@@ -1,0 +1,1094 @@
+﻿<!-- 由 build/convert_icons.py 从原版自动 1:1 转换，勿手改 -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+      RoadLib 模块专属图标字典。
+      由 RoadLibPlugin.Initialize() 通过 IResourceRegistry.MergeResourceDictionary
+      合并进 Application.Resources。
+
+      ══ 2026-08-09 全库重画：对齐【模块家族】（不是 Host/Home 那一族）══
+      ⚠ 本仓库有**两套**图标风格，别对错参照物：
+        · Host/Home 家族（icon_new / icon_open）：白纸 + 深描边 + 单色点缀 —— 文件/剪贴板那些
+        · **模块家族**（MineAssLib / PlanLib / PointCloudLib / GeoDataBase）：
+          **暖色渐变实体、直接画对象本身、不套白底方框**、细描边取自填充的深色、
+          需要几种颜色就用几种（台阶=棕橙、路面=灰、通过=绿、数据=蓝、禁止/峰值=红）
+      道路运输 tab 的邻居是 剥采排 / 点云 / 生产计划编制，全是**模块家族**，
+      所以这本字典按模块家族画。第一版误对齐到 Host 家族（每个图标套白框），现场连提三次不像，已推倒重来。
+
+      调色（与 MineAssLib 一致）：
+        台阶/地形  #FFD98E4A → #FF8B4A1E   描边 #FF7C3A12
+        路面/沥青  #FF9CA3AF → #FF4B5563   描边 #FF374151    中线 #FFFBBF24
+        绿(通过)   #FF34D399 → #FF10B981   描边 #FF047857
+        蓝(数据)   #FF60A5FA → #FF2563EB   描边 #FF1E40AF
+        橙(强调)   #FFFB923C → #FFEA580C   描边 #FF9A3412
+        红(禁止)   #FFF87171 → #FFDC2626   描边 #FF991B1B
+
+      ⚠ 本文件里 **x:Key 不许重复** —— ResourceDictionary 加载遇到重复键会抛异常并
+        **作废整本字典**，那个 tab 的所有图标（含 Tab 图标）会一起消失，而构建全绿、运行不报错。
+        提交 764fdcf 就带进过一份重复的 road_trigger，整条 tab 的图标全灭。判据 S42 已钉住这条。
+    -->
+
+    <!-- ══════════ Tab 图标 ══════════ -->
+
+    <!-- 道路运输系统：棕色远山 + 灰色透视路面 + 黄虚中线 -->
+    <DrawingImage x:Key="road">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Geometry="M1,15 L9,5 L15,12 L21,6 L31,15 Z">
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFD98E4A" Offset="0"/><GradientStop Color="#FF8B4A1E" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C3A12" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M12,13 L20,13 L30,30 L2,30 Z">
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FF9CA3AF" Offset="0"/><GradientStop Color="#FF4B5563" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF374151" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M16,15 L16,28">
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FFFBBF24" Thickness="2.2" LineCap="Round">
+                            <Pen.DashStyle><DashStyle Dashes="1.5,1.2"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- ══════════ ① 路网构建 ══════════ -->
+
+    <!-- 手动标定线路：棕台阶坡面 + 蓝手绘中线 + 蓝夹点 + 绿笔 -->
+    <DrawingImage x:Key="road_mark">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Geometry="M2,29 L2,22 L10,22 L10,15 L18,15 L18,8 L30,8 L30,29 Z">
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFD98E4A" Offset="0"/><GradientStop Color="#FF8B4A1E" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C3A12" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M4,27 L11,20 L19,13 L28,10">
+                    <GeometryDrawing.Pen><Pen Brush="#FF2563EB" Thickness="2.4" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF60A5FA">
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="1"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <RectangleGeometry Rect="2.2,25.2,3.6,3.6"/>
+                            <RectangleGeometry Rect="9.2,18.2,3.6,3.6"/>
+                            <RectangleGeometry Rect="17.2,11.2,3.6,3.6"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M22,15 L29,3 L31,4.6 L25,17 Z">
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                            <GradientStop Color="#FF34D399" Offset="0"/><GradientStop Color="#FF10B981" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF047857" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 删除道路中心线：灰中线折线 + 黄芯 + 蓝夹点（= 一条已标定的中线）+ 压在上面的红叉（去掉它）
+         ⚠ 2026-08-11 起功能区已不用它 —— 那个钮升级成「中心线管理」，改用下面的 road_centerline_manage。
+         键留着不删：字典里多一个没人引用的键无害，删了反而让"这枚图标画的是什么"这段来历断掉。 -->
+    <DrawingImage x:Key="road_erase">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Geometry="M3,29 L12,22 L21,24 L29,17">
+                    <GeometryDrawing.Pen><Pen Brush="#FF4B5563" Thickness="3.4" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M3,29 L12,22 L21,24 L29,17">
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FFFBBF24" Thickness="1.3">
+                            <Pen.DashStyle><DashStyle Dashes="2,1.4"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF60A5FA">
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="1"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <RectangleGeometry Rect="1.4,27.4,3.2,3.2"/>
+                            <RectangleGeometry Rect="10.4,20.4,3.2,3.2"/>
+                            <RectangleGeometry Rect="19.4,22.4,3.2,3.2"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M17,3 L29,15 M29,3 L17,15">
+                    <GeometryDrawing.Pen><Pen Brush="#FFDC2626" Thickness="3.8" LineCap="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 中心线管理：左边一张蓝色清单（三行白条 = 逐条中线摊成表），右边那条已标定的中线
+         （灰身 + 黄虚芯 + 蓝夹点，与上面 road_erase 同一母题），底下一枚红叉小标 = 清单里能删。
+         替代原「删除道路中心线」的 road_erase（那枚整块红叉，现在的入口不止于删）。 -->
+    <DrawingImage x:Key="road_centerline_manage">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Geometry="M2,3 L15,3 L15,23 L2,23 Z">
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FF60A5FA" Offset="0"/><GradientStop Color="#FF2563EB" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFF8FAFC">
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <RectangleGeometry Rect="4.2,6.4,8.6,2.2"/>
+                            <RectangleGeometry Rect="4.2,11.4,8.6,2.2"/>
+                            <RectangleGeometry Rect="4.2,16.4,8.6,2.2"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M18,26 L23,17 L27,18 L31,9">
+                    <GeometryDrawing.Pen><Pen Brush="#FF4B5563" Thickness="3.4" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M18,26 L23,17 L27,18 L31,9">
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FFFBBF24" Thickness="1.3">
+                            <Pen.DashStyle><DashStyle Dashes="2,1.4"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF60A5FA">
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="1"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <RectangleGeometry Rect="21.4,15.4,3.2,3.2"/>
+                            <RectangleGeometry Rect="29.4,7.4,3.2,3.2"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M4.5,25.5 L10.5,31.5 M10.5,25.5 L4.5,31.5">
+                    <GeometryDrawing.Pen><Pen Brush="#FFDC2626" Thickness="2.6" LineCap="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 基础道路网络构建：灰路段连成网 + 蓝节点 + 橙枢纽 -->
+    <DrawingImage x:Key="road_network_build">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Geometry="M6,26 L16,16 L27,7 M16,16 L27,25 M5,7 L16,16">
+                    <GeometryDrawing.Pen><Pen Brush="#FF4B5563" Thickness="3.4" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M6,26 L16,16 L27,7 M16,16 L27,25 M5,7 L16,16">
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FFFBBF24" Thickness="0.9">
+                            <Pen.DashStyle><DashStyle Dashes="2,1.4"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FF60A5FA" Offset="0"/><GradientStop Color="#FF2563EB" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="1"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <EllipseGeometry RadiusX="2.6" RadiusY="2.6" Center="6,26"/>
+                            <EllipseGeometry RadiusX="2.6" RadiusY="2.6" Center="27,7"/>
+                            <EllipseGeometry RadiusX="2.6" RadiusY="2.6" Center="27,25"/>
+                            <EllipseGeometry RadiusX="2.6" RadiusY="2.6" Center="5,7"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFFB923C" Offset="0"/><GradientStop Color="#FFEA580C" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF9A3412" Thickness="1.1"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><EllipseGeometry RadiusX="4" RadiusY="4" Center="16,16"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 装卸点设置：棕台阶 + 绿装载销（源）+ 红卸载销（汇） -->
+    <DrawingImage x:Key="road_points">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Geometry="M1,30 L1,24 L11,24 L11,19 L31,19 L31,30 Z">
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFD98E4A" Offset="0"/><GradientStop Color="#FF8B4A1E" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C3A12" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M7,3 C11,3 14,6 14,9.4 C14,13.6 7,21 7,21 C7,21 0,13.6 0,9.4 C0,6 3,3 7,3 Z">
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FF34D399" Offset="0"/><GradientStop Color="#FF10B981" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF047857" Thickness="1.1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFFFFFFF">
+                    <GeometryDrawing.Geometry><EllipseGeometry RadiusX="2.3" RadiusY="2.3" Center="7,9.2"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M24,7 C28,7 31,10 31,13.4 C31,17.6 24,25 24,25 C24,25 17,17.6 17,13.4 C17,10 20,7 24,7 Z">
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFF87171" Offset="0"/><GradientStop Color="#FFDC2626" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF991B1B" Thickness="1.1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFFFFFFF">
+                    <GeometryDrawing.Geometry><EllipseGeometry RadiusX="2.3" RadiusY="2.3" Center="24,13.2"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- ══════════ ② 运输表征 ══════════ -->
+
+    <!-- 路况显示：灰透视路面 + 黄虚中线 + 白方向箭头 -->
+    <DrawingImage x:Key="road_styled">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Geometry="M2,30 L12,3 L20,3 L30,30 Z">
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FF9CA3AF" Offset="0"/><GradientStop Color="#FF4B5563" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF374151" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M16,5 L16,28">
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FFFBBF24" Thickness="2.4" LineCap="Round">
+                            <Pen.DashStyle><DashStyle Dashes="1.4,1.1"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFFFFFFF" Geometry="M8,27 L11,20 L14,27 Z"/>
+                <GeometryDrawing Brush="#FFFFFFFF" Geometry="M18,27 L21,20 L24,27 Z"/>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 结构路面：棕台阶 + 灰色等宽路面带贴在上面 -->
+    <DrawingImage x:Key="road_pavement">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Geometry="M1,30 L1,23 L10,23 L10,16 L19,16 L19,9 L31,9 L31,30 Z">
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFD98E4A" Offset="0"/><GradientStop Color="#FF8B4A1E" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C3A12" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M1,27 L10,27 L10,20 L19,20 L19,13 L31,13 L31,17 L23,17 L23,24 L14,24 L14,31 L1,31 Z">
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FF9CA3AF" Offset="0"/><GradientStop Color="#FF4B5563" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF374151" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 路网预览：灰路网 + 橙放大镜（看，不改） -->
+    <DrawingImage x:Key="road_network_preview">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Geometry="M3,25 L13,15 L24,5 M13,15 L23,22 M3,6 L13,15">
+                    <GeometryDrawing.Pen><Pen Brush="#FF9CA3AF" Thickness="3" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF4B5563">
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <EllipseGeometry RadiusX="2.2" RadiusY="2.2" Center="3,25"/>
+                            <EllipseGeometry RadiusX="2.2" RadiusY="2.2" Center="3,6"/>
+                            <EllipseGeometry RadiusX="2.6" RadiusY="2.6" Center="13,15"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M25,25 L31,31">
+                    <GeometryDrawing.Pen><Pen Brush="#FF9A3412" Thickness="3.4"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <RadialGradientBrush><GradientStop Color="#66FFFFFF" Offset="0"/><GradientStop Color="#22EA580C" Offset="1"/></RadialGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FFEA580C" Thickness="2.6"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><EllipseGeometry RadiusX="7" RadiusY="7" Center="19,18"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- ══════════ ③ 路网维护与延拓 ══════════ -->
+
+    <!-- 增量增删边：灰路网 + 绿新增边 + 红删除虚线边 -->
+    <DrawingImage x:Key="road_update">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Geometry="M5,26 L16,9">
+                    <GeometryDrawing.Pen><Pen Brush="#FF10B981" Thickness="3.2"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M16,9 L27,26">
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FFDC2626" Thickness="3">
+                            <Pen.DashStyle><DashStyle Dashes="1.3,1.1"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M5,26 L27,26">
+                    <GeometryDrawing.Pen><Pen Brush="#FF9CA3AF" Thickness="3"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FF60A5FA" Offset="0"/><GradientStop Color="#FF2563EB" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="1"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <EllipseGeometry RadiusX="2.8" RadiusY="2.8" Center="5,26"/>
+                            <EllipseGeometry RadiusX="2.8" RadiusY="2.8" Center="16,9"/>
+                            <EllipseGeometry RadiusX="2.8" RadiusY="2.8" Center="27,26"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 边状态：灰路段 + 绿/黄/红三盏状态灯 -->
+    <DrawingImage x:Key="road_edgestate">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Geometry="M1,22 L31,22 L31,29 L1,29 Z">
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FF9CA3AF" Offset="0"/><GradientStop Color="#FF4B5563" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF374151" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M3,25.5 L29,25.5">
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FFFBBF24" Thickness="1.4">
+                            <Pen.DashStyle><DashStyle Dashes="2,1.4"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FF34D399" Offset="0"/><GradientStop Color="#FF10B981" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF047857" Thickness="1.1"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><EllipseGeometry RadiusX="4.4" RadiusY="4.4" Center="6.5,11"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFFCD34D" Offset="0"/><GradientStop Color="#FFF59E0B" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FFB45309" Thickness="1.1"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><EllipseGeometry RadiusX="4.4" RadiusY="4.4" Center="16,11"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFF87171" Offset="0"/><GradientStop Color="#FFDC2626" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF991B1B" Thickness="1.1"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><EllipseGeometry RadiusX="4.4" RadiusY="4.4" Center="25.5,11"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 时段快照：层叠的路网帧 + 蓝时钟 -->
+    <DrawingImage x:Key="road_snapshot">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FFD98E4A" Geometry="M9,2 L30,2 L30,18 L9,18 Z">
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C3A12" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFE9C08F" Geometry="M6,6 L27,6 L27,22 L6,22 Z">
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C3A12" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFFDF0DC" Geometry="M3,10 L24,10 L24,26 L3,26 Z">
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C3A12" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M6,23 L13,17 L21,13">
+                    <GeometryDrawing.Pen><Pen Brush="#FF4B5563" Thickness="2.2" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FF60A5FA" Offset="0"/><GradientStop Color="#FF2563EB" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="1.1"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><EllipseGeometry RadiusX="7" RadiusY="7" Center="24,24"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M24,20 L24,24 L27,25.8">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="1.8" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 路网存档：棕档案盒 + 绿标签 + 抽出的路网卡 -->
+    <DrawingImage x:Key="road_routelib">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FFFDF0DC" Geometry="M9,4 L25,4 L25,16 L9,16 Z">
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C3A12" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M12,13 L17,8 L22,6">
+                    <GeometryDrawing.Pen><Pen Brush="#FF4B5563" Thickness="2" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M2,14 L30,14 L30,29 L2,29 Z">
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFD98E4A" Offset="0"/><GradientStop Color="#FF8B4A1E" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C3A12" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M11,18 L21,18 L21,22 L11,22 Z">
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FF34D399" Offset="0"/><GradientStop Color="#FF10B981" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF047857" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 演化对比：灰旧路（虚）+ 绿新路 + 绿箭头 -->
+    <DrawingImage x:Key="road_evolution">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Geometry="M3,26 L11,15 L20,11">
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FF9CA3AF" Thickness="3" LineJoin="Round">
+                            <Pen.DashStyle><DashStyle Dashes="1.3,1.1"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M3,26 L14,26 L22,17">
+                    <GeometryDrawing.Pen><Pen Brush="#FF10B981" Thickness="3.4" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF10B981" Geometry="M29,12 L20.6,13.4 L24.6,20.4 Z">
+                    <GeometryDrawing.Pen><Pen Brush="#FF047857" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF4B5563">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="1"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <EllipseGeometry RadiusX="2.6" RadiusY="2.6" Center="3,26"/>
+                            <EllipseGeometry RadiusX="2.6" RadiusY="2.6" Center="14,26"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 分色显示：三条按类别分色的路段 + 蓝眼睛 -->
+    <DrawingImage x:Key="road_colordisplay">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Geometry="M3,5 L29,5">
+                    <GeometryDrawing.Pen><Pen Brush="#FF10B981" Thickness="3.4"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M3,12 L29,12">
+                    <GeometryDrawing.Pen><Pen Brush="#FFF59E0B" Thickness="3.4"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M3,19 L29,19">
+                    <GeometryDrawing.Pen><Pen Brush="#FFDC2626" Thickness="3.4"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M16,22 C22,22 27,25.4 30,28 C27,30.6 22,32 16,32 C10,32 5,30.6 2,28 C5,25.4 10,22 16,22 Z">
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFFFFFFF" Offset="0"/><GradientStop Color="#FFDBEAFE" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="1.2" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FF60A5FA" Offset="0"/><GradientStop Color="#FF2563EB" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Geometry><EllipseGeometry RadiusX="3.6" RadiusY="3.6" Center="16,28"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 路网更新（随采延拓）：灰现状路 + 绿延伸虚线 + 绿箭头 + 接驳点 -->
+    <DrawingImage x:Key="road_extend">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Geometry="M2,27 L10,22 L17,24">
+                    <GeometryDrawing.Pen><Pen Brush="#FF4B5563" Thickness="3.2" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M17,24 L22,18 L26,10">
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FF10B981" Thickness="3.2" LineJoin="Round">
+                            <Pen.DashStyle><DashStyle Dashes="1.3,0.9"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF10B981" Geometry="M28,4 L22.4,11.6 L30,12 Z">
+                    <GeometryDrawing.Pen><Pen Brush="#FF047857" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FF34D399" Offset="0"/><GradientStop Color="#FF10B981" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF047857" Thickness="1.1"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><EllipseGeometry RadiusX="3" RadiusY="3" Center="17,24"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 延拓触发设置：蓝齿轮 + 绿推进箭头（设计文档 §2.5 就是这么定的） -->
+    <DrawingImage x:Key="road_trigger">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 齿轮：8 齿，圆心(13,18) 外径 11 内径 8 —— 全部顶点都落在 0..32 内，
+                     别再让坐标跑出画布：ClipGeometry 会把出界的那半圈直接切掉，看着像画糊了 -->
+                <GeometryDrawing Geometry="M11,7.2 L15,7.2 L15.6,10.3 L18.2,11.4 L20.8,9.6 L23.6,12.4 L21.8,15 L22.9,17.6 L26,18.2 L26,22.2 L22.9,22.8 L21.8,25.4 L23.6,28 L20.8,30.8 L18.2,29 L15.6,30.1 L15,33.2 L11,33.2 L10.4,30.1 L7.8,29 L5.2,30.8 L2.4,28 L4.2,25.4 L3.1,22.8 L0,22.2 L0,18.2 L3.1,17.6 L4.2,15 L2.4,12.4 L5.2,9.6 L7.8,11.4 L10.4,10.3 Z">
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FF60A5FA" Offset="0"/><GradientStop Color="#FF2563EB" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="1.1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFFDF0DC">
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="1.2"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><EllipseGeometry RadiusX="5" RadiusY="5" Center="13,20.2"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 推进箭头（绿），整支落在右上角画布内 -->
+                <GeometryDrawing Geometry="M19,5 L26,5">
+                    <GeometryDrawing.Pen><Pen Brush="#FF10B981" Thickness="2.6"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF10B981" Geometry="M31,5 L25,1.8 L25,8.2 Z">
+                    <GeometryDrawing.Pen><Pen Brush="#FF047857" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- ══════════ ④ 快速寻径 ══════════ -->
+
+    <!-- 点对点寻径：灰路网 + 橙最短路 + 绿起点 / 红终点 -->
+    <DrawingImage x:Key="road_pathfind">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Geometry="M6,26 L6,14 L26,14 M6,14 L6,6 M26,14 L26,26 M16,6 L16,26">
+                    <GeometryDrawing.Pen><Pen Brush="#FFCBD5E1" Thickness="2.6"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M6,26 L6,14 L26,14 L26,6">
+                    <GeometryDrawing.Pen><Pen Brush="#FFEA580C" Thickness="3.4" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FF34D399" Offset="0"/><GradientStop Color="#FF10B981" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF047857" Thickness="1.1"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><EllipseGeometry RadiusX="3.6" RadiusY="3.6" Center="6,26"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFF87171" Offset="0"/><GradientStop Color="#FFDC2626" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF991B1B" Thickness="1.1"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><EllipseGeometry RadiusX="3.6" RadiusY="3.6" Center="26,6"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- OD 运距矩阵：米色表格 + 橙对角高亮 + 棕表头 -->
+    <DrawingImage x:Key="road_odmatrix">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FFFDF0DC" Geometry="M2,4 L30,4 L30,29 L2,29 Z">
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C3A12" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M2,4 L30,4 L30,10 L2,10 Z">
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFD98E4A" Offset="0"/><GradientStop Color="#FF8B4A1E" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C3A12" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFEA580C" Geometry="M2,10 L11.3,10 L11.3,16.3 L2,16.3 Z M11.3,16.3 L20.6,16.3 L20.6,22.6 L11.3,22.6 Z M20.6,22.6 L30,22.6 L30,29 L20.6,29 Z"/>
+                <GeometryDrawing Geometry="M11.3,4 L11.3,29 M20.6,4 L20.6,29 M2,16.3 L30,16.3 M2,22.6 L30,22.6">
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C3A12" Thickness="0.9"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 备选路径：橙主路 + 两条灰虚线绕行 + 绿起 / 红终 -->
+    <DrawingImage x:Key="road_pathplan">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Geometry="M6,16 C12,5 20,5 26,16">
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FF9CA3AF" Thickness="2.6">
+                            <Pen.DashStyle><DashStyle Dashes="1.3,1.1"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M6,16 C12,27 20,27 26,16">
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FF9CA3AF" Thickness="2.6">
+                            <Pen.DashStyle><DashStyle Dashes="1.3,1.1"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M6,16 L26,16">
+                    <GeometryDrawing.Pen><Pen Brush="#FFEA580C" Thickness="3.4" LineCap="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF10B981">
+                    <GeometryDrawing.Pen><Pen Brush="#FF047857" Thickness="1.1"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><EllipseGeometry RadiusX="3.6" RadiusY="3.6" Center="6,16"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFDC2626">
+                    <GeometryDrawing.Pen><Pen Brush="#FF991B1B" Thickness="1.1"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><EllipseGeometry RadiusX="3.6" RadiusY="3.6" Center="26,16"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 按区域块体算路线：棕块体 + 橙运输路线 + 绿排土堆 -->
+    <DrawingImage x:Key="road_blockroute">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FFE9C08F" Geometry="M2,10 L9,6 L16,10 L9,14 Z">
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C3A12" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFD98E4A" Geometry="M2,10 L9,14 L9,22 L2,18 Z">
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C3A12" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF8B4A1E" Geometry="M9,14 L16,10 L16,18 L9,22 Z">
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C3A12" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M16,19 C21,21 21,25 25,26">
+                    <GeometryDrawing.Pen><Pen Brush="#FFEA580C" Thickness="3" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFEA580C" Geometry="M31,27 L24.4,23 L23.6,30 Z"/>
+                <GeometryDrawing Geometry="M18,14 L23,4 L27,4 L32,14 Z">
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FF34D399" Offset="0"/><GradientStop Color="#FF10B981" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF047857" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 运输路径浏览：灰路网 + 橙高亮路径 + 蓝播放三角 -->
+    <DrawingImage x:Key="road_route_browse">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Geometry="M3,5 L24,5 M3,5 L3,26 M14,5 L14,20">
+                    <GeometryDrawing.Pen><Pen Brush="#FFCBD5E1" Thickness="2.4"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M4,25 L4,13 L14,13 L14,6">
+                    <GeometryDrawing.Pen><Pen Brush="#FFEA580C" Thickness="3.4" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF10B981">
+                    <GeometryDrawing.Pen><Pen Brush="#FF047857" Thickness="1.1"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><EllipseGeometry RadiusX="3.2" RadiusY="3.2" Center="4,25"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M20,15 L31,22 L20,29 Z">
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FF60A5FA" Offset="0"/><GradientStop Color="#FF2563EB" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="1.2" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- ══════════ ⑤ 运距与指标 ══════════ -->
+
+    <!-- 等效运距：灰路面 + 红双向箭头 + 棕刻度尺 -->
+    <DrawingImage x:Key="road_distance">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Geometry="M1,6 L31,6 L31,15 L1,15 Z">
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFD98E4A" Offset="0"/><GradientStop Color="#FF8B4A1E" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C3A12" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M7,6 L7,12 M13,6 L13,10 M19,6 L19,12 M25,6 L25,10">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFDF0DC" Thickness="1.4"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M7,25 L25,25">
+                    <GeometryDrawing.Pen><Pen Brush="#FFDC2626" Thickness="2.6" LineCap="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFDC2626" Geometry="M1,25 L8,21 L8,29 Z"/>
+                <GeometryDrawing Brush="#FFDC2626" Geometry="M31,25 L24,21 L24,29 Z"/>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 循环时间：灰环形路 + 绿循环箭头 + 蓝钟 -->
+    <DrawingImage x:Key="road_cycle">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF9CA3AF" Thickness="4"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><EllipseGeometry RadiusX="10" RadiusY="10" Center="16,16"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FFFBBF24" Thickness="1.1">
+                            <Pen.DashStyle><DashStyle Dashes="2,1.6"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><EllipseGeometry RadiusX="10" RadiusY="10" Center="16,16"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M16,4 A 12,12 0 0 1 27,12">
+                    <GeometryDrawing.Pen><Pen Brush="#FF10B981" Thickness="2.8"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF10B981" Geometry="M31,14 L24.6,8.6 L23.6,16 Z">
+                    <GeometryDrawing.Pen><Pen Brush="#FF047857" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FF60A5FA" Offset="0"/><GradientStop Color="#FF2563EB" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="1.1"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><EllipseGeometry RadiusX="6" RadiusY="6" Center="16,17"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M16,13.4 L16,17 L18.6,18.6">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="1.6" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 运距统计：三根柱（棕 / 橙加权 / 绿）+ 基线 -->
+    <DrawingImage x:Key="road_stats">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Geometry="M4,17 L11,17 L11,26 L4,26 Z">
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFD98E4A" Offset="0"/><GradientStop Color="#FF8B4A1E" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C3A12" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M13,7 L20,7 L20,26 L13,26 Z">
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFFB923C" Offset="0"/><GradientStop Color="#FFEA580C" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF9A3412" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M22,13 L29,13 L29,26 L22,26 Z">
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FF34D399" Offset="0"/><GradientStop Color="#FF10B981" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF047857" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M2,27 L30,27">
+                    <GeometryDrawing.Pen><Pen Brush="#FF374151" Thickness="1.8"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 运输指标报表：米色文档折角 + 橙折线 + 绿勾 -->
+    <DrawingImage x:Key="road_report">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FFFDF0DC" Geometry="M4,2 L19,2 L27,10 L27,30 L4,30 Z">
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C3A12" Thickness="1.1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFE9C08F" Geometry="M19,2 L27,10 L19,10 Z">
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C3A12" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M8,14 L17,14 M8,18 L22,18">
+                    <GeometryDrawing.Pen><Pen Brush="#FFB08050" Thickness="1.4"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M8,26 L13,21 L17,23 L23,15">
+                    <GeometryDrawing.Pen><Pen Brush="#FFEA580C" Thickness="2.2" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- ══════════ 未上功能区的 8 个 ══════════ -->
+
+    <!-- 车辆调度：橙矿卡 + 蓝调度箭头 -->
+    <DrawingImage x:Key="road_dispatch">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Geometry="M2,13 L16,13 L16,23 L2,23 Z">
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFFB923C" Offset="0"/><GradientStop Color="#FFEA580C" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF9A3412" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF9CA3AF" Geometry="M16,16 L22,16 L27,21 L27,23 L16,23 Z">
+                    <GeometryDrawing.Pen><Pen Brush="#FF374151" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF374151">
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <EllipseGeometry RadiusX="3" RadiusY="3" Center="8,24"/>
+                            <EllipseGeometry RadiusX="3" RadiusY="3" Center="22,24"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M5,7 L22,7">
+                    <GeometryDrawing.Pen><Pen Brush="#FF2563EB" Thickness="2.6"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF2563EB" Geometry="M28,7 L21,3.4 L21,10.6 Z"/>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 油耗分析：橙油桶 + 蓝液位 + 橙折线 -->
+    <DrawingImage x:Key="road_fuel">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Geometry="M3,7 L16,7 L16,29 L3,29 Z">
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFFB923C" Offset="0"/><GradientStop Color="#FFEA580C" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF9A3412" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF2563EB" Geometry="M3,19 L16,19 L16,29 L3,29 Z">
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M19,27 L23,19 L26,22 L30,9">
+                    <GeometryDrawing.Pen><Pen Brush="#FFEA580C" Thickness="2.4" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 圈定管理区位置：棕地形 + 绿多边形选区 + 蓝角点 -->
+    <DrawingImage x:Key="road_zone">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Geometry="M1,29 L1,23 L10,23 L10,17 L31,17 L31,29 Z">
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFD98E4A" Offset="0"/><GradientStop Color="#FF8B4A1E" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C3A12" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#4410B981" Geometry="M6,6 L25,4 L28,17 L10,21 Z">
+                    <GeometryDrawing.Pen><Pen Brush="#FF10B981" Thickness="2" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF60A5FA">
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="1"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <RectangleGeometry Rect="4,4,4,4"/>
+                            <RectangleGeometry Rect="23,2,4,4"/>
+                            <RectangleGeometry Rect="26,15,4,4"/>
+                            <RectangleGeometry Rect="8,19,4,4"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 自动提取路网：棕地形 + 蓝提取出的路网 + 橙星 -->
+    <DrawingImage x:Key="road_extract">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Geometry="M1,30 L1,24 L10,24 L10,18 L19,18 L19,12 L31,12 L31,30 Z">
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFD98E4A" Offset="0"/><GradientStop Color="#FF8B4A1E" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C3A12" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M3,28 L11,22 L20,16 L29,14">
+                    <GeometryDrawing.Pen><Pen Brush="#FF2563EB" Thickness="3" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFEA580C" Geometry="M25,1 L26.6,4.8 L30.6,5.4 L27.6,8.2 L28.4,12.2 L25,10.2 L21.6,12.2 L22.4,8.2 L19.4,5.4 L23.4,4.8 Z">
+                    <GeometryDrawing.Pen><Pen Brush="#FF9A3412" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 开拓运输系统优化设计：灰备选 + 橙最优线 + 绿终点 -->
+    <DrawingImage x:Key="road_optimize">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Geometry="M6,25 C13,22 19,15 26,9 M6,25 C12,14 20,19 26,9">
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FF9CA3AF" Thickness="2.4">
+                            <Pen.DashStyle><DashStyle Dashes="1.3,1.1"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M6,25 L26,9">
+                    <GeometryDrawing.Pen><Pen Brush="#FFEA580C" Thickness="3.4" LineCap="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF4B5563">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="1"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><EllipseGeometry RadiusX="3.4" RadiusY="3.4" Center="6,25"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF10B981">
+                    <GeometryDrawing.Pen><Pen Brush="#FF047857" Thickness="1.1"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><EllipseGeometry RadiusX="3.6" RadiusY="3.6" Center="26,9"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 方案比选：三柱 + 绿最优 + 绿勾 -->
+    <DrawingImage x:Key="road_compare">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FFD98E4A" Geometry="M3,17 L10,17 L10,27 L3,27 Z">
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C3A12" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M12,9 L19,9 L19,27 L12,27 Z">
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FF34D399" Offset="0"/><GradientStop Color="#FF10B981" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF047857" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFD98E4A" Geometry="M21,14 L28,14 L28,27 L21,27 Z">
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C3A12" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M12,5.4 L14.6,8 L19.4,2.6">
+                    <GeometryDrawing.Pen><Pen Brush="#FF10B981" Thickness="2.6" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 路网校验：灰路网 + 绿勾徽章 -->
+    <DrawingImage x:Key="road_validate">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Geometry="M3,22 L13,13 L24,4 M13,13 L23,20">
+                    <GeometryDrawing.Pen><Pen Brush="#FF9CA3AF" Thickness="3" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF4B5563">
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <EllipseGeometry RadiusX="2.4" RadiusY="2.4" Center="3,22"/>
+                            <EllipseGeometry RadiusX="2.6" RadiusY="2.6" Center="13,13"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FF34D399" Offset="0"/><GradientStop Color="#FF10B981" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF047857" Thickness="1.1"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><EllipseGeometry RadiusX="7.4" RadiusY="7.4" Center="23,24"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M19.4,24 L22,26.6 L26.8,21">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="2" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 临时道路回收：灰虚线临时路 + 绿回收循环箭头 -->
+    <DrawingImage x:Key="road_recycle">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Geometry="M3,27 L29,27">
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FF9CA3AF" Thickness="3.4">
+                            <Pen.DashStyle><DashStyle Dashes="1.2,1.1"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="M9,17 A 8,8 0 1 1 14,21">
+                    <GeometryDrawing.Pen><Pen Brush="#FF10B981" Thickness="3.2"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF10B981" Geometry="M5,13 L13.4,15 L9,21.4 Z">
+                    <GeometryDrawing.Pen><Pen Brush="#FF047857" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+</ResourceDictionary>

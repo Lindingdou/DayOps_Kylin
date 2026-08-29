@@ -1,0 +1,27 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="PitMine3D.Kylin.App"
+             RequestedThemeVariant="Light">
+
+    <Application.Styles>
+        <FluentTheme />
+        <StyleInclude Source="avares://PitMine3D.Kylin/Styles/Ribbon.axaml" />
+    </Application.Styles>
+
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceInclude Source="avares://PitMine3D.Kylin/Styles/Icons.axaml" />
+                <ResourceInclude Source="avares://PitMine3D.Kylin/Styles/IconDict.axaml" />
+                <ResourceInclude Source="avares://PitMine3D.Kylin/Styles/IconDict.GeoDataBase.axaml" />
+                <ResourceInclude Source="avares://PitMine3D.Kylin/Styles/IconDict.MeshEditLib.axaml" />
+                <ResourceInclude Source="avares://PitMine3D.Kylin/Styles/IconDict.PointCloudLib.axaml" />
+                <ResourceInclude Source="avares://PitMine3D.Kylin/Styles/IconDict.MineAssLib.axaml" />
+                <ResourceInclude Source="avares://PitMine3D.Kylin/Styles/IconDict.RoadLib.axaml" />
+                <ResourceInclude Source="avares://PitMine3D.Kylin/Styles/IconDict.PlanLib.axaml" />
+                <ResourceInclude Source="avares://PitMine3D.Kylin/Styles/IconDict.TaskLib.axaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+
+</Application>

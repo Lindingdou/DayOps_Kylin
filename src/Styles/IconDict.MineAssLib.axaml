@@ -1,0 +1,1793 @@
+﻿<!-- 由 build/convert_icons.py 从原版自动 1:1 转换，勿手改 -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+      MineAssLib 模块专属图标字典。
+      由 MineAssLibPlugin.Initialize() 通过 IResourceRegistry.MergeResourceDictionary
+      合并进 Application.Resources。
+      当前 "mineass" 复用 PointCloudLib 的点云造型作为占位，后续按业务画专属图标时
+      只改这一个文件。
+    -->
+
+    <!-- 剥采排工程 Tab 图标：露天矿坑剖面（阶梯下降）+ 天空 + 顶部小卡车 -->
+    <DrawingImage x:Key="mineass">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 天空背景（蓝→米黄渐变） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFDBEAFE" Offset="0"/>
+                            <GradientStop Color="#FFFEF3C7" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry Rect="2,4,28,8"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 阶梯坑剖面（橙→深棕渐变） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFEA580C" Offset="0"/>
+                            <GradientStop Color="#FF7C2D12" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FF451A03" Thickness="0.7" LineJoin="Round"/>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M2,12 L8,12 L8,16 L14,16 L14,20 L20,20 L20,24 L30,24 L30,28 L2,28 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 台阶顶高光线（金黄） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FFFBBF24" Thickness="0.7" LineCap="Round"/>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M2,12.5 L8,12.5 M8,16.5 L14,16.5 M14,20.5 L20,20.5 M20,24.5 L30,24.5"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 顶层小卡车（黄车身） -->
+                <GeometryDrawing Brush="#FFFBBF24">
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C2D12" Thickness="0.4" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M3,9 L7,9 L7,11.5 L6.5,11.5 L6.5,11 L3.5,11 L3.5,11.5 L3,11.5 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 卡车轮 -->
+                <GeometryDrawing Brush="#FF1F2937">
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <EllipseGeometry RadiusX="0.7" RadiusY="0.7" Center="3.8,11.7"/>
+                            <EllipseGeometry RadiusX="0.7" RadiusY="0.7" Center="6.2,11.7"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- ───── 工程量计算 ───── -->
+
+    <!-- 体积计算：3D 立方体 + 测量箭头 -->
+    <!-- 排土场容量校核：按安息角的排弃料堆 + 容量上限线 + 校核对勾（排弃量 vs 容量） -->
+    <DrawingImage x:Key="mineass_volume">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 容量上限线（红虚水平线，设计排土容量上沿） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FFEF4444" Thickness="1" LineCap="Round">
+                            <Pen.DashStyle><DashStyle Dashes="2,1.4"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M3,11 L29,11"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 排弃料堆（按安息角的对称土堆，土黄渐变） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFD4A373" Offset="0"/>
+                            <GradientStop Color="#FF7C2D12" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF5C2A0E" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M4,27 L15,14 L26,27 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 料堆顶高光（安息角顶线提示） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFFDE68A" Thickness="0.6" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M6.5,24 L15,14.7 L23.5,24"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 地面线 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF1F2937" Thickness="0.8"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M2,27.4 L30,27.4"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 容量校核对勾（绿，堆顶在容量线之下=通过） -->
+                <GeometryDrawing Brush="#FF10B981">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.5"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <EllipseGeometry RadiusX="4" RadiusY="4" Center="26,6"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="1.2" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M24,6 L25.5,7.6 L28.2,4.2"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 进度对比：三根递增柱 + 计划虚线 -->
+    <DrawingImage x:Key="mineass_progress">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 实际柱 -->
+                <GeometryDrawing Brush="#FF3B82F6">
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E3A8A" Thickness="0.4"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <RectangleGeometry Rect="5,20,5,8"/>
+                            <RectangleGeometry Rect="14,14,5,14"/>
+                            <RectangleGeometry Rect="23,8,5,20"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 计划虚线 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FFEF4444" Thickness="1.2">
+                            <Pen.DashStyle><DashStyle Dashes="2,1"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M3,22 L7,22 L7,16 L11,16 L11,10 L15,10 L15,5 L29,5"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 底轴 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF1F2937" Thickness="0.8"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M3,28 L30,28"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 验收：剪贴板 + 绿色对勾 -->
+    <DrawingImage x:Key="mineass_accept">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 剪贴板背景 -->
+                <GeometryDrawing Brush="#FFFFFFFF">
+                    <GeometryDrawing.Pen><Pen Brush="#FF334155" Thickness="0.9" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M7,7 L25,7 L25,28 L7,28 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 顶部夹子 -->
+                <GeometryDrawing Brush="#FF6B7280">
+                    <GeometryDrawing.Pen><Pen Brush="#FF1F2937" Thickness="0.6"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M12,4 L20,4 L21,8 L11,8 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 内容线 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF94A3B8" Thickness="0.6"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M10,13 L22,13 M10,16 L20,16"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 大绿对勾 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF10B981" Thickness="2.6" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M10,22 L15,26 L23,18"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- ─────────── 按 Needs.md 新增图标 ─────────── -->
+
+    <!-- 排土模板：按安息角(~35°)的排弃料堆 + 参数滑块 —— 与 mineass_template_param（采场模板）区分 -->
+    <DrawingImage x:Key="mineass_dump_template">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 料堆（绿，梯形=安息角） -->
+                <GeometryDrawing Brush="#FF34D399">
+                    <GeometryDrawing.Pen><Pen Brush="#FF065F46" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M2,27 L9,14 L19,14 L26,27 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 安息角弧 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF065F46" Thickness="1"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M2,27 A 6,6 0 0 1 5.2,21.8"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 参数滑块（两根，表明这是"模板/参数"） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF334155" Thickness="1.6" LineCap="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M14,5 L30,5 M14,10 L30,10"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF2563EB">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="1"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <EllipseGeometry RadiusX="2.6" RadiusY="2.6" Center="26,5"/>
+                            <EllipseGeometry RadiusX="2.6" RadiusY="2.6" Center="19,10"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 外排放坡：排土台阶【向上堆】+ 向上箭头 —— 与 mineass_bench_expand_batch（采场向下扩帮）方向相反 -->
+    <DrawingImage x:Key="mineass_outer_dump_slope">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 逐级堆高的排土台阶（绿） -->
+                <GeometryDrawing Brush="#FF6EE7B7">
+                    <GeometryDrawing.Pen><Pen Brush="#FF065F46" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M2,29 L2,23 L11,23 L11,17 L20,17 L20,11 L29,11 L29,29 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 台阶面分界 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF065F46" Thickness="0.7"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M11,23 L11,29 M20,17 L20,29"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 向上堆的箭头（三根） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF047857" Thickness="1.5"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M6.5,21 L6.5,15 M15.5,15 L15.5,9 M24.5,9 L24.5,3"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF047857">
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <PathGeometry Figures="M6.5,12.5 L4,17 L9,17 Z"/>
+                            <PathGeometry Figures="M15.5,6.5 L13,11 L18,11 Z"/>
+                            <PathGeometry Figures="M24.5,1 L22,5.5 L27,5.5 Z"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 驱动量：工作帮斜面 + 吨位砝码 + 左右双向箭头（用量反算位置）—— 与 mineass_volume（排土容量校核）区分 -->
+    <DrawingImage x:Key="mineass_qty_driven">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 煤层（黑）+ 现状面 -->
+                <GeometryDrawing Brush="#FF1F2937">
+                    <GeometryDrawing.Geometry><RectangleGeometry Rect="2,22,28,4"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 工作帮斜面（贯穿煤层） -->
+                <GeometryDrawing Brush="#FFFDBA74">
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C2D12" Thickness="1.2" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M10,26 L18,10 L24,10 L24,26 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 位置由量反算：左右双向箭头 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFDC2626" Thickness="1.5" LineCap="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M7,29 L27,29"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFDC2626">
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <PathGeometry Figures="M3,29 L8,26.6 L8,31.4 Z"/>
+                            <PathGeometry Figures="M31,29 L26,26.6 L26,31.4 Z"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 砝码（量）：梯形块 -->
+                <GeometryDrawing Brush="#FF2563EB">
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E3A8A" Thickness="0.9" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M3,17 L5,9 L11,9 L13,17 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="1.4"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M6,13.5 L10,13.5"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 组合工作线：两条成员线 + 缺口处的虚线【软连接段】—— 与 mineass_workline（单条）区分 -->
+    <DrawingImage x:Key="mineass_workline_group">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 成员线 ①（实） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF334155" Thickness="2.4" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M2,22 L7,15 L12,18"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 软连接段（虚线，不是实几何） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FF94A3B8" Thickness="1.8" LineCap="Round">
+                            <Pen.DashStyle><DashStyle Dashes="1.5,1.5"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M12,18 L18,14"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 成员线 ②（实） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF334155" Thickness="2.4" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M18,14 L23,17 L30,9"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 统一推进方向（琥珀箭头，与场景同色） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFF59E0B" Thickness="1.6"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M6,28 L16,28 M20,28 L26,28"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFF59E0B">
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <PathGeometry Figures="M19,28 L15,26 L15,30 Z"/>
+                            <PathGeometry Figures="M30,28 L25,26 L25,30 Z"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 成员端点夹点 -->
+                <GeometryDrawing Brush="#FF2563EB">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.8"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <EllipseGeometry RadiusX="2" RadiusY="2" Center="12,18"/>
+                            <EllipseGeometry RadiusX="2" RadiusY="2" Center="18,14"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 螺旋坑线：坑的同心环 + 盘旋下降的坡道弧 + 下行箭头 —— 与 mineass_road_straight（一条直腿）区分 -->
+    <DrawingImage x:Key="mineass_road_spiral">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 坑的同心台阶环（俯视） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFCBD5E1" Thickness="1.2"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <EllipseGeometry RadiusX="14" RadiusY="7" Center="16,14"/>
+                            <EllipseGeometry RadiusX="9.5" RadiusY="4.8" Center="16,17"/>
+                            <EllipseGeometry RadiusX="5" RadiusY="2.6" Center="16,20"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 盘旋下降的坡道（沿环走的弧段，逐圈收小） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF374151" Thickness="2.6" LineCap="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M30,14 A 14,7 0 0 1 16,21 M6.5,17 A 9.5,4.8 0 0 1 16,12.2 M21,20 A 5,2.6 0 0 1 11,20"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 黄色路面中线 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FFFBBF24" Thickness="0.8">
+                            <Pen.DashStyle><DashStyle Dashes="2,1.5"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M30,14 A 14,7 0 0 1 16,21 M6.5,17 A 9.5,4.8 0 0 1 16,12.2"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 下行箭头 -->
+                <GeometryDrawing Brush="#FF10B981">
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M16,29 L12.5,23.5 L19.5,23.5 Z"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 折返坑线：直腿 + 180° 回头弧往返下降 —— 与 mineass_road_centerline（手画之字中线 + 画笔）区分 -->
+    <DrawingImage x:Key="mineass_road_switchback">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 坡面底衬 -->
+                <GeometryDrawing Brush="#FFF5F5F4">
+                    <GeometryDrawing.Pen><Pen Brush="#FFD6D3D1" Thickness="0.8"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry RadiusX="1" RadiusY="1" Rect="2,4,28,25"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 折返路：直腿 + 两个 180° 回头弧 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF374151" Thickness="2.8" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M5,26 L21,26 A 4,4 0 0 0 21,18 L9,18 A 4,4 0 0 1 9,10 L26,10"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 黄色中线 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FFFBBF24" Thickness="0.8">
+                            <Pen.DashStyle><DashStyle Dashes="2,1.5"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M5,26 L21,26 A 4,4 0 0 0 21,18 L9,18 A 4,4 0 0 1 9,10 L26,10"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 上行端箭头 -->
+                <GeometryDrawing Brush="#FF10B981">
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M30,10 L25,7.4 L25,12.6 Z"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 参数化开采模板设计：模板矩形 + 参数滑块 -->
+    <DrawingImage x:Key="mineass_template_param">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 模板背板 -->
+                <GeometryDrawing Brush="#FFFEF3C7">
+                    <GeometryDrawing.Pen><Pen Brush="#FF92400E" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry RadiusX="1.5" RadiusY="1.5" Rect="3,5,26,22"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 模板里的阶梯（开采台阶示意） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF92400E" Thickness="1.2" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M5,22 L11,22 L11,18 L17,18 L17,14 L23,14 L23,10 L27,10"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 右侧 3 个参数滑块（蓝色） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF93C5FD" Thickness="1.6" LineCap="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M20,8 L29,8 M20,16 L29,16 M20,24 L29,24"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF2563EB">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.5"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <EllipseGeometry RadiusX="1.6" RadiusY="1.6" Center="26,8"/>
+                            <EllipseGeometry RadiusX="1.6" RadiusY="1.6" Center="22,16"/>
+                            <EllipseGeometry RadiusX="1.6" RadiusY="1.6" Center="27,24"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 驱动开采模板：模板 + 绿色播放/驱动箭头 -->
+    <DrawingImage x:Key="mineass_drive_template">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FFFEF3C7">
+                    <GeometryDrawing.Pen><Pen Brush="#FF92400E" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry RadiusX="1.5" RadiusY="1.5" Rect="2,5,20,22"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 模板内的阶梯 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF92400E" Thickness="1.2" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M4,22 L9,22 L9,18 L14,18 L14,14 L20,14"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 绿色播放三角（驱动） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FF34D399" Offset="0"/>
+                            <GradientStop Color="#FF059669" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M23,10 L30,16 L23,22 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 创建工程位置：红色定位水滴 + 阶梯坑 -->
+    <DrawingImage x:Key="mineass_create_loc">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 阶梯坑剖面 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFEA580C" Offset="0"/>
+                            <GradientStop Color="#FF7C2D12" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF451A03" Thickness="0.6" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M2,18 L8,18 L8,21 L14,21 L14,24 L20,24 L20,27 L30,27 L30,29 L2,29 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 顶部红色水滴定位 + 中心白圆 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFEF4444" Offset="0"/>
+                            <GradientStop Color="#FFB91C1C" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF7F1D1D" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M15,2 C19,2 22,5 22,8 C22,12 15,17 15,17 C15,17 8,12 8,8 C8,5 11,2 15,2 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFFFFFFF">
+                    <GeometryDrawing.Geometry>
+                        <EllipseGeometry RadiusX="2.2" RadiusY="2.2" Center="15,8"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 绿色+角标 -->
+                <GeometryDrawing Brush="#FF10B981">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.5"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <EllipseGeometry RadiusX="3" RadiusY="3" Center="26,9"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="1" LineCap="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M26,7 L26,11 M24,9 L28,9"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 工作线：折线基线（深 slate）+ 琥珀色推进方向箭头（与场景中工作线箭头同色）+ 蓝色可拖夹点（中段=控制箭头） -->
+    <DrawingImage x:Key="mineass_workline">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 工作线基线（多段线，深 slate） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF334155" Thickness="2.2" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M4,24 L12,22 L20,24 L28,21"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 基线顶点 -->
+                <GeometryDrawing Brush="#FF334155">
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <EllipseGeometry RadiusX="1" RadiusY="1" Center="4,24"/>
+                            <EllipseGeometry RadiusX="1" RadiusY="1" Center="12,22"/>
+                            <EllipseGeometry RadiusX="1" RadiusY="1" Center="20,24"/>
+                            <EllipseGeometry RadiusX="1" RadiusY="1" Center="28,21"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 推进方向箭头（琥珀色）：两侧为指示箭头（带箭头头），中段为控制箭头（轴顶带可拖夹点，无箭头头） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFF59E0B" Thickness="1.8" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M8,22 L8,13 M5.8,15 L8,13 L10.2,15   M16,23 L16,9   M24,22.5 L24,14 M21.8,16 L24,14 L26.2,16"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 控制箭头顶端蓝色可拖夹点（与「动态调整台阶」夹点同色语言） -->
+                <GeometryDrawing Brush="#FF3B82F6">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.7"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry Rect="14,5,4,4"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- ─────────── 参数化开采模板设计 · 4 个子功能图标 ─────────── -->
+
+    <!-- 单台阶扩帮：单级台阶 + 单个绿色外推箭头（含旧虚线轮廓示意扩展前位置） -->
+    <DrawingImage x:Key="mineass_bench_expand">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 旧台阶虚线轮廓（扩展前） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FFFB923C" Thickness="1.2" LineJoin="Round">
+                            <Pen.DashStyle><DashStyle Dashes="2,1.5"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M4,26 L4,18 L13,18"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 新台阶实心（外推后位置） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFFB923C" Offset="0"/>
+                            <GradientStop Color="#FFC2410C" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C2D12" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M4,26 L4,12 L21,12 L21,26 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 顶部高光 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFFBBF24" Thickness="0.8" LineCap="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M4,12.6 L21,12.6"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 绿色外推箭头 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FF10B981" Thickness="2.2" LineCap="Round" LineJoin="Round"/>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M23,18 L30,18 M27,15 L30,18 L27,21"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 批量台阶扩帮：3 级阶梯 + 3 根并排绿色外推箭头 -->
+    <DrawingImage x:Key="mineass_bench_expand_batch">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 3 级阶梯本体 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFFB923C" Offset="0"/>
+                            <GradientStop Color="#FF7C2D12" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C2D12" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M3,28 L3,22 L9,22 L9,17 L15,17 L15,12 L21,12 L21,28 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 高光线 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFFBBF24" Thickness="0.7" LineCap="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M3,22.5 L9,22.5 M9,17.5 L15,17.5 M15,12.5 L21,12.5"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 3 根并排绿色外推箭头（每级一根） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FF10B981" Thickness="1.5" LineCap="Round" LineJoin="Round"/>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M22,14 L30,14 M28,12 L30,14 L28,16    M22,19 L30,19 M28,17 L30,19 L28,21    M22,25 L30,25 M28,23 L30,25 L28,27"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 动态调整台阶形态：阶梯 + 蓝色夹点 + 双向调整箭头 + 右侧滑块（动态调节） -->
+    <DrawingImage x:Key="mineass_bench_edit">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 阶梯本体 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFFED7AA" Offset="0"/>
+                            <GradientStop Color="#FFFB923C" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C2D12" Thickness="0.9" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M3,27 L3,21 L9,21 L9,15 L16,15 L16,9 L22,9 L22,27 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 高光线 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFFBBF24" Thickness="0.6"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M3,21.5 L9,21.5 M9,15.5 L16,15.5 M16,9.5 L22,9.5"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 蓝色夹点方块（拐点处） -->
+                <GeometryDrawing Brush="#FF3B82F6">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.8"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <RectangleGeometry Rect="7.5,19.5,3,3"/>
+                            <RectangleGeometry Rect="14.5,13.5,3,3"/>
+                            <RectangleGeometry Rect="20.5,7.5,3,3"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 中段双向调整箭头（绿色，表示动态调节台阶高度/宽度） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF10B981" Thickness="1.6" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M16,18 L16,28 M14,20 L16,18 L18,20 M14,26 L16,28 L18,26"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 右侧滑块条（紫色，强调"动态可调"） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFC4B5FD" Thickness="2.4" LineCap="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M26,5 L26,28"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF7C3AED">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.6"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <EllipseGeometry RadiusX="2.4" RadiusY="2.4" Center="26,16"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 滑块上下小箭头 -->
+                <GeometryDrawing Brush="#FF7C3AED">
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <PathGeometry Figures="M26,3 L24,6 L28,6 Z"/>
+                            <PathGeometry Figures="M26,30 L24,27 L28,27 Z"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 处理尖灭：阶梯沿走向收缩到尖灭点 + 红色聚焦圆圈高亮 + 扳手徽章（手动处理） -->
+    <DrawingImage x:Key="mineass_bench_pinch">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 阶梯沿走向收缩（左宽右窄到尖灭点，剖面/俯视双重含义） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFFED7AA" Offset="0"/>
+                            <GradientStop Color="#FFEA580C" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C2D12" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M2,28 L2,21 L9,21 L9,16 L15,16 L15,12 L20,12 L20,16 L23,16 L23,21 L26,21 L26,28 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 高光线 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFFBBF24" Thickness="0.6"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M2,21.5 L9,21.5 M9,16.5 L15,16.5 M15,12.5 L20,12.5 M20,16.5 L23,16.5 M23,21.5 L26,21.5"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 走向尖灭虚线收尾（右端，紫色虚线锥形） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <SolidColorBrush Color="#FFA855F7" Opacity="0.3"/>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FF7C3AED" Thickness="1.2" LineJoin="Round">
+                            <Pen.DashStyle><DashStyle Dashes="1.8,1"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M26,21 L30,25 L30,28 L26,28 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 红色聚焦圆圈（高亮尖灭点） -->
+                <GeometryDrawing Brush="{x:Null}">
+                    <GeometryDrawing.Pen><Pen Brush="#FFEF4444" Thickness="1.6"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <EllipseGeometry RadiusX="4" RadiusY="4" Center="20,12"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 聚焦十字 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFEF4444" Thickness="0.8" LineCap="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M14,12 L17,12 M23,12 L26,12 M20,6 L20,9 M20,15 L20,18"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 扳手徽章（左上，"处理"动作标识） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FF60A5FA" Offset="0"/>
+                            <GradientStop Color="#FF1E40AF" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.5"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <EllipseGeometry RadiusX="3.6" RadiusY="3.6" Center="5,5"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 扳手图形 -->
+                <GeometryDrawing Brush="#FFFFFFFF">
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.4" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M3,3 L4,2 L5,3 L4.5,3.5 L7,6 L6,7 L3.5,4.5 L3,5 L2,4 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- ─────────── 驱动开采模板 · 2 个子图标（按 Needs.md 未提交补充） ─────────── -->
+
+    <!-- 固定模板驱动：单个模板矩形 + 锁定徽章 + 绿色播放箭头 -->
+    <DrawingImage x:Key="mineass_drive_fixed">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 模板背板 -->
+                <GeometryDrawing Brush="#FFFEF3C7">
+                    <GeometryDrawing.Pen><Pen Brush="#FF92400E" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry RadiusX="1.5" RadiusY="1.5" Rect="3,7,18,20"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 模板内阶梯（开采台阶） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF92400E" Thickness="1.2" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M5,23 L9,23 L9,19 L14,19 L14,15 L19,15"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 锁定徽章（蓝色挂锁，表示"固定"） -->
+                <GeometryDrawing Brush="#FF2563EB">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.6"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry RadiusX="0.6" RadiusY="0.6" Rect="6,12,7,6"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="{x:Null}">
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E3A8A" Thickness="1.0"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry>
+                            <PathFigure StartPoint="7.5,12">
+                                <ArcSegment Point="11.5,12" Size="2,2" SweepDirection="Clockwise" IsLargeArc="False"/>
+                            </PathFigure>
+                        </PathGeometry>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFFBBF24">
+                    <GeometryDrawing.Geometry>
+                        <EllipseGeometry RadiusX="0.7" RadiusY="0.7" Center="9.5,15"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 绿色播放三角（驱动） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FF34D399" Offset="0"/>
+                            <GradientStop Color="#FF059669" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M23,11 L30,17 L23,23 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 组合模板驱动：3 个叠加的模板（蓝/橙/绿） + 绿色播放箭头 -->
+    <DrawingImage x:Key="mineass_drive_combo">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 后层模板（绿） -->
+                <GeometryDrawing Brush="#FFD1FAE5">
+                    <GeometryDrawing.Pen><Pen Brush="#FF065F46" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry RadiusX="1" RadiusY="1" Rect="7,3,14,14"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 中层模板（橙） -->
+                <GeometryDrawing Brush="#FFFED7AA">
+                    <GeometryDrawing.Pen><Pen Brush="#FF9A3412" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry RadiusX="1" RadiusY="1" Rect="4,7,14,14"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 前层模板（蓝，最显眼） -->
+                <GeometryDrawing Brush="#FFBFDBFE">
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.9" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry RadiusX="1" RadiusY="1" Rect="2,11,14,14"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 前层内阶梯 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M4,22 L7,22 L7,19 L11,19 L11,16 L14,16"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 绿色播放三角（驱动） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FF34D399" Offset="0"/>
+                            <GradientStop Color="#FF059669" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M22,14 L30,20 L22,26 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- ─────────── 创建工程位置 · 3 个子图标 ─────────── -->
+
+    <!-- 批量扩坑：多个叠加阶梯坑 + 绿色多向外推箭头 -->
+    <DrawingImage x:Key="mineass_pit_expand">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 旧阶梯坑（虚线轮廓） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FFFB923C" Thickness="1.0" LineJoin="Round">
+                            <Pen.DashStyle><DashStyle Dashes="2,1.5"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M10,24 L10,18 L15,18 L15,14 L20,14"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 扩展后的新阶梯坑（实心多级） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFFB923C" Offset="0"/>
+                            <GradientStop Color="#FF7C2D12" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C2D12" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M3,28 L3,22 L8,22 L8,17 L14,17 L14,12 L21,12 L21,7 L28,7 L28,28 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 高光线 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFFBBF24" Thickness="0.6"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M3,22.5 L8,22.5 M8,17.5 L14,17.5 M14,12.5 L21,12.5 M21,7.5 L28,7.5"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 多向绿色批量箭头 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF10B981" Thickness="1.4" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M24,3 L29,3 L29,8 M27,5 L31,1 M5,5 L5,2 M3,4 L5,2 L7,4"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 搭建运输系统：阶梯坑 + 绕坑盘旋道路 + 卡车 -->
+    <!-- 坑线落地：虚线中线 → 实体路面带，嵌入/切入台阶坡面，配向下"落地"实箭头 -->
+    <DrawingImage x:Key="mineass_build_transport">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 台阶坡面（剖面，被切入路面的母体） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFFED7AA" Offset="0"/>
+                            <GradientStop Color="#FF9A3412" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C2D12" Thickness="0.7" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M2,29 L2,22 L28,8 L30,8 L30,29 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 上半段：仍是虚线鬼影中线（未落地） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FF94A3B8" Thickness="1.4" LineJoin="Round">
+                            <Pen.DashStyle><DashStyle Dashes="1.6,1.4"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M17,18.5 L28,12.5"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 下半段：已落地的实体路面带（深灰，切入坡面的路堑走廊） -->
+                <GeometryDrawing Brush="#FF6B7280">
+                    <GeometryDrawing.Pen><Pen Brush="#FF374151" Thickness="0.6" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M3,26 L17,18.4 L17,20.6 L3,28.2 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 实体段黄色实中线 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFFBBF24" Thickness="0.8"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M4,27 L17,19.5"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 切口红边（路面嵌入坡面的切割上沿） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFEF4444" Thickness="1" LineCap="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M3,26 L17,18.4"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 向下"落地/成型"实箭头（绿，从虚线段指向实体段） -->
+                <GeometryDrawing Brush="#FF10B981">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.5" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M22,5 L26,5 L26,9 L29,9 L24,15 L19,9 L22,9 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 合并台阶面：两条台阶 + 中间向中心合并的箭头 + 合并后一面整段 -->
+    <DrawingImage x:Key="mineass_merge_bench">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 上方台阶（被合并方，淡橙） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <SolidColorBrush Color="#FFFB923C" Opacity="0.6"/>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FF9A3412" Thickness="0.8" LineJoin="Round">
+                            <Pen.DashStyle><DashStyle Dashes="2,1.5"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M3,8 L13,8 L13,12 L3,12 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <SolidColorBrush Color="#FFFB923C" Opacity="0.6"/>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FF9A3412" Thickness="0.8" LineJoin="Round">
+                            <Pen.DashStyle><DashStyle Dashes="2,1.5"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M19,8 L29,8 L29,12 L19,12 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 中间向内合并箭头（绿色） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF10B981" Thickness="1.6" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M5,17 L13,17 M10,15 L13,17 L10,19 M27,17 L19,17 M22,15 L19,17 L22,19"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 合并后的台阶面（实心整段，深橙）-->
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFFB923C" Offset="0"/>
+                            <GradientStop Color="#FF7C2D12" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C2D12" Thickness="1.0" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M3,23 L29,23 L29,28 L3,28 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 合并后顶高光 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFFBBF24" Thickness="0.8" LineCap="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M3,23.6 L29,23.6"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- ─────────── 工程位置动态调整 · 2 个子图标 ─────────── -->
+
+    <!-- 台阶调整：阶梯 + 蓝色夹点 + 上下调整箭头 -->
+    <DrawingImage x:Key="mineass_adjust_bench">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 阶梯本体 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFFED7AA" Offset="0"/>
+                            <GradientStop Color="#FFFB923C" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C2D12" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M2,28 L2,22 L9,22 L9,17 L17,17 L17,12 L25,12 L25,28 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 高光 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFFBBF24" Thickness="0.7"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M2,22.6 L9,22.6 M9,17.6 L17,17.6 M17,12.6 L25,12.6"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 蓝色夹点方块（各拐点） -->
+                <GeometryDrawing Brush="#FF3B82F6">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.6"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <RectangleGeometry Rect="7.5,20.5,3,3"/>
+                            <RectangleGeometry Rect="15.5,15.5,3,3"/>
+                            <RectangleGeometry Rect="23.5,10.5,3,3"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 右上双向调整箭头（↑↓） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFEA580C" Thickness="1.8" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M29,3 L29,15 M27,5 L29,3 L31,5 M27,13 L29,15 L31,13"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 运输系统调整：道路节点图 + 蓝色夹点 + 4 向调整箭头 -->
+    <DrawingImage x:Key="mineass_adjust_transport">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 道路连线（深灰） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF1F2937" Thickness="2.4" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M5,25 L13,18 L21,22 M13,18 L18,9"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 黄色中线 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FFFBBF24" Thickness="0.7">
+                            <Pen.DashStyle><DashStyle Dashes="1.5,1"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M5,25 L13,18 L21,22 M13,18 L18,9"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 蓝色夹点（节点） -->
+                <GeometryDrawing Brush="#FF3B82F6">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.6"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <RectangleGeometry Rect="3.5,23.5,3,3"/>
+                            <RectangleGeometry Rect="11.5,16.5,3,3"/>
+                            <RectangleGeometry Rect="19.5,20.5,3,3"/>
+                            <RectangleGeometry Rect="16.5,7.5,3,3"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 4 向橙色调整箭头（中心夹点旁） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFEA580C" Thickness="1.4" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M28,4 L31,4 L31,7 M27,8 L31,4 M24,28 L27,28 L27,31 M23,27 L27,31"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 工程位置动态调整：水滴 + 4 向调整箭头 -->
+    <DrawingImage x:Key="mineass_adjust_loc">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 红色水滴定位 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFEF4444" Offset="0"/>
+                            <GradientStop Color="#FFB91C1C" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF7F1D1D" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M16,9 C19,9 21,11 21,13 C21,16 16,21 16,21 C16,21 11,16 11,13 C11,11 13,9 16,9 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFFFFFFF">
+                    <GeometryDrawing.Geometry>
+                        <EllipseGeometry RadiusX="1.5" RadiusY="1.5" Center="16,13"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 4 向调整箭头（蓝色） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF2563EB" Thickness="1.5" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M16,2 L16,6 M14,4 L16,2 L18,4 M16,30 L16,26 M14,28 L16,30 L18,28 M2,16 L6,16 M4,14 L2,16 L4,18 M30,16 L26,16 M28,14 L30,16 L28,18"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- ═══════════ 按"剥采排工程"功能名重配的专属图标 ═══════════ -->
+
+    <!-- 分帮扩帮：俯视境界被分成多帮(不同色边段)+各帮独立外推箭头(差异化放坡) -->
+    <DrawingImage x:Key="mineass_bench_perwall">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 原境界(虚线内圈) -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FFFB923C" Thickness="1.0" LineJoin="Round">
+                            <Pen.DashStyle><DashStyle Dashes="2,1.5"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry RadiusX="1" RadiusY="1" Rect="11,11,10,10"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 上帮(绿) -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF059669" Thickness="2.6" LineCap="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M9,9 L23,9"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 右帮(橙) -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFEA580C" Thickness="2.6" LineCap="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M23,9 L23,23"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 下/左帮(深棕) -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF92400E" Thickness="2.6" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M23,23 L9,23 L9,9"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 分帮分界点(角点,蓝夹点) -->
+                <GeometryDrawing Brush="#FF3B82F6">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.5"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <EllipseGeometry RadiusX="1.4" RadiusY="1.4" Center="9,9"/>
+                            <EllipseGeometry RadiusX="1.4" RadiusY="1.4" Center="23,9"/>
+                            <EllipseGeometry RadiusX="1.4" RadiusY="1.4" Center="23,23"/>
+                            <EllipseGeometry RadiusX="1.4" RadiusY="1.4" Center="9,23"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 各帮独立外推箭头(三向,绿) -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF10B981" Thickness="1.5" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M16,7 L16,2 M14,4 L16,2 L18,4   M25,16 L30,16 M28,14 L30,16 L28,18   M16,25 L16,30 M14,28 L16,30 L18,28"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 约束条件设置：斜坡道 + 限制坡度角弧(红) + 右侧参数滑块(蓝) -->
+    <DrawingImage x:Key="mineass_transport_config">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 地面基线 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF1F2937" Thickness="1.0"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M3,27 L16,27"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 斜坡道(灰带) -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF6B7280" Thickness="2.6" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M3,27 L16,13"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 黄虚中线 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FFFBBF24" Thickness="0.7"><Pen.DashStyle><DashStyle Dashes="1.5,1"/></Pen.DashStyle></Pen>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M3,27 L16,13"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 限制坡度角弧(红) -->
+                <GeometryDrawing Brush="{x:Null}">
+                    <GeometryDrawing.Pen><Pen Brush="#FFEF4444" Thickness="1.2"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry>
+                            <PathFigure StartPoint="11,27">
+                                <ArcSegment Point="9.6,23.6" Size="4,4" SweepDirection="CounterClockwise" IsLargeArc="False"/>
+                            </PathFigure>
+                        </PathGeometry>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 右侧参数滑块(蓝,约束参数) -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF93C5FD" Thickness="1.6" LineCap="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M20,9 L30,9 M20,16 L30,16 M20,23 L30,23"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF2563EB">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.5"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <EllipseGeometry RadiusX="1.5" RadiusY="1.5" Center="27,9"/>
+                            <EllipseGeometry RadiusX="1.5" RadiusY="1.5" Center="23,16"/>
+                            <EllipseGeometry RadiusX="1.5" RadiusY="1.5" Center="28,23"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 运量驱动布线：采剥点(橙方,源) → 分叉节点(蓝) → 卸载点(绿圆,汇) 的流向路网 -->
+    <DrawingImage x:Key="mineass_road_layout">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 路网连线(灰) -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF6B7280" Thickness="2.2" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M5,26 L14,16 L26,7 M14,16 L27,20"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 流向虚黄 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FFFBBF24" Thickness="0.7"><Pen.DashStyle><DashStyle Dashes="1.5,1"/></Pen.DashStyle></Pen>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M5,26 L14,16 L26,7 M14,16 L27,20"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 源:采剥点(橙方) -->
+                <GeometryDrawing Brush="#FFEA580C">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.6"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><RectangleGeometry Rect="2.5,23.5,5,5"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 汇:卸载点(绿圆 ×2) -->
+                <GeometryDrawing Brush="#FF10B981">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.6"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <EllipseGeometry RadiusX="2.6" RadiusY="2.6" Center="27,6"/>
+                            <EllipseGeometry RadiusX="2.6" RadiusY="2.6" Center="28,21"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 分叉节点(蓝) -->
+                <GeometryDrawing Brush="#FF3B82F6">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.5"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><EllipseGeometry RadiusX="1.8" RadiusY="1.8" Center="14,16"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 画道路中线：阶梯坡面 + 蓝虚之字中线 + 控制点 + 画笔 -->
+    <DrawingImage x:Key="mineass_road_centerline">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 阶梯坡面(橙) -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFFED7AA" Offset="0"/>
+                            <GradientStop Color="#FFFB923C" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C2D12" Thickness="0.7" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M2,29 L2,23 L9,23 L9,17 L16,17 L16,11 L23,11 L23,29 Z"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 道路中线(蓝虚,之字爬升) -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FF2563EB" Thickness="1.6" LineJoin="Round"><Pen.DashStyle><DashStyle Dashes="2,1.2"/></Pen.DashStyle></Pen>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M4,27 L12,21 L19,15 L27,9"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 中线控制点(蓝) -->
+                <GeometryDrawing Brush="#FF3B82F6">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.5"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <EllipseGeometry RadiusX="1.4" RadiusY="1.4" Center="4,27"/>
+                            <EllipseGeometry RadiusX="1.4" RadiusY="1.4" Center="12,21"/>
+                            <EllipseGeometry RadiusX="1.4" RadiusY="1.4" Center="19,15"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 画笔(右上,绿) -->
+                <GeometryDrawing Brush="#FF10B981">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.5" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M27,9 L31,5 L29,3 L25,7 Z"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFFFFFFF">
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M25,7 L27,9 L25.8,10.2 Z"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 撤销坑线：已落地路面带 + 末段虚化淡出 + 逆时针撤销箭头（移除最近一段） -->
+    <DrawingImage x:Key="mineass_road_cut">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 已落地的路面带（保留段，深灰实体） -->
+                <GeometryDrawing Brush="#FF6B7280">
+                    <GeometryDrawing.Pen><Pen Brush="#FF374151" Thickness="0.6" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M2,28 L2,24 L17,18 L18,21.5 L4,28 Z"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 保留段黄实中线 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFFBBF24" Thickness="0.7"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M3,26 L17,19.5"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 末段：正被撤销，虚化淡出（半透明灰 + 虚边） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <SolidColorBrush Color="#FF9CA3AF" Opacity="0.4"/>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FF6B7280" Thickness="0.7" LineJoin="Round">
+                            <Pen.DashStyle><DashStyle Dashes="1.6,1.4"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M17,18 L28,12 L29,15.5 L18,21.5 Z"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 逆时针撤销箭头（绿色 ↺，移除最近一段） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF10B981" Thickness="2.2" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M25,9 A6.5,6.5 0 1 0 27.5,14.5"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 撤销箭头头部（指向起点，逆时针入口） -->
+                <GeometryDrawing Brush="#FF10B981">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.4" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M25,9 L20,8.2 L23,12.8 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- ─────────── 运输/排土 占位图标改专属 ─────────── -->
+
+    <!-- 直线坑线：阶梯坑 + 一条贯穿坑底到地表的【直线】斜坡道（深灰带+黄虚中线）+ 绿上行箭头 -->
+    <DrawingImage x:Key="mineass_road_straight">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 阶梯坑剖面 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFFED7AA" Offset="0"/>
+                            <GradientStop Color="#FF9A3412" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C2D12" Thickness="0.7" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M2,29 L2,23 L8,23 L8,17 L14,17 L14,11 L22,11 L22,7 L30,7 L30,29 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 台阶高光 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFFBBF24" Thickness="0.6"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M2,23.5 L8,23.5 M8,17.5 L14,17.5 M14,11.5 L22,11.5 M22,7.5 L30,7.5"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 直线斜坡道（贯穿，深灰带） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF1F2937" Thickness="3.4" LineCap="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M5,27 L27,8"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 黄虚中线 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FFFBBF24" Thickness="0.8"><Pen.DashStyle><DashStyle Dashes="1.6,1.2"/></Pen.DashStyle></Pen>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M5,27 L27,8"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 绿色上行箭头（坑底→地表） -->
+                <GeometryDrawing Brush="#FF10B981">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.5" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M28,7 L23.5,8 L26,12.5 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 平盘联络道：上下两级平盘 + 跨坡面的斜向联络路（深灰带+黄虚中线）连接两平盘 -->
+    <DrawingImage x:Key="mineass_bench_connector">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 两级平盘 + 中间坡面（剖面） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFFED7AA" Offset="0"/>
+                            <GradientStop Color="#FF9A3412" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C2D12" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M2,29 L2,23 L13,23 L19,13 L30,13 L30,29 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 平盘高光（上下两条） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFFBBF24" Thickness="0.6"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M2,23.5 L13,23.5 M19,13.5 L30,13.5"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 跨坡联络路（下平盘→上平盘，深灰带） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF1F2937" Thickness="3.2" LineCap="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M8,23 L24,13"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 黄虚中线 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FFFBBF24" Thickness="0.8"><Pen.DashStyle><DashStyle Dashes="1.6,1.2"/></Pen.DashStyle></Pen>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M8,23 L24,13"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 两端联络端点（蓝色，强调"联络/对接两平盘"） -->
+                <GeometryDrawing Brush="#FF3B82F6">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.6"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <EllipseGeometry RadiusX="1.7" RadiusY="1.7" Center="8,23"/>
+                            <EllipseGeometry RadiusX="1.7" RadiusY="1.7" Center="24,13"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 排土场按量推进：左侧采空区（虚线空台阶）+ 右侧排土堆（安息角）+ 绿色推进箭头（给量往外堆） -->
+    <DrawingImage x:Key="mineass_inner_dump">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 采空区（左，虚线空台阶轮廓） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FFC2410C" Thickness="1.1" LineJoin="Round">
+                            <Pen.DashStyle><DashStyle Dashes="2,1.4"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M2,29 L2,21 L8,21 L8,15 L13,15"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 排土堆（右，按安息角的料堆，土黄渐变） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFD4A373" Offset="0"/>
+                            <GradientStop Color="#FF7C2D12" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF5C2A0E" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M14,29 L23,16 L30,16 L30,29 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 排土堆顶高光 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFFDE68A" Thickness="0.6"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M23,16.5 L30,16.5"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 绿色向左推进箭头（向采空区回填） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF10B981" Thickness="2.2" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M23,9 L11,9 M14,6 L11,9 L14,12"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 排土条带：俯视一级排土台阶被切成网格——土黄底 + 走向分幅虚线 + 推进方向实线带 + 当前工作面带高亮 -->
+    <DrawingImage x:Key="mineass_dump_strip">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 台阶壳子（俯视矩形，土黄） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#FFE7C9A3" Offset="0"/>
+                            <GradientStop Color="#FFC08A52" Offset="1"/>
+                        </LinearGradientBrush>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen><Pen Brush="#FF5C2A0E" Thickness="1.0" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry Rect="3,7 26,18"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 当前排土工作面那一带（最左一条，绿色实心 = 真坡面所在） -->
+                <GeometryDrawing Brush="#FF10B981">
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry Rect="3,7 6,18"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 条带界（沿推进方向逐带切开） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF5C2A0E" Thickness="0.9"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M9,7 L9,25 M15,7 L15,25 M21,7 L21,25"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 分幅界（沿走向切，虚线以示与条带不同轴） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FF7C2D12" Thickness="0.8">
+                            <Pen.DashStyle><DashStyle Dashes="2,1.4"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M3,13 L29,13 M3,19 L29,19"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 推进方向箭头（往坡脚/外，与采场镜像） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF2563EB" Thickness="1.8" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M12,4 L26,4 M23,1.5 L26,4 L23,6.5"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 煤层露头着色：台阶横剖面——鲜绿坡体 + 埋藏煤层暗带 + 台阶帮面露头段染煤色·亮橙高亮 -->
+    <DrawingImage x:Key="mineass_seam_outcrop">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 土体横剖面（鲜绿地表）：左台面 → 台阶帮面下切 → 坑底 -->
+                <GeometryDrawing Brush="#FF8BD450">
+                    <GeometryDrawing.Pen><Pen Brush="#FF4F9E2C" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M2,11 L12,11 L16,25 L30,25 L30,29 L2,29 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 埋藏煤层暗带（顶底板之间，横卧于台面下，向帮面尖灭） -->
+                <GeometryDrawing Brush="#FF242428">
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M2,16 L12.5,18 L13.5,22 L2,20 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 现状面轮廓（深绿线，示意地表剖面下切） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF2F6B15" Thickness="1.3" LineJoin="Round" LineCap="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M2,11 L12,11 L16,25 L30,25"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 露头着色高亮（亮橙描边光晕 = 着色动作） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFFF7A14" Thickness="4.6" LineCap="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <LineGeometry StartPoint="12.6,17.4" EndPoint="15.4,23.6"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 露头煤色芯（近黑，被染色的出露煤段） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF1A1A1A" Thickness="2.6" LineCap="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <LineGeometry StartPoint="12.6,17.4" EndPoint="15.4,23.6"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 着色点缀（亮黄小圆点，出露起点） -->
+                <GeometryDrawing Brush="#FFFFC42B">
+                    <GeometryDrawing.Geometry>
+                        <EllipseGeometry RadiusX="1.7" RadiusY="1.7" Center="12.6,17.4"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 连接台阶线：俯视一圈台阶线——两段原有橙色台阶线段 + 两处绿色新接上的接缝 + 接头绿夹点 -->
+    <DrawingImage x:Key="mineass_bench_join">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 原有台阶线段（橙，上下两段，中间左右各缺一口） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FFC2410C" Thickness="2.6" LineJoin="Round" LineCap="Round"/>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M5,11 L16,5 L27,11 M27,22 L16,28 L5,22"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 台阶线高光（浅橙描一道，和其它台阶类图标同一视觉语言） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FFFDBA74" Thickness="0.9" LineJoin="Round" LineCap="Round"/>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M5,11 L16,5 L27,11 M27,22 L16,28 L5,22"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 新接上的两处接缝（亮绿 = 本命令补上的连接关系，串成整圈） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FF10B981" Thickness="2.6" LineCap="Round"/>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M27,11 L27,22 M5,22 L5,11"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 四个接头（绿点白边 = 首尾重合的端点被吸合） -->
+                <GeometryDrawing Brush="#FF059669">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.7"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <EllipseGeometry RadiusX="1.9" RadiusY="1.9" Center="27,11"/>
+                            <EllipseGeometry RadiusX="1.9" RadiusY="1.9" Center="27,22"/>
+                            <EllipseGeometry RadiusX="1.9" RadiusY="1.9" Center="5,22"/>
+                            <EllipseGeometry RadiusX="1.9" RadiusY="1.9" Center="5,11"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+</ResourceDictionary>

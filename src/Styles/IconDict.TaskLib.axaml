@@ -1,0 +1,223 @@
+﻿<!-- 由 build/convert_icons.py 从原版自动 1:1 转换，勿手改 -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+      TaskLib 图标字典（写实风，与进度计划编制/运输/剥采排工程统一）：
+      白底 + 细色描边 + 关键件渐变 + 多元素细节 + 矿味实物。32×32 viewBox，全部大图标用。
+    -->
+
+    <!-- ═══════════ Tab ═══════════ -->
+    <DrawingImage x:Key="task_module"><DrawingImage.Drawing><DrawingGroup>
+        <GeometryDrawing Brush="#FFFFFFFF"><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><RectangleGeometry RadiusX="2.5" RadiusY="2.5" Rect="6,5,20,24"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#FF60A5FA" Offset="0"/><GradientStop Color="#FF2563EB" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#FF1E3A8A" Thickness="0.5" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M12,3 L20,3 L21,7 L11,7 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF94A3B8" Thickness="1.3"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M15,14 L23,14 M15,19 L23,19 M15,24 L21,24"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF16A34A" Thickness="1.8" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M9.5,13 L11,14.5 L13,12 M9.5,18 L11,19.5 L13,17 M9.5,23 L11,24.5 L13,22"/></GeometryDrawing.Geometry></GeometryDrawing>
+    </DrawingGroup></DrawingImage.Drawing></DrawingImage>
+
+    <!-- ═══════════ ① 基础数据 ═══════════ -->
+
+    <!-- 班次日历：白框 + 蓝渐变栏 + A/B/C 三班彩点 -->
+    <DrawingImage x:Key="task_calendar"><DrawingImage.Drawing><DrawingGroup>
+        <GeometryDrawing Brush="#FFFFFFFF"><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><RectangleGeometry RadiusX="2.5" RadiusY="2.5" Rect="4,6,24,22"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#FF60A5FA" Offset="0"/><GradientStop Color="#FF2563EB" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Geometry><PathGeometry Figures="M4,8.5 A2.5,2.5 0 0 1 6.5,6 L25.5,6 A2.5,2.5 0 0 1 28,8.5 L28,11.5 L4,11.5 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF1E3A8A" Thickness="1.8"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M10,3.5 L10,8 M22,3.5 L22,8"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FF16A34A"><GeometryDrawing.Geometry><RectangleGeometry RadiusX="0.6" RadiusY="0.6" Rect="7.5,15,4.5,3.6"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FFF59E0B"><GeometryDrawing.Geometry><RectangleGeometry RadiusX="0.6" RadiusY="0.6" Rect="13.7,15,4.5,3.6"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FF7C3AED"><GeometryDrawing.Geometry><RectangleGeometry RadiusX="0.6" RadiusY="0.6" Rect="19.9,15,4.5,3.6"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FFCBD5E1"><GeometryDrawing.Geometry><GeometryGroup><RectangleGeometry RadiusX="0.6" RadiusY="0.6" Rect="7.5,20.5,4.5,3.6"/><RectangleGeometry RadiusX="0.6" RadiusY="0.6" Rect="13.7,20.5,4.5,3.6"/><RectangleGeometry RadiusX="0.6" RadiusY="0.6" Rect="19.9,20.5,4.5,3.6"/></GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
+    </DrawingGroup></DrawingImage.Drawing></DrawingImage>
+
+    <!-- 作业面台账：台阶坑剖面（蓝渐变）+ 测量红旗 -->
+    <DrawingImage x:Key="task_face"><DrawingImage.Drawing><DrawingGroup>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#FFDBEAFE" Offset="0"/><GradientStop Color="#FFFEF3C7" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Geometry><RectangleGeometry Rect="3,5,26,5"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#FF60A5FA" Offset="0"/><GradientStop Color="#FF1E3A8A" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#FF1E3A8A" Thickness="0.6" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M3,10 L9,10 L9,15 L15,15 L15,20 L21,20 L21,25 L29,25 L29,29 L3,29 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF93C5FD" Thickness="0.7"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M3,10.5 L9,10.5 M9,15.5 L15,15.5 M15,20.5 L21,20.5 M21,25.5 L29,25.5"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FFDC2626"><GeometryDrawing.Geometry><PathGeometry Figures="M23,6 L28,7.5 L23,9 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF334155" Thickness="1"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M23,6 L23,20"/></GeometryDrawing.Geometry></GeometryDrawing>
+    </DrawingGroup></DrawingImage.Drawing></DrawingImage>
+
+    <!-- ═══════════ ② 任务编制 ═══════════ -->
+
+    <!-- 编制配置：面板 + 滑块 + 橙渐变旋钮 + teal 台阶底 -->
+    <DrawingImage x:Key="task_config"><DrawingImage.Drawing><DrawingGroup>
+        <GeometryDrawing Brush="#FFCCFBF1"><GeometryDrawing.Pen><Pen Brush="#FF0F766E" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M2,18 L9,18 L13,23 L19,23 L23,27 L30,27 L30,29 L2,29 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF64748B" Thickness="1.6" LineCap="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M5,5 L27,5 M5,10 L27,10 M5,15 L27,15"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#FFFBBF24" Offset="0"/><GradientStop Color="#FFEA580C" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.7"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><GeometryGroup><EllipseGeometry RadiusX="2.6" RadiusY="2.6" Center="11,5"/><EllipseGeometry RadiusX="2.6" RadiusY="2.6" Center="21,10"/><EllipseGeometry RadiusX="2.6" RadiusY="2.6" Center="14,15"/></GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
+    </DrawingGroup></DrawingImage.Drawing></DrawingImage>
+
+    <!-- 生产任务编制：排产夹板 + 立体甘特条 + 红现在线 ★样板 -->
+    <DrawingImage x:Key="task_create"><DrawingImage.Drawing><DrawingGroup>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="30%,100%"><GradientStop Color="#FFFFFFFF" Offset="0"/><GradientStop Color="#FFDDE5EE" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#FF334155" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><RectangleGeometry RadiusX="2.5" RadiusY="2.5" Rect="4,5,24,23"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#FF64748B" Offset="0"/><GradientStop Color="#FF334155" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#FF1E293B" Thickness="0.5" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><RectangleGeometry RadiusX="1.5" RadiusY="1.5" Rect="12,2.5,8,4"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#FF60A5FA" Offset="0"/><GradientStop Color="#FF2563EB" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#FF1E3A8A" Thickness="0.4"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><RectangleGeometry RadiusX="1" RadiusY="1" Rect="7,9.5,11,2.7"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#FF5EEAD4" Offset="0"/><GradientStop Color="#FF14B8A6" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#FF0F766E" Thickness="0.4"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><RectangleGeometry RadiusX="1" RadiusY="1" Rect="11,13.4,12,2.7"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#FFFBBF24" Offset="0"/><GradientStop Color="#FFD97706" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#FFB45309" Thickness="0.4"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><RectangleGeometry RadiusX="1" RadiusY="1" Rect="7,17.3,8,2.7"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#FF4ADE80" Offset="0"/><GradientStop Color="#FF16A34A" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#FF15803D" Thickness="0.4"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><RectangleGeometry RadiusX="1" RadiusY="1" Rect="12,21.2,10,2.7"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FFDC2626" Thickness="1.1"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M17,7.5 L17,25.5"/></GeometryDrawing.Geometry></GeometryDrawing>
+    </DrawingGroup></DrawingImage.Drawing></DrawingImage>
+
+    <!-- 作业区划分与设备布置：平面分区（渐变）+ 设备 + 橙推进箭头 -->
+    <DrawingImage x:Key="task_layout"><DrawingImage.Drawing><DrawingGroup>
+        <GeometryDrawing Brush="#FFFFFFFF"><GeometryDrawing.Pen><Pen Brush="#FF334155" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><RectangleGeometry RadiusX="2" RadiusY="2" Rect="4,5,24,22"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%"><GradientStop Color="#FFDBEAFE" Offset="0"/><GradientStop Color="#FF93C5FD" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Geometry><RectangleGeometry Rect="4,5,12,11"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%"><GradientStop Color="#FFFEF3C7" Offset="0"/><GradientStop Color="#FFFCD34D" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Geometry><RectangleGeometry Rect="16,16,12,11"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FFBFD4FB" Thickness="1"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M16,5 L16,27 M4,16 L28,16"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FF2563EB"><GeometryDrawing.Pen><Pen Brush="#FF1E3A8A" Thickness="0.4"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><RectangleGeometry RadiusX="0.6" RadiusY="0.6" Rect="7.5,8.5,4,4"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FFD97706"><GeometryDrawing.Pen><Pen Brush="#FF7C2D12" Thickness="0.4"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><RectangleGeometry RadiusX="0.6" RadiusY="0.6" Rect="20,19.5,4,4"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FFEA580C" Thickness="1.5" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M7,21 L13,21 M11,19 L13,21 L11,23"/></GeometryDrawing.Geometry></GeometryDrawing>
+    </DrawingGroup></DrawingImage.Drawing></DrawingImage>
+
+    <!-- 周计划编制：月历 + 高亮一周（绿渐变）+ 周内小条 -->
+    <DrawingImage x:Key="task_week"><DrawingImage.Drawing><DrawingGroup>
+        <GeometryDrawing Brush="#FFFFFFFF"><GeometryDrawing.Pen><Pen Brush="#FF15803D" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><RectangleGeometry RadiusX="2.5" RadiusY="2.5" Rect="4,6,24,22"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#FF4ADE80" Offset="0"/><GradientStop Color="#FF16A34A" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Geometry><PathGeometry Figures="M4,8.5 A2.5,2.5 0 0 1 6.5,6 L25.5,6 A2.5,2.5 0 0 1 28,8.5 L28,11 L4,11 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FFD1FAE5"><GeometryDrawing.Geometry><RectangleGeometry RadiusX="1.2" RadiusY="1.2" Rect="5,17,22,4.6"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FF16A34A"><GeometryDrawing.Geometry><GeometryGroup><RectangleGeometry RadiusX="0.6" RadiusY="0.6" Rect="6.5,18,3,2.6"/><RectangleGeometry RadiusX="0.6" RadiusY="0.6" Rect="11,18,5,2.6"/><RectangleGeometry RadiusX="0.6" RadiusY="0.6" Rect="17.5,18,4,2.6"/></GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FFCBD5E1"><GeometryDrawing.Geometry><GeometryGroup><RectangleGeometry Rect="7,13,2.6,2.6"/><RectangleGeometry Rect="14.7,13,2.6,2.6"/><RectangleGeometry Rect="22.4,13,2.6,2.6"/><RectangleGeometry Rect="7,23.5,2.6,2.6"/><RectangleGeometry Rect="14.7,23.5,2.6,2.6"/><RectangleGeometry Rect="22.4,23.5,2.6,2.6"/></GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
+    </DrawingGroup></DrawingImage.Drawing></DrawingImage>
+
+    <!-- 钻爆计划衔接：台阶基 + 爆破星（橙渐变）+ 红心 -->
+    <DrawingImage x:Key="task_blast"><DrawingImage.Drawing><DrawingGroup>
+        <GeometryDrawing Brush="#FFCBB89A"><GeometryDrawing.Pen><Pen Brush="#FF7C2D12" Thickness="0.5" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M2,24 L11,24 L11,27 L2,27 Z M11,27 L30,27 L30,30 L2,30 L2,27 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#FFFCD34D" Offset="0"/><GradientStop Color="#FFF97316" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#FF9A3412" Thickness="0.9" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M16,2 L18.5,10 L26,7 L20.5,13.5 L28,18 L19.5,18 L20.5,26 L16,19.5 L11.5,26 L12.5,18 L4,18 L11.5,13.5 L6,7 L13.5,10 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FFFFFFFF"><GeometryDrawing.Geometry><EllipseGeometry RadiusX="2.8" RadiusY="2.8" Center="16,14"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FFDC2626"><GeometryDrawing.Geometry><EllipseGeometry RadiusX="1.6" RadiusY="1.6" Center="16,14"/></GeometryDrawing.Geometry></GeometryDrawing>
+    </DrawingGroup></DrawingImage.Drawing></DrawingImage>
+
+    <!-- ═══════════ ③ 任务下达 ═══════════ -->
+
+    <!-- 生产任务书：正式文书 + 红渐变栏 + 表格 + 红印章 -->
+    <DrawingImage x:Key="task_order"><DrawingImage.Drawing><DrawingGroup>
+        <GeometryDrawing Brush="#FFFFFFFF"><GeometryDrawing.Pen><Pen Brush="#FFB91C1C" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><RectangleGeometry RadiusX="2" RadiusY="2" Rect="5,3,21,26"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#FFF87171" Offset="0"/><GradientStop Color="#FFDC2626" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Geometry><PathGeometry Figures="M5,5 A2,2 0 0 1 7,3 L24,3 A2,2 0 0 1 26,5 L26,9 L5,9 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FFFEE2E2"><GeometryDrawing.Geometry><RectangleGeometry Rect="10,5,11,1.6"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FFCBD5E1" Thickness="0.8"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M8,13 L23,13 M8,17 L23,17 M8,21 L18,21 M16,12 L16,22"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FFEF4444"><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="1.1"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="4.4" RadiusY="4.4" Center="23,24"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FFFFFFFF"><GeometryDrawing.Geometry><PathGeometry Figures="M23,21 L23.9,23.2 L26.2,23.2 L24.3,24.6 L25.1,26.9 L23,25.5 L20.9,26.9 L21.7,24.6 L19.8,23.2 L22.1,23.2 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+    </DrawingGroup></DrawingImage.Drawing></DrawingImage>
+
+    <!-- 任务下达：纸飞机（天蓝渐变）+ 信号波 -->
+    <DrawingImage x:Key="task_dispatch"><DrawingImage.Drawing><DrawingGroup>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#FF7DD3FC" Offset="0"/><GradientStop Color="#FF0284C7" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#FF075985" Thickness="0.9" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M2,15 L28,3 L21,27 L15.5,18 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FF0369A1"><GeometryDrawing.Geometry><PathGeometry Figures="M2,15 L15.5,18 L21,27 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF075985" Thickness="0.8"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M15.5,18 L28,3"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF22C55E" Thickness="1.3"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M24,20 A3,3 0 0 1 26.5,24 M26.5,18 A6,6 0 0 1 29.5,25"/></GeometryDrawing.Geometry></GeometryDrawing>
+    </DrawingGroup></DrawingImage.Drawing></DrawingImage>
+
+    <!-- 班组派工：两名矿工（黄安全帽渐变） -->
+    <DrawingImage x:Key="task_crew"><DrawingImage.Drawing><DrawingGroup>
+        <GeometryDrawing Brush="#FFFCE7C0"><GeometryDrawing.Pen><Pen Brush="#FF7C5A2E" Thickness="0.5"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="2.7" RadiusY="2.7" Center="9,12"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FFFCA5A5"><GeometryDrawing.Pen><Pen Brush="#FF7C5A2E" Thickness="0.5" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M3.5,9.5 A5.5,5.5 0 0 1 14.5,9.5 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FFFCA5A5"><GeometryDrawing.Pen><Pen Brush="#FF7C5A2E" Thickness="0.5" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M4,27 C4,19.5 14,19.5 14,27 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FFFCE7C0"><GeometryDrawing.Pen><Pen Brush="#FF7C5A2E" Thickness="0.5"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="3.2" RadiusY="3.2" Center="20,13"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#FFFBBF24" Offset="0"/><GradientStop Color="#FFD97706" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#FF7C2D12" Thickness="0.5" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M13.5,10.5 A6.5,6.5 0 0 1 26.5,10.5 Z M20,4 L20,7"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#FF93C5FD" Offset="0"/><GradientStop Color="#FF2563EB" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#FF1E3A8A" Thickness="0.5" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M12.5,28.5 C12.5,20 27.5,20 27.5,28.5 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+    </DrawingGroup></DrawingImage.Drawing></DrawingImage>
+
+    <!-- ═══════════ ④ 执行调度 ═══════════ -->
+
+    <!-- 调度态势看板：浅屏大屏 + 现场推进线 + 设备光点 + LIVE 信号 -->
+    <DrawingImage x:Key="task_board"><DrawingImage.Drawing><DrawingGroup>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#FFEFF6FF" Offset="0"/><GradientStop Color="#FFDBEAFE" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#FF334155" Thickness="0.9" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><RectangleGeometry RadiusX="2" RadiusY="2" Rect="3,4,26,18"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF93C5FD" Thickness="1.1" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M5,18 L11,18 L11,15 L17,15 L17,12 L27,12"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FF2563EB"><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.5"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="1.6" RadiusY="1.6" Center="9,16.5"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FF14B8A6"><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.5"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="1.6" RadiusY="1.6" Center="14,13.5"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FFD97706"><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.5"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="1.6" RadiusY="1.6" Center="22,11"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#9922C55E" Thickness="0.8"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="2.6" RadiusY="2.6" Center="24,8"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FF22C55E"><GeometryDrawing.Geometry><EllipseGeometry RadiusX="1.5" RadiusY="1.5" Center="24,8"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#FF94A3B8" Offset="0"/><GradientStop Color="#FF475569" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#FF1E293B" Thickness="0.5" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M13,22 L19,22 L21,27 L11,27 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FF475569"><GeometryDrawing.Geometry><RectangleGeometry RadiusX="1" RadiusY="1" Rect="8,27,16,2.4"/></GeometryDrawing.Geometry></GeometryDrawing>
+    </DrawingGroup></DrawingImage.Drawing></DrawingImage>
+
+    <!-- 实绩录入：班报夹 + teal 渐变夹 + 绿对勾 + 笔 -->
+    <DrawingImage x:Key="task_actual"><DrawingImage.Drawing><DrawingGroup>
+        <GeometryDrawing Brush="#FFFFFFFF"><GeometryDrawing.Pen><Pen Brush="#FF0F766E" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><RectangleGeometry RadiusX="2.5" RadiusY="2.5" Rect="6,6,18,23"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#FF5EEAD4" Offset="0"/><GradientStop Color="#FF0F766E" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#FF0F766E" Thickness="0.5" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M11,3.5 L19,3.5 L20,7.5 L10,7.5 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FFCBD5E1" Thickness="1"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M10,13 L20,13 M10,16.5 L17,16.5"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF16A34A" Thickness="2.2" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M9,22 L13,26 L19,19"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FFFBBF24"><GeometryDrawing.Pen><Pen Brush="#FF7C2D12" Thickness="0.4" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M22,24 L27,19 L29,21 L24,26 L21,27 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+    </DrawingGroup></DrawingImage.Drawing></DrawingImage>
+
+    <!-- 设备状态·故障报修：矿用自卸卡车 + 红故障警示 ★样板 -->
+    <DrawingImage x:Key="task_equipstatus"><DrawingImage.Drawing><DrawingGroup>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#FFFBBF24" Offset="0"/><GradientStop Color="#FFD97706" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#FF7C2D12" Thickness="0.7" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M3,10.5 L17,10.5 L19,15.5 L3,15.5 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#FFFBBF24" Offset="0"/><GradientStop Color="#FFD97706" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#FF7C2D12" Thickness="0.7" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M19,11.5 L24,11.5 L25.5,15.5 L19,15.5 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#FFBAE6FD" Offset="0"/><GradientStop Color="#FF38BDF8" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Geometry><RectangleGeometry RadiusX="0.5" RadiusY="0.5" Rect="20,12.2,3.2,2.3"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FF1F2937"><GeometryDrawing.Geometry><RectangleGeometry RadiusX="0.6" RadiusY="0.6" Rect="3.5,15.5,22.5,2"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FF111827"><GeometryDrawing.Geometry><GeometryGroup><EllipseGeometry RadiusX="3" RadiusY="3" Center="8.5,19.5"/><EllipseGeometry RadiusX="3" RadiusY="3" Center="21,19.5"/></GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FF94A3B8"><GeometryDrawing.Geometry><GeometryGroup><EllipseGeometry RadiusX="1.2" RadiusY="1.2" Center="8.5,19.5"/><EllipseGeometry RadiusX="1.2" RadiusY="1.2" Center="21,19.5"/></GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FFDC2626"><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.9" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M25,1.5 L30.5,10.5 L19.5,10.5 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FFFFFFFF"><GeometryDrawing.Geometry><GeometryGroup><RectangleGeometry Rect="24.4,4,1.2,3.4"/><EllipseGeometry RadiusX="0.7" RadiusY="0.7" Center="25,8.8"/></GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
+    </DrawingGroup></DrawingImage.Drawing></DrawingImage>
+
+    <!-- 工序进度跟踪：穿孔→爆破→采装 工序链（渐变节点 + 进度） -->
+    <DrawingImage x:Key="task_progress"><DrawingImage.Drawing><DrawingGroup>
+        <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FFE2E8F0" Thickness="3"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M6,16 L26,16"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF16A34A" Thickness="3"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M6,16 L16,16"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#FF4ADE80" Offset="0"/><GradientStop Color="#FF16A34A" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.8"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="3.6" RadiusY="3.6" Center="6,16"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#FF4ADE80" Offset="0"/><GradientStop Color="#FF16A34A" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.8"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="3.6" RadiusY="3.6" Center="16,16"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FFFFFFFF"><GeometryDrawing.Pen><Pen Brush="#FF94A3B8" Thickness="1.3"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="3.6" RadiusY="3.6" Center="26,16"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FFFFFFFF"><GeometryDrawing.Geometry><PathGeometry Figures="M4.4,16 L5.6,17.2 L7.8,14.6"/></GeometryDrawing.Geometry><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="1.2" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen></GeometryDrawing>
+    </DrawingGroup></DrawingImage.Drawing></DrawingImage>
+
+    <!-- ═══════════ ⑤ 评价分析 ═══════════ -->
+
+    <!-- 任务报表：文档 + 紫渐变栏 + 多色柱 + 轴 -->
+    <DrawingImage x:Key="task_report"><DrawingImage.Drawing><DrawingGroup>
+        <GeometryDrawing Brush="#FFFFFFFF"><GeometryDrawing.Pen><Pen Brush="#FF6D28D9" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M6,4 L19,4 L25,10 L25,28 L6,28 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FFDDD6FE"><GeometryDrawing.Pen><Pen Brush="#FF6D28D9" Thickness="0.6" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M19,4 L19,10 L25,10 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%"><GradientStop Color="#FFA78BFA" Offset="0"/><GradientStop Color="#FF7C3AED" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Geometry><RectangleGeometry Rect="9,13,11,1.8"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FF3B82F6"><GeometryDrawing.Geometry><RectangleGeometry RadiusX="0.4" RadiusY="0.4" Rect="9,20,2.6,5"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FF16A34A"><GeometryDrawing.Geometry><RectangleGeometry RadiusX="0.4" RadiusY="0.4" Rect="13,17,2.6,8"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FFF59E0B"><GeometryDrawing.Geometry><RectangleGeometry RadiusX="0.4" RadiusY="0.4" Rect="17,19,2.6,6"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FFEF4444"><GeometryDrawing.Geometry><RectangleGeometry RadiusX="0.4" RadiusY="0.4" Rect="21,15,2.6,10"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF94A3B8" Thickness="0.6"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M8.5,25.3 L24,25.3"/></GeometryDrawing.Geometry></GeometryDrawing>
+    </DrawingGroup></DrawingImage.Drawing></DrawingImage>
+
+    <!-- 达成度评价：仪表盘（绿渐变弧 + 红针） -->
+    <DrawingImage x:Key="task_attainment"><DrawingImage.Drawing><DrawingGroup>
+        <GeometryDrawing Brush="#FFFFFFFF"><GeometryDrawing.Pen><Pen Brush="#FFCBD5E1" Thickness="0.8"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M3,24 A13,13 0 0 1 29,24 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FFE2E8F0" Thickness="3.4" LineCap="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M5,23 A11,11 0 0 1 27,23"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%"><GradientStop Color="#FFFBBF24" Offset="0"/><GradientStop Color="#FF16A34A" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#FF16A34A" Thickness="3.4" LineCap="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M5,23 A11,11 0 0 1 22.5,14.1"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FFDC2626" Thickness="2"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M16,23 L22,13"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FF334155"><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.7"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="2.4" RadiusY="2.4" Center="16,23"/></GeometryDrawing.Geometry></GeometryDrawing>
+    </DrawingGroup></DrawingImage.Drawing></DrawingImage>
+
+    <!-- 产量统计：环形图（渐变段 + 中心） -->
+    <DrawingImage x:Key="task_stats"><DrawingImage.Drawing><DrawingGroup>
+        <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FFE2E8F0" Thickness="6.5"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="9" RadiusY="9" Center="16,16"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF3B82F6" Thickness="6.5"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M16,7 A9,9 0 0 1 25,16"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF16A34A" Thickness="6.5"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M25,16 A9,9 0 0 1 16,25"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FFF59E0B" Thickness="6.5"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M16,25 A9,9 0 0 1 9.5,21.5"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FFFFFFFF"><GeometryDrawing.Pen><Pen Brush="#FFE2E8F0" Thickness="0.6"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="3.6" RadiusY="3.6" Center="16,16"/></GeometryDrawing.Geometry></GeometryDrawing>
+    </DrawingGroup></DrawingImage.Drawing></DrawingImage>
+
+    <!-- 质量·配煤分析：化验瓶（琥珀渐变）+ 黑煤粒 + 气泡 -->
+    <DrawingImage x:Key="task_coal"><DrawingImage.Drawing><DrawingGroup>
+        <GeometryDrawing Brush="#FFFFFFFF"><GeometryDrawing.Pen><Pen Brush="#FFB45309" Thickness="1.1" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M13,5 L19,5 L19,13 L25,24 C26,27 24,29 21,29 L11,29 C8,29 6,27 7,24 L13,13 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#FFFBBF24" Offset="0"/><GradientStop Color="#FFD97706" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Geometry><PathGeometry Figures="M11.4,19 L20.6,19 L24,25 C24.6,26.5 23.6,27.5 22,27.5 L10,27.5 C8.4,27.5 7.4,26.5 8,25 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FF1F2937"><GeometryDrawing.Geometry><GeometryGroup><EllipseGeometry RadiusX="1.2" RadiusY="1.2" Center="13,24"/><EllipseGeometry RadiusX="0.9" RadiusY="0.9" Center="17,26"/><EllipseGeometry RadiusX="0.8" RadiusY="0.8" Center="19,22.8"/></GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FFFEF3C7"><GeometryDrawing.Geometry><EllipseGeometry RadiusX="0.8" RadiusY="0.8" Center="15,22"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF334155" Thickness="1.8"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M12,5 L20,5"/></GeometryDrawing.Geometry></GeometryDrawing>
+    </DrawingGroup></DrawingImage.Drawing></DrawingImage>
+
+    <!-- ═══════════ ⑥ 调整·推演 ═══════════ -->
+
+    <!-- 生产任务动态调整：任务卡（蓝渐变）+ 橙四向箭头 -->
+    <DrawingImage x:Key="task_adjust"><DrawingImage.Drawing><DrawingGroup>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#FFDBEAFE" Offset="0"/><GradientStop Color="#FF93C5FD" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><RectangleGeometry RadiusX="2" RadiusY="2" Rect="10,10,12,12"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="1.1"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M13,14.5 L19,14.5 M13,17.5 L18,17.5"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FFEA580C" Thickness="2" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M16,2 L16,8 M13.5,4.5 L16,2 L18.5,4.5 M16,30 L16,24 M13.5,27.5 L16,30 L18.5,27.5 M2,16 L8,16 M4.5,13.5 L2,16 L4.5,18.5 M30,16 L24,16 M27.5,13.5 L30,16 L27.5,18.5"/></GeometryDrawing.Geometry></GeometryDrawing>
+    </DrawingGroup></DrawingImage.Drawing></DrawingImage>
+
+    <!-- 生产任务动态模拟：时间轴（蓝渐变进度）+ 绿播放钮 + 刻度 -->
+    <DrawingImage x:Key="task_simulate"><DrawingImage.Drawing><DrawingGroup>
+        <GeometryDrawing Brush="#FFF1F5F9"><GeometryDrawing.Pen><Pen Brush="#FF334155" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><RectangleGeometry RadiusX="2" RadiusY="2" Rect="3,14,26,6"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%"><GradientStop Color="#FF38BDF8" Offset="0"/><GradientStop Color="#FF2563EB" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Geometry><RectangleGeometry RadiusX="2" RadiusY="2" Rect="3,14,15,6"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF334155" Thickness="1"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M8,20 L8,23 M14,20 L14,23 M20,20 L20,23 M25,20 L25,23"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing><GeometryDrawing.Brush><LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#FF4ADE80" Offset="0"/><GradientStop Color="#FF15803D" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="1.2"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="5" RadiusY="5" Center="9,8"/></GeometryDrawing.Geometry></GeometryDrawing>
+        <GeometryDrawing Brush="#FFFFFFFF"><GeometryDrawing.Geometry><PathGeometry Figures="M7.3,5.5 L12,8 L7.3,10.5 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+    </DrawingGroup></DrawingImage.Drawing></DrawingImage>
+
+</ResourceDictionary>

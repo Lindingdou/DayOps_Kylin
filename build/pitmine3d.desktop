@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=PitMine3D
+Name[zh_CN]=露天矿三维平台
+Comment=露天煤矿二三维一体化平台 · 麒麟版 (Avalonia + OpenGL)
+Exec=/opt/pitmine3d/PitMine3D.Kylin
+Icon=pitmine3d
+Categories=Graphics;Engineering;Science;
+Terminal=false
+StartupNotify=true

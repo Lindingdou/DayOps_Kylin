@@ -1,0 +1,1083 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:PitMine3D.Kylin.Controls"
+        x:Class="PitMine3D.Kylin.Views.MainWindow"
+        Width="1240" Height="800"
+        MinWidth="900" MinHeight="600"
+        Background="#F3F4F6"
+        Title="PitMine3D · 麒麟版 (Avalonia + OpenGL 最小实现)">
+
+    <Grid RowDefinitions="Auto,*,Auto,Auto">
+
+        <!-- ============================ 顶部 Ribbon ============================ -->
+        <TabControl Grid.Row="0" Classes="ribbon">
+
+            <!-- ===== 开始 ===== -->
+            <TabItem Header="开始">
+                <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,0,1">
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                        <StackPanel Orientation="Horizontal" Height="108">
+
+                            <!-- 文件 -->
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="文件" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="新建" Click="OnRibbonCommand" ToolTip.Tip="新建图形">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <Image Source="{StaticResource icon_new}" />
+                                                <TextBlock Text="新建" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="打开" Click="OnRibbonCommand" ToolTip.Tip="打开图形">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <Image Source="{StaticResource icon_open}" />
+                                                <TextBlock Text="打开" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="保存" Click="OnRibbonCommand" ToolTip.Tip="保存">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <Image Source="{StaticResource icon_save}" />
+                                                <TextBlock Text="保存" />
+                                            </StackPanel>
+                                        </Button>
+                                        <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                            <Button Classes="ribbon-btn small" Tag="另存为" Click="OnRibbonCommand">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_save}" /><TextBlock Text="另存为" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="导入" Click="OnRibbonCommand">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_import}" /><TextBlock Text="导入" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="选项" Click="OnRibbonCommand">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_option}" /><TextBlock Text="选项" /></StackPanel>
+                                            </Button>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+
+                            <!-- 绘制 -->
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="绘制" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="点" Click="OnRibbonCommand">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_point}" /><TextBlock Text="点" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="多段线" Click="OnRibbonCommand">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_polyline}" /><TextBlock Text="多段线" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="滑动多段线" Click="OnRibbonCommand" ToolTip.Tip="按住拖动，自动按像素采样插点">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_polyline_slide}" /><TextBlock Text="滑动&#x0a;多段线" /></StackPanel>
+                                        </Button>
+                                        <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                            <Button Classes="ribbon-btn small" Tag="直线" Click="OnRibbonCommand">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_line}" /><TextBlock Text="直线" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="圆" Click="OnRibbonCommand">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_circle}" /><TextBlock Text="圆" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="圆弧" Click="OnRibbonCommand">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_arc}" /><TextBlock Text="圆弧" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="矩形" Click="OnRibbonCommand">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_rectangle}" /><TextBlock Text="矩形" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="正多边形" Click="OnRibbonCommand">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_polygon}" /><TextBlock Text="正多边形" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="文字" Click="OnRibbonCommand">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_text}" /><TextBlock Text="文字" /></StackPanel>
+                                            </Button>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+
+                            <!-- 修改 -->
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="修改" />
+                                    <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                        <Button Classes="ribbon-btn small" Tag="复制" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_copy}" /><TextBlock Text="复制" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="移动" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_move}" /><TextBlock Text="移动" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="延伸" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_extend}" /><TextBlock Text="延伸" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="旋转" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_rotate}" /><TextBlock Text="旋转" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="修剪" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_trim}" /><TextBlock Text="修剪" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="偏移" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_offset}" /><TextBlock Text="偏移" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="打断" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_break}" /><TextBlock Text="打断" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="分解" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_explode}" /><TextBlock Text="分解" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="删除" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_delete}" /><TextBlock Text="删除" /></StackPanel></Button>
+                                    </WrapPanel>
+                                </DockPanel>
+                            </Border>
+
+                            <!-- 图层 -->
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="图层" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="图层特性管理器" Click="OnRibbonCommand">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_layer}" /><TextBlock Text="图层特性&#x0a;管理器" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="新建图层" Click="OnRibbonCommand">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_layer_add}" /><TextBlock Text="新建&#x0a;图层" /></StackPanel>
+                                        </Button>
+                                        <StackPanel VerticalAlignment="Center" Margin="6,0,0,0">
+                                            <TextBlock Text="当前图层" FontSize="11" Foreground="#8A9099" Margin="0,0,0,2" />
+                                            <ComboBox SelectedIndex="0" Width="120" MinHeight="26">
+                                                <ComboBoxItem>0 · 默认层</ComboBoxItem>
+                                                <ComboBoxItem>台阶线</ComboBoxItem>
+                                                <ComboBoxItem>坡顶线</ComboBoxItem>
+                                            </ComboBox>
+                                            <WrapPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                                <Button Classes="ribbon-btn small" Tag="全开" Click="OnRibbonCommand" MinWidth="46"><StackPanel Orientation="Horizontal"><TextBlock Text="全开" /></StackPanel></Button>
+                                                <Button Classes="ribbon-btn small" Tag="冻结" Click="OnRibbonCommand" MinWidth="46"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_frozen}" /><TextBlock Text="冻结" /></StackPanel></Button>
+                                                <Button Classes="ribbon-btn small" Tag="锁定" Click="OnRibbonCommand" MinWidth="46"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_locked}" /><TextBlock Text="锁定" /></StackPanel></Button>
+                                            </WrapPanel>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+
+                            <!-- 视图 -->
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="视图" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="3D" Click="OnRibbonCommand">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_3D}" /><TextBlock Text="3D" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="2D" Click="OnRibbonCommand">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_2D}" /><TextBlock Text="2D" /></StackPanel>
+                                        </Button>
+                                        <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                            <Button Classes="ribbon-btn small" Tag="渲染配置" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_render_cfg}" /><TextBlock Text="渲染配置" /></StackPanel></Button>
+                                            <Button Classes="ribbon-btn small" Tag="缩放" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_Zoom}" /><TextBlock Text="缩放" /></StackPanel></Button>
+                                            <Button Classes="ribbon-btn small" Tag="清空视图" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_clear_marks}" /><TextBlock Text="清空视图" /></StackPanel></Button>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+
+                            <!-- 特性 -->
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="特性" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="快速选择" Click="OnRibbonCommand">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_quick_select}" /><TextBlock Text="快速&#x0a;选择" /></StackPanel>
+                                        </Button>
+                                        <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                            <Button Classes="ribbon-btn small" Tag="全部选择" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="全部选择" /></StackPanel></Button>
+                                            <Button Classes="ribbon-btn small" Tag="最后" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="最后" /></StackPanel></Button>
+                                            <Button Classes="ribbon-btn small" Tag="上次" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="上次" /></StackPanel></Button>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+
+                            <!-- 帮助 -->
+                            <Border Classes="ribbon-group" BorderThickness="0">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="帮助" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="帮助文档" Click="OnRibbonCommand">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_help}" /><TextBlock Text="帮助&#x0a;文档" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn small" Tag="注册" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_register}" /><TextBlock Text="注册" /></StackPanel></Button>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+
+            <!-- ===== 模块页（由 build/gen_module_tabs.py 生成，勿手改） ===== -->
+            <TabItem Header="地质与工程信息数据库">
+                <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,0,1">
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                        <StackPanel Orientation="Horizontal" Height="108">
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="钻孔管理" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="导入钻孔数据" Click="OnRibbonCommand" ToolTip.Tip="导入钻孔数据">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource bh_import}" /><TextBlock Text="导入钻孔数据" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="展绘钻孔" Click="OnRibbonCommand" ToolTip.Tip="展绘钻孔">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource bh_plot}" /><TextBlock Text="展绘钻孔" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="虚拟钻孔" Click="OnRibbonCommand" ToolTip.Tip="虚拟钻孔">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource bh_virtual}" /><TextBlock Text="虚拟钻孔" /></StackPanel>
+                                        </Button>
+                                        <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                            <Button Classes="ribbon-btn small" Tag="开孔坐标管理" Click="OnRibbonCommand" ToolTip.Tip="开孔坐标管理">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource bh_data_manage}" /><TextBlock Text="开孔坐标管理" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="原始钻孔柱状图" Click="OnRibbonCommand" ToolTip.Tip="原始钻孔柱状图">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource bh_histogram}" /><TextBlock Text="原始钻孔柱状图" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="展绘层位数据" Click="OnRibbonCommand" ToolTip.Tip="展绘层位数据">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource bh_layer_plot}" /><TextBlock Text="展绘层位数据" /></StackPanel>
+                                            </Button>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="煤质管理" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="煤质数据管理" Click="OnRibbonCommand" ToolTip.Tip="煤质数据管理">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource coal_data}" /><TextBlock Text="煤质数据管理" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="空间分布" Click="OnRibbonCommand" ToolTip.Tip="空间分布">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource coal_spatial}" /><TextBlock Text="空间分布" /></StackPanel>
+                                        </Button>
+                                        <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                            <Button Classes="ribbon-btn small" Tag="数据看板" Click="OnRibbonCommand" ToolTip.Tip="数据看板">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource coal_dashboard}" /><TextBlock Text="数据看板" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="统计分析" Click="OnRibbonCommand" ToolTip.Tip="统计分析">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource coal_stats}" /><TextBlock Text="统计分析" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="钻孔柱状图" Click="OnRibbonCommand" ToolTip.Tip="钻孔柱状图">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource bh_column_3d}" /><TextBlock Text="钻孔柱状图" /></StackPanel>
+                                            </Button>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="工艺参数管理" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="工艺架构定义" Click="OnRibbonCommand" ToolTip.Tip="工艺架构定义">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource process_arch}" /><TextBlock Text="工艺架构定义" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="平盘工艺地图" Click="OnRibbonCommand" ToolTip.Tip="平盘工艺地图">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource process_map}" /><TextBlock Text="平盘工艺地图" /></StackPanel>
+                                        </Button>
+                                        <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                            <Button Classes="ribbon-btn small" Tag="参数模板库" Click="OnRibbonCommand" ToolTip.Tip="参数模板库">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource process_tmpl}" /><TextBlock Text="参数模板库" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="现场验收录入" Click="OnRibbonCommand" ToolTip.Tip="现场验收录入">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource process_accept}" /><TextBlock Text="现场验收录入" /></StackPanel>
+                                            </Button>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="设备管理" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="机群总览" Click="OnRibbonCommand" ToolTip.Tip="机群总览">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource equip_cockpit}" /><TextBlock Text="机群总览" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="设备信息管理" Click="OnRibbonCommand" ToolTip.Tip="设备信息管理">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource equip_info}" /><TextBlock Text="设备信息管理" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="设备智能编组" Click="OnRibbonCommand" ToolTip.Tip="设备智能编组">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource equip_grouping}" /><TextBlock Text="设备智能编组" /></StackPanel>
+                                        </Button>
+                                        <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                            <Button Classes="ribbon-btn small" Tag="设备数据分析" Click="OnRibbonCommand" ToolTip.Tip="设备数据分析">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource equip_analysis}" /><TextBlock Text="设备数据分析" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="设备生产数据" Click="OnRibbonCommand" ToolTip.Tip="设备生产数据">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource equip_prod}" /><TextBlock Text="设备生产数据" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="班次效能预测" Click="OnRibbonCommand" ToolTip.Tip="班次效能预测">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource equip_forecast_shift}" /><TextBlock Text="班次效能预测" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="设备效能预测" Click="OnRibbonCommand" ToolTip.Tip="设备效能预测">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource equip_forecast}" /><TextBlock Text="设备效能预测" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="设备能力" Click="OnRibbonCommand" ToolTip.Tip="设备能力">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource equip_capability}" /><TextBlock Text="设备能力" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="数据导入导出" Click="OnRibbonCommand" ToolTip.Tip="数据导入导出">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource equip_import}" /><TextBlock Text="数据导入导出" /></StackPanel>
+                                            </Button>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+            <TabItem Header="三维地质建模">
+                <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,0,1">
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                        <StackPanel Orientation="Horizontal" Height="108">
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="建模" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="创建三角网" Click="OnRibbonCommand" ToolTip.Tip="创建三角网">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_Triangle}" /><TextBlock Text="创建三角网" /></StackPanel>
+                                        </Button>
+                                        <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                            <Button Classes="ribbon-btn small" Tag="固化成体" Click="OnRibbonCommand" ToolTip.Tip="固化成体">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mb_solidify}" /><TextBlock Text="固化成体" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="侧面三角网" Click="OnRibbonCommand" ToolTip.Tip="侧面三角网">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mb_side_tri}" /><TextBlock Text="侧面三角网" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="快速建模" Click="OnRibbonCommand" ToolTip.Tip="快速建模">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mb_quickmodel}" /><TextBlock Text="快速建模" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="地质体建模" Click="OnRibbonCommand" ToolTip.Tip="地质体建模">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mb_geomodel}" /><TextBlock Text="地质体建模" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="展点" Click="OnRibbonCommand" ToolTip.Tip="展点">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mb_show_pts}" /><TextBlock Text="展点" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="基本几何体" Click="OnRibbonCommand" ToolTip.Tip="基本几何体">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mb_primitives}" /><TextBlock Text="基本几何体" /></StackPanel>
+                                            </Button>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="倾斜摄影" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="加载倾斜摄影" Click="OnRibbonCommand" ToolTip.Tip="加载倾斜摄影">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mb_oblique_import}" /><TextBlock Text="加载倾斜摄影" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="转化为三角格网" Click="OnRibbonCommand" ToolTip.Tip="转化为三角格网">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mb_oblique_tin}" /><TextBlock Text="转化为三角格网" /></StackPanel>
+                                        </Button>
+                                        <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                            <Button Classes="ribbon-btn small" Tag="隐藏" Click="OnRibbonCommand" ToolTip.Tip="隐藏">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mb_oblique_hide}" /><TextBlock Text="隐藏" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="删除" Click="OnRibbonCommand" ToolTip.Tip="删除">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mb_oblique_del}" /><TextBlock Text="删除" /></StackPanel>
+                                            </Button>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="编辑" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="点编辑" Click="OnRibbonCommand" ToolTip.Tip="点编辑">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource edit_point}" /><TextBlock Text="点编辑" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="线编辑" Click="OnRibbonCommand" ToolTip.Tip="线编辑">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource edit_line}" /><TextBlock Text="线编辑" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="面编辑" Click="OnRibbonCommand" ToolTip.Tip="面编辑">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource edit_face}" /><TextBlock Text="面编辑" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="体编辑" Click="OnRibbonCommand" ToolTip.Tip="体编辑">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource edit_body}" /><TextBlock Text="体编辑" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="工具" Click="OnRibbonCommand" ToolTip.Tip="工具">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource me_contour}" /><TextBlock Text="工具" /></StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="地质统计学分析" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="快速估值" Click="OnRibbonCommand" ToolTip.Tip="快速估值">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource stat_quick}" /><TextBlock Text="快速估值" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="克里金估值" Click="OnRibbonCommand" ToolTip.Tip="克里金估值">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource stat_kriging}" /><TextBlock Text="克里金估值" /></StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="更新地质模型" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="补勘钻孔写实" Click="OnRibbonCommand" ToolTip.Tip="补勘钻孔写实">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mu_borehole}" /><TextBlock Text="补勘钻孔写实" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="现状写实" Click="OnRibbonCommand" ToolTip.Tip="现状写实">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mu_current}" /><TextBlock Text="现状写实" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="更新煤层面" Click="OnRibbonCommand" ToolTip.Tip="更新煤层面">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mu_update}" /><TextBlock Text="更新煤层面" /></StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+            <TabItem Header="点云处理">
+                <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,0,1">
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                        <StackPanel Orientation="Horizontal" Height="108">
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="点云数据" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="加载点云" Click="OnRibbonCommand" ToolTip.Tip="加载点云">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource pc_load}" /><TextBlock Text="加载点云" /></StackPanel>
+                                        </Button>
+                                        <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                            <Button Classes="ribbon-btn small" Tag="点云管理" Click="OnRibbonCommand" ToolTip.Tip="点云管理">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource pc_manage}" /><TextBlock Text="点云管理" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="显示/隐藏" Click="OnRibbonCommand" ToolTip.Tip="显示/隐藏">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource pc_visibility}" /><TextBlock Text="显示/隐藏" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="点云着色" Click="OnRibbonCommand" ToolTip.Tip="点云着色">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource pc_colorize}" /><TextBlock Text="点云着色" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="清除全部" Click="OnRibbonCommand" ToolTip.Tip="清除全部">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource pc_view_clean}" /><TextBlock Text="清除全部" /></StackPanel>
+                                            </Button>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="点云修复" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="地面点滤波" Click="OnRibbonCommand" ToolTip.Tip="地面点滤波">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource pc_classify}" /><TextBlock Text="地面点滤波" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="SOR去噪" Click="OnRibbonCommand" ToolTip.Tip="SOR去噪">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource pc_denoise}" /><TextBlock Text="SOR去噪" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="ROR去噪" Click="OnRibbonCommand" ToolTip.Tip="ROR去噪">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource pc_repair}" /><TextBlock Text="ROR去噪" /></StackPanel>
+                                        </Button>
+                                        <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                            <Button Classes="ribbon-btn small" Tag="补洞(三角网)" Click="OnRibbonCommand" ToolTip.Tip="补洞(三角网)">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource pc_fill_hole}" /><TextBlock Text="补洞(三角网)" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="剔面(三角网)" Click="OnRibbonCommand" ToolTip.Tip="剔面(三角网)">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource pc_remove_obs}" /><TextBlock Text="剔面(三角网)" /></StackPanel>
+                                            </Button>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="点云编辑" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="点云抽稀" Click="OnRibbonCommand" ToolTip.Tip="点云抽稀">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource pc_thin}" /><TextBlock Text="点云抽稀" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="分割点云" Click="OnRibbonCommand" ToolTip.Tip="分割点云">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource pc_crop_cloud}" /><TextBlock Text="分割点云" /></StackPanel>
+                                        </Button>
+                                        <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                            <Button Classes="ribbon-btn small" Tag="高程截断" Click="OnRibbonCommand" ToolTip.Tip="高程截断">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource pc_z_clip}" /><TextBlock Text="高程截断" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="坐标转换" Click="OnRibbonCommand" ToolTip.Tip="坐标转换">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource pc_coord_xform}" /><TextBlock Text="坐标转换" /></StackPanel>
+                                            </Button>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="点云分析（逐点）" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="逐点坡度/坡向" Click="OnRibbonCommand" ToolTip.Tip="逐点坡度/坡向">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource pc_slope}" /><TextBlock Text="逐点坡度/坡向" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="点云剖面" Click="OnRibbonCommand" ToolTip.Tip="点云剖面">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource pc_cloud_profile}" /><TextBlock Text="点云剖面" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="位移监测 C2C" Click="OnRibbonCommand" ToolTip.Tip="位移监测 C2C">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource pc_c2c}" /><TextBlock Text="位移监测 C2C" /></StackPanel>
+                                        </Button>
+                                        <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                            <Button Classes="ribbon-btn small" Tag="法向估计" Click="OnRibbonCommand" ToolTip.Tip="法向估计">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource pc_normals}" /><TextBlock Text="法向估计" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="质量统计" Click="OnRibbonCommand" ToolTip.Tip="质量统计">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource pc_quality}" /><TextBlock Text="质量统计" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="坡顶底线提取" Click="OnRibbonCommand" ToolTip.Tip="坡顶底线提取">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource pc_slope_edges}" /><TextBlock Text="坡顶底线提取" /></StackPanel>
+                                            </Button>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="三角网重建" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="2.5D TIN" Click="OnRibbonCommand" ToolTip.Tip="2.5D TIN">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource pc_tin25d}" /><TextBlock Text="2.5D TIN" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="两期点云算量" Click="OnRibbonCommand" ToolTip.Tip="两期点云算量">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource pc_volume_diff}" /><TextBlock Text="两期点云算量" /></StackPanel>
+                                        </Button>
+                                        <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                            <Button Classes="ribbon-btn small" Tag="圈范围算量" Click="OnRibbonCommand" ToolTip.Tip="圈范围算量">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource pc_volume}" /><TextBlock Text="圈范围算量" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="三角网着色" Click="OnRibbonCommand" ToolTip.Tip="三角网着色">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource pc_tin_color}" /><TextBlock Text="三角网着色" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="分割三角网" Click="OnRibbonCommand" ToolTip.Tip="分割三角网">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource pc_tin_split}" /><TextBlock Text="分割三角网" /></StackPanel>
+                                            </Button>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="三角网分析" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="等高线生产" Click="OnRibbonCommand" ToolTip.Tip="等高线生产">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource pc_contour}" /><TextBlock Text="等高线生产" /></StackPanel>
+                                        </Button>
+                                        <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                            <Button Classes="ribbon-btn small" Tag="剖面分析" Click="OnRibbonCommand" ToolTip.Tip="剖面分析">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource pc_profile}" /><TextBlock Text="剖面分析" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="工艺参数分析" Click="OnRibbonCommand" ToolTip.Tip="工艺参数分析">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource pc_process_param}" /><TextBlock Text="工艺参数分析" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="坡度着色" Click="OnRibbonCommand" ToolTip.Tip="坡度着色">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource pc_slope_shade}" /><TextBlock Text="坡度着色" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="粗糙度" Click="OnRibbonCommand" ToolTip.Tip="粗糙度">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource pc_roughness}" /><TextBlock Text="粗糙度" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="坡向着色" Click="OnRibbonCommand" ToolTip.Tip="坡向着色">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource pc_aspect}" /><TextBlock Text="坡向着色" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="曲率" Click="OnRibbonCommand" ToolTip.Tip="曲率">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource pc_curvature}" /><TextBlock Text="曲率" /></StackPanel>
+                                            </Button>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+            <TabItem Header="剥采排工程辅助设计">
+                <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,0,1">
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                        <StackPanel Orientation="Horizontal" Height="108">
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="剥采工程" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="参数化模板" Click="OnRibbonCommand" ToolTip.Tip="参数化模板">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mineass_template_param}" /><TextBlock Text="参数化模板" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="批量台阶扩帮" Click="OnRibbonCommand" ToolTip.Tip="批量台阶扩帮">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mineass_bench_expand_batch}" /><TextBlock Text="批量台阶扩帮" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="处理尖灭" Click="OnRibbonCommand" ToolTip.Tip="处理尖灭">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mineass_bench_pinch}" /><TextBlock Text="处理尖灭" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="驱动距离" Click="OnRibbonCommand" ToolTip.Tip="驱动距离">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mineass_drive_template}" /><TextBlock Text="驱动距离" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="驱动量" Click="OnRibbonCommand" ToolTip.Tip="驱动量">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mineass_qty_driven}" /><TextBlock Text="驱动量" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="创建工程位置" Click="OnRibbonCommand" ToolTip.Tip="创建工程位置">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mineass_create_loc}" /><TextBlock Text="创建工程位置" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="创建工作线" Click="OnRibbonCommand" ToolTip.Tip="创建工作线">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mineass_workline}" /><TextBlock Text="创建工作线" /></StackPanel>
+                                        </Button>
+                                        <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                            <Button Classes="ribbon-btn small" Tag="分帮扩帮" Click="OnRibbonCommand" ToolTip.Tip="分帮扩帮">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mineass_bench_perwall}" /><TextBlock Text="分帮扩帮" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="局部台阶" Click="OnRibbonCommand" ToolTip.Tip="局部台阶">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mineass_bench_expand}" /><TextBlock Text="局部台阶" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="组合工作线" Click="OnRibbonCommand" ToolTip.Tip="组合工作线">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mineass_workline_group}" /><TextBlock Text="组合工作线" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="最终并段" Click="OnRibbonCommand" ToolTip.Tip="最终并段">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mineass_merge_bench}" /><TextBlock Text="最终并段" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="批量扩坑" Click="OnRibbonCommand" ToolTip.Tip="批量扩坑">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mineass_pit_expand}" /><TextBlock Text="批量扩坑" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="连接台阶线" Click="OnRibbonCommand" ToolTip.Tip="连接台阶线">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mineass_bench_join}" /><TextBlock Text="连接台阶线" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="动态调整" Click="OnRibbonCommand" ToolTip.Tip="动态调整">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mineass_bench_edit}" /><TextBlock Text="动态调整" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="编辑台阶" Click="OnRibbonCommand" ToolTip.Tip="编辑台阶">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mineass_adjust_bench}" /><TextBlock Text="编辑台阶" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="煤层露头着色" Click="OnRibbonCommand" ToolTip.Tip="煤层露头着色">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mineass_seam_outcrop}" /><TextBlock Text="煤层露头着色" /></StackPanel>
+                                            </Button>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="运输工程" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="约束条件设置" Click="OnRibbonCommand" ToolTip.Tip="约束条件设置">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mineass_transport_config}" /><TextBlock Text="约束条件设置" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="运量驱动布线" Click="OnRibbonCommand" ToolTip.Tip="运量驱动布线">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mineass_road_layout}" /><TextBlock Text="运量驱动布线" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="直线坑线" Click="OnRibbonCommand" ToolTip.Tip="直线坑线">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mineass_road_straight}" /><TextBlock Text="直线坑线" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="坑线落地" Click="OnRibbonCommand" ToolTip.Tip="坑线落地">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mineass_build_transport}" /><TextBlock Text="坑线落地" /></StackPanel>
+                                        </Button>
+                                        <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                            <Button Classes="ribbon-btn small" Tag="撤销坑线" Click="OnRibbonCommand" ToolTip.Tip="撤销坑线">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mineass_road_cut}" /><TextBlock Text="撤销坑线" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="平盘联络道" Click="OnRibbonCommand" ToolTip.Tip="平盘联络道">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mineass_bench_connector}" /><TextBlock Text="平盘联络道" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="螺旋坑线" Click="OnRibbonCommand" ToolTip.Tip="螺旋坑线">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mineass_road_spiral}" /><TextBlock Text="螺旋坑线" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="画道路中线" Click="OnRibbonCommand" ToolTip.Tip="画道路中线">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mineass_road_centerline}" /><TextBlock Text="画道路中线" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="折返坑线" Click="OnRibbonCommand" ToolTip.Tip="折返坑线">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mineass_road_switchback}" /><TextBlock Text="折返坑线" /></StackPanel>
+                                            </Button>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="排土工程" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="排土模板" Click="OnRibbonCommand" ToolTip.Tip="排土模板">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mineass_dump_template}" /><TextBlock Text="排土模板" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="排土场放坡" Click="OnRibbonCommand" ToolTip.Tip="排土场放坡">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mineass_outer_dump_slope}" /><TextBlock Text="排土场放坡" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="排土场按量推进" Click="OnRibbonCommand" ToolTip.Tip="排土场按量推进">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mineass_inner_dump}" /><TextBlock Text="排土场按量推进" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="排土条带" Click="OnRibbonCommand" ToolTip.Tip="排土条带">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mineass_dump_strip}" /><TextBlock Text="排土条带" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="排土场容量校核" Click="OnRibbonCommand" ToolTip.Tip="排土场容量校核">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mineass_volume}" /><TextBlock Text="排土场容量校核" /></StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+            <TabItem Header="道路运输系统">
+                <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,0,1">
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                        <StackPanel Orientation="Horizontal" Height="108">
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="路网构建" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="提取道路中心线" Click="OnRibbonCommand" ToolTip.Tip="提取道路中心线">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource pc_road_centerline}" /><TextBlock Text="提取道路中心线" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="手动标定线路" Click="OnRibbonCommand" ToolTip.Tip="手动标定线路">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource road_mark}" /><TextBlock Text="手动标定线路" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="中心线管理" Click="OnRibbonCommand" ToolTip.Tip="中心线管理">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource road_centerline_manage}" /><TextBlock Text="中心线管理" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="基础道路网络构建" Click="OnRibbonCommand" ToolTip.Tip="基础道路网络构建">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource road_network_build}" /><TextBlock Text="基础道路网络构建" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="破碎站位置设置" Click="OnRibbonCommand" ToolTip.Tip="破碎站位置设置">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource road_points}" /><TextBlock Text="破碎站位置设置" /></StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="运输表征" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="路况显示" Click="OnRibbonCommand" ToolTip.Tip="路况显示">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource road_styled}" /><TextBlock Text="路况显示" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="结构路面" Click="OnRibbonCommand" ToolTip.Tip="结构路面">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource road_pavement}" /><TextBlock Text="结构路面" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="路网预览" Click="OnRibbonCommand" ToolTip.Tip="路网预览">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource road_network_preview}" /><TextBlock Text="路网预览" /></StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="路网维护与延拓" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="增量增删边" Click="OnRibbonCommand" ToolTip.Tip="增量增删边">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource road_update}" /><TextBlock Text="增量增删边" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="时段快照" Click="OnRibbonCommand" ToolTip.Tip="时段快照">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource road_snapshot}" /><TextBlock Text="时段快照" /></StackPanel>
+                                        </Button>
+                                        <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                            <Button Classes="ribbon-btn small" Tag="路网存档" Click="OnRibbonCommand" ToolTip.Tip="路网存档">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource road_routelib}" /><TextBlock Text="路网存档" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="演化对比" Click="OnRibbonCommand" ToolTip.Tip="演化对比">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource road_evolution}" /><TextBlock Text="演化对比" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="分色显示" Click="OnRibbonCommand" ToolTip.Tip="分色显示">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource road_colordisplay}" /><TextBlock Text="分色显示" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="路网更新" Click="OnRibbonCommand" ToolTip.Tip="路网更新">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource road_extend}" /><TextBlock Text="路网更新" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="边状态" Click="OnRibbonCommand" ToolTip.Tip="边状态">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource road_edgestate}" /><TextBlock Text="边状态" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="延拓触发设置" Click="OnRibbonCommand" ToolTip.Tip="延拓触发设置">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource road_trigger}" /><TextBlock Text="延拓触发设置" /></StackPanel>
+                                            </Button>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="寻径与运距" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="点对点寻径" Click="OnRibbonCommand" ToolTip.Tip="点对点寻径">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource road_pathfind}" /><TextBlock Text="点对点寻径" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="等效运距" Click="OnRibbonCommand" ToolTip.Tip="等效运距">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource road_distance}" /><TextBlock Text="等效运距" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="运输指标报表" Click="OnRibbonCommand" ToolTip.Tip="运输指标报表">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource road_report}" /><TextBlock Text="运输指标报表" /></StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+            <TabItem Header="生产计划编制">
+                <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,0,1">
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                        <StackPanel Orientation="Horizontal" Height="108">
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="优化开采设计" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="境界圈定" Click="OnRibbonCommand" ToolTip.Tip="境界圈定">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource pit_opt_config}" /><TextBlock Text="境界圈定" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="确定境界" Click="OnRibbonCommand" ToolTip.Tip="确定境界">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource pit_opt_solve}" /><TextBlock Text="确定境界" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="采区划分" Click="OnRibbonCommand" ToolTip.Tip="采区划分">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource panel_div_config}" /><TextBlock Text="采区划分" /></StackPanel>
+                                        </Button>
+                                        <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                            <Button Classes="ribbon-btn small" Tag="开采程序确定" Click="OnRibbonCommand" ToolTip.Tip="开采程序确定">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource panel_div_solve}" /><TextBlock Text="开采程序确定" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="刀量切割" Click="OnRibbonCommand" ToolTip.Tip="刀量切割">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource plan_lt_cutting}" /><TextBlock Text="刀量切割" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="剥采比均衡" Click="OnRibbonCommand" ToolTip.Tip="剥采比均衡">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource plan_lt_ratio_balance}" /><TextBlock Text="剥采比均衡" /></StackPanel>
+                                            </Button>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="中长远进度计划编制" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="中长远进度计划编制" Click="OnRibbonCommand" ToolTip.Tip="中长远进度计划编制">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource plan_longterm}" /><TextBlock Text="中长远进度计划编制" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="规划计算" Click="OnRibbonCommand" ToolTip.Tip="规划计算">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource plan_lt_compute}" /><TextBlock Text="规划计算" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="中长远规划动态模拟" Click="OnRibbonCommand" ToolTip.Tip="中长远规划动态模拟">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource plan_sim_longterm}" /><TextBlock Text="中长远规划动态模拟" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="采场/排土场圈定" Click="OnRibbonCommand" ToolTip.Tip="采场/排土场圈定">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource plan_st_mineable_area}" /><TextBlock Text="采场/排土场圈定" /></StackPanel>
+                                        </Button>
+                                        <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                            <Button Classes="ribbon-btn small" Tag="派生计划方案" Click="OnRibbonCommand" ToolTip.Tip="派生计划方案">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource plan_lt_derive}" /><TextBlock Text="派生计划方案" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="方案综合对比" Click="OnRibbonCommand" ToolTip.Tip="方案综合对比">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource plan_lt_compare}" /><TextBlock Text="方案综合对比" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="进度计划方案出图" Click="OnRibbonCommand" ToolTip.Tip="进度计划方案出图">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource plan_lt_chart}" /><TextBlock Text="进度计划方案出图" /></StackPanel>
+                                            </Button>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="短期生产计划编制" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="短期生产计划编制" Click="OnRibbonCommand" ToolTip.Tip="短期生产计划编制">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource plan_shortterm}" /><TextBlock Text="短期生产计划编制" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="月度计划编制" Click="OnRibbonCommand" ToolTip.Tip="月度计划编制">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource plan_st_monthly}" /><TextBlock Text="月度计划编制" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="量驱动采剥接续" Click="OnRibbonCommand" ToolTip.Tip="量驱动采剥接续">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource plan_st_qty_driven}" /><TextBlock Text="量驱动采剥接续" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="短期进度计划动态模拟" Click="OnRibbonCommand" ToolTip.Tip="短期进度计划动态模拟">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource plan_sim_shortterm}" /><TextBlock Text="短期进度计划动态模拟" /></StackPanel>
+                                        </Button>
+                                        <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                            <Button Classes="ribbon-btn small" Tag="采场参数识别" Click="OnRibbonCommand" ToolTip.Tip="采场参数识别">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource plan_st_param_extract}" /><TextBlock Text="采场参数识别" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="标注台阶标高" Click="OnRibbonCommand" ToolTip.Tip="标注台阶标高">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource plan_st_bench_label}" /><TextBlock Text="标注台阶标高" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="确定开采程序" Click="OnRibbonCommand" ToolTip.Tip="确定开采程序">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource plan_st_mine_program}" /><TextBlock Text="确定开采程序" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="采排配对" Click="OnRibbonCommand" ToolTip.Tip="采排配对">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource plan_st_pairing}" /><TextBlock Text="采排配对" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="采掘单元清单" Click="OnRibbonCommand" ToolTip.Tip="采掘单元清单">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource plan_st_unit_ledger}" /><TextBlock Text="采掘单元清单" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="派生计划方案" Click="OnRibbonCommand" ToolTip.Tip="派生计划方案">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource plan_st_derive}" /><TextBlock Text="派生计划方案" /></StackPanel>
+                                            </Button>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+            <TabItem Header="日常生产组织">
+                <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,0,1">
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                        <StackPanel Orientation="Horizontal" Height="108">
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="基础数据" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="班次日历" Click="OnRibbonCommand" ToolTip.Tip="班次日历">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource task_calendar}" /><TextBlock Text="班次日历" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="作业面台账" Click="OnRibbonCommand" ToolTip.Tip="作业面台账">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource task_face}" /><TextBlock Text="作业面台账" /></StackPanel>
+                                        </Button>
+                                        <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                            <Button Classes="ribbon-btn small" Tag="去向台账" Click="OnRibbonCommand" ToolTip.Tip="去向台账">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource task_layout}" /><TextBlock Text="去向台账" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="检修档期" Click="OnRibbonCommand" ToolTip.Tip="检修档期">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource task_calendar}" /><TextBlock Text="检修档期" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="影像底图" Click="OnRibbonCommand" ToolTip.Tip="影像底图">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource task_layout}" /><TextBlock Text="影像底图" /></StackPanel>
+                                            </Button>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="任务编制" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="生产任务编制" Click="OnRibbonCommand" ToolTip.Tip="生产任务编制">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource task_create}" /><TextBlock Text="生产任务编制" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="作业区划分" Click="OnRibbonCommand" ToolTip.Tip="作业区划分">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource task_layout}" /><TextBlock Text="作业区划分" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="周计划编制" Click="OnRibbonCommand" ToolTip.Tip="周计划编制">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource task_week}" /><TextBlock Text="周计划编制" /></StackPanel>
+                                        </Button>
+                                        <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                            <Button Classes="ribbon-btn small" Tag="编制配置" Click="OnRibbonCommand" ToolTip.Tip="编制配置">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource task_config}" /><TextBlock Text="编制配置" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="钻爆计划衔接" Click="OnRibbonCommand" ToolTip.Tip="钻爆计划衔接">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource task_blast}" /><TextBlock Text="钻爆计划衔接" /></StackPanel>
+                                            </Button>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="任务下达" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="生产任务书" Click="OnRibbonCommand" ToolTip.Tip="生产任务书">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource task_order}" /><TextBlock Text="生产任务书" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="任务下达" Click="OnRibbonCommand" ToolTip.Tip="任务下达">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource task_dispatch}" /><TextBlock Text="任务下达" /></StackPanel>
+                                        </Button>
+                                        <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                            <Button Classes="ribbon-btn small" Tag="派车单" Click="OnRibbonCommand" ToolTip.Tip="派车单">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource task_dispatch}" /><TextBlock Text="派车单" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="班组派工" Click="OnRibbonCommand" ToolTip.Tip="班组派工">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource task_crew}" /><TextBlock Text="班组派工" /></StackPanel>
+                                            </Button>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="执行调度" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="调度态势看板" Click="OnRibbonCommand" ToolTip.Tip="调度态势看板">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource task_board}" /><TextBlock Text="调度态势看板" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="实绩录入" Click="OnRibbonCommand" ToolTip.Tip="实绩录入">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource task_actual}" /><TextBlock Text="实绩录入" /></StackPanel>
+                                        </Button>
+                                        <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                            <Button Classes="ribbon-btn small" Tag="设备状态·故障报修" Click="OnRibbonCommand" ToolTip.Tip="设备状态·故障报修">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource task_equipstatus}" /><TextBlock Text="设备状态·故障报修" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="工序进度跟踪" Click="OnRibbonCommand" ToolTip.Tip="工序进度跟踪">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource task_progress}" /><TextBlock Text="工序进度跟踪" /></StackPanel>
+                                            </Button>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="评价分析" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="生产报告" Click="OnRibbonCommand" ToolTip.Tip="生产报告">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource task_report}" /><TextBlock Text="生产报告" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="达成度评价" Click="OnRibbonCommand" ToolTip.Tip="达成度评价">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource task_attainment}" /><TextBlock Text="达成度评价" /></StackPanel>
+                                        </Button>
+                                        <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                            <Button Classes="ribbon-btn small" Tag="产量统计" Click="OnRibbonCommand" ToolTip.Tip="产量统计">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource task_stats}" /><TextBlock Text="产量统计" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="质量·配煤分析" Click="OnRibbonCommand" ToolTip.Tip="质量·配煤分析">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource task_coal}" /><TextBlock Text="质量·配煤分析" /></StackPanel>
+                                            </Button>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="调整·推演" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="生产任务动态调整" Click="OnRibbonCommand" ToolTip.Tip="生产任务动态调整">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource task_adjust}" /><TextBlock Text="生产任务动态调整" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="班内工艺·工序推演" Click="OnRibbonCommand" ToolTip.Tip="班内工艺·工序推演">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource task_simulate}" /><TextBlock Text="班内工艺·工序推演" /></StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+        </TabControl>
+
+        <!-- ============================ 3D 视口 ============================ -->
+        <Panel Grid.Row="1">
+            <controls:CadGlViewport x:Name="Viewport" />
+            <!-- 左上叠加信息 -->
+            <Border Background="#B0000000" CornerRadius="6" Padding="10,7"
+                    Margin="12" HorizontalAlignment="Left" VerticalAlignment="Top">
+                <StackPanel>
+                    <TextBlock Text="3D 视口 · OpenGL" Foreground="#EAF2FF" FontWeight="SemiBold" FontSize="13" />
+                    <TextBlock Text="左键拖拽 = 轨道旋转 · 滚轮 = 缩放" Foreground="#B9C6D6" FontSize="11" Margin="0,3,0,0" />
+                    <TextBlock x:Name="GlInfo" Text="渲染后端: 初始化中…" Foreground="#8FE3A0" FontSize="11" Margin="0,2,0,0" />
+                </StackPanel>
+            </Border>
+            <!-- 右下角坐标系铭牌 -->
+            <Border Background="#80102040" CornerRadius="4" Padding="8,5"
+                    Margin="12" HorizontalAlignment="Right" VerticalAlignment="Bottom">
+                <TextBlock Text="Z 上 · CGCS2000 约定" Foreground="#C9D6E6" FontSize="11" />
+            </Border>
+        </Panel>
+
+        <!-- ============================ 命令行 ============================ -->
+        <Border Grid.Row="2" Background="#1E1F22" Padding="8,5">
+            <Grid ColumnDefinitions="Auto,*">
+                <TextBlock Grid.Column="0" Text="命令:" Foreground="#9DA3AD" VerticalAlignment="Center" Margin="2,0,8,0" FontFamily="Consolas,monospace" />
+                <TextBox Grid.Column="1" x:Name="CommandInput"
+                         Background="Transparent" BorderThickness="0" Foreground="#E6E6E6"
+                         FontFamily="Consolas,monospace" Watermark="输入命令别名后回车（LINE / CIRCLE / TR / EX …）"
+                         KeyDown="OnCommandKeyDown" />
+            </Grid>
+        </Border>
+
+        <!-- ============================ 状态栏 ============================ -->
+        <Border Grid.Row="3" Background="#0A5AD4" Height="26">
+            <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto">
+                <TextBlock Grid.Column="0" x:Name="CoordText" Text="X 0.000  Y 0.000  Z 0.000"
+                           Foreground="White" VerticalAlignment="Center" Margin="10,0" FontSize="12" FontFamily="Consolas,monospace" />
+                <ToggleButton Grid.Column="1" Content="对象捕捉" Foreground="White" Background="Transparent" BorderThickness="0" Padding="8,0" FontSize="12" />
+                <ToggleButton Grid.Column="2" Content="正交" Foreground="White" Background="Transparent" BorderThickness="0" Padding="8,0" FontSize="12" />
+                <TextBlock Grid.Column="3" x:Name="StatusMsg" Text="就绪" Foreground="#DCE8FF" VerticalAlignment="Center" Margin="12,0" FontSize="12" />
+                <TextBlock Grid.Column="4" Text="Avalonia 11 · OpenGL · 麒麟 SP10 就绪"
+                           Foreground="#DCE8FF" VerticalAlignment="Center" Margin="10,0" FontSize="12" />
+            </Grid>
+        </Border>
+
+    </Grid>
+</Window>

@@ -1,0 +1,1289 @@
+<!-- 由 build/convert_icons.py 从原版自动 1:1 转换，勿手改 -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+      MeshEditLib 模块专属图标字典。
+      由 MeshEditLibPlugin.Initialize() 通过 IResourceRegistry.MergeResourceDictionary
+      合并进 Application.Resources，让 Ribbon 注册的 iconKey 能解析到这里的资源。
+      新增三维建模 / 三角网 / 块体 相关图标只改这一个文件。
+    -->
+
+    <!-- 三维地质建模图标（蓝色立方体+黄色提示+剖切虚线）
+         viewBox 0 0 32 32 -->
+    <DrawingImage x:Key="icon_Geo3d">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <DrawingGroup.Children>
+                    <DrawingGroup>
+                        <DrawingGroup.Children>
+                            <GeometryDrawing>
+                                <GeometryDrawing.Brush>
+                                    <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%" SpreadMethod="Pad" Opacity="1">
+                                        <LinearGradientBrush.GradientStops>
+                                            <GradientStop Color="#FF3B82F6" Offset="0" />
+                                            <GradientStop Color="#FF2563EB" Offset="1" />
+                                        </LinearGradientBrush.GradientStops>
+                                    </LinearGradientBrush>
+                                </GeometryDrawing.Brush>
+                                <GeometryDrawing.Pen>
+                                    <Pen Brush="#FF2563EB" Thickness="1" LineCap="Flat" LineJoin="Round" />
+                                </GeometryDrawing.Pen>
+                                <GeometryDrawing.Geometry>
+                                    <PathGeometry FillRule="NonZero" Figures="M16,16L26,11 26,23 16,28z" />
+                                </GeometryDrawing.Geometry>
+                            </GeometryDrawing>
+                            <GeometryDrawing>
+                                <GeometryDrawing.Brush>
+                                    <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%" SpreadMethod="Pad" Opacity="1">
+                                        <LinearGradientBrush.GradientStops>
+                                            <GradientStop Color="#FFBFDBFE" Offset="0" />
+                                            <GradientStop Color="#FF93C5FD" Offset="1" />
+                                        </LinearGradientBrush.GradientStops>
+                                    </LinearGradientBrush>
+                                </GeometryDrawing.Brush>
+                                <GeometryDrawing.Pen>
+                                    <Pen Brush="#FF2563EB" Thickness="1" LineCap="Flat" LineJoin="Round" />
+                                </GeometryDrawing.Pen>
+                                <GeometryDrawing.Geometry>
+                                    <PathGeometry FillRule="NonZero" Figures="M6,11L16,16 16,28 6,23z" />
+                                </GeometryDrawing.Geometry>
+                            </GeometryDrawing>
+                            <GeometryDrawing Brush="{x:Null}">
+                                <GeometryDrawing.Pen>
+                                    <Pen Brush="#FF2563EB" Thickness="0.75" LineCap="Flat" LineJoin="Miter" />
+                                </GeometryDrawing.Pen>
+                                <GeometryDrawing.Geometry>
+                                    <PathGeometry FillRule="NonZero" Figures="M6,15C8,16,12,17.5,16,18.5" />
+                                </GeometryDrawing.Geometry>
+                            </GeometryDrawing>
+                            <GeometryDrawing>
+                                <GeometryDrawing.Brush>
+                                    <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%" SpreadMethod="Pad" Opacity="1">
+                                        <LinearGradientBrush.GradientStops>
+                                            <GradientStop Color="#FF93C5FD" Offset="0" />
+                                            <GradientStop Color="#FF60A5FA" Offset="1" />
+                                        </LinearGradientBrush.GradientStops>
+                                    </LinearGradientBrush>
+                                </GeometryDrawing.Brush>
+                                <GeometryDrawing.Pen>
+                                    <Pen Brush="#FF2563EB" Thickness="1" LineCap="Flat" LineJoin="Round" />
+                                </GeometryDrawing.Pen>
+                                <GeometryDrawing.Geometry>
+                                    <PathGeometry FillRule="NonZero" Figures="M6,15L6,23 16,28 16,18.5z" />
+                                </GeometryDrawing.Geometry>
+                            </GeometryDrawing>
+                            <GeometryDrawing Brush="{x:Null}">
+                                <GeometryDrawing.Pen>
+                                    <Pen Brush="#FF2563EB" Thickness="0.75" LineCap="Flat" LineJoin="Miter" />
+                                </GeometryDrawing.Pen>
+                                <GeometryDrawing.Geometry>
+                                    <PathGeometry FillRule="NonZero" Figures="M6,19C8,20,12,21.5,16,22.5" />
+                                </GeometryDrawing.Geometry>
+                            </GeometryDrawing>
+                            <GeometryDrawing>
+                                <GeometryDrawing.Brush>
+                                    <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%" SpreadMethod="Pad" Opacity="1">
+                                        <LinearGradientBrush.GradientStops>
+                                            <GradientStop Color="#FF60A5FA" Offset="0" />
+                                            <GradientStop Color="#FF3B82F6" Offset="1" />
+                                        </LinearGradientBrush.GradientStops>
+                                    </LinearGradientBrush>
+                                </GeometryDrawing.Brush>
+                                <GeometryDrawing.Pen>
+                                    <Pen Brush="#FF2563EB" Thickness="1" LineCap="Flat" LineJoin="Round" />
+                                </GeometryDrawing.Pen>
+                                <GeometryDrawing.Geometry>
+                                    <PathGeometry FillRule="NonZero" Figures="M6,19L6,23 16,28 16,22.5z" />
+                                </GeometryDrawing.Geometry>
+                            </GeometryDrawing>
+                            <GeometryDrawing>
+                                <GeometryDrawing.Brush>
+                                    <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%" SpreadMethod="Pad" Opacity="1">
+                                        <LinearGradientBrush.GradientStops>
+                                            <GradientStop Color="#FF93C5FD" Offset="0" />
+                                            <GradientStop Color="#FF60A5FA" Offset="1" />
+                                        </LinearGradientBrush.GradientStops>
+                                    </LinearGradientBrush>
+                                </GeometryDrawing.Brush>
+                                <GeometryDrawing.Pen>
+                                    <Pen Brush="#FF2563EB" Thickness="1" LineCap="Flat" LineJoin="Round" />
+                                </GeometryDrawing.Pen>
+                                <GeometryDrawing.Geometry>
+                                    <PathGeometry FillRule="NonZero" Figures="M6,11L16,6 26,11 16,16z" />
+                                </GeometryDrawing.Geometry>
+                            </GeometryDrawing>
+                            <DrawingGroup Opacity="0.5">
+                                <DrawingGroup.Children>
+                                    <GeometryDrawing Brush="{x:Null}">
+                                        <GeometryDrawing.Pen>
+                                            <Pen Brush="#FF2563EB" Thickness="0.75" LineCap="Flat" LineJoin="Miter" />
+                                        </GeometryDrawing.Pen>
+                                        <GeometryDrawing.Geometry>
+                                            <PathGeometry FillRule="NonZero" Figures="M9,11C11,10 13,9.5 16,9.5 19,9.5 21,10 23,11" />
+                                        </GeometryDrawing.Geometry>
+                                    </GeometryDrawing>
+                                </DrawingGroup.Children>
+                            </DrawingGroup>
+                            <DrawingGroup Opacity="0.5">
+                                <DrawingGroup.Children>
+                                    <GeometryDrawing Brush="{x:Null}">
+                                        <GeometryDrawing.Pen>
+                                            <Pen Brush="#FF2563EB" Thickness="0.75" LineCap="Flat" LineJoin="Miter" />
+                                        </GeometryDrawing.Pen>
+                                        <GeometryDrawing.Geometry>
+                                            <PathGeometry FillRule="NonZero" Figures="M12,12.5C13.5,12 14.5,11.5 16,11.5 17.5,11.5 18.5,12 20,12.5" />
+                                        </GeometryDrawing.Geometry>
+                                    </GeometryDrawing>
+                                </DrawingGroup.Children>
+                            </DrawingGroup>
+                            <DrawingGroup Opacity="0.4">
+                                <DrawingGroup.Children>
+                                    <GeometryDrawing Brush="#FF2563EB" Pen="{x:Null}">
+                                        <GeometryDrawing.Geometry>
+                                            <EllipseGeometry RadiusX="1.5" RadiusY="0.7" Center="16,13" />
+                                        </GeometryDrawing.Geometry>
+                                    </GeometryDrawing>
+                                </DrawingGroup.Children>
+                            </DrawingGroup>
+                            <GeometryDrawing Brush="#FF000000">
+                                <GeometryDrawing.Pen>
+                                    <Pen Brush="#FF2563EB" Thickness="0.75" LineCap="Flat" LineJoin="Miter">
+                                        <Pen.DashStyle>
+                                            <DashStyle Offset="0" Dashes="2,1.3333333333333333" />
+                                        </Pen.DashStyle>
+                                    </Pen>
+                                </GeometryDrawing.Pen>
+                                <GeometryDrawing.Geometry>
+                                    <PathGeometry FillRule="NonZero" Figures="M14.5,13L14.5,25" />
+                                </GeometryDrawing.Geometry>
+                            </GeometryDrawing>
+                            <DrawingGroup Opacity="0.8">
+                                <DrawingGroup.Children>
+                                    <GeometryDrawing Brush="#FFFBBF24">
+                                        <GeometryDrawing.Pen>
+                                            <Pen Brush="#FF2563EB" Thickness="0.75" LineCap="Flat" LineJoin="Round" />
+                                        </GeometryDrawing.Pen>
+                                        <GeometryDrawing.Geometry>
+                                            <PathGeometry FillRule="NonZero" Figures="M18,18L24,15.5 24,20 18,22.5z" />
+                                        </GeometryDrawing.Geometry>
+                                    </GeometryDrawing>
+                                </DrawingGroup.Children>
+                            </DrawingGroup>
+                            <GeometryDrawing Brush="#FF2563EB" Pen="{x:Null}">
+                                <GeometryDrawing.Geometry>
+                                    <EllipseGeometry RadiusX="1" RadiusY="1" Center="16,16" />
+                                </GeometryDrawing.Geometry>
+                            </GeometryDrawing>
+                        </DrawingGroup.Children>
+                        <DrawingGroup.ClipGeometry>
+                            <RectangleGeometry Rect="0,0,32,32" />
+                        </DrawingGroup.ClipGeometry>
+                    </DrawingGroup>
+                </DrawingGroup.Children>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 创建三角网：离散顶点 → 约束 Delaunay TIN（浅蓝三角面 + 绿色约束线 + 顶点） -->
+    <DrawingImage x:Key="icon_Triangle">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- TIN 三角面（浅蓝填充 + 蓝边） -->
+                <GeometryDrawing Brush="#FFBFDBFE">
+                    <GeometryDrawing.Pen><Pen Brush="#FF2563EB" Thickness="0.7" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <PathGeometry Figures="M5,26 L14,28 L10,18 Z"/>
+                            <PathGeometry Figures="M14,28 L10,18 L20,16 Z"/>
+                            <PathGeometry Figures="M14,28 L24,26 L20,16 Z"/>
+                            <PathGeometry Figures="M24,26 L29,18 L20,16 Z"/>
+                            <PathGeometry Figures="M10,18 L4,13 L15,9 Z"/>
+                            <PathGeometry Figures="M10,18 L20,16 L15,9 Z"/>
+                            <PathGeometry Figures="M20,16 L15,9 L26,8 Z"/>
+                            <PathGeometry Figures="M20,16 L29,18 L26,8 Z"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 绿色约束线（约束 Delaunay 的强制边） -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF059669" Thickness="1.8" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M4,13 L15,9 L26,8"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 内部顶点（深蓝） -->
+                <GeometryDrawing Brush="#FF1E3A8A">
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <EllipseGeometry RadiusX="1" RadiusY="1" Center="5,26"/>
+                            <EllipseGeometry RadiusX="1" RadiusY="1" Center="14,28"/>
+                            <EllipseGeometry RadiusX="1" RadiusY="1" Center="24,26"/>
+                            <EllipseGeometry RadiusX="1" RadiusY="1" Center="29,18"/>
+                            <EllipseGeometry RadiusX="1" RadiusY="1" Center="10,18"/>
+                            <EllipseGeometry RadiusX="1" RadiusY="1" Center="20,16"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 约束线顶点（绿色高亮） -->
+                <GeometryDrawing Brush="#FF059669">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.5"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <EllipseGeometry RadiusX="1.5" RadiusY="1.5" Center="4,13"/>
+                            <EllipseGeometry RadiusX="1.5" RadiusY="1.5" Center="15,9"/>
+                            <EllipseGeometry RadiusX="1.5" RadiusY="1.5" Center="26,8"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- ───── 格网数据处理 ───── -->
+
+    <!-- 网格平滑：锯齿 → 平滑曲线 + 中间向下箭头 -->
+    <DrawingImage x:Key="mesh_smooth">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF94A3B8" Thickness="1.6" LineJoin="Miter"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M4,10 L8,5 L12,11 L16,5 L20,11 L24,5 L28,10"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF2563EB" Geometry="M14,14 L18,14 L18,17 L21,17 L16,22 L11,17 L14,17 Z"/>
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF2563EB" Thickness="2" LineCap="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M4,27 C8,23 12,29 16,26 C20,23 24,29 28,27"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 网格简化：左侧密三角网 → 右侧大三角 -->
+    <DrawingImage x:Key="mesh_simplify">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FFBFDBFE">
+                    <GeometryDrawing.Pen><Pen Brush="#FF2563EB" Thickness="0.6"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M3,22 L9,22 L6,12 Z M9,22 L15,22 L12,12 Z M6,12 L12,12 L9,4 Z M9,12 L15,12 L12,4 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF1F2937" Geometry="M16,12 L20,12 L20,11 L24,13 L20,15 L20,14 L16,14 Z"/>
+                <GeometryDrawing Brush="#FF3B82F6">
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E3A8A" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M19,24 L29,24 L24,8 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 修补孔洞：三角网带洞 + 黄色补丁 -->
+    <DrawingImage x:Key="mesh_repair">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FFBFDBFE">
+                    <GeometryDrawing.Pen><Pen Brush="#FF2563EB" Thickness="0.6"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M3,28 L11,28 L7,20 Z M11,28 L19,28 L15,20 Z M19,28 L27,28 L23,20 Z M7,20 L15,20 L11,12 Z M15,20 L23,20 L19,12 Z M11,12 L19,12 L15,4 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFFFFFFF" Geometry="M15,20 L23,20 L19,12 Z"/>
+                <GeometryDrawing>
+                    <GeometryDrawing.Brush>
+                        <SolidColorBrush Color="#FFFBBF24" Opacity="0.85"/>
+                    </GeometryDrawing.Brush>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FFB45309" Thickness="1" LineJoin="Round">
+                            <Pen.DashStyle><DashStyle Dashes="2,1"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M15,20 L23,20 L19,12 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- =================================================================
+         Needs.md 2026-05-25 15:00 规格 — MeshEditLib 43+ 新图标
+         建模 (4 新 L) / 基础模型编辑 (15 M) / 三角网体素编辑 (14 M)
+         地质统计学 (2 L) / 块体模型 (2L+6M)
+         "创建三角网"复用 Host 共享 icon_triangle，不重复定义。
+         立体派统一画风。L 用 32×32 ; M 用 16×16。
+         ================================================================= -->
+
+    <!-- ─────────── 建模组 (Large 32×32) ─────────── -->
+
+    <!-- 展点：散布彩色点云在浅蓝底图上 -->
+    <DrawingImage x:Key="mb_show_pts">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FFE0F2FE">
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry RadiusX="1" RadiusY="1" Rect="3,6,26,22"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FF93C5FD" Thickness="0.4">
+                            <Pen.DashStyle><DashStyle Dashes="1,1"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M3,13 L29,13 M3,21 L29,21 M11,6 L11,28 M21,6 L21,28"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFEF4444"><GeometryDrawing.Geometry><GeometryGroup><EllipseGeometry RadiusX="1.6" RadiusY="1.6" Center="7,10"/><EllipseGeometry RadiusX="1.6" RadiusY="1.6" Center="14,9"/></GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FFFBBF24"><GeometryDrawing.Geometry><GeometryGroup><EllipseGeometry RadiusX="1.6" RadiusY="1.6" Center="9,17"/><EllipseGeometry RadiusX="1.6" RadiusY="1.6" Center="19,12"/><EllipseGeometry RadiusX="1.6" RadiusY="1.6" Center="25,15"/></GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF10B981"><GeometryDrawing.Geometry><GeometryGroup><EllipseGeometry RadiusX="1.6" RadiusY="1.6" Center="13,22"/><EllipseGeometry RadiusX="1.6" RadiusY="1.6" Center="20,24"/><EllipseGeometry RadiusX="1.6" RadiusY="1.6" Center="26,22"/></GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF3B82F6"><GeometryDrawing.Geometry><GeometryGroup><EllipseGeometry RadiusX="1.6" RadiusY="1.6" Center="6,24"/><EllipseGeometry RadiusX="1.6" RadiusY="1.6" Center="16,18"/></GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 侧面三角网：3D 立方体 + 侧面三角化线 -->
+    <DrawingImage x:Key="mb_side_tri">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 立方体三个面 -->
+                <GeometryDrawing Brush="#FF93C5FD"><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M6,10 L16,5 L26,10 L16,15 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF60A5FA"><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M6,10 L16,15 L16,28 L6,23 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <!-- 右侧三角网（高亮蓝面 + 内三角线） -->
+                <GeometryDrawing Brush="#FF1E40AF"><GeometryDrawing.Pen><Pen Brush="#FF1E3A8A" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M16,15 L26,10 L26,23 L16,28 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFFBBF24" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M16,15 L26,23 M16,28 L26,10 M21,12.5 L21,25.5 M16,21 L26,16.5"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 固化成体：面网格 + 箭头 → 实心 cube -->
+    <DrawingImage x:Key="mb_solidify">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 左侧线框 cube -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF94A3B8" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M3,12 L8,8 L13,12 L8,16 Z M3,12 L3,22 L8,26 L13,22 L13,12 M8,16 L8,26"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 中间箭头 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFFB923C" Thickness="1.6"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M14,17 L19,17"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFFB923C" Geometry="M19,17 L16,15 L16,19 Z"/>
+                <!-- 右侧实心 cube -->
+                <GeometryDrawing Brush="#FF60A5FA"><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M20,12 L25,8 L30,12 L25,16 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF3B82F6"><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M20,12 L25,16 L25,26 L20,22 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF1E40AF"><GeometryDrawing.Pen><Pen Brush="#FF1E3A8A" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M25,16 L30,12 L30,22 L25,26 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 地质体建模：彩色多层 3D 地质体 -->
+    <DrawingImage x:Key="mb_geomodel">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FFFBBF24"><GeometryDrawing.Pen><Pen Brush="#FF92400E" Thickness="0.5" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M5,8 L16,3 L27,8 L16,13 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF10B981"><GeometryDrawing.Pen><Pen Brush="#FF064E3B" Thickness="0.5" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M5,8 L16,13 L16,17 L5,12 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF059669"><GeometryDrawing.Pen><Pen Brush="#FF064E3B" Thickness="0.5" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M16,13 L27,8 L27,12 L16,17 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF3B82F6"><GeometryDrawing.Pen><Pen Brush="#FF1E3A8A" Thickness="0.5" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M5,12 L16,17 L16,21 L5,16 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF1E40AF"><GeometryDrawing.Pen><Pen Brush="#FF1E3A8A" Thickness="0.5" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M16,17 L27,12 L27,16 L16,21 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FFEA580C"><GeometryDrawing.Pen><Pen Brush="#FF7C2D12" Thickness="0.5" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M5,16 L16,21 L16,28 L5,23 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF7C2D12"><GeometryDrawing.Pen><Pen Brush="#FF451A03" Thickness="0.5" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M16,21 L27,16 L27,23 L16,28 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 补勘钻孔写实：地层柱(煤层分色带 + 深度刻度) + 橙色「+」徽标(补勘/写实录入) -->
+    <DrawingImage x:Key="mu_borehole">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 柱身 -->
+                <GeometryDrawing Brush="#FFF1F5F9">
+                    <GeometryDrawing.Pen><Pen Brush="#FF334155" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><RectangleGeometry RadiusX="1.5" RadiusY="1.5" Rect="6,3,10,26"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 煤层分色带(4/9/11 号煤层色) -->
+                <GeometryDrawing Brush="#FFD4A017"><GeometryDrawing.Geometry><RectangleGeometry Rect="6,8,10,3"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF4A7C2E"><GeometryDrawing.Geometry><RectangleGeometry Rect="6,14,10,2.6"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF2C5F8D"><GeometryDrawing.Geometry><RectangleGeometry Rect="6,20,10,3"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <!-- 深度刻度 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF94A3B8" Thickness="0.7"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M3.5,8 L6,8 M3.5,14 L6,14 M3.5,20 L6,20 M3.5,26 L6,26"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 橙色「+」徽标（补勘/写实） -->
+                <GeometryDrawing Brush="#FFFB923C">
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C2D12" Thickness="0.6"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><EllipseGeometry RadiusX="5" RadiusY="5" Center="24,8"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFFFFFFF"><GeometryDrawing.Geometry><GeometryGroup>
+                    <RectangleGeometry Rect="23.1,4.8,1.8,6.4"/>
+                    <RectangleGeometry Rect="20.8,7.1,6.4,1.8"/>
+                </GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 现状写实：现状地形面(绿·三角网 + 高程点) + 橙色▽水准/高程符号 -->
+    <DrawingImage x:Key="mu_current">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 现状地形面 -->
+                <GeometryDrawing Brush="#FFB7D3A8">
+                    <GeometryDrawing.Pen><Pen Brush="#FF4A7C2E" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M3,19 L13,14 L27,19 L17,24 Z"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 三角网线 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF4A7C2E" Thickness="0.4"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M3,19 L17,24 M13,14 L27,19 M8,16.5 L22,21.5 M10,21.5 L20,16.5"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 现状高程点 -->
+                <GeometryDrawing Brush="#FF1E3A5F"><GeometryDrawing.Geometry><GeometryGroup>
+                    <EllipseGeometry RadiusX="1" RadiusY="1" Center="10,18"/>
+                    <EllipseGeometry RadiusX="1" RadiusY="1" Center="16.5,20"/>
+                    <EllipseGeometry RadiusX="1" RadiusY="1" Center="21,18"/>
+                </GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
+                <!-- 橙色 ▽ 水准/高程符号 -->
+                <GeometryDrawing Brush="#FFFB923C">
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C2D12" Thickness="0.6" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M21.5,3.5 L29,3.5 L25.25,9.5 Z"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C2D12" Thickness="0.8"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M20.8,2.4 L29.7,2.4"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 更新煤层面：目标三角网面(蓝) + 观测点(橙) + 橙色拉动箭头(把面更新到观测) -->
+    <DrawingImage x:Key="mu_update">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 目标面 -->
+                <GeometryDrawing Brush="#FF93C5FD">
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M3,21 L13,16 L27,21 L17,26 Z"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.4"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M3,21 L17,26 M13,16 L27,21 M8,18.5 L22,23.5 M10,23.5 L20,18.5"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 观测点 -->
+                <GeometryDrawing Brush="#FFFB923C">
+                    <GeometryDrawing.Pen><Pen Brush="#FF7C2D12" Thickness="0.5"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><GeometryGroup>
+                        <EllipseGeometry RadiusX="1.6" RadiusY="1.6" Center="9,9"/>
+                        <EllipseGeometry RadiusX="1.6" RadiusY="1.6" Center="16,6.5"/>
+                        <EllipseGeometry RadiusX="1.6" RadiusY="1.6" Center="23,10"/>
+                    </GeometryGroup></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 更新/拉动箭头 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFEA580C" Thickness="1.4"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M16,8.5 L16,15"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFEA580C"><GeometryDrawing.Geometry><PathGeometry Figures="M16,18 L13.2,14.3 L18.8,14.3 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 快速建模：顶/底等高线 → 自动箭头 → 封闭地质体；右上黄色闪电=快速一键 -->
+    <DrawingImage x:Key="mb_quickmodel">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 左：嵌套等高线（顶/底板等高线输入） -->
+                <GeometryDrawing Brush="{x:Null}">
+                    <GeometryDrawing.Pen><Pen Brush="#FF2563EB" Thickness="1.2" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <EllipseGeometry RadiusX="6" RadiusY="4.4" Center="8,18"/>
+                            <EllipseGeometry RadiusX="3.8" RadiusY="2.7" Center="8,18"/>
+                            <EllipseGeometry RadiusX="1.7" RadiusY="1.2" Center="8,18"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 中：橙色自动箭头 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFFB923C" Thickness="1.8"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M15,18 L20,18"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFFB923C" Geometry="M21,18 L17.5,15.8 L17.5,20.2 Z"/>
+                <!-- 右：封闭地质体（等轴测实体） -->
+                <GeometryDrawing Brush="#FF60A5FA"><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M22,15 L26,12.5 L30,15 L26,17.5 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF3B82F6"><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M22,15 L26,17.5 L26,25 L22,22.5 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF1E40AF"><GeometryDrawing.Pen><Pen Brush="#FF1E3A8A" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M26,17.5 L30,15 L30,22.5 L26,25 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <!-- 右上：黄色闪电（快速 / 一键自动） -->
+                <GeometryDrawing Brush="#FFFBBF24">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.6" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M17,2 L13.5,8 L16,8 L13.5,12.5 L19.5,6 L17,6 Z"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 加载倾斜模型：倾斜航拍网格地块（等距斜视方块 + 瓦片纹理格子 + 上方航拍相机视锥） -->
+    <DrawingImage x:Key="mb_oblique">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 地块顶面（等距斜视平行四边形 = 一片倾斜摄影瓦片） -->
+                <GeometryDrawing Brush="#FF60A5FA">
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.9" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M4,20 L16,13 L28,20 L16,27 Z"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 纹理格子（LOD 瓦片网格线，双向平行于两条边） -->
+                <GeometryDrawing Brush="{x:Null}">
+                    <GeometryDrawing.Pen><Pen Brush="#FFDBEAFE" Thickness="0.6" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M8,17.7 L20,24.7 M12,15.4 L24,22.4 M8,22.3 L20,15.3 M12,24.6 L24,17.6"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 上方航拍相机（黄色机身） -->
+                <GeometryDrawing Brush="#FFFBBF24">
+                    <GeometryDrawing.Pen><Pen Brush="#FF92400E" Thickness="0.5" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><RectangleGeometry Rect="13,3,6,4" RadiusX="1" RadiusY="1"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 相机视锥（橙色斜线打向地块） -->
+                <GeometryDrawing Brush="{x:Null}">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFB923C" Thickness="0.8"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M14,7 L10,13 M18,7 L22,13"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 倾斜摄影·加载：倾斜实景瓦片母题 + 右上绿色下载角标（统一组图标） -->
+    <DrawingImage x:Key="mb_oblique_import">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FF60A5FA">
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.9" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M3,22 L14,16 L25,22 L14,28 Z"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="{x:Null}">
+                    <GeometryDrawing.Pen><Pen Brush="#FFDBEAFE" Thickness="0.55"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M6.7,20 L17.7,25.9 M10.3,17.9 L21.3,23.8 M8.5,23.4 L19.5,17.5"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF22C55E">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="1.1"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><EllipseGeometry RadiusX="7" RadiusY="7" Center="23.5,8.5"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFFFFFFF">
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M21.9,4.8 L25.1,4.8 L25.1,8 L27,8 L23.5,12.2 L20,8 L21.9,8 Z"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 倾斜摄影·转化为三角格网：倾斜实景瓦片母题 + 右上青色三角网角标（专属，替代通用 icon_Triangle） -->
+    <DrawingImage x:Key="mb_oblique_tin">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FF60A5FA">
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.9" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M3,22 L14,16 L25,22 L14,28 Z"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="{x:Null}">
+                    <GeometryDrawing.Pen><Pen Brush="#FFDBEAFE" Thickness="0.55"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M6.7,20 L17.7,25.9 M10.3,17.9 L21.3,23.8 M8.5,23.4 L19.5,17.5"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF0EA5E9">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="1.1"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><EllipseGeometry RadiusX="7" RadiusY="7" Center="23.5,8.5"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="{x:Null}">
+                    <GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.85" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M19.3,11.8 L23.5,4.5 L27.7,11.8 Z M23.5,4.5 L23.5,11.8 M19.3,11.8 L27.7,11.8 M21.4,8.15 L25.6,8.15"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 倾斜摄影·隐藏：眼睛 + 红斜杠，底部倾斜瓦片呼应主题（小图标） -->
+    <DrawingImage x:Key="mb_oblique_hide">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FF93C5FD">
+                    <GeometryDrawing.Pen><Pen Brush="#FF2563EB" Thickness="0.9" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M6,25 L15,20 L24,25 L15,30 Z"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFF1F5F9">
+                    <GeometryDrawing.Pen><Pen Brush="#FF334155" Thickness="1.9" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M3,11.5 C8,5 20,5 25,11.5 C20,18 8,18 3,11.5 Z"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF334155"><GeometryDrawing.Geometry><EllipseGeometry RadiusX="3" RadiusY="3" Center="14,11.5"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="{x:Null}">
+                    <GeometryDrawing.Pen><Pen Brush="#FFEF4444" Thickness="2.3" LineCap="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M3.5,19 L24.5,4"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 倾斜摄影·删除：垃圾桶 + 底部倾斜瓦片呼应主题（小图标） -->
+    <DrawingImage x:Key="mb_oblique_del">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FF93C5FD">
+                    <GeometryDrawing.Pen><Pen Brush="#FF2563EB" Thickness="0.9" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M6,25 L15,20 L24,25 L15,30 Z"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFFECACA">
+                    <GeometryDrawing.Pen><Pen Brush="#FFB91C1C" Thickness="1.3" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M7.5,9.5 L22.5,9.5 L21,20.5 L9,20.5 Z"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="{x:Null}">
+                    <GeometryDrawing.Pen><Pen Brush="#FFB91C1C" Thickness="0.95"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M12,12 L12.4,18 M15,12 L15,18 M18,12 L17.6,18"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFEF4444">
+                    <GeometryDrawing.Pen><Pen Brush="#FFB91C1C" Thickness="1.0" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><RectangleGeometry Rect="5.5,6.5,19,3" RadiusX="1" RadiusY="1"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="{x:Null}">
+                    <GeometryDrawing.Pen><Pen Brush="#FFB91C1C" Thickness="1.3" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M12,6.5 L12,4.3 L18,4.3 L18,6.5"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 基本几何体：立方体 + 球体 + 圆柱（基本体素拼盘，各用一色区分） -->
+    <DrawingImage x:Key="mb_primitives">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 立方体（左后，蓝） -->
+                <GeometryDrawing Brush="#FF93C5FD"><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M4,11 L10,7 L16,11 L10,15 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF3B82F6"><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M4,11 L10,15 L10,22 L4,18 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF1E40AF"><GeometryDrawing.Pen><Pen Brush="#FF1E3A8A" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M10,15 L16,11 L16,18 L10,22 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <!-- 圆柱（右，橙） -->
+                <GeometryDrawing Brush="#FFFDBA74" Pen="{x:Null}"><GeometryDrawing.Geometry><RectangleGeometry Rect="21,12,8,11"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FFFB923C"><GeometryDrawing.Pen><Pen Brush="#FF9A3412" Thickness="0.8"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="4" RadiusY="1.8" Center="25,23"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF9A3412" Thickness="0.8"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M21,12 L21,23 M29,12 L29,23"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FFFED7AA"><GeometryDrawing.Pen><Pen Brush="#FF9A3412" Thickness="0.8"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="4" RadiusY="1.8" Center="25,12"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <!-- 球体（前，绿）—— 叠在最前，三体成组 -->
+                <GeometryDrawing Brush="#FF10B981"><GeometryDrawing.Pen><Pen Brush="#FF065F46" Thickness="0.8"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="5.2" RadiusY="5.2" Center="15,22"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing><GeometryDrawing.Brush><SolidColorBrush Color="#FFFFFFFF" Opacity="0.7"/></GeometryDrawing.Brush><GeometryDrawing.Geometry><EllipseGeometry RadiusX="1.8" RadiusY="1.2" Center="13,20"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 立方体（16×16）：等轴测蓝立方体 -->
+    <DrawingImage x:Key="mb_prim_box">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FF93C5FD"><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.7" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M3,6 L8,3 L13,6 L8,9 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF3B82F6"><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.7" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M3,6 L8,9 L8,14 L3,11 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF1E40AF"><GeometryDrawing.Pen><Pen Brush="#FF1E3A8A" Thickness="0.7" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M8,9 L13,6 L13,11 L8,14 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 球体（16×16）：蓝色球 + 白色高光 + 经线 -->
+    <DrawingImage x:Key="mb_prim_sphere">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FF3B82F6"><GeometryDrawing.Pen><Pen Brush="#FF1E3A8A" Thickness="0.7"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="6" RadiusY="6" Center="8,8"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="{x:Null}"><GeometryDrawing.Pen><Pen Brush="#FF1E3A8A" Thickness="0.6"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="2.6" RadiusY="6" Center="8,8"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing><GeometryDrawing.Brush><SolidColorBrush Color="#FFFFFFFF" Opacity="0.75"/></GeometryDrawing.Brush><GeometryDrawing.Geometry><EllipseGeometry RadiusX="1.8" RadiusY="1.2" Center="5.5,5.5"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 圆柱（16×16）：橙色立式圆柱（上下椭圆封盖） -->
+    <DrawingImage x:Key="mb_prim_cylinder">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FFFDBA74" Pen="{x:Null}"><GeometryDrawing.Geometry><RectangleGeometry Rect="4,4,8,9"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FFFB923C"><GeometryDrawing.Pen><Pen Brush="#FF9A3412" Thickness="0.7"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="4" RadiusY="1.7" Center="8,13"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF9A3412" Thickness="0.7"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M4,4 L4,13 M12,4 L12,13"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FFFED7AA"><GeometryDrawing.Pen><Pen Brush="#FF9A3412" Thickness="0.7"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="4" RadiusY="1.7" Center="8,4"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- ─────────── 地质统计学 (Large 32×32) ─────────── -->
+
+    <!-- 快速估值：闪电 + 数据点散布 + 网格 -->
+    <DrawingImage x:Key="stat_quick">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FFE0F2FE"><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.8"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><RectangleGeometry RadiusX="1" RadiusY="1" Rect="3,8,26,20"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF93C5FD" Thickness="0.4"><Pen.DashStyle><DashStyle Dashes="1,1"/></Pen.DashStyle></Pen></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M3,14 L29,14 M3,21 L29,21 M10,8 L10,28 M19,8 L19,28"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF3B82F6"><GeometryDrawing.Geometry><GeometryGroup><EllipseGeometry RadiusX="1.4" RadiusY="1.4" Center="7,11"/><EllipseGeometry RadiusX="1.4" RadiusY="1.4" Center="14,17"/><EllipseGeometry RadiusX="1.4" RadiusY="1.4" Center="23,12"/><EllipseGeometry RadiusX="1.4" RadiusY="1.4" Center="26,24"/></GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
+                <!-- 大绿色闪电（快速） -->
+                <GeometryDrawing Brush="#FF10B981"><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.6" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M20,2 L26,12 L23,12 L26,22 L17,12 L20,12 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 克里金估值：变差函数曲线 + 网格 + K 字标识 -->
+    <DrawingImage x:Key="stat_kriging">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FFFEF3C7"><GeometryDrawing.Pen><Pen Brush="#FFB45309" Thickness="0.8"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><RectangleGeometry RadiusX="1" RadiusY="1" Rect="3,8,26,20"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <!-- 变差函数曲线 -->
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF7C2D12" Thickness="1.6" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M5,24 C9,24 12,20 15,16 C18,12 24,11 27,11"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <!-- 离散数据点 -->
+                <GeometryDrawing Brush="#FFEA580C"><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.4"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><GeometryGroup><EllipseGeometry RadiusX="1.4" RadiusY="1.4" Center="7,23"/><EllipseGeometry RadiusX="1.4" RadiusY="1.4" Center="13,19"/><EllipseGeometry RadiusX="1.4" RadiusY="1.4" Center="19,13"/><EllipseGeometry RadiusX="1.4" RadiusY="1.4" Center="26,11"/></GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
+                <!-- K 字标识 -->
+                <GeometryDrawing Brush="#FF7C3AED"><GeometryDrawing.Geometry><PathGeometry Figures="M22,3 L24,3 L24,6 L27,3 L29,3 L26,6 L29,10 L27,10 L24,7 L24,10 L22,10 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- ─────────── 块体模型图标已迁出至 BlockModelLib/Assets/IconDict.xaml ─────────── -->
+
+    <!-- ═════════════ 基础模型编辑 (15 个 M / 16×16) ═════════════ -->
+
+    <!-- 修改高程点：蓝点 + ↑Z 红箭头 -->
+    <DrawingImage x:Key="me_edit_z">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FF3B82F6"><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.5"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="2.4" RadiusY="2.4" Center="6,12"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FFEF4444" Thickness="1.4" LineCap="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M11,13 L11,3 M9,5 L11,3 L13,5"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FFEF4444"><GeometryDrawing.Geometry><PathGeometry Figures="M12.5,9 L14,9 L14,10 L13,10 L13,11 L14,11 L14,12 L12.5,12 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 删除重复点：2 重叠点 + 红 X -->
+    <DrawingImage x:Key="me_dedupe_pt">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FF94A3B8"><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.5"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><GeometryGroup><EllipseGeometry RadiusX="2.4" RadiusY="2.4" Center="6,7"/><EllipseGeometry RadiusX="2.4" RadiusY="2.4" Center="9,10"/></GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FFEF4444" Thickness="1.8" LineCap="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M10,2 L15,7 M15,2 L10,7"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 修改点样式：点 + 调色板 -->
+    <DrawingImage x:Key="me_pt_style">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FF3B82F6"><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.5"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="2.6" RadiusY="2.6" Center="5,11"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FFEF4444"><GeometryDrawing.Geometry><RectangleGeometry RadiusX="0.5" RadiusY="0.5" Rect="8,2,3,3"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FFFBBF24"><GeometryDrawing.Geometry><RectangleGeometry RadiusX="0.5" RadiusY="0.5" Rect="12,2,3,3"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF10B981"><GeometryDrawing.Geometry><RectangleGeometry RadiusX="0.5" RadiusY="0.5" Rect="8,6,3,3"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF7C3AED"><GeometryDrawing.Geometry><RectangleGeometry RadiusX="0.5" RadiusY="0.5" Rect="12,6,3,3"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 构建等值线：同心等值线圈 + 中心峰点 -->
+    <DrawingImage x:Key="me_contour">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FFA16207" Thickness="1.1"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M2,8.5 C1.8,5 4.6,2 8,2 C11.4,2 14.2,4.8 14,8.2 C13.8,11.6 11.2,14.2 7.8,14 C4.6,13.8 2.2,11.6 2,8.5 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FFD97706" Thickness="1.1"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M4.6,8.4 C4.5,6.2 6.1,4.5 8.2,4.6 C10.3,4.7 11.7,6.3 11.5,8.4 C11.3,10.3 9.8,11.6 7.9,11.5 C6.2,11.4 4.7,10.2 4.6,8.4 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FFEF4444"><GeometryDrawing.Geometry><EllipseGeometry RadiusX="1.2" RadiusY="1.2" Center="8,8"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 切割剖面：山形剖面轮廓 + 红色竖直剖切线 -->
+    <DrawingImage x:Key="me_section">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF334155" Thickness="1.2" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M1,13 L4.5,7 L7.5,10 L11,3.5 L15,13"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF94A3B8" Thickness="1"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M1,13 L15,13"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FFEF4444" Thickness="1.3" LineCap="Round">
+                            <Pen.DashStyle><DashStyle Dashes="1.8,1.4"/></Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M9,1.5 L9,14.5"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 删除重复线：2 重叠线 + 红 X -->
+    <DrawingImage x:Key="me_dedupe_line">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF94A3B8" Thickness="1.6" LineCap="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M2,9 L11,9 M2,11 L11,11"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FFEF4444" Thickness="1.8" LineCap="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M10,2 L15,7 M15,2 L10,7"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 闭合线裁剪：闭合环 + 剪刀 -->
+    <DrawingImage x:Key="me_clip_loop">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="{x:Null}"><GeometryDrawing.Pen><Pen Brush="#FF3B82F6" Thickness="1.4" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M2,5 L7,2 L11,4 L13,9 L9,13 L4,11 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="{x:Null}"><GeometryDrawing.Pen><Pen Brush="#FFEF4444" Thickness="1.2"><Pen.DashStyle><DashStyle Dashes="1.5,0.8"/></Pen.DashStyle></Pen></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M1,7 L15,9"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 赋节点高程：点 + Z= 标签 -->
+    <DrawingImage x:Key="me_assign_z">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FF3B82F6"><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.5"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="2" RadiusY="2" Center="4,11"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FFFBBF24"><GeometryDrawing.Pen><Pen Brush="#FF92400E" Thickness="0.4"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M7,3 L13,3 L15,5 L13,7 L7,7 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF92400E"><GeometryDrawing.Geometry><PathGeometry Figures="M8.5,4 L11,4 L8.5,6 L11,6 L11,6.3 L8,6.3 L10.5,4.3 L8,4.3 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF92400E" Thickness="0.5"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M5,10 L7,5"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 统一线高程：3 条水平等高线 -->
+    <DrawingImage x:Key="me_unify_z">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF3B82F6" Thickness="1.4" LineCap="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M2,5 L14,5 M2,8 L14,8 M2,11 L14,11"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FFEF4444"><GeometryDrawing.Geometry><GeometryGroup><EllipseGeometry RadiusX="1.1" RadiusY="1.1" Center="3,5"/><EllipseGeometry RadiusX="1.1" RadiusY="1.1" Center="13,5"/><EllipseGeometry RadiusX="1.1" RadiusY="1.1" Center="3,8"/><EllipseGeometry RadiusX="1.1" RadiusY="1.1" Center="13,8"/><EllipseGeometry RadiusX="1.1" RadiusY="1.1" Center="3,11"/><EllipseGeometry RadiusX="1.1" RadiusY="1.1" Center="13,11"/></GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 闭合多段线：U 形开口 → 绿色闭合段 -->
+    <DrawingImage x:Key="me_close_pline">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF3B82F6" Thickness="1.4" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M3,3 L3,12 L13,12 L13,3"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF10B981" Thickness="1.6" LineCap="Round"><Pen.DashStyle><DashStyle Dashes="2,1"/></Pen.DashStyle></Pen></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M3,3 L13,3"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF10B981"><GeometryDrawing.Geometry><GeometryGroup><EllipseGeometry RadiusX="1.4" RadiusY="1.4" Center="3,3"/><EllipseGeometry RadiusX="1.4" RadiusY="1.4" Center="13,3"/></GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 加密多段线：折线 + 中间插入橙色点 -->
+    <DrawingImage x:Key="me_densify">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF3B82F6" Thickness="1.4" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M2,12 L6,4 L10,9 L14,3"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <!-- 原始端点（蓝） -->
+                <GeometryDrawing Brush="#FF3B82F6"><GeometryDrawing.Geometry><GeometryGroup><EllipseGeometry RadiusX="1.2" RadiusY="1.2" Center="2,12"/><EllipseGeometry RadiusX="1.2" RadiusY="1.2" Center="6,4"/><EllipseGeometry RadiusX="1.2" RadiusY="1.2" Center="10,9"/><EllipseGeometry RadiusX="1.2" RadiusY="1.2" Center="14,3"/></GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
+                <!-- 新增加密点（橙） -->
+                <GeometryDrawing Brush="#FFFB923C"><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.3"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><GeometryGroup><EllipseGeometry RadiusX="1.2" RadiusY="1.2" Center="4,8"/><EllipseGeometry RadiusX="1.2" RadiusY="1.2" Center="8,6.5"/><EllipseGeometry RadiusX="1.2" RadiusY="1.2" Center="12,6"/></GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 抽稀等值线：稠密灰点折线 → 蓝色保留关键点（与"加密"反向：减点） -->
+    <DrawingImage x:Key="me_simplify">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 原始稠密折线（浅灰） -->
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FFCBD5E1" Thickness="1" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M2,12 L4,9 L6,10 L8,6 L10,7 L12,4 L14,5"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <!-- 被抽掉的点（灰色空心） -->
+                <GeometryDrawing Brush="#FFFFFFFF"><GeometryDrawing.Pen><Pen Brush="#FFCBD5E1" Thickness="0.7"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><GeometryGroup><EllipseGeometry RadiusX="1" RadiusY="1" Center="4,9"/><EllipseGeometry RadiusX="1" RadiusY="1" Center="6,10"/><EllipseGeometry RadiusX="1" RadiusY="1" Center="10,7"/><EllipseGeometry RadiusX="1" RadiusY="1" Center="12,4"/></GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
+                <!-- 简化后折线（蓝，仅保留关键点） -->
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF3B82F6" Thickness="1.6" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M2,12 L8,6 L14,5"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <!-- 保留的关键点（蓝实心） -->
+                <GeometryDrawing Brush="#FF3B82F6"><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.4"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><GeometryGroup><EllipseGeometry RadiusX="1.4" RadiusY="1.4" Center="2,12"/><EllipseGeometry RadiusX="1.4" RadiusY="1.4" Center="8,6"/><EllipseGeometry RadiusX="1.4" RadiusY="1.4" Center="14,5"/></GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 标识起点：折线 + 绿色起点 + S -->
+    <DrawingImage x:Key="me_mark_start">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF3B82F6" Thickness="1.4" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M3,13 L6,7 L11,9 L14,4"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF10B981"><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.5"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="2.6" RadiusY="2.6" Center="3,13"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FFFFFFFF"><GeometryDrawing.Geometry><PathGeometry Figures="M2,14 L4,14 L4,13 L2,12.5 L2,11.5 L4,11.5"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 标识线序：折线 + 编号 1/2/3 -->
+    <DrawingImage x:Key="me_mark_order">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF94A3B8" Thickness="1" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M3,13 L6,7 L11,9 L14,3"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <!-- 三个数字徽章（红/黄/绿） -->
+                <GeometryDrawing Brush="#FFEF4444"><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.4"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="2" RadiusY="2" Center="3,13"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FFFBBF24"><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.4"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="2" RadiusY="2" Center="11,9"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF10B981"><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.4"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="2" RadiusY="2" Center="14,3"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FFFFFFFF"><GeometryDrawing.Geometry><PathGeometry Figures="M2.7,12 L3.3,12 L3.3,14 L2.7,14 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 连接多段线：两段在中间端点相接（绿色高亮） -->
+    <DrawingImage x:Key="me_connect_lines">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF3B82F6" Thickness="1.4" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M2,4 L7,8 M9,8 L14,12"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF10B981"><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.6"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="2.4" RadiusY="2.4" Center="8,8"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="1.1" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M6.5,8 L7.7,9.2 L9.5,7"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 两线交点：两线交叉 + 红色中心点 -->
+    <DrawingImage x:Key="me_intersect_pts">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF3B82F6" Thickness="1.4" LineCap="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M2,2 L14,14 M2,14 L14,2"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FFEF4444"><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.7"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="2.4" RadiusY="2.4" Center="8,8"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FFFFFFFF"><GeometryDrawing.Geometry><EllipseGeometry RadiusX="0.8" RadiusY="0.8" Center="8,8"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 点落到面上：点 + ↓ + 浅蓝面 -->
+    <DrawingImage x:Key="me_pt_to_surf">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FFEF4444"><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.5"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="2" RadiusY="2" Center="8,3"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF10B981" Thickness="1.6" LineCap="Round"><Pen.DashStyle><DashStyle Dashes="1.5,0.8"/></Pen.DashStyle></Pen></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M8,5 L8,10"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF10B981"><GeometryDrawing.Geometry><PathGeometry Figures="M8,11 L6,9 L10,9 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FFBFDBFE"><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.6" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M1,12 L8,11 L15,13 L8,15 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 线落到面上：线 + ↓ + 面 -->
+    <DrawingImage x:Key="me_line_to_surf">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FFEF4444" Thickness="1.6" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M2,2 L7,4 L11,2 L14,4"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF10B981" Thickness="1.4" LineCap="Round"><Pen.DashStyle><DashStyle Dashes="1.5,0.8"/></Pen.DashStyle></Pen></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M5,6 L5,10 M11,5 L11,10"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF10B981"><GeometryDrawing.Geometry><PathGeometry Figures="M5,11 L3.5,9 L6.5,9 Z M11,11 L9.5,9 L12.5,9 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FFBFDBFE"><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.6" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M1,12 L8,11 L15,13 L8,15 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- ═════════════ 三角网/体素编辑 (14 个 M / 16×16) ═════════════ -->
+
+    <!-- 生成三角网边界：三角网 + 加粗外边 -->
+    <DrawingImage x:Key="te_gen_boundary">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FFBFDBFE"><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.4"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M2,13 L8,13 L5,8 Z M8,13 L14,13 L11,8 Z M5,8 L11,8 L8,3 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FFEF4444" Thickness="1.4" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M2,13 L14,13 L8,3 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 闭合线裁剪面：面 + 闭合裁剪线 -->
+    <DrawingImage x:Key="te_clip_loop_face">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FFBFDBFE"><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.6"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><RectangleGeometry RadiusX="0.5" RadiusY="0.5" Rect="2,3,12,10"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="{x:Null}"><GeometryDrawing.Pen><Pen Brush="#FFEF4444" Thickness="1.4" LineJoin="Round"><Pen.DashStyle><DashStyle Dashes="2,1"/></Pen.DashStyle></Pen></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M5,6 L10,5 L12,9 L7,11 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 沿线分割三角网：三角网 + 红色分割线 -->
+    <DrawingImage x:Key="te_split_along">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FFBFDBFE"><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.5"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M2,13 L8,13 L5,8 Z M8,13 L14,13 L11,8 Z M5,8 L11,8 L8,3 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FFEF4444" Thickness="1.8" LineCap="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M1,5 L15,11"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 合并三角网：两侧箭头向中间聚拢 + 合成的一张三角网（「沿线分割三角网」的逆操作） -->
+    <DrawingImage x:Key="te_merge_mesh">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF16A34A" Thickness="1.6" LineCap="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M1,3 L5,3 M15,3 L11,3"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF16A34A"><GeometryDrawing.Geometry><PathGeometry Figures="M4.6,1.3 L7.2,3 L4.6,4.7 Z M11.4,1.3 L8.8,3 L11.4,4.7 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FFBFDBFE"><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.5"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M2,14 L8,14 L5,10 Z M8,14 L14,14 L11,10 Z M5,10 L11,10 L8,6.5 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 面交线：两面相交 + 高亮交线 -->
+    <DrawingImage x:Key="te_face_intersect">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing><GeometryDrawing.Brush><SolidColorBrush Color="#FF3B82F6" Opacity="0.35"/></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.6"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M2,4 L11,2 L14,8 L5,10 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing><GeometryDrawing.Brush><SolidColorBrush Color="#FF10B981" Opacity="0.35"/></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#FF065F46" Thickness="0.6"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M3,9 L13,7 L14,14 L4,15 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FFEF4444" Thickness="1.8" LineCap="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M3,9 L13,7"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 裁剪面：面 + 剪刀 -->
+    <DrawingImage x:Key="te_clip_face">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FFBFDBFE"><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.5"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M2,5 L11,3 L13,11 L4,13 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <!-- 剪刀刃 -->
+                <GeometryDrawing Brush="#FF94A3B8"><GeometryDrawing.Pen><Pen Brush="#FF1F2937" Thickness="0.4" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M8,8 L15,2 L15.4,2.4 L8.4,8.6 Z M8,8 L15,14 L14.6,14.4 L7.6,8.4 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FFFFFFFF"><GeometryDrawing.Pen><Pen Brush="#FFEF4444" Thickness="1"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><GeometryGroup><EllipseGeometry RadiusX="1.2" RadiusY="1.2" Center="3,3"/><EllipseGeometry RadiusX="1.2" RadiusY="1.2" Center="3,13"/></GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 两期三角网算量：上下两面 + 中间 Δ 体积 -->
+    <DrawingImage x:Key="te_volume_diff">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FFFBBF24"><GeometryDrawing.Pen><Pen Brush="#FF92400E" Thickness="0.5"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M2,4 L8,2 L14,4 L8,6 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF7C2D12"><GeometryDrawing.Pen><Pen Brush="#FF451A03" Thickness="0.5"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M2,12 L8,10 L14,12 L8,14 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <!-- 中间Δ -->
+                <GeometryDrawing Brush="#FF10B981"><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.4"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M8,7 L11,11 L5,11 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 分割地质体：3D 块 + 红色切分线 -->
+    <DrawingImage x:Key="te_split_body">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FF93C5FD"><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.5" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M3,6 L8,3 L13,6 L8,9 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF60A5FA"><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.5" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M3,6 L8,9 L8,14 L3,11 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF1E40AF"><GeometryDrawing.Pen><Pen Brush="#FF1E3A8A" Thickness="0.5" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M8,9 L13,6 L13,11 L8,14 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FFEF4444" Thickness="1.8" LineCap="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M2,9 L14,7"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 修复拓扑关系：三角网 + 红×孔 + 绿色补丁徽章 -->
+    <DrawingImage x:Key="te_repair_topo">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FFBFDBFE"><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.5"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M2,13 L8,13 L5,8 Z M5,8 L11,8 L8,3 Z M8,13 L14,13 L11,8 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FFFFFFFF" Geometry="M5,8 L11,8 L8,13 Z"/>
+                <GeometryDrawing Brush="#FF10B981"><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.8"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="3" RadiusY="3" Center="12,4"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="1.1" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M10.5,4 L11.7,5.2 L13.5,3"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 删除三角面：三角形 + 红 X -->
+    <DrawingImage x:Key="te_delete_tri">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FFBFDBFE"><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M3,12 L13,12 L8,4 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FFEF4444" Thickness="2.2" LineCap="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M4,4 L12,12 M12,4 L4,12"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 顶点焊接：2 点 → 1 点（绿色合并箭头） -->
+    <DrawingImage x:Key="te_weld_vertex">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FF3B82F6"><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.5"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><GeometryGroup><EllipseGeometry RadiusX="2.2" RadiusY="2.2" Center="3,4"/><EllipseGeometry RadiusX="2.2" RadiusY="2.2" Center="3,12"/></GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FF10B981" Thickness="1.4" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M6,4 L11,8 M6,12 L11,8"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF10B981" Geometry="M11,8 L9,6 L9,10 Z"/>
+                <GeometryDrawing Brush="#FF7C2D12"><GeometryDrawing.Pen><Pen Brush="#FFFBBF24" Thickness="0.8"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="2.8" RadiusY="2.8" Center="13,8"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 多段线嵌入三角网：网 + 嵌入的红线 -->
+    <DrawingImage x:Key="te_embed_pline">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FFBFDBFE"><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.5"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M2,13 L8,13 L5,8 Z M8,13 L14,13 L11,8 Z M5,8 L11,8 L8,3 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FFEF4444" Thickness="1.6" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M3,10 L7,7 L10,11 L13,5"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FFEF4444"><GeometryDrawing.Geometry><GeometryGroup><EllipseGeometry RadiusX="1" RadiusY="1" Center="3,10"/><EllipseGeometry RadiusX="1" RadiusY="1" Center="7,7"/><EllipseGeometry RadiusX="1" RadiusY="1" Center="10,11"/><EllipseGeometry RadiusX="1" RadiusY="1" Center="13,5"/></GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 格网质量检测：三角网 + 绿/黄/红质量标记 -->
+    <DrawingImage x:Key="te_quality">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FF10B981"><GeometryDrawing.Pen><Pen Brush="#FF065F46" Thickness="0.4"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M2,13 L8,13 L5,8 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FFFBBF24"><GeometryDrawing.Pen><Pen Brush="#FF92400E" Thickness="0.4"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M8,13 L14,13 L11,8 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FFEF4444"><GeometryDrawing.Pen><Pen Brush="#FF7F1D1D" Thickness="0.4"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M5,8 L11,8 L8,3 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing><GeometryDrawing.Pen><Pen Brush="#FFFFFFFF" Thickness="0.4"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M2,13 L8,13 L5,8 Z M8,13 L14,13 L11,8 Z M5,8 L11,8 L8,3 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 布尔运算：两形重叠 + 紫色交集 -->
+    <DrawingImage x:Key="te_boolean">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing><GeometryDrawing.Brush><SolidColorBrush Color="#FF3B82F6" Opacity="0.5"/></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.6"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="4.2" RadiusY="4.2" Center="6,8"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing><GeometryDrawing.Brush><SolidColorBrush Color="#FFEF4444" Opacity="0.5"/></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#FF7F1D1D" Thickness="0.6"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><EllipseGeometry RadiusX="4.2" RadiusY="4.2" Center="10,8"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 体素格网体积：3 个堆叠彩色 voxel -->
+    <DrawingImage x:Key="te_voxel_volume">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FF93C5FD"><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.4" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><GeometryGroup><PathGeometry Figures="M2,10 L4,9 L6,10 L4,11 Z M2,10 L2,13 L4,14 L4,11 Z M4,11 L6,10 L6,13 L4,14 Z"/><PathGeometry Figures="M6,8 L8,7 L10,8 L8,9 Z M6,8 L6,11 L8,12 L8,9 Z M8,9 L10,8 L10,11 L8,12 Z"/></GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FF60A5FA"><GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.4" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M10,6 L12,5 L14,6 L12,7 Z M10,6 L10,9 L12,10 L12,7 Z M12,7 L14,6 L14,9 L12,10 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="#FFFB923C"><GeometryDrawing.Pen><Pen Brush="#FF92400E" Thickness="0.4" LineJoin="Round"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M6,4 L8,3 L10,4 L8,5 Z M6,4 L6,7 L8,8 L8,5 Z M8,5 L10,4 L10,7 L8,8 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- ╔══════════════════════════════════════════════════════════════╗ -->
+    <!-- ║ 编辑分类大图标（DropDownButton 用，32x32 居中绘制于 16x16）║ -->
+    <!-- ╚══════════════════════════════════════════════════════════════╝ -->
+
+    <!-- 点编辑：3 个聚类的彩色高亮点 + 中心圆环（编辑标志） -->
+    <DrawingImage x:Key="edit_point">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FF3B82F6">
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E3A8A" Thickness="0.6"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <EllipseGeometry RadiusX="2" RadiusY="2" Center="4,5"/>
+                            <EllipseGeometry RadiusX="2" RadiusY="2" Center="12,5"/>
+                            <EllipseGeometry RadiusX="2" RadiusY="2" Center="4,13"/>
+                            <EllipseGeometry RadiusX="2" RadiusY="2" Center="12,13"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFF59E0B">
+                    <GeometryDrawing.Pen><Pen Brush="#FF92400E" Thickness="0.8"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <EllipseGeometry RadiusX="2.8" RadiusY="2.8" Center="8,9"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FFDC2626" Thickness="0.8">
+                            <Pen.DashStyle>
+                                <!-- DashStyle 是对象不是字符串：必须用 <DashStyle Dashes=".."/>，
+                                     不能写 DashStyle="2,1"（运行期 lazy 解析时 ArgumentException → 整个 IconDict 加载失败 → MeshEditLib Initialize 崩溃）。 -->
+                                <DashStyle Dashes="2,1"/>
+                            </Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <EllipseGeometry RadiusX="4.5" RadiusY="4.5" Center="8,9"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 线编辑：一条折线 + 关键节点高亮 + 编辑笔触示意 -->
+    <DrawingImage x:Key="edit_line">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF3B82F6" Thickness="1.8" LineJoin="Round" LineCap="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M2,12 L5,5 L9,9 L13,3"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFF59E0B">
+                    <GeometryDrawing.Pen><Pen Brush="#FF92400E" Thickness="0.6"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <RectangleGeometry Rect="3.5,10.5 3,3"/>
+                            <RectangleGeometry Rect="7.5,7.5 3,3"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFEF4444">
+                    <GeometryDrawing.Pen><Pen Brush="#FF7F1D1D" Thickness="0.6"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry Rect="11.5,1.5 3,3"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 面编辑：一个三角网面片 + 编辑高亮三角 -->
+    <DrawingImage x:Key="edit_face">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FFBFDBFE">
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.6" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <PathGeometry Figures="M2,13 L7,3 L13,8 Z"/>
+                            <PathGeometry Figures="M7,3 L13,8 L14,13 Z"/>
+                            <PathGeometry Figures="M2,13 L13,8 L14,13 Z"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFF59E0B">
+                    <GeometryDrawing.Pen><Pen Brush="#FF92400E" Thickness="0.8" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M7,3 L13,8 L14,13 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFEF4444">
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <EllipseGeometry RadiusX="1" RadiusY="1" Center="7,3"/>
+                            <EllipseGeometry RadiusX="1" RadiusY="1" Center="13,8"/>
+                            <EllipseGeometry RadiusX="1" RadiusY="1" Center="14,13"/>
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- 体编辑：等轴测立方体（地质体）+ 切面/编辑标志 -->
+    <DrawingImage x:Key="edit_body">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 立方体顶面 -->
+                <GeometryDrawing Brush="#FF93C5FD">
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.6" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M3,5 L8,2 L13,5 L8,8 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 左前面 -->
+                <GeometryDrawing Brush="#FF3B82F6">
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.6" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M3,5 L8,8 L8,14 L3,11 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 右前面 -->
+                <GeometryDrawing Brush="#FF60A5FA">
+                    <GeometryDrawing.Pen><Pen Brush="#FF1E40AF" Thickness="0.6" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M8,8 L13,5 L13,11 L8,14 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 编辑标志：橙色切割笔触 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FFF59E0B" Thickness="1.2" LineCap="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M2,9 L14,9"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFF59E0B">
+                    <GeometryDrawing.Pen><Pen Brush="#FF92400E" Thickness="0.5"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M13,8 L15,9 L13,10 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+</ResourceDictionary>

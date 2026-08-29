@@ -1,0 +1,51 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- 简单折线字形（仅 M/L/H/V/Z），跨平台零依赖、无弧线解析风险 -->
+    <StreamGeometry x:Key="geo_new">M7,3 L14,3 L18,7 L18,21 L7,21 Z M14,3 L14,7 L18,7</StreamGeometry>
+    <StreamGeometry x:Key="geo_open">M3,7 L9,7 L11,9 L20,9 L20,19 L3,19 Z</StreamGeometry>
+    <StreamGeometry x:Key="geo_save">M4,4 L16,4 L20,8 L20,20 L4,20 Z M7,4 L7,10 L15,10 L15,4 M8,14 L16,14 M8,17 L16,17</StreamGeometry>
+    <StreamGeometry x:Key="geo_import">M6,4 L18,4 M12,4 L12,14 M8,10 L12,14 L16,10 M4,17 L20,17 L20,20 L4,20 Z</StreamGeometry>
+    <StreamGeometry x:Key="geo_options">M8,4 H16 V8 H20 V16 H16 V20 H8 V16 H4 V8 H8 Z M10,10 H14 V14 H10 Z</StreamGeometry>
+
+    <StreamGeometry x:Key="geo_point">M12,9 L15,12 L12,15 L9,12 Z</StreamGeometry>
+    <StreamGeometry x:Key="geo_polyline">M4,17 L9,8 L14,14 L20,5</StreamGeometry>
+    <StreamGeometry x:Key="geo_line">M5,19 L19,5</StreamGeometry>
+    <StreamGeometry x:Key="geo_circle">M9,5 L15,5 L19,9 L19,15 L15,19 L9,19 L5,15 L5,9 Z</StreamGeometry>
+    <StreamGeometry x:Key="geo_arc">M4,18 L6,12 L10,8 L16,6 L20,6</StreamGeometry>
+    <StreamGeometry x:Key="geo_rectangle">M5,7 H19 V17 H5 Z</StreamGeometry>
+    <StreamGeometry x:Key="geo_polygon">M12,4 L19,8 L19,16 L12,20 L5,16 L5,8 Z</StreamGeometry>
+    <StreamGeometry x:Key="geo_text">M6,6 H18 M12,6 V19 M9,19 H15</StreamGeometry>
+
+    <StreamGeometry x:Key="geo_copy">M8,4 H17 V15 H8 Z M5,8 H14 V19 H5 Z</StreamGeometry>
+    <StreamGeometry x:Key="geo_move">M12,3 L15,6 M12,3 L9,6 M12,3 V21 M12,21 L15,18 M12,21 L9,18 M3,12 H21 M3,12 L6,9 M3,12 L6,15 M21,12 L18,9 M21,12 L18,15</StreamGeometry>
+    <StreamGeometry x:Key="geo_extend">M4,12 H15 M15,12 L11,8 M15,12 L11,16 M20,4 V20</StreamGeometry>
+    <StreamGeometry x:Key="geo_rotate">M7,7 L7,11 L11,11 M7,11 L10,14 L15,14 L18,11 L18,7</StreamGeometry>
+    <StreamGeometry x:Key="geo_trim">M6,6 L18,18 M18,6 L6,18</StreamGeometry>
+    <StreamGeometry x:Key="geo_offset">M5,8 H19 M5,13 H19</StreamGeometry>
+    <StreamGeometry x:Key="geo_break">M6,12 H10 M14,12 H18 M11,8 L10,16 M14,8 L13,16</StreamGeometry>
+    <StreamGeometry x:Key="geo_explode">M12,12 L6,6 M12,12 L18,6 M12,12 L6,18 M12,12 L18,18 M12,12 V4 M12,12 V20</StreamGeometry>
+    <StreamGeometry x:Key="geo_delete">M6,7 H18 M9,7 L9,4 H15 V7 M7,7 L8,20 H16 L17,7 M10,10 V17 M14,10 V17</StreamGeometry>
+    <StreamGeometry x:Key="geo_undo">M9,7 L5,11 L9,15 M5,11 H15 L18,14 L18,18</StreamGeometry>
+    <StreamGeometry x:Key="geo_redo">M15,7 L19,11 L15,15 M19,11 H9 L6,14 L6,18</StreamGeometry>
+
+    <StreamGeometry x:Key="geo_layer">M12,4 L20,8 L12,12 L4,8 Z M4,12 L12,16 L20,12 M4,16 L12,20 L20,16</StreamGeometry>
+    <StreamGeometry x:Key="geo_layer_add">M11,4 L19,8 L11,12 L3,8 Z M17,15 H23 M20,12 V18</StreamGeometry>
+    <StreamGeometry x:Key="geo_freeze">M12,4 V20 M4,12 H20 M6,6 L18,18 M18,6 L6,18</StreamGeometry>
+    <StreamGeometry x:Key="geo_lock">M7,11 H17 V20 H7 Z M9,11 V8 L10,6 L14,6 L15,8 V11</StreamGeometry>
+    <StreamGeometry x:Key="geo_print">M7,4 H17 V9 H7 Z M5,9 H19 V16 H5 Z M7,13 H17 V20 H7 Z</StreamGeometry>
+
+    <StreamGeometry x:Key="geo_view2d">M4,6 H20 V18 H4 Z M4,10 H20 M4,14 H20 M9,6 V18 M14,6 V18</StreamGeometry>
+    <StreamGeometry x:Key="geo_view3d">M8,7 L15,7 L20,10 L20,18 L13,18 L13,11 Z M8,7 L13,11 M13,18 L4,15 L4,8 L8,7</StreamGeometry>
+    <StreamGeometry x:Key="geo_render">M4,8 L12,4 L20,8 L12,12 Z M4,8 V16 L12,20 V12 M20,8 V16 L12,20</StreamGeometry>
+    <StreamGeometry x:Key="geo_zoom">M5,4 L11,4 L14,7 L14,13 L11,16 L5,16 L2,13 L2,7 Z M14,14 L20,20 M6,9 H10 M8,7 V11</StreamGeometry>
+    <StreamGeometry x:Key="geo_clear">M5,5 L19,19 M19,5 L5,19 M3,12 H21</StreamGeometry>
+    <StreamGeometry x:Key="geo_select">M4,4 H10 M14,4 H20 M4,20 H9 M4,4 V10 M4,15 V20 M20,4 V10 M12,12 L17,21 L15,21 L13,16</StreamGeometry>
+
+    <StreamGeometry x:Key="geo_help">M9,4 L15,4 L20,9 L20,15 L15,20 L9,20 L4,15 L4,9 Z M10,10 L12,8 L14,10 L12,12 V14 M12,16 V17</StreamGeometry>
+    <StreamGeometry x:Key="geo_register">M6,4 H14 L18,8 V20 H6 Z M9,12 H15 M9,15 H15 M9,9 H12</StreamGeometry>
+
+    <!-- 通用回退字形 -->
+    <StreamGeometry x:Key="geo_generic">M7,7 H17 V17 H7 Z M10,10 H14 V14 H10 Z</StreamGeometry>
+
+</ResourceDictionary>
