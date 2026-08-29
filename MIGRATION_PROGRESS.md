@@ -47,9 +47,15 @@
 - **iter 0（基线）**：构建 2% · 功能对等 0% · 渲染 0% · 数据库 5% · 打包运行 0% → **总 ≈ 2%**
   - 完成：P5-1 方言抽象子步（`ISqlDialect`/`DmDialect`/`SqliteDialectImpl` + `TableBuilder` 接线，SqlLib 构建 0 错 0 警，SQLite 输出字节不变）。
   - 骨架既有：Avalonia 外壳 + OpenGL demo + .deb/AppImage 脚本 + 达梦建库脚本（`db/dm/`）。
+- **iter 1（方言单测）**：数据库 5%→8% → **总 ≈ 3%**
+  - 完成 + **运行时验证**：P5-1 方言抽象单测（`Tests/Tests.SqlLib`，`dotnet test` 2 passed）——SQLite DDL 字节不变 + 达梦 DDL 正确（`BIGINT IDENTITY(1,1)`/`VARCHAR`/`TINYINT`/`DOUBLE`/`TIMESTAMP`，无 `AUTOINCREMENT`）。commit PitMine3D `0329b10`。
+  - 发现（记待办，与移植无关）：`Tests.PitMineApp` 既有编译错误，引用不存在的 `PitMineApp.Licensing`（`LicensingTests.cs`/`RegisterWindowRenderDump.cs`），该测试工程当前编不过。
+  - 下一步（仍 Windows 可验证）：① DM `CREATE INDEX IF NOT EXISTS` 关键字兼容（DM/MySQL 模式）② `_schema_migration` 历史表 DDL 方言化。此二者做完后，P5-1 余项（连接层/DmProvider/.sql 脚本翻译/冒烟）**均需 DM8** → 转 BLOCKED-VERIFY。
 
 ## 五、待上机验证清单（🟡BLOCKED-VERIFY）
 
+- **P5-1 连接层**：`ConnectionFactory`/`SqlService` 接 `DmProvider`（换 `IDbConnection`），需 DM8 实例连测。
+- **P5-1 .sql 迁移脚本**：`V*.sql` 达梦方言翻译 + `PRAGMA` 去除，需 DM8 跑迁移验证。
 - （随 loop 推进追加：原生 CMake 产物、GL 渲染、达梦端到端、.deb 装机、功能对等）
 
 ## 六、待决策（⛳）
