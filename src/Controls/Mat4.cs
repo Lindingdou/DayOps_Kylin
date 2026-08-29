@@ -58,6 +58,19 @@ internal static class Mat4
         return m;
     }
 
+    public static float[] Ortho(float l, float r, float b, float t, float near, float far)
+    {
+        var m = new float[16];
+        m[0] = 2f / (r - l);
+        m[5] = 2f / (t - b);
+        m[10] = -2f / (far - near);
+        m[12] = -(r + l) / (r - l);
+        m[13] = -(t + b) / (t - b);
+        m[14] = -(far + near) / (far - near);
+        m[15] = 1f;
+        return m;
+    }
+
     public static float[] LookAt(float[] eye, float[] center, float[] up)
     {
         float[] f = Norm(Sub(center, eye));
