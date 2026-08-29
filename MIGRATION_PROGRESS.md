@@ -85,16 +85,18 @@
 - [x] **DXF 渲染 + 导入触发 + 范围缩放**：`CadGlViewport.ShowImportedGeometry`（GL 线程上传，ScenePass 画导入线框）；`Camera.FitBounds`（ZOOMEXTENTS，2 单测）；Ribbon「导入」→ Avalonia 文件对话框 → 显示。4 tests + app 启动无崩溃。commit `aa3797d`。（打开真图纸上屏效果需手测）
 - [x] **按实体/图层颜色上色**：`ColorOf`（ByLayer/真彩色/ACI 1-9）逐实体着色。+1 单测（红线 ACI 1 → 偏红），共 5 passed。commit `833c1c6`。
 - [x] **2D/3D 视图模式切换**：`Camera` 2D 正交俯视（拖拽平移）/ 3D 透视轨道；命令行 `2D`/`3D`。顺带修透视远平面裁剪大图纸的 bug。+2 单测，共 7 passed。commit `8d339bb`。
+- [x] **Point + Ellipse 图元**：点 → 十字、椭圆 → 主轴/半径比/起止参数折线近似。+1 单测，共 8 passed。commit `82b499b`。
 
 **⏳ 待做（可托管、Windows 可验证）：**
-- [ ] 更多图元：Point、Ellipse、Text/MText（Skia 文字）、Hatch 填充显示
-- [ ] 节点编辑器（WPF Canvas → Avalonia 自绘）、对象/文件管理器面板
+- [ ] 对象/文件管理器面板（左侧 TreeView，托管 UI）
+- [ ] 节点编辑器（WPF Canvas → Avalonia 自绘）
 
 **🟡 已记录 · 延后（当前无法验证/实现，需目标环境）：**
 - 🔵 **需内核**：绘制/编辑/选择/夹点等交互命令、命令系统、精确几何、LAS 点云、内核渲染路径。
 - 🟣 **需模块**：9 大业务模块（GeoDataBase…TaskLib）。
 - **DWG 显示**（跳过·已记录）：纯显示本可托管（同 DXF 路径），但**验证受阻**——ACadSharp DWG 写入不可靠，无法生成测试 DWG，也无现成样例 .dwg。给我一个样例 .dwg 即可加上并验证。
 - **DWG↔内核实体**：导入几何与内核 AcDb 实体系统对接需内核。
+- **Text/MText 文字 · Hatch 填充**（跳过·已记录）：文字需 Skia 字形渲染子系统、填充需三角面渲染路径，均超出当前线渲染管线；待渲染腿扩到 Skia 文字 / 填充着色后再加。
 - **达梦**：连接层 / `.sql` 脚本翻译 / 端到端（需 DM8 实例）。
 
 ## 六、待决策（⛳）
