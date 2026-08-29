@@ -17,13 +17,36 @@ public partial class MainWindow : Window
             StatusMsg.Text = $"OpenGL 就绪 · {backend}";
         };
 
-        // 视口内移动时回报像素坐标（真实世界坐标需反投影，最小版先给屏幕系）
-        Viewport.PointerMoved += (_, e) =>
+        // 视口交互：在宿主 Panel（可命中）上收指针事件，转发到相机。
+        // OpenGlControlBase 自身无背景时命中测试不可靠，直接在其上收事件在部分后端收不到，
+        // 故统一在 ViewportHost（Background=Transparent → 全区可命中）上处理。
+        ViewportHost.PointerPressed += (_, e) =>
         {
-            var p = e.GetPosition(Viewport);
-            CoordText.Text = $"视口 px  X {p.X:0}  Y {p.Y:0}";
+            _dragging = true;
+            _lastPointer = e.GetPosition(ViewportHost);
+            e.Pointer.Capture(ViewportHost);
         };
+        ViewportHost.PointerMoved += (_, e) =>
+        {
+            var p = e.GetPosition(ViewportHost);
+            CoordText.Text = $"视口 px  X {p.X:0}  Y {p.Y:0}";
+            if (_dragging)
+            {
+                Viewport.Orbit((p.X - _lastPointer.X) * 0.01, (p.Y - _lastPointer.Y) * 0.01);
+                _lastPointer = p;
+            }
+        };
+        ViewportHost.PointerReleased += (_, e) =>
+        {
+            _dragging = false;
+            e.Pointer.Capture(null);
+        };
+        ViewportHost.PointerWheelChanged += (_, e) =>
+            Viewport.Zoom(e.Delta.Y > 0 ? 0.9 : 1.1);
     }
+
+    private bool _dragging;
+    private Avalonia.Point _lastPointer;
 
     // Ribbon 按钮 → 回显命令（证明整条 UI 已接线）
     private void OnRibbonCommand(object? sender, RoutedEventArgs e)

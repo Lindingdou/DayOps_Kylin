@@ -30,8 +30,6 @@ public class CadGlViewport : OpenGlControlBase
     // 静态网格：地面网格+轴 / 示例实体 / 罗盘
     private GlRenderer.Mesh _grid, _cube, _gizmo;
 
-    private Point _lastPointer;
-    private bool _dragging;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
 
     /// <summary>OpenGL 上下文就绪后回报后端版本串给界面。</summary>
@@ -116,36 +114,14 @@ public class CadGlViewport : OpenGlControlBase
         _renderer.EndPass();
     }
 
-    // ---------- 交互 ----------
-    protected override void OnPointerPressed(PointerPressedEventArgs e)
-    {
-        base.OnPointerPressed(e);
-        _dragging = true;
-        _lastPointer = e.GetPosition(this);
-        e.Pointer.Capture(this);
-    }
+    // ---------- 交互 API（供宿主 Panel 转发）----------
+    // OpenGlControlBase 自身命中测试不可靠（无背景时部分后端收不到指针），
+    // 交互统一由宿主 Panel（可命中）转发到相机。
+    /// <summary>轨道旋转（增量已由宿主换算好）。</summary>
+    public void Orbit(double dYaw, double dPitch) => _camera.Orbit(dYaw, dPitch);
 
-    protected override void OnPointerMoved(PointerEventArgs e)
-    {
-        base.OnPointerMoved(e);
-        if (!_dragging) return;
-        var p = e.GetPosition(this);
-        _camera.Orbit((p.X - _lastPointer.X) * 0.01, (p.Y - _lastPointer.Y) * 0.01);
-        _lastPointer = p;
-    }
-
-    protected override void OnPointerReleased(PointerReleasedEventArgs e)
-    {
-        base.OnPointerReleased(e);
-        _dragging = false;
-        e.Pointer.Capture(null);
-    }
-
-    protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
-    {
-        base.OnPointerWheelChanged(e);
-        _camera.Zoom(e.Delta.Y > 0 ? 0.9 : 1.1);
-    }
+    /// <summary>缩放。factor &lt;1 拉近，&gt;1 拉远。</summary>
+    public void Zoom(double factor) => _camera.Zoom(factor);
 
     // ---------- 几何（示例内容；接入内核后由 AcDb worldDraw 提供）----------
     private static float[] BuildGrid(int n, float step)

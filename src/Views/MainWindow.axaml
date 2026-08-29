@@ -1037,7 +1037,7 @@
         </TabControl>
 
         <!-- ============================ 3D 视口 ============================ -->
-        <Panel Grid.Row="1">
+        <Panel Grid.Row="1" x:Name="ViewportHost" Background="Transparent">
             <controls:CadGlViewport x:Name="Viewport" />
             <!-- 左上叠加信息 -->
             <Border Background="#B0000000" CornerRadius="6" Padding="10,7"
