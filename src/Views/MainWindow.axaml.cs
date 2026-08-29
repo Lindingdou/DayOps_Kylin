@@ -59,6 +59,7 @@ public partial class MainWindow : Window
         if (sender is Control c && c.Tag is string cmd)
         {
             if (cmd == "导入") { await ImportDxfAsync(); return; }
+            if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
             StatusMsg.Text = $"命令: {cmd}";
             CommandInput.Text = cmd;
             CommandInput.CaretIndex = cmd.Length;
@@ -151,6 +152,11 @@ public partial class MainWindow : Window
             case "3DORBIT":
                 Viewport.SetViewMode(false);
                 StatusMsg.Text = "视图: 3D 轨道";
+                break;
+            case "NODEEDITOR":
+            case "节点编辑器":
+                new NodeEditorWindow().Show();
+                StatusMsg.Text = "打开节点编辑器";
                 break;
             default:
                 StatusMsg.Text = $"执行: {cmd}";

@@ -1,0 +1,20 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="PitMine3D.Kylin.Views.NodeEditorWindow"
+        Title="节点编辑器" Width="900" Height="600"
+        Background="#FBFBFD">
+    <Grid RowDefinitions="Auto,*">
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="8" Spacing="6">
+            <TextBlock Text="添加节点:" VerticalAlignment="Center" Foreground="#555" />
+            <Button Content="数字" Tag="Number" Click="OnAddNode" />
+            <Button Content="点" Tag="Point" Click="OnAddNode" />
+            <Button Content="圆" Tag="Circle" Click="OnAddNode" />
+            <Button Content="矩形" Tag="Rectangle" Click="OnAddNode" />
+            <TextBlock x:Name="Hint" Text="拖拽移动节点 · 点绿色输出口再点橙色输入口连线"
+                       VerticalAlignment="Center" Margin="16,0,0,0" Foreground="#8A929C" FontSize="12" />
+        </StackPanel>
+        <Border Grid.Row="1" Background="#FFFFFF" BorderBrush="#E3E6EA" BorderThickness="1" Margin="8,0,8,8">
+            <Canvas x:Name="Canvas" Background="Transparent" ClipToBounds="True" />
+        </Border>
+    </Grid>
+</Window>
