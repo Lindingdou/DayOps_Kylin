@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -77,20 +78,48 @@ public partial class MainWindow : Window
             }
         });
         if (files.Count == 0) return;
+        ImportPath(files[0].Path.LocalPath);
+    }
 
-        string path = files[0].Path.LocalPath;
+    // 共享导入逻辑：加载 → 视口显示 → 对象树 → 状态回报
+    private void ImportPath(string path)
+    {
         StatusMsg.Text = $"正在导入 {Path.GetFileName(path)} …";
-
         var r = DxfImportService.Load(path);
         if (!r.Success)
         {
             StatusMsg.Text = $"导入失败：{r.Error}";
             return;
         }
-
         Viewport.ShowImportedGeometry(r.LineVertices, r.Bounds);
         PopulateObjectTree(r, Path.GetFileName(path));
         StatusMsg.Text = $"已导入 {Path.GetFileName(path)} · {r.EntityCount} 实体 · {r.SegmentCount} 线段";
+    }
+
+    // 文件管理器：选文件夹 → 列出该目录 .dxf
+    private async void OnOpenFolder(object? sender, RoutedEventArgs e)
+    {
+        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = "选择图纸文件夹",
+            AllowMultiple = false
+        });
+        if (folders.Count == 0) return;
+
+        string dir = folders[0].Path.LocalPath;
+        FileFolderLabel.Text = dir;
+        var items = CadFileBrowser.ListDxf(dir);
+        FileList.ItemsSource = items
+            .Select(x => new ListBoxItem { Content = x.Name, Tag = x.Path })
+            .ToList();
+        StatusMsg.Text = items.Count == 0 ? "该文件夹无 .dxf 文件" : $"{items.Count} 个 .dxf（双击打开）";
+    }
+
+    // 双击文件列表项 → 导入该图纸
+    private void OnFileListDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (FileList.SelectedItem is ListBoxItem { Tag: string path })
+            ImportPath(path);
     }
 
     // 对象管理器：按图元类型列出导入的实体
