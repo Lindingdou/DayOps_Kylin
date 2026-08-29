@@ -32,6 +32,8 @@ public static class DxfImportService
         public float[] LineVertices { get; set; } = Array.Empty<float>();
         /// <summary>[minX, minY, maxX, maxY]，供范围缩放。</summary>
         public double[] Bounds { get; set; } = { 0, 0, 0, 0 };
+        /// <summary>按图元类型（中文名）计数，供对象管理器。</summary>
+        public Dictionary<string, int> TypeCounts { get; } = new();
         public List<string> Warnings { get; } = new();
         public string? Error { get; set; }
     }
@@ -116,6 +118,8 @@ public static class DxfImportService
             {
                 entCount++;
                 (cr, cg, cb) = ColorOf(e);
+                var cn = CnTypeName(e);
+                if (cn != null) result.TypeCounts[cn] = result.TypeCounts.GetValueOrDefault(cn) + 1;
                 switch (e)
                 {
                     case Line ln:
@@ -219,5 +223,18 @@ public static class DxfImportService
         8 => (0.55f, 0.55f, 0.55f),   // 深灰
         9 => (0.75f, 0.75f, 0.78f),   // 浅灰
         _ => LineColor                // 其余/未知 → 默认
+    };
+
+    /// <summary>图元 → 中文类型名（对象管理器用）；不支持的返回 null。</summary>
+    private static string? CnTypeName(Entity e) => e switch
+    {
+        Line => "直线",
+        LwPolyline => "多段线",
+        Polyline2D => "多段线",   // 含 Polyline3D
+        Arc => "圆弧",            // 必须在 Circle 前（Arc : Circle）
+        Circle => "圆",
+        Point => "点",
+        Ellipse => "椭圆",
+        _ => null
     };
 }

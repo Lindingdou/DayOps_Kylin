@@ -1037,7 +1037,18 @@
         </TabControl>
 
         <!-- ============================ 3D 视口 ============================ -->
-        <Panel Grid.Row="1" x:Name="ViewportHost" Background="Transparent">
+        <Grid Grid.Row="1" ColumnDefinitions="220,*">
+        <!-- 左侧对象管理器 -->
+        <Border Grid.Column="0" Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,1,0">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Text="对象管理器" FontWeight="SemiBold" FontSize="13"
+                           Margin="10,8" Foreground="#3A3F46" />
+                <TextBlock DockPanel.Dock="Top" x:Name="ObjectTreeHint" Text="导入图纸后显示实体"
+                           Margin="10,0,10,6" FontSize="11" Foreground="#8A929C" />
+                <TreeView x:Name="ObjectTree" Background="Transparent" BorderThickness="0" Margin="4,0" />
+            </DockPanel>
+        </Border>
+        <Panel Grid.Column="1" x:Name="ViewportHost" Background="Transparent">
             <controls:CadGlViewport x:Name="Viewport" />
             <!-- 左上叠加信息 -->
             <Border Background="#B0000000" CornerRadius="6" Padding="10,7"
@@ -1054,6 +1065,7 @@
                 <TextBlock Text="Z 上 · CGCS2000 约定" Foreground="#C9D6E6" FontSize="11" />
             </Border>
         </Panel>
+        </Grid>
 
         <!-- ============================ 命令行 ============================ -->
         <Border Grid.Row="2" Background="#1E1F22" Padding="8,5">

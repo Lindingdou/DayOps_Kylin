@@ -34,6 +34,8 @@ public class DxfImportTests
         Assert.Equal(r.SegmentCount * 12, r.LineVertices.Length);             // 每段 2 顶点 × 6 float
         Assert.True(r.Bounds[0] <= 0.01, $"minX={r.Bounds[0]}");              // 含线起点 (0,0)
         Assert.True(r.Bounds[2] >= 9.99, $"maxX={r.Bounds[2]}");              // 含线终点 x=10
+        Assert.Equal(1, r.TypeCounts["直线"]);                                // 对象管理器计数
+        Assert.Equal(1, r.TypeCounts["圆"]);
 
         try { File.Delete(path); } catch { /* 清理失败无碍 */ }
     }

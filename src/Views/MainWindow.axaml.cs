@@ -89,7 +89,18 @@ public partial class MainWindow : Window
         }
 
         Viewport.ShowImportedGeometry(r.LineVertices, r.Bounds);
+        PopulateObjectTree(r, Path.GetFileName(path));
         StatusMsg.Text = $"已导入 {Path.GetFileName(path)} · {r.EntityCount} 实体 · {r.SegmentCount} 线段";
+    }
+
+    // 对象管理器：按图元类型列出导入的实体
+    private void PopulateObjectTree(DxfImportService.ImportResult r, string fileName)
+    {
+        ObjectTreeHint.IsVisible = false;
+        var root = new TreeViewItem { Header = $"{fileName}（{r.EntityCount} 实体）", IsExpanded = true };
+        foreach (var kv in r.TypeCounts)
+            root.Items.Add(new TreeViewItem { Header = $"{kv.Key} × {kv.Value}" });
+        ObjectTree.ItemsSource = new[] { root };
     }
 
     // 命令行回车 → 命令分发（已实装的走功能，其余回显）
