@@ -21,6 +21,8 @@
     <PackageReference Include="Avalonia.Desktop" Version="11.2.1" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.1" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="11.2.1" />
+    <!-- DXF/DWG 读取(纯托管, 跨平台) —— 与 Windows 版同版本 -->
+    <PackageReference Include="ACadSharp" Version="3.5.7" />
     <PackageReference Include="Avalonia.Diagnostics" Version="11.2.1">
       <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
     </PackageReference>
