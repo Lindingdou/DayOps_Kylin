@@ -71,4 +71,29 @@ public class DxfImportTests
 
         try { File.Delete(path); } catch { /* 清理失败无碍 */ }
     }
+
+    [Fact]
+    public void Loads_point_and_ellipse()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "pm_dxf_pe_test.dxf");
+
+        var doc = new CadDocument();
+        doc.Entities.Add(new Point { Location = new XYZ(3, 3, 0) });
+        doc.Entities.Add(new Ellipse
+        {
+            Center = new XYZ(0, 0, 0),
+            MajorAxisEndPoint = new XYZ(10, 0, 0),
+            RadiusRatio = 0.5
+        });
+        using (var writer = new DxfWriter(path, doc, false))
+            writer.Write();
+
+        var r = DxfImportService.Load(path);
+
+        Assert.True(r.Success, r.Error);
+        Assert.Equal(2, r.EntityCount);
+        Assert.True(r.SegmentCount >= 2 + 12, $"segments={r.SegmentCount}");   // 点十字=2段, 椭圆多段
+
+        try { File.Delete(path); } catch { /* 清理失败无碍 */ }
+    }
 }

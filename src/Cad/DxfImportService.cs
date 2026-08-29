@@ -83,6 +83,31 @@ public static class DxfImportService
             }
         }
 
+        // 椭圆折线近似：主轴向量 + 半径比 + 起止参数
+        void EllipseSegs(Ellipse ell)
+        {
+            double ecx = ell.Center.X, ecy = ell.Center.Y, ecz = ell.Center.Z;
+            double majX = ell.MajorAxisEndPoint.X, majY = ell.MajorAxisEndPoint.Y;
+            double majLen = Math.Sqrt(majX * majX + majY * majY);
+            if (majLen < 1e-9) return;
+            double rot = Math.Atan2(majY, majX);
+            double minLen = majLen * ell.RadiusRatio;
+            double t0 = ell.StartParameter, t1 = ell.EndParameter;
+            if (t1 <= t0) t1 += Math.PI * 2;
+            int n = Math.Max(16, (int)(CircleSegments * Math.Abs(t1 - t0) / (Math.PI * 2)));
+            double cosR = Math.Cos(rot), sinR = Math.Sin(rot);
+            double px = 0, py = 0;
+            for (int i = 0; i <= n; i++)
+            {
+                double t = t0 + (t1 - t0) * i / n;
+                double lx = majLen * Math.Cos(t), ly = minLen * Math.Sin(t);
+                double wx = ecx + lx * cosR - ly * sinR;
+                double wy = ecy + lx * sinR + ly * cosR;
+                if (i > 0) Seg(px, py, ecz, wx, wy, ecz);
+                px = wx; py = wy;
+            }
+        }
+
         int entCount = 0;
         try
         {
@@ -129,6 +154,18 @@ public static class DxfImportService
 
                     case Circle ci:
                         ArcSegs(ci.Center.X, ci.Center.Y, ci.Center.Z, ci.Radius, 0, Math.PI * 2);
+                        break;
+
+                    case Point pt:
+                    {
+                        const double s = 0.5;   // 点标记十字半长
+                        Seg(pt.Location.X - s, pt.Location.Y, pt.Location.Z, pt.Location.X + s, pt.Location.Y, pt.Location.Z);
+                        Seg(pt.Location.X, pt.Location.Y - s, pt.Location.Z, pt.Location.X, pt.Location.Y + s, pt.Location.Z);
+                        break;
+                    }
+
+                    case Ellipse ell:
+                        EllipseSegs(ell);
                         break;
 
                     default:
