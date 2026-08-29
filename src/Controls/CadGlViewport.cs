@@ -30,6 +30,12 @@ public class CadGlViewport : OpenGlControlBase
     // 静态网格：地面网格+轴 / 示例实体 / 罗盘
     private GlRenderer.Mesh _grid, _cube, _gizmo;
 
+    // 导入的图纸线框（世界坐标 P3_C3 线段）。上传须在 GL 线程，故 UI 线程只挂起数据，下一帧消费。
+    private GlRenderer.Mesh _imported;
+    private bool _hasImported;
+    private float[]? _pendingImport;
+    private double[]? _pendingBounds;
+
     private readonly Stopwatch _clock = Stopwatch.StartNew();
 
     /// <summary>OpenGL 上下文就绪后回报后端版本串给界面。</summary>
@@ -61,6 +67,7 @@ public class CadGlViewport : OpenGlControlBase
         _renderer.DeleteMesh(_grid);
         _renderer.DeleteMesh(_cube);
         _renderer.DeleteMesh(_gizmo);
+        if (_hasImported) _renderer.DeleteMesh(_imported);
         _renderer.Deinit();
     }
 
@@ -70,6 +77,17 @@ public class CadGlViewport : OpenGlControlBase
         int w = Math.Max(1, (int)(Bounds.Width * scale));
         int h = Math.Max(1, (int)(Bounds.Height * scale));
         float aspect = h == 0 ? 1f : (float)w / h;
+
+        // 消费待上传的导入几何（必须在 GL 线程 = 本回调内）
+        var pending = _pendingImport;
+        if (pending != null)
+        {
+            _pendingImport = null;
+            if (_hasImported) _renderer.DeleteMesh(_imported);
+            _imported = _renderer.Upload(pending);
+            _hasImported = !_imported.IsEmpty;
+            _camera.FitBounds(_pendingBounds);
+        }
 
         float[] vp = _camera.ViewProj(aspect);
 
@@ -93,13 +111,23 @@ public class CadGlViewport : OpenGlControlBase
         _renderer.EndPass();
     }
 
-    /// <summary>场景实体（此处示例：缓慢自转的立方体；将来接内核 AcDb 几何）。深度开。</summary>
+    /// <summary>
+    /// 场景实体。已导入图纸时画其线框（世界坐标）；否则画示例自转立方体。
+    /// 将来接内核 AcDb 几何后由内核渲染路径取代。深度开。
+    /// </summary>
     private void ScenePass(float[] vp)
     {
         _renderer.BeginPass(depthTest: true);
-        float angle = (float)_clock.Elapsed.TotalSeconds * 0.6f;
-        float[] model = Mat4.Mul(Mat4.Translate(0f, 0f, 1.6f), Mat4.RotateZ(angle));
-        _renderer.Draw(_cube, GL_TRIANGLES, Mat4.Mul(vp, model));
+        if (_hasImported)
+        {
+            _renderer.Draw(_imported, GL_LINES, vp);
+        }
+        else
+        {
+            float angle = (float)_clock.Elapsed.TotalSeconds * 0.6f;
+            float[] model = Mat4.Mul(Mat4.Translate(0f, 0f, 1.6f), Mat4.RotateZ(angle));
+            _renderer.Draw(_cube, GL_TRIANGLES, Mat4.Mul(vp, model));
+        }
         _renderer.EndPass();
     }
 
@@ -122,6 +150,17 @@ public class CadGlViewport : OpenGlControlBase
 
     /// <summary>缩放。factor &lt;1 拉近，&gt;1 拉远。</summary>
     public void Zoom(double factor) => _camera.Zoom(factor);
+
+    /// <summary>
+    /// 显示导入的线框几何（世界坐标交错 P3_C3 线段）并范围缩放到其包围盒。
+    /// UI 线程调用；实际 GL 上传延到下一帧渲染回调（GL 线程）执行。
+    /// </summary>
+    public void ShowImportedGeometry(float[] lineVertices, double[] bounds)
+    {
+        _pendingImport = lineVertices;
+        _pendingBounds = bounds;
+        RequestNextFrameRendering();
+    }
 
     // ---------- 几何（示例内容；接入内核后由 AcDb worldDraw 提供）----------
     private static float[] BuildGrid(int n, float step)

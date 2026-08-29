@@ -22,7 +22,24 @@ internal sealed class Camera
     }
 
     /// <summary>缩放（滚轮）。factor &lt;1 拉近，&gt;1 拉远。</summary>
-    public void Zoom(double factor) => Dist = Math.Clamp(Dist * factor, 2.0, 80.0);
+    public void Zoom(double factor) => Dist = Math.Clamp(Dist * factor, 2.0, 100000.0);
+
+    /// <summary>范围缩放：相机对准并纳入包围盒 [minX, minY, maxX, maxY]（对应 ZOOMEXTENTS）。</summary>
+    public void FitBounds(double[]? bounds)
+    {
+        if (bounds == null || bounds.Length < 4) return;
+        FitBounds(bounds[0], bounds[1], bounds[2], bounds[3]);
+    }
+
+    public void FitBounds(double minX, double minY, double maxX, double maxY)
+    {
+        Target[0] = (float)((minX + maxX) * 0.5);
+        Target[1] = (float)((minY + maxY) * 0.5);
+        Target[2] = 0f;
+        double span = Math.Max(maxX - minX, maxY - minY);
+        if (span < 1e-6) span = 10;
+        Dist = Math.Clamp(span * 1.4, 2.0, 100000.0);
+    }
 
     /// <summary>相机位置（球坐标，Z 上）。</summary>
     public float[] Eye()
