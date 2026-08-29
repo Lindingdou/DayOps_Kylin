@@ -86,9 +86,10 @@
 - [x] **按实体/图层颜色上色**：`ColorOf`（ByLayer/真彩色/ACI 1-9）逐实体着色。+1 单测（红线 ACI 1 → 偏红），共 5 passed。commit `833c1c6`。
 - [x] **2D/3D 视图模式切换**：`Camera` 2D 正交俯视（拖拽平移）/ 3D 透视轨道；命令行 `2D`/`3D`。顺带修透视远平面裁剪大图纸的 bug。+2 单测，共 7 passed。commit `8d339bb`。
 - [x] **Point + Ellipse 图元**：点 → 十字、椭圆 → 主轴/半径比/起止参数折线近似。+1 单测，共 8 passed。commit `82b499b`。
+- [x] **对象管理器面板**：左侧 TreeView，导入后按图元类型列出（`TypeCounts`，含计数单测）。app 左面板正常。commit `bf9a1a0`。
 
 **⏳ 待做（可托管、Windows 可验证）：**
-- [ ] 对象/文件管理器面板（左侧 TreeView，托管 UI）
+- [ ] 文件管理器面板（磁盘文件树，托管 UI）
 - [ ] 节点编辑器（WPF Canvas → Avalonia 自绘）
 
 **🟡 已记录 · 延后（当前无法验证/实现，需目标环境）：**
