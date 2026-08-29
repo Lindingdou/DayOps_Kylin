@@ -59,7 +59,7 @@ public static class DxfImportService
 
         var verts = new List<float>(4096);
         double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
-        var (cr, cg, cb) = LineColor;
+        float cr = LineColor.r, cg = LineColor.g, cb = LineColor.b;   // 逐实体更新
 
         void Seg(double x0, double y0, double z0, double x1, double y1, double z1)
         {
@@ -90,6 +90,7 @@ public static class DxfImportService
             foreach (var e in model.Entities)
             {
                 entCount++;
+                (cr, cg, cb) = ColorOf(e);
                 switch (e)
                 {
                     case Line ln:
@@ -149,4 +150,37 @@ public static class DxfImportService
         result.Bounds = verts.Count == 0 ? new double[] { 0, 0, 0, 0 } : new[] { minX, minY, maxX, maxY };
         return result;
     }
+
+    /// <summary>实体颜色：ByLayer 取图层色；真彩色直接用 RGB；否则按 ACI 索引映射。失败回落统一色。</summary>
+    private static (float r, float g, float b) ColorOf(Entity e)
+    {
+        try
+        {
+            var color = e.Color;
+            if (color.IsByLayer && e.Layer != null)
+                color = e.Layer.Color;
+            if (color.IsTrueColor)
+                return (color.R / 255f, color.G / 255f, color.B / 255f);
+            return AciToRgb(color.Index);
+        }
+        catch
+        {
+            return LineColor;
+        }
+    }
+
+    /// <summary>AutoCAD 颜色索引(ACI) → RGB。1-9 标准色（深底上做了适配），其余回落浅蓝灰。</summary>
+    private static (float r, float g, float b) AciToRgb(int index) => index switch
+    {
+        1 => (0.90f, 0.32f, 0.32f),   // 红
+        2 => (0.90f, 0.85f, 0.35f),   // 黄
+        3 => (0.38f, 0.85f, 0.42f),   // 绿
+        4 => (0.36f, 0.85f, 0.90f),   // 青
+        5 => (0.42f, 0.56f, 0.96f),   // 蓝
+        6 => (0.90f, 0.46f, 0.86f),   // 品红
+        7 => (0.88f, 0.90f, 0.94f),   // 白/黑 → 深底上用浅色
+        8 => (0.55f, 0.55f, 0.55f),   // 深灰
+        9 => (0.75f, 0.75f, 0.78f),   // 浅灰
+        _ => LineColor                // 其余/未知 → 默认
+    };
 }

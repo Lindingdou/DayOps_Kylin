@@ -45,4 +45,30 @@ public class DxfImportTests
         Assert.False(r.Success);
         Assert.NotNull(r.Error);
     }
+
+    [Fact]
+    public void Uses_entity_aci_color()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "pm_dxf_color_test.dxf");
+
+        var doc = new CadDocument();
+        doc.Entities.Add(new Line
+        {
+            StartPoint = new XYZ(0, 0, 0),
+            EndPoint = new XYZ(5, 0, 0),
+            Color = new Color((short)1)   // ACI 1 = 红
+        });
+        using (var writer = new DxfWriter(path, doc, false))
+            writer.Write();
+
+        var r = DxfImportService.Load(path);
+
+        Assert.True(r.Success, r.Error);
+        Assert.True(r.SegmentCount >= 1);
+        // 颜色在每顶点的 [3,4,5] 分量；红色应 r 分量最大
+        float cr = r.LineVertices[3], cg = r.LineVertices[4], cb = r.LineVertices[5];
+        Assert.True(cr > cg && cr > cb, $"expected red-dominant, got ({cr},{cg},{cb})");
+
+        try { File.Delete(path); } catch { /* 清理失败无碍 */ }
+    }
 }
