@@ -42,6 +42,9 @@
 
 ## 四、达成度快照
 
+> **Loop 状态：已于 iter 2 停止**（`CronDelete 561cc045`）。原因：命中停止条件 #2——只剩外部阻塞项。
+> 重启方式：备好目标环境（见 §二）后，`/loop 3m ...` 重新拉起即可，本文件续接。
+
 > 每次触发更新。格式：迭代 / 时间(相对) / 五维 / 队列 / 备注
 
 - **iter 0（基线）**：构建 2% · 功能对等 0% · 渲染 0% · 数据库 5% · 打包运行 0% → **总 ≈ 2%**
@@ -56,7 +59,18 @@
 
 - **P5-1 连接层**：`ConnectionFactory`/`SqlService` 接 `DmProvider`（换 `IDbConnection`），需 DM8 实例连测。
 - **P5-1 .sql 迁移脚本**：`V*.sql` 达梦方言翻译 + `PRAGMA` 去除，需 DM8 跑迁移验证。
-- （随 loop 推进追加：原生 CMake 产物、GL 渲染、达梦端到端、.deb 装机、功能对等）
+- **DM DDL 关键字**：`CREATE INDEX IF NOT EXISTS`、历史表 `TEXT`→`VARCHAR` 等，需 DM8 确认可执行后再改（不在无验证下改生产热路径）。
+- **原生内核**：70 工程 CMake + D3D11→GL 渲染，需 Linux + GCC + OpenGL。
+- **托管 UI**：Fluent.Ribbon/AvalonDock/WinForms → Avalonia，~167 对话框，需 Avalonia + 目标机验证。
+- **打包 / 功能对等**：.deb 装机 + 9 模块加载 + 视口出图 + 达梦连通 + README 命令逐条对齐，需麒麟 SP10。
+
+## 七、要解除阻塞、让 loop 重新推进，需要你提供
+
+1. **DM8 开发版装到麒麟机**（`db/dm/README.md` 有步骤）→ 解锁 P5-1 连接层 / `.sql` 翻译 / 达梦端到端。
+2. **一台可连的麒麟/Linux 环境**（SSH 亦可，含 .NET 8 SDK + GCC/Clang C++20 + OpenGL）→ 解锁原生内核 CMake、渲染、构建、打包、功能对等验证。
+3. **P0-2/P0-3/P0-5 决策**（DirectXMath 路线 / 视口宿主 / 达梦部署模式与兼容模式）。
+
+> 有了 1+2，可验证面才真正打开；届时 `/loop` 重启，能持续推进而非撞墙即停。
 
 ## 六、待决策（⛳）
 
