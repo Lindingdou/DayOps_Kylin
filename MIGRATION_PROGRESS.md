@@ -83,10 +83,9 @@
 **✅ 已完成（验证过）：**
 - [x] **DXF 解析** `DxfImportService`（ACadSharp 3.5.7）读 .dxf → 提取 Line/LwPolyline/Polyline/Circle/Arc 为线段几何 + 范围框。2 单测通过。commit `296c786`。
 - [x] **DXF 渲染 + 导入触发 + 范围缩放**：`CadGlViewport.ShowImportedGeometry`（GL 线程上传，ScenePass 画导入线框）；`Camera.FitBounds`（ZOOMEXTENTS，2 单测）；Ribbon「导入」→ Avalonia 文件对话框 → 显示。4 tests + app 启动无崩溃。commit `aa3797d`。（打开真图纸上屏效果需手测）
+- [x] **按实体/图层颜色上色**：`ColorOf`（ByLayer/真彩色/ACI 1-9）逐实体着色。+1 单测（红线 ACI 1 → 偏红），共 5 passed。commit `833c1c6`。
 
 **⏳ 待做（可托管、Windows 可验证）：**
-- [ ] DWG 显示：`DwgReader` 路径（同 DXF，纯显示可托管）
-- [ ] 按图层/ACI 上色（现为统一色）
 - [ ] 2D/3D 视图模式切换
 - [ ] 更多图元：Point、Ellipse、Text/MText（Skia 文字）、Hatch 填充显示
 - [ ] 节点编辑器（WPF Canvas → Avalonia 自绘）、对象/文件管理器面板
@@ -94,7 +93,8 @@
 **🟡 已记录 · 延后（当前无法验证/实现，需目标环境）：**
 - 🔵 **需内核**：绘制/编辑/选择/夹点等交互命令、命令系统、精确几何、LAS 点云、内核渲染路径。
 - 🟣 **需模块**：9 大业务模块（GeoDataBase…TaskLib）。
-- **DWG↔内核实体**：ACadSharp 能读 DWG，但导入几何与内核 AcDb 实体系统对接需内核（纯显示不需要）。
+- **DWG 显示**（跳过·已记录）：纯显示本可托管（同 DXF 路径），但**验证受阻**——ACadSharp DWG 写入不可靠，无法生成测试 DWG，也无现成样例 .dwg。给我一个样例 .dwg 即可加上并验证。
+- **DWG↔内核实体**：导入几何与内核 AcDb 实体系统对接需内核。
 - **达梦**：连接层 / `.sql` 脚本翻译 / 端到端（需 DM8 实例）。
 
 ## 六、待决策（⛳）
