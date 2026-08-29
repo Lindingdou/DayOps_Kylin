@@ -54,6 +54,9 @@
   - 完成 + **运行时验证**：P5-1 方言抽象单测（`Tests/Tests.SqlLib`，`dotnet test` 2 passed）——SQLite DDL 字节不变 + 达梦 DDL 正确（`BIGINT IDENTITY(1,1)`/`VARCHAR`/`TINYINT`/`DOUBLE`/`TIMESTAMP`，无 `AUTOINCREMENT`）。commit PitMine3D `0329b10`。
   - 发现（记待办，与移植无关）：`Tests.PitMineApp` 既有编译错误，引用不存在的 `PitMineApp.Licensing`（`LicensingTests.cs`/`RegisterWindowRenderDump.cs`），该测试工程当前编不过。
   - 下一步（仍 Windows 可验证）：① DM `CREATE INDEX IF NOT EXISTS` 关键字兼容（DM/MySQL 模式）② `_schema_migration` 历史表 DDL 方言化。此二者做完后，P5-1 余项（连接层/DmProvider/.sql 脚本翻译/冒烟）**均需 DM8** → 转 BLOCKED-VERIFY。
+- **手动 · 渲染管线搭建（P2 · 骨架侧）**：渲染 0%→5% → **总 ≈ 4%**
+  - 完成 + **运行验证**：骨架视口重构为内核式**三趟渲染管线**（`Camera` + `GlRenderer` + GridPass/ScenePass/OverlayPass + 左下角坐标罗盘），Windows **GLES 3.0 实测**：GL 初始化 + 着色器编译链接 + 三趟渲染循环 **0 错**。commit DayOps_Kylin `12105bc`。
+  - 说明：这是 **Avalonia 侧渲染管线脚手架**（渲染腿落点），可跨平台运行验证。C++ 内核 `xllAcGi` 的**真实渲染器移植**（7 条渲染路径 + 8 HLSL→GLSL + DirectXMath→GLM）仍是主体，需 Linux + GCC + OpenGL，属 🟡BLOCKED-VERIFY。
 
 ## 五、待上机验证清单（🟡BLOCKED-VERIFY）
 
@@ -71,6 +74,29 @@
 3. **P0-2/P0-3/P0-5 决策**（DirectXMath 路线 / 视口宿主 / 达梦部署模式与兼容模式）。
 
 > 有了 1+2，可验证面才真正打开；届时 `/loop` 重启，能持续推进而非撞墙即停。
+
+## 八、功能补全 loop（可托管功能 · Windows 可验证）
+
+> 策略（用户指定）：跳过并**记录**当前无法验证/实现的（🔵需内核、🟣需模块），
+> 只把"能做且可验证"的功能一项项补全，做完接下一项，直到可做功能全完成才停。
+
+**✅ 已完成（验证过）：**
+- [x] **DXF 解析** `DxfImportService`（ACadSharp 3.5.7）读 .dxf → 提取 Line/LwPolyline/Polyline/Circle/Arc 为线段几何 + 范围框。2 单测通过。commit `296c786`。
+
+**⏳ 待做（可托管、Windows 可验证）：**
+- [ ] DXF 渲染到视口：导入几何上传 `GlRenderer`，ScenePass 渲染 + 范围缩放到图纸
+- [ ] 导入触发：Ribbon「导入」/ 命令行 `IMPORTDXF` → 文件对话框（Avalonia StorageProvider）
+- [ ] DWG 显示：`DwgReader` 路径（同 DXF，纯显示可托管）
+- [ ] 按图层/ACI 上色（现为统一色）
+- [ ] 2D/3D 视图模式切换、范围缩放
+- [ ] 更多图元：Point、Ellipse、Text/MText（Skia 文字）、Hatch 填充显示
+- [ ] 节点编辑器（WPF Canvas → Avalonia 自绘）、对象/文件管理器面板
+
+**🟡 已记录 · 延后（当前无法验证/实现，需目标环境）：**
+- 🔵 **需内核**：绘制/编辑/选择/夹点等交互命令、命令系统、精确几何、LAS 点云、内核渲染路径。
+- 🟣 **需模块**：9 大业务模块（GeoDataBase…TaskLib）。
+- **DWG↔内核实体**：ACadSharp 能读 DWG，但导入几何与内核 AcDb 实体系统对接需内核（纯显示不需要）。
+- **达梦**：连接层 / `.sql` 脚本翻译 / 端到端（需 DM8 实例）。
 
 ## 六、待决策（⛳）
 
