@@ -92,13 +92,29 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"已导入 {Path.GetFileName(path)} · {r.EntityCount} 实体 · {r.SegmentCount} 线段";
     }
 
-    // 命令行回车 → 执行回显
+    // 命令行回车 → 命令分发（已实装的走功能，其余回显）
     private void OnCommandKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter && sender is TextBox tb && !string.IsNullOrWhiteSpace(tb.Text))
+        if (e.Key != Key.Enter || sender is not TextBox tb || string.IsNullOrWhiteSpace(tb.Text)) return;
+
+        string cmd = tb.Text.Trim();
+        tb.Text = string.Empty;
+
+        switch (cmd.ToUpperInvariant())
         {
-            StatusMsg.Text = $"执行: {tb.Text.Trim()}";
-            tb.Text = string.Empty;
+            case "2D":
+                Viewport.SetViewMode(true);
+                StatusMsg.Text = "视图: 2D 平面（正交俯视，拖拽平移）";
+                break;
+            case "3D":
+            case "3DVIEW":
+            case "3DORBIT":
+                Viewport.SetViewMode(false);
+                StatusMsg.Text = "视图: 3D 轨道";
+                break;
+            default:
+                StatusMsg.Text = $"执行: {cmd}";
+                break;
         }
     }
 }

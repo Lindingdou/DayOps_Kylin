@@ -162,6 +162,16 @@ public class CadGlViewport : OpenGlControlBase
         RequestNextFrameRendering();
     }
 
+    /// <summary>切换 2D 平面 / 3D 轨道视图。</summary>
+    public void SetViewMode(bool is2D)
+    {
+        _camera.SetMode(is2D);
+        RequestNextFrameRendering();
+    }
+
+    /// <summary>当前是否 2D 平面视图。</summary>
+    public bool Is2DView => _camera.Is2D;
+
     // ---------- 几何（示例内容；接入内核后由 AcDb worldDraw 提供）----------
     private static float[] BuildGrid(int n, float step)
     {

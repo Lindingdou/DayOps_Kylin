@@ -1,3 +1,4 @@
+using System;
 using PitMine3D.Kylin.Controls;
 using Xunit;
 
@@ -29,5 +30,39 @@ public class CameraTests
         cam.FitBounds(null);
         cam.FitBounds(new double[] { 1, 2 });
         Assert.Equal(before, cam.Dist, 6);       // 未变
+    }
+
+    [Fact]
+    public void Mode_3d_orbits_2d_pans()
+    {
+        var cam = new Camera();
+
+        // 3D：orbit 改 yaw，不动 target
+        double yaw0 = cam.Yaw;
+        cam.Orbit(0.2, 0.1);
+        Assert.NotEqual(yaw0, cam.Yaw, 6);
+
+        // 切 2D：orbit 平移 target，不动 yaw
+        cam.SetMode(true);
+        Assert.True(cam.Is2D);
+        double yawNow = cam.Yaw;
+        float tx0 = cam.Target[0];
+        cam.Orbit(0.2, 0.1);
+        Assert.Equal(yawNow, cam.Yaw, 6);            // yaw 未变
+        Assert.NotEqual(tx0, cam.Target[0], 4);      // target 平移了
+    }
+
+    [Fact]
+    public void ViewProj_differs_between_2d_and_3d()
+    {
+        var cam = new Camera();
+        float[] vp3d = cam.ViewProj(1.5f);
+        cam.SetMode(true);
+        float[] vp2d = cam.ViewProj(1.5f);
+
+        bool anyDiff = false;
+        for (int i = 0; i < 16; i++)
+            if (Math.Abs(vp3d[i] - vp2d[i]) > 1e-4f) { anyDiff = true; break; }
+        Assert.True(anyDiff, "2D 与 3D 的 ViewProj 应不同");
     }
 }
