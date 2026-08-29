@@ -82,13 +82,12 @@
 
 **✅ 已完成（验证过）：**
 - [x] **DXF 解析** `DxfImportService`（ACadSharp 3.5.7）读 .dxf → 提取 Line/LwPolyline/Polyline/Circle/Arc 为线段几何 + 范围框。2 单测通过。commit `296c786`。
+- [x] **DXF 渲染 + 导入触发 + 范围缩放**：`CadGlViewport.ShowImportedGeometry`（GL 线程上传，ScenePass 画导入线框）；`Camera.FitBounds`（ZOOMEXTENTS，2 单测）；Ribbon「导入」→ Avalonia 文件对话框 → 显示。4 tests + app 启动无崩溃。commit `aa3797d`。（打开真图纸上屏效果需手测）
 
 **⏳ 待做（可托管、Windows 可验证）：**
-- [ ] DXF 渲染到视口：导入几何上传 `GlRenderer`，ScenePass 渲染 + 范围缩放到图纸
-- [ ] 导入触发：Ribbon「导入」/ 命令行 `IMPORTDXF` → 文件对话框（Avalonia StorageProvider）
 - [ ] DWG 显示：`DwgReader` 路径（同 DXF，纯显示可托管）
 - [ ] 按图层/ACI 上色（现为统一色）
-- [ ] 2D/3D 视图模式切换、范围缩放
+- [ ] 2D/3D 视图模式切换
 - [ ] 更多图元：Point、Ellipse、Text/MText（Skia 文字）、Hatch 填充显示
 - [ ] 节点编辑器（WPF Canvas → Avalonia 自绘）、对象/文件管理器面板
 
