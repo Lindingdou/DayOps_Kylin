@@ -648,6 +648,7 @@ public partial class MainWindow : Window
             if (cmd == "提取道路中心线" || cmd == "道路中线" || cmd == "提取道路中线") { ExtractCenterline(); return; }
             if (cmd == "点对点寻径" || cmd == "寻径" || cmd == "点对点寻路") { StartPathfind(); return; }
             if (cmd == "备选路径" || cmd == "K最短路" || cmd == "备用路径") { StartKPathfind(); return; }
+            if (cmd == "路网校验" || cmd == "连通性诊断" || cmd == "路网体检") { ValidateRoadNetwork(); return; }
             if (cmd == "排土条带" || cmd == "条带填充" || cmd == "排土条带划分") { DumpStrips(); return; }
             if (cmd == "分帮扩帮" || cmd == "批量台阶扩帮" || cmd == "批量扩坑") { StartBench(); return; }
             if (cmd == "组合工作线" || cmd == "合并多段线" || cmd == "连接台阶线" || cmd == "连接多段线") { JoinPolylines(); return; }
@@ -2404,6 +2405,31 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"备选路径：{paths.Count} 条(里程升序) {sb}";
     }
 
+    // 路网校验：场景多段线建图 → 连通分量数 + 片间最窄缺口(品红线标注) + 报表
+    private void ValidateRoadNetwork()
+    {
+        var polys = new List<System.Collections.Generic.IReadOnlyList<(double x, double y)>>();
+        foreach (var e in _scene.Entities)
+            if (e is PolylineEntity pl && pl.Points.Count >= 2) polys.Add(pl.Points);
+        if (polys.Count == 0) { StatusMsg.Text = "路网校验：场景无路（多段线）"; return; }
+        double tol = System.Math.Max(1e-6, SnapTolWorld(_lastPointer) * 0.5);
+        var (nodes, adj) = RoadNetwork.Build(polys, tol);
+        RoadConnectivity.Components(adj, out int comps);
+        if (comps <= 1) { StatusMsg.Text = $"路网校验：连通(1 片, {nodes.Count} 节点)——网络完整"; return; }
+        // maxGap 按包围盒对角取, 尺度稳健
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        foreach (var (x, y) in nodes) { if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y; }
+        double diag = System.Math.Sqrt((maxX - minX) * (maxX - minX) + (maxY - minY) * (maxY - minY));
+        double maxGap = diag > 0 ? diag * 0.5 : 300.0;
+        var gaps = RoadConnectivity.AllGaps(nodes, adj, maxGap, RoadConnectivity.SampleStepM);
+        BeginChange();
+        foreach (var g in gaps)
+            _scene.Add(new LineEntity { X0 = g.From.x, Y0 = g.From.y, X1 = g.To.x, Y1 = g.To.y, Cr = 0.95f, Cg = 0.2f, Cb = 0.85f });   // 品红缺口线
+        RefreshScene();
+        string narrow = gaps.Count > 0 ? $" · 最窄缺口 {gaps[0].GapM:0.#}(片{gaps[0].FromComp}↔{gaps[0].ToComp})" : "";
+        StatusMsg.Text = $"路网校验：{comps} 个连通片(断开!) · {gaps.Count} 处可接缺口(≤{maxGap:0.#}, 品红标注){narrow}";
+    }
+
     // 圈范围算量：选中的闭合多段线作边界 → TIN → 边界内三角体积
     private async Task BoundaryVolumeAsync()
     {
@@ -3794,6 +3820,10 @@ public partial class MainWindow : Window
             case "KPATH":
             case "ALTPATH":
                 StartKPathfind();
+                break;
+            case "ROADVALIDATE":
+            case "NETCHECK":
+                ValidateRoadNetwork();
                 break;
             case "STRIPS":
                 DumpStrips();
