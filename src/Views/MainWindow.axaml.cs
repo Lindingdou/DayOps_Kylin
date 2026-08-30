@@ -681,6 +681,7 @@ public partial class MainWindow : Window
             if (cmd == "合并三角网" || cmd == "网格合并" || cmd == "合并网格") { await MeshMergeAsync(); return; }
             if (cmd == "固化成体" || cmd == "固化实体") { await SolidifyAsync(); return; }
             if (cmd == "体素格网体积" || cmd == "体素体积" || cmd == "体素算量") { await VoxelVolumeAsync(); return; }
+            if (cmd == "实体转块体" || cmd == "网格转块体" || cmd == "体转块") { await EntityToBlocksAsync(); return; }
             if (cmd == "立方体" || cmd == "长方体") { await BoxPrimitiveAsync(); return; }
             if (cmd == "球体" || cmd == "球") { await SpherePrimitiveAsync(); return; }
             if (cmd == "圆柱" || cmd == "圆柱体") { await CylinderPrimitiveAsync(); return; }
@@ -1260,6 +1261,50 @@ public partial class MainWindow : Window
         var m = MeshMetrics.Compute(mv, mt);
         var inv = System.Globalization.CultureInfo.InvariantCulture;
         StatusMsg.Text = $"体素格网体积：格边 {cell.ToString("0.##", inv)} · 占用 {occupied}/{total} 格 · 体素体积 {voxelVol.ToString("0.#", inv)}(精确 {m.Volume.ToString("0.#", inv)})";
+    }
+
+    // 实体转块体：选封闭 OFF → GWN 逐格判内外 → 占用格作块体(BlockModel.Block)入场景
+    private async Task EntityToBlocksAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "实体转块体：选封闭 OFF 网格",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } } }
+        });
+        if (files.Count == 0) return;
+        string text;
+        try { text = System.IO.File.ReadAllText(files[0].Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"实体转块体：读取失败 {ex.Message}"; return; }
+        var (mv, mt) = MeshMetrics.ParseOff(text);
+        if (mt.Count == 0) { StatusMsg.Text = "实体转块体：无三角"; return; }
+        var fv = new double[mv.Count * 3];
+        for (int i = 0; i < mv.Count; i++) { fv[i * 3] = mv[i].x; fv[i * 3 + 1] = mv[i].y; fv[i * 3 + 2] = mv[i].z; }
+        var ft = new int[mt.Count * 3];
+        for (int i = 0; i < mt.Count; i++) { ft[i * 3] = mt[i].a; ft[i * 3 + 1] = mt[i].b; ft[i * 3 + 2] = mt[i].c; }
+
+        WindingNumberTester wn;
+        try { wn = new WindingNumberTester(fv, ft); }
+        catch (System.Exception ex) { StatusMsg.Text = $"实体转块体：建测试器失败 {ex.Message}"; return; }
+        double dx = wn.MaxX - wn.MinX, dy = wn.MaxY - wn.MinY, dz = wn.MaxZ - wn.MinZ;
+        double diag = System.Math.Sqrt(dx * dx + dy * dy + dz * dz);
+        double cell = diag > 0 ? diag / 20.0 : 1.0;   // 较粗(限场景块数)
+        // 安全：总格数过大再自动加粗
+        while (dx / cell * (dy / cell) * (dz / cell) > 200000) cell *= 1.5;
+        var blocks = new List<BlockModel.Block>();
+        for (double z = wn.MinZ + cell * 0.5; z <= wn.MaxZ; z += cell)
+            for (double y = wn.MinY + cell * 0.5; y <= wn.MaxY; y += cell)
+                for (double x = wn.MinX + cell * 0.5; x <= wn.MaxX; x += cell)
+                    if (wn.IsInsideClosed(x, y, z)) blocks.Add(new BlockModel.Block { X = x, Y = y, Z = z, Size = cell, Grade = 0 });
+        if (blocks.Count == 0) { StatusMsg.Text = "实体转块体：无占用块体(网格可能非闭合/朝向不一致)"; return; }
+        var cells = BlockModel.BuildCells(blocks, 0, 0);
+        BeginChange();
+        foreach (var c in cells) _scene.Add(c);
+        RefreshScene();
+        Viewport.FitBounds(new[] { wn.MinX, wn.MinY, wn.MaxX, wn.MaxY });
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        _lastBlocks = blocks;   // 供资源量/剥采比等复用
+        StatusMsg.Text = $"实体转块体：格边 {cell.ToString("0.##", inv)} · {blocks.Count} 块 · 体积 {(blocks.Count * cell * cell * cell).ToString("0.#", inv)}(已入场景, 可接资源量/筛选)";
     }
 
     // 基本几何体：生成拓扑闭合三角网 → 保存 OFF + 度量报表
@@ -4453,6 +4498,10 @@ public partial class MainWindow : Window
             case "VOXELVOLUME":
             case "VOXEL":
                 _ = VoxelVolumeAsync();
+                break;
+            case "ENTITYTOBLOCKS":
+            case "SOLID2BLOCK":
+                _ = EntityToBlocksAsync();
                 break;
             case "BOX":
                 _ = BoxPrimitiveAsync();
