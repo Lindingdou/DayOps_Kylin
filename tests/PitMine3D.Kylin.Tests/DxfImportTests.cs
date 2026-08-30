@@ -254,6 +254,33 @@ public class DxfImportTests
     }
 
     [Fact]
+    public void SceneExport_roundtrip_dxf_preserves_types_and_layers()
+    {
+        var s = new Scene();
+        s.Add(new LineEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 0, LayerName = "墙" });
+        s.Add(new CircleEntity { Cx = 5, Cy = 5, Radius = 3, LayerName = "柱" });
+        s.Add(new ArcEntity { X1 = 1, Y1 = 0, X2 = 0, Y2 = 1, X3 = -1, Y3 = 0 });
+        var pl = new PolylineEntity { Closed = true };
+        pl.Points.Add((0, 0)); pl.Points.Add((4, 0)); pl.Points.Add((4, 4));
+        s.Add(pl);
+
+        string path = Path.Combine(Path.GetTempPath(), "pm_scene_export.dxf");
+        int written = SceneExportService.Export(s, path);
+        Assert.Equal(4, written);
+
+        var er = DxfImportService.LoadEntities(path);            // 读回
+        Assert.True(er.Success, er.Error);
+        Assert.Contains(er.Entities, e => e is LineEntity);
+        Assert.Contains(er.Entities, e => e is CircleEntity);
+        Assert.Contains(er.Entities, e => e is ArcEntity);
+        Assert.Contains(er.Entities, e => e is PolylineEntity);   // 闭合多段线
+        Assert.Contains("墙", er.LayerOrder);
+        Assert.Contains("柱", er.LayerOrder);
+
+        try { File.Delete(path); } catch { /* 清理失败无碍 */ }
+    }
+
+    [Fact]
     public void Export_roundtrip_preserves_segments()
     {
         string src = Path.Combine(Path.GetTempPath(), "pm_exp_src.dxf");

@@ -428,7 +428,7 @@ public partial class MainWindow : Window
             if (cmd == "重做") { DoRedo(); return; }
             if (cmd == "导入") { await ImportDxfAsync(); return; }
             if (cmd == "导入点") { await ImportPointsAsync(); return; }
-            if (cmd == "另存为") { await ExportDxfAsync(); return; }
+            if (cmd == "另存为") { await SaveAsAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
             if (cmd == "删除") { DeleteSelected(); return; }
             if (cmd == "全部选择") { SelectAll(); return; }
@@ -476,14 +476,10 @@ public partial class MainWindow : Window
         ImportPath(files[0].Path.LocalPath);
     }
 
-    // 导出：把当前显示的线段几何写回 .dxf
+    // 导出 DXF：把场景实体写为原生 DXF 实体（直线/圆/弧/点/多段线，保留图层）
     private async Task ExportDxfAsync()
     {
-        if (_lastImport == null || _lastImport.LineVertices.Length == 0)
-        {
-            StatusMsg.Text = "无可导出的几何（先导入图纸）";
-            return;
-        }
+        if (_scene.Count == 0) { StatusMsg.Text = "场景为空，无可导出"; return; }
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = "导出 DXF",
@@ -494,13 +490,37 @@ public partial class MainWindow : Window
         if (file == null) return;
         try
         {
-            int n = DxfExportService.Export(_lastImport.LineVertices, file.Path.LocalPath);
-            StatusMsg.Text = $"已导出 {Path.GetFileName(file.Path.LocalPath)} · {n} 段";
+            int n = SceneExportService.Export(_scene, file.Path.LocalPath);
+            StatusMsg.Text = $"已导出 {Path.GetFileName(file.Path.LocalPath)} · {n} 实体";
         }
-        catch (System.Exception ex)
+        catch (System.Exception ex) { StatusMsg.Text = $"导出失败：{ex.Message}"; }
+    }
+
+    // 另存为：场景存 .pmx / 导出 .dxf / .dwg（按所选扩展名）
+    private async Task SaveAsAsync()
+    {
+        if (_scene.Count == 0) { StatusMsg.Text = "场景为空，无可另存"; return; }
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            StatusMsg.Text = $"导出失败：{ex.Message}";
+            Title = "另存为",
+            DefaultExtension = "pmx",
+            SuggestedFileName = "drawing.pmx",
+            FileTypeChoices = new[]
+            {
+                new FilePickerFileType("PitMine 图形 (PMX)") { Patterns = new[] { "*.pmx" } },
+                new FilePickerFileType("DXF 图纸") { Patterns = new[] { "*.dxf" } },
+                new FilePickerFileType("DWG 图纸") { Patterns = new[] { "*.dwg" } }
+            }
+        });
+        if (file == null) return;
+        string path = file.Path.LocalPath;
+        string ext = Path.GetExtension(path).ToLowerInvariant();
+        try
+        {
+            if (ext == ".pmx") { File.WriteAllText(path, SceneIO.Save(_scene)); StatusMsg.Text = $"已另存 {Path.GetFileName(path)} · {_scene.Count} 实体"; }
+            else { int n = SceneExportService.Export(_scene, path); StatusMsg.Text = $"已另存 {Path.GetFileName(path)} · {n} 实体"; }
         }
+        catch (System.Exception ex) { StatusMsg.Text = $"另存失败：{ex.Message}"; }
     }
 
     // ---------- 文件：新建 / 打开 / 保存（绘制场景内部格式）----------
