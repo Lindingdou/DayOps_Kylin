@@ -712,6 +712,7 @@ public partial class MainWindow : Window
             if (cmd == "创建选择集" || cmd == "选择集") { CreateSelSet(); return; }
             if (cmd == "调用选择集") { RecallSelSet(); return; }
             if (cmd == "刷新") { Regen(); return; }
+            if (cmd == "特性" || cmd == "属性") { ShowProperties(); return; }
             if (cmd == "清理标记" || cmd == "清除标记") { ClrMark(); return; }
             if (cmd == "修剪" || cmd == "延伸") { StartTrim(); return; }
             if (cmd == "圆TTR" || cmd == "圆(切切半径)") { StartTTR(); return; }
@@ -2445,6 +2446,17 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"调用「{s.Value.name}」（{_selected.Count} 实体，再点循环下一组）";
     }
 
+    // 特性 / PROPERTIES：读出选中实体的属性（常规+几何）到状态栏（完整属性面板为后续 UI 增强）
+    private void ShowProperties()
+    {
+        if (_selected.Count == 0) { StatusMsg.Text = "特性：未选中实体"; return; }
+        if (_selected.Count > 1) { StatusMsg.Text = $"特性：选中 {_selected.Count} 个实体（单选查看详细特性）"; return; }
+        var rows = Cad.Draw.EntityProperties.Describe(_selected[0]);
+        var parts = new List<string>();
+        foreach (var (_, label, value) in rows) parts.Add($"{label}={value}");
+        StatusMsg.Text = "特性  " + string.Join(" · ", parts);
+    }
+
     private void Regen()   // 刷新 / REGEN：重建显示几何
     {
         RefreshScene();
@@ -3103,6 +3115,11 @@ public partial class MainWindow : Window
             case "REGEN":
             case "RE":
                 Regen();
+                break;
+            case "PROPERTIES":
+            case "PROPS":
+            case "PR":
+                ShowProperties();
                 break;
             case "CLRMARK":
                 ClrMark();
