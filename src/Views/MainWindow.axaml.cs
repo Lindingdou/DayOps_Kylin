@@ -542,6 +542,7 @@ public partial class MainWindow : Window
             if (cmd == "排土条带" || cmd == "条带填充" || cmd == "排土条带划分") { DumpStrips(); return; }
             if (cmd == "分帮扩帮" || cmd == "批量台阶扩帮" || cmd == "批量扩坑") { StartBench(); return; }
             if (cmd == "组合工作线" || cmd == "合并多段线" || cmd == "连接台阶线") { JoinPolylines(); return; }
+            if (cmd == "块体模型" || cmd == "导入块体" || cmd == "地质体建模") { await ImportBlockModelAsync(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
             if (cmd == "2D") { Viewport.SetViewMode(true); StatusMsg.Text = "视图: 2D 平面（正交俯视）"; return; }
@@ -936,6 +937,26 @@ public partial class MainWindow : Window
             _scene.Add(new LineEntity { X0 = s.x0, Y0 = s.y0, X1 = s.x1, Y1 = s.y1, Cr = 0.80f, Cg = 0.60f, Cb = 0.35f });
         RefreshScene();
         StatusMsg.Text = $"排土条带：{segs.Count} 条（间距 {spacing:0.##}）";
+    }
+
+    // 块体模型：CSV(x,y,z[,尺寸,品位]) → 品位配色方块平面显示 + 统计
+    private async Task ImportBlockModelAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "块体模型：选 CSV (x,y,z[,尺寸,品位])",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("块体 (CSV/TXT)") { Patterns = new[] { "*.csv", "*.txt", "*.blk" } } }
+        });
+        if (files.Count == 0) return;
+        var r = BlockModel.Load(files[0].Path.LocalPath);
+        if (!r.Success) { StatusMsg.Text = $"块体导入失败：{r.Error}"; return; }
+        var cells = BlockModel.BuildCells(r.Blocks, r.GradeMin, r.GradeMax);
+        BeginChange();
+        foreach (var e in cells) _scene.Add(e);
+        RefreshScene();
+        Viewport.FitBounds(r.Bounds);
+        StatusMsg.Text = $"块体模型：{r.Blocks.Count} 块 · 品位 {r.GradeMin:0.##}~{r.GradeMax:0.##}(均 {r.GradeMean:0.##})";
     }
 
     // 组合工作线：合并选中的多段线（端点相接连成一条）
@@ -2030,6 +2051,9 @@ public partial class MainWindow : Window
                 break;
             case "JOINPOLY":
                 JoinPolylines();
+                break;
+            case "BLOCKMODEL":
+                _ = ImportBlockModelAsync();
                 break;
             case "DIST":
             case "DI":
