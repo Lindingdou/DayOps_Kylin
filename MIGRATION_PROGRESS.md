@@ -132,7 +132,7 @@
 **🟡 已记录 · 延后（当前无法验证/实现，需目标环境）：**
 - 🔵 **需内核**：绘制/编辑/选择/夹点等交互命令、命令系统、精确几何、LAS 点云、内核渲染路径。
 - 🟣 **需模块**：9 大业务模块（GeoDataBase…TaskLib）。
-- **DWG 显示**（跳过·已记录）：纯显示本可托管（同 DXF 路径），但**验证受阻**——ACadSharp DWG 写入不可靠，无法生成测试 DWG，也无现成样例 .dwg。给我一个样例 .dwg 即可加上并验证。
+- ~~**DWG 显示**（跳过·已记录）：ACadSharp DWG 写入不可靠…~~ **更正（已验证）**：DWG 导入+导出均已接线（`DwgReader`/`DwgWriter`，SceneExportService 按扩展名走 .dwg），且 **DWG 往返测试通过**（写→读回保留 Line/Circle/闭合多段线 + 图层「墙/柱」）——旧"写入不可靠"记录过于悲观，DWG 编解码在本平台可靠。commit 见下。
 - **DWG↔内核实体**：导入几何与内核 AcDb 实体系统对接需内核。
 - **Text/MText 文字 · Hatch 填充**（跳过·已记录）：文字需 Skia 字形渲染子系统、填充需三角面渲染路径，均超出当前线渲染管线；待渲染腿扩到 Skia 文字 / 填充着色后再加。
 - **达梦**：连接层 / `.sql` 脚本翻译 / 端到端（需 DM8 实例）。
@@ -306,3 +306,5 @@
 - [记录] `TaskZoneSplitter`(任务区划分) 依赖 `DumpStripPlanner`(2426 行轨偏移几何)+`UnitRailFile.RailRow` → 非自足, 移植成本高, 暂跳过。
 - [x] **方案综合对比(PlanLib)**：`ProgramComparer.Score`(**移植**原 `PlanLib.BoundaryOptimization.ProgramComparer` 纯算法——方向感知 min-max 归一 + 7 准则加权评分：峰值剥采比/基建剥离/达产年 低优，内排率/服务年限/储量均衡/NPV 高优；权重逐字照搬；推荐=最高分且可行, 全不可行退最高分)。原类吃 `MiningProgramPlan.Result`(需求解链)，此抽纯函数吃 7 项指标向量。命令 方案综合对比/方案比选/PROGRAMCOMPARE：读方案指标 CSV(名称+7指标)→排名+推荐 报表。+4 单测(全优100分/低优方向/单方案50/不可行让位)，263 tests。commit `ed1b521`。**记录**：指标由求解链(块体+排产)回填, 本环境以 CSV 指标替代, 评分核完全一致。
 - [记录] **模块纯算法核扫描（本 tick）**：客观筛「小且仅 System/Linq」类后确认——余下多为 Result/Report DTO（无算法）或耦合大依赖网：`SectionBuilder`→PmbiWriter+Platform.Geometry、`BenchFaceBuilder`→Ep衔接图模型、`CenterlineJunctions`→RoadGraphBuilder、`EquipmentAssigner`(2111行)、`PolylineMetrics`(内部助手非命令)。网格剖面因 OFF 导入拍平为 2D 线框(丢三角/高程)无 3D 网格而不可行。**可干净移植的命令级纯算法核已基本抽尽**(VpBalanceSolver/WorkingFaceLineFitter/DepositAutoDetector/ProgramComparer)。
+- [x] **DWG 导出·已验证**：新增 DWG 往返单测(SceneExport→DwgWriter→DwgReader 读回, 保留 Line/Circle/闭合多段线+图层)——坐实 ACadSharp DWG 编解码在本平台可靠, 修正旧"写入不可靠"记录。DWG 导入+导出至此均已验证。+1 单测，264 tests。commit `pending8`。
+- [记录·受阻] **KDF(WeCAD) 导入/导出**：原 `KdfReader`(811行)/`KdfWriter`(417行) 是自足二进制编解码器(magic `wecad_bin_version_2021`, 逆向自单一样例), 依赖 System+CSMath(本项目 ACadSharp 已带), GBK 用 `CodePagesEncodingProvider` 原码已处理 → **可移植**。但**验证受阻**：无真 .kdf 样例, 逐字转写逆向格式仅靠 writer↔reader 往返对称是弱验证(原作者亦标 WeCAD 兼容"未验证")。给一个样例 .kdf 即可移植并按真实字节验证。原 .las/.blk/.osgb/.3dm/.3ds 同理需样例/大依赖。

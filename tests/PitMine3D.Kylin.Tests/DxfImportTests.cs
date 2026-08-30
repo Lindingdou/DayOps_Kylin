@@ -293,6 +293,31 @@ public class DxfImportTests
     }
 
     [Fact]
+    public void SceneExport_roundtrip_dwg_preserves_types_and_layers()
+    {
+        var s = new Scene();
+        s.Add(new LineEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 0, LayerName = "墙" });
+        s.Add(new CircleEntity { Cx = 5, Cy = 5, Radius = 3, LayerName = "柱" });
+        var pl = new PolylineEntity { Closed = true };
+        pl.Points.Add((0, 0)); pl.Points.Add((4, 0)); pl.Points.Add((4, 4));
+        s.Add(pl);
+
+        string path = Path.Combine(Path.GetTempPath(), "pm_scene_export.dwg");
+        int written = SceneExportService.Export(s, path);        // 走 DwgWriter
+        Assert.Equal(3, written);
+
+        var er = DxfImportService.LoadEntities(path);            // 走 DwgReader 读回
+        Assert.True(er.Success, er.Error);
+        Assert.Contains(er.Entities, e => e is LineEntity);
+        Assert.Contains(er.Entities, e => e is CircleEntity);
+        Assert.Contains(er.Entities, e => e is PolylineEntity);
+        Assert.Contains("墙", er.LayerOrder);
+        Assert.Contains("柱", er.LayerOrder);
+
+        try { File.Delete(path); } catch { /* 清理失败无碍 */ }
+    }
+
+    [Fact]
     public void Text_roundtrips_through_dxf()
     {
         var s = new Scene();
