@@ -249,8 +249,8 @@ public partial class MainWindow : Window
                 var wp = PickWorld();
                 if (wp != null)
                 {
-                    if (_pathP1 == null) { _pathP1 = (wp.Value.x, wp.Value.y); StatusMsg.Text = "点对点寻径：点终点"; }
-                    else { ComputePath(_pathP1.Value, (wp.Value.x, wp.Value.y)); _pathActive = false; _pathP1 = null; }
+                    if (_pathP1 == null) { _pathP1 = (wp.Value.x, wp.Value.y); StatusMsg.Text = _kpathMode ? "备选路径：点终点" : "点对点寻径：点终点"; }
+                    else { if (_kpathMode) ComputeKPaths(_pathP1.Value, (wp.Value.x, wp.Value.y)); else ComputePath(_pathP1.Value, (wp.Value.x, wp.Value.y)); _pathActive = false; _pathP1 = null; _kpathMode = false; }
                 }
                 return;
             }
@@ -531,7 +531,7 @@ public partial class MainWindow : Window
                 _trimActive = false;
                 _breakActive = false; _breakPts.Clear();
                 _slideActive = false; _slideDragging = false; _slidePts.Clear();
-                _pathActive = false; _pathP1 = null;
+                _pathActive = false; _pathP1 = null; _kpathMode = false;
                 _benchActive = false; _benchEntity = null;
                 _spotActive = false;
                 _textActive = false;
@@ -602,6 +602,7 @@ public partial class MainWindow : Window
     private bool _gripsOn = true;                    // 夹点显示开关(GIZMO)
     private bool _pathActive;                       // 点对点寻径：等待取两点
     private (double x, double y)? _pathP1;
+    private bool _kpathMode;                         // 备选路径(K 最短路)模式(复用 _pathActive 取两点)
     private bool _benchActive;                      // 分帮扩帮：等待点方向/步距
     private SceneEntity? _benchEntity;
     private int _benchCount = 5;
@@ -646,6 +647,7 @@ public partial class MainWindow : Window
             if (cmd == "圈范围算量") { await BoundaryVolumeAsync(); return; }
             if (cmd == "提取道路中心线" || cmd == "道路中线" || cmd == "提取道路中线") { ExtractCenterline(); return; }
             if (cmd == "点对点寻径" || cmd == "寻径" || cmd == "点对点寻路") { StartPathfind(); return; }
+            if (cmd == "备选路径" || cmd == "K最短路" || cmd == "备用路径") { StartKPathfind(); return; }
             if (cmd == "排土条带" || cmd == "条带填充" || cmd == "排土条带划分") { DumpStrips(); return; }
             if (cmd == "分帮扩帮" || cmd == "批量台阶扩帮" || cmd == "批量扩坑") { StartBench(); return; }
             if (cmd == "组合工作线" || cmd == "合并多段线" || cmd == "连接台阶线" || cmd == "连接多段线") { JoinPolylines(); return; }
@@ -2362,6 +2364,46 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"寻径完成：{path.Count} 节点 · 路径长度 {dist:0.##}";
     }
 
+    // 备选路径：K 最短路(Yen)。复用点对点两点取点, 计算并高亮 K 条不同路径
+    private void StartKPathfind()
+    {
+        _pathActive = true; _kpathMode = true; _pathP1 = null;
+        _tool = null; _measure = null; _editMode = EditMode.None;
+        _offsetActive = false; _trimActive = false; _breakActive = false;
+        StatusMsg.Text = "备选路径(K最短路)：点起点（路网 = 场景中的多段线）";
+    }
+
+    private void ComputeKPaths((double x, double y) a, (double x, double y) b)
+    {
+        var polys = new List<System.Collections.Generic.IReadOnlyList<(double x, double y)>>();
+        foreach (var e in _scene.Entities)
+            if (e is PolylineEntity pl && pl.Points.Count >= 2) polys.Add(pl.Points);
+        if (polys.Count == 0) { StatusMsg.Text = "备选路径：场景无路（多段线）"; return; }
+        double tol = System.Math.Max(1e-6, SnapTolWorld(_lastPointer) * 0.5);
+        var (nodes, adj) = RoadNetwork.Build(polys, tol);
+        int s = RoadNetwork.NearestNode(nodes, a.x, a.y);
+        int g = RoadNetwork.NearestNode(nodes, b.x, b.y);
+        const int K = 3;
+        var paths = RoadNetwork.KShortestPaths(adj, s, g, K);
+        if (paths.Count == 0) { StatusMsg.Text = "备选路径：两点在路网上不连通"; return; }
+        // 主路青、备选橙/黄, 依次高亮
+        var colors = new (float r, float g, float b)[] { (0.30f, 0.95f, 0.95f), (0.95f, 0.55f, 0.20f), (0.95f, 0.85f, 0.30f) };
+        BeginChange();
+        var lens = new List<double>();
+        for (int i = 0; i < paths.Count; i++)
+        {
+            var col = colors[i % colors.Length];
+            var route = new PolylineEntity { Cr = col.r, Cg = col.g, Cb = col.b };
+            foreach (var idx in paths[i]) route.Points.Add(nodes[idx]);
+            _scene.Add(route);
+            lens.Add(RoadNetwork.PathLength(nodes, paths[i]));
+        }
+        RefreshScene();
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < lens.Count; i++) { if (i > 0) sb.Append(" · "); sb.Append($"#{i + 1} {lens[i]:0.#}"); }
+        StatusMsg.Text = $"备选路径：{paths.Count} 条(里程升序) {sb}";
+    }
+
     // 圈范围算量：选中的闭合多段线作边界 → TIN → 边界内三角体积
     private async Task BoundaryVolumeAsync()
     {
@@ -3748,6 +3790,10 @@ public partial class MainWindow : Window
                 break;
             case "PATH":
                 StartPathfind();
+                break;
+            case "KPATH":
+            case "ALTPATH":
+                StartKPathfind();
                 break;
             case "STRIPS":
                 DumpStrips();

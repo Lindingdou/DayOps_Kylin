@@ -83,6 +83,115 @@ public static class RoadNetwork
         return dist;
     }
 
+    /// <summary>邻接中 u→v 的边权(无则 +∞)。</summary>
+    private static double EdgeWeight(List<List<(int to, double w)>> adj, int u, int v)
+    {
+        if (u < 0 || u >= adj.Count) return double.PositiveInfinity;
+        double best = double.PositiveInfinity;
+        foreach (var (t, w) in adj[u]) if (t == v && w < best) best = w;
+        return best;
+    }
+
+    /// <summary>路径(节点索引序列)的边权总和。</summary>
+    public static double PathWeight(List<List<(int to, double w)>> adj, List<int> path)
+    {
+        double d = 0;
+        for (int i = 1; i < path.Count; i++) d += EdgeWeight(adj, path[i - 1], path[i]);
+        return d;
+    }
+
+    /// <summary>带排除集的 Dijkstra 最短路(供 Yen K 短路)：排除给定节点与无向边。不可达返回空。</summary>
+    public static List<int> DijkstraExcluding(List<List<(int to, double w)>> adj, int start, int goal,
+        HashSet<int> exclNodes, HashSet<(int, int)> exclEdges)
+    {
+        int n = adj.Count;
+        var path = new List<int>();
+        if (start < 0 || goal < 0 || start >= n || goal >= n) return path;
+        if (exclNodes.Contains(start)) return path;
+        var dist = new double[n]; var prev = new int[n]; var done = new bool[n];
+        for (int i = 0; i < n; i++) { dist[i] = double.PositiveInfinity; prev[i] = -1; }
+        dist[start] = 0;
+        for (int it = 0; it < n; it++)
+        {
+            int u = -1; double best = double.PositiveInfinity;
+            for (int i = 0; i < n; i++) if (!done[i] && dist[i] < best) { best = dist[i]; u = i; }
+            if (u < 0) break;
+            done[u] = true;
+            if (u == goal) break;
+            foreach (var (v, w) in adj[u])
+            {
+                if (exclNodes.Contains(v)) continue;
+                var key = u < v ? (u, v) : (v, u);
+                if (exclEdges.Contains(key)) continue;
+                if (dist[u] + w < dist[v]) { dist[v] = dist[u] + w; prev[v] = u; }
+            }
+        }
+        if (double.IsPositiveInfinity(dist[goal])) return path;
+        for (int c = goal; c >= 0; c = prev[c]) path.Add(c);
+        path.Reverse();
+        return path;
+    }
+
+    /// <summary>
+    /// Yen K 最短路(备选路径, 按里程升序)：返回 1~K 条不重复简单路径(节点索引序列)。
+    /// 忠实移植原 DijkstraPathSolver.FindKShortest 结构(spur/root 分解、禁同 root 的第 i 条边、禁 root 中间节点)。
+    /// </summary>
+    public static List<List<int>> KShortestPaths(List<List<(int to, double w)>> adj, int start, int goal, int k)
+    {
+        var A = new List<List<int>>();
+        var noNodes = new HashSet<int>(); var noEdges = new HashSet<(int, int)>();
+        var first = DijkstraExcluding(adj, start, goal, noNodes, noEdges);
+        if (first.Count < 2) return A;
+        A.Add(first);
+        if (k <= 1) return A;
+
+        var seen = new HashSet<string> { Sig(first) };
+        var B = new List<List<int>>();
+        for (int kk = 1; kk < k; kk++)
+        {
+            var prev = A[kk - 1];
+            for (int i = 0; i < prev.Count - 1; i++)
+            {
+                int spur = prev[i];
+                var rootNodes = prev.GetRange(0, i + 1);
+                var exclEdges = new HashSet<(int, int)>();
+                foreach (var p in A)
+                    if (SameRoot(p, rootNodes, i) && i + 1 < p.Count)
+                    {
+                        int u = p[i], v = p[i + 1];
+                        exclEdges.Add(u < v ? (u, v) : (v, u));
+                    }
+                var exclNodes = new HashSet<int>();
+                for (int j = 0; j < i; j++) exclNodes.Add(rootNodes[j]);   // 禁 root 中间节点(除 spur)
+
+                var spurPath = DijkstraExcluding(adj, spur, goal, exclNodes, exclEdges);
+                if (spurPath.Count < 2) continue;
+
+                var cand = new List<int>(rootNodes);
+                cand.AddRange(spurPath.GetRange(1, spurPath.Count - 1));   // 拼接(去 spur 重复)
+                string sig = Sig(cand);
+                if (seen.Contains(sig)) continue;
+                if (B.Exists(b => Sig(b) == sig)) continue;
+                B.Add(cand);
+            }
+            if (B.Count == 0) break;
+            B.Sort((a, b) => PathWeight(adj, a).CompareTo(PathWeight(adj, b)));
+            var bestPath = B[0]; B.RemoveAt(0);
+            A.Add(bestPath);
+            seen.Add(Sig(bestPath));
+        }
+        return A;
+    }
+
+    private static string Sig(List<int> path) => string.Join(",", path);
+
+    private static bool SameRoot(List<int> path, List<int> root, int i)
+    {
+        if (path.Count <= i) return false;
+        for (int j = 0; j <= i; j++) if (path[j] != root[j]) return false;
+        return true;
+    }
+
     /// <summary>路径(节点索引序列)的总长度。</summary>
     public static double PathLength(List<(double x, double y)> nodes, List<int> path)
     {
