@@ -878,9 +878,12 @@ public partial class MainWindow : Window
         var cols = BoreholeRender.BuildColumns(r.Boreholes, scale, width);
         BeginChange();
         foreach (var e in cols) _scene.Add(e);   // 保留岩性色，不覆盖图层色
+        double lblH = System.Math.Max((r.Bounds[2] - r.Bounds[0]) / 50.0, width);
+        foreach (var h in r.Boreholes)           // 孔号标注(孔口上方)
+            _scene.Add(new TextEntity { X = h.X, Y = h.Y + lblH * 0.4, Height = lblH, Text = h.Name, Cr = 0.95f, Cg = 0.95f, Cb = 0.4f });
         RefreshScene();
         Viewport.FitBounds(new[] { r.Bounds[0], r.Bounds[1] - maxDepth * scale, r.Bounds[2] + width, r.Bounds[3] });
-        StatusMsg.Text = $"已展绘 {r.Boreholes.Count} 个钻孔 · {cols.Count} 图元（柱状图，岩性配色）";
+        StatusMsg.Text = $"已展绘 {r.Boreholes.Count} 个钻孔 · 柱状图+孔号标注（岩性配色）";
     }
 
     // 等高线：高程点 CSV(x,y,z) → IDW 网格 → 多层 Marching Squares → 彩色等值折线
