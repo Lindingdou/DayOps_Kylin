@@ -680,6 +680,9 @@ public partial class MainWindow : Window
             if (cmd == "网格焊接" || cmd == "合并顶点" || cmd == "顶点焊接") { await MeshWeldAsync(); return; }
             if (cmd == "合并三角网" || cmd == "网格合并" || cmd == "合并网格") { await MeshMergeAsync(); return; }
             if (cmd == "固化成体" || cmd == "固化实体") { await SolidifyAsync(); return; }
+            if (cmd == "立方体" || cmd == "长方体") { await BoxPrimitiveAsync(); return; }
+            if (cmd == "球体" || cmd == "球") { await SpherePrimitiveAsync(); return; }
+            if (cmd == "圆柱" || cmd == "圆柱体") { await CylinderPrimitiveAsync(); return; }
             if (cmd == "网格边界" || cmd == "边界环提取" || cmd == "提取边界") { await MeshBoundaryAsync(); return; }
             if (cmd == "SOR去噪" || cmd == "统计去噪" || cmd == "SOR") { await DenoiseAsync(false); return; }
             if (cmd == "ROR去噪" || cmd == "半径去噪" || cmd == "ROR") { await DenoiseAsync(true); return; }
@@ -1215,6 +1218,32 @@ public partial class MainWindow : Window
         catch (System.Exception ex) { StatusMsg.Text = $"固化成体：写出失败 {ex.Message}"; return; }
         StatusMsg.Text = $"固化成体：{paths.Count} 网焊成 {w.OutputTris} 三角 · {(watertight ? "水密(闭合实体)" : $"非水密(开放边 {d.BoundaryEdges}·非流形 {d.NonManifoldEdges})")} → {System.IO.Path.GetFileName(outPath)}";
     }
+
+    // 基本几何体：生成拓扑闭合三角网 → 保存 OFF + 度量报表
+    private async Task SavePrimitiveAsync(string name, List<(double x, double y, double z)> verts, List<(int a, int b, int c)> tris)
+    {
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = $"保存{name}", DefaultExtension = "off", SuggestedFileName = $"{name}.off",
+            FileTypeChoices = new[] { new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } } }
+        });
+        if (file == null) return;
+        try { System.IO.File.WriteAllText(file.Path.LocalPath, MeshWeld.ToOff(verts, tris)); }
+        catch (System.Exception ex) { StatusMsg.Text = $"{name}：写出失败 {ex.Message}"; return; }
+        var m = MeshMetrics.Compute(verts, tris);
+        var d = MeshDiagnose.Analyze(verts, tris);
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        StatusMsg.Text = $"{name}：{m.VertexCount} 顶点 · {m.TriangleCount} 三角 · 体积 {m.Volume.ToString("0.##", inv)} · {(d.IsClosed ? "闭合" : "非闭合")} → {System.IO.Path.GetFileName(file.Path.LocalPath)}";
+    }
+
+    private async Task BoxPrimitiveAsync()
+    { var (v, t) = PrimitiveBodies.Box(0, 0, 0, 10, 10, 10); await SavePrimitiveAsync("立方体", v, t); }
+
+    private async Task SpherePrimitiveAsync()
+    { var (v, t) = PrimitiveBodies.Sphere(0, 0, 0, 5, 16, 24); await SavePrimitiveAsync("球体", v, t); }
+
+    private async Task CylinderPrimitiveAsync()
+    { var (v, t) = PrimitiveBodies.Cylinder(0, 0, 0, 5, 10, 24); await SavePrimitiveAsync("圆柱", v, t); }
 
     // 网格焊接：OFF 网格 → 按容差合并重合顶点 → 落 .welded.off + 报表
     private async Task MeshWeldAsync()
@@ -4240,6 +4269,15 @@ public partial class MainWindow : Window
                 break;
             case "SOLIDIFY":
                 _ = SolidifyAsync();
+                break;
+            case "BOX":
+                _ = BoxPrimitiveAsync();
+                break;
+            case "SPHERE":
+                _ = SpherePrimitiveAsync();
+                break;
+            case "CYLINDER":
+                _ = CylinderPrimitiveAsync();
                 break;
             case "MESHBOUNDARY":
             case "MESHBOUND":
