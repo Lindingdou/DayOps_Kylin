@@ -492,6 +492,7 @@ public partial class MainWindow : Window
             if (cmd == "创建三角网" || cmd == "三角网") { await CreateTinAsync(); return; }
             if (cmd == "坡度着色") { await ShadeTinAsync("坡度着色", "绿=平 → 红=陡", TerrainAnalysis.BuildSlopeMap); return; }
             if (cmd == "坡向着色") { await ShadeTinAsync("坡向着色", "按朝向 HSV 配色", TerrainAnalysis.BuildAspectMap); return; }
+            if (cmd == "高程着色" || cmd == "分色显示" || cmd == "高程分带") { await ShadeTinAsync("高程着色", "低绿→中黄→高棕", TerrainAnalysis.BuildElevationMap); return; }
             if (cmd == "体积计算" || cmd == "算量" || cmd == "土方量") { await VolumeAsync(); return; }
             if (cmd == "两期点云算量" || cmd == "两期算量" || cmd == "两期土方") { await TwoEpochVolumeAsync(); return; }
             if (cmd == "圈范围算量") { await BoundaryVolumeAsync(); return; }
@@ -1850,6 +1851,9 @@ public partial class MainWindow : Window
                 break;
             case "ASPECT":
                 _ = ShadeTinAsync("坡向着色", "按朝向 HSV 配色", TerrainAnalysis.BuildAspectMap);
+                break;
+            case "ELEV":
+                _ = ShadeTinAsync("高程着色", "低绿→中黄→高棕", TerrainAnalysis.BuildElevationMap);
                 break;
             case "VOLUME":
                 _ = VolumeAsync();

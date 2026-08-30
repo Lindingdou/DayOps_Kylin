@@ -65,6 +65,30 @@ public static class TerrainAnalysis
         IReadOnlyList<(double x, double y, double z)> pts, List<(int a, int b, int c)> tris)
         => BuildShaded(pts, tris, (A, B, C) => SlopeColor(SlopeDegrees(A, B, C)));
 
+    /// <summary>高程 → 分带色（低=绿 中=黄 高=棕，hypsometric）。range 为 zmax−zmin。</summary>
+    public static (float r, float g, float b) ElevationColor(double z, double zmin, double range)
+    {
+        double t = Math.Clamp((z - zmin) / (range < 1e-9 ? 1 : range), 0, 1);
+        (float r, float g, float b) lo = (0.25f, 0.55f, 0.35f), mid = (0.90f, 0.85f, 0.40f), hi = (0.60f, 0.42f, 0.32f);
+        if (t < 0.5)
+        {
+            float u = (float)(t * 2);
+            return (lo.r + (mid.r - lo.r) * u, lo.g + (mid.g - lo.g) * u, lo.b + (mid.b - lo.b) * u);
+        }
+        float w = (float)((t - 0.5) * 2);
+        return (mid.r + (hi.r - mid.r) * w, mid.g + (hi.g - mid.g) * w, mid.b + (hi.b - mid.b) * w);
+    }
+
+    /// <summary>三角网 → 按平均高程分带着色的三角边线。</summary>
+    public static List<SceneEntity> BuildElevationMap(
+        IReadOnlyList<(double x, double y, double z)> pts, List<(int a, int b, int c)> tris)
+    {
+        double zmin = double.MaxValue, zmax = double.MinValue;
+        foreach (var p in pts) { if (p.z < zmin) zmin = p.z; if (p.z > zmax) zmax = p.z; }
+        double range = zmax - zmin;
+        return BuildShaded(pts, tris, (A, B, C) => ElevationColor((A.z + B.z + C.z) / 3, zmin, range));
+    }
+
     /// <summary>三角网 → 按坡向着色的三角边线。</summary>
     public static List<SceneEntity> BuildAspectMap(
         IReadOnlyList<(double x, double y, double z)> pts, List<(int a, int b, int c)> tris)

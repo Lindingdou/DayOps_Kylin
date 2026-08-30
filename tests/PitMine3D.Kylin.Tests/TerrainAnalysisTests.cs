@@ -99,6 +99,15 @@ public class TerrainAnalysisTests
     }
 
     [Fact]
+    public void ElevationColor_low_green_high_brown()
+    {
+        var low = TerrainAnalysis.ElevationColor(0, 0, 100);     // 最低
+        var high = TerrainAnalysis.ElevationColor(100, 0, 100);  // 最高
+        Assert.True(low.g > low.r);      // 低=绿主导
+        Assert.True(high.r > high.g);    // 高=棕(红主导)
+    }
+
+    [Fact]
     public void PointInPolygon_square()
     {
         var poly = new List<(double x, double y)> { (0, 0), (4, 0), (4, 4), (0, 4) };
