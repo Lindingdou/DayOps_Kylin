@@ -687,7 +687,7 @@ public partial class MainWindow : Window
             if (cmd == "连续标注" || cmd == "连续") { StartDimContinue(); return; }
             if (cmd == "裁剪" || cmd == "多边形裁剪" || cmd == "区运算" || cmd == "范围裁剪") { ClipPolygon(); return; }
             if (cmd == "平滑" || cmd == "光滑" || cmd == "曲线平滑" || cmd == "光滑曲线") { SmoothPolyline(); return; }
-            if (cmd == "简化" || cmd == "多段线简化" || cmd == "抽稀线") { SimplifyPolyline(); return; }
+            if (cmd == "简化" || cmd == "多段线简化" || cmd == "抽稀线" || cmd == "抽稀等值线") { SimplifyPolyline(); return; }
             if (cmd == "圈选" || cmd == "窗口圈选") { PolygonSelect(false); return; }
             if (cmd == "交叉圈选") { PolygonSelect(true); return; }
             if (cmd == "坐标转换") { await CoordTransformAsync(); return; }
@@ -705,6 +705,7 @@ public partial class MainWindow : Window
             if (cmd == "最后") { SelectLast(); return; }
             if (cmd == "上次") { SelectPrevious(); return; }
             if (cmd == "分解") { ExplodeSelected(); return; }
+            if (cmd == "加密多段线" || cmd == "加密") { DensifySelectedPolylines(); return; }
             if (cmd == "新建图层") { var l = _layers.New(); PopulateDrawingLayers(); StatusMsg.Text = $"新建图层「{l.Name}」并置为当前"; return; }
             if (cmd == "图层特性管理器") { var l = _layers.CycleCurrent(); StatusMsg.Text = $"当前图层「{l.Name}」 显示{( l.Shown?"开":"关")}/{(l.Locked?"锁":"解锁")}（再点循环切换）"; return; }
             if (cmd == "冻结") { FreezeCurrentLayer(true); return; }
@@ -2891,6 +2892,39 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"已分解为 {newSel.Count} 段";
     }
 
+    // 各点表的包围盒对角(供自动取参用)
+    private static double PolyDiag(IReadOnlyList<(double x, double y)> pts)
+    {
+        if (pts == null || pts.Count == 0) return 0;
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        foreach (var (x, y) in pts) { if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y; }
+        double dx = maxX - minX, dy = maxY - minY;
+        return System.Math.Sqrt(dx * dx + dy * dy);
+    }
+
+    // 加密多段线：逐段按最大步长匀分插点(步长=各自包围盒对角/50, 自动取)
+    private void DensifySelectedPolylines()
+    {
+        var polys = new List<PolylineEntity>();
+        foreach (var e in _selected) if (e is PolylineEntity p) polys.Add(p);
+        if (polys.Count == 0) { StatusMsg.Text = "加密多段线：请先选中多段线"; return; }
+        BeginChange();
+        int ov = 0, fv = 0; var newSel = new List<SceneEntity>();
+        foreach (var p in polys)
+        {
+            double diag = PolyDiag(p.Points);
+            double step = diag > 0 ? diag / 50.0 : 1.0;
+            var densified = PolylineEdit.Densify(p.Points, p.Closed, step);
+            var np = new PolylineEntity { Closed = p.Closed, Cr = p.Cr, Cg = p.Cg, Cb = p.Cb, LayerName = p.LayerName };
+            np.Points.AddRange(densified);
+            ov += p.Points.Count; fv += densified.Count;
+            _scene.Remove(p); _scene.Add(np); newSel.Add(np);
+        }
+        _selected.Clear(); _selected.AddRange(newSel);
+        HighlightSelection(); RefreshScene();
+        StatusMsg.Text = $"加密多段线：{polys.Count} 条 · 顶点 {ov}→{fv}(插入 {fv - ov})";
+    }
+
     // 进入编辑（移动/复制/镜像）：需已有选择
     private void StartEdit(EditMode mode, string name)
     {
@@ -3511,6 +3545,10 @@ public partial class MainWindow : Window
             case "EXPLODE":
             case "X":
                 ExplodeSelected();
+                break;
+            case "DENSIFY":
+            case "POLYDENSIFY":
+                DensifySelectedPolylines();
                 break;
             case "MOVE":
             case "M":
