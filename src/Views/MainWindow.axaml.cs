@@ -95,7 +95,13 @@ public partial class MainWindow : Window
                         if (np != null) { BeginChange(); _scene.Replace(ptarget, np); StatusMsg.Text = "已修剪/延伸多段线端"; }
                         else StatusMsg.Text = "与边界无交点，无法修剪/延伸";
                     }
-                    else StatusMsg.Text = "未点中目标（目标须为直线或多段线；圆弧目标待做）";
+                    else if (hit is ArcEntity atarget && !ReferenceEquals(atarget, boundary))
+                    {
+                        var na = TrimTools.TrimExtendArc(atarget, boundary, wp.Value.x, wp.Value.y);
+                        if (na != null) { BeginChange(); _scene.Replace(atarget, na); StatusMsg.Text = "已修剪/延伸圆弧端"; }
+                        else StatusMsg.Text = "与边界无交点，无法修剪/延伸";
+                    }
+                    else StatusMsg.Text = "未点中目标（目标须为直线/多段线/圆弧）";
                     RefreshScene();
                 }
                 _trimActive = false;

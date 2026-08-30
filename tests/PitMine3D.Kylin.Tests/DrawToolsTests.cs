@@ -623,6 +623,18 @@ public class DrawToolsTests
     }
 
     [Fact]
+    public void TrimTools_trims_arc_end_to_boundary()
+    {
+        double s = System.Math.Cos(System.Math.PI / 4);
+        var arc = new ArcEntity { X1 = 1, Y1 = 0, X2 = s, Y2 = s, X3 = 0, Y3 = 1 };   // 上象限单位弧
+        var boundary = new LineEntity { X0 = -2, Y0 = 0.5, X1 = 2, Y1 = 0.5 };         // 水平线 y=0.5
+        var r = TrimTools.TrimExtendArc(arc, boundary, 1, 0)!;                          // 点击近起点
+        Assert.Equal(0.866, r.X1, 2); Assert.Equal(0.5, r.Y1, 2);                       // 起点移到 (0.866,0.5)
+        Assert.Equal(1, r.X1 * r.X1 + r.Y1 * r.Y1, 2);                                  // 仍在单位圆
+        Assert.Equal(0, r.X3, 4); Assert.Equal(1, r.Y3, 4);                             // 端点不动
+    }
+
+    [Fact]
     public void Scene_recolor_layer_updates_only_that_layer()
     {
         var s = new Scene();
