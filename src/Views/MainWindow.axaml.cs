@@ -136,6 +136,21 @@ public partial class MainWindow : Window
                 return;
             }
 
+            // 高程查询：点击任意点 → IDW 报高程 + 标记（连续，ESC 退出）
+            if (_spotActive && props.IsLeftButtonPressed && _spotTerrain != null)
+            {
+                _nav = NavMode.None;
+                var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                if (wp != null)
+                {
+                    double z = Contour.IdwAt(_spotTerrain, wp.Value.x, wp.Value.y);
+                    var mk = new PointEntity { X = wp.Value.x, Y = wp.Value.y, Size = SnapTolWorld(_lastPointer), Cr = 0.95f, Cg = 0.85f, Cb = 0.30f };
+                    BeginChange(); _scene.Add(mk); RefreshScene();
+                    StatusMsg.Text = $"高程查询：({wp.Value.x:0.##}, {wp.Value.y:0.##}) → z = {z:0.###}（继续点，ESC 退出）";
+                }
+                return;
+            }
+
             // 分帮扩帮：点方向/步距 → 批量偏移台阶线
             if (_benchActive && props.IsLeftButtonPressed)
             {
@@ -445,6 +460,7 @@ public partial class MainWindow : Window
                 _slideActive = false; _slideDragging = false; _slidePts.Clear();
                 _pathActive = false; _pathP1 = null;
                 _benchActive = false; _benchEntity = null;
+                _spotActive = false;
                 _gripIndex = -1;
                 _selBoxActive = false;
                 _ttrActive = false; _ttrAwaitRadius = false; _ttrRef1 = null; _ttrRef2 = null;
@@ -509,6 +525,8 @@ public partial class MainWindow : Window
     private SceneEntity? _benchEntity;
     private int _benchCount = 5;
     private System.Collections.Generic.List<BlockModel.Block>? _lastBlocks;   // 最近导入的块体(资源量用)
+    private bool _spotActive;                       // 高程查询：点击报高程
+    private System.Collections.Generic.List<(double x, double y, double z)>? _spotTerrain;
     private bool _selBoxActive;                     // 窗口框选拖拽中
     private Avalonia.Point _selBoxStart;            // 框选起点(屏幕)
     private bool _ttrActive, _ttrAwaitRadius;       // 圆 TTR：选两相切参照(线/圆) → 输半径
@@ -555,6 +573,7 @@ public partial class MainWindow : Window
             if (cmd == "曲率" || cmd == "地表曲率") { await CurvatureAsync(); return; }
             if (cmd == "面积" || cmd == "面积测量" || cmd == "周长") { MeasureArea(); return; }
             if (cmd == "等效运距" || cmd == "运输指标" || cmd == "驱动距离") { await HaulMetricsAsync(); return; }
+            if (cmd == "高程查询" || cmd == "虚拟钻孔" || cmd == "查询高程") { await StartSpotQueryAsync(); return; }
             if (cmd == "坐标转换") { await CoordTransformAsync(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
@@ -1135,6 +1154,24 @@ public partial class MainWindow : Window
         }
         if (ok == 0) { StatusMsg.Text = "等效运距：无可达任务（检查路网/任务坐标）"; return; }
         StatusMsg.Text = $"等效运距：{ok} 任务 · 吨公里 {totalTonDist:0.#} · 等效运距 {totalTonDist / totalTon:0.###}（跳过 {skip} 不可达）";
+    }
+
+    // 高程查询：载入地形高程点，进入点击查询模式
+    private async Task StartSpotQueryAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "高程查询：选地形高程点 CSV (x,y,z)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("高程点 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success) { StatusMsg.Text = $"高程查询：导入失败 {r.Error}"; return; }
+        _spotTerrain = r.Points; _spotActive = true;
+        _tool = null; _measure = null; _editMode = EditMode.None;
+        Viewport.FitBounds(r.Bounds);
+        StatusMsg.Text = $"高程查询：已载入 {r.Points.Count} 点，点击视口任意位置查询高程（ESC 退出）";
     }
 
     // 面积/周长：对选中的多段线(闭合优先)算面积+周长，报状态栏
@@ -2378,6 +2415,9 @@ public partial class MainWindow : Window
                 break;
             case "HAUL":
                 _ = HaulMetricsAsync();
+                break;
+            case "SPOT":
+                _ = StartSpotQueryAsync();
                 break;
             case "ESTIMATE":
                 _ = EstimateGradeAsync();

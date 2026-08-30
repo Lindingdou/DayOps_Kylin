@@ -88,6 +88,20 @@ public static class Contour
         return GridInto(pts, nx, ny, x0, y0, dx, dy);
     }
 
+    /// <summary>单点 IDW(1/d²) 插值高程；无点返回 0，落在点上返回该点 z。</summary>
+    public static double IdwAt(IReadOnlyList<(double x, double y, double z)> pts, double px, double py)
+    {
+        double num = 0, den = 0;
+        foreach (var p in pts)
+        {
+            double d2 = (px - p.x) * (px - p.x) + (py - p.y) * (py - p.y);
+            if (d2 < 1e-9) return p.z;
+            double w = 1.0 / d2;
+            num += w * p.z; den += w;
+        }
+        return den > 0 ? num / den : 0;
+    }
+
     /// <summary>把散点 IDW 插值到指定原点/步距的网格（供两期差值等用同一网格）。</summary>
     public static double[,] GridInto(
         IReadOnlyList<(double x, double y, double z)> pts, int nx, int ny, double x0, double y0, double dx, double dy)

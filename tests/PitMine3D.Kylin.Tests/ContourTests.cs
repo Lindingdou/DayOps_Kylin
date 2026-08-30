@@ -47,6 +47,15 @@ public class ContourTests
     }
 
     [Fact]
+    public void IdwAt_returns_exact_on_point_and_blends_between()
+    {
+        var pts = new System.Collections.Generic.List<(double x, double y, double z)> { (0, 0, 10), (10, 0, 20) };
+        Assert.Equal(10, Contour.IdwAt(pts, 0, 0), 4);        // 落在点上 → 精确
+        double mid = Contour.IdwAt(pts, 5, 0);
+        Assert.Equal(15, mid, 4);                              // 中点等权 → 15
+    }
+
+    [Fact]
     public void GridFromPoints_reproduces_samples_at_corner_nodes()
     {
         // 2x2 网格节点恰为 4 个采样点 → IDW 在点上返回精确 z
