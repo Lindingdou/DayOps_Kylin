@@ -261,3 +261,7 @@
 ### BlockModelLib 块体模型（托管切片）
 - [x] **块体模型 CSV 导入**：`BlockModel`(x,y,z,尺寸,品位 → 品位配色方块平面显示 + min/max/mean 统计)。命令 块体模型/导入块体/BLOCKMODEL。+4 单测，182 tests。commit `1178318`。
 - [记录] 原版 **.pmb 私有二进制**(PMBM1)读取 → 需格式规范/样本(可参照 PitMine3D/Modules/BlockModelLib/Format 移植, 但需样本验证)。体素 3D 渲染 → 需内核。
+
+### PlanLib 规划（托管切片）
+- [x] **资源量估算/剥采比**：`BlockModel.Resource`(按 cutoff 分矿废→矿量/剥采比/平均品位/金属量/吨位)。命令 资源量估算/剥采比/RESOURCE。+1 单测，183 tests。commit `87dc06f`。
+- [记录] 排产/接续/进度计划 → 结果为甘特/报表, 需表格 UI(部分算法可托管); 克里金估值 → 可托管做, 较大。
