@@ -106,6 +106,22 @@ public static class MeshWeld
         return result;
     }
 
+    /// <summary>把多份 (verts, tris) 拼接为一份(三角索引按各网顶点数偏移)。跨网焊接前的合并步。</summary>
+    public static (List<(double x, double y, double z)> verts, List<(int a, int b, int c)> tris) Concat(
+        IReadOnlyList<(IReadOnlyList<(double x, double y, double z)> verts, IReadOnlyList<(int a, int b, int c)> tris)> meshes)
+    {
+        var verts = new List<(double x, double y, double z)>();
+        var tris = new List<(int a, int b, int c)>();
+        if (meshes == null) return (verts, tris);
+        foreach (var (v, t) in meshes)
+        {
+            int off = verts.Count;
+            if (v != null) verts.AddRange(v);
+            if (t != null) foreach (var (a, b, c) in t) tris.Add((a + off, b + off, c + off));
+        }
+        return (verts, tris);
+    }
+
     /// <summary>把 (verts, tris) 序列化为 OFF 文本（供焊接结果落盘）。</summary>
     public static string ToOff(IReadOnlyList<(double x, double y, double z)> verts, IReadOnlyList<(int a, int b, int c)> tris)
     {

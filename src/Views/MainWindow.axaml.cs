@@ -678,6 +678,8 @@ public partial class MainWindow : Window
             if (cmd == "网格度量" || cmd == "网格面积体积" || cmd == "网格体积") { await MeshMetricsAsync(); return; }
             if (cmd == "网格诊断" || cmd == "网格检查" || cmd == "网格拓扑") { await MeshDiagnoseAsync(); return; }
             if (cmd == "网格焊接" || cmd == "合并顶点" || cmd == "顶点焊接") { await MeshWeldAsync(); return; }
+            if (cmd == "合并三角网" || cmd == "网格合并" || cmd == "合并网格") { await MeshMergeAsync(); return; }
+            if (cmd == "固化成体" || cmd == "固化实体") { await SolidifyAsync(); return; }
             if (cmd == "网格边界" || cmd == "边界环提取" || cmd == "提取边界") { await MeshBoundaryAsync(); return; }
             if (cmd == "SOR去噪" || cmd == "统计去噪" || cmd == "SOR") { await DenoiseAsync(false); return; }
             if (cmd == "ROR去噪" || cmd == "半径去噪" || cmd == "ROR") { await DenoiseAsync(true); return; }
@@ -1149,6 +1151,69 @@ public partial class MainWindow : Window
         RefreshScene();
         if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
         StatusMsg.Text = $"网格边界：{loops.Count} 环 · {totPts} 点(投影 XY 作闭合折线入场景)";
+    }
+
+    // 读多份 OFF 并拼接为一份 (verts, tris)(索引偏移)；失败的文件跳过
+    private static (List<(double x, double y, double z)> verts, List<(int a, int b, int c)> tris) ReadConcatOff(IReadOnlyList<string> paths)
+    {
+        var meshes = new List<(IReadOnlyList<(double x, double y, double z)>, IReadOnlyList<(int a, int b, int c)>)>();
+        foreach (var p in paths)
+        {
+            string text;
+            try { text = System.IO.File.ReadAllText(p); } catch { continue; }
+            var (v, t) = MeshMetrics.ParseOff(text);
+            meshes.Add((v, t));
+        }
+        return MeshWeld.Concat(meshes);
+    }
+
+    // 合并三角网：选多份 OFF → 拼接 → 跨网焊接(去重复三角) → 落 .merged.off + 开放/非流形边 报表
+    private async Task MeshMergeAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "合并三角网：选多份 OFF 网格",
+            AllowMultiple = true,
+            FileTypeFilter = new[] { new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } } }
+        });
+        if (files.Count == 0) return;
+        var paths = new List<string>(); foreach (var f in files) paths.Add(f.Path.LocalPath);
+        var (verts, tris) = ReadConcatOff(paths);
+        if (tris.Count == 0) { StatusMsg.Text = "合并三角网：未解析到三角网格"; return; }
+        var m = MeshMetrics.Compute(verts, tris);
+        double diag = System.Math.Sqrt((m.MaxX - m.MinX) * (m.MaxX - m.MinX) + (m.MaxY - m.MinY) * (m.MaxY - m.MinY) + (m.MaxZ - m.MinZ) * (m.MaxZ - m.MinZ));
+        double tol = diag > 0 ? diag * 1e-4 : 1e-6;
+        var w = MeshWeld.Weld(verts, tris, tol, dropDuplicateTris: true);
+        var d = MeshDiagnose.Analyze(w.Verts, w.Tris);
+        string outPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(paths[0]) ?? ".", "merged.off");
+        try { System.IO.File.WriteAllText(outPath, MeshWeld.ToOff(w.Verts, w.Tris)); }
+        catch (System.Exception ex) { StatusMsg.Text = $"合并三角网：写出失败 {ex.Message}"; return; }
+        StatusMsg.Text = $"合并三角网：{paths.Count} 网 · 顶点 {w.InputVerts}→{w.OutputVerts} · 三角 {w.OutputTris}(去重复 {w.DuplicateTris}) · 开放边 {d.BoundaryEdges}·非流形 {d.NonManifoldEdges} → {System.IO.Path.GetFileName(outPath)}";
+    }
+
+    // 固化成体：选多份 OFF(顶/底/侧) → 拼接 → 跨网焊接(保缠绕) → 水密自检 → 落 .solid.off + 报表
+    private async Task SolidifyAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "固化成体：选多份 OFF(顶/底/侧面)",
+            AllowMultiple = true,
+            FileTypeFilter = new[] { new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } } }
+        });
+        if (files.Count == 0) return;
+        var paths = new List<string>(); foreach (var f in files) paths.Add(f.Path.LocalPath);
+        var (verts, tris) = ReadConcatOff(paths);
+        if (tris.Count == 0) { StatusMsg.Text = "固化成体：未解析到三角网格"; return; }
+        var m = MeshMetrics.Compute(verts, tris);
+        double diag = System.Math.Sqrt((m.MaxX - m.MinX) * (m.MaxX - m.MinX) + (m.MaxY - m.MinY) * (m.MaxY - m.MinY) + (m.MaxZ - m.MinZ) * (m.MaxZ - m.MinZ));
+        double tol = diag > 0 ? diag * 1e-4 : 1e-6;
+        var w = MeshWeld.Weld(verts, tris, tol, dropDuplicateTris: false);   // 闭合体上同顶点不同缠绕合法, 不去重复
+        var d = MeshDiagnose.Analyze(w.Verts, w.Tris);
+        bool watertight = d.BoundaryEdges == 0 && d.NonManifoldEdges == 0 && w.OutputTris > 0;
+        string outPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(paths[0]) ?? ".", "solid.off");
+        try { System.IO.File.WriteAllText(outPath, MeshWeld.ToOff(w.Verts, w.Tris)); }
+        catch (System.Exception ex) { StatusMsg.Text = $"固化成体：写出失败 {ex.Message}"; return; }
+        StatusMsg.Text = $"固化成体：{paths.Count} 网焊成 {w.OutputTris} 三角 · {(watertight ? "水密(闭合实体)" : $"非水密(开放边 {d.BoundaryEdges}·非流形 {d.NonManifoldEdges})")} → {System.IO.Path.GetFileName(outPath)}";
     }
 
     // 网格焊接：OFF 网格 → 按容差合并重合顶点 → 落 .welded.off + 报表
@@ -4169,6 +4234,12 @@ public partial class MainWindow : Window
             case "MESHWELD":
             case "WELD":
                 _ = MeshWeldAsync();
+                break;
+            case "MESHMERGE":
+                _ = MeshMergeAsync();
+                break;
+            case "SOLIDIFY":
+                _ = SolidifyAsync();
                 break;
             case "MESHBOUNDARY":
             case "MESHBOUND":
