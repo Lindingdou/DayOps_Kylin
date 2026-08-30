@@ -88,7 +88,13 @@ public partial class MainWindow : Window
                         if (nl != null) { BeginChange(); _scene.Replace(target, nl); StatusMsg.Text = "已修剪/延伸"; }
                         else StatusMsg.Text = "与边界无交点，无法修剪/延伸";
                     }
-                    else StatusMsg.Text = "未点中目标直线（目标须为直线，多段线/圆弧目标待做）";
+                    else if (hit is PolylineEntity ptarget && !ReferenceEquals(ptarget, boundary))
+                    {
+                        var np = TrimTools.TrimExtendPolylineEnd(ptarget, boundary, wp.Value.x, wp.Value.y);
+                        if (np != null) { BeginChange(); _scene.Replace(ptarget, np); StatusMsg.Text = "已修剪/延伸多段线端"; }
+                        else StatusMsg.Text = "与边界无交点，无法修剪/延伸";
+                    }
+                    else StatusMsg.Text = "未点中目标（目标须为直线或多段线；圆弧目标待做）";
                     RefreshScene();
                 }
                 _trimActive = false;

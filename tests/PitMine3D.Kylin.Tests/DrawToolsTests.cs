@@ -569,6 +569,29 @@ public class DrawToolsTests
     }
 
     [Fact]
+    public void TrimTools_extends_polyline_end_to_boundary()
+    {
+        // 多段线 (0,0)-(5,0)，边界竖线 x=8；点击靠近末端 → 末端延伸到 (8,0)
+        var pl = new PolylineEntity();
+        pl.Points.Add((0, 0)); pl.Points.Add((5, 0));
+        var boundary = new LineEntity { X0 = 8, Y0 = -5, X1 = 8, Y1 = 5 };
+        var r = TrimTools.TrimExtendPolylineEnd(pl, boundary, 5, 0)!;
+        Assert.Equal(8, r.Points[^1].x, 4); Assert.Equal(0, r.Points[^1].y, 4);
+        Assert.Equal(0, r.Points[0].x, 4);   // 起点不动
+    }
+
+    [Fact]
+    public void TrimTools_trims_polyline_end_at_boundary()
+    {
+        // 多段线 (0,0)-(10,0)，边界竖线 x=6；点击靠近末端 → 末端缩到 (6,0)
+        var pl = new PolylineEntity();
+        pl.Points.Add((0, 0)); pl.Points.Add((10, 0));
+        var boundary = new LineEntity { X0 = 6, Y0 = -5, X1 = 6, Y1 = 5 };
+        var r = TrimTools.TrimExtendPolylineEnd(pl, boundary, 10, 0)!;
+        Assert.Equal(6, r.Points[^1].x, 4);
+    }
+
+    [Fact]
     public void Scene_recolor_layer_updates_only_that_layer()
     {
         var s = new Scene();
