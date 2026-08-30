@@ -70,6 +70,28 @@ public static class TerrainAnalysis
         IReadOnlyList<(double x, double y, double z)> pts, List<(int a, int b, int c)> tris)
         => BuildShaded(pts, tris, (A, B, C) => AspectColor(AspectDegrees(A, B, C)));
 
+    /// <summary>三角形 XY 投影面积。</summary>
+    public static double XyArea((double x, double y, double z) a, (double x, double y, double z) b, (double x, double y, double z) c)
+        => System.Math.Abs((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)) * 0.5;
+
+    /// <summary>三角柱相对基准面 baseZ 的带符号体积（均高 × XY 面积）。</summary>
+    public static double PrismVolume(
+        (double x, double y, double z) a, (double x, double y, double z) b, (double x, double y, double z) c, double baseZ)
+        => ((a.z - baseZ) + (b.z - baseZ) + (c.z - baseZ)) / 3.0 * XyArea(a, b, c);
+
+    /// <summary>TIN 相对基准面的体积：返回(挖方=基准面上方, 填方=下方(正值), 净值=上−下)。</summary>
+    public static (double above, double below, double net) Volume(
+        IReadOnlyList<(double x, double y, double z)> pts, List<(int a, int b, int c)> tris, double baseZ)
+    {
+        double above = 0, below = 0;
+        foreach (var t in tris)
+        {
+            double v = PrismVolume(pts[t.a], pts[t.b], pts[t.c], baseZ);
+            if (v >= 0) above += v; else below += -v;
+        }
+        return (above, below, above - below);
+    }
+
     private static List<SceneEntity> BuildShaded(
         IReadOnlyList<(double x, double y, double z)> pts, List<(int a, int b, int c)> tris,
         Func<(double x, double y, double z), (double x, double y, double z), (double x, double y, double z), (float r, float g, float b)> color)

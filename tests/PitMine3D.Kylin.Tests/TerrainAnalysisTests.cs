@@ -68,4 +68,33 @@ public class TerrainAnalysisTests
         var blue = TerrainAnalysis.HsvToRgb(240, 1, 1);
         Assert.True(blue.b > 0.9f && blue.g < 0.1f);
     }
+
+    [Fact]
+    public void Flat_surface_volume_equals_height_times_area()
+    {
+        // 单位正方形高 10, 基准 0 → 上方体积 = 10*1 = 10
+        var pts = new List<(double x, double y, double z)>
+        {
+            (0, 0, 10), (1, 0, 10), (1, 1, 10), (0, 1, 10)
+        };
+        var tris = new List<(int a, int b, int c)> { (0, 1, 2), (0, 2, 3) };
+        var (above, below, net) = TerrainAnalysis.Volume(pts, tris, 0);
+        Assert.Equal(10, above, 4);
+        Assert.Equal(0, below, 4);
+        Assert.Equal(10, net, 4);
+    }
+
+    [Fact]
+    public void Below_base_counts_as_fill()
+    {
+        var pts = new List<(double x, double y, double z)>
+        {
+            (0, 0, -2), (1, 0, -2), (1, 1, -2), (0, 1, -2)
+        };
+        var tris = new List<(int a, int b, int c)> { (0, 1, 2), (0, 2, 3) };
+        var (above, below, net) = TerrainAnalysis.Volume(pts, tris, 0);
+        Assert.Equal(0, above, 4);
+        Assert.Equal(2, below, 4);
+        Assert.Equal(-2, net, 4);
+    }
 }
