@@ -94,9 +94,9 @@
 - [x] **视图命令**：`ZE`/`ZOOMEXTENTS` 范围缩放（复用 `FitBounds`）+ `GRID` 网格/轴开关。16 tests 无回归。commit `90161f0`。
 - [x] **INSERT 块引用展开**：块内几何按插入变换（平移/旋转/缩放）递归展开（嵌套上限 8）。+2 单测（变换数学 + 含块 DXF round-trip），18 tests。commit `acb2090`。
 - [x] **实体选择高亮**：按类型分组几何（`TypeGeometry`）+ 对象树选类型 → `SetHighlight` 重着色画最上层。+1 单测（Recolor），19 tests。commit `76a588f`。
+- [x] **Spline 样条导入**：De Boor NURBS 求值采样（`EvalBSpline`）+ 退化回退拟合点/控制多边形。+2 单测，21 tests。commit `7afd2a7`。
 
 **⏳ 待做（可托管、Windows 可验证）—— 续：**
-- [ ] Spline 样条曲线导入（分段折线近似）
 - [ ] DIST 测距（点两点显示距离，复用屏幕→世界反投影）
 - [ ] DXF 导出（线几何写回 .dxf，round-trip 可验证）
 
