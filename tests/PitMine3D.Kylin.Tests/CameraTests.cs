@@ -105,4 +105,17 @@ public class CameraTests
         Assert.Equal(30, got!.Value.x, 1);
         Assert.Equal(70, got!.Value.y, 1);
     }
+
+    [Fact]
+    public void Recolor_keeps_positions_replaces_color()
+    {
+        float[] src = { 1, 2, 3, 0.5f, 0.5f, 0.5f, 4, 5, 6, 0.1f, 0.2f, 0.3f };
+        float[] dst = CadGlViewport.Recolor(src, 1f, 0.9f, 0.2f);
+
+        Assert.Equal(1f, dst[0]); Assert.Equal(3f, dst[2]);          // 位置不变
+        Assert.Equal(4f, dst[6]); Assert.Equal(6f, dst[8]);
+        Assert.Equal(1f, dst[3]); Assert.Equal(0.9f, dst[4]); Assert.Equal(0.2f, dst[5]);   // 颜色替换
+        Assert.Equal(0.2f, dst[11]);
+        Assert.Equal(0.5f, src[3]);                                  // 原数组不被改（克隆）
+    }
 }

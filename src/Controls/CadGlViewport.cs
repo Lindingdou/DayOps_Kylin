@@ -43,6 +43,12 @@ public class CadGlViewport : OpenGlControlBase
     private double[]? _lastBounds;   // 最近导入的包围盒，供 ZE 重新范围缩放
     private bool _showGrid = true;   // 网格/轴显隐
 
+    // 选择高亮（对象树选类型 → 高亮其几何）
+    private GlRenderer.Mesh _highlight;
+    private bool _hasHighlight;
+    private float[]? _pendingHighlight;
+    private bool _highlightDirty;
+
     private readonly Stopwatch _clock = Stopwatch.StartNew();
 
     /// <summary>OpenGL 上下文就绪后回报后端版本串给界面。</summary>
@@ -75,6 +81,7 @@ public class CadGlViewport : OpenGlControlBase
         _renderer.DeleteMesh(_cube);
         _renderer.DeleteMesh(_gizmo);
         if (_hasImported) _renderer.DeleteMesh(_imported);
+        if (_hasHighlight) _renderer.DeleteMesh(_highlight);
         _renderer.Deinit();
     }
 
@@ -96,11 +103,20 @@ public class CadGlViewport : OpenGlControlBase
             _camera.FitBounds(_pendingBounds);
         }
 
+        if (_highlightDirty)
+        {
+            _highlightDirty = false;
+            if (_hasHighlight) _renderer.DeleteMesh(_highlight);
+            _highlight = _renderer.Upload(_pendingHighlight!);
+            _hasHighlight = !_highlight.IsEmpty;
+        }
+
         float[] vp = _camera.ViewProj(aspect);
 
         _renderer.BeginFrame(w, h, 0.13f, 0.14f, 0.16f);
         GridPass(vp);
         ScenePass(vp);
+        HighlightPass(vp);
         OverlayPass(w, h);
         _renderer.EndFrame();
 
@@ -136,6 +152,15 @@ public class CadGlViewport : OpenGlControlBase
             float[] model = Mat4.Mul(Mat4.Translate(0f, 0f, 1.6f), Mat4.RotateZ(angle));
             _renderer.Draw(_cube, GL_TRIANGLES, Mat4.Mul(vp, model));
         }
+        _renderer.EndPass();
+    }
+
+    /// <summary>选择高亮：选中类型的几何用高亮色画在最上层。深度关。</summary>
+    private void HighlightPass(float[] vp)
+    {
+        if (!_hasHighlight) return;
+        _renderer.BeginPass(depthTest: false);
+        _renderer.Draw(_highlight, GL_LINES, vp);
         _renderer.EndPass();
     }
 
@@ -205,6 +230,22 @@ public class CadGlViewport : OpenGlControlBase
     {
         _showGrid = !_showGrid;
         RequestNextFrameRendering();
+    }
+
+    /// <summary>高亮一组几何（P3_C3 位置，重着色为高亮色）；null/空 → 清除高亮。</summary>
+    public void SetHighlight(float[]? geom)
+    {
+        _pendingHighlight = (geom == null || geom.Length == 0) ? Array.Empty<float>() : Recolor(geom, 1f, 0.9f, 0.2f);
+        _highlightDirty = true;
+        RequestNextFrameRendering();
+    }
+
+    /// <summary>把交错 P3_C3 几何整体重着色（位置不变，颜色替换）。</summary>
+    internal static float[] Recolor(float[] src, float r, float g, float b)
+    {
+        var dst = (float[])src.Clone();
+        for (int i = 0; i + 5 < dst.Length; i += 6) { dst[i + 3] = r; dst[i + 4] = g; dst[i + 5] = b; }
+        return dst;
     }
 
     // 拼接所有可见图层的几何为一段连续缓冲

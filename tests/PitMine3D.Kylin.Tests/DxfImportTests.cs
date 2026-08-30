@@ -36,6 +36,8 @@ public class DxfImportTests
         Assert.True(r.Bounds[2] >= 9.99, $"maxX={r.Bounds[2]}");              // 含线终点 x=10
         Assert.Equal(1, r.TypeCounts["直线"]);                                // 对象管理器计数
         Assert.Equal(1, r.TypeCounts["圆"]);
+        Assert.True(r.TypeGeometry.ContainsKey("直线"));                       // 类型几何(供高亮)
+        Assert.True(r.TypeGeometry["圆"].Length > 0);
 
         try { File.Delete(path); } catch { /* 清理失败无碍 */ }
     }

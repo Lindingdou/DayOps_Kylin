@@ -52,10 +52,14 @@ public partial class MainWindow : Window
         };
         ViewportHost.PointerWheelChanged += (_, e) =>
             Viewport.Zoom(e.Delta.Y > 0 ? 0.9 : 1.1);
+
+        // 对象树选类型 → 视口高亮该类型几何
+        ObjectTree.SelectionChanged += OnObjectTreeSelect;
     }
 
     private bool _dragging;
     private Avalonia.Point _lastPointer;
+    private DxfImportService.ImportResult? _lastImport;
 
     // Ribbon 按钮 → 「导入」走真实 DXF 导入；其余暂回显命令（证明整条 UI 已接线）
     private async void OnRibbonCommand(object? sender, RoutedEventArgs e)
@@ -96,6 +100,7 @@ public partial class MainWindow : Window
             StatusMsg.Text = $"导入失败：{r.Error}";
             return;
         }
+        _lastImport = r;
         Viewport.ShowImportedLayers(r.LayerGeometry, r.Bounds);
         PopulateObjectTree(r, Path.GetFileName(path));
         PopulateLayers(r);
@@ -159,8 +164,18 @@ public partial class MainWindow : Window
         ObjectTreeHint.IsVisible = false;
         var root = new TreeViewItem { Header = $"{fileName}（{r.EntityCount} 实体）", IsExpanded = true };
         foreach (var kv in r.TypeCounts)
-            root.Items.Add(new TreeViewItem { Header = $"{kv.Key} × {kv.Value}" });
+            root.Items.Add(new TreeViewItem { Header = $"{kv.Key} × {kv.Value}", Tag = kv.Key });
         ObjectTree.ItemsSource = new[] { root };
+    }
+
+    // 对象树选中类型 → 高亮该类型几何；选根/无 → 清除
+    private void OnObjectTreeSelect(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_lastImport != null && ObjectTree.SelectedItem is TreeViewItem { Tag: string type }
+            && _lastImport.TypeGeometry.TryGetValue(type, out var geom))
+            Viewport.SetHighlight(geom);
+        else
+            Viewport.SetHighlight(null);
     }
 
     // 命令行回车 → 命令分发（已实装的走功能，其余回显）

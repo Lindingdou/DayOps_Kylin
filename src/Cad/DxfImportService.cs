@@ -40,6 +40,8 @@ public static class DxfImportService
         public List<string> LayerOrder { get; } = new();
         /// <summary>按图层的实体计数。</summary>
         public Dictionary<string, int> LayerCounts { get; } = new();
+        /// <summary>各图元类型几何（类型中文名 → 交错 P3_C3），供对象树选择高亮。</summary>
+        public Dictionary<string, float[]> TypeGeometry { get; } = new();
         public List<string> Warnings { get; } = new();
         public string? Error { get; set; }
     }
@@ -67,7 +69,9 @@ public static class DxfImportService
 
         var verts = new List<float>(4096);
         var byLayer = new Dictionary<string, List<float>>();
+        var byType = new Dictionary<string, List<float>>();
         List<float> cur = new();                                      // 当前实体所属图层的几何缓冲
+        List<float> curType = new();                                  // 当前实体所属类型的几何缓冲
         double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
         float cr = LineColor.r, cg = LineColor.g, cb = LineColor.b;   // 逐实体更新
         Func<(double x, double y), (double x, double y)>? xform = null;   // 块引用展开时的累积变换
@@ -80,6 +84,8 @@ public static class DxfImportService
             verts.Add((float)x1); verts.Add((float)y1); verts.Add((float)z1); verts.Add(cr); verts.Add(cg); verts.Add(cb);
             cur.Add((float)x0); cur.Add((float)y0); cur.Add((float)z0); cur.Add(cr); cur.Add(cg); cur.Add(cb);
             cur.Add((float)x1); cur.Add((float)y1); cur.Add((float)z1); cur.Add(cr); cur.Add(cg); cur.Add(cb);
+            curType.Add((float)x0); curType.Add((float)y0); curType.Add((float)z0); curType.Add(cr); curType.Add(cg); curType.Add(cb);
+            curType.Add((float)x1); curType.Add((float)y1); curType.Add((float)z1); curType.Add(cr); curType.Add(cg); curType.Add(cb);
             if (x0 < minX) minX = x0; if (y0 < minY) minY = y0; if (x0 > maxX) maxX = x0; if (y0 > maxY) maxY = y0;
             if (x1 < minX) minX = x1; if (y1 < minY) minY = y1; if (x1 > maxX) maxX = x1; if (y1 > maxY) maxY = y1;
         }
@@ -237,6 +243,11 @@ public static class DxfImportService
                 }
                 result.LayerCounts[layerName] = result.LayerCounts.GetValueOrDefault(layerName) + 1;
 
+                // 路由到当前实体所属类型的几何缓冲（供对象树选择高亮）
+                string typeName = cn ?? "其他";
+                if (byType.TryGetValue(typeName, out var exType)) curType = exType;
+                else { curType = new List<float>(); byType[typeName] = curType; }
+
                 Emit(e);
             }
         }
@@ -251,6 +262,7 @@ public static class DxfImportService
         result.SegmentCount = verts.Count / 12;   // 每段 2 顶点 × 6 float
         result.LineVertices = verts.ToArray();
         foreach (var kv in byLayer) result.LayerGeometry[kv.Key] = kv.Value.ToArray();
+        foreach (var kv in byType) result.TypeGeometry[kv.Key] = kv.Value.ToArray();
         result.Bounds = verts.Count == 0 ? new double[] { 0, 0, 0, 0 } : new[] { minX, minY, maxX, maxY };
         return result;
     }
