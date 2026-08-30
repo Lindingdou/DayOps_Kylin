@@ -707,6 +707,9 @@ public partial class MainWindow : Window
             if (cmd == "分解") { ExplodeSelected(); return; }
             if (cmd == "加密多段线" || cmd == "加密") { DensifySelectedPolylines(); return; }
             if (cmd == "两线交点" || cmd == "求交点" || cmd == "线交点") { IntersectSelectedPolylines(); return; }
+            if (cmd == "闭合多段线" || cmd == "闭合线") { CloseSelectedPolylines(); return; }
+            if (cmd == "删除重复点" || cmd == "去重复点" || cmd == "点去重") { DedupeSelectedPoints(); return; }
+            if (cmd == "删除重复线" || cmd == "去重复线" || cmd == "线去重") { DedupeSelectedPolylines(); return; }
             if (cmd == "新建图层") { var l = _layers.New(); PopulateDrawingLayers(); StatusMsg.Text = $"新建图层「{l.Name}」并置为当前"; return; }
             if (cmd == "图层特性管理器") { var l = _layers.CycleCurrent(); StatusMsg.Text = $"当前图层「{l.Name}」 显示{( l.Shown?"开":"关")}/{(l.Locked?"锁":"解锁")}（再点循环切换）"; return; }
             if (cmd == "冻结") { FreezeCurrentLayer(true); return; }
@@ -2976,6 +2979,71 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"两线交点：{seqs.Count} 条线 → {all.Count} 个交点(已作红点标注)";
     }
 
+    // 闭合多段线：把选中未闭合多段线置为闭合
+    private void CloseSelectedPolylines()
+    {
+        var open = new List<PolylineEntity>();
+        foreach (var e in _selected) if (e is PolylineEntity p && !p.Closed && p.Points.Count >= 3) open.Add(p);
+        if (open.Count == 0) { StatusMsg.Text = "闭合多段线：请先选中未闭合的多段线(≥3 点)"; return; }
+        BeginChange();
+        var newSel = new List<SceneEntity>();
+        foreach (var p in open)
+        {
+            var np = new PolylineEntity { Closed = true, Cr = p.Cr, Cg = p.Cg, Cb = p.Cb, LayerName = p.LayerName };
+            np.Points.AddRange(p.Points);
+            _scene.Replace(p, np); newSel.Add(np);
+        }
+        _selected.Clear(); _selected.AddRange(newSel);
+        HighlightSelection(); RefreshScene();
+        StatusMsg.Text = $"闭合多段线：已闭合 {open.Count} 条";
+    }
+
+    // 删除重复点：选中的点按容差(1e-3)去重, 移除重复者
+    private void DedupeSelectedPoints()
+    {
+        var pts = new List<PointEntity>();
+        foreach (var e in _selected) if (e is PointEntity pe) pts.Add(pe);
+        if (pts.Count < 2) { StatusMsg.Text = "删除重复点：请先选中多个点"; return; }
+        var coords = new List<(double x, double y)>();
+        foreach (var p in pts) coords.Add((p.X, p.Y));
+        var keep = new HashSet<int>(GeomDedup.KeepAfterDedup(coords, 1e-3));
+        int removed = 0;
+        BeginChange();
+        var newSel = new List<SceneEntity>();
+        for (int i = 0; i < pts.Count; i++)
+        {
+            if (keep.Contains(i)) newSel.Add(pts[i]);
+            else { _scene.Remove(pts[i]); removed++; }
+        }
+        _selected.Clear(); _selected.AddRange(newSel);
+        HighlightSelection(); RefreshScene();
+        StatusMsg.Text = $"删除重复点：原 {pts.Count} · 删除 {removed} · 余 {pts.Count - removed}";
+    }
+
+    // 删除重复线：选中的多段线按几何(正/反向等长重合)去重, 移除重复者
+    private void DedupeSelectedPolylines()
+    {
+        var polys = new List<PolylineEntity>();
+        foreach (var e in _selected) if (e is PolylineEntity p) polys.Add(p);
+        if (polys.Count < 2) { StatusMsg.Text = "删除重复线：请先选中多条多段线"; return; }
+        var kept = new List<PolylineEntity>();
+        var dups = new List<PolylineEntity>();
+        foreach (var p in polys)
+        {
+            bool isDup = false;
+            foreach (var q in kept)
+                if (GeomDedup.SamePolyline(p.Points, p.Closed, q.Points, q.Closed, 1e-3)) { isDup = true; break; }
+            if (isDup) dups.Add(p); else kept.Add(p);
+        }
+        if (dups.Count == 0) { StatusMsg.Text = "删除重复线：所选无重复"; return; }
+        BeginChange();
+        foreach (var d in dups) _scene.Remove(d);
+        _selected.Clear();
+        foreach (var k in kept) _selected.Add(k);
+        HighlightSelection(); RefreshScene();
+        StatusMsg.Text = $"删除重复线：原 {polys.Count} · 删除 {dups.Count} · 余 {kept.Count}";
+    }
+
     // 进入编辑（移动/复制/镜像）：需已有选择
     private void StartEdit(EditMode mode, string name)
     {
@@ -3604,6 +3672,18 @@ public partial class MainWindow : Window
             case "POLYINTERSECT":
             case "INTERSECTPOLY":
                 IntersectSelectedPolylines();
+                break;
+            case "POLYCLOSE":
+            case "CLOSEPOLY":
+                CloseSelectedPolylines();
+                break;
+            case "POINTDEDUPE":
+            case "DEDUPEPOINTS":
+                DedupeSelectedPoints();
+                break;
+            case "POLYDEDUPE":
+            case "DEDUPEPOLY":
+                DedupeSelectedPolylines();
                 break;
             case "MOVE":
             case "M":
