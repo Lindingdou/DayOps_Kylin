@@ -270,3 +270,7 @@
 - [x] **快速估值**：`Estimation`(品位样本 IDW→网格→配色估值面, 复用 GridInto+GradeColor)。命令 快速估值/品位估值/ESTIMATE。+2 单测，191 tests。commit `44cac48`。
 - [记录] 排产/接续/进度计划 → 结果为甘特/报表, 需表格 UI(部分算法可托管); 真克里金(变差函数) → 可托管做, 较大。
 - [x] **境界圈定**：`GeomHull.ConvexHull`(Andrew 单调链)→散点凸包边界。命令 境界圈定/凸包/确定境界/采场圈定/HULL。+3 单测，186 tests。commit `d2d5d95`。
+
+### PointCloudLib 点云（托管切片）
+- [x] **点云抽稀**：`PointThin.Thin`(体素网格每格保留一点, 对 XYZ 点集有效)。命令 点云抽稀/抽稀/THIN。+3 单测，194 tests。commit `75fdc74`。
+- [记录] **.las 二进制解析 + 八叉树缓存 + 点云渲染** → 需 C++ 内核 LasLib。地面点滤波/C2C 比对 → 需内核/较大。
