@@ -657,6 +657,7 @@ public partial class MainWindow : Window
             if (cmd == "角度" || cmd == "测量角度" || cmd == "三点测角") { _angle = new AngleState(); _tool = null; _measure = null; StatusMsg.Text = "测角：点顶点"; return; }
             if (cmd == "等效运距" || cmd == "运输指标" || cmd == "驱动距离") { await HaulMetricsAsync(); return; }
             if (cmd == "批量台阶扩帮" || cmd == "台阶线生成" || cmd == "台阶扩帮") { GenerateBenchLines(); return; }
+            if (cmd == "剥采比均衡" || cmd == "VP曲线" || cmd == "剥采比") { await StrippingBalanceAsync(); return; }
             if (cmd == "高程查询" || cmd == "虚拟钻孔" || cmd == "查询高程") { await StartSpotQueryAsync(); return; }
             if (cmd == "文字" || cmd == "单行文字") { ArmText(); return; }
             if (cmd == "标注" || cmd == "线性标注" || cmd == "尺寸标注" || cmd == "标注台阶标高") { StartDim(); return; }
@@ -993,6 +994,69 @@ public partial class MainWindow : Window
         RefreshScene();
         Viewport.FitBounds(r.Bounds);
         StatusMsg.Text = $"等高线：{r.Points.Count} 点 → {levels} 层 · {segCount} 段 + 高程标注（z {zmin:0.#}~{zmax:0.#}）";
+    }
+
+    // 剥采比均衡(VP曲线)：分期物料量 CSV → 累计 V-P 曲线 → DP 分段均衡 → 曲线/折线/比值上屏 + 报表
+    private async Task StrippingBalanceAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "剥采比均衡：选分期物料量 CSV (每行 采出量万t, 剥离量万m³)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("分期物料量 (CSV/TXT)") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (files.Count == 0) return;
+
+        var coal = new List<double>(); var strip = new List<double>();
+        try
+        {
+            foreach (var raw in System.IO.File.ReadAllLines(files[0].Path.LocalPath))
+            {
+                var line = raw.Trim();
+                if (line.Length == 0 || line.StartsWith("#")) continue;
+                var parts = line.Split(new[] { ',', '\t', ' ', ';' }, System.StringSplitOptions.RemoveEmptyEntries);
+                var nums = new List<double>();
+                foreach (var p in parts)
+                    if (double.TryParse(p, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var v)) nums.Add(v);
+                if (nums.Count >= 2) { coal.Add(nums[^2]); strip.Add(nums[^1]); }   // 末两数 = 采出量,剥离量
+            }
+        }
+        catch (System.Exception ex) { StatusMsg.Text = $"剥采比均衡：读取失败 {ex.Message}"; return; }
+        if (coal.Count < 2) { StatusMsg.Text = "剥采比均衡：需至少 2 期（每行 采出量,剥离量）"; return; }
+
+        var xs = new List<double> { 0 }; var ys = new List<double> { 0 };
+        double cx = 0, cy = 0;
+        for (int i = 0; i < coal.Count; i++) { cx += coal[i]; cy += strip[i]; xs.Add(cx); ys.Add(cy); }
+
+        var res = VpBalanceSolver.Solve(xs, ys, null);
+        if (!res.Ok) { StatusMsg.Text = "剥采比均衡：求解失败（累计曲线需单调不减）"; return; }
+
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        BeginChange();
+        var curve = new PolylineEntity { Cr = 0.3f, Cg = 0.85f, Cb = 0.95f };   // 实际累计 V-P 曲线(青)
+        for (int i = 0; i < xs.Count; i++) curve.Points.Add((xs[i], ys[i]));
+        AssignLayer(curve); curve.Cr = 0.3f; curve.Cg = 0.85f; curve.Cb = 0.95f; _scene.Add(curve);
+
+        var bal = new PolylineEntity { Cr = 0.95f, Cg = 0.85f, Cb = 0.3f };     // 均衡折线(黄, 过断点)
+        foreach (var bp in res.Breakpoints) bal.Points.Add((xs[bp], ys[bp]));
+        AssignLayer(bal); bal.Cr = 0.95f; bal.Cg = 0.85f; bal.Cb = 0.3f; _scene.Add(bal);
+
+        double h = System.Math.Max(cx / 40.0, 1e-3);
+        foreach (var seg in res.Segments)
+        {
+            double mx = (xs[seg.A] + xs[seg.B]) / 2, my = (ys[seg.A] + ys[seg.B]) / 2;
+            _scene.Add(new TextEntity { X = mx, Y = my + h, Height = h, Text = seg.RatioM3PerT.ToString("0.##", inv), Cr = 0.95f, Cg = 0.85f, Cb = 0.3f });
+        }
+        RefreshScene();
+        Viewport.FitBounds(new double[] { 0, 0, cx, cy });
+
+        string report = $"剥采比均衡：{coal.Count} 期 · K={res.UsedK} 段 · 总超前剥离面积 {res.TotalLeadArea:0.#}；";
+        for (int i = 0; i < res.Segments.Count; i++)
+        {
+            var s = res.Segments[i];
+            report += $" 段{i + 1} 均衡比{s.RatioM3PerT.ToString("0.##", inv)}({s.B - s.A}期,峰值超前{s.PeakLeadWanM3:0.#})";
+        }
+        StatusMsg.Text = report;
     }
 
     // 创建三角网：散点 CSV → Delaunay → 三角边线框入场景
@@ -2805,6 +2869,10 @@ public partial class MainWindow : Window
             case "BENCHLINES":
             case "BENCHEXPAND":
                 GenerateBenchLines();
+                break;
+            case "VPBALANCE":
+            case "STRIPBALANCE":
+                _ = StrippingBalanceAsync();
                 break;
             case "CIRCLETTR":
             case "TTR":
