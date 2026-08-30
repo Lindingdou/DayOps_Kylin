@@ -496,6 +496,7 @@ public partial class MainWindow : Window
             if (cmd == "体积计算" || cmd == "算量" || cmd == "土方量") { await VolumeAsync(); return; }
             if (cmd == "两期点云算量" || cmd == "两期算量" || cmd == "两期土方") { await TwoEpochVolumeAsync(); return; }
             if (cmd == "圈范围算量") { await BoundaryVolumeAsync(); return; }
+            if (cmd == "提取道路中心线" || cmd == "道路中线" || cmd == "提取道路中线") { ExtractCenterline(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
             if (cmd == "2D") { Viewport.SetViewMode(true); StatusMsg.Text = "视图: 2D 平面（正交俯视）"; return; }
@@ -855,6 +856,24 @@ public partial class MainWindow : Window
         if (tris.Count == 0) { StatusMsg.Text = "体积计算：点太少或共线"; return; }
         var (above, below, net) = TerrainAnalysis.Volume(r.Points, tris, zmin);
         StatusMsg.Text = $"体积（基准=最低 z {zmin:0.##}）：上方 {above:0.##} · 下方 {below:0.##} · 净 {net:0.##}（{tris.Count} 三角）";
+    }
+
+    // 提取道路中心线：选两条路边多段线 → 中点连成中心线
+    private void ExtractCenterline()
+    {
+        var polys = _selected.FindAll(e => e is PolylineEntity);
+        if (polys.Count != 2)
+        { StatusMsg.Text = "提取道路中心线：请先选中两条路边多段线"; return; }
+        var a = (PolylineEntity)polys[0]; var b = (PolylineEntity)polys[1];
+        var mid = RoadTools.Centerline(a.Points, b.Points);
+        if (mid.Count < 2) { StatusMsg.Text = "提取道路中心线：路边点数不足"; return; }
+        var cl = new PolylineEntity { Cr = 0.95f, Cg = 0.85f, Cb = 0.30f };   // 黄色中心线
+        foreach (var p in mid) cl.Points.Add(p);
+        AssignLayer(cl); cl.Cr = 0.95f; cl.Cg = 0.85f; cl.Cb = 0.30f;         // 保中心线色
+        BeginChange();
+        _scene.Add(cl);
+        RefreshScene();
+        StatusMsg.Text = $"已提取道路中心线（{mid.Count} 点）";
     }
 
     // 圈范围算量：选中的闭合多段线作边界 → TIN → 边界内三角体积
@@ -1863,6 +1882,9 @@ public partial class MainWindow : Window
                 break;
             case "BNDVOL":
                 _ = BoundaryVolumeAsync();
+                break;
+            case "CENTERLINE":
+                ExtractCenterline();
                 break;
             case "DIST":
             case "DI":
