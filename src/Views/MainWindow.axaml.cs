@@ -489,6 +489,7 @@ public partial class MainWindow : Window
             if (cmd == "导入点") { await ImportPointsAsync(); return; }
             if (cmd == "展绘钻孔" || cmd == "钻孔柱状图" || cmd == "导入钻孔数据" || cmd == "原始钻孔柱状图") { await ImportBoreholesAsync(); return; }
             if (cmd == "等高线" || cmd == "等高线生产" || cmd == "等值线") { await ContourFromCsvAsync(); return; }
+            if (cmd == "创建三角网" || cmd == "三角网") { await CreateTinAsync(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
             if (cmd == "2D") { Viewport.SetViewMode(true); StatusMsg.Text = "视图: 2D 平面（正交俯视）"; return; }
@@ -803,6 +804,30 @@ public partial class MainWindow : Window
         RefreshScene();
         Viewport.FitBounds(r.Bounds);
         StatusMsg.Text = $"等高线：{r.Points.Count} 点 → {levels} 层 · {segCount} 段（z {zmin:0.#}~{zmax:0.#}）";
+    }
+
+    // 创建三角网：散点 CSV → Delaunay → 三角边线框入场景
+    private async Task CreateTinAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "创建三角网：选点 CSV (x,y[,z])",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("点 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success) { StatusMsg.Text = $"三角网：点导入失败 {r.Error}"; return; }
+        var pts2d = new List<(double x, double y)>();
+        foreach (var p in r.Points) pts2d.Add((p.x, p.y));
+        var tris = Delaunay.Triangulate(pts2d);
+        if (tris.Count == 0) { StatusMsg.Text = "三角网：点太少或共线，无法剖分"; return; }
+        var edges = Delaunay.BuildEdges(pts2d, tris, 0.55f, 0.75f, 0.85f);
+        BeginChange();
+        foreach (var e in edges) _scene.Add(e);
+        RefreshScene();
+        Viewport.FitBounds(r.Bounds);
+        StatusMsg.Text = $"创建三角网：{pts2d.Count} 点 → {tris.Count} 三角 · {edges.Count} 边";
     }
 
     // 图层管理器：列出图层复选框，勾选控制显隐
@@ -1723,6 +1748,9 @@ public partial class MainWindow : Window
                 break;
             case "CONTOUR":
                 _ = ContourFromCsvAsync();
+                break;
+            case "TIN":
+                _ = CreateTinAsync();
                 break;
             case "DIST":
             case "DI":

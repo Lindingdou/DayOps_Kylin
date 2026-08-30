@@ -53,6 +53,22 @@ public static class Delaunay
         return result;
     }
 
+    /// <summary>三角网 → 去重的三角边线实体（TIN 线框渲染）。</summary>
+    public static List<SceneEntity> BuildEdges(
+        IReadOnlyList<(double x, double y)> pts, List<(int a, int b, int c)> tris, float r, float g, float b)
+    {
+        var seen = new HashSet<(int, int)>();
+        var list = new List<SceneEntity>();
+        void Edge(int u, int v)
+        {
+            var k = u < v ? (u, v) : (v, u);
+            if (seen.Add(k))
+                list.Add(new LineEntity { X0 = pts[u].x, Y0 = pts[u].y, X1 = pts[v].x, Y1 = pts[v].y, Cr = r, Cg = g, Cb = b });
+        }
+        foreach (var t in tris) { Edge(t.a, t.b); Edge(t.b, t.c); Edge(t.c, t.a); }
+        return list;
+    }
+
     private static void Bump(Dictionary<(int, int), int> m, int u, int v)
     {
         var key = u < v ? (u, v) : (v, u);

@@ -43,4 +43,15 @@ public class DelaunayTests
         var tris = Delaunay.Triangulate(pts);
         Assert.Equal(8, tris.Count);
     }
+
+    [Fact]
+    public void BuildEdges_dedups_shared_edges()
+    {
+        // 方形 2 三角共享 1 对角边 → 4 边 + 1 对角 = 5 条唯一边
+        var pts = new List<(double x, double y)> { (0, 0), (1, 0), (1, 1), (0, 1) };
+        var tris = Delaunay.Triangulate(pts);
+        var edges = Delaunay.BuildEdges(pts, tris, 0.5f, 0.5f, 0.5f);
+        Assert.Equal(5, edges.Count);
+        Assert.All(edges, e => Assert.IsType<PitMine3D.Kylin.Cad.Draw.LineEntity>(e));
+    }
 }
