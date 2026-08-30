@@ -299,4 +299,4 @@
 - [x] **半径标注(DIMRADIAL)**：`DimTools.BuildRadial`(选圆/弧→径向线+箭头+"R值"文字)。命令 半径标注/DIMRADIAL；线性标注兼收 DIMALIGNED。经核 MockAiEngine/Ribbon 确为原程序功能。+2 单测，243 tests。commit `09f7b47`。
 - [x] **连续标注(DIMCONTINUE)**：以上一条线性标注的第二点为起点链式接续(复用 DimTools.Build + _lastDimP2)。命令 连续标注/DIMCONTINUE。经核原 ribbon 确有。复用已测几何, 无新纯逻辑单测；build+run 验证。243 tests。commit `12023e0`。→ **标注三型齐**(对齐 DIMALIGNED / 半径 DIMRADIAL / 连续 DIMCONTINUE + 三点测角 MANG)
 - [x] **夹点开关(GIZMO)**：`_gripsOn` 切换夹点方块显示/可拖(关时 HitGrip 直返 -1)。命令 夹点开关/GIZMO。经核原 ribbon(67/679)+AI 菜单确有。至此 **Home ribbon 命令集 100% 覆盖并忠实核对**。243 tests。commit `79e2d57`。
-- [x] **批量台阶扩帮·几何核(MineAssLib)**：`BenchLines.Generate`(闭合境界按定距逐圈 miter 内偏移生成台阶顶线, 面积递减自交保护)。选中闭合多段线→生成多圈台阶线。命令 批量台阶扩帮/台阶线生成/BENCHLINES。+3 单测(方形均匀收缩/CW 绕向/自交停)，246 tests。commit `pending3`。**记录**：真实台阶距=W+H/tanα 需帮参数对话框(待接)；凹境界深偏移自交则提前停(不产病态环)；TIN/块体量算需内核。
+- [x] **批量台阶扩帮·几何核(MineAssLib)**：`BenchLines.Generate`(闭合境界按定距逐圈 miter 内偏移生成台阶顶线, 面积递减自交保护)。选中闭合多段线→生成多圈台阶线。命令 批量台阶扩帮/台阶线生成/BENCHLINES。+3 单测(方形均匀收缩/CW 绕向/自交停)，246 tests。commit `7993485`。**记录**：真实台阶距=W+H/tanα 需帮参数对话框(待接)；凹境界深偏移自交则提前停(不产病态环)；TIN/块体量算需内核。
