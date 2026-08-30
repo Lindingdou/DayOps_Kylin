@@ -544,7 +544,8 @@ public partial class MainWindow : Window
             if (cmd == "分帮扩帮" || cmd == "批量台阶扩帮" || cmd == "批量扩坑") { StartBench(); return; }
             if (cmd == "组合工作线" || cmd == "合并多段线" || cmd == "连接台阶线") { JoinPolylines(); return; }
             if (cmd == "块体模型" || cmd == "导入块体" || cmd == "地质体建模") { await ImportBlockModelAsync(); return; }
-            if (cmd == "资源量估算" || cmd == "剥采比" || cmd == "快速估值") { ResourceReport(null); return; }
+            if (cmd == "资源量估算" || cmd == "剥采比") { ResourceReport(null); return; }
+            if (cmd == "快速估值" || cmd == "品位估值" || cmd == "克里金估值") { await EstimateGradeAsync(); return; }
             if (cmd == "境界圈定" || cmd == "凸包" || cmd == "确定境界" || cmd == "采场圈定") { await BoundaryHullAsync(); return; }
             if (cmd == "剖面分析" || cmd == "剖面" || cmd == "点云剖面") { await SectionProfileAsync(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
@@ -997,6 +998,29 @@ public partial class MainWindow : Window
         _scene.Add(curve);
         RefreshScene();
         StatusMsg.Text = $"剖面分析：{prof.Count} 采样 · 高程 {zmin:0.##}~{zmax:0.##} · 剖面长 {prof[^1].dist:0.##}";
+    }
+
+    // 快速估值：品位样本 CSV(x,y,品位) → IDW 网格 → 品位配色估值面
+    private async Task EstimateGradeAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "快速估值：选品位样本 CSV (x,y,品位)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("样本 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success) { StatusMsg.Text = $"快速估值：样本导入失败 {r.Error}"; return; }
+        int n = 48;
+        var grid = Contour.GridFromPoints(r.Points, n, n, out double gx0, out double gy0, out double gdx, out double gdy);
+        var (min, max) = Estimation.Range(grid);
+        var cells = Estimation.BuildCells(grid, gx0, gy0, gdx, gdy, min, max);
+        BeginChange();
+        foreach (var e in cells) _scene.Add(e);
+        RefreshScene();
+        Viewport.FitBounds(r.Bounds);
+        StatusMsg.Text = $"快速估值：{r.Points.Count} 样本 → {n}² 网格 · 品位 {min:0.###}~{max:0.###}";
     }
 
     // 境界圈定：散点 CSV → 凸包 → 闭合边界多段线
@@ -2139,6 +2163,9 @@ public partial class MainWindow : Window
                 break;
             case "PROFILE":
                 _ = SectionProfileAsync();
+                break;
+            case "ESTIMATE":
+                _ = EstimateGradeAsync();
                 break;
             case "DIST":
             case "DI":
