@@ -210,4 +210,26 @@ public class DrawToolsTests
     {
         Assert.Null(new LineEntity().Explode());
     }
+
+    [Fact]
+    public void LineTool_preview_rubber_band_needs_cursor()
+    {
+        var t = new LineTool();
+        t.AddPoint(0, 0);                              // 已点起点
+        var o = new System.Collections.Generic.List<float>();
+        t.AppendPreview(o, null);                      // 无光标 → 无预览
+        Assert.Empty(o);
+        t.AppendPreview(o, (10, 5));                   // 有光标 → 1 段 = 12 float
+        Assert.Equal(12, o.Count);
+    }
+
+    [Fact]
+    public void PolylineTool_preview_adds_cursor_segment()
+    {
+        var t = new PolylineTool();
+        t.AddPoint(0, 0); t.AddPoint(10, 0);           // 1 已点段
+        var o = new System.Collections.Generic.List<float>();
+        t.AppendPreview(o, (10, 10));                  // + 橡皮筋段 → 2 段 = 24 float
+        Assert.Equal(24, o.Count);
+    }
 }

@@ -173,6 +173,9 @@ public partial class MainWindow : Window
                 ? $"X {shown.Value.x:0.00}  Y {shown.Value.y:0.00}{(_snapWorld != null ? "  [捕捉]" : "")}"
                 : $"视口 px  X {p.X:0}  Y {p.Y:0}";
 
+            _cursorWorld = shown;
+            if (_tool != null && _nav == NavMode.None) RefreshScene();   // 橡皮筋预览随光标刷新
+
             if (_nav == NavMode.Pan)
                 Viewport.Pan(_lastPointer.X, _lastPointer.Y, p.X, p.Y);
             else if (_nav == NavMode.Orbit)
@@ -248,6 +251,7 @@ public partial class MainWindow : Window
     private DxfImportService.ImportResult? _lastImport;
     private MeasureState? _measure;
     private (double x, double y)? _snapWorld;   // 当前捕捉到的世界点
+    private (double x, double y)? _cursorWorld; // 当前光标世界点(橡皮筋预览用)
     private bool _snapShown;                     // 捕捉标记是否已显示
     private readonly Scene _scene = new();       // 托管绘制场景
     private readonly LayerTable _layers = new();  // 图层表
@@ -571,11 +575,11 @@ public partial class MainWindow : Window
         e.Cr = _layers.Current.Cr; e.Cg = _layers.Current.Cg; e.Cb = _layers.Current.Cb;
     }
 
-    // 重绘场景（含当前工具进行中的预览，如多段线已点的段）
+    // 重绘场景（含当前工具进行中的预览：已点的段 + 到光标的橡皮筋）
     private void RefreshScene()
     {
         var list = new List<float>(_scene.BuildGeometry());
-        _tool?.AppendPreview(list);
+        _tool?.AppendPreview(list, _cursorWorld);
         Viewport.SetSceneGeometry(list.ToArray());
     }
 

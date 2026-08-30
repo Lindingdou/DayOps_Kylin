@@ -20,8 +20,13 @@ public abstract class DrawTool
     /// <summary>结束多点绘制，返回实体（不足则 null）。</summary>
     public virtual SceneEntity? Finish() => null;
 
-    /// <summary>把进行中的几何（如多段线已点的段）追加为预览。</summary>
-    public virtual void AppendPreview(List<float> o) { }
+    /// <summary>追加进行中的预览（橡皮筋）：已点的点 + 当前光标。cursor 为 null 时只画已确定部分。</summary>
+    public virtual void AppendPreview(List<float> o, (double x, double y)? cursor) { }
+
+    /// <summary>预览色（灰蓝）。</summary>
+    protected const float PR = 0.55f, PG = 0.62f, PB = 0.70f;
+
+    protected static SceneEntity Tint(SceneEntity e) { e.Cr = PR; e.Cg = PG; e.Cb = PB; return e; }
 }
 
 /// <summary>直线：起点 → 终点。</summary>
@@ -34,6 +39,11 @@ public sealed class LineTool : DrawTool
         if (_p0 == null) { _p0 = (x, y); return null; }
         var p = _p0.Value; _p0 = null;
         return new LineEntity { X0 = p.x, Y0 = p.y, X1 = x, Y1 = y };
+    }
+    public override void AppendPreview(List<float> o, (double x, double y)? cursor)
+    {
+        if (_p0 != null && cursor != null)
+            Tint(new LineEntity { X0 = _p0.Value.x, Y0 = _p0.Value.y, X1 = cursor.Value.x, Y1 = cursor.Value.y }).Tessellate(o);
     }
     public override void Reset() => _p0 = null;
 }
@@ -50,6 +60,14 @@ public sealed class CircleTool : DrawTool
         double r = Math.Sqrt((x - c.x) * (x - c.x) + (y - c.y) * (y - c.y));
         return new CircleEntity { Cx = c.x, Cy = c.y, Radius = r };
     }
+    public override void AppendPreview(List<float> o, (double x, double y)? cursor)
+    {
+        if (_c != null && cursor != null)
+        {
+            double dx = cursor.Value.x - _c.Value.x, dy = cursor.Value.y - _c.Value.y;
+            Tint(new CircleEntity { Cx = _c.Value.x, Cy = _c.Value.y, Radius = Math.Sqrt(dx * dx + dy * dy) }).Tessellate(o);
+        }
+    }
     public override void Reset() => _c = null;
 }
 
@@ -63,6 +81,11 @@ public sealed class RectTool : DrawTool
         if (_p0 == null) { _p0 = (x, y); return null; }
         var p = _p0.Value; _p0 = null;
         return new RectEntity { X0 = p.x, Y0 = p.y, X1 = x, Y1 = y };
+    }
+    public override void AppendPreview(List<float> o, (double x, double y)? cursor)
+    {
+        if (_p0 != null && cursor != null)
+            Tint(new RectEntity { X0 = _p0.Value.x, Y0 = _p0.Value.y, X1 = cursor.Value.x, Y1 = cursor.Value.y }).Tessellate(o);
     }
     public override void Reset() => _p0 = null;
 }
@@ -87,6 +110,14 @@ public sealed class ArcTool : DrawTool
         var a = _p1.Value; var b = _p2.Value; _p1 = null; _p2 = null;
         return new ArcEntity { X1 = a.x, Y1 = a.y, X2 = b.x, Y2 = b.y, X3 = x, Y3 = y };
     }
+    public override void AppendPreview(List<float> o, (double x, double y)? cursor)
+    {
+        if (cursor == null || _p1 == null) return;
+        if (_p2 == null)   // 只 1 点：起点→光标 直线预览
+            Tint(new LineEntity { X0 = _p1.Value.x, Y0 = _p1.Value.y, X1 = cursor.Value.x, Y1 = cursor.Value.y }).Tessellate(o);
+        else               // 2 点：三点圆弧预览
+            Tint(new ArcEntity { X1 = _p1.Value.x, Y1 = _p1.Value.y, X2 = _p2.Value.x, Y2 = _p2.Value.y, X3 = cursor.Value.x, Y3 = cursor.Value.y }).Tessellate(o);
+    }
     public override void Reset() { _p1 = null; _p2 = null; }
 }
 
@@ -104,14 +135,17 @@ public sealed class PolylineTool : DrawTool
         _pts.Clear();
         return e;
     }
-    public override void AppendPreview(List<float> o)
+    public override void AppendPreview(List<float> o, (double x, double y)? cursor)
     {
         for (int i = 0; i + 1 < _pts.Count; i++)
-        {
-            var a = _pts[i]; var b = _pts[i + 1];
-            o.Add((float)a.x); o.Add((float)a.y); o.Add(0); o.Add(0.86f); o.Add(0.9f); o.Add(0.6f);
-            o.Add((float)b.x); o.Add((float)b.y); o.Add(0); o.Add(0.86f); o.Add(0.9f); o.Add(0.6f);
-        }
+            Seg(o, _pts[i], _pts[i + 1], 0.86f, 0.9f, 0.6f);
+        if (cursor != null && _pts.Count > 0)
+            Seg(o, _pts[^1], cursor.Value, PR, PG, PB);       // 橡皮筋段
+    }
+    private static void Seg(List<float> o, (double x, double y) a, (double x, double y) b, float r, float g, float bl)
+    {
+        o.Add((float)a.x); o.Add((float)a.y); o.Add(0); o.Add(r); o.Add(g); o.Add(bl);
+        o.Add((float)b.x); o.Add((float)b.y); o.Add(0); o.Add(r); o.Add(g); o.Add(bl);
     }
     public override void Reset() => _pts.Clear();
 }
