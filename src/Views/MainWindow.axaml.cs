@@ -603,6 +603,7 @@ public partial class MainWindow : Window
             if (cmd == "高程查询" || cmd == "虚拟钻孔" || cmd == "查询高程") { await StartSpotQueryAsync(); return; }
             if (cmd == "文字" || cmd == "单行文字") { ArmText(); return; }
             if (cmd == "标注" || cmd == "线性标注" || cmd == "尺寸标注" || cmd == "标注台阶标高") { StartDim(); return; }
+            if (cmd == "裁剪" || cmd == "多边形裁剪" || cmd == "区运算" || cmd == "范围裁剪") { ClipPolygon(); return; }
             if (cmd == "坐标转换") { await CoordTransformAsync(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
@@ -1211,6 +1212,23 @@ public partial class MainWindow : Window
         _tool = null; _measure = null; _editMode = EditMode.None;
         Viewport.FitBounds(r.Bounds);
         StatusMsg.Text = $"高程查询：已载入 {r.Points.Count} 点，点击视口任意位置查询高程（ESC 退出）";
+    }
+
+    // 多边形裁剪：选两条多段线(第1=被裁, 第2=凸裁剪边界)→交集
+    private void ClipPolygon()
+    {
+        var polys = _selected.FindAll(e => e is PolylineEntity);
+        if (polys.Count != 2) { StatusMsg.Text = "裁剪：请先选中两条多段线(第1=被裁, 第2=裁剪边界)"; return; }
+        var subject = ((PolylineEntity)polys[0]).Points;
+        var clipHull = GeomHull.ConvexHull(((PolylineEntity)polys[1]).Points);   // 边界取凸包保证凸+CCW
+        var result = PolygonClip.Clip(subject, clipHull);
+        if (result.Count < 3) { StatusMsg.Text = "裁剪：无交集"; return; }
+        var pl = new PolylineEntity { Closed = true, Cr = 0.4f, Cg = 0.95f, Cb = 0.6f };
+        foreach (var p in result) pl.Points.Add(p);
+        BeginChange();
+        _scene.Add(pl);
+        RefreshScene();
+        StatusMsg.Text = $"裁剪完成：交集 {result.Count} 顶点";
     }
 
     // 线性标注：取两点
@@ -2510,6 +2528,9 @@ public partial class MainWindow : Window
             case "DIM":
             case "DIMLINEAR":
                 StartDim();
+                break;
+            case "CLIP":
+                ClipPolygon();
                 break;
             case "DIST":
             case "DI":
