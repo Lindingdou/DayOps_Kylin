@@ -722,6 +722,7 @@ public partial class MainWindow : Window
             if (cmd == "区域重叠检测" || cmd == "区域重叠" || cmd == "重叠检测") { CheckRegionOverlap(); return; }
             if (cmd == "平盘宽度识别" || cmd == "现场参数提取" || cmd == "平盘识别") { await BenchWidthAsync(); return; }
             if (cmd == "确定可采区域" || cmd == "可采区域" || cmd == "可采区域识别") { await MineableAreaAsync(); return; }
+            if (cmd == "侧面三角网" || cmd == "侧面放样" || cmd == "放样侧面") { await SideSurfaceAsync(); return; }
             if (cmd == "道路横断面" || cmd == "路面加宽超高" || cmd == "弯道加宽") { RoadCrossSectionCmd(); return; }
             if (cmd == "螺旋斜坡道" || cmd == "螺旋坑线" || cmd == "螺旋中线") { SpiralRampCmd(); return; }
             if (cmd == "折返斜坡道" || cmd == "折返坑线" || cmd == "折返中线") { SwitchbackRampCmd(); return; }
@@ -1387,6 +1388,64 @@ public partial class MainWindow : Window
         double maxH = HaulMetrics.MaxHaulM(dists);
         double avgCycle = sumCycle / samples.Count;
         StatusMsg.Text = $"运距指标({samples.Count} 车·{truck.PayloadT:0}t)：加权平均运距 {wavg:0.#}m · 最大 {maxH:0.#}m · 等效总里程 {sumEquiv / 1000.0:0.##}km · 平均循环 {avgCycle:0.#}min · 总量 {sumTons:0.#}t";
+    }
+
+    // 读单条 3D 折线 CSV(x,y,z)
+    private static List<(double x, double y, double z)>? ReadLineCsv(string path)
+    {
+        string[] rows;
+        try { rows = System.IO.File.ReadAllLines(path); } catch { return null; }
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var pts = new List<(double x, double y, double z)>();
+        foreach (var raw in rows)
+        {
+            var s = raw.Trim();
+            if (s.Length == 0 || s.StartsWith("#")) continue;
+            var t = s.Split(new[] { ',', '\t', ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
+            if (t.Length < 2) continue;
+            if (!double.TryParse(t[0], System.Globalization.NumberStyles.Float, inv, out double x)) continue;
+            if (!double.TryParse(t[1], System.Globalization.NumberStyles.Float, inv, out double y)) continue;
+            double z = 0; if (t.Length >= 3) double.TryParse(t[2], System.Globalization.NumberStyles.Float, inv, out z);
+            pts.Add((x, y, z));
+        }
+        return pts;
+    }
+
+    // 侧面三角网：选顶线 CSV + 底线 CSV → 弧长拉链放样 → 保存 OFF + 报表
+    private async Task SideSurfaceAsync()
+    {
+        var tf = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "侧面三角网：① 选顶线 CSV (x,y,z)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("折线 CSV") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (tf.Count == 0) return;
+        var top = ReadLineCsv(tf[0].Path.LocalPath);
+        if (top == null || top.Count < 2) { StatusMsg.Text = "侧面三角网：顶线需 ≥2 点(x,y,z)"; return; }
+        var bfp = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "侧面三角网：② 选底线 CSV (x,y,z)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("折线 CSV") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (bfp.Count == 0) return;
+        var bot = ReadLineCsv(bfp[0].Path.LocalPath);
+        if (bot == null || bot.Count < 2) { StatusMsg.Text = "侧面三角网：底线需 ≥2 点(x,y,z)"; return; }
+        bool closed = top.Count >= 3 && System.Math.Abs(top[0].x - top[^1].x) < 1e-6 && System.Math.Abs(top[0].y - top[^1].y) < 1e-6;
+        var (verts, tris) = SideSurface.Loft(top, bot, closed, flip: false);
+        if (tris.Count == 0) { StatusMsg.Text = "侧面三角网：放样失败(点太少/退化)"; return; }
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "保存侧面三角网", DefaultExtension = "off", SuggestedFileName = "side.off",
+            FileTypeChoices = new[] { new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } } }
+        });
+        if (file == null) return;
+        try { System.IO.File.WriteAllText(file.Path.LocalPath, MeshWeld.ToOff(verts, tris)); }
+        catch (System.Exception ex) { StatusMsg.Text = $"侧面三角网：写出失败 {ex.Message}"; return; }
+        var m = MeshMetrics.Compute(verts, tris);
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        StatusMsg.Text = $"侧面三角网：顶{top.Count}·底{bot.Count}线{(closed ? "(闭环)" : "")} → {verts.Count} 顶点·{tris.Count} 三角·面积 {m.SurfaceArea.ToString("0.#", inv)} → {System.IO.Path.GetFileName(file.Path.LocalPath)}";
     }
 
     // 确定可采区域：选煤层底板 OFF + 台阶线 CSV(lineId,x,y,z) → 找采煤台阶+可采面积+上覆揭露量 报表
@@ -4221,6 +4280,10 @@ public partial class MainWindow : Window
                 break;
             case "MINEABLEAREA":
                 _ = MineableAreaAsync();
+                break;
+            case "SIDESURFACE":
+            case "LOFT":
+                _ = SideSurfaceAsync();
                 break;
             case "ROADSECTION":
             case "ROADWIDEN":
