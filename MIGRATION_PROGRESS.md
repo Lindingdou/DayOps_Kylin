@@ -235,6 +235,7 @@
 
 ### GeoDataBase 续
 - [x] **等高线生产**：`Contour`（散点 IDW→网格 + Marching Squares 多层等值线）→ 高程点 CSV(x,y,z) 生成彩色等高线折线入场景。命令 等高线/等高线生产/CONTOUR。+4 单测(算法3+插值1)，143 tests。commit `e4d1ad2`+`0fa5e4d`。
+- [x] **等高线高程标注**：每层加高程数字文字(复用单笔画字体)。commit `eaecbd1`。
 - [记录] 等高线**标注高程数字** → 需 Skia。三角网 TIN(Delaunay) 更精确的表面 → 可托管做但较大，待评估。
 
 ### MeshEditLib / 三角网（托管切片）
