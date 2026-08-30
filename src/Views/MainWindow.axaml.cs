@@ -706,6 +706,7 @@ public partial class MainWindow : Window
             if (cmd == "上次") { SelectPrevious(); return; }
             if (cmd == "分解") { ExplodeSelected(); return; }
             if (cmd == "加密多段线" || cmd == "加密") { DensifySelectedPolylines(); return; }
+            if (cmd == "两线交点" || cmd == "求交点" || cmd == "线交点") { IntersectSelectedPolylines(); return; }
             if (cmd == "新建图层") { var l = _layers.New(); PopulateDrawingLayers(); StatusMsg.Text = $"新建图层「{l.Name}」并置为当前"; return; }
             if (cmd == "图层特性管理器") { var l = _layers.CycleCurrent(); StatusMsg.Text = $"当前图层「{l.Name}」 显示{( l.Shown?"开":"关")}/{(l.Locked?"锁":"解锁")}（再点循环切换）"; return; }
             if (cmd == "冻结") { FreezeCurrentLayer(true); return; }
@@ -2925,6 +2926,56 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"加密多段线：{polys.Count} 条 · 顶点 {ov}→{fv}(插入 {fv - ov})";
     }
 
+    // 把选中实体抽成 (点表, 是否闭合) 序列(供交点用)：支持直线/多段线/矩形
+    private static bool AsSequence(SceneEntity e, out List<(double x, double y)> pts, out bool closed)
+    {
+        pts = new List<(double, double)>(); closed = false;
+        switch (e)
+        {
+            case LineEntity l: pts.Add((l.X0, l.Y0)); pts.Add((l.X1, l.Y1)); return true;
+            case PolylineEntity p: pts.AddRange(p.Points); closed = p.Closed; return pts.Count >= 2;
+            case RectEntity r:
+                pts.Add((r.X0, r.Y0)); pts.Add((r.X1, r.Y0)); pts.Add((r.X1, r.Y1)); pts.Add((r.X0, r.Y1));
+                closed = true; return true;
+            default: return false;
+        }
+    }
+
+    // 两线交点：选中的线/多段线/矩形两两求段交点 → 各交点作 Point 标注入场景
+    private void IntersectSelectedPolylines()
+    {
+        var seqs = new List<(List<(double x, double y)> pts, bool closed)>();
+        foreach (var e in _selected)
+            if (AsSequence(e, out var pts, out var closed)) seqs.Add((pts, closed));
+        if (seqs.Count < 2) { StatusMsg.Text = "两线交点：请先选中至少两条线/多段线/矩形"; return; }
+        // 去重容差按参与点的包围盒对角取
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        foreach (var s in seqs) foreach (var (x, y) in s.pts) { if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y; }
+        double diag = System.Math.Sqrt((maxX - minX) * (maxX - minX) + (maxY - minY) * (maxY - minY));
+        double tol = diag > 0 ? diag * 1e-6 : 1e-6;
+        var all = new List<(double x, double y)>();
+        for (int i = 0; i < seqs.Count; i++)
+            for (int j = i + 1; j < seqs.Count; j++)
+            {
+                var hits = PolylineIntersect.Between(seqs[i].pts, seqs[i].closed, seqs[j].pts, seqs[j].closed, tol);
+                foreach (var h in hits)
+                {
+                    bool dup = false; double t2 = tol * tol;
+                    foreach (var q in all) { double dx = q.x - h.x, dy = q.y - h.y; if (dx * dx + dy * dy <= t2) { dup = true; break; } }
+                    if (!dup) all.Add(h);
+                }
+            }
+        if (all.Count == 0) { StatusMsg.Text = "两线交点：所选线之间无交点"; return; }
+        BeginChange();
+        foreach (var (x, y) in all)
+        {
+            var pe = new PointEntity { X = x, Y = y, Cr = 0.95f, Cg = 0.3f, Cb = 0.3f };   // 红点标交点
+            _scene.Add(pe);
+        }
+        RefreshScene();
+        StatusMsg.Text = $"两线交点：{seqs.Count} 条线 → {all.Count} 个交点(已作红点标注)";
+    }
+
     // 进入编辑（移动/复制/镜像）：需已有选择
     private void StartEdit(EditMode mode, string name)
     {
@@ -3549,6 +3600,10 @@ public partial class MainWindow : Window
             case "DENSIFY":
             case "POLYDENSIFY":
                 DensifySelectedPolylines();
+                break;
+            case "POLYINTERSECT":
+            case "INTERSECTPOLY":
+                IntersectSelectedPolylines();
                 break;
             case "MOVE":
             case "M":
