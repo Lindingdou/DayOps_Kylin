@@ -2713,11 +2713,28 @@ public partial class MainWindow : Window
     }
 
     // 命令行回车 → 命令分发（已实装的走功能，其余回显）
+    private string? _lastCommand;   // 上次成功派发的命令（空命令行 + Enter 重复用）
+
+    /// <summary>命令行是否空闲（无进行中的绘制/编辑/测量/交互）——空 Enter 仅在此态重复上次命令。</summary>
+    private bool CommandIdle() =>
+        _tool == null && _measure == null && _angle == null && _editMode == EditMode.None
+        && !_textActive && !_ttrActive && !_serActive && !_offsetActive && !_trimActive
+        && !_breakActive && !_slideActive && !_dimActive && !_dimRadActive;
+
+    /// <summary>空命令行 → 上次命令；否则用输入。纯逻辑，可单测。</summary>
+    internal static string? RepeatCommand(string typed, string? last)
+        => typed.Length > 0 ? typed : (string.IsNullOrEmpty(last) ? null : last);
+
     private void OnCommandKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Enter || sender is not TextBox tb || string.IsNullOrWhiteSpace(tb.Text)) return;
+        if (e.Key != Key.Enter || sender is not TextBox tb) return;
 
         string cmd = tb.Text.Trim();
+        if (cmd.Length == 0)   // 空命令行 + Enter = 重复上次命令（AutoCAD 行为；仅空闲态，不干预进行中的交互）
+        {
+            if (!CommandIdle() || string.IsNullOrEmpty(_lastCommand)) return;
+            cmd = _lastCommand!;
+        }
         tb.Text = string.Empty;
 
         // 文字：下一条命令行输入即内容
@@ -2754,6 +2771,8 @@ public partial class MainWindow : Window
         }
 
         if (TryCoordinateInput(cmd)) return;   // 绘制/编辑取点时优先当坐标
+
+        _lastCommand = cmd;                    // 记录供"空命令行 + Enter 重复"（坐标已在上一步返回，不会记为命令）
 
         switch (cmd.ToUpperInvariant())
         {

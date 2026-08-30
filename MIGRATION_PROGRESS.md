@@ -178,7 +178,7 @@
 2. ~~**精确键盘输入全缺**~~ ✅ **已做**：命令行支持 `x,y` / `@dx,dy` / `d<ang` / `@d<ang`，绘制/编辑取点时等效点击（commit `3b38128`）。
 3. ~~**导入与绘制两套、互不相通**~~ ✅ **已打通**：CAD(DXF/DWG) 导入现映射为**可编辑场景实体**（Line/Circle/Arc/Polyline/Point/Ellipse→多段线/Spline→多段线/Insert 展开），图层并入绘制图层表，可选中/编辑/删除/移动/按层冻结；捕捉统一用场景几何（commit `722dbeb`+`ea05b14`）。点数据 CSV 同样进可编辑场景。剩 OFF 网格仍显示态（网格逐边编辑无意义）。
 4. ~~**夹点编辑（grip）没做**~~ ✅ **已做**：单选显示夹点方块，拖拽改几何（直线端点/中点、圆心/半径、矩形角、圆弧三点、多段线顶点、多边形心/半径），可撤销（commit `e8ba0b2`）。
-5. **命令行只识别固定词**：无参数解析、无历史、无 Enter 重复上次命令。
+5. **命令行只识别固定词**：无参数解析、无历史；~~无 Enter 重复上次命令~~ ✅ **Enter 重复已做**（空命令行+Enter 在空闲态重复上次命令，AutoCAD 行为，commit 见 §十一）。
 
 **已完成（续 loop）**：全部选择/最后/上次 ✅ · 分解 ✅ · 正多边形 ✅ · 滑动多段线 ✅ · 橡皮筋预览(全绘制工具) ✅ · 精确坐标输入(绝对/相对/极) ✅ · 打断(直线) ✅ · 圆 2P/3P ✅ · 图层特性(绘制层 冻结/锁定/全开，渲染+拾取遵守) ✅
 
@@ -316,4 +316,5 @@
 - [x] **文字旋转 · 保真**：`TextEntity` 加 `Rotation`(弧度, 绕锚点)；`Tessellate` 绕锚点旋转字形、`Apply` 并入仿射旋转分量(atan2(B,A), 同 PolygonEntity)、`Grips/MoveGrip` 保角；`SceneIO` 存读(N[3], 向后兼容旧文件)；导入 Text/MText 读 `Rotation`、导出写回。此前旋转文字被导成/绘成水平。+5 单测(旋转90°笔画落 +Y/水平向后兼容/Apply 合成/SceneIO 往返/DXF 往返保角 π/4)，286 tests。commit `dbf159a`。
 - [x] **导出实体颜色 · 保真修复**：`SceneExportService.BuildDocument` 此前只赋图层不赋颜色 → 另存为丢失实体 RGB（红线导出变默认色）。现把场景烘焙 RGB 写为 ACadSharp 真彩色(`new Color(byte r,g,b)`)，与导入 `ColorOf` 的真彩色读取对称。+1 端到端(偏红线 导出→导入 颜色量化容差内保留)，287 tests。commit `02ec1a6`。→ **导入/导出双向颜色保真闭合**。
 - [x] **.pmx 图层表持久化 · 保真修复**：此前 .pmx 只存实体, 重开时按实体名重建图层 → **丢失每层 冻结/锁定/显隐 状态 + 空图层**。新增文档级格式 `{L:[图层],Cur:当前层,E:[实体]}`(`SaveDoc`/`LoadDoc`, 按首字符 `[`/`{` **向后兼容旧数组 .pmx**)；`LayerTable.Restore` 整表恢复(含空层)；MainWindow 保存/另存/打开接线, 打开时新格式整表恢复、旧格式回退按实体重建。+4 单测(图层状态+空层往返/旧格式兼容/Load 读新格式/Restore 重建)，291 tests。commit `8d38937`。
+- [x] **命令行 Enter 重复上次命令 · 交互**：**忠实移植原 Commands.cs 行为**——空命令行 + Enter 在**空闲态**(无进行中绘制/编辑/测量/交互, `CommandIdle()` 判)重复上次命令；派发前记录 `_lastCommand`(坐标输入已先返回不误记)。经核原程序确有(Commands.cs:166 "空命令行+执行键=重复上次命令 AutoCAD 行为")。+3 单测(RepeatCommand 解析: 空→上次/输入覆盖/无上次→null)，294 tests。commit `pending17`。
 - [记录·受阻] **KDF(WeCAD) 导入/导出**：原 `KdfReader`(811行)/`KdfWriter`(417行) 是自足二进制编解码器(magic `wecad_bin_version_2021`, 逆向自单一样例), 依赖 System+CSMath(本项目 ACadSharp 已带), GBK 用 `CodePagesEncodingProvider` 原码已处理 → **可移植**。但**验证受阻**：无真 .kdf 样例, 逐字转写逆向格式仅靠 writer↔reader 往返对称是弱验证(原作者亦标 WeCAD 兼容"未验证")。给一个样例 .kdf 即可移植并按真实字节验证。原 .las/.blk/.osgb/.3dm/.3ds 同理需样例/大依赖。
