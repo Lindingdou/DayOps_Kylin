@@ -671,6 +671,7 @@ public partial class MainWindow : Window
             if (cmd == "达成分析" || cmd == "产量达成" || cmd == "达成率") { await AttainmentAsync(); return; }
             if (cmd == "车铲匹配" || cmd == "配车匹配" || cmd == "车铲配比") { await FleetMatchAsync(); return; }
             if (cmd == "点云质量统计" || cmd == "点云统计" || cmd == "点云质量") { await PointCloudStatsAsync(); return; }
+            if (cmd == "点云高程着色" || cmd == "高程着色" || cmd == "点云着色") { await ElevationColorAsync(); return; }
             if (cmd == "SOR去噪" || cmd == "统计去噪" || cmd == "SOR") { await DenoiseAsync(false); return; }
             if (cmd == "ROR去噪" || cmd == "半径去噪" || cmd == "ROR") { await DenoiseAsync(true); return; }
             if (cmd == "矿床识别" || cmd == "自动识别" || cmd == "矿床类型识别") { await DepositDetectAsync(); return; }
@@ -1092,6 +1093,39 @@ public partial class MainWindow : Window
             report += $" 段{i + 1} 均衡比{s.RatioM3PerT.ToString("0.##", inv)}({s.B - s.A}期,峰值超前{s.PeakLeadWanM3:0.#})";
         }
         StatusMsg.Text = report;
+    }
+
+    // 点云高程着色：点 CSV(x,y,z) → 按 z 用地形色带着色 → 彩色点入场景
+    private async Task ElevationColorAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "点云高程着色：选点 CSV (x,y,z)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("点云 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success) { StatusMsg.Text = $"高程着色：点导入失败 {r.Error}"; return; }
+        if (r.Points.Count == 0) { StatusMsg.Text = "高程着色：无点"; return; }
+
+        double zmin = double.MaxValue, zmax = double.MinValue;
+        foreach (var p in r.Points) { if (p.z < zmin) zmin = p.z; if (p.z > zmax) zmax = p.z; }
+        double range = zmax - zmin;
+        BeginChange();
+        foreach (var p in r.Points)
+        {
+            double t = range > 1e-9 ? (p.z - zmin) / range : 0.5;
+            var (cr, cg, cb) = Colormap.Sample(Colormap.Terrain, t);
+            var pe = new PointEntity { X = p.x, Y = p.y };
+            AssignLayer(pe);
+            pe.Cr = cr / 255f; pe.Cg = cg / 255f; pe.Cb = cb / 255f;
+            _scene.Add(pe);
+        }
+        RefreshScene();
+        Viewport.FitBounds(r.Bounds);
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        StatusMsg.Text = $"高程着色：{r.Points.Count} 点 · z {zmin.ToString("0.#", inv)}~{zmax.ToString("0.#", inv)}（地形色带）";
     }
 
     // 点云去噪 SOR/ROR：点 CSV(x,y,z) → 去噪 → 保留点入场景(黄) + 报表
@@ -3457,6 +3491,10 @@ public partial class MainWindow : Window
             case "PCSTATS":
             case "CLOUDSTATS":
                 _ = PointCloudStatsAsync();
+                break;
+            case "ELEVCOLOR":
+            case "PCCOLOR":
+                _ = ElevationColorAsync();
                 break;
             case "SOR":
                 _ = DenoiseAsync(false);
