@@ -585,6 +585,7 @@ public partial class MainWindow : Window
     private DrawTool? _tool;                      // 当前激活的绘制工具
     private readonly List<SceneEntity> _selected = new();   // 选择集
     private List<SceneEntity> _prevSelected = new();         // 上次选择集
+    private readonly Cad.Draw.CadClipboard _clip = new();    // 实体剪贴板（COPYCLIP/CUTCLIP/PASTECLIP）
     private Avalonia.Point _pressPos;             // 按下位置（区分点击/拖拽）
     private enum EditMode { None, Move, Copy, Mirror, Rotate, Scale }
     private EditMode _editMode = EditMode.None;
@@ -699,6 +700,10 @@ public partial class MainWindow : Window
             if (cmd == "旋转") { StartEdit(EditMode.Rotate, "旋转"); return; }
             if (cmd == "缩放") { StartEdit(EditMode.Scale, "缩放"); return; }
             if (cmd == "偏移") { StartOffset(); return; }
+            if (cmd == "复制到剪贴板" || cmd == "剪贴板复制") { CopyClip(); return; }
+            if (cmd == "剪切") { CutClip(); return; }
+            if (cmd == "粘贴") { PasteClip(); return; }
+            if (cmd == "删除全部" || cmd == "全部删除" || cmd == "清空实体") { EraseAll(); return; }
             if (cmd == "修剪" || cmd == "延伸") { StartTrim(); return; }
             if (cmd == "圆TTR" || cmd == "圆(切切半径)") { StartTTR(); return; }
             if (cmd == "圆弧SER" || cmd == "圆弧(起点端点半径)") { StartArcSer(); return; }
@@ -2351,6 +2356,46 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"已删除 {n} 个实体";
     }
 
+    // ---------- 剪贴板（COPYCLIP/CUTCLIP/PASTECLIP/PASTEORIG）+ 删除全部 ----------
+    private void CopyClip()
+    {
+        if (_selected.Count == 0) { StatusMsg.Text = "复制：未选中实体"; return; }
+        _clip.Set(_selected);
+        StatusMsg.Text = $"已复制 {_clip.Count} 个实体到剪贴板";
+    }
+
+    private void CutClip()
+    {
+        if (_selected.Count == 0) { StatusMsg.Text = "剪切：未选中实体"; return; }
+        _clip.Set(_selected);
+        int n = _clip.Count;
+        BeginChange();
+        foreach (var e in _selected) _scene.Remove(e);
+        _selected.Clear(); Viewport.SetHighlight(null); RefreshScene();
+        StatusMsg.Text = $"已剪切 {n} 个实体到剪贴板";
+    }
+
+    private void PasteClip()
+    {
+        if (_clip.IsEmpty) { StatusMsg.Text = "粘贴：剪贴板为空"; return; }
+        var pasted = _clip.Paste(0, 0);              // 原位粘贴（克隆），选中以便随后移动
+        BeginChange();
+        foreach (var e in pasted) _scene.Add(e);
+        _selected.Clear(); _selected.AddRange(pasted);
+        RefreshScene(); HighlightSelection();
+        StatusMsg.Text = $"已粘贴 {pasted.Count} 个实体（已选中，可移动）";
+    }
+
+    private void EraseAll()
+    {
+        if (_scene.Count == 0) { StatusMsg.Text = "场景为空"; return; }
+        BeginChange();
+        int n = _scene.Count;
+        _scene.Clear();
+        _selected.Clear(); Viewport.SetHighlight(null); RefreshScene();
+        StatusMsg.Text = $"已删除全部 {n} 个实体";
+    }
+
     // ---------- 选择命令（全选/最后/上次）+ 分解 ----------
     private void SaveSel() => _prevSelected = new List<SceneEntity>(_selected);
 
@@ -2947,6 +2992,19 @@ public partial class MainWindow : Window
             case "ERASE":
             case "E":
                 DeleteSelected();
+                break;
+            case "COPYCLIP":
+                CopyClip();
+                break;
+            case "CUTCLIP":
+                CutClip();
+                break;
+            case "PASTECLIP":
+            case "PASTEORIG":
+                PasteClip();
+                break;
+            case "ERASEALL":
+                EraseAll();
                 break;
             case "ALL":
                 SelectAll();
