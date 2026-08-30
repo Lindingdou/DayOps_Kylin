@@ -75,7 +75,7 @@ public partial class MainWindow : Window
                 var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
                 if (wp != null && _selected.Count == 1 && _selected[0] is LineEntity boundary)
                 {
-                    var hit = _scene.Pick(wp.Value.x, wp.Value.y, SnapTolWorld(_lastPointer) * 3);
+                    var hit = _scene.Pick(wp.Value.x, wp.Value.y, SnapTolWorld(_lastPointer) * 3, _layers.IsSelectable);
                     if (hit is LineEntity target && !ReferenceEquals(target, boundary))
                     {
                         var isect = LineMath.IntersectInfinite(target.X0, target.Y0, target.X1, target.Y1,
@@ -350,7 +350,12 @@ public partial class MainWindow : Window
             if (cmd == "上次") { SelectPrevious(); return; }
             if (cmd == "分解") { ExplodeSelected(); return; }
             if (cmd == "新建图层") { var l = _layers.New(); StatusMsg.Text = $"新建图层「{l.Name}」并置为当前"; return; }
-            if (cmd == "图层特性管理器") { var l = _layers.CycleCurrent(); StatusMsg.Text = $"当前图层「{l.Name}」（共 {_layers.Layers.Count} 层，再点循环切换）"; return; }
+            if (cmd == "图层特性管理器") { var l = _layers.CycleCurrent(); StatusMsg.Text = $"当前图层「{l.Name}」 显示{( l.Shown?"开":"关")}/{(l.Locked?"锁":"解锁")}（再点循环切换）"; return; }
+            if (cmd == "冻结") { FreezeCurrentLayer(true); return; }
+            if (cmd == "解冻") { FreezeCurrentLayer(false); return; }
+            if (cmd == "锁定") { LockCurrentLayer(true); return; }
+            if (cmd == "解锁") { LockCurrentLayer(false); return; }
+            if (cmd == "图层全开") { LayersAllOn(); return; }
             if (cmd == "移动") { StartEdit(EditMode.Move, "移动"); return; }
             if (cmd == "复制") { StartEdit(EditMode.Copy, "复制"); return; }
             if (cmd == "镜像") { StartEdit(EditMode.Mirror, "镜像"); return; }
@@ -663,7 +668,7 @@ public partial class MainWindow : Window
     // 重绘场景（含当前工具进行中的预览：已点的段 + 到光标的橡皮筋）
     private void RefreshScene()
     {
-        var list = new List<float>(_scene.BuildGeometry());
+        var list = new List<float>(_scene.BuildGeometry(_layers.IsShown));
         _tool?.AppendPreview(list, _cursorWorld);
         if (_slideDragging && _slidePts.Count > 1)     // 滑动多段线拖动预览
         {
@@ -680,7 +685,7 @@ public partial class MainWindow : Window
         if (w == null) return;
         SaveSel();
         double tol = SnapTolWorld(rel);
-        var hit = _scene.Pick(w.Value.x, w.Value.y, tol);
+        var hit = _scene.Pick(w.Value.x, w.Value.y, tol, _layers.IsSelectable);
         if (hit == null) _selected.Clear();
         else if (_selected.Contains(hit)) _selected.Remove(hit);
         else { _selected.Clear(); _selected.Add(hit); }
@@ -798,6 +803,29 @@ public partial class MainWindow : Window
         _slideActive = true; _slideDragging = false; _slidePts.Clear();
         Viewport.SetSnapMarker(null); _snapShown = false;
         StatusMsg.Text = "滑动多段线：在视口按住左键拖动采样，松开成线（ESC 退出）";
+    }
+
+    // 图层特性：作用于当前图层（当前层可用 图层特性管理器 循环切换）
+    private void FreezeCurrentLayer(bool freeze)
+    {
+        _layers.Current.Frozen = freeze;
+        _selected.RemoveAll(en => !_layers.IsSelectable(en.LayerName));   // 冻结层的选中失效
+        HighlightSelection();
+        RefreshScene();
+        StatusMsg.Text = $"图层「{_layers.Current.Name}」{(freeze ? "已冻结（隐藏且不可选）" : "已解冻")}";
+    }
+    private void LockCurrentLayer(bool locked)
+    {
+        _layers.Current.Locked = locked;
+        _selected.RemoveAll(en => !_layers.IsSelectable(en.LayerName));
+        HighlightSelection();
+        StatusMsg.Text = $"图层「{_layers.Current.Name}」{(locked ? "已锁定（可见不可选）" : "已解锁")}";
+    }
+    private void LayersAllOn()
+    {
+        _layers.AllOn();
+        RefreshScene();
+        StatusMsg.Text = "所有图层已打开（解冻）";
     }
 
     // 命令行精确坐标：绘制/编辑取点时把 "x,y" / "@dx,dy" / "@d<ang" 当作一次点击
@@ -1025,6 +1053,21 @@ public partial class MainWindow : Window
             case "BREAK":
             case "BR":
                 StartBreak();
+                break;
+            case "LAYFRZ":
+                FreezeCurrentLayer(true);
+                break;
+            case "LAYTHW":
+                FreezeCurrentLayer(false);
+                break;
+            case "LAYLCK":
+                LockCurrentLayer(true);
+                break;
+            case "LAYULK":
+                LockCurrentLayer(false);
+                break;
+            case "LAYON":
+                LayersAllOn();
                 break;
             case "NEW":
                 NewScene();

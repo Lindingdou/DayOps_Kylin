@@ -44,4 +44,40 @@ public class LayerTableTests
         Assert.True(t.Remove("A"));    // 删当前 → 回落到 "0"
         Assert.Equal("0", t.Current.Name);
     }
+
+    [Fact]
+    public void Freeze_hides_and_blocks_select()
+    {
+        var t = new LayerTable();
+        t.New("A"); t.Current.Frozen = true;
+        Assert.False(t.IsShown("A"));
+        Assert.False(t.IsSelectable("A"));
+        Assert.True(t.IsShown("0"));      // 其它层不受影响
+    }
+
+    [Fact]
+    public void Lock_shows_but_blocks_select()
+    {
+        var t = new LayerTable();
+        t.New("A"); t.Current.Locked = true;
+        Assert.True(t.IsShown("A"));       // 仍显示
+        Assert.False(t.IsSelectable("A")); // 但不可选
+    }
+
+    [Fact]
+    public void AllOn_thaws_and_shows()
+    {
+        var t = new LayerTable();
+        t.New("A"); t.Current.Frozen = true; t.Current.Visible = false;
+        t.AllOn();
+        Assert.True(t.IsShown("A"));
+    }
+
+    [Fact]
+    public void Unknown_layer_defaults_shown_and_selectable()
+    {
+        var t = new LayerTable();
+        Assert.True(t.IsShown("不存在"));
+        Assert.True(t.IsSelectable("不存在"));
+    }
 }

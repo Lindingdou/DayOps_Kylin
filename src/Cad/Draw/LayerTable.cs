@@ -2,13 +2,20 @@ using System.Collections.Generic;
 
 namespace PitMine3D.Kylin.Cad.Draw;
 
-/// <summary>图层：名称 + 颜色 + 可见。对应 Home 图层管理（托管重实现）。</summary>
+/// <summary>图层：名称 + 颜色 + 开关/冻结/锁定。对应 Home 图层管理（托管重实现）。</summary>
 public sealed class Layer
 {
     public string Name;
     public float Cr, Cg, Cb;
-    public bool Visible = true;
+    public bool Visible = true;    // 关闭=不显示
+    public bool Frozen;            // 冻结=不显示且不参与(比关闭更强)
+    public bool Locked;            // 锁定=显示但不可选/改
     public Layer(string name, float r, float g, float b) { Name = name; Cr = r; Cg = g; Cb = b; }
+
+    /// <summary>是否上屏（开且未冻结）。</summary>
+    public bool Shown => Visible && !Frozen;
+    /// <summary>是否可拾取/编辑（上屏且未锁定）。</summary>
+    public bool Selectable => Shown && !Locked;
 }
 
 /// <summary>图层表：默认层 "0"，可新建/删除/设为当前；新层轮转配色。纯逻辑，可单测。</summary>
@@ -68,4 +75,12 @@ public sealed class LayerTable
         if (Current == l) Current = _layers[0];
         return true;
     }
+
+    /// <summary>该图层上的实体是否上屏（未知图层按显示处理）。</summary>
+    public bool IsShown(string name) { var l = Get(name); return l == null || l.Shown; }
+    /// <summary>该图层上的实体是否可拾取/编辑（未知图层按可选处理）。</summary>
+    public bool IsSelectable(string name) { var l = Get(name); return l == null || l.Selectable; }
+
+    /// <summary>全部打开：所有层开且解冻（锁定保持）。</summary>
+    public void AllOn() { foreach (var l in _layers) { l.Visible = true; l.Frozen = false; } }
 }

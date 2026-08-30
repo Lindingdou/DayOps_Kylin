@@ -315,4 +315,24 @@ public class DrawToolsTests
         t.AddPoint(0, 0); t.AddPoint(1, 0);
         Assert.Null(t.AddPoint(2, 0));   // 三点共线 → 无圆
     }
+
+    [Fact]
+    public void Scene_buildgeometry_skips_hidden_layer()
+    {
+        var s = new Scene();
+        s.Add(new LineEntity { X0 = 0, Y0 = 0, X1 = 1, Y1 = 0, LayerName = "on" });
+        s.Add(new LineEntity { X0 = 0, Y0 = 0, X1 = 1, Y1 = 0, LayerName = "off" });
+        Assert.Equal(24, s.BuildGeometry().Length);              // 2 段全画
+        Assert.Equal(12, s.BuildGeometry(n => n != "off").Length); // 隐藏 off → 1 段
+    }
+
+    [Fact]
+    public void Scene_pick_skips_locked_layer()
+    {
+        var s = new Scene();
+        var line = new LineEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 0, LayerName = "locked" };
+        s.Add(line);
+        Assert.Null(s.Pick(5, 0, 1.0, n => n != "locked"));   // 锁定层不可选
+        Assert.Same(line, s.Pick(5, 0, 1.0, n => true));      // 无过滤可选
+    }
 }

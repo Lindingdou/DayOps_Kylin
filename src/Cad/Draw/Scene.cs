@@ -359,13 +359,14 @@ public sealed class Scene
         return true;
     }
 
-    /// <summary>拾取：容差 tol 内离 (x,y) 最近的实体；无则 null。</summary>
-    public SceneEntity? Pick(double x, double y, double tol)
+    /// <summary>拾取：容差 tol 内离 (x,y) 最近的实体；无则 null。canSelect 为 null 时不按图层过滤。</summary>
+    public SceneEntity? Pick(double x, double y, double tol, Func<string, bool>? canSelect = null)
     {
         SceneEntity? best = null;
         double bestD = tol;
         foreach (var e in Entities)
         {
+            if (canSelect != null && !canSelect(e.LayerName)) continue;   // 锁定/隐藏层不可选
             double d = e.DistanceTo(x, y);
             if (d <= bestD) { bestD = d; best = e; }
         }
@@ -380,10 +381,12 @@ public sealed class Scene
         if (i >= 0) Entities[i] = newE; else Entities.Add(newE);
     }
 
-    public float[] BuildGeometry()
+    /// <summary>汇总几何。isShown 为 null 时全画；否则跳过不上屏图层的实体。</summary>
+    public float[] BuildGeometry(Func<string, bool>? isShown = null)
     {
         var o = new List<float>();
-        foreach (var e in Entities) e.Tessellate(o);
+        foreach (var e in Entities)
+            if (isShown == null || isShown(e.LayerName)) e.Tessellate(o);
         return o.ToArray();
     }
 }
