@@ -66,25 +66,14 @@ public partial class MainWindow : Window
                 var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
                 if (wp != null)
                 {
-                    if (_editP0 == null)
+                    _editPts.Add((wp.Value.x, wp.Value.y));
+                    if (_editPts.Count >= EditPointCount(_editMode))
                     {
-                        _editP0 = (wp.Value.x, wp.Value.y);
-                        StatusMsg.Text = _editMode == EditMode.Mirror ? "镜像：指定镜像线第二点" : "指定目标点";
-                    }
-                    else
-                    {
-                        var p0 = _editP0.Value; var p1 = wp.Value;
-                        Affine2 m = _editMode switch
-                        {
-                            EditMode.Move => Affine2.Translate(p1.x - p0.x, p1.y - p0.y),
-                            EditMode.Copy => Affine2.Translate(p1.x - p0.x, p1.y - p0.y),
-                            EditMode.Mirror => Affine2.MirrorLine(p0.x, p0.y, p1.x, p1.y),
-                            _ => Affine2.Translate(0, 0)
-                        };
-                        ApplyEditTransform(m, _editMode == EditMode.Copy);
-                        _editMode = EditMode.None; _editP0 = null;
+                        ApplyEditTransform(BuildEditTransform(), _editMode == EditMode.Copy);
+                        _editMode = EditMode.None; _editPts.Clear();
                         StatusMsg.Text = "编辑完成";
                     }
+                    else StatusMsg.Text = EditPrompt(_editMode, _editPts.Count);
                 }
                 return;
             }
@@ -181,7 +170,7 @@ public partial class MainWindow : Window
                 _tool = null;
                 _measure = null;
                 _editMode = EditMode.None;
-                _editP0 = null;
+                _editPts.Clear();
                 _selected.Clear();
                 Viewport.SetSnapMarker(null);
                 Viewport.SetHighlight(null);
@@ -207,9 +196,9 @@ public partial class MainWindow : Window
     private DrawTool? _tool;                      // 当前激活的绘制工具
     private readonly List<SceneEntity> _selected = new();   // 选择集
     private Avalonia.Point _pressPos;             // 按下位置（区分点击/拖拽）
-    private enum EditMode { None, Move, Copy, Mirror }
+    private enum EditMode { None, Move, Copy, Mirror, Rotate, Scale }
     private EditMode _editMode = EditMode.None;
-    private (double x, double y)? _editP0;         // 编辑基点/镜像线第一点
+    private readonly List<(double x, double y)> _editPts = new();   // 编辑取的点（基点/目标点/参照…）
 
     // Ribbon 按钮 → 「导入」走真实 DXF 导入；其余暂回显命令（证明整条 UI 已接线）
     private async void OnRibbonCommand(object? sender, RoutedEventArgs e)
@@ -223,6 +212,8 @@ public partial class MainWindow : Window
             if (cmd == "移动") { StartEdit(EditMode.Move, "移动"); return; }
             if (cmd == "复制") { StartEdit(EditMode.Copy, "复制"); return; }
             if (cmd == "镜像") { StartEdit(EditMode.Mirror, "镜像"); return; }
+            if (cmd == "旋转") { StartEdit(EditMode.Rotate, "旋转"); return; }
+            if (cmd == "缩放") { StartEdit(EditMode.Scale, "缩放"); return; }
             if (ActivateDrawTool(cmd)) return;
             StatusMsg.Text = $"命令: {cmd}";
             CommandInput.Text = cmd;
@@ -465,8 +456,42 @@ public partial class MainWindow : Window
     private void StartEdit(EditMode mode, string name)
     {
         if (_selected.Count == 0) { StatusMsg.Text = $"{name}：请先选实体"; return; }
-        _editMode = mode; _editP0 = null; _tool = null; _measure = null;
+        _editMode = mode; _editPts.Clear(); _tool = null; _measure = null;
         StatusMsg.Text = mode == EditMode.Mirror ? $"{name}：指定镜像线第一点" : $"{name}：指定基点";
+    }
+
+    private static int EditPointCount(EditMode m) => m == EditMode.Scale ? 3 : 2;
+
+    private static string EditPrompt(EditMode m, int have) => (m, have) switch
+    {
+        (EditMode.Mirror, 1) => "镜像：指定镜像线第二点",
+        (EditMode.Rotate, 1) => "旋转：指定旋转角参照点",
+        (EditMode.Scale, 1) => "缩放：指定参考长度点",
+        (EditMode.Scale, 2) => "缩放：指定新长度点",
+        _ => "指定目标点"
+    };
+
+    private Affine2 BuildEditTransform()
+    {
+        var p = _editPts;
+        switch (_editMode)
+        {
+            case EditMode.Move:
+            case EditMode.Copy:
+                return Affine2.Translate(p[1].x - p[0].x, p[1].y - p[0].y);
+            case EditMode.Mirror:
+                return Affine2.MirrorLine(p[0].x, p[0].y, p[1].x, p[1].y);
+            case EditMode.Rotate:
+                return Affine2.Rotate(System.Math.Atan2(p[1].y - p[0].y, p[1].x - p[0].x), p[0].x, p[0].y);
+            case EditMode.Scale:
+            {
+                double refLen = System.Math.Sqrt((p[1].x - p[0].x) * (p[1].x - p[0].x) + (p[1].y - p[0].y) * (p[1].y - p[0].y));
+                double newLen = System.Math.Sqrt((p[2].x - p[0].x) * (p[2].x - p[0].x) + (p[2].y - p[0].y) * (p[2].y - p[0].y));
+                double f = refLen < 1e-9 ? 1 : newLen / refLen;
+                return Affine2.Scale(f, p[0].x, p[0].y);
+            }
+            default: return Affine2.Translate(0, 0);
+        }
     }
 
     // 对选择集施加仿射变换；copy=true 则加副本，否则替换原实体
@@ -545,6 +570,14 @@ public partial class MainWindow : Window
             case "MIRROR":
             case "MI":
                 StartEdit(EditMode.Mirror, "镜像");
+                break;
+            case "ROTATE":
+            case "RO":
+                StartEdit(EditMode.Rotate, "旋转");
+                break;
+            case "SCALE":
+            case "SC":
+                StartEdit(EditMode.Scale, "缩放");
                 break;
             default:
                 if (!ActivateDrawTool(cmd)) StatusMsg.Text = $"执行: {cmd}";
