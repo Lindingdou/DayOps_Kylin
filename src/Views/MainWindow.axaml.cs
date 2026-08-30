@@ -712,6 +712,7 @@ public partial class MainWindow : Window
             if (cmd == "删除重复线" || cmd == "去重复线" || cmd == "线去重") { DedupeSelectedPolylines(); return; }
             if (cmd == "区域求差" || cmd == "可采区域求差" || cmd == "多边形求差") { SubtractRegions(); return; }
             if (cmd == "区域重叠检测" || cmd == "区域重叠" || cmd == "重叠检测") { CheckRegionOverlap(); return; }
+            if (cmd == "平盘宽度识别" || cmd == "现场参数提取" || cmd == "平盘识别") { await BenchWidthAsync(); return; }
             if (cmd == "新建图层") { var l = _layers.New(); PopulateDrawingLayers(); StatusMsg.Text = $"新建图层「{l.Name}」并置为当前"; return; }
             if (cmd == "图层特性管理器") { var l = _layers.CycleCurrent(); StatusMsg.Text = $"当前图层「{l.Name}」 显示{( l.Shown?"开":"关")}/{(l.Locked?"锁":"解锁")}（再点循环切换）"; return; }
             if (cmd == "冻结") { FreezeCurrentLayer(true); return; }
@@ -1166,6 +1167,58 @@ public partial class MainWindow : Window
         try { System.IO.File.WriteAllText(outPath, MeshWeld.ToOff(w.Verts, w.Tris)); }
         catch (System.Exception ex) { StatusMsg.Text = $"网格焊接：写出失败 {ex.Message}"; return; }
         StatusMsg.Text = $"网格焊接：顶点 {w.InputVerts}→{w.OutputVerts} · 三角 {w.InputTris}→{w.OutputTris}(退化 {w.DroppedDegenerate}·重复 {w.DuplicateTris}) · 容差 {tol.ToString("0.###e0", System.Globalization.CultureInfo.InvariantCulture)} → {System.IO.Path.GetFileName(outPath)}";
+    }
+
+    // 平盘宽度识别(现场参数提取)：读台阶线 CSV(lineId,x,y,z) → 圈出宽度 ≥ 目标 的平盘 → 多边形入场景
+    private async Task BenchWidthAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "平盘宽度识别：选台阶线 CSV (lineId,x,y,z)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("台阶线 CSV") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (files.Count == 0) return;
+        string[] rows;
+        try { rows = System.IO.File.ReadAllLines(files[0].Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"平盘宽度识别：读取失败 {ex.Message}"; return; }
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var groups = new Dictionary<string, List<double>>();
+        var order = new List<string>();
+        foreach (var raw in rows)
+        {
+            var s = raw.Trim();
+            if (s.Length == 0 || s.StartsWith("#")) continue;
+            var t = s.Split(new[] { ',', '\t', ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
+            if (t.Length < 4) continue;
+            if (!double.TryParse(t[1], System.Globalization.NumberStyles.Float, inv, out double x)) continue;   // 跳表头
+            if (!double.TryParse(t[2], System.Globalization.NumberStyles.Float, inv, out double y)) continue;
+            if (!double.TryParse(t[3], System.Globalization.NumberStyles.Float, inv, out double z)) continue;
+            string id = t[0];
+            if (!groups.TryGetValue(id, out var list)) { list = new List<double>(); groups[id] = list; order.Add(id); }
+            list.Add(x); list.Add(y); list.Add(z);
+        }
+        var lines = new List<double[]>();
+        foreach (var id in order) if (groups[id].Count >= 6) lines.Add(groups[id].ToArray());
+        if (lines.Count == 0) { StatusMsg.Text = "平盘宽度识别：未解析到台阶线(需 lineId,x,y,z, 每线 ≥2 点)"; return; }
+        const double wTarget = 20.0;   // 目标平盘宽度默认 20m(典型工作平盘); 本环境无参数对话框, 取此默认
+        var r = BenchWidthIdentifier.Identify(lines, wTarget);
+        if (!r.Ok) { StatusMsg.Text = $"平盘宽度识别：{r.Message}"; return; }
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        BeginChange();
+        foreach (var reg in r.Regions)
+        {
+            var pl = new PolylineEntity { Closed = true, Cr = 0.3f, Cg = 0.85f, Cb = 0.95f };   // 青色达标平盘
+            foreach (var (x, y) in reg.Polygon)
+            {
+                pl.Points.Add((x, y));
+                if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y;
+            }
+            _scene.Add(pl);
+        }
+        RefreshScene();
+        if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
+        StatusMsg.Text = $"平盘宽度识别(≥{wTarget:0.#}m)：{r.Message}";
     }
 
     // 网格诊断：OFF 网格 → 边界边/非流形边/退化三角/洞数/是否闭合 报表
@@ -3719,6 +3772,10 @@ public partial class MainWindow : Window
                 break;
             case "REGIONOVERLAP":
                 CheckRegionOverlap();
+                break;
+            case "BENCHWIDTH":
+            case "WIDEBENCH":
+                _ = BenchWidthAsync();
                 break;
             case "MOVE":
             case "M":
