@@ -649,6 +649,7 @@ public partial class MainWindow : Window
             if (cmd == "点对点寻径" || cmd == "寻径" || cmd == "点对点寻路") { StartPathfind(); return; }
             if (cmd == "备选路径" || cmd == "K最短路" || cmd == "备用路径") { StartKPathfind(); return; }
             if (cmd == "路网校验" || cmd == "连通性诊断" || cmd == "路网体检") { ValidateRoadNetwork(); return; }
+            if (cmd == "演化对比" || cmd == "路网演化" || cmd == "两期路网对比") { await EvolutionCompareAsync(); return; }
             if (cmd == "排土条带" || cmd == "条带填充" || cmd == "排土条带划分") { DumpStrips(); return; }
             if (cmd == "分帮扩帮" || cmd == "批量台阶扩帮" || cmd == "批量扩坑") { StartBench(); return; }
             if (cmd == "组合工作线" || cmd == "合并多段线" || cmd == "连接台阶线" || cmd == "连接多段线") { JoinPolylines(); return; }
@@ -2747,6 +2748,82 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"路网校验：{comps} 个连通片(断开!) · {gaps.Count} 处可接缺口(≤{maxGap:0.#}, 品红标注){narrow}";
     }
 
+    // 读中线 CSV(lineId,x,y[,z]) → 分组为 EvoLine 列表(供演化对比)
+    private static List<EvoLine> ReadEvoLines(string path)
+    {
+        var lines = new List<EvoLine>();
+        string[] rows;
+        try { rows = System.IO.File.ReadAllLines(path); } catch { return lines; }
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var groups = new Dictionary<string, EvoLine>(); var order = new List<string>();
+        foreach (var raw in rows)
+        {
+            var s = raw.Trim();
+            if (s.Length == 0 || s.StartsWith("#")) continue;
+            var t = s.Split(new[] { ',', '\t', ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
+            if (t.Length < 3) continue;
+            if (!double.TryParse(t[1], System.Globalization.NumberStyles.Float, inv, out double x)) continue;
+            if (!double.TryParse(t[2], System.Globalization.NumberStyles.Float, inv, out double y)) continue;
+            double z = 0; if (t.Length >= 4) double.TryParse(t[3], System.Globalization.NumberStyles.Float, inv, out z);
+            string id = t[0];
+            if (!groups.TryGetValue(id, out var ln)) { ln = new EvoLine { Id = id }; groups[id] = ln; order.Add(id); }
+            ln.Centerline.Add(new Pt3(x, y, z));
+        }
+        foreach (var id in order) if (groups[id].Centerline.Count >= 2) lines.Add(groups[id]);
+        return lines;
+    }
+
+    // 演化对比：读上期 + 本期中线 CSV(lineId,x,y[,z]) → 逐段分类(保持/移位/延拓/截短/废除) → 配色入场景 + 里程账
+    private async Task EvolutionCompareAsync()
+    {
+        var pf = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "演化对比：① 选上期中线 CSV (lineId,x,y[,z])",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("中线 CSV") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (pf.Count == 0) return;
+        var prev = ReadEvoLines(pf[0].Path.LocalPath);
+        var cf = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "演化对比：② 选本期中线 CSV (lineId,x,y[,z])",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("中线 CSV") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (cf.Count == 0) return;
+        var curr = ReadEvoLines(cf[0].Path.LocalPath);
+        if (prev.Count == 0 && curr.Count == 0) { StatusMsg.Text = "演化对比：两期均未解析到中线(需 lineId,x,y[,z], 每线≥2点)"; return; }
+        var res = RoadEvolutionAnalyzer.Analyze(prev, curr, new RoadEvolutionOptions());
+        // 按类别配色：保持灰/移位橙/延拓·新建绿/截短黄/废除红
+        (float r, float g, float b) Col(RoadEvolutionClass c) => c switch
+        {
+            RoadEvolutionClass.Keep => (0.6f, 0.6f, 0.65f),
+            RoadEvolutionClass.Shift => (0.95f, 0.55f, 0.20f),
+            RoadEvolutionClass.Extend => (0.35f, 0.9f, 0.45f),
+            RoadEvolutionClass.Shorten => (0.95f, 0.85f, 0.30f),
+            _ => (0.95f, 0.25f, 0.25f),
+        };
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        BeginChange();
+        foreach (var r in res.Routes)
+        {
+            if (r.DisplayCenterline.Count < 2) continue;
+            var (cr, cg, cb) = Col(r.Class);
+            var pl = new PolylineEntity { Cr = cr, Cg = cg, Cb = cb };
+            foreach (var p in r.DisplayCenterline)
+            {
+                pl.Points.Add((p.X, p.Y));
+                if (p.X < minX) minX = p.X; if (p.Y < minY) minY = p.Y; if (p.X > maxX) maxX = p.X; if (p.Y > maxY) maxY = p.Y;
+            }
+            _scene.Add(pl);
+        }
+        RefreshScene();
+        if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
+        // 落 CSV 明细到本期文件旁
+        try { System.IO.File.WriteAllText(System.IO.Path.ChangeExtension(cf[0].Path.LocalPath, ".evolution.csv"), res.ToCsv()); } catch { }
+        StatusMsg.Text = $"演化对比：{res.Summary}｜{res.Ledger.Text}";
+    }
+
     // 圈范围算量：选中的闭合多段线作边界 → TIN → 边界内三角体积
     private async Task BoundaryVolumeAsync()
     {
@@ -4215,6 +4292,10 @@ public partial class MainWindow : Window
             case "ROADVALIDATE":
             case "NETCHECK":
                 ValidateRoadNetwork();
+                break;
+            case "ROADEVOLUTION":
+            case "EVOLUTION":
+                _ = EvolutionCompareAsync();
                 break;
             case "STRIPS":
                 DumpStrips();
