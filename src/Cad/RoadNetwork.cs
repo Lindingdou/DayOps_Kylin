@@ -63,6 +63,26 @@ public static class RoadNetwork
         return path;
     }
 
+    /// <summary>单源最短距：从 start 到每个节点的最短距离(不可达为 +∞)。供 OD 运距矩阵。</summary>
+    public static double[] DijkstraDistances(List<List<(int to, double w)>> adj, int start)
+    {
+        int n = adj.Count;
+        var dist = new double[n]; var done = new bool[n];
+        for (int i = 0; i < n; i++) dist[i] = double.PositiveInfinity;
+        if (start < 0 || start >= n) return dist;
+        dist[start] = 0;
+        for (int it = 0; it < n; it++)
+        {
+            int u = -1; double best = double.PositiveInfinity;
+            for (int i = 0; i < n; i++) if (!done[i] && dist[i] < best) { best = dist[i]; u = i; }
+            if (u < 0) break;
+            done[u] = true;
+            foreach (var (v, w) in adj[u])
+                if (dist[u] + w < dist[v]) dist[v] = dist[u] + w;
+        }
+        return dist;
+    }
+
     /// <summary>路径(节点索引序列)的总长度。</summary>
     public static double PathLength(List<(double x, double y)> nodes, List<int> path)
     {

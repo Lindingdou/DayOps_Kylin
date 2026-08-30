@@ -715,6 +715,7 @@ public partial class MainWindow : Window
             if (cmd == "平盘宽度识别" || cmd == "现场参数提取" || cmd == "平盘识别") { await BenchWidthAsync(); return; }
             if (cmd == "道路横断面" || cmd == "路面加宽超高" || cmd == "弯道加宽") { RoadCrossSectionCmd(); return; }
             if (cmd == "运距指标" || cmd == "循环时间" || cmd == "运距统计") { await HaulRecordMetricsAsync(); return; }
+            if (cmd == "OD运距矩阵" || cmd == "OD矩阵" || cmd == "运距矩阵") { await OdMatrixAsync(); return; }
             if (cmd == "新建图层") { var l = _layers.New(); PopulateDrawingLayers(); StatusMsg.Text = $"新建图层「{l.Name}」并置为当前"; return; }
             if (cmd == "图层特性管理器") { var l = _layers.CycleCurrent(); StatusMsg.Text = $"当前图层「{l.Name}」 显示{( l.Shown?"开":"关")}/{(l.Locked?"锁":"解锁")}（再点循环切换）"; return; }
             if (cmd == "冻结") { FreezeCurrentLayer(true); return; }
@@ -1169,6 +1170,76 @@ public partial class MainWindow : Window
         try { System.IO.File.WriteAllText(outPath, MeshWeld.ToOff(w.Verts, w.Tris)); }
         catch (System.Exception ex) { StatusMsg.Text = $"网格焊接：写出失败 {ex.Message}"; return; }
         StatusMsg.Text = $"网格焊接：顶点 {w.InputVerts}→{w.OutputVerts} · 三角 {w.InputTris}→{w.OutputTris}(退化 {w.DroppedDegenerate}·重复 {w.DuplicateTris}) · 容差 {tol.ToString("0.###e0", System.Globalization.CultureInfo.InvariantCulture)} → {System.IO.Path.GetFileName(outPath)}";
+    }
+
+    // OD 运距矩阵：读 OD 点 CSV(x,y[,name]) → 场景多段线路网 → 各 OD 对最短路距离矩阵 → 落 CSV + 报表
+    private async Task OdMatrixAsync()
+    {
+        var polys = new List<IReadOnlyList<(double x, double y)>>();
+        foreach (var e in _scene.Entities) if (e is PolylineEntity p && p.Points.Count >= 2) polys.Add(p.Points);
+        if (polys.Count == 0) { StatusMsg.Text = "OD 运距矩阵：场景无路网（多段线）"; return; }
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "OD 运距矩阵：选 OD 点 CSV (x,y[,name])",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("OD 点 CSV") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (files.Count == 0) return;
+        string[] rows;
+        try { rows = System.IO.File.ReadAllLines(files[0].Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"OD 运距矩阵：读取失败 {ex.Message}"; return; }
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var pts = new List<(double x, double y)>(); var names = new List<string>();
+        foreach (var raw in rows)
+        {
+            var s = raw.Trim();
+            if (s.Length == 0 || s.StartsWith("#")) continue;
+            var t = s.Split(new[] { ',', '\t', ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
+            if (t.Length < 2) continue;
+            if (!double.TryParse(t[0], System.Globalization.NumberStyles.Float, inv, out double x)) continue;
+            if (!double.TryParse(t[1], System.Globalization.NumberStyles.Float, inv, out double y)) continue;
+            pts.Add((x, y)); names.Add(t.Length >= 3 ? t[2] : $"P{pts.Count}");
+        }
+        if (pts.Count < 2) { StatusMsg.Text = "OD 运距矩阵：需 ≥2 个 OD 点(x,y[,name])"; return; }
+        double tol = SnapTolWorld(_lastPointer);
+        var (nodes, adj) = RoadNetwork.Build(polys, tol > 0 ? tol : 1e-6);
+        var idx = new int[pts.Count];
+        for (int i = 0; i < pts.Count; i++) idx[i] = RoadNetwork.NearestNode(nodes, pts[i].x, pts[i].y);
+        // 逐源单源最短距 → 矩阵
+        var mat = new double[pts.Count][];
+        int reach = 0; double sum = 0, max = 0;
+        for (int i = 0; i < pts.Count; i++)
+        {
+            var dall = RoadNetwork.DijkstraDistances(adj, idx[i]);
+            mat[i] = new double[pts.Count];
+            for (int j = 0; j < pts.Count; j++)
+            {
+                double d = (idx[j] >= 0 && idx[j] < dall.Length) ? dall[idx[j]] : double.PositiveInfinity;
+                mat[i][j] = d;
+                if (i != j && !double.IsInfinity(d)) { reach++; sum += d; if (d > max) max = d; }
+            }
+        }
+        // 落 CSV
+        string outPath = System.IO.Path.ChangeExtension(files[0].Path.LocalPath, ".odmatrix.csv");
+        try
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.Append("from\\to");
+            foreach (var nm in names) sb.Append(',').Append(nm);
+            sb.Append('\n');
+            for (int i = 0; i < pts.Count; i++)
+            {
+                sb.Append(names[i]);
+                for (int j = 0; j < pts.Count; j++)
+                    sb.Append(',').Append(double.IsInfinity(mat[i][j]) ? "INF" : mat[i][j].ToString("0.##", inv));
+                sb.Append('\n');
+            }
+            System.IO.File.WriteAllText(outPath, sb.ToString());
+        }
+        catch (System.Exception ex) { StatusMsg.Text = $"OD 运距矩阵：写出失败 {ex.Message}"; return; }
+        int totalPairs = pts.Count * (pts.Count - 1);
+        double avg = reach > 0 ? sum / reach : 0;
+        StatusMsg.Text = $"OD 运距矩阵：{pts.Count} 点 · 可达 {reach}/{totalPairs} 对 · 平均 {avg:0.#} · 最大 {max:0.#} → {System.IO.Path.GetFileName(outPath)}";
     }
 
     // 运距指标：读运输记录 CSV(distanceM,gradePct,tons) → 等效运距/循环时间/加权平均/最大运距 报表
@@ -3870,6 +3941,9 @@ public partial class MainWindow : Window
             case "HAULMETRICS":
             case "CYCLETIME":
                 _ = HaulRecordMetricsAsync();
+                break;
+            case "ODMATRIX":
+                _ = OdMatrixAsync();
                 break;
             case "MOVE":
             case "M":
