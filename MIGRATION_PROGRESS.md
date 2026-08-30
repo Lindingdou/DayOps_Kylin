@@ -249,6 +249,7 @@
 
 ### 通用地形/分析（跨模块托管切片）
 - [x] **剖面分析**：`Profile.Sample`(沿剖面线 IDW 采样地形高程→距离-高程曲线)。命令 剖面分析/剖面/PROFILE。+3 单测，189 tests。commit `b168409`。
+- [x] **地表粗糙度**：`Roughness.Compute`(网格 3×3 邻域极差)→配色格。命令 粗糙度/ROUGHNESS。+2 单测，200 tests。commit `9d37b87`。
 
 ### RoadLib 道路（托管切片）
 - [x] **提取道路中心线**：`RoadTools.Centerline`（两路边多段线→逐点最近中点连线）。命令 提取道路中心线/道路中线/CENTERLINE。+3 单测，165 tests。commit `e305b4e`。
