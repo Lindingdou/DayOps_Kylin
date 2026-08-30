@@ -297,4 +297,4 @@
 - [x] **多边形圈选(WP/CP)**：`SelectionBox.MatchPolygon`(顶点全含/任含)+以选中闭合多段线为边界圈选。命令 圈选/交叉圈选/WP/CP。+1 单测，237 tests。commit `671f8bb`。
 - [x] **三点测角(MANG)**：`AngleMath/AngleState`(顶点→两边取点出夹角 0..180°, 与测距同框架)。命令 角度/测量角度/MANG/ANG。+4 单测，241 tests。commit `0551d9c`。
 - [x] **半径标注(DIMRADIAL)**：`DimTools.BuildRadial`(选圆/弧→径向线+箭头+"R值"文字)。命令 半径标注/DIMRADIAL；线性标注兼收 DIMALIGNED。经核 MockAiEngine/Ribbon 确为原程序功能。+2 单测，243 tests。commit `09f7b47`。
-- [记录] **连续标注(DIMCONTINUE)** → 原 ribbon 有；需先有一条基准标注再链式接续，属标注体系扩展，可托管、后续补。
+- [x] **连续标注(DIMCONTINUE)**：以上一条线性标注的第二点为起点链式接续(复用 DimTools.Build + _lastDimP2)。命令 连续标注/DIMCONTINUE。经核原 ribbon 确有。复用已测几何, 无新纯逻辑单测；build+run 验证。243 tests。commit `pending2`。→ **标注三型齐**(对齐 DIMALIGNED / 半径 DIMRADIAL / 连续 DIMCONTINUE + 三点测角 MANG)

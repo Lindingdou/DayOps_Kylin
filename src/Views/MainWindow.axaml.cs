@@ -180,6 +180,7 @@ public partial class MainWindow : Window
                         foreach (var de in dim) { de.LayerName = _layers.Current.Name; _scene.Add(de); }
                         RefreshScene();
                         StatusMsg.Text = "已标注";
+                        _lastDimP2 = (wp.Value.x, wp.Value.y);   // 供连续标注接续
                         _dimActive = false; _dimP1 = null;
                     }
                 }
@@ -606,6 +607,7 @@ public partial class MainWindow : Window
     private (double x, double y)? _dimP1;
     private bool _dimRadActive;                        // 半径标注：选圆/弧后指定方向
     private (double cx, double cy, double r)? _dimRadCircle;
+    private (double x, double y)? _lastDimP2;           // 上一条线性标注的第二点(连续标注基准)
     private bool _selBoxActive;                     // 窗口框选拖拽中
     private Avalonia.Point _selBoxStart;            // 框选起点(屏幕)
     private bool _ttrActive, _ttrAwaitRadius;       // 圆 TTR：选两相切参照(线/圆) → 输半径
@@ -657,6 +659,7 @@ public partial class MainWindow : Window
             if (cmd == "文字" || cmd == "单行文字") { ArmText(); return; }
             if (cmd == "标注" || cmd == "线性标注" || cmd == "尺寸标注" || cmd == "标注台阶标高") { StartDim(); return; }
             if (cmd == "半径标注" || cmd == "半径") { StartDimRadial(); return; }
+            if (cmd == "连续标注" || cmd == "连续") { StartDimContinue(); return; }
             if (cmd == "裁剪" || cmd == "多边形裁剪" || cmd == "区运算" || cmd == "范围裁剪") { ClipPolygon(); return; }
             if (cmd == "平滑" || cmd == "光滑" || cmd == "曲线平滑" || cmd == "光滑曲线") { SmoothPolyline(); return; }
             if (cmd == "简化" || cmd == "多段线简化" || cmd == "抽稀线") { SimplifyPolyline(); return; }
@@ -1361,6 +1364,15 @@ public partial class MainWindow : Window
         _dimRadCircle = c; _dimRadActive = true;
         _tool = null; _measure = null; _editMode = EditMode.None;
         StatusMsg.Text = "半径标注：指定标注方向";
+    }
+
+    // 连续标注(DIMCONTINUE)：以上一条线性标注的第二点为起点链式接续
+    private void StartDimContinue()
+    {
+        if (_lastDimP2 == null) { StatusMsg.Text = "连续标注：请先做一条线性标注"; return; }
+        _dimActive = true; _dimP1 = _lastDimP2;
+        _tool = null; _measure = null; _editMode = EditMode.None;
+        StatusMsg.Text = "连续标注：指定下一点";
     }
 
     // 文字：进入模式，下一条命令行输入即文字内容
@@ -2657,6 +2669,10 @@ public partial class MainWindow : Window
             case "DIMRADIAL":
             case "DIMRAD":
                 StartDimRadial();
+                break;
+            case "DIMCONTINUE":
+            case "DIMCONT":
+                StartDimContinue();
                 break;
             case "CLIP":
                 ClipPolygon();
