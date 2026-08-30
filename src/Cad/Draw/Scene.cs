@@ -288,6 +288,48 @@ public sealed class ArcEntity : SceneEntity
         switch (i) { case 0: e.X1 = nx; e.Y1 = ny; break; case 1: e.X2 = nx; e.Y2 = ny; break; case 2: e.X3 = nx; e.Y3 = ny; break; }
         return e;
     }
+    public override SceneEntity? Offset(double px, double py)   // 同心弧：过点偏移(新半径=心到点距)
+    {
+        var cc = ArcMath.Circumcircle(X1, Y1, X2, Y2, X3, Y3);
+        if (cc == null) return null;
+        var (cx, cy, r) = cc.Value;
+        double r2 = Math.Sqrt((px - cx) * (px - cx) + (py - cy) * (py - cy));
+        if (r2 < 1e-6 || r < 1e-9) return null;
+        double s = r2 / r;
+        return Colored(new ArcEntity
+        {
+            X1 = cx + (X1 - cx) * s, Y1 = cy + (Y1 - cy) * s,
+            X2 = cx + (X2 - cx) * s, Y2 = cy + (Y2 - cy) * s,
+            X3 = cx + (X3 - cx) * s, Y3 = cy + (Y3 - cy) * s, Segments = Segments
+        });
+    }
+    public override List<SceneEntity>? Break(double x1, double y1, double x2, double y2)   // 断成两段弧
+    {
+        var cc = ArcMath.Circumcircle(X1, Y1, X2, Y2, X3, Y3);
+        if (cc == null) return null;
+        var (cx, cy, r) = cc.Value;
+        double a1 = Math.Atan2(Y1 - cy, X1 - cx), am = Math.Atan2(Y2 - cy, X2 - cx), a3 = Math.Atan2(Y3 - cy, X3 - cx);
+        double sweep = Norm(a3 - a1), mid = Norm(am - a1);
+        double total = mid <= sweep ? sweep : sweep - 2 * Math.PI;   // 经中点的扫向(可负)
+        double AngOf(double px, double py) { double t = Norm(Math.Atan2(py - cy, px - cx) - a1); if (total < 0 && t > 0) t -= 2 * Math.PI; return t; }  // 相对起点的参数[与 total 同号]
+        double t1 = AngOf(x1, y1), t2 = AngOf(x2, y2);
+        if ((total >= 0 && t1 > t2) || (total < 0 && t1 < t2)) (t1, t2) = (t2, t1);   // 按扫向排序
+        var res = new List<SceneEntity>();
+        var seg1 = SubArc(cx, cy, r, a1, 0, t1); if (seg1 != null) res.Add(Colored(seg1));
+        var seg2 = SubArc(cx, cy, r, a1, t2, total); if (seg2 != null) res.Add(Colored(seg2));
+        return res.Count > 0 ? res : null;
+    }
+    private ArcEntity? SubArc(double cx, double cy, double r, double a0, double from, double to)
+    {
+        if (Math.Abs(to - from) < 1e-6) return null;
+        double s = a0 + from, m = a0 + (from + to) / 2, e = a0 + to;
+        return new ArcEntity
+        {
+            X1 = cx + r * Math.Cos(s), Y1 = cy + r * Math.Sin(s),
+            X2 = cx + r * Math.Cos(m), Y2 = cy + r * Math.Sin(m),
+            X3 = cx + r * Math.Cos(e), Y3 = cy + r * Math.Sin(e), Segments = Segments
+        };
+    }
 }
 
 public sealed class PolylineEntity : SceneEntity
@@ -323,6 +365,92 @@ public sealed class PolylineEntity : SceneEntity
         var pl = new PolylineEntity { Closed = Closed };
         for (int k = 0; k < Points.Count; k++) pl.Points.Add(k == i ? (nx, ny) : Points[k]);
         return Colored(pl);
+    }
+    public override SceneEntity? Offset(double px, double py)   // 等距偏移(逐段平移 + 相邻段求交 miter)
+    {
+        int n = Points.Count;
+        if (n < 2) return null;
+        int segN = Closed ? n : n - 1;
+        int ns = -1; double best = double.MaxValue, off = 0;
+        for (int i = 0; i < segN; i++)
+        {
+            var a = Points[i]; var b = Points[(i + 1) % n];
+            double dx = b.x - a.x, dy = b.y - a.y, len = Math.Sqrt(dx * dx + dy * dy);
+            if (len < 1e-9) continue;
+            double dseg = SegDist(px, py, a.x, a.y, b.x, b.y);
+            if (dseg < best) { best = dseg; ns = i; off = (px - a.x) * (-dy / len) + (py - a.y) * (dx / len); }
+        }
+        if (ns < 0) return null;
+        var oa = new (double x, double y)[segN];
+        var ob = new (double x, double y)[segN];
+        for (int i = 0; i < segN; i++)
+        {
+            var a = Points[i]; var b = Points[(i + 1) % n];
+            double dx = b.x - a.x, dy = b.y - a.y, len = Math.Sqrt(dx * dx + dy * dy);
+            if (len < 1e-9) { oa[i] = a; ob[i] = b; continue; }
+            double nx = -dy / len * off, ny = dx / len * off;
+            oa[i] = (a.x + nx, a.y + ny); ob[i] = (b.x + nx, b.y + ny);
+        }
+        var r = new PolylineEntity { Closed = Closed };
+        if (!Closed)
+        {
+            r.Points.Add(oa[0]);
+            for (int i = 1; i < segN; i++)
+            {
+                var p = LineMath.IntersectInfinite(oa[i - 1].x, oa[i - 1].y, ob[i - 1].x, ob[i - 1].y, oa[i].x, oa[i].y, ob[i].x, ob[i].y);
+                r.Points.Add(p ?? oa[i]);
+            }
+            r.Points.Add(ob[segN - 1]);
+        }
+        else
+        {
+            for (int i = 0; i < segN; i++)
+            {
+                int prev = (i - 1 + segN) % segN;
+                var p = LineMath.IntersectInfinite(oa[prev].x, oa[prev].y, ob[prev].x, ob[prev].y, oa[i].x, oa[i].y, ob[i].x, ob[i].y);
+                r.Points.Add(p ?? oa[i]);
+            }
+        }
+        return r.Points.Count >= 2 ? Colored(r) : null;
+    }
+    public override List<SceneEntity>? Break(double x1, double y1, double x2, double y2)   // 两点间移除一段
+    {
+        if (Points.Count < 2) return null;
+        (int seg, double t, double cum) Proj(double px, double py)
+        {
+            int bs = 0; double bt = 0, bd = double.MaxValue, cum = 0, acc = 0;
+            for (int i = 0; i + 1 < Points.Count; i++)
+            {
+                var a = Points[i]; var b = Points[i + 1];
+                double dx = b.x - a.x, dy = b.y - a.y, len2 = dx * dx + dy * dy, len = Math.Sqrt(len2);
+                double t = len2 < 1e-12 ? 0 : Math.Clamp(((px - a.x) * dx + (py - a.y) * dy) / len2, 0, 1);
+                double cxp = a.x + t * dx, cyp = a.y + t * dy, d = (px - cxp) * (px - cxp) + (py - cyp) * (py - cyp);
+                if (d < bd) { bd = d; bs = i; bt = t; cum = acc + t * len; }
+                acc += len;
+            }
+            return (bs, bt, cum);
+        }
+        var p1 = Proj(x1, y1); var p2 = Proj(x2, y2);
+        if (p1.cum > p2.cum) (p1, p2) = (p2, p1);
+        (double x, double y) At(int seg, double t) { var a = Points[seg]; var b = Points[seg + 1]; return (a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t); }
+        var b1 = At(p1.seg, p1.t); var b2 = At(p2.seg, p2.t);
+        if (Closed)   // 闭合 → 断成一条开口多段线(经另一侧绕回)
+        {
+            var c = new PolylineEntity(); c.Points.Add(b2);
+            for (int i = p2.seg + 1; i < Points.Count; i++) c.Points.Add(Points[i]);
+            for (int i = 0; i <= p1.seg; i++) c.Points.Add(Points[i]);
+            c.Points.Add(b1);
+            return c.Points.Count >= 2 ? new List<SceneEntity> { Colored(c) } : null;
+        }
+        var a1 = new PolylineEntity();
+        for (int i = 0; i <= p1.seg; i++) a1.Points.Add(Points[i]);
+        a1.Points.Add(b1);
+        var a2 = new PolylineEntity(); a2.Points.Add(b2);
+        for (int i = p2.seg + 1; i < Points.Count; i++) a2.Points.Add(Points[i]);
+        var res = new List<SceneEntity>();
+        if (a1.Points.Count >= 2) res.Add(Colored(a1));
+        if (a2.Points.Count >= 2) res.Add(Colored(a2));
+        return res.Count > 0 ? res : null;
     }
 }
 

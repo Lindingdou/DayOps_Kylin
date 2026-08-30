@@ -136,7 +136,7 @@ public partial class MainWindow : Window
                 {
                     var off = _selected[0].Offset(wp.Value.x, wp.Value.y);
                     if (off != null) { BeginChange(); _scene.Add(off); StatusMsg.Text = "已偏移"; }
-                    else StatusMsg.Text = "该实体暂不支持偏移（记录：多段线/圆弧偏移待做）";
+                    else StatusMsg.Text = "该实体不支持偏移（如点/退化几何）";
                     RefreshScene();
                 }
                 _offsetActive = false;
@@ -1010,8 +1010,8 @@ public partial class MainWindow : Window
 
     private void StartBreak()
     {
-        if (_selected.Count != 1 || _selected[0] is not LineEntity)
-        { StatusMsg.Text = "打断：请先选一条直线（多段线/圆弧打断待做）"; return; }
+        if (_selected.Count != 1 || _selected[0] is not (LineEntity or PolylineEntity or ArcEntity))
+        { StatusMsg.Text = "打断：请先选一条直线/多段线/圆弧"; return; }
         _breakActive = true; _breakPts.Clear();
         _tool = null; _measure = null; _editMode = EditMode.None; _offsetActive = false; _trimActive = false;
         StatusMsg.Text = "打断：指定第一点（两点间的一段将被移除）";

@@ -394,4 +394,48 @@ public class DrawToolsTests
         Assert.Equal(10, m.Radius, 6);
         Assert.Equal(System.Math.PI / 2, m.Rotation, 4);
     }
+
+    [Fact]
+    public void PolylineEntity_offset_miters_corner()
+    {
+        var pl = new PolylineEntity();
+        pl.Points.Add((0, 0)); pl.Points.Add((10, 0)); pl.Points.Add((10, 10));
+        var off = (PolylineEntity)pl.Offset(5, -3)!;          // 点击第一段下方 3
+        Assert.Equal(3, off.Points.Count);
+        Assert.Equal(0, off.Points[0].x, 4); Assert.Equal(-3, off.Points[0].y, 4);
+        Assert.Equal(13, off.Points[1].x, 4); Assert.Equal(-3, off.Points[1].y, 4);   // 外角 miter 交点
+    }
+
+    [Fact]
+    public void PolylineEntity_break_splits_into_two()
+    {
+        var pl = new PolylineEntity();
+        pl.Points.Add((0, 0)); pl.Points.Add((10, 0)); pl.Points.Add((10, 10));
+        var parts = pl.Break(3, 0, 7, 0)!;                    // 在第一段 x=3..7 间打断
+        Assert.Equal(2, parts.Count);
+        var a = (PolylineEntity)parts[0]; var b = (PolylineEntity)parts[1];
+        Assert.Equal(2, a.Points.Count);                     // (0,0),(3,0)
+        Assert.Equal(3, b.Points.Count);                     // (7,0),(10,0),(10,10)
+        Assert.Equal(3, a.Points[^1].x, 4);
+        Assert.Equal(7, b.Points[0].x, 4);
+    }
+
+    [Fact]
+    public void ArcEntity_offset_concentric_through_point()
+    {
+        var arc = new ArcEntity { X1 = 1, Y1 = 0, X2 = 0, Y2 = 1, X3 = -1, Y3 = 0 };   // 上半单位圆
+        var off = (ArcEntity)arc.Offset(0, 2)!;              // 过 (0,2) → 半径 2
+        Assert.Equal(2, off.X1, 4); Assert.Equal(0, off.Y1, 4);
+        Assert.Equal(-2, off.X3, 4); Assert.Equal(0, off.Y3, 4);
+    }
+
+    [Fact]
+    public void ArcEntity_break_into_two_arcs()
+    {
+        var arc = new ArcEntity { X1 = 1, Y1 = 0, X2 = 0, Y2 = 1, X3 = -1, Y3 = 0 };
+        double c = System.Math.Cos(System.Math.PI / 4);
+        var parts = arc.Break(c, c, -c, c)!;                 // 在 45°/135° 打断
+        Assert.Equal(2, parts.Count);
+        Assert.All(parts, p => Assert.IsType<ArcEntity>(p));
+    }
 }
