@@ -30,6 +30,33 @@ public partial class MainWindow : Window
         {
             var props = e.GetCurrentPoint(ViewportHost).Properties;
             _lastPointer = e.GetPosition(ViewportHost);
+
+            // 测距模式：左键取点（第一/第二点）
+            if (_measure != null && props.IsLeftButtonPressed)
+            {
+                _nav = NavMode.None;
+                var wp = Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                if (wp != null)
+                {
+                    var first = _measure.First;
+                    var d = _measure.AddPoint(wp.Value.x, wp.Value.y);
+                    if (d == null)
+                        StatusMsg.Text = "测距：点第二点";
+                    else
+                    {
+                        StatusMsg.Text = $"距离 = {d:0.###}";
+                        if (first != null)
+                            Viewport.SetHighlight(new float[]
+                            {
+                                (float)first.Value.x, (float)first.Value.y, 0, 0, 0, 0,
+                                (float)wp.Value.x,    (float)wp.Value.y,    0, 0, 0, 0
+                            });
+                        _measure = null;
+                    }
+                }
+                return;
+            }
+
             if (props.IsMiddleButtonPressed)
                 _nav = NavMode.Pan;                                       // 中键拖拽 = 平移
             else if (props.IsLeftButtonPressed)
@@ -71,6 +98,7 @@ public partial class MainWindow : Window
     private NavMode _nav;
     private Avalonia.Point _lastPointer;
     private DxfImportService.ImportResult? _lastImport;
+    private MeasureState? _measure;
 
     // Ribbon 按钮 → 「导入」走真实 DXF 导入；其余暂回显命令（证明整条 UI 已接线）
     private async void OnRibbonCommand(object? sender, RoutedEventArgs e)
@@ -262,6 +290,11 @@ public partial class MainWindow : Window
             case "EXPORTDXF":
             case "导出":
                 _ = ExportDxfAsync();
+                break;
+            case "DIST":
+            case "DI":
+                _measure = new MeasureState();
+                StatusMsg.Text = "测距：点第一点";
                 break;
             default:
                 StatusMsg.Text = $"执行: {cmd}";
