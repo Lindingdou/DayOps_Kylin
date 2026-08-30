@@ -635,6 +635,20 @@ public class DrawToolsTests
     }
 
     [Fact]
+    public void Scene_snap_candidates_include_midpoint_and_center()
+    {
+        var s = new Scene();
+        s.Add(new LineEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 0 });
+        s.Add(new CircleEntity { Cx = 3, Cy = 4, Radius = 2 });
+        var c = s.SnapCandidates();
+        var pts = new System.Collections.Generic.List<(float x, float y)>();
+        for (int i = 0; i + 5 < c.Length; i += 6) pts.Add((c[i], c[i + 1]));
+        Assert.Contains(pts, p => System.Math.Abs(p.x - 5) < 1e-3 && System.Math.Abs(p.y) < 1e-3);       // 线中点
+        Assert.Contains(pts, p => System.Math.Abs(p.x - 3) < 1e-3 && System.Math.Abs(p.y - 4) < 1e-3);   // 圆心
+        Assert.Contains(pts, p => System.Math.Abs(p.x - 5) < 1e-3 && System.Math.Abs(p.y - 4) < 1e-3);   // 圆右象限(3+2,4)
+    }
+
+    [Fact]
     public void Scene_recolor_layer_updates_only_that_layer()
     {
         var s = new Scene();

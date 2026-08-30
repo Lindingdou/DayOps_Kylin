@@ -719,6 +719,33 @@ public sealed class Scene
         return o.ToArray();
     }
 
+    /// <summary>对象捕捉候选点(端点/中点/圆心/象限/顶点)，交错 P3_C3(仅位置)。供 osnap。</summary>
+    public float[] SnapCandidates(Func<string, bool>? isShown = null)
+    {
+        var o = new List<float>();
+        void P(double x, double y) { o.Add((float)x); o.Add((float)y); o.Add(0); o.Add(0); o.Add(0); o.Add(0); }
+        foreach (var e in Entities)
+        {
+            if (isShown != null && !isShown(e.LayerName)) continue;
+            foreach (var g in e.Grips()) P(g.x, g.y);              // 端点/中点/圆心/象限/顶点
+            if (e is PolylineEntity pl)                             // 补：段中点
+                for (int i = 0; i + 1 < pl.Points.Count; i++)
+                    P((pl.Points[i].x + pl.Points[i + 1].x) / 2, (pl.Points[i].y + pl.Points[i + 1].y) / 2);
+            else if (e is RectEntity r)                             // 补：矩形中心 + 边中点
+            {
+                P((r.X0 + r.X1) / 2, (r.Y0 + r.Y1) / 2);
+                P((r.X0 + r.X1) / 2, r.Y0); P((r.X0 + r.X1) / 2, r.Y1);
+                P(r.X0, (r.Y0 + r.Y1) / 2); P(r.X1, (r.Y0 + r.Y1) / 2);
+            }
+            else if (e is ArcEntity a)                              // 补：圆弧圆心
+            {
+                var cc = ArcMath.Circumcircle(a.X1, a.Y1, a.X2, a.Y2, a.X3, a.Y3);
+                if (cc != null) P(cc.Value.cx, cc.Value.cy);
+            }
+        }
+        return o.ToArray();
+    }
+
     /// <summary>把某图层上所有实体改为给定颜色，返回改动数（图层改色用）。</summary>
     public int RecolorLayer(string layer, float r, float g, float b)
     {

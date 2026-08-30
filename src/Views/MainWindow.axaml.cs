@@ -1125,8 +1125,9 @@ public partial class MainWindow : Window
     // 重绘场景（含当前工具进行中的预览：已点的段 + 到光标的橡皮筋）
     private void RefreshScene()
     {
-        _snapVerts = _scene.BuildGeometry(_layers.IsShown);
-        var list = new List<float>(_snapVerts);
+        var baseGeom = _scene.BuildGeometry(_layers.IsShown);
+        _snapVerts = _scene.SnapCandidates(_layers.IsShown);   // 语义 osnap 点(端点/中点/圆心/象限)
+        var list = new List<float>(baseGeom);
         _tool?.AppendPreview(list, _cursorWorld);
         if (_slideDragging && _slidePts.Count > 1)     // 滑动多段线拖动预览
         {
