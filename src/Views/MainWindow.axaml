@@ -74,8 +74,16 @@
                                             <Button Classes="ribbon-btn small" Tag="直线" Click="OnRibbonCommand">
                                                 <StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_line}" /><TextBlock Text="直线" /></StackPanel>
                                             </Button>
-                                            <Button Classes="ribbon-btn small" Tag="圆" Click="OnRibbonCommand">
-                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_circle}" /><TextBlock Text="圆" /></StackPanel>
+                                            <Button Classes="ribbon-btn small" ToolTip.Tip="圆的多种画法">
+                                                <Button.Flyout>
+                                                    <MenuFlyout>
+                                                        <MenuItem Header="圆心、半径" Tag="圆" Click="OnRibbonCommand" />
+                                                        <MenuItem Header="两点 (2P)" Tag="圆2P" Click="OnRibbonCommand" />
+                                                        <MenuItem Header="三点 (3P)" Tag="圆3P" Click="OnRibbonCommand" />
+                                                        <MenuItem Header="切、切、半径 (TTR)" Tag="圆TTR" Click="OnRibbonCommand" />
+                                                    </MenuFlyout>
+                                                </Button.Flyout>
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_circle}" /><TextBlock Text="圆 ▾" /></StackPanel>
                                             </Button>
                                             <Button Classes="ribbon-btn small" Tag="圆弧" Click="OnRibbonCommand">
                                                 <StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_arc}" /><TextBlock Text="圆弧" /></StackPanel>

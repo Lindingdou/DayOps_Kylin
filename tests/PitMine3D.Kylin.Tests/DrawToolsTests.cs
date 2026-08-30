@@ -482,4 +482,20 @@ public class DrawToolsTests
         Assert.Null(LineMath.IntersectInfiniteWithSegment(0, 0, 0, 10, 2, 5, 8, 5));   // 交点不在边界段内
         Assert.Null(LineMath.IntersectInfiniteWithSegment(0, 0, 10, 0, 0, 5, 10, 5));  // 平行
     }
+
+    [Fact]
+    public void TtrCenter_tangent_to_two_axes()
+    {
+        // x轴(点击上方) + y轴(点击右侧), r=2 → 第一象限内切圆 心(2,2)
+        var c = LineMath.TtrCenter(0, 0, 10, 0, 5, 1, 0, 0, 0, 10, 1, 5, 2);
+        Assert.NotNull(c);
+        Assert.Equal(2, c!.Value.x, 4);
+        Assert.Equal(2, c!.Value.y, 4);
+    }
+
+    [Fact]
+    public void TtrCenter_parallel_lines_is_null()
+    {
+        Assert.Null(LineMath.TtrCenter(0, 0, 10, 0, 5, 1, 0, 5, 10, 5, 5, 6, 2));   // 两平行线
+    }
 }

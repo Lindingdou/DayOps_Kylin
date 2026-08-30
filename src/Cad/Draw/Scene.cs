@@ -541,6 +541,30 @@ public static class LineMath
         return (ax0 + t * d1x, ay0 + t * d1y);
     }
 
+    /// <summary>直线向点击侧法向偏移 r，返回偏移后的两端点；退化返回 null。</summary>
+    public static (double x0, double y0, double x1, double y1)? OffsetToward(
+        double x0, double y0, double x1, double y1, double px, double py, double r)
+    {
+        double dx = x1 - x0, dy = y1 - y0, len = Math.Sqrt(dx * dx + dy * dy);
+        if (len < 1e-9) return null;
+        double nx = -dy / len, ny = dx / len;
+        double side = (px - x0) * nx + (py - y0) * ny;   // 点击在直线哪侧
+        double s = side >= 0 ? r : -r;
+        return (x0 + nx * s, y0 + ny * s, x1 + nx * s, y1 + ny * s);
+    }
+
+    /// <summary>切-切-半径(TTR)：与两直线相切、半径 r 的圆心（按各自点击侧定唯一解）；平行返回 null。</summary>
+    public static (double x, double y)? TtrCenter(
+        double ax0, double ay0, double ax1, double ay1, double p1x, double p1y,
+        double bx0, double by0, double bx1, double by1, double p2x, double p2y, double r)
+    {
+        var o1 = OffsetToward(ax0, ay0, ax1, ay1, p1x, p1y, r);
+        var o2 = OffsetToward(bx0, by0, bx1, by1, p2x, p2y, r);
+        if (o1 == null || o2 == null) return null;
+        return IntersectInfinite(o1.Value.x0, o1.Value.y0, o1.Value.x1, o1.Value.y1,
+                                 o2.Value.x0, o2.Value.y0, o2.Value.x1, o2.Value.y1);
+    }
+
     /// <summary>过 A 两点的无限直线 与 有限线段 B 的交点；平行或交点不在 B 段内返回 null（供修剪/延伸边界为任意实体）。</summary>
     public static (double x, double y)? IntersectInfiniteWithSegment(
         double ax0, double ay0, double ax1, double ay1,
