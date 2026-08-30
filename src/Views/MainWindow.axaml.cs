@@ -514,6 +514,7 @@ public partial class MainWindow : Window
             if (cmd == "圈范围算量") { await BoundaryVolumeAsync(); return; }
             if (cmd == "提取道路中心线" || cmd == "道路中线" || cmd == "提取道路中线") { ExtractCenterline(); return; }
             if (cmd == "点对点寻径" || cmd == "寻径" || cmd == "点对点寻路") { StartPathfind(); return; }
+            if (cmd == "排土条带" || cmd == "条带填充" || cmd == "排土条带划分") { DumpStrips(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
             if (cmd == "2D") { Viewport.SetViewMode(true); StatusMsg.Text = "视图: 2D 平面（正交俯视）"; return; }
@@ -891,6 +892,23 @@ public partial class MainWindow : Window
         _scene.Add(cl);
         RefreshScene();
         StatusMsg.Text = $"已提取道路中心线（{mid.Count} 点）";
+    }
+
+    // 排土条带：选中闭合多段线内按间距生成平行线条带
+    private void DumpStrips()
+    {
+        if (_selected.Count != 1 || _selected[0] is not PolylineEntity poly || !poly.Closed || poly.Points.Count < 3)
+        { StatusMsg.Text = "排土条带：请先选中一条闭合多段线作范围"; return; }
+        double minY = double.MaxValue, maxY = double.MinValue;
+        foreach (var p in poly.Points) { if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y; }
+        double spacing = System.Math.Max((maxY - minY) / 20.0, 1e-6);   // 自动约 20 条
+        var segs = Hatch.ParallelFill(poly.Points, spacing, 0);
+        if (segs.Count == 0) { StatusMsg.Text = "排土条带：无填充（范围过小）"; return; }
+        BeginChange();
+        foreach (var s in segs)
+            _scene.Add(new LineEntity { X0 = s.x0, Y0 = s.y0, X1 = s.x1, Y1 = s.y1, Cr = 0.80f, Cg = 0.60f, Cb = 0.35f });
+        RefreshScene();
+        StatusMsg.Text = $"排土条带：{segs.Count} 条（间距 {spacing:0.##}）";
     }
 
     // 点对点寻径：场景所有多段线建路网 → 两点最近节点 Dijkstra → 高亮路径
@@ -1942,6 +1960,9 @@ public partial class MainWindow : Window
                 break;
             case "PATH":
                 StartPathfind();
+                break;
+            case "STRIPS":
+                DumpStrips();
                 break;
             case "DIST":
             case "DI":
