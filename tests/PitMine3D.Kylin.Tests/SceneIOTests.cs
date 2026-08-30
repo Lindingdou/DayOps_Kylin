@@ -58,4 +58,34 @@ public class SceneIOTests
         var s2 = SceneIO.Load(SceneIO.Save(s));
         Assert.Equal("墙", s2.Entities[0].LayerName);
     }
+
+    [Fact]
+    public void Roundtrip_preserves_rect_point_text()
+    {
+        var s = new Scene();
+        s.Add(new RectEntity { X0 = 1, Y0 = 2, X1 = 8, Y1 = 6 });
+        s.Add(new PointEntity { X = 3, Y = 4 });
+        s.Add(new TextEntity { X = 5, Y = 6, Height = 2.5, Text = "ZK-12" });
+
+        var s2 = SceneIO.Load(SceneIO.Save(s));
+        Assert.Equal(3, s2.Count);
+        var r = Assert.IsType<RectEntity>(s2.Entities[0]);
+        Assert.Equal(8, r.X1, 6); Assert.Equal(6, r.Y1, 6);
+        var p = Assert.IsType<PointEntity>(s2.Entities[1]);
+        Assert.Equal(3, p.X, 6); Assert.Equal(4, p.Y, 6);
+        var t = Assert.IsType<TextEntity>(s2.Entities[2]);
+        Assert.Equal("ZK-12", t.Text);
+        Assert.Equal(2.5, t.Height, 6);
+    }
+
+    [Fact]
+    public void Roundtrip_preserves_entity_color()
+    {
+        var s = new Scene();
+        s.Add(new CircleEntity { Cx = 0, Cy = 0, Radius = 1, Cr = 0.1f, Cg = 0.7f, Cb = 0.9f });
+        var e = SceneIO.Load(SceneIO.Save(s)).Entities[0];
+        Assert.Equal(0.1f, e.Cr, 3);
+        Assert.Equal(0.7f, e.Cg, 3);
+        Assert.Equal(0.9f, e.Cb, 3);
+    }
 }
