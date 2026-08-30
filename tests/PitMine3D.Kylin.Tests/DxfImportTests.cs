@@ -355,6 +355,29 @@ public class DxfImportTests
     }
 
     [Fact]
+    public void Solid_imports_as_closed_quad_polyline()
+    {
+        string src = Path.Combine(Path.GetTempPath(), "pm_solid.dxf");
+        var doc = new CadDocument();
+        var so = new Solid
+        {
+            FirstCorner = new XYZ(0, 0, 0),
+            SecondCorner = new XYZ(4, 0, 0),
+            ThirdCorner = new XYZ(0, 3, 0),
+            FourthCorner = new XYZ(4, 3, 0),
+        };
+        doc.Entities.Add(so);
+        using (var w = new DxfWriter(src, doc, false)) w.Write();
+
+        var er = DxfImportService.LoadEntities(src);
+        Assert.True(er.Success, er.Error);
+        var pl = Assert.IsType<PolylineEntity>(Assert.Single(er.Entities));
+        Assert.True(pl.Closed);
+        Assert.Equal(4, pl.Points.Count);
+        try { File.Delete(src); } catch { /* 清理失败无碍 */ }
+    }
+
+    [Fact]
     public void Export_roundtrip_preserves_segments()
     {
         string src = Path.Combine(Path.GetTempPath(), "pm_exp_src.dxf");

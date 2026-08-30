@@ -506,6 +506,33 @@ public static class DxfImportService
                 case MText mt:
                     Finalize(new DrawText { X = mt.InsertPoint.X, Y = mt.InsertPoint.Y, Height = mt.Height > 0 ? mt.Height : 1, Text = mt.Value ?? "" }, xf, col, layer);
                     break;
+                case Solid so:
+                {
+                    var pl = new PolylineEntity { Closed = true };   // 2D 实心：角点序 1,2,4,3 成四边形轮廓
+                    pl.Points.Add((so.FirstCorner.X, so.FirstCorner.Y));
+                    pl.Points.Add((so.SecondCorner.X, so.SecondCorner.Y));
+                    pl.Points.Add((so.FourthCorner.X, so.FourthCorner.Y));
+                    pl.Points.Add((so.ThirdCorner.X, so.ThirdCorner.Y));
+                    Finalize(pl, xf, col, layer);
+                    break;
+                }
+                case Face3D f3:
+                {
+                    var pl = new PolylineEntity { Closed = true };
+                    pl.Points.Add((f3.FirstCorner.X, f3.FirstCorner.Y));
+                    pl.Points.Add((f3.SecondCorner.X, f3.SecondCorner.Y));
+                    pl.Points.Add((f3.ThirdCorner.X, f3.ThirdCorner.Y));
+                    pl.Points.Add((f3.FourthCorner.X, f3.FourthCorner.Y));
+                    Finalize(pl, xf, col, layer);
+                    break;
+                }
+                case Dimension dim:   // 标注(对齐/线性/半径/角度…)：爆炸其渲染块还原尺寸线/箭头/文字
+                {
+                    if (depth >= 8 || dim.Block == null) break;
+                    foreach (var be in dim.Block.Entities)
+                        Emit(be, xf, ColorOf(be), layer, depth + 1);
+                    break;
+                }
                 case Insert ins:
                 {
                     if (depth >= 8 || ins.Block == null) break;

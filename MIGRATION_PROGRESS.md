@@ -151,7 +151,7 @@
 **📂 文件格式矩阵**（原版导入清单见 Explore 调查；打开=.pmx/.pmb，导入=交换格式）：
 | 格式 | 状态 | 说明 |
 |---|---|---|
-| `.dxf` | ✅ | ACadSharp；Line/Poly(**含 bulge 弧段**)/Circle/Arc/Point/Ellipse/Insert/Spline/**Text/MText** → 可编辑实体（Latin/数字文字可显; 缺填充/标注; 中文需字库） |
+| `.dxf` | ✅ | ACadSharp；Line/Poly(**含 bulge 弧段**)/Circle/Arc/Point/Ellipse/Insert/Spline/**Text/MText/Solid/Face3D/Dimension(爆炸渲染块)** → 可编辑实体（Latin/数字文字可显; Solid/Face3D 取轮廓不填充; 中文需字库） |
 | `.dwg` | ✅ | ACadSharp DwgReader；与 DXF 同管线 → **可编辑实体**（本平台读写已验证） |
 | `.off` | ✅ | Geomview 网格（顶点+面表→去重边），托管解析 |
 | `.csv/.txt/.xyz/.pts` | ✅ | 点数据（自动识别数值列）→ **可编辑**点实体入场景 |
@@ -309,4 +309,5 @@
 - [x] **DWG 导出·已验证**：新增 DWG 往返单测(SceneExport→DwgWriter→DwgReader 读回, 保留 Line/Circle/闭合多段线+图层)——坐实 ACadSharp DWG 编解码在本平台可靠, 修正旧"写入不可靠"记录。DWG 导入+导出至此均已验证。+1 单测，264 tests。commit `eb1dd0f`。
 - [x] **.pmx 全类型往返补测**：SceneIO 颜色/图层统一存读已确认无 bug；补 Rect/Point/Text + 非默认颜色往返测试闭合覆盖。+2 单测，266 tests。commit `fc999b2`。
 - [x] **LwPolyline/Polyline2D 凸度(bulge)→弧 · 保真修复**：`BulgeArc.Interior`(弦中点沿左法向抬矢高得弧顶→三点外接圆+过中点扫向插值)。**修复真实保真 bug**——此前含弧段的多段线被当直线弦导入(常见: 圆角边界/腰形孔)，现还原成弧；导入(可编辑+显示两路径)均已修。+4 单测(半圆点在圆上/零凸度直线/负凸度反向/弧顶) +1 端到端(DXF bulge→导入多点弧, 弧顶 y≈1)，271 tests。commit `ceefecb`。
+- [x] **导入补 Solid/Face3D/Dimension · 保真**：此前静默丢弃——2D 实心(Solid)/三维面(Face3D)→角点闭合多段线轮廓(不填充)；**标注(Dimension 全子类)→爆炸其渲染块**(复用 Insert 的 Emit 递归, 尺寸线/箭头/文字随之还原)。命中 DXF 常见但原漏读的实体。+1 端到端(Solid→闭合四点多段线); Dimension 经块爆炸机制(同 Insert 已测); 272 tests。commit `pending10`。**记录**：Solid/Face3D 填充需 Skia; Hatch/MLine/Leader 仍未读(Hatch 边界可托管但多环+弧边界较繁, 记录待补)。
 - [记录·受阻] **KDF(WeCAD) 导入/导出**：原 `KdfReader`(811行)/`KdfWriter`(417行) 是自足二进制编解码器(magic `wecad_bin_version_2021`, 逆向自单一样例), 依赖 System+CSMath(本项目 ACadSharp 已带), GBK 用 `CodePagesEncodingProvider` 原码已处理 → **可移植**。但**验证受阻**：无真 .kdf 样例, 逐字转写逆向格式仅靠 writer↔reader 往返对称是弱验证(原作者亦标 WeCAD 兼容"未验证")。给一个样例 .kdf 即可移植并按真实字节验证。原 .las/.blk/.osgb/.3dm/.3ds 同理需样例/大依赖。
