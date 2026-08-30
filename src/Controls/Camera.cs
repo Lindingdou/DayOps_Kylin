@@ -53,6 +53,32 @@ internal sealed class Camera
         Dist = Math.Clamp(span * 1.4, 2.0, 100000.0);
     }
 
+    /// <summary>平移注视点（世界 XY）。</summary>
+    public void ShiftTarget(double dx, double dy)
+    {
+        Target[0] += (float)dx;
+        Target[1] += (float)dy;
+    }
+
+    /// <summary>屏幕拖拽平移：让光标抓住的世界点跟随光标（2D/3D 通用，基于反投影）。</summary>
+    public void PanScreen(double sx0, double sy0, double sx1, double sy1, double vw, double vh)
+    {
+        var w0 = ScreenToWorldOnZPlane(sx0, sy0, vw, vh);
+        var w1 = ScreenToWorldOnZPlane(sx1, sy1, vw, vh);
+        if (w0 != null && w1 != null)
+            ShiftTarget(w0.Value.x - w1.Value.x, w0.Value.y - w1.Value.y);
+    }
+
+    /// <summary>朝光标缩放：缩放后保持光标下的世界点不动（CAD 标准）。</summary>
+    public void ZoomAtScreen(double sx, double sy, double vw, double vh, double factor)
+    {
+        var before = ScreenToWorldOnZPlane(sx, sy, vw, vh);
+        Zoom(factor);
+        var after = ScreenToWorldOnZPlane(sx, sy, vw, vh);
+        if (before != null && after != null)
+            ShiftTarget(before.Value.x - after.Value.x, before.Value.y - after.Value.y);
+    }
+
     /// <summary>相机位置（球坐标，Z 上）。</summary>
     public float[] Eye()
     {

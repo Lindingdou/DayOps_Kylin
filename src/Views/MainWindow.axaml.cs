@@ -28,9 +28,15 @@ public partial class MainWindow : Window
         // 故统一在 ViewportHost（Background=Transparent → 全区可命中）上处理。
         ViewportHost.PointerPressed += (_, e) =>
         {
-            _dragging = true;
+            var props = e.GetCurrentPoint(ViewportHost).Properties;
             _lastPointer = e.GetPosition(ViewportHost);
-            e.Pointer.Capture(ViewportHost);
+            if (props.IsMiddleButtonPressed)
+                _nav = NavMode.Pan;                                       // 中键拖拽 = 平移
+            else if (props.IsLeftButtonPressed)
+                _nav = Viewport.Is2DView ? NavMode.Pan : NavMode.Orbit;   // 2D 左键平移 / 3D 左键旋转
+            else
+                _nav = NavMode.None;                                      // 右键留给上下文菜单
+            if (_nav != NavMode.None) e.Pointer.Capture(ViewportHost);
         };
         ViewportHost.PointerMoved += (_, e) =>
         {
@@ -39,25 +45,30 @@ public partial class MainWindow : Window
             CoordText.Text = w != null
                 ? $"X {w.Value.x:0.00}  Y {w.Value.y:0.00}"
                 : $"视口 px  X {p.X:0}  Y {p.Y:0}";
-            if (_dragging)
-            {
+            if (_nav == NavMode.Pan)
+                Viewport.Pan(_lastPointer.X, _lastPointer.Y, p.X, p.Y);
+            else if (_nav == NavMode.Orbit)
                 Viewport.Orbit((p.X - _lastPointer.X) * 0.01, (p.Y - _lastPointer.Y) * 0.01);
-                _lastPointer = p;
-            }
+            _lastPointer = p;
         };
         ViewportHost.PointerReleased += (_, e) =>
         {
-            _dragging = false;
+            _nav = NavMode.None;
             e.Pointer.Capture(null);
         };
         ViewportHost.PointerWheelChanged += (_, e) =>
-            Viewport.Zoom(e.Delta.Y > 0 ? 0.9 : 1.1);
+        {
+            var p = e.GetPosition(ViewportHost);
+            Viewport.ZoomAt(p.X, p.Y, e.Delta.Y > 0 ? 0.9 : 1.1);        // 朝光标缩放
+        };
+        ViewportHost.DoubleTapped += (_, _) => Viewport.ZoomExtents();    // 双击 = 范围缩放
 
         // 对象树选类型 → 视口高亮该类型几何
         ObjectTree.SelectionChanged += OnObjectTreeSelect;
     }
 
-    private bool _dragging;
+    private enum NavMode { None, Orbit, Pan }
+    private NavMode _nav;
     private Avalonia.Point _lastPointer;
     private DxfImportService.ImportResult? _lastImport;
 
@@ -177,6 +188,13 @@ public partial class MainWindow : Window
         else
             Viewport.SetHighlight(null);
     }
+
+    // ---------- 右键上下文菜单 ----------
+    private void OnCtxZoomExtents(object? s, RoutedEventArgs e) => Viewport.ZoomExtents();
+    private void OnCtx2D(object? s, RoutedEventArgs e) { Viewport.SetViewMode(true); StatusMsg.Text = "视图: 2D 平面"; }
+    private void OnCtx3D(object? s, RoutedEventArgs e) { Viewport.SetViewMode(false); StatusMsg.Text = "视图: 3D 轨道"; }
+    private void OnCtxGrid(object? s, RoutedEventArgs e) => Viewport.ToggleGrid();
+    private void OnCtxClearHighlight(object? s, RoutedEventArgs e) => Viewport.SetHighlight(null);
 
     // 命令行回车 → 命令分发（已实装的走功能，其余回显）
     private void OnCommandKeyDown(object? sender, KeyEventArgs e)

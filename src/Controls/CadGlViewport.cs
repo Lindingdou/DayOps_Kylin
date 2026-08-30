@@ -184,6 +184,20 @@ public class CadGlViewport : OpenGlControlBase
     /// <summary>缩放。factor &lt;1 拉近，&gt;1 拉远。</summary>
     public void Zoom(double factor) => _camera.Zoom(factor);
 
+    /// <summary>屏幕拖拽平移（光标抓取的世界点跟随光标；2D/3D 通用）。</summary>
+    public void Pan(double sx0, double sy0, double sx1, double sy1)
+    {
+        _camera.PanScreen(sx0, sy0, sx1, sy1, Bounds.Width, Bounds.Height);
+        RequestNextFrameRendering();
+    }
+
+    /// <summary>朝光标缩放（缩放后光标下的点不动）。</summary>
+    public void ZoomAt(double sx, double sy, double factor)
+    {
+        _camera.ZoomAtScreen(sx, sy, Bounds.Width, Bounds.Height, factor);
+        RequestNextFrameRendering();
+    }
+
     /// <summary>
     /// 显示导入的线框几何（世界坐标交错 P3_C3 线段）并范围缩放到其包围盒。
     /// UI 线程调用；实际 GL 上传延到下一帧渲染回调（GL 线程）执行。

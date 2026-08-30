@@ -1063,6 +1063,17 @@
             </Grid>
         </Border>
         <Panel Grid.Column="1" x:Name="ViewportHost" Background="Transparent">
+            <Panel.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="范围缩放" Click="OnCtxZoomExtents" />
+                    <Separator />
+                    <MenuItem Header="2D 平面视图" Click="OnCtx2D" />
+                    <MenuItem Header="3D 轨道视图" Click="OnCtx3D" />
+                    <Separator />
+                    <MenuItem Header="网格 / 轴 开关" Click="OnCtxGrid" />
+                    <MenuItem Header="清除高亮" Click="OnCtxClearHighlight" />
+                </ContextMenu>
+            </Panel.ContextMenu>
             <controls:CadGlViewport x:Name="Viewport" />
             <!-- 左上叠加信息 -->
             <Border Background="#B0000000" CornerRadius="6" Padding="10,7"

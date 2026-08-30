@@ -118,4 +118,30 @@ public class CameraTests
         Assert.Equal(0.2f, dst[11]);
         Assert.Equal(0.5f, src[3]);                                  // 原数组不被改（克隆）
     }
+
+    [Fact]
+    public void ZoomAtScreen_keeps_cursor_point_fixed()
+    {
+        var cam = new Camera();
+        cam.SetMode(true);
+        cam.FitBounds(0, 0, 100, 100);
+        double vw = 800, vh = 600, sx = 220, sy = 160;
+        var before = cam.ScreenToWorldOnZPlane(sx, sy, vw, vh);
+        cam.ZoomAtScreen(sx, sy, vw, vh, 0.5);
+        var after = cam.ScreenToWorldOnZPlane(sx, sy, vw, vh);
+        Assert.NotNull(before); Assert.NotNull(after);
+        Assert.Equal(before!.Value.x, after!.Value.x, 1);   // 光标下的世界点缩放后不动
+        Assert.Equal(before!.Value.y, after!.Value.y, 1);
+    }
+
+    [Fact]
+    public void PanScreen_moves_target()
+    {
+        var cam = new Camera();
+        cam.SetMode(true);
+        cam.FitBounds(0, 0, 100, 100);
+        float tx0 = cam.Target[0];
+        cam.PanScreen(400, 300, 500, 300, 800, 600);   // 向右拖 100px
+        Assert.NotEqual(tx0, cam.Target[0]);
+    }
 }
