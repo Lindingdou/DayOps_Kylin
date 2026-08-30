@@ -8,6 +8,20 @@ namespace PitMine3D.Kylin.Tests;
 public class DelaunayTests
 {
     [Fact]
+    public void Sample_6x6_grid_triangulates_and_builds_edges()
+    {
+        // TRIMESH 示例三角网核：6×6 网格(与 GenerateSampleTrimesh 同)→ 非退化三角网 + 边
+        var pts = new List<(double x, double y)>();
+        for (int i = 0; i < 6; i++)
+            for (int j = 0; j < 6; j++)
+                pts.Add((i * 20.0, j * 20.0));
+        var tris = Delaunay.Triangulate(pts);
+        Assert.True(tris.Count >= 30, $"6×6 网格应产可观三角数, 实得 {tris.Count}");
+        var edges = Delaunay.BuildEdges(pts, tris, 0.5f, 0.7f, 0.8f);
+        Assert.NotEmpty(edges);
+    }
+
+    [Fact]
     public void Square_gives_two_triangles()
     {
         var pts = new List<(double x, double y)> { (0, 0), (1, 0), (1, 1), (0, 1) };

@@ -635,6 +635,7 @@ public partial class MainWindow : Window
             if (cmd == "展绘钻孔" || cmd == "钻孔柱状图" || cmd == "导入钻孔数据" || cmd == "原始钻孔柱状图") { await ImportBoreholesAsync(); return; }
             if (cmd == "等高线" || cmd == "等高线生产" || cmd == "等值线") { await ContourFromCsvAsync(); return; }
             if (cmd == "创建三角网" || cmd == "三角网") { await CreateTinAsync(); return; }
+            if (cmd == "示例三角网" || cmd == "三角网示例") { GenerateSampleTrimesh(); return; }
             if (cmd == "坡度着色") { await ShadeTinAsync("坡度着色", "绿=平 → 红=陡", TerrainAnalysis.BuildSlopeMap); return; }
             if (cmd == "坡向着色") { await ShadeTinAsync("坡向着色", "按朝向 HSV 配色", TerrainAnalysis.BuildAspectMap); return; }
             if (cmd == "高程着色" || cmd == "分色显示" || cmd == "高程分带") { await ShadeTinAsync("高程着色", "低绿→中黄→高棕", TerrainAnalysis.BuildElevationMap); return; }
@@ -1193,6 +1194,23 @@ public partial class MainWindow : Window
     }
 
     // 创建三角网：散点 CSV → Delaunay → 三角边线框入场景
+    // TRIMESH：生成示例三角网（确定性 6×6 网格点 → Delaunay → 三角边，复用已测 Delaunay，无需文件）
+    private void GenerateSampleTrimesh()
+    {
+        var pts2d = new List<(double x, double y)>();
+        for (int i = 0; i < 6; i++)
+            for (int j = 0; j < 6; j++)
+                pts2d.Add((i * 20.0, j * 20.0));
+        var tris = Delaunay.Triangulate(pts2d);
+        var edges = Delaunay.BuildEdges(pts2d, tris, 0.55f, 0.75f, 0.85f);
+        if (edges.Count == 0) { StatusMsg.Text = "示例三角网：生成失败"; return; }
+        BeginChange();
+        foreach (var e in edges) _scene.Add(e);
+        RefreshScene();
+        Viewport.FitBounds(new double[] { 0, 0, 100, 100 });
+        StatusMsg.Text = $"示例三角网：{pts2d.Count} 点 → {tris.Count} 三角 · {edges.Count} 边";
+    }
+
     private async Task CreateTinAsync()
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
@@ -2890,6 +2908,9 @@ public partial class MainWindow : Window
                 break;
             case "TIN":
                 _ = CreateTinAsync();
+                break;
+            case "TRIMESH":
+                GenerateSampleTrimesh();
                 break;
             case "SLOPE":
                 _ = ShadeTinAsync("坡度着色", "绿=平 → 红=陡", TerrainAnalysis.BuildSlopeMap);
