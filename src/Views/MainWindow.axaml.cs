@@ -59,6 +59,36 @@ public partial class MainWindow : Window
                 return;
             }
 
+            // 编辑（移动/复制/镜像）：左键取两点
+            if (_editMode != EditMode.None && props.IsLeftButtonPressed)
+            {
+                _nav = NavMode.None;
+                var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                if (wp != null)
+                {
+                    if (_editP0 == null)
+                    {
+                        _editP0 = (wp.Value.x, wp.Value.y);
+                        StatusMsg.Text = _editMode == EditMode.Mirror ? "镜像：指定镜像线第二点" : "指定目标点";
+                    }
+                    else
+                    {
+                        var p0 = _editP0.Value; var p1 = wp.Value;
+                        Affine2 m = _editMode switch
+                        {
+                            EditMode.Move => Affine2.Translate(p1.x - p0.x, p1.y - p0.y),
+                            EditMode.Copy => Affine2.Translate(p1.x - p0.x, p1.y - p0.y),
+                            EditMode.Mirror => Affine2.MirrorLine(p0.x, p0.y, p1.x, p1.y),
+                            _ => Affine2.Translate(0, 0)
+                        };
+                        ApplyEditTransform(m, _editMode == EditMode.Copy);
+                        _editMode = EditMode.None; _editP0 = null;
+                        StatusMsg.Text = "编辑完成";
+                    }
+                }
+                return;
+            }
+
             // 绘制工具：左键喂点（凑齐一个实体则加入场景并重绘）
             if (_tool != null && props.IsLeftButtonPressed)
             {
@@ -150,6 +180,8 @@ public partial class MainWindow : Window
             {
                 _tool = null;
                 _measure = null;
+                _editMode = EditMode.None;
+                _editP0 = null;
                 _selected.Clear();
                 Viewport.SetSnapMarker(null);
                 Viewport.SetHighlight(null);
@@ -175,6 +207,9 @@ public partial class MainWindow : Window
     private DrawTool? _tool;                      // 当前激活的绘制工具
     private readonly List<SceneEntity> _selected = new();   // 选择集
     private Avalonia.Point _pressPos;             // 按下位置（区分点击/拖拽）
+    private enum EditMode { None, Move, Copy, Mirror }
+    private EditMode _editMode = EditMode.None;
+    private (double x, double y)? _editP0;         // 编辑基点/镜像线第一点
 
     // Ribbon 按钮 → 「导入」走真实 DXF 导入；其余暂回显命令（证明整条 UI 已接线）
     private async void OnRibbonCommand(object? sender, RoutedEventArgs e)
@@ -185,6 +220,9 @@ public partial class MainWindow : Window
             if (cmd == "另存为") { await ExportDxfAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
             if (cmd == "删除") { DeleteSelected(); return; }
+            if (cmd == "移动") { StartEdit(EditMode.Move, "移动"); return; }
+            if (cmd == "复制") { StartEdit(EditMode.Copy, "复制"); return; }
+            if (cmd == "镜像") { StartEdit(EditMode.Mirror, "镜像"); return; }
             if (ActivateDrawTool(cmd)) return;
             StatusMsg.Text = $"命令: {cmd}";
             CommandInput.Text = cmd;
@@ -423,6 +461,30 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"已删除 {n} 个实体";
     }
 
+    // 进入编辑（移动/复制/镜像）：需已有选择
+    private void StartEdit(EditMode mode, string name)
+    {
+        if (_selected.Count == 0) { StatusMsg.Text = $"{name}：请先选实体"; return; }
+        _editMode = mode; _editP0 = null; _tool = null; _measure = null;
+        StatusMsg.Text = mode == EditMode.Mirror ? $"{name}：指定镜像线第一点" : $"{name}：指定基点";
+    }
+
+    // 对选择集施加仿射变换；copy=true 则加副本，否则替换原实体
+    private void ApplyEditTransform(Affine2 m, bool copy)
+    {
+        var newSel = new List<SceneEntity>();
+        foreach (var e in _selected)
+        {
+            var e2 = e.Apply(m);
+            if (copy) _scene.Add(e2); else _scene.Replace(e, e2);
+            newSel.Add(e2);
+        }
+        _selected.Clear();
+        _selected.AddRange(newSel);
+        RefreshScene();
+        HighlightSelection();
+    }
+
     // 命令行回车 → 命令分发（已实装的走功能，其余回显）
     private void OnCommandKeyDown(object? sender, KeyEventArgs e)
     {
@@ -471,6 +533,18 @@ public partial class MainWindow : Window
             case "ERASE":
             case "E":
                 DeleteSelected();
+                break;
+            case "MOVE":
+            case "M":
+                StartEdit(EditMode.Move, "移动");
+                break;
+            case "COPY":
+            case "CO":
+                StartEdit(EditMode.Copy, "复制");
+                break;
+            case "MIRROR":
+            case "MI":
+                StartEdit(EditMode.Mirror, "镜像");
                 break;
             default:
                 if (!ActivateDrawTool(cmd)) StatusMsg.Text = $"执行: {cmd}";

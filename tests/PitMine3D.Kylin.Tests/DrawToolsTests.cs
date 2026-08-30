@@ -118,4 +118,38 @@ public class DrawToolsTests
         Assert.Same(line, s.Pick(5, 0.5, 1.0));   // 容差内命中
         Assert.Null(s.Pick(5, 5, 1.0));           // 容差外
     }
+
+    [Fact]
+    public void Affine_translate_moves_line()
+    {
+        var line = new LineEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 0 };
+        var moved = (LineEntity)line.Apply(Affine2.Translate(5, 3));
+        Assert.Equal(5, moved.X0); Assert.Equal(3, moved.Y0);
+        Assert.Equal(15, moved.X1); Assert.Equal(3, moved.Y1);
+    }
+
+    [Fact]
+    public void Affine_rotate90_about_origin()
+    {
+        var line = new LineEntity { X0 = 1, Y0 = 0, X1 = 2, Y1 = 0 };
+        var r = (LineEntity)line.Apply(Affine2.Rotate(System.Math.PI / 2, 0, 0));
+        Assert.Equal(0, r.X0, 4); Assert.Equal(1, r.Y0, 4);   // (1,0)→(0,1)
+        Assert.Equal(0, r.X1, 4); Assert.Equal(2, r.Y1, 4);   // (2,0)→(0,2)
+    }
+
+    [Fact]
+    public void Affine_mirror_across_x_axis()
+    {
+        var line = new LineEntity { X0 = 0, Y0 = 5, X1 = 10, Y1 = 5 };
+        var mir = (LineEntity)line.Apply(Affine2.MirrorLine(0, 0, 1, 0));   // 沿 X 轴镜像
+        Assert.Equal(-5, mir.Y0, 4); Assert.Equal(-5, mir.Y1, 4);
+    }
+
+    [Fact]
+    public void Affine_scale_circle_radius()
+    {
+        var c = new CircleEntity { Cx = 0, Cy = 0, Radius = 2 };
+        var s = (CircleEntity)c.Apply(Affine2.Scale(3, 0, 0));
+        Assert.Equal(6, s.Radius, 4);
+    }
 }

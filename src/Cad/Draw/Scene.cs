@@ -44,12 +44,53 @@ public abstract class SceneEntity
         double cx = ax + t * dx, cy = ay + t * dy;
         return Math.Sqrt((px - cx) * (px - cx) + (py - cy) * (py - cy));
     }
+
+    /// <summary>应用仿射变换，返回变换后的新实体（移动/旋转/缩放/镜像）。</summary>
+    public abstract SceneEntity Apply(Affine2 m);
+
+    /// <summary>把本实体颜色复制给 e 并返回（变换保留颜色）。</summary>
+    protected T Colored<T>(T e) where T : SceneEntity { e.Cr = Cr; e.Cg = Cg; e.Cb = Cb; return e; }
+}
+
+/// <summary>2D 仿射变换：x' = A·x + C·y + E，y' = B·x + D·y + F。</summary>
+public readonly struct Affine2
+{
+    public readonly double A, B, C, D, E, F;
+    public Affine2(double a, double b, double c, double d, double e, double f) { A = a; B = b; C = c; D = d; E = e; F = f; }
+
+    public (double x, double y) Map(double x, double y) => (A * x + C * y + E, B * x + D * y + F);
+    /// <summary>尺度幅度（√|det|）：均匀缩放 s → s；旋转/镜像 → 1。</summary>
+    public double ScaleMag => Math.Sqrt(Math.Abs(A * D - B * C));
+    /// <summary>是否保持轴对齐（无旋转/错切）。</summary>
+    public bool IsAxisAligned => Math.Abs(B) < 1e-9 && Math.Abs(C) < 1e-9;
+
+    public static Affine2 Translate(double dx, double dy) => new(1, 0, 0, 1, dx, dy);
+    public static Affine2 Scale(double s, double cx, double cy) => new(s, 0, 0, s, cx - s * cx, cy - s * cy);
+
+    public static Affine2 Rotate(double ang, double cx, double cy)
+    {
+        double c = Math.Cos(ang), s = Math.Sin(ang);
+        return new(c, s, -s, c, cx - c * cx + s * cy, cy - s * cx - c * cy);
+    }
+
+    public static Affine2 MirrorLine(double x0, double y0, double x1, double y1)
+    {
+        double dx = x1 - x0, dy = y1 - y0, len2 = dx * dx + dy * dy;
+        if (len2 < 1e-12) return Translate(0, 0);
+        double a = (dx * dx - dy * dy) / len2, b = 2 * dx * dy / len2;
+        return new(a, b, b, -a, x0 - a * x0 - b * y0, y0 - b * x0 + a * y0);
+    }
 }
 
 public sealed class LineEntity : SceneEntity
 {
     public double X0, Y0, X1, Y1;
     public override void Tessellate(List<float> o) => Seg(o, X0, Y0, X1, Y1);
+    public override SceneEntity Apply(Affine2 m)
+    {
+        var (x0, y0) = m.Map(X0, Y0); var (x1, y1) = m.Map(X1, Y1);
+        return Colored(new LineEntity { X0 = x0, Y0 = y0, X1 = x1, Y1 = y1 });
+    }
 }
 
 public sealed class CircleEntity : SceneEntity
@@ -66,6 +107,11 @@ public sealed class CircleEntity : SceneEntity
             Seg(o, px, py, x, y); px = x; py = y;
         }
     }
+    public override SceneEntity Apply(Affine2 m)
+    {
+        var (cx, cy) = m.Map(Cx, Cy);
+        return Colored(new CircleEntity { Cx = cx, Cy = cy, Radius = Radius * m.ScaleMag, Segments = Segments });
+    }
 }
 
 public sealed class RectEntity : SceneEntity
@@ -75,6 +121,19 @@ public sealed class RectEntity : SceneEntity
     {
         Seg(o, X0, Y0, X1, Y0); Seg(o, X1, Y0, X1, Y1);
         Seg(o, X1, Y1, X0, Y1); Seg(o, X0, Y1, X0, Y0);
+    }
+    public override SceneEntity Apply(Affine2 m)
+    {
+        if (m.IsAxisAligned)
+        {
+            var (x0, y0) = m.Map(X0, Y0); var (x1, y1) = m.Map(X1, Y1);
+            return Colored(new RectEntity { X0 = x0, Y0 = y0, X1 = x1, Y1 = y1 });
+        }
+        // 旋转/镜像后不再轴对齐 → 转闭合多段线（4 角）
+        var pl = new PolylineEntity { Closed = true };
+        pl.Points.Add(m.Map(X0, Y0)); pl.Points.Add(m.Map(X1, Y0));
+        pl.Points.Add(m.Map(X1, Y1)); pl.Points.Add(m.Map(X0, Y1));
+        return Colored(pl);
     }
 }
 
@@ -86,6 +145,11 @@ public sealed class PointEntity : SceneEntity
     {
         Seg(o, X - Size, Y, X + Size, Y);
         Seg(o, X, Y - Size, X, Y + Size);
+    }
+    public override SceneEntity Apply(Affine2 m)
+    {
+        var (x, y) = m.Map(X, Y);
+        return Colored(new PointEntity { X = x, Y = y, Size = Size });
     }
 }
 
@@ -113,6 +177,11 @@ public sealed class ArcEntity : SceneEntity
         }
     }
     private static double Norm(double a) { while (a < 0) a += 2 * Math.PI; while (a >= 2 * Math.PI) a -= 2 * Math.PI; return a; }
+    public override SceneEntity Apply(Affine2 m)
+    {
+        var (x1, y1) = m.Map(X1, Y1); var (x2, y2) = m.Map(X2, Y2); var (x3, y3) = m.Map(X3, Y3);
+        return Colored(new ArcEntity { X1 = x1, Y1 = y1, X2 = x2, Y2 = y2, X3 = x3, Y3 = y3, Segments = Segments });
+    }
 }
 
 public sealed class PolylineEntity : SceneEntity
@@ -125,6 +194,12 @@ public sealed class PolylineEntity : SceneEntity
             Seg(o, Points[i].x, Points[i].y, Points[i + 1].x, Points[i + 1].y);
         if (Closed && Points.Count > 1)
             Seg(o, Points[^1].x, Points[^1].y, Points[0].x, Points[0].y);
+    }
+    public override SceneEntity Apply(Affine2 m)
+    {
+        var pl = new PolylineEntity { Closed = Closed };
+        foreach (var p in Points) pl.Points.Add(m.Map(p.x, p.y));
+        return Colored(pl);
     }
 }
 
@@ -171,6 +246,12 @@ public sealed class Scene
     }
 
     public bool Remove(SceneEntity e) => Entities.Remove(e);
+
+    public void Replace(SceneEntity oldE, SceneEntity newE)
+    {
+        int i = Entities.IndexOf(oldE);
+        if (i >= 0) Entities[i] = newE; else Entities.Add(newE);
+    }
 
     public float[] BuildGeometry()
     {
