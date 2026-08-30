@@ -670,6 +670,7 @@ public partial class MainWindow : Window
             if (cmd == "台阶参数分析" || cmd == "台阶分析" || cmd == "台阶参数") { await BenchAnalyzeAsync(); return; }
             if (cmd == "达成分析" || cmd == "产量达成" || cmd == "达成率") { await AttainmentAsync(); return; }
             if (cmd == "车铲匹配" || cmd == "配车匹配" || cmd == "车铲配比") { await FleetMatchAsync(); return; }
+            if (cmd == "点云质量统计" || cmd == "点云统计" || cmd == "点云质量") { await PointCloudStatsAsync(); return; }
             if (cmd == "矿床识别" || cmd == "自动识别" || cmd == "矿床类型识别") { await DepositDetectAsync(); return; }
             if (cmd == "方案综合对比" || cmd == "方案比选" || cmd == "方案对比") { await ProgramCompareAsync(); return; }
             if (cmd == "高程查询" || cmd == "虚拟钻孔" || cmd == "查询高程") { await StartSpotQueryAsync(); return; }
@@ -1089,6 +1090,27 @@ public partial class MainWindow : Window
             report += $" 段{i + 1} 均衡比{s.RatioM3PerT.ToString("0.##", inv)}({s.B - s.A}期,峰值超前{s.PeakLeadWanM3:0.#})";
         }
         StatusMsg.Text = report;
+    }
+
+    // 点云质量统计：点 CSV(x,y,z) → 计数/包围盒/XY面积/密度/高程均值·标准差 报表
+    private async Task PointCloudStatsAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "点云质量统计：选点 CSV (x,y,z)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("点云 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success) { StatusMsg.Text = $"点云统计：点导入失败 {r.Error}"; return; }
+        if (r.Points.Count == 0) { StatusMsg.Text = "点云统计：无点"; return; }
+
+        var pts = new List<(double x, double y, double z)>(r.Points.Count);
+        foreach (var p in r.Points) pts.Add((p.x, p.y, p.z));
+        var s = PointCloudStats.Compute(pts);
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        StatusMsg.Text = $"点云统计：{s.Count} 点 · 范围 X[{s.MinX.ToString("0.#", inv)},{s.MaxX.ToString("0.#", inv)}] Y[{s.MinY.ToString("0.#", inv)},{s.MaxY.ToString("0.#", inv)}] Z[{s.MinZ.ToString("0.#", inv)},{s.MaxZ.ToString("0.#", inv)}] · 面积 {s.AreaXY.ToString("0", inv)}m² · 密度 {s.DensityXY.ToString("0.###", inv)}点/m² · 高程 均值{s.MeanZ.ToString("0.##", inv)} σ{s.StdZ.ToString("0.##", inv)}";
     }
 
     // 车铲匹配：CSV(卡车数, 装车节拍min, 循环时间min) → 匹配系数 + Erlang-C 等待概率 + 结论
@@ -3399,6 +3421,10 @@ public partial class MainWindow : Window
             case "FLEETMATCH":
             case "TRUCKMATCH":
                 _ = FleetMatchAsync();
+                break;
+            case "PCSTATS":
+            case "CLOUDSTATS":
+                _ = PointCloudStatsAsync();
                 break;
             case "DEPOSITDETECT":
             case "DEPOSIT":
