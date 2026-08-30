@@ -236,3 +236,7 @@
 ### GeoDataBase 续
 - [x] **等高线生产**：`Contour`（散点 IDW→网格 + Marching Squares 多层等值线）→ 高程点 CSV(x,y,z) 生成彩色等高线折线入场景。命令 等高线/等高线生产/CONTOUR。+4 单测(算法3+插值1)，143 tests。commit `e4d1ad2`+`0fa5e4d`。
 - [记录] 等高线**标注高程数字** → 需 Skia。三角网 TIN(Delaunay) 更精确的表面 → 可托管做但较大，待评估。
+
+### MeshEditLib / 三角网（托管切片）
+- [x] **创建三角网(TIN)**：`Delaunay`（Bowyer-Watson 剖分 + 三角边去重线框）→ 点 CSV(x,y[,z]) 生成三角网入场景。命令 创建三角网/三角网/TIN。+5 单测，148 tests。commit `44659ce`+`b39c632`。
+- [记录] 三角网**面着色/坡向坡度**(需按面渲染, 我方为线管线可做色边)、**布尔/光滑/补洞**等 mesh 编辑 → 需内核 mesh ops。**倾斜摄影/OSGB** → 需内核。
