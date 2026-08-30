@@ -247,6 +247,56 @@ public sealed class PolylineEntity : SceneEntity
     }
 }
 
+/// <summary>正多边形：中心 + 外接半径 + 边数 + 首顶点方向角。</summary>
+public sealed class PolygonEntity : SceneEntity
+{
+    public double Cx, Cy, Radius, Rotation;   // Rotation = 首顶点相对 +X 的角
+    public int Sides = 6;
+
+    private IEnumerable<(double x, double y)> Vertices()
+    {
+        for (int i = 0; i < Sides; i++)
+        {
+            double a = Rotation + 2 * Math.PI * i / Sides;
+            yield return (Cx + Radius * Math.Cos(a), Cy + Radius * Math.Sin(a));
+        }
+    }
+    public override void Tessellate(List<float> o)
+    {
+        if (Sides < 3 || Radius < 1e-9) return;
+        double px = Cx + Radius * Math.Cos(Rotation), py = Cy + Radius * Math.Sin(Rotation);
+        for (int i = 1; i <= Sides; i++)
+        {
+            double a = Rotation + 2 * Math.PI * i / Sides;   // i=Sides → 回到首顶点，闭合
+            double x = Cx + Radius * Math.Cos(a), y = Cy + Radius * Math.Sin(a);
+            Seg(o, px, py, x, y); px = x; py = y;
+        }
+    }
+    public override SceneEntity Apply(Affine2 m)
+    {
+        if (m.A * m.D - m.B * m.C > 0)   // 平移/旋转/缩放 → 保持正多边形
+        {
+            var (cx, cy) = m.Map(Cx, Cy);
+            return Colored(new PolygonEntity { Cx = cx, Cy = cy, Radius = Radius * m.ScaleMag, Sides = Sides, Rotation = Rotation + Math.Atan2(m.B, m.A) });
+        }
+        var pl = new PolylineEntity { Closed = true };   // 镜像 → 闭合多段线
+        foreach (var v in Vertices()) pl.Points.Add(m.Map(v.x, v.y));
+        return Colored(pl);
+    }
+    public override List<SceneEntity>? Explode()
+    {
+        if (Sides < 3) return null;
+        var vs = new List<(double x, double y)>(Vertices());
+        var list = new List<SceneEntity>();
+        for (int i = 0; i < vs.Count; i++)
+        {
+            var a = vs[i]; var b = vs[(i + 1) % vs.Count];
+            list.Add(Colored(new LineEntity { X0 = a.x, Y0 = a.y, X1 = b.x, Y1 = b.y }));
+        }
+        return list;
+    }
+}
+
 /// <summary>圆弧几何辅助（三点外接圆），供 ArcEntity/ArcTool，可单测。</summary>
 public static class ArcMath
 {

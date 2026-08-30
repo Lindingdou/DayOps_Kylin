@@ -125,6 +125,19 @@ public partial class MainWindow : Window
                 return;
             }
 
+            // 滑动多段线：按住左键开始，拖动自动采样，松开成线
+            if (_slideActive && props.IsLeftButtonPressed)
+            {
+                _nav = NavMode.None;
+                e.Pointer.Capture(ViewportHost);
+                _slideDragging = true;
+                _slidePts.Clear();
+                var wp = Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                if (wp != null) { _slidePts.Add((wp.Value.x, wp.Value.y)); _slideLastScreen = _lastPointer; }
+                StatusMsg.Text = "滑动多段线：按住拖动…松开结束";
+                return;
+            }
+
             // 绘制工具：左键喂点（凑齐一个实体则加入场景并重绘）
             if (_tool != null && props.IsLeftButtonPressed)
             {
@@ -152,6 +165,18 @@ public partial class MainWindow : Window
         {
             var p = e.GetPosition(ViewportHost);
             var w = Viewport.ScreenToWorld(p.X, p.Y);
+
+            // 滑动多段线：拖动中按像素间距采样
+            if (_slideDragging)
+            {
+                double dpx = p.X - _slideLastScreen.X, dpy = p.Y - _slideLastScreen.Y;
+                if (dpx * dpx + dpy * dpy >= 36 && w != null)   // 移动 ≥6px 采一点
+                { _slidePts.Add((w.Value.x, w.Value.y)); _slideLastScreen = p; }
+                CoordText.Text = w != null ? $"X {w.Value.x:0.00}  Y {w.Value.y:0.00}  [滑动 {_slidePts.Count}]" : "";
+                RefreshScene();
+                _lastPointer = p;
+                return;
+            }
 
             // 对象捕捉：吸附到最近顶点
             _snapWorld = null;
@@ -185,6 +210,25 @@ public partial class MainWindow : Window
         ViewportHost.PointerReleased += (_, e) =>
         {
             var rel = e.GetPosition(ViewportHost);
+
+            // 滑动多段线：松开 → 采样点成多段线
+            if (_slideDragging)
+            {
+                _slideDragging = false;
+                e.Pointer.Capture(null);
+                if (_slidePts.Count >= 2)
+                {
+                    BeginChange();
+                    var pl = new PolylineEntity { Points = new List<(double, double)>(_slidePts) };
+                    AssignLayer(pl); _scene.Add(pl);
+                    StatusMsg.Text = $"滑动多段线完成（{_slidePts.Count} 点，共 {_scene.Count}）";
+                }
+                else StatusMsg.Text = "滑动多段线：点数不足，已取消";
+                _slidePts.Clear();
+                RefreshScene();
+                return;
+            }
+
             // 无拖动 + 非绘制/测距 → 视为点选
             bool wasClick = _nav != NavMode.None && _tool == null && _measure == null
                 && System.Math.Abs(rel.X - _pressPos.X) < 4 && System.Math.Abs(rel.Y - _pressPos.Y) < 4;
@@ -223,6 +267,7 @@ public partial class MainWindow : Window
                 _editPts.Clear();
                 _offsetActive = false;
                 _trimActive = false;
+                _slideActive = false; _slideDragging = false; _slidePts.Clear();
                 _selected.Clear();
                 Viewport.SetSnapMarker(null);
                 Viewport.SetHighlight(null);
@@ -253,6 +298,10 @@ public partial class MainWindow : Window
     private (double x, double y)? _snapWorld;   // 当前捕捉到的世界点
     private (double x, double y)? _cursorWorld; // 当前光标世界点(橡皮筋预览用)
     private bool _snapShown;                     // 捕捉标记是否已显示
+    private bool _slideActive;                   // 滑动多段线：已激活(等待按下)
+    private bool _slideDragging;                 // 滑动多段线：正在按住拖动
+    private readonly List<(double x, double y)> _slidePts = new();   // 滑动采样点
+    private Avalonia.Point _slideLastScreen;     // 上次采样的屏幕点(控制采样密度)
     private readonly Scene _scene = new();       // 托管绘制场景
     private readonly LayerTable _layers = new();  // 图层表
     private readonly UndoManager _undo = new();   // 撤销/重做
@@ -293,6 +342,7 @@ public partial class MainWindow : Window
             if (cmd == "缩放") { StartEdit(EditMode.Scale, "缩放"); return; }
             if (cmd == "偏移") { StartOffset(); return; }
             if (cmd == "修剪" || cmd == "延伸") { StartTrim(); return; }
+            if (cmd == "滑动多段线") { StartSlide(); return; }
             if (ActivateDrawTool(cmd)) return;
             StatusMsg.Text = $"命令: {cmd}";
             CommandInput.Text = cmd;
@@ -514,6 +564,20 @@ public partial class MainWindow : Window
     private bool ActivateDrawTool(string cmd)
     {
         string u = cmd.Trim().ToUpperInvariant();
+
+        // 正多边形：可带边数，如 "POLYGON 5" / "POL8" / "正多边形6"（须排除 POLYLINE）
+        string letters = new string(u.TakeWhile(char.IsLetter).ToArray());
+        if (letters == "POLYGON" || letters == "POL" || cmd.Trim().StartsWith("正多边形"))
+        {
+            int sides = 6;
+            string digits = new string(cmd.Where(char.IsDigit).ToArray());
+            if (digits.Length > 0 && int.TryParse(digits, out int n) && n >= 3 && n <= 120) sides = n;
+            _tool = new PolygonTool { Sides = sides };
+            _measure = null; Viewport.SetSnapMarker(null); _snapShown = false;
+            StatusMsg.Text = _tool.Prompt + "（ESC 退出）";
+            return true;
+        }
+
         DrawTool? t = u switch
         {
             "LINE" => new LineTool(),
@@ -580,6 +644,11 @@ public partial class MainWindow : Window
     {
         var list = new List<float>(_scene.BuildGeometry());
         _tool?.AppendPreview(list, _cursorWorld);
+        if (_slideDragging && _slidePts.Count > 1)     // 滑动多段线拖动预览
+        {
+            var pv = new PolylineEntity { Points = _slidePts, Cr = 0.55f, Cg = 0.62f, Cb = 0.70f };
+            pv.Tessellate(list);
+        }
         Viewport.SetSceneGeometry(list.ToArray());
     }
 
@@ -690,6 +759,15 @@ public partial class MainWindow : Window
         { StatusMsg.Text = "修剪/延伸：请先选一条作为边界的直线"; return; }
         _trimActive = true; _tool = null; _measure = null; _editMode = EditMode.None; _offsetActive = false;
         StatusMsg.Text = "点击要修剪/延伸的直线（近端点移到与边界的交点）";
+    }
+
+    private void StartSlide()
+    {
+        _tool = null; _measure = null; _editMode = EditMode.None; _editPts.Clear();
+        _offsetActive = false; _trimActive = false;
+        _slideActive = true; _slideDragging = false; _slidePts.Clear();
+        Viewport.SetSnapMarker(null); _snapShown = false;
+        StatusMsg.Text = "滑动多段线：在视口按住左键拖动采样，松开成线（ESC 退出）";
     }
 
     private static double Dist2((double x, double y) p, double x, double y)
@@ -838,6 +916,10 @@ public partial class MainWindow : Window
             case "EXTEND":
             case "EX":
                 StartTrim();
+                break;
+            case "PLDRAG":
+            case "SPL":
+                StartSlide();
                 break;
             case "NEW":
                 NewScene();

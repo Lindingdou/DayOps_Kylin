@@ -232,4 +232,35 @@ public class DrawToolsTests
         t.AppendPreview(o, (10, 10));                  // + 橡皮筋段 → 2 段 = 24 float
         Assert.Equal(24, o.Count);
     }
+
+    [Fact]
+    public void PolygonTool_center_vertex_make_polygon()
+    {
+        var t = new PolygonTool { Sides = 6 };
+        Assert.Null(t.AddPoint(0, 0));                 // 中心
+        var p = Assert.IsType<PolygonEntity>(t.AddPoint(10, 0));   // 顶点方向 +X
+        Assert.Equal(6, p.Sides);
+        Assert.Equal(10, p.Radius, 6);
+        Assert.Equal(0, p.Rotation, 6);
+    }
+
+    [Fact]
+    public void PolygonEntity_explode_and_tessellate_n_edges()
+    {
+        var p = new PolygonEntity { Cx = 0, Cy = 0, Radius = 5, Sides = 5 };
+        Assert.Equal(5, p.Explode()!.Count);          // 五边形 → 5 边
+        var o = new System.Collections.Generic.List<float>();
+        p.Tessellate(o);
+        Assert.Equal(5 * 12, o.Count);                // 5 段 × 12 float
+    }
+
+    [Fact]
+    public void PolygonEntity_move_preserves_polygon()
+    {
+        var p = new PolygonEntity { Cx = 0, Cy = 0, Radius = 5, Sides = 4 };
+        var moved = Assert.IsType<PolygonEntity>(p.Apply(Affine2.Translate(10, 0)));
+        Assert.Equal(10, moved.Cx, 6);
+        Assert.Equal(5, moved.Radius, 6);
+        Assert.Equal(4, moved.Sides);
+    }
 }

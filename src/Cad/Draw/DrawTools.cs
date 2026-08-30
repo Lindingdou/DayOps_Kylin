@@ -149,3 +149,28 @@ public sealed class PolylineTool : DrawTool
     }
     public override void Reset() => _pts.Clear();
 }
+
+/// <summary>正多边形：中心 → 半径点(顶点方向)。边数默认 6，可设 Sides。</summary>
+public sealed class PolygonTool : DrawTool
+{
+    private (double x, double y)? _c;
+    public int Sides = 6;
+    public override string Prompt => _c == null ? $"正多边形（{Sides} 边）：指定中心" : $"正多边形（{Sides} 边）：指定顶点";
+    public override SceneEntity? AddPoint(double x, double y)
+    {
+        if (_c == null) { _c = (x, y); return null; }
+        var c = _c.Value; _c = null;
+        return Make(c.x, c.y, x, y, Sides);
+    }
+    private static PolygonEntity Make(double cx, double cy, double px, double py, int sides)
+    {
+        double dx = px - cx, dy = py - cy;
+        return new PolygonEntity { Cx = cx, Cy = cy, Radius = Math.Sqrt(dx * dx + dy * dy), Sides = sides, Rotation = Math.Atan2(dy, dx) };
+    }
+    public override void AppendPreview(List<float> o, (double x, double y)? cursor)
+    {
+        if (_c != null && cursor != null)
+            Tint(Make(_c.Value.x, _c.Value.y, cursor.Value.x, cursor.Value.y, Sides)).Tessellate(o);
+    }
+    public override void Reset() => _c = null;
+}
