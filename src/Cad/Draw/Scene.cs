@@ -64,6 +64,60 @@ public sealed class PointEntity : SceneEntity
     }
 }
 
+public sealed class ArcEntity : SceneEntity
+{
+    public double X1, Y1, X2, Y2, X3, Y3;   // 起点 / 圆弧上一点 / 端点
+    public int Segments = 48;
+    public override void Tessellate(List<float> o)
+    {
+        var cc = ArcMath.Circumcircle(X1, Y1, X2, Y2, X3, Y3);
+        if (cc == null) { Seg(o, X1, Y1, X3, Y3); return; }   // 三点共线 → 退化为直线
+        var (cx, cy, r) = cc.Value;
+        double a1 = Math.Atan2(Y1 - cy, X1 - cx);
+        double am = Math.Atan2(Y2 - cy, X2 - cx);
+        double a3 = Math.Atan2(Y3 - cy, X3 - cx);
+        double sweep = Norm(a3 - a1);
+        double mid = Norm(am - a1);
+        double total = mid <= sweep ? sweep : sweep - 2 * Math.PI;   // 经中点的扫向
+        double px = cx + r * Math.Cos(a1), py = cy + r * Math.Sin(a1);
+        for (int i = 1; i <= Segments; i++)
+        {
+            double t = a1 + total * i / Segments;
+            double x = cx + r * Math.Cos(t), y = cy + r * Math.Sin(t);
+            Seg(o, px, py, x, y); px = x; py = y;
+        }
+    }
+    private static double Norm(double a) { while (a < 0) a += 2 * Math.PI; while (a >= 2 * Math.PI) a -= 2 * Math.PI; return a; }
+}
+
+public sealed class PolylineEntity : SceneEntity
+{
+    public List<(double x, double y)> Points = new();
+    public bool Closed;
+    public override void Tessellate(List<float> o)
+    {
+        for (int i = 0; i + 1 < Points.Count; i++)
+            Seg(o, Points[i].x, Points[i].y, Points[i + 1].x, Points[i + 1].y);
+        if (Closed && Points.Count > 1)
+            Seg(o, Points[^1].x, Points[^1].y, Points[0].x, Points[0].y);
+    }
+}
+
+/// <summary>圆弧几何辅助（三点外接圆），供 ArcEntity/ArcTool，可单测。</summary>
+public static class ArcMath
+{
+    public static (double cx, double cy, double r)? Circumcircle(double x1, double y1, double x2, double y2, double x3, double y3)
+    {
+        double d = 2 * (x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2));
+        if (Math.Abs(d) < 1e-12) return null;   // 共线
+        double s1 = x1 * x1 + y1 * y1, s2 = x2 * x2 + y2 * y2, s3 = x3 * x3 + y3 * y3;
+        double ux = (s1 * (y2 - y3) + s2 * (y3 - y1) + s3 * (y1 - y2)) / d;
+        double uy = (s1 * (x3 - x2) + s2 * (x1 - x3) + s3 * (x2 - x1)) / d;
+        double r = Math.Sqrt((x1 - ux) * (x1 - ux) + (y1 - uy) * (y1 - uy));
+        return (ux, uy, r);
+    }
+}
+
 public sealed class Scene
 {
     public List<SceneEntity> Entities { get; } = new();

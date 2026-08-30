@@ -66,11 +66,8 @@ public partial class MainWindow : Window
                 if (wp != null)
                 {
                     var ent = _tool.AddPoint(wp.Value.x, wp.Value.y);
-                    if (ent != null)
-                    {
-                        _scene.Add(ent);
-                        Viewport.SetSceneGeometry(_scene.BuildGeometry());
-                    }
+                    if (ent != null) _scene.Add(ent);
+                    RefreshScene();
                     StatusMsg.Text = $"{_tool.Prompt}（已画 {_scene.Count}）";
                 }
                 return;
@@ -125,7 +122,17 @@ public partial class MainWindow : Window
             var p = e.GetPosition(ViewportHost);
             Viewport.ZoomAt(p.X, p.Y, e.Delta.Y > 0 ? 0.9 : 1.1);        // 朝光标缩放
         };
-        ViewportHost.DoubleTapped += (_, _) => Viewport.ZoomExtents();    // 双击 = 范围缩放
+        ViewportHost.DoubleTapped += (_, _) =>
+        {
+            if (_tool != null && _tool.IsMultiPoint)                      // 双击结束多段线
+            {
+                var e = _tool.Finish();
+                if (e != null) _scene.Add(e);
+                RefreshScene();
+                StatusMsg.Text = $"多段线完成（已画 {_scene.Count}）";
+            }
+            else Viewport.ZoomExtents();                                  // 否则 = 范围缩放
+        };
 
         // 对象树选类型 → 视口高亮该类型几何
         ObjectTree.SelectionChanged += OnObjectTreeSelect;
@@ -139,6 +146,7 @@ public partial class MainWindow : Window
                 _measure = null;
                 Viewport.SetSnapMarker(null);
                 _snapShown = false;
+                RefreshScene();          // 清除进行中的预览
                 StatusMsg.Text = "就绪";
             }
         };
@@ -336,13 +344,17 @@ public partial class MainWindow : Window
         {
             "LINE" => new LineTool(),
             "CIRCLE" => new CircleTool(),
+            "ARC" => new ArcTool(),
             "RECTANG" or "RECT" => new RectTool(),
+            "PLINE" or "POLYLINE" => new PolylineTool(),
             "POINT" or "PO" => new PointTool(),
             _ => cmd.Trim() switch
             {
                 "直线" => new LineTool(),
                 "圆" => new CircleTool(),
+                "圆弧" => new ArcTool(),
                 "矩形" => new RectTool(),
+                "多段线" => new PolylineTool(),
                 "点" => new PointTool(),
                 _ => (DrawTool?)null
             }
@@ -353,6 +365,14 @@ public partial class MainWindow : Window
         Viewport.SetSnapMarker(null); _snapShown = false;
         StatusMsg.Text = t.Prompt + "（ESC 退出）";
         return true;
+    }
+
+    // 重绘场景（含当前工具进行中的预览，如多段线已点的段）
+    private void RefreshScene()
+    {
+        var list = new List<float>(_scene.BuildGeometry());
+        _tool?.AppendPreview(list);
+        Viewport.SetSceneGeometry(list.ToArray());
     }
 
     // 命令行回车 → 命令分发（已实装的走功能，其余回显）

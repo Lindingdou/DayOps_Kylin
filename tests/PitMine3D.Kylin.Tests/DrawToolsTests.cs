@@ -55,4 +55,49 @@ public class DrawToolsTests
         Assert.True(s.RemoveLast());
         Assert.Equal(0, s.Count);
     }
+
+    [Fact]
+    public void Circumcircle_of_unit_points()
+    {
+        var c = ArcMath.Circumcircle(1, 0, 0, 1, -1, 0);
+        Assert.NotNull(c);
+        Assert.Equal(0, c!.Value.cx, 4);
+        Assert.Equal(0, c!.Value.cy, 4);
+        Assert.Equal(1, c!.Value.r, 4);
+    }
+
+    [Fact]
+    public void Circumcircle_collinear_is_null()
+    {
+        Assert.Null(ArcMath.Circumcircle(0, 0, 1, 0, 2, 0));
+    }
+
+    [Fact]
+    public void ArcTool_three_points_make_arc()
+    {
+        var t = new ArcTool();
+        Assert.Null(t.AddPoint(1, 0));
+        Assert.Null(t.AddPoint(0, 1));
+        var arc = Assert.IsType<ArcEntity>(t.AddPoint(-1, 0));
+        Assert.Equal(-1, arc.X3);
+    }
+
+    [Fact]
+    public void PolylineTool_accumulates_and_finishes()
+    {
+        var t = new PolylineTool();
+        Assert.Null(t.AddPoint(0, 0));
+        Assert.Null(t.AddPoint(10, 0));
+        Assert.Null(t.AddPoint(10, 10));
+        var pl = Assert.IsType<PolylineEntity>(t.Finish());
+        Assert.Equal(3, pl.Points.Count);
+    }
+
+    [Fact]
+    public void PolylineTool_finish_too_few_is_null()
+    {
+        var t = new PolylineTool();
+        t.AddPoint(0, 0);
+        Assert.Null(t.Finish());   // 只 1 点，不成线
+    }
 }
