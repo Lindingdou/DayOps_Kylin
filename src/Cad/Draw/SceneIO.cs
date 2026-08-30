@@ -18,6 +18,7 @@ public static class SceneIO
         public bool Closed { get; set; }
         public float[] C { get; set; } = { 0.86f, 0.9f, 0.6f };
         public string L { get; set; } = "0";   // 图层名
+        public string? S { get; set; }          // 文字内容
     }
 
     public static string Save(Scene scene)
@@ -33,6 +34,7 @@ public static class SceneIO
                 PointEntity p => new Dto { T = "point", N = new[] { p.X, p.Y } },
                 ArcEntity a => new Dto { T = "arc", N = new[] { a.X1, a.Y1, a.X2, a.Y2, a.X3, a.Y3 } },
                 PolygonEntity pg => new Dto { T = "polygon", N = new[] { pg.Cx, pg.Cy, pg.Radius, pg.Rotation, pg.Sides } },
+                TextEntity tx => new Dto { T = "text", N = new[] { tx.X, tx.Y, tx.Height }, S = tx.Text },
                 PolylineEntity pl => PolyDto(pl),
                 _ => null
             };
@@ -66,6 +68,7 @@ public static class SceneIO
                 "point" when d.N.Length >= 2 => new PointEntity { X = d.N[0], Y = d.N[1] },
                 "arc" when d.N.Length >= 6 => new ArcEntity { X1 = d.N[0], Y1 = d.N[1], X2 = d.N[2], Y2 = d.N[3], X3 = d.N[4], Y3 = d.N[5] },
                 "polygon" when d.N.Length >= 5 => new PolygonEntity { Cx = d.N[0], Cy = d.N[1], Radius = d.N[2], Rotation = d.N[3], Sides = (int)d.N[4] },
+                "text" when d.N.Length >= 3 => new TextEntity { X = d.N[0], Y = d.N[1], Height = d.N[2], Text = d.S ?? "" },
                 "poly" => BuildPoly(d),
                 _ => null
             };

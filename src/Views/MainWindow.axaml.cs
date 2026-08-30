@@ -461,6 +461,7 @@ public partial class MainWindow : Window
                 _pathActive = false; _pathP1 = null;
                 _benchActive = false; _benchEntity = null;
                 _spotActive = false;
+                _textActive = false;
                 _gripIndex = -1;
                 _selBoxActive = false;
                 _ttrActive = false; _ttrAwaitRadius = false; _ttrRef1 = null; _ttrRef2 = null;
@@ -527,6 +528,7 @@ public partial class MainWindow : Window
     private System.Collections.Generic.List<BlockModel.Block>? _lastBlocks;   // 最近导入的块体(资源量用)
     private bool _spotActive;                       // 高程查询：点击报高程
     private System.Collections.Generic.List<(double x, double y, double z)>? _spotTerrain;
+    private bool _textActive;                        // 文字：等待命令行输入内容
     private bool _selBoxActive;                     // 窗口框选拖拽中
     private Avalonia.Point _selBoxStart;            // 框选起点(屏幕)
     private bool _ttrActive, _ttrAwaitRadius;       // 圆 TTR：选两相切参照(线/圆) → 输半径
@@ -574,6 +576,7 @@ public partial class MainWindow : Window
             if (cmd == "面积" || cmd == "面积测量" || cmd == "周长") { MeasureArea(); return; }
             if (cmd == "等效运距" || cmd == "运输指标" || cmd == "驱动距离") { await HaulMetricsAsync(); return; }
             if (cmd == "高程查询" || cmd == "虚拟钻孔" || cmd == "查询高程") { await StartSpotQueryAsync(); return; }
+            if (cmd == "文字" || cmd == "单行文字") { ArmText(); return; }
             if (cmd == "坐标转换") { await CoordTransformAsync(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
@@ -1172,6 +1175,24 @@ public partial class MainWindow : Window
         _tool = null; _measure = null; _editMode = EditMode.None;
         Viewport.FitBounds(r.Bounds);
         StatusMsg.Text = $"高程查询：已载入 {r.Points.Count} 点，点击视口任意位置查询高程（ESC 退出）";
+    }
+
+    // 文字：进入模式，下一条命令行输入即文字内容
+    private void ArmText()
+    {
+        _textActive = true; _tool = null; _measure = null;
+        StatusMsg.Text = "文字：在命令行输入内容并回车（数字/符号/XYZM 可显，中文暂空）";
+    }
+
+    private void PlaceText(string content)
+    {
+        double w = ViewportHost.Bounds.Width, h = ViewportHost.Bounds.Height;
+        var c = Viewport.ScreenToWorld(w / 2, h / 2) ?? (0, 0);
+        double height = System.Math.Max(SnapTolWorld(new Avalonia.Point(w / 2, h / 2)) * 3, 1e-3);
+        var tx = new TextEntity { X = c.x, Y = c.y, Height = height, Text = content };
+        AssignLayer(tx);
+        BeginChange(); _scene.Add(tx); RefreshScene();
+        StatusMsg.Text = $"已放置文字「{content}」（视口中心，字高 {height:0.##}）";
     }
 
     // 面积/周长：对选中的多段线(闭合优先)算面积+周长，报状态栏
@@ -2278,6 +2299,9 @@ public partial class MainWindow : Window
         string cmd = tb.Text.Trim();
         tb.Text = string.Empty;
 
+        // 文字：下一条命令行输入即内容
+        if (_textActive) { _textActive = false; if (cmd.Length > 0) PlaceText(cmd); return; }
+
         // 圆 TTR：等待半径
         if (_ttrActive && _ttrAwaitRadius && _ttrRef1 != null && _ttrRef2 != null && double.TryParse(cmd, out double ttrR) && ttrR > 0)
         {
@@ -2434,6 +2458,10 @@ public partial class MainWindow : Window
             case "AREA":
             case "AA":
                 MeasureArea();
+                break;
+            case "TEXT":
+            case "DT":
+                ArmText();
                 break;
             case "DIST":
             case "DI":

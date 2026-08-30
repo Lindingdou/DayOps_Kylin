@@ -673,6 +673,30 @@ public static class LineMath
     }
 }
 
+/// <summary>文字（单笔画矢量字体渲染为线段）：锚点 + 字高 + 内容。数字/符号可显，中文暂空(记录)。</summary>
+public sealed class TextEntity : SceneEntity
+{
+    public double X, Y, Height = 1;
+    public string Text = "";
+    public override void Tessellate(List<float> o)
+    {
+        double cx = X, adv = Height * 0.8;
+        foreach (char ch in Text)
+        {
+            foreach (var (sx0, sy0, sx1, sy1) in StrokeFont.Strokes(ch))
+                Seg(o, cx + sx0 * Height, Y + sy0 * Height, cx + sx1 * Height, Y + sy1 * Height);
+            cx += adv;
+        }
+    }
+    public override SceneEntity Apply(Affine2 m)
+    {
+        var (x, y) = m.Map(X, Y);
+        return Colored(new TextEntity { X = x, Y = y, Height = Height * m.ScaleMag, Text = Text });
+    }
+    public override List<(double x, double y)> Grips() => new() { (X, Y) };
+    public override SceneEntity? MoveGrip(int i, double nx, double ny) => Colored(new TextEntity { X = nx, Y = ny, Height = Height, Text = Text });
+}
+
 /// <summary>实体 → 类型中文名（对象树 / 快速选择用；椭圆/样条导入后并为多段线）。</summary>
 public static class EntityTypeName
 {
@@ -685,6 +709,7 @@ public static class EntityTypeName
         PolylineEntity => "多段线",
         PointEntity => "点",
         PolygonEntity => "正多边形",
+        TextEntity => "文字",
         _ => "其他"
     };
 }
