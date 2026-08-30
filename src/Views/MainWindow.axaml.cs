@@ -772,7 +772,7 @@ public partial class MainWindow : Window
         try
         {
             if (ext == ".pmx") { File.WriteAllText(path, SceneIO.SaveDoc(_scene, _layers.Layers, _layers.Current.Name)); SetDocPath(path); StatusMsg.Text = $"已另存 {Path.GetFileName(path)} · {_scene.Count} 实体"; }
-            else { int n = SceneExportService.Export(_scene, path); StatusMsg.Text = $"已导出 {Path.GetFileName(path)} · {n} 实体（.dxf/.dwg 不改当前文档）"; }
+            else { int n = SceneExportService.Export(_scene, path, _layers); StatusMsg.Text = $"已导出 {Path.GetFileName(path)} · {n} 实体（.dxf/.dwg 不改当前文档）"; }
         }
         catch (System.Exception ex) { StatusMsg.Text = $"另存失败：{ex.Message}"; }
     }

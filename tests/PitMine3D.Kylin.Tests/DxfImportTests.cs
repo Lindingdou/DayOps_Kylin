@@ -453,6 +453,21 @@ public class DxfImportTests
     }
 
     [Fact]
+    public void Export_writes_layer_color_to_dxf_layer_table()
+    {
+        var s = new Scene();
+        s.Add(new LineEntity { X0 = 0, Y0 = 0, X1 = 5, Y1 = 0, LayerName = "墙" });
+        var lt = new PitMine3D.Kylin.Cad.Draw.LayerTable();
+        var wall = lt.EnsureImported("墙", 0.9f, 0.1f, 0.1f);   // 偏红图层
+        var doc = SceneExportService.BuildDocument(s, lt);
+        Assert.True(doc.Layers.Contains("墙"));
+        var layer = doc.Layers["墙"];
+        Assert.True(layer.Color.IsTrueColor);
+        Assert.InRange(layer.Color.R, 220, 240);               // 0.9*255≈229
+        Assert.InRange(layer.Color.G, 20, 35);
+    }
+
+    [Fact]
     public void Export_roundtrip_preserves_entity_color()
     {
         var s = new Scene();

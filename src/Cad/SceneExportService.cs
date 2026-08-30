@@ -18,18 +18,18 @@ namespace PitMine3D.Kylin.Cad;
 /// </summary>
 public static class SceneExportService
 {
-    /// <summary>导出场景到 .dxf/.dwg（按扩展名）；返回写出的实体数。</summary>
-    public static int Export(Scene scene, string path)
+    /// <summary>导出场景到 .dxf/.dwg（按扩展名）；返回写出的实体数。layers 非空则把图层颜色写入 DXF 图层表。</summary>
+    public static int Export(Scene scene, string path, LayerTable? layers = null)
     {
-        var doc = BuildDocument(scene);
+        var doc = BuildDocument(scene, layers);
         string ext = Path.GetExtension(path).ToLowerInvariant();
         if (ext == ".dwg") { using var w = new DwgWriter(path, doc); w.Write(); }
         else { using var w = new DxfWriter(path, doc, false); w.Write(); }
         return scene.Count;
     }
 
-    /// <summary>场景 → CadDocument（可单测：导出再读回比对）。</summary>
-    public static CadDocument BuildDocument(Scene scene)
+    /// <summary>场景 → CadDocument（可单测：导出再读回比对）。layers 非空则图层表带上各层颜色。</summary>
+    public static CadDocument BuildDocument(Scene scene, LayerTable? layers = null)
     {
         var doc = new CadDocument();
         var cache = new Dictionary<string, AcLayer>();
@@ -40,6 +40,12 @@ public static class SceneExportService
             AcLayer l;
             if (doc.Layers.Contains(name)) l = doc.Layers[name];   // "0" 等内建层已存在
             else { l = new AcLayer(name); doc.Layers.Add(l); }
+            var src = layers?.Get(name);                            // 场景图层色 → DXF 图层表(真彩色)
+            if (src != null)
+                l.Color = new Color(
+                    (byte)Math.Clamp(src.Cr * 255f, 0, 255),
+                    (byte)Math.Clamp(src.Cg * 255f, 0, 255),
+                    (byte)Math.Clamp(src.Cb * 255f, 0, 255));
             cache[name] = l;
             return l;
         }
