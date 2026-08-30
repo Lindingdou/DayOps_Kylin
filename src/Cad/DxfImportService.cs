@@ -521,10 +521,10 @@ public static class DxfImportService
                     break;
                 }
                 case ACadSharp.Entities.TextEntity te:
-                    Finalize(new DrawText { X = te.InsertPoint.X, Y = te.InsertPoint.Y, Height = te.Height > 0 ? te.Height : 1, Text = te.Value ?? "" }, xf, col, layer);
+                    Finalize(new DrawText { X = te.InsertPoint.X, Y = te.InsertPoint.Y, Height = te.Height > 0 ? te.Height : 1, Rotation = te.Rotation, Text = te.Value ?? "" }, xf, col, layer);
                     break;
                 case MText mt:
-                    Finalize(new DrawText { X = mt.InsertPoint.X, Y = mt.InsertPoint.Y, Height = mt.Height > 0 ? mt.Height : 1, Text = StripMTextFormatting(mt.Value ?? "") }, xf, col, layer);
+                    Finalize(new DrawText { X = mt.InsertPoint.X, Y = mt.InsertPoint.Y, Height = mt.Height > 0 ? mt.Height : 1, Rotation = mt.Rotation, Text = StripMTextFormatting(mt.Value ?? "") }, xf, col, layer);
                     break;
                 case Solid so:
                 {

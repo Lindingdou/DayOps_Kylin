@@ -677,24 +677,32 @@ public static class LineMath
 public sealed class TextEntity : SceneEntity
 {
     public double X, Y, Height = 1;
+    public double Rotation;   // 弧度，绕锚点 (X,Y) 逆时针；0 = 水平（向后兼容）
     public string Text = "";
     public override void Tessellate(List<float> o)
     {
-        double cx = X, adv = Height * 0.8;
+        double c = Math.Cos(Rotation), s = Math.Sin(Rotation);
+        double adv = Height * 0.8, cursor = 0;
         foreach (char ch in Text)
         {
             foreach (var (sx0, sy0, sx1, sy1) in StrokeFont.Strokes(ch))
-                Seg(o, cx + sx0 * Height, Y + sy0 * Height, cx + sx1 * Height, Y + sy1 * Height);
-            cx += adv;
+            {
+                double lx0 = cursor + sx0 * Height, ly0 = sy0 * Height;   // 锚点为原点的局部坐标
+                double lx1 = cursor + sx1 * Height, ly1 = sy1 * Height;
+                Seg(o, X + lx0 * c - ly0 * s, Y + lx0 * s + ly0 * c,      // 旋转后平移到锚点
+                       X + lx1 * c - ly1 * s, Y + lx1 * s + ly1 * c);
+            }
+            cursor += adv;
         }
     }
     public override SceneEntity Apply(Affine2 m)
     {
         var (x, y) = m.Map(X, Y);
-        return Colored(new TextEntity { X = x, Y = y, Height = Height * m.ScaleMag, Text = Text });
+        double addRot = Math.Atan2(m.B, m.A);   // 仿射的旋转分量并入文字角
+        return Colored(new TextEntity { X = x, Y = y, Height = Height * m.ScaleMag, Rotation = Rotation + addRot, Text = Text });
     }
     public override List<(double x, double y)> Grips() => new() { (X, Y) };
-    public override SceneEntity? MoveGrip(int i, double nx, double ny) => Colored(new TextEntity { X = nx, Y = ny, Height = Height, Text = Text });
+    public override SceneEntity? MoveGrip(int i, double nx, double ny) => Colored(new TextEntity { X = nx, Y = ny, Height = Height, Rotation = Rotation, Text = Text });
 }
 
 /// <summary>实体 → 类型中文名（对象树 / 快速选择用；椭圆/样条导入后并为多段线）。</summary>

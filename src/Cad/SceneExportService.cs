@@ -72,7 +72,7 @@ public static class SceneExportService
                 yield return new Point { Location = new XYZ(p.X, p.Y, 0) };
                 break;
             case DrawText t:
-                yield return new ACadSharp.Entities.TextEntity { InsertPoint = new XYZ(t.X, t.Y, 0), Height = t.Height, Value = t.Text };
+                yield return new ACadSharp.Entities.TextEntity { InsertPoint = new XYZ(t.X, t.Y, 0), Height = t.Height, Rotation = t.Rotation, Value = t.Text };
                 break;
             case RectEntity r:
                 yield return Poly(new[] { (r.X0, r.Y0), (r.X1, r.Y0), (r.X1, r.Y1), (r.X0, r.Y1) }, true);

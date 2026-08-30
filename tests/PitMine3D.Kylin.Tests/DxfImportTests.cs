@@ -435,6 +435,24 @@ public class DxfImportTests
     }
 
     [Fact]
+    public void Text_rotation_roundtrips_through_dxf()
+    {
+        string src = Path.Combine(Path.GetTempPath(), "pm_txtrot.dxf");
+        var doc = new CadDocument();
+        doc.Entities.Add(new ACadSharp.Entities.TextEntity
+        {
+            InsertPoint = new XYZ(0, 0, 0), Height = 2, Rotation = System.Math.PI / 4, Value = "R"
+        });
+        using (var w = new DxfWriter(src, doc, false)) w.Write();
+
+        var er = DxfImportService.LoadEntities(src);
+        Assert.True(er.Success, er.Error);
+        var t = Assert.IsType<PitMine3D.Kylin.Cad.Draw.TextEntity>(Assert.Single(er.Entities));
+        Assert.Equal(System.Math.PI / 4, t.Rotation, 4);   // ACadSharp 旋转为弧度, 导入原样带入
+        try { File.Delete(src); } catch { /* 清理失败无碍 */ }
+    }
+
+    [Fact]
     public void Export_roundtrip_preserves_segments()
     {
         string src = Path.Combine(Path.GetTempPath(), "pm_exp_src.dxf");
