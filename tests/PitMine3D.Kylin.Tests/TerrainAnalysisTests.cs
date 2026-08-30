@@ -44,4 +44,28 @@ public class TerrainAnalysisTests
         var tris = new List<(int a, int b, int c)> { (0, 1, 2) };
         Assert.Equal(3, TerrainAnalysis.BuildSlopeMap(pts, tris).Count);
     }
+
+    [Fact]
+    public void Flat_triangle_has_no_aspect()
+    {
+        Assert.Equal(-1, TerrainAnalysis.AspectDegrees((0, 0, 0), (1, 0, 0), (0, 1, 0)), 3);
+    }
+
+    [Fact]
+    public void Sloped_triangle_aspect_in_range()
+    {
+        double asp = TerrainAnalysis.AspectDegrees((0, 0, 0), (1, 0, 0), (0, 1, 1));   // 有坡
+        Assert.InRange(asp, 0, 360);
+    }
+
+    [Fact]
+    public void Hsv_primaries()
+    {
+        var red = TerrainAnalysis.HsvToRgb(0, 1, 1);
+        Assert.True(red.r > 0.9f && red.g < 0.1f && red.b < 0.1f);
+        var green = TerrainAnalysis.HsvToRgb(120, 1, 1);
+        Assert.True(green.g > 0.9f && green.r < 0.1f);
+        var blue = TerrainAnalysis.HsvToRgb(240, 1, 1);
+        Assert.True(blue.b > 0.9f && blue.g < 0.1f);
+    }
 }

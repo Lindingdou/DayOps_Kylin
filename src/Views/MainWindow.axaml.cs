@@ -490,7 +490,8 @@ public partial class MainWindow : Window
             if (cmd == "展绘钻孔" || cmd == "钻孔柱状图" || cmd == "导入钻孔数据" || cmd == "原始钻孔柱状图") { await ImportBoreholesAsync(); return; }
             if (cmd == "等高线" || cmd == "等高线生产" || cmd == "等值线") { await ContourFromCsvAsync(); return; }
             if (cmd == "创建三角网" || cmd == "三角网") { await CreateTinAsync(); return; }
-            if (cmd == "坡度着色") { await SlopeShadeAsync(); return; }
+            if (cmd == "坡度着色") { await ShadeTinAsync("坡度着色", "绿=平 → 红=陡", TerrainAnalysis.BuildSlopeMap); return; }
+            if (cmd == "坡向着色") { await ShadeTinAsync("坡向着色", "按朝向 HSV 配色", TerrainAnalysis.BuildAspectMap); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
             if (cmd == "2D") { Viewport.SetViewMode(true); StatusMsg.Text = "视图: 2D 平面（正交俯视）"; return; }
@@ -831,28 +832,29 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"创建三角网：{pts2d.Count} 点 → {tris.Count} 三角 · {edges.Count} 边";
     }
 
-    // 坡度着色：散点 CSV(x,y,z) → 三角网 → 按坡度绿→红着色边
-    private async Task SlopeShadeAsync()
+    // 三角网着色通用流程：散点 CSV → 三角网 → builder 生成着色边入场景
+    private async Task ShadeTinAsync(string title, string doneHint,
+        System.Func<System.Collections.Generic.IReadOnlyList<(double x, double y, double z)>, List<(int a, int b, int c)>, List<SceneEntity>> builder)
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "坡度着色：选高程点 CSV (x,y,z)",
+            Title = $"{title}：选高程点 CSV (x,y,z)",
             AllowMultiple = false,
             FileTypeFilter = new[] { new FilePickerFileType("高程点 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
         });
         if (files.Count == 0) return;
         var r = PointDataImportService.Load(files[0].Path.LocalPath);
-        if (!r.Success) { StatusMsg.Text = $"坡度着色：点导入失败 {r.Error}"; return; }
+        if (!r.Success) { StatusMsg.Text = $"{title}：点导入失败 {r.Error}"; return; }
         var pts2d = new List<(double x, double y)>();
         foreach (var p in r.Points) pts2d.Add((p.x, p.y));
         var tris = Delaunay.Triangulate(pts2d);
-        if (tris.Count == 0) { StatusMsg.Text = "坡度着色：点太少或共线"; return; }
-        var geo = TerrainAnalysis.BuildSlopeMap(r.Points, tris);
+        if (tris.Count == 0) { StatusMsg.Text = $"{title}：点太少或共线"; return; }
+        var geo = builder(r.Points, tris);
         BeginChange();
         foreach (var e in geo) _scene.Add(e);
         RefreshScene();
         Viewport.FitBounds(r.Bounds);
-        StatusMsg.Text = $"坡度着色：{tris.Count} 三角（绿=平 → 红=陡）";
+        StatusMsg.Text = $"{title}：{tris.Count} 三角（{doneHint}）";
     }
 
     // 图层管理器：列出图层复选框，勾选控制显隐
@@ -1778,7 +1780,10 @@ public partial class MainWindow : Window
                 _ = CreateTinAsync();
                 break;
             case "SLOPE":
-                _ = SlopeShadeAsync();
+                _ = ShadeTinAsync("坡度着色", "绿=平 → 红=陡", TerrainAnalysis.BuildSlopeMap);
+                break;
+            case "ASPECT":
+                _ = ShadeTinAsync("坡向着色", "按朝向 HSV 配色", TerrainAnalysis.BuildAspectMap);
                 break;
             case "DIST":
             case "DI":

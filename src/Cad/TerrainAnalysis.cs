@@ -30,14 +30,54 @@ public static class TerrainAnalysis
         return ((float)t, (float)(1 - t), 0.15f);
     }
 
+    /// <summary>三角面坡向(度, 0..360 罗盘方位)；平面返回 -1。</summary>
+    public static double AspectDegrees(
+        (double x, double y, double z) a, (double x, double y, double z) b, (double x, double y, double z) c)
+    {
+        double ux = b.x - a.x, uy = b.y - a.y, uz = b.z - a.z;
+        double vx = c.x - a.x, vy = c.y - a.y, vz = c.z - a.z;
+        double nx = uy * vz - uz * vy, ny = uz * vx - ux * vz;
+        if (nx * nx + ny * ny < 1e-12) return -1;            // 平面无坡向
+        double ang = Math.Atan2(ny, nx) * 180 / Math.PI;
+        return ang < 0 ? ang + 360 : ang;
+    }
+
+    /// <summary>坡向(度) → 颜色：按方位 HSV 配色；平面(-1)灰。</summary>
+    public static (float r, float g, float b) AspectColor(double aspectDeg)
+        => aspectDeg < 0 ? (0.6f, 0.6f, 0.6f) : HsvToRgb(aspectDeg, 0.7f, 0.9f);
+
+    public static (float r, float g, float b) HsvToRgb(double h, double s, double v)
+    {
+        h = ((h % 360) + 360) % 360;
+        double c = v * s, x = c * (1 - Math.Abs((h / 60) % 2 - 1)), m = v - c;
+        double r, g, b;
+        if (h < 60) { r = c; g = x; b = 0; }
+        else if (h < 120) { r = x; g = c; b = 0; }
+        else if (h < 180) { r = 0; g = c; b = x; }
+        else if (h < 240) { r = 0; g = x; b = c; }
+        else if (h < 300) { r = x; g = 0; b = c; }
+        else { r = c; g = 0; b = x; }
+        return ((float)(r + m), (float)(g + m), (float)(b + m));
+    }
+
     /// <summary>三角网 → 按坡度着色的三角边线（每三角自身 3 边着色，不去重以保色）。</summary>
     public static List<SceneEntity> BuildSlopeMap(
         IReadOnlyList<(double x, double y, double z)> pts, List<(int a, int b, int c)> tris)
+        => BuildShaded(pts, tris, (A, B, C) => SlopeColor(SlopeDegrees(A, B, C)));
+
+    /// <summary>三角网 → 按坡向着色的三角边线。</summary>
+    public static List<SceneEntity> BuildAspectMap(
+        IReadOnlyList<(double x, double y, double z)> pts, List<(int a, int b, int c)> tris)
+        => BuildShaded(pts, tris, (A, B, C) => AspectColor(AspectDegrees(A, B, C)));
+
+    private static List<SceneEntity> BuildShaded(
+        IReadOnlyList<(double x, double y, double z)> pts, List<(int a, int b, int c)> tris,
+        Func<(double x, double y, double z), (double x, double y, double z), (double x, double y, double z), (float r, float g, float b)> color)
     {
         var list = new List<SceneEntity>();
         foreach (var t in tris)
         {
-            var (r, g, b) = SlopeColor(SlopeDegrees(pts[t.a], pts[t.b], pts[t.c]));
+            var (r, g, b) = color(pts[t.a], pts[t.b], pts[t.c]);
             void E(int u, int v) => list.Add(new LineEntity { X0 = pts[u].x, Y0 = pts[u].y, X1 = pts[v].x, Y1 = pts[v].y, Cr = r, Cg = g, Cb = b });
             E(t.a, t.b); E(t.b, t.c); E(t.c, t.a);
         }
