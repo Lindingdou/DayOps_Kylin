@@ -124,6 +124,44 @@
                                         <Button Classes="ribbon-btn small" Tag="打断" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_break}" /><TextBlock Text="打断" /></StackPanel></Button>
                                         <Button Classes="ribbon-btn small" Tag="分解" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_explode}" /><TextBlock Text="分解" /></StackPanel></Button>
                                         <Button Classes="ribbon-btn small" Tag="删除" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_delete}" /><TextBlock Text="删除" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="撤销" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="撤销" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="重做" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="重做" /></StackPanel></Button>
+                                    </WrapPanel>
+                                </DockPanel>
+                            </Border>
+
+                            <!-- 注释 -->
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="注释" />
+                                    <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                        <Button Classes="ribbon-btn small" Tag="对齐标注" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="对齐标注" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="半径标注" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="半径标注" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="连续标注" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="连续标注" /></StackPanel></Button>
+                                    </WrapPanel>
+                                </DockPanel>
+                            </Border>
+
+                            <!-- 测量 -->
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="测量" />
+                                    <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                        <Button Classes="ribbon-btn small" Tag="距离" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="距离" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="面积" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="面积" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="角度" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="角度" /></StackPanel></Button>
+                                    </WrapPanel>
+                                </DockPanel>
+                            </Border>
+
+                            <!-- 剪贴板 -->
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="剪贴板" />
+                                    <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                        <Button Classes="ribbon-btn small" Tag="剪切" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="剪切" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="复制到剪贴板" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="复制" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="粘贴" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="粘贴" /></StackPanel></Button>
                                     </WrapPanel>
                                 </DockPanel>
                             </Border>
