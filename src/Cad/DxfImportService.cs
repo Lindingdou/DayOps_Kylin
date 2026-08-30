@@ -4,6 +4,7 @@ using System.IO;
 using ACadSharp;
 using ACadSharp.Entities;
 using ACadSharp.IO;
+using PitMine3D.Kylin.Cad.Draw;
 
 namespace PitMine3D.Kylin.Cad;
 
@@ -303,6 +304,195 @@ public static class DxfImportService
         foreach (var kv in byLayer) result.LayerGeometry[kv.Key] = kv.Value.ToArray();
         foreach (var kv in byType) result.TypeGeometry[kv.Key] = kv.Value.ToArray();
         result.Bounds = verts.Count == 0 ? new double[] { 0, 0, 0, 0 } : new[] { minX, minY, maxX, maxY };
+        return result;
+    }
+
+    /// <summary>可编辑导入结果：DXF/DWG → 绘制场景实体（可选中/编辑/删除/按层管理）。</summary>
+    public sealed class EntityImportResult
+    {
+        public bool Success => Error == null;
+        public string? Error { get; set; }
+        public List<SceneEntity> Entities { get; } = new();
+        public double[] Bounds { get; set; } = { 0, 0, 0, 0 };
+        /// <summary>图层名 → 代表色（供图层面板色块）。</summary>
+        public Dictionary<string, (float r, float g, float b)> LayerColors { get; } = new();
+        public List<string> LayerOrder { get; } = new();
+        public Dictionary<string, int> TypeCounts { get; } = new();
+        public List<string> Warnings { get; } = new();
+    }
+
+    /// <summary>读 DXF/DWG 为可编辑场景实体（Line/Circle/Arc/Polyline/Point/Ellipse/Spline/Insert 展开）。</summary>
+    public static EntityImportResult LoadEntities(string filePath)
+    {
+        var result = new EntityImportResult();
+        CadDocument doc;
+        try
+        {
+            string ext = Path.GetExtension(filePath).ToLowerInvariant();
+            doc = ext switch
+            {
+                ".dxf" => DxfReader.Read(filePath),
+                ".dwg" => DwgReader.Read(filePath),
+                _ => throw new NotSupportedException($"不支持的 CAD 格式：{ext}")
+            };
+        }
+        catch (Exception ex) { result.Error = $"读取失败：{ex.Message}"; return result; }
+        return MapDocument(doc, result);
+    }
+
+    /// <summary>把 CadDocument 映射为场景实体（可单测：测试直接传入内存 doc）。</summary>
+    public static EntityImportResult MapDocument(CadDocument doc, EntityImportResult? into = null)
+    {
+        var result = into ?? new EntityImportResult();
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+
+        void Finalize(SceneEntity se, Affine2? xf, (float r, float g, float b) col, string layer)
+        {
+            se.Cr = col.r; se.Cg = col.g; se.Cb = col.b;
+            if (xf != null) se = se.Apply(xf.Value);   // 变换保留颜色(Colored)，但不拷层名
+            se.LayerName = layer;
+            result.Entities.Add(se);
+            var o = new List<float>(); se.Tessellate(o);
+            for (int i = 0; i + 1 < o.Count; i += 6)
+            {
+                float x = o[i], y = o[i + 1];
+                if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y;
+            }
+        }
+
+        PolylineEntity? EllipsePoly(Ellipse ell)
+        {
+            double majX = ell.MajorAxisEndPoint.X, majY = ell.MajorAxisEndPoint.Y;
+            double majLen = Math.Sqrt(majX * majX + majY * majY);
+            if (majLen < 1e-9) return null;
+            double rot = Math.Atan2(majY, majX), minLen = majLen * ell.RadiusRatio;
+            double t0 = ell.StartParameter, t1 = ell.EndParameter;
+            if (t1 <= t0) t1 += Math.PI * 2;
+            bool full = Math.Abs((t1 - t0) - Math.PI * 2) < 1e-6;
+            int n = Math.Max(16, (int)(CircleSegments * Math.Abs(t1 - t0) / (Math.PI * 2)));
+            double cosR = Math.Cos(rot), sinR = Math.Sin(rot);
+            var pl = new PolylineEntity { Closed = full };
+            for (int i = 0; i <= n; i++)
+            {
+                double t = t0 + (t1 - t0) * i / n;
+                double lx = majLen * Math.Cos(t), ly = minLen * Math.Sin(t);
+                pl.Points.Add((ell.Center.X + lx * cosR - ly * sinR, ell.Center.Y + lx * sinR + ly * cosR));
+            }
+            return pl.Points.Count >= 2 ? pl : null;
+        }
+
+        PolylineEntity? SplinePoly(Spline sp)
+        {
+            var cps = sp.ControlPoints; int deg = sp.Degree; var knots = sp.Knots;
+            var pl = new PolylineEntity();
+            if (cps == null || cps.Count < 2)
+            {
+                var fps = sp.FitPoints;
+                if (fps != null) foreach (var p in fps) pl.Points.Add((p.X, p.Y));
+                return pl.Points.Count >= 2 ? pl : null;
+            }
+            if (knots == null || deg < 1 || knots.Count < cps.Count + deg + 1)
+            {
+                foreach (var p in cps) pl.Points.Add((p.X, p.Y));
+                return pl.Points.Count >= 2 ? pl : null;
+            }
+            var sx = new double[cps.Count]; var sy = new double[cps.Count]; var sz = new double[cps.Count];
+            for (int i = 0; i < cps.Count; i++) { sx[i] = cps[i].X; sy[i] = cps[i].Y; sz[i] = cps[i].Z; }
+            int nn = cps.Count - 1; double u0 = knots[deg], u1 = knots[nn + 1];
+            int samples = Math.Max(CircleSegments, cps.Count * 8);
+            for (int s = 0; s <= samples; s++)
+            {
+                double u = s == samples ? u1 : u0 + (u1 - u0) * s / samples;
+                var pt = EvalBSpline(sx, sy, sz, knots, deg, u);
+                pl.Points.Add((pt.x, pt.y));
+            }
+            return pl.Points.Count >= 2 ? pl : null;
+        }
+
+        void Emit(Entity ent, Affine2? xf, (float r, float g, float b) col, string layer, int depth)
+        {
+            switch (ent)
+            {
+                case Line ln:
+                    Finalize(new LineEntity { X0 = ln.StartPoint.X, Y0 = ln.StartPoint.Y, X1 = ln.EndPoint.X, Y1 = ln.EndPoint.Y }, xf, col, layer);
+                    break;
+                case LwPolyline lp:
+                {
+                    var pl = new PolylineEntity { Closed = lp.IsClosed };
+                    foreach (var v in lp.Vertices) pl.Points.Add((v.Location.X, v.Location.Y));
+                    if (pl.Points.Count >= 2) Finalize(pl, xf, col, layer);
+                    break;
+                }
+                case Polyline2D p2:
+                {
+                    var pl = new PolylineEntity { Closed = p2.IsClosed };
+                    foreach (var v in p2.Vertices) pl.Points.Add((v.Location.X, v.Location.Y));
+                    if (pl.Points.Count >= 2) Finalize(pl, xf, col, layer);
+                    break;
+                }
+                case Arc ar:   // 须在 Circle 之前（Arc : Circle）
+                {
+                    double a0 = ar.StartAngle, a1 = ar.EndAngle;
+                    if (a1 <= a0) a1 += Math.PI * 2;
+                    double am = (a0 + a1) / 2;
+                    Finalize(new ArcEntity
+                    {
+                        X1 = ar.Center.X + ar.Radius * Math.Cos(a0), Y1 = ar.Center.Y + ar.Radius * Math.Sin(a0),
+                        X2 = ar.Center.X + ar.Radius * Math.Cos(am), Y2 = ar.Center.Y + ar.Radius * Math.Sin(am),
+                        X3 = ar.Center.X + ar.Radius * Math.Cos(a1), Y3 = ar.Center.Y + ar.Radius * Math.Sin(a1)
+                    }, xf, col, layer);
+                    break;
+                }
+                case Circle ci:
+                    Finalize(new CircleEntity { Cx = ci.Center.X, Cy = ci.Center.Y, Radius = ci.Radius }, xf, col, layer);
+                    break;
+                case Point pt:
+                    Finalize(new PointEntity { X = pt.Location.X, Y = pt.Location.Y }, xf, col, layer);
+                    break;
+                case Ellipse ell:
+                {
+                    var pl = EllipsePoly(ell);
+                    if (pl != null) Finalize(pl, xf, col, layer);
+                    break;
+                }
+                case Spline sp:
+                {
+                    var pl = SplinePoly(sp);
+                    if (pl != null) Finalize(pl, xf, col, layer);
+                    break;
+                }
+                case Insert ins:
+                {
+                    if (depth >= 8 || ins.Block == null) break;
+                    double c = Math.Cos(ins.Rotation), s = Math.Sin(ins.Rotation);
+                    double sx = ins.XScale == 0 ? 1 : ins.XScale, sy = ins.YScale == 0 ? 1 : ins.YScale;
+                    var insM = new Affine2(sx * c, sx * s, -sy * s, sy * c, ins.InsertPoint.X, ins.InsertPoint.Y);
+                    var childXf = xf == null ? insM : Affine2.Multiply(xf.Value, insM);
+                    foreach (var be in ins.Block.Entities)
+                        Emit(be, childXf, ColorOf(be), layer, depth + 1);   // 块内实体归插入所在层
+                    break;
+                }
+                default:
+                    result.Warnings.Add($"跳过未支持实体：{ent.GetType().Name}");
+                    break;
+            }
+        }
+
+        try
+        {
+            var model = doc.BlockRecords["*Model_Space"];
+            foreach (var e in model.Entities)
+            {
+                string layer = SafeLayerName(e);
+                if (!result.LayerColors.ContainsKey(layer)) { result.LayerColors[layer] = ColorOf(e); result.LayerOrder.Add(layer); }
+                var cn = CnTypeName(e);
+                if (cn != null) result.TypeCounts[cn] = result.TypeCounts.GetValueOrDefault(cn) + 1;
+                Emit(e, null, ColorOf(e), layer, 0);
+            }
+        }
+        catch (Exception ex) { result.Error = $"映射实体失败：{ex.Message}"; return result; }
+
+        result.Bounds = result.Entities.Count == 0 ? new double[] { 0, 0, 0, 0 } : new[] { minX, minY, maxX, maxY };
         return result;
     }
 

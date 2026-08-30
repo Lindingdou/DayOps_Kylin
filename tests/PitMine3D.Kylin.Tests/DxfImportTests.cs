@@ -4,6 +4,7 @@ using ACadSharp.Entities;
 using ACadSharp.IO;
 using CSMath;
 using PitMine3D.Kylin.Cad;
+using PitMine3D.Kylin.Cad.Draw;
 using Xunit;
 
 namespace PitMine3D.Kylin.Tests;
@@ -204,6 +205,52 @@ public class DxfImportTests
         var b = DxfImportService.EvalBSpline(px, py, pz, knots, 3, 1.0);
         Assert.Equal(0, a.x, 4); Assert.Equal(0, a.y, 4);     // 起点 = P0
         Assert.Equal(3, b.x, 4); Assert.Equal(0, b.y, 4);     // 终点 = P3
+    }
+
+    [Fact]
+    public void MapDocument_produces_editable_entities()
+    {
+        var doc = new CadDocument();
+        doc.Entities.Add(new Line { StartPoint = new XYZ(0, 0, 0), EndPoint = new XYZ(10, 0, 0) });
+        doc.Entities.Add(new Circle { Center = new XYZ(5, 5, 0), Radius = 3 });
+        doc.Entities.Add(new Arc { Center = new XYZ(0, 0, 0), Radius = 2, StartAngle = 0, EndAngle = System.Math.PI / 2 });
+
+        var r = DxfImportService.MapDocument(doc);
+        Assert.True(r.Success, r.Error);
+        Assert.Equal(3, r.Entities.Count);
+        Assert.Contains(r.Entities, e => e is LineEntity);
+        Assert.Contains(r.Entities, e => e is CircleEntity);
+        Assert.Contains(r.Entities, e => e is ArcEntity);
+    }
+
+    [Fact]
+    public void MapDocument_expands_insert_to_world_position()
+    {
+        var doc = new CadDocument();
+        var block = new ACadSharp.Tables.BlockRecord("blk");
+        block.Entities.Add(new Line { StartPoint = new XYZ(0, 0, 0), EndPoint = new XYZ(1, 0, 0) });
+        doc.BlockRecords.Add(block);
+        doc.Entities.Add(new Insert(block) { InsertPoint = new XYZ(100, 0, 0) });
+
+        var r = DxfImportService.MapDocument(doc);
+        Assert.True(r.Success, r.Error);
+        var line = Assert.IsType<LineEntity>(Assert.Single(r.Entities));
+        Assert.Equal(100, line.X0, 4);          // 块内线平移到插入点
+        Assert.Equal(101, line.X1, 4);
+    }
+
+    [Fact]
+    public void MapDocument_captures_layer_name()
+    {
+        var doc = new CadDocument();
+        var wall = new ACadSharp.Tables.Layer("墙");
+        doc.Layers.Add(wall);
+        doc.Entities.Add(new Line { StartPoint = new XYZ(0, 0, 0), EndPoint = new XYZ(5, 0, 0), Layer = wall });
+
+        var r = DxfImportService.MapDocument(doc);
+        Assert.True(r.Success, r.Error);
+        Assert.Contains("墙", r.LayerOrder);
+        Assert.Equal("墙", r.Entities[0].LayerName);
     }
 
     [Fact]

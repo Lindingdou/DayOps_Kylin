@@ -50,6 +50,16 @@ public sealed class LayerTable
 
     public Layer? Get(string name) => _layers.Find(x => x.Name == name);
 
+    /// <summary>确保存在名为 name 的图层（导入时并入）：已存在返回原层，否则用给定色新建（不改当前层）。</summary>
+    public Layer EnsureImported(string name, float r, float g, float b)
+    {
+        var l = Get(name);
+        if (l != null) return l;
+        l = new Layer(name, r, g, b);
+        _layers.Add(l);
+        return l;
+    }
+
     public bool SetCurrent(string name)
     {
         var l = Get(name);

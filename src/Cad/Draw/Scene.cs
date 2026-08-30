@@ -74,6 +74,12 @@ public readonly struct Affine2
     /// <summary>是否保持轴对齐（无旋转/错切）。</summary>
     public bool IsAxisAligned => Math.Abs(B) < 1e-9 && Math.Abs(C) < 1e-9;
 
+    /// <summary>复合变换：返回 outer∘inner（先 inner 再 outer），供块引用嵌套展开。</summary>
+    public static Affine2 Multiply(Affine2 o, Affine2 i) => new(
+        o.A * i.A + o.C * i.B, o.B * i.A + o.D * i.B,
+        o.A * i.C + o.C * i.D, o.B * i.C + o.D * i.D,
+        o.A * i.E + o.C * i.F + o.E, o.B * i.E + o.D * i.F + o.F);
+
     public static Affine2 Translate(double dx, double dy) => new(1, 0, 0, 1, dx, dy);
     public static Affine2 Scale(double s, double cx, double cy) => new(s, 0, 0, s, cx - s * cx, cy - s * cy);
 
