@@ -136,6 +136,19 @@ public partial class MainWindow : Window
                 return;
             }
 
+            // 点对点寻径：取起点、终点
+            if (_pathActive && props.IsLeftButtonPressed)
+            {
+                _nav = NavMode.None;
+                var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                if (wp != null)
+                {
+                    if (_pathP1 == null) { _pathP1 = (wp.Value.x, wp.Value.y); StatusMsg.Text = "点对点寻径：点终点"; }
+                    else { ComputePath(_pathP1.Value, (wp.Value.x, wp.Value.y)); _pathActive = false; _pathP1 = null; }
+                }
+                return;
+            }
+
             // 偏移：点击一侧 → 偏移选中实体（保留原实体颜色/图层）
             if (_offsetActive && props.IsLeftButtonPressed)
             {
@@ -409,6 +422,7 @@ public partial class MainWindow : Window
                 _trimActive = false;
                 _breakActive = false; _breakPts.Clear();
                 _slideActive = false; _slideDragging = false; _slidePts.Clear();
+                _pathActive = false; _pathP1 = null;
                 _gripIndex = -1;
                 _selBoxActive = false;
                 _ttrActive = false; _ttrAwaitRadius = false; _ttrRef1 = null; _ttrRef2 = null;
@@ -467,6 +481,8 @@ public partial class MainWindow : Window
     private bool _breakActive;                      // 打断：等待取两点
     private readonly List<(double x, double y)> _breakPts = new();   // 打断的两点
     private int _gripIndex = -1;                    // 夹点拖拽中的夹点序号(-1=无)
+    private bool _pathActive;                       // 点对点寻径：等待取两点
+    private (double x, double y)? _pathP1;
     private bool _selBoxActive;                     // 窗口框选拖拽中
     private Avalonia.Point _selBoxStart;            // 框选起点(屏幕)
     private bool _ttrActive, _ttrAwaitRadius;       // 圆 TTR：选两相切参照(线/圆) → 输半径
@@ -497,6 +513,7 @@ public partial class MainWindow : Window
             if (cmd == "两期点云算量" || cmd == "两期算量" || cmd == "两期土方") { await TwoEpochVolumeAsync(); return; }
             if (cmd == "圈范围算量") { await BoundaryVolumeAsync(); return; }
             if (cmd == "提取道路中心线" || cmd == "道路中线" || cmd == "提取道路中线") { ExtractCenterline(); return; }
+            if (cmd == "点对点寻径" || cmd == "寻径" || cmd == "点对点寻路") { StartPathfind(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
             if (cmd == "2D") { Viewport.SetViewMode(true); StatusMsg.Text = "视图: 2D 平面（正交俯视）"; return; }
@@ -874,6 +891,43 @@ public partial class MainWindow : Window
         _scene.Add(cl);
         RefreshScene();
         StatusMsg.Text = $"已提取道路中心线（{mid.Count} 点）";
+    }
+
+    // 点对点寻径：场景所有多段线建路网 → 两点最近节点 Dijkstra → 高亮路径
+    private void StartPathfind()
+    {
+        _pathActive = true; _pathP1 = null;
+        _tool = null; _measure = null; _editMode = EditMode.None;
+        _offsetActive = false; _trimActive = false; _breakActive = false;
+        StatusMsg.Text = "点对点寻径：点起点（路网 = 场景中的多段线）";
+    }
+
+    private void ComputePath((double x, double y) a, (double x, double y) b)
+    {
+        var polys = new List<System.Collections.Generic.IReadOnlyList<(double x, double y)>>();
+        foreach (var e in _scene.Entities)
+            if (e is PolylineEntity pl && pl.Points.Count >= 2) polys.Add(pl.Points);
+        if (polys.Count == 0) { StatusMsg.Text = "寻径：场景无路（多段线）"; return; }
+
+        double tol = System.Math.Max(1e-6, SnapTolWorld(_lastPointer) * 0.5);
+        var (nodes, adj) = RoadNetwork.Build(polys, tol);
+        int s = RoadNetwork.NearestNode(nodes, a.x, a.y);
+        int g = RoadNetwork.NearestNode(nodes, b.x, b.y);
+        var path = RoadNetwork.Dijkstra(adj, s, g);
+        if (path.Count < 2) { StatusMsg.Text = "寻径：两点在路网上不连通"; return; }
+
+        var route = new PolylineEntity { Cr = 0.30f, Cg = 0.95f, Cb = 0.95f };   // 青色路径
+        double dist = 0;
+        for (int i = 0; i < path.Count; i++)
+        {
+            var p = nodes[path[i]];
+            route.Points.Add(p);
+            if (i > 0) { var q = nodes[path[i - 1]]; dist += System.Math.Sqrt((p.x - q.x) * (p.x - q.x) + (p.y - q.y) * (p.y - q.y)); }
+        }
+        BeginChange();
+        _scene.Add(route);
+        RefreshScene();
+        StatusMsg.Text = $"寻径完成：{path.Count} 节点 · 路径长度 {dist:0.##}";
     }
 
     // 圈范围算量：选中的闭合多段线作边界 → TIN → 边界内三角体积
@@ -1885,6 +1939,9 @@ public partial class MainWindow : Window
                 break;
             case "CENTERLINE":
                 ExtractCenterline();
+                break;
+            case "PATH":
+                StartPathfind();
                 break;
             case "DIST":
             case "DI":
