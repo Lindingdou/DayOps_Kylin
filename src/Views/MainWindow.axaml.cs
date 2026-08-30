@@ -2,9 +2,13 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using PitMine3D.Kylin.Cad;
 using PitMine3D.Kylin.Cad.Draw;
@@ -16,6 +20,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        PopulateDrawingLayers();   // 启动即显示绘制图层("0")，可管理
 
         // OpenGL 上下文就绪后，把真实后端版本显示到视口与状态栏
         Viewport.GlReady += backend =>
@@ -457,7 +462,7 @@ public partial class MainWindow : Window
             if (cmd == "最后") { SelectLast(); return; }
             if (cmd == "上次") { SelectPrevious(); return; }
             if (cmd == "分解") { ExplodeSelected(); return; }
-            if (cmd == "新建图层") { var l = _layers.New(); StatusMsg.Text = $"新建图层「{l.Name}」并置为当前"; return; }
+            if (cmd == "新建图层") { var l = _layers.New(); PopulateDrawingLayers(); StatusMsg.Text = $"新建图层「{l.Name}」并置为当前"; return; }
             if (cmd == "图层特性管理器") { var l = _layers.CycleCurrent(); StatusMsg.Text = $"当前图层「{l.Name}」 显示{( l.Shown?"开":"关")}/{(l.Locked?"锁":"解锁")}（再点循环切换）"; return; }
             if (cmd == "冻结") { FreezeCurrentLayer(true); return; }
             if (cmd == "解冻") { FreezeCurrentLayer(false); return; }
@@ -563,11 +568,11 @@ public partial class MainWindow : Window
         Viewport.ClearImported();
         Viewport.SetHighlight(null);
         Viewport.SetSnapMarker(null); _snapShown = false;
-        LayerList.ItemsSource = null;
         ObjectTree.ItemsSource = null;
         ObjectTreeHint.IsVisible = true;
 
         _layers.Reset();
+        PopulateDrawingLayers();
         _undo.Clear();
         RefreshScene();
         StatusMsg.Text = "新建图形（已重置：绘图/导入/图层/选择/撤销）";
@@ -754,26 +759,57 @@ public partial class MainWindow : Window
         ObjectTree.ItemsSource = new[] { root };
     }
 
-    // 图层面板：由绘制图层表驱动（勾选=显隐；含导入并入的层）
+    // 图层面板：每层一行 [显隐][冻结][锁定][色块][名称→设当前]，由绘制图层表驱动
     private void PopulateDrawingLayers()
     {
-        var items = new List<CheckBox>();
+        var rows = new List<Control>();
         foreach (var l in _layers.Layers)
         {
-            var cb = new CheckBox { Content = l.Name, IsChecked = l.Shown, Tag = l.Name, FontSize = 12 };
-            cb.IsCheckedChanged += OnDrawingLayerToggle;
-            items.Add(cb);
+            var layer = l;   // 闭包捕获
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3 };
+
+            var vis = new CheckBox { IsChecked = layer.Visible, MinWidth = 0, Padding = new Thickness(0), VerticalAlignment = VerticalAlignment.Center };
+            ToolTip.SetTip(vis, "显示/隐藏");
+            vis.IsCheckedChanged += (_, _) => { layer.Visible = vis.IsChecked == true; AfterLayerStateChange(); };
+
+            var frz = new ToggleButton { IsChecked = layer.Frozen, Content = "冻", FontSize = 10, Padding = new Thickness(3, 0), MinWidth = 0 };
+            ToolTip.SetTip(frz, "冻结（隐藏且不可选）");
+            frz.IsCheckedChanged += (_, _) => { layer.Frozen = frz.IsChecked == true; AfterLayerStateChange(); };
+
+            var lck = new ToggleButton { IsChecked = layer.Locked, Content = "锁", FontSize = 10, Padding = new Thickness(3, 0), MinWidth = 0 };
+            ToolTip.SetTip(lck, "锁定（可见不可选）");
+            lck.IsCheckedChanged += (_, _) => { layer.Locked = lck.IsChecked == true; AfterLayerStateChange(); };
+
+            var swatch = new Border
+            {
+                Width = 14, Height = 14, CornerRadius = new CornerRadius(2),
+                Background = new SolidColorBrush(Color.FromRgb((byte)(layer.Cr * 255), (byte)(layer.Cg * 255), (byte)(layer.Cb * 255))),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            bool cur = ReferenceEquals(layer, _layers.Current);
+            var name = new Button
+            {
+                Content = (cur ? "● " : "") + layer.Name,
+                FontWeight = cur ? FontWeight.Bold : FontWeight.Normal,
+                Background = Brushes.Transparent, BorderThickness = new Thickness(0),
+                Padding = new Thickness(2, 0), FontSize = 12
+            };
+            ToolTip.SetTip(name, "点击设为当前图层");
+            name.Click += (_, _) => { _layers.SetCurrent(layer.Name); PopulateDrawingLayers(); StatusMsg.Text = $"当前图层「{layer.Name}」"; };
+
+            row.Children.Add(vis); row.Children.Add(frz); row.Children.Add(lck); row.Children.Add(swatch); row.Children.Add(name);
+            rows.Add(row);
         }
-        LayerList.ItemsSource = items;
+        LayerList.ItemsSource = rows;
     }
 
-    private void OnDrawingLayerToggle(object? sender, RoutedEventArgs e)
+    // 图层显隐/冻结/锁定变更后：失效选择清理 + 重绘
+    private void AfterLayerStateChange()
     {
-        if (sender is CheckBox cb && cb.Tag is string name)
-        {
-            var l = _layers.Get(name);
-            if (l != null) { l.Visible = cb.IsChecked == true; RefreshScene(); }
-        }
+        _selected.RemoveAll(en => !_layers.IsSelectable(en.LayerName));
+        HighlightSelection();
+        RefreshScene();
     }
 
     // 场景实体 → 类型中文名（对象树高亮匹配用；椭圆/样条已并为多段线）
@@ -1145,22 +1181,22 @@ public partial class MainWindow : Window
     private void FreezeCurrentLayer(bool freeze)
     {
         _layers.Current.Frozen = freeze;
-        _selected.RemoveAll(en => !_layers.IsSelectable(en.LayerName));   // 冻结层的选中失效
-        HighlightSelection();
-        RefreshScene();
+        AfterLayerStateChange();
+        PopulateDrawingLayers();
         StatusMsg.Text = $"图层「{_layers.Current.Name}」{(freeze ? "已冻结（隐藏且不可选）" : "已解冻")}";
     }
     private void LockCurrentLayer(bool locked)
     {
         _layers.Current.Locked = locked;
-        _selected.RemoveAll(en => !_layers.IsSelectable(en.LayerName));
-        HighlightSelection();
+        AfterLayerStateChange();
+        PopulateDrawingLayers();
         StatusMsg.Text = $"图层「{_layers.Current.Name}」{(locked ? "已锁定（可见不可选）" : "已解锁")}";
     }
     private void LayersAllOn()
     {
         _layers.AllOn();
-        RefreshScene();
+        AfterLayerStateChange();
+        PopulateDrawingLayers();
         StatusMsg.Text = "所有图层已打开（解冻）";
     }
 
