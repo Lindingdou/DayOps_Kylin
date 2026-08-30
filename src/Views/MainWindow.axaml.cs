@@ -714,6 +714,7 @@ public partial class MainWindow : Window
             if (cmd == "区域重叠检测" || cmd == "区域重叠" || cmd == "重叠检测") { CheckRegionOverlap(); return; }
             if (cmd == "平盘宽度识别" || cmd == "现场参数提取" || cmd == "平盘识别") { await BenchWidthAsync(); return; }
             if (cmd == "道路横断面" || cmd == "路面加宽超高" || cmd == "弯道加宽") { RoadCrossSectionCmd(); return; }
+            if (cmd == "运距指标" || cmd == "循环时间" || cmd == "运距统计") { await HaulRecordMetricsAsync(); return; }
             if (cmd == "新建图层") { var l = _layers.New(); PopulateDrawingLayers(); StatusMsg.Text = $"新建图层「{l.Name}」并置为当前"; return; }
             if (cmd == "图层特性管理器") { var l = _layers.CycleCurrent(); StatusMsg.Text = $"当前图层「{l.Name}」 显示{( l.Shown?"开":"关")}/{(l.Locked?"锁":"解锁")}（再点循环切换）"; return; }
             if (cmd == "冻结") { FreezeCurrentLayer(true); return; }
@@ -1168,6 +1169,53 @@ public partial class MainWindow : Window
         try { System.IO.File.WriteAllText(outPath, MeshWeld.ToOff(w.Verts, w.Tris)); }
         catch (System.Exception ex) { StatusMsg.Text = $"网格焊接：写出失败 {ex.Message}"; return; }
         StatusMsg.Text = $"网格焊接：顶点 {w.InputVerts}→{w.OutputVerts} · 三角 {w.InputTris}→{w.OutputTris}(退化 {w.DroppedDegenerate}·重复 {w.DuplicateTris}) · 容差 {tol.ToString("0.###e0", System.Globalization.CultureInfo.InvariantCulture)} → {System.IO.Path.GetFileName(outPath)}";
+    }
+
+    // 运距指标：读运输记录 CSV(distanceM,gradePct,tons) → 等效运距/循环时间/加权平均/最大运距 报表
+    // (区别于既有 HaulMetricsAsync 的路网寻径版：此为按记录的坡阻折算+循环时间公式)
+    private async Task HaulRecordMetricsAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "运距指标：选运输记录 CSV (distanceM,gradePct,tons)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("运输记录 CSV") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (files.Count == 0) return;
+        string[] rows;
+        try { rows = System.IO.File.ReadAllLines(files[0].Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"运距指标：读取失败 {ex.Message}"; return; }
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var samples = new List<(double d, double grade, double tons)>();
+        foreach (var raw in rows)
+        {
+            var s = raw.Trim();
+            if (s.Length == 0 || s.StartsWith("#")) continue;
+            var t = s.Split(new[] { ',', '\t', ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
+            if (t.Length < 2) continue;
+            if (!double.TryParse(t[0], System.Globalization.NumberStyles.Float, inv, out double d)) continue;   // 跳表头
+            double grade = 0, tons = 1;
+            if (t.Length >= 2) double.TryParse(t[1], System.Globalization.NumberStyles.Float, inv, out grade);
+            if (t.Length >= 3) double.TryParse(t[2], System.Globalization.NumberStyles.Float, inv, out tons);
+            samples.Add((d, grade, tons));
+        }
+        if (samples.Count == 0) { StatusMsg.Text = "运距指标：未解析到运输记录(需 distanceM[,gradePct,tons])"; return; }
+        var truck = TruckProfile.Default;
+        double sumEquiv = 0, sumCycle = 0, sumTons = 0;
+        var dists = new List<double>(); var wsamples = new List<(double, double)>();
+        foreach (var (d, grade, tons) in samples)
+        {
+            double loadedMin = HaulMetrics.TravelTimeMin(d, grade, truck, true);
+            double emptyMin = HaulMetrics.TravelTimeMin(d, -grade, truck, false);   // 返程坡向相反、空车
+            sumCycle += HaulMetrics.CycleTimeMin(loadedMin, emptyMin);
+            sumEquiv += HaulMetrics.EquivalentLengthM(d, grade, truck, true);
+            sumTons += tons;
+            dists.Add(d); wsamples.Add((d, tons));
+        }
+        double wavg = HaulMetrics.WeightedAverageHaulM(wsamples);
+        double maxH = HaulMetrics.MaxHaulM(dists);
+        double avgCycle = sumCycle / samples.Count;
+        StatusMsg.Text = $"运距指标({samples.Count} 车·{truck.PayloadT:0}t)：加权平均运距 {wavg:0.#}m · 最大 {maxH:0.#}m · 等效总里程 {sumEquiv / 1000.0:0.##}km · 平均循环 {avgCycle:0.#}min · 总量 {sumTons:0.#}t";
     }
 
     // 平盘宽度识别(现场参数提取)：读台阶线 CSV(lineId,x,y,z) → 圈出宽度 ≥ 目标 的平盘 → 多边形入场景
@@ -3818,6 +3866,10 @@ public partial class MainWindow : Window
             case "ROADSECTION":
             case "ROADWIDEN":
                 RoadCrossSectionCmd();
+                break;
+            case "HAULMETRICS":
+            case "CYCLETIME":
+                _ = HaulRecordMetricsAsync();
                 break;
             case "MOVE":
             case "M":
