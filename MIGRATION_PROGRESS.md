@@ -240,4 +240,5 @@
 ### MeshEditLib / 三角网（托管切片）
 - [x] **创建三角网(TIN)**：`Delaunay`（Bowyer-Watson 剖分 + 三角边去重线框）→ 点 CSV(x,y[,z]) 生成三角网入场景。命令 创建三角网/三角网/TIN。+5 单测，148 tests。commit `44659ce`+`b39c632`。
 - [x] **坡度着色**：`TerrainAnalysis`(三角面法向→坡度→绿平红陡)。命令 坡度着色/SLOPE。+5 单测，153 tests。commit `d363f6d`。
-- [记录] **坡向着色**(需 HSV 罗盘配色, 可托管小做) · 布尔/光滑/补洞 mesh 编辑 → 需内核。倾斜摄影/OSGB → 需内核。
+- [x] **坡向着色**：三角面朝向→罗盘 HSV 配色（`AspectDegrees`+`HsvToRgb`）。命令 坡向着色/ASPECT。+3 单测，156 tests。commit `4c8f37a`。
+- [记录] 布尔/光滑/补洞 mesh 编辑 → 需内核。倾斜摄影/OSGB → 需内核。面填充 → 需 Hatch。
