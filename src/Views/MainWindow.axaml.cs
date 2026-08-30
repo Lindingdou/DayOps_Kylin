@@ -35,7 +35,10 @@ public partial class MainWindow : Window
         ViewportHost.PointerMoved += (_, e) =>
         {
             var p = e.GetPosition(ViewportHost);
-            CoordText.Text = $"视口 px  X {p.X:0}  Y {p.Y:0}";
+            var w = Viewport.ScreenToWorld(p.X, p.Y);
+            CoordText.Text = w != null
+                ? $"X {w.Value.x:0.00}  Y {w.Value.y:0.00}"
+                : $"视口 px  X {p.X:0}  Y {p.Y:0}";
             if (_dragging)
             {
                 Viewport.Orbit((p.X - _lastPointer.X) * 0.01, (p.Y - _lastPointer.Y) * 0.01);

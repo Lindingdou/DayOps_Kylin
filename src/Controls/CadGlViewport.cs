@@ -210,6 +210,10 @@ public class CadGlViewport : OpenGlControlBase
     /// <summary>当前是否 2D 平面视图。</summary>
     public bool Is2DView => _camera.Is2D;
 
+    /// <summary>屏幕像素（相对本控件）→ Z=0 平面世界坐标，供状态栏坐标读数。</summary>
+    public (double x, double y)? ScreenToWorld(double sx, double sy)
+        => _camera.ScreenToWorldOnZPlane(sx, sy, Bounds.Width, Bounds.Height);
+
     // ---------- 几何（示例内容；接入内核后由 AcDb worldDraw 提供）----------
     private static float[] BuildGrid(int n, float step)
     {

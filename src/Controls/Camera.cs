@@ -84,6 +84,32 @@ internal sealed class Camera
         return Mat4.Mul(proj, view);
     }
 
+    /// <summary>屏幕像素 → Z=0 平面上的世界坐标（坐标读数 / 拾取）。不可逆或射线平行于平面时返回 null。</summary>
+    public (double x, double y)? ScreenToWorldOnZPlane(double sx, double sy, double vw, double vh)
+    {
+        if (vw < 1 || vh < 1) return null;
+        double ndcX = 2.0 * sx / vw - 1.0;
+        double ndcY = 1.0 - 2.0 * sy / vh;                 // 屏幕 Y 下 → NDC Y 上
+        float[]? inv = Mat4.Invert(ViewProj((float)(vw / vh)));
+        if (inv == null) return null;
+        var near = UnprojectNdc(inv, ndcX, ndcY, -1.0);    // 近裁面点
+        var far = UnprojectNdc(inv, ndcX, ndcY, 1.0);      // 远裁面点
+        double dz = far.z - near.z;
+        if (Math.Abs(dz) < 1e-12) return null;
+        double t = (0.0 - near.z) / dz;                    // 沿射线交 Z=0
+        return (near.x + t * (far.x - near.x), near.y + t * (far.y - near.y));
+    }
+
+    private static (double x, double y, double z) UnprojectNdc(float[] inv, double nx, double ny, double nz)
+    {
+        double x = inv[0] * nx + inv[4] * ny + inv[8] * nz + inv[12];
+        double y = inv[1] * nx + inv[5] * ny + inv[9] * nz + inv[13];
+        double z = inv[2] * nx + inv[6] * ny + inv[10] * nz + inv[14];
+        double w = inv[3] * nx + inv[7] * ny + inv[11] * nz + inv[15];
+        if (Math.Abs(w) < 1e-12) w = 1.0;
+        return (x / w, y / w, z / w);
+    }
+
     /// <summary>叠加层坐标罗盘用：随相机朝向的纯旋转 + 小正交，无平移。</summary>
     public float[] GizmoViewProj()
     {

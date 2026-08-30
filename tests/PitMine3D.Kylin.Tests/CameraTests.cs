@@ -65,4 +65,44 @@ public class CameraTests
             if (Math.Abs(vp3d[i] - vp2d[i]) > 1e-4f) { anyDiff = true; break; }
         Assert.True(anyDiff, "2D 与 3D 的 ViewProj 应不同");
     }
+
+    [Fact]
+    public void Mat4_invert_times_self_is_identity()
+    {
+        float[] m = Mat4.Mul(Mat4.Translate(3, -2, 5), Mat4.RotateZ(0.7f));
+        float[]? inv = Mat4.Invert(m);
+        Assert.NotNull(inv);
+        float[] id = Mat4.Mul(m, inv!);
+        for (int c = 0; c < 4; c++)
+        for (int r = 0; r < 4; r++)
+        {
+            float expected = c == r ? 1f : 0f;
+            Assert.True(Math.Abs(id[c * 4 + r] - expected) < 1e-4f, $"[{c},{r}]={id[c * 4 + r]}");
+        }
+    }
+
+    [Fact]
+    public void ScreenToWorld_roundtrip_on_z0_plane()
+    {
+        var cam = new Camera();
+        cam.SetMode(true);                  // 2D 正交俯视，Z=0 平面
+        cam.FitBounds(0, 0, 100, 100);
+        double vw = 800, vh = 600;
+
+        // 正向：世界点 (30,70,0) → 屏幕像素
+        float[] vp = cam.ViewProj((float)(vw / vh));
+        double wx = 30, wy = 70;
+        double cx = vp[0] * wx + vp[4] * wy + vp[12];
+        double cy = vp[1] * wx + vp[5] * wy + vp[13];
+        double cw = vp[3] * wx + vp[7] * wy + vp[15];
+        double ndcx = cx / cw, ndcy = cy / cw;
+        double sx = (ndcx + 1) * 0.5 * vw;
+        double sy = (1 - ndcy) * 0.5 * vh;
+
+        // 反向：屏幕 → 世界，应得回 (30,70)
+        var got = cam.ScreenToWorldOnZPlane(sx, sy, vw, vh);
+        Assert.NotNull(got);
+        Assert.Equal(30, got!.Value.x, 1);
+        Assert.Equal(70, got!.Value.y, 1);
+    }
 }
