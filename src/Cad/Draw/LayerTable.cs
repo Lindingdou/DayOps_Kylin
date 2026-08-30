@@ -83,4 +83,13 @@ public sealed class LayerTable
 
     /// <summary>全部打开：所有层开且解冻（锁定保持）。</summary>
     public void AllOn() { foreach (var l in _layers) { l.Visible = true; l.Frozen = false; } }
+
+    /// <summary>重置为仅默认层 "0"（新建文档）。</summary>
+    public void Reset()
+    {
+        _layers.Clear();
+        var l0 = new Layer("0", Palette[0].r, Palette[0].g, Palette[0].b);
+        _layers.Add(l0);
+        Current = l0;
+    }
 }

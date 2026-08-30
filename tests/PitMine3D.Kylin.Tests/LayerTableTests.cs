@@ -80,4 +80,15 @@ public class LayerTableTests
         Assert.True(t.IsShown("不存在"));
         Assert.True(t.IsSelectable("不存在"));
     }
+
+    [Fact]
+    public void Reset_returns_to_single_default_layer()
+    {
+        var t = new LayerTable();
+        t.New("A"); t.New("B");
+        Assert.Equal(3, t.Layers.Count);
+        t.Reset();
+        Assert.Single(t.Layers);          // 只剩 "0"
+        Assert.Equal("0", t.Current.Name);
+    }
 }

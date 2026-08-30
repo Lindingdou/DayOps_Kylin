@@ -259,6 +259,15 @@ public class CadGlViewport : OpenGlControlBase
         RequestNextFrameRendering();
     }
 
+    /// <summary>清除导入几何（新建/关闭文档）。</summary>
+    public void ClearImported()
+    {
+        _layerGeom = null;
+        _hiddenLayers.Clear();
+        _pendingImport = Array.Empty<float>();
+        RequestNextFrameRendering();
+    }
+
     /// <summary>切换某图层显隐并重建可见几何。</summary>
     public void SetLayerVisible(string layer, bool visible)
     {

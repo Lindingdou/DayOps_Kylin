@@ -54,12 +54,12 @@ public static class DxfImportService
         try
         {
             string ext = Path.GetExtension(filePath).ToLowerInvariant();
-            if (ext != ".dxf")
+            doc = ext switch
             {
-                result.Error = $"暂只支持 .dxf（DWG 后续接入）：{ext}";
-                return result;
-            }
-            doc = DxfReader.Read(filePath);
+                ".dxf" => DxfReader.Read(filePath),
+                ".dwg" => DwgReader.Read(filePath),
+                _ => throw new NotSupportedException($"不支持的 CAD 格式：{ext}（支持 .dxf/.dwg）")
+            };
         }
         catch (Exception ex)
         {

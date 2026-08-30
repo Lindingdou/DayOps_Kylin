@@ -43,11 +43,33 @@ public class DxfImportTests
     }
 
     [Fact]
-    public void Rejects_non_dxf()
+    public void Rejects_unsupported_extension()
     {
-        var r = DxfImportService.Load("foo.dwg");
+        var r = DxfImportService.Load("foo.xyz");   // 非 CAD 格式
         Assert.False(r.Success);
         Assert.NotNull(r.Error);
+    }
+
+    [Fact]
+    public void Loads_line_and_circle_from_dwg()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "pm_dwg_import_test.dwg");
+
+        var doc = new CadDocument();
+        doc.Entities.Add(new Line { StartPoint = new XYZ(0, 0, 0), EndPoint = new XYZ(10, 5, 0) });
+        doc.Entities.Add(new Circle { Center = new XYZ(5, 5, 0), Radius = 3 });
+        using (var writer = new DwgWriter(path, doc))
+            writer.Write();
+
+        var r = DxfImportService.Load(path);        // 走 .dwg → DwgReader 分支
+
+        Assert.True(r.Success, r.Error);
+        Assert.Equal(2, r.EntityCount);
+        Assert.True(r.SegmentCount >= 8, $"segments={r.SegmentCount}");
+        Assert.Equal(1, r.TypeCounts["直线"]);
+        Assert.Equal(1, r.TypeCounts["圆"]);
+
+        try { File.Delete(path); } catch { /* 清理失败无碍 */ }
     }
 
     [Fact]

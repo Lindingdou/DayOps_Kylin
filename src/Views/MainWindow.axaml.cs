@@ -377,11 +377,13 @@ public partial class MainWindow : Window
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "导入 DXF 图纸",
+            Title = "导入 CAD 图纸",
             AllowMultiple = false,
             FileTypeFilter = new[]
             {
-                new FilePickerFileType("DXF 图纸") { Patterns = new[] { "*.dxf" } }
+                new FilePickerFileType("CAD 图纸 (DXF/DWG)") { Patterns = new[] { "*.dxf", "*.dwg" } },
+                new FilePickerFileType("DXF") { Patterns = new[] { "*.dxf" } },
+                new FilePickerFileType("DWG") { Patterns = new[] { "*.dwg" } }
             }
         });
         if (files.Count == 0) return;
@@ -418,12 +420,27 @@ public partial class MainWindow : Window
     // ---------- 文件：新建 / 打开 / 保存（绘制场景内部格式）----------
     private void NewScene()
     {
-        if (_scene.Count > 0) BeginChange();
+        // 完整文档重置：绘图 / 导入 / 图层 / 选择 / 撤销 / 进行中的命令
         _scene.Clear();
-        _selected.Clear();
+        _selected.Clear(); _prevSelected = new();
+        _tool = null; _measure = null;
+        _editMode = EditMode.None; _editPts.Clear();
+        _offsetActive = false; _trimActive = false;
+        _breakActive = false; _breakPts.Clear();
+        _slideActive = false; _slideDragging = false; _slidePts.Clear();
+        _lastInputPoint = null;
+
+        _lastImport = null;
+        Viewport.ClearImported();
         Viewport.SetHighlight(null);
+        Viewport.SetSnapMarker(null); _snapShown = false;
+        LayerList.ItemsSource = null;
+        ObjectTree.ItemsSource = null;
+
+        _layers.Reset();
+        _undo.Clear();
         RefreshScene();
-        StatusMsg.Text = "新建图形";
+        StatusMsg.Text = "新建图形（已重置：绘图/导入/图层/选择/撤销）";
     }
 
     private async Task SaveSceneAsync()
