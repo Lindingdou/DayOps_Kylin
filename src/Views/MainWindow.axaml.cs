@@ -637,8 +637,6 @@ public partial class MainWindow : Window
             if (cmd == "裁剪" || cmd == "多边形裁剪" || cmd == "区运算" || cmd == "范围裁剪") { ClipPolygon(); return; }
             if (cmd == "平滑" || cmd == "光滑" || cmd == "曲线平滑" || cmd == "光滑曲线") { SmoothPolyline(); return; }
             if (cmd == "简化" || cmd == "多段线简化" || cmd == "抽稀线") { SimplifyPolyline(); return; }
-            if (cmd == "定数等分" || cmd == "等分") { DividePolyline(false); return; }
-            if (cmd == "定距等分" || cmd == "定距") { DividePolyline(true); return; }
             if (cmd == "圈选" || cmd == "窗口圈选") { PolygonSelect(false); return; }
             if (cmd == "交叉圈选") { PolygonSelect(true); return; }
             if (cmd == "坐标转换") { await CoordTransformAsync(); return; }
@@ -1249,25 +1247,6 @@ public partial class MainWindow : Window
         _tool = null; _measure = null; _editMode = EditMode.None;
         Viewport.FitBounds(r.Bounds);
         StatusMsg.Text = $"高程查询：已载入 {r.Points.Count} 点，点击视口任意位置查询高程（ESC 退出）";
-    }
-
-    // 定数/定距等分：沿选中多段线放点
-    private void DividePolyline(bool measure)
-    {
-        if (_selected.Count != 1 || _selected[0] is not PolylineEntity pl || pl.Points.Count < 2)
-        { StatusMsg.Text = "等分：请先选中一条多段线"; return; }
-        List<(double x, double y)> marks;
-        if (measure)
-        {
-            double total = GeomMeasure.Perimeter(pl.Points, false);
-            marks = PolylineDivide.Measure(pl.Points, System.Math.Max(total / 8.0, 1e-6));
-        }
-        else marks = PolylineDivide.Divide(pl.Points, 8);
-        if (marks.Count == 0) { StatusMsg.Text = "等分：无分点"; return; }
-        BeginChange();
-        foreach (var m in marks) { var pt = new PointEntity { X = m.x, Y = m.y, Cr = 0.95f, Cg = 0.85f, Cb = 0.3f }; AssignLayer(pt); pt.Cr = 0.95f; pt.Cg = 0.85f; pt.Cb = 0.3f; _scene.Add(pt); }
-        RefreshScene();
-        StatusMsg.Text = $"{(measure ? "定距" : "定数")}等分：{marks.Count} 个分点";
     }
 
     // 多边形圈选：以选中的闭合多段线为边界，选中其内实体
@@ -2645,12 +2624,6 @@ public partial class MainWindow : Window
             case "SIMPLIFY":
             case "DP":
                 SimplifyPolyline();
-                break;
-            case "DIVIDE":
-                DividePolyline(false);
-                break;
-            case "MEASURE":
-                DividePolyline(true);
                 break;
             case "WP":
                 PolygonSelect(false);

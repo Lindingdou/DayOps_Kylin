@@ -295,5 +295,4 @@
 - [x] **线性标注(尺寸)**：`DimTools.Build`(尺寸线+刻度+距离文字, 复用单笔画字体)。命令 标注/线性标注/DIM。文字解锁后新增。+3 单测，222 tests。commit `e0a0d07`。
 - [x] **文字 DXF 往返**：TextEntity ↔ DXF TEXT 导入+导出完整。commit `e63243d`。
 - [x] **多边形圈选(WP/CP)**：`SelectionBox.MatchPolygon`(顶点全含/任含)+以选中闭合多段线为边界圈选。命令 圈选/交叉圈选/WP/CP。+1 单测，237 tests。commit `671f8bb`。
-- [x] **定数/定距等分**：`PolylineDivide.Divide/Measure`(按弧长均分/定距放分点)。命令 定数等分/定距等分/DIVIDE/MEASURE。+3 单测，240 tests。commit `87e2c0b`。
-- [x] **三点测角(MANG)**：`AngleMath/AngleState`(顶点→两边取点出夹角 0..180°, 与测距同框架)。命令 角度/测量角度/MANG/ANG。+4 单测，244 tests。commit `0551d9c`。
+- [x] **三点测角(MANG)**：`AngleMath/AngleState`(顶点→两边取点出夹角 0..180°, 与测距同框架)。命令 角度/测量角度/MANG/ANG。+4 单测，241 tests。commit `0551d9c`。
