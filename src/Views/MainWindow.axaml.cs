@@ -771,7 +771,7 @@ public partial class MainWindow : Window
         string ext = Path.GetExtension(path).ToLowerInvariant();
         try
         {
-            if (ext == ".pmx") { File.WriteAllText(path, SceneIO.Save(_scene)); SetDocPath(path); StatusMsg.Text = $"已另存 {Path.GetFileName(path)} · {_scene.Count} 实体"; }
+            if (ext == ".pmx") { File.WriteAllText(path, SceneIO.SaveDoc(_scene, _layers.Layers, _layers.Current.Name)); SetDocPath(path); StatusMsg.Text = $"已另存 {Path.GetFileName(path)} · {_scene.Count} 实体"; }
             else { int n = SceneExportService.Export(_scene, path); StatusMsg.Text = $"已导出 {Path.GetFileName(path)} · {n} 实体（.dxf/.dwg 不改当前文档）"; }
         }
         catch (System.Exception ex) { StatusMsg.Text = $"另存失败：{ex.Message}"; }
@@ -829,9 +829,9 @@ public partial class MainWindow : Window
         }
         try
         {
-            File.WriteAllText(path, SceneIO.Save(_scene));
+            File.WriteAllText(path, SceneIO.SaveDoc(_scene, _layers.Layers, _layers.Current.Name));
             SetDocPath(path);
-            StatusMsg.Text = $"已保存 {Path.GetFileName(path)} · {_scene.Count} 实体";
+            StatusMsg.Text = $"已保存 {Path.GetFileName(path)} · {_scene.Count} 实体 · {_layers.Layers.Count} 图层";
         }
         catch (System.Exception ex) { StatusMsg.Text = $"保存失败：{ex.Message}"; }
     }
@@ -847,14 +847,21 @@ public partial class MainWindow : Window
         if (files.Count == 0) return;
         try
         {
-            var loaded = SceneIO.Load(File.ReadAllText(files[0].Path.LocalPath));
+            var doc = SceneIO.LoadDoc(File.ReadAllText(files[0].Path.LocalPath));
             _scene.Clear();
-            foreach (var e in loaded.Entities) _scene.Add(e);
+            foreach (var e in doc.Scene.Entities) _scene.Add(e);
+            _layers.Reset();
+            if (doc.Layers.Count > 0)
+                _layers.Restore(doc.Layers, doc.Current);        // 新格式：整表恢复(含冻结/锁定/显隐/空层)
+            else
+                foreach (var e in _scene.Entities)               // 旧格式：按实体名+色回退重建
+                    _layers.EnsureImported(e.LayerName, e.Cr, e.Cg, e.Cb);
+            PopulateDrawingLayers();
             _selected.Clear();
             Viewport.SetHighlight(null);
             RefreshScene();
             SetDocPath(files[0].Path.LocalPath);
-            StatusMsg.Text = $"已打开 {Path.GetFileName(files[0].Path.LocalPath)} · {_scene.Count} 实体";
+            StatusMsg.Text = $"已打开 {Path.GetFileName(files[0].Path.LocalPath)} · {_scene.Count} 实体 · {_layers.Layers.Count} 图层";
         }
         catch (System.Exception ex) { StatusMsg.Text = $"打开失败：{ex.Message}"; }
     }

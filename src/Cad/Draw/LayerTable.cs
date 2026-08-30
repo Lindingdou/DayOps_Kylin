@@ -94,6 +94,17 @@ public sealed class LayerTable
     /// <summary>全部打开：所有层开且解冻（锁定保持）。</summary>
     public void AllOn() { foreach (var l in _layers) { l.Visible = true; l.Frozen = false; } }
 
+    /// <summary>用持久化的图层状态整表恢复（打开 .pmx 新格式用）。空列表则不动（交调用方按实体回退重建）。</summary>
+    public void Restore(IReadOnlyList<SceneIO.LayerState> layers, string current)
+    {
+        if (layers == null || layers.Count == 0) return;
+        _layers.Clear();
+        foreach (var ls in layers)
+            _layers.Add(new Layer(ls.Name, ls.Cr, ls.Cg, ls.Cb) { Visible = ls.Visible, Frozen = ls.Frozen, Locked = ls.Locked });
+        if (_layers.Count == 0) _layers.Add(new Layer("0", Palette[0].r, Palette[0].g, Palette[0].b));
+        Current = Get(current) ?? _layers[0];
+    }
+
     /// <summary>重置为仅默认层 "0"（新建文档）。</summary>
     public void Reset()
     {

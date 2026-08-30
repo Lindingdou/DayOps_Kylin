@@ -7,6 +7,11 @@ namespace PitMine3D.Kylin.Cad.Draw;
 /// <summary>
 /// 绘制场景的内部格式读写（JSON）。用扁平 DTO 表示多态实体，避免多态 JSON 复杂度。
 /// 纯逻辑、可单测（Save→Load round-trip）。对应 Home 文件的新建/打开/保存。
+///
+/// 两种顶层格式：
+///   · 旧：实体数组 `[ {T,N,...}, ... ]`（Save 输出，兼容既有 .pmx）；
+///   · 新：文档对象 `{ "L":[图层], "Cur":当前层, "E":[实体] }`（SaveDoc 输出，含图层表状态）。
+/// Load/LoadDoc 均按首字符 `[`/`{` 自动识别，二者都能读两种格式。
 /// </summary>
 public static class SceneIO
 {
@@ -21,7 +26,37 @@ public static class SceneIO
         public string? S { get; set; }          // 文字内容
     }
 
-    public static string Save(Scene scene)
+    private sealed class LayerDto
+    {
+        public string N { get; set; } = "0";               // 图层名
+        public float[] C { get; set; } = { 0.86f, 0.9f, 0.6f };
+        public bool V { get; set; } = true;                // Visible
+        public bool F { get; set; }                        // Frozen
+        public bool K { get; set; }                        // Locked
+    }
+
+    private sealed class Doc
+    {
+        public List<LayerDto> L { get; set; } = new();
+        public string Cur { get; set; } = "0";
+        public List<Dto> E { get; set; } = new();
+    }
+
+    /// <summary>一层的持久化状态（LoadDoc 回传，供 LayerTable 恢复）。</summary>
+    public readonly record struct LayerState(string Name, float Cr, float Cg, float Cb, bool Visible, bool Frozen, bool Locked);
+
+    /// <summary>LoadDoc 结果：场景 + 图层表状态 + 当前层名（旧格式时图层列表为空、当前层 "0"）。</summary>
+    public sealed class LoadedDoc
+    {
+        public Scene Scene { get; init; } = new();
+        public List<LayerState> Layers { get; init; } = new();
+        public string Current { get; init; } = "0";
+    }
+
+    private static readonly JsonSerializerOptions Opts = new() { WriteIndented = true };
+
+    // ── 实体 ⇄ DTO ────────────────────────────────────────────────
+    private static List<Dto> ToDtos(Scene scene)
     {
         var list = new List<Dto>();
         foreach (var e in scene.Entities)
@@ -43,21 +78,12 @@ public static class SceneIO
             d.L = e.LayerName;
             list.Add(d);
         }
-        return JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true });
+        return list;
     }
 
-    private static Dto PolyDto(PolylineEntity pl)
+    private static void FromDtos(List<Dto>? list, Scene scene)
     {
-        var pts = new List<double[]>();
-        foreach (var pt in pl.Points) pts.Add(new[] { pt.x, pt.y });
-        return new Dto { T = "poly", P = pts, Closed = pl.Closed };
-    }
-
-    public static Scene Load(string json)
-    {
-        var scene = new Scene();
-        var list = JsonSerializer.Deserialize<List<Dto>>(json);
-        if (list == null) return scene;
+        if (list == null) return;
         foreach (var d in list)
         {
             SceneEntity? e = d.T switch
@@ -77,7 +103,58 @@ public static class SceneIO
             e.LayerName = string.IsNullOrEmpty(d.L) ? "0" : d.L;
             scene.Add(e);
         }
+    }
+
+    // ── 旧格式：实体数组（保持既有 .pmx 兼容） ──────────────────────
+    public static string Save(Scene scene) => JsonSerializer.Serialize(ToDtos(scene), Opts);
+
+    /// <summary>读场景（两种格式都认）。</summary>
+    public static Scene Load(string json)
+    {
+        var scene = new Scene();
+        if (string.IsNullOrWhiteSpace(json)) return scene;
+        if (json.TrimStart().StartsWith("{"))
+            FromDtos(JsonSerializer.Deserialize<Doc>(json)?.E, scene);   // 新格式：取实体段
+        else
+            FromDtos(JsonSerializer.Deserialize<List<Dto>>(json), scene);
         return scene;
+    }
+
+    // ── 新格式：文档对象（含图层表状态） ────────────────────────────
+    public static string SaveDoc(Scene scene, IReadOnlyList<Layer> layers, string current)
+    {
+        var doc = new Doc { Cur = current, E = ToDtos(scene) };
+        foreach (var l in layers)
+            doc.L.Add(new LayerDto { N = l.Name, C = new[] { l.Cr, l.Cg, l.Cb }, V = l.Visible, F = l.Frozen, K = l.Locked });
+        return JsonSerializer.Serialize(doc, Opts);
+    }
+
+    /// <summary>读文档（新格式带图层；旧数组格式时图层列表为空，交调用方回退按实体重建）。</summary>
+    public static LoadedDoc LoadDoc(string json)
+    {
+        var scene = new Scene();
+        if (string.IsNullOrWhiteSpace(json)) return new LoadedDoc { Scene = scene };
+        if (!json.TrimStart().StartsWith("{"))
+        {
+            FromDtos(JsonSerializer.Deserialize<List<Dto>>(json), scene);
+            return new LoadedDoc { Scene = scene };
+        }
+        var doc = JsonSerializer.Deserialize<Doc>(json) ?? new Doc();
+        FromDtos(doc.E, scene);
+        var layers = new List<LayerState>();
+        foreach (var l in doc.L)
+        {
+            float r = l.C.Length >= 3 ? l.C[0] : 0.86f, g = l.C.Length >= 3 ? l.C[1] : 0.9f, b = l.C.Length >= 3 ? l.C[2] : 0.6f;
+            layers.Add(new LayerState(l.N, r, g, b, l.V, l.F, l.K));
+        }
+        return new LoadedDoc { Scene = scene, Layers = layers, Current = string.IsNullOrEmpty(doc.Cur) ? "0" : doc.Cur };
+    }
+
+    private static Dto PolyDto(PolylineEntity pl)
+    {
+        var pts = new List<double[]>();
+        foreach (var pt in pl.Points) pts.Add(new[] { pt.x, pt.y });
+        return new Dto { T = "poly", P = pts, Closed = pl.Closed };
     }
 
     private static PolylineEntity BuildPoly(Dto d)

@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using PitMine3D.Kylin.Cad.Draw;
 using Xunit;
 
@@ -87,5 +89,58 @@ public class SceneIOTests
         Assert.Equal(0.1f, e.Cr, 3);
         Assert.Equal(0.7f, e.Cg, 3);
         Assert.Equal(0.9f, e.Cb, 3);
+    }
+
+    [Fact]
+    public void SaveDoc_roundtrips_layer_states_and_empty_layer()
+    {
+        var s = new Scene();
+        s.Add(new LineEntity { X0 = 0, Y0 = 0, X1 = 1, Y1 = 1, LayerName = "墙" });
+        var layers = new List<Layer>
+        {
+            new Layer("0", 1, 1, 1),
+            new Layer("墙", 0.9f, 0.1f, 0.1f) { Frozen = true },
+            new Layer("空层", 0.2f, 0.3f, 0.4f) { Locked = true, Visible = false },   // 无实体的空层
+        };
+        var doc = SceneIO.LoadDoc(SceneIO.SaveDoc(s, layers, "墙"));
+        Assert.Equal(1, doc.Scene.Count);
+        Assert.Equal(3, doc.Layers.Count);                     // 空层也保留
+        Assert.Equal("墙", doc.Current);
+        Assert.True(doc.Layers.First(l => l.Name == "墙").Frozen);
+        var empty = doc.Layers.First(l => l.Name == "空层");
+        Assert.True(empty.Locked); Assert.False(empty.Visible);
+    }
+
+    [Fact]
+    public void LoadDoc_reads_old_array_format_backcompat()
+    {
+        var s = new Scene(); s.Add(new CircleEntity { Cx = 0, Cy = 0, Radius = 5 });
+        var doc = SceneIO.LoadDoc(SceneIO.Save(s));   // 旧数组格式
+        Assert.Equal(1, doc.Scene.Count);
+        Assert.Empty(doc.Layers);                     // 旧格式无图层表
+    }
+
+    [Fact]
+    public void Load_also_reads_new_doc_format()
+    {
+        var s = new Scene(); s.Add(new LineEntity { X0 = 0, Y0 = 0, X1 = 2, Y1 = 0 });
+        var s2 = SceneIO.Load(SceneIO.SaveDoc(s, new List<Layer> { new Layer("0", 1, 1, 1) }, "0"));
+        Assert.Equal(1, s2.Count);                    // Load 也能读新文档格式
+    }
+
+    [Fact]
+    public void LayerTable_restore_rebuilds_states()
+    {
+        var lt = new LayerTable();
+        var states = new List<SceneIO.LayerState>
+        {
+            new("0", 1, 1, 1, true, false, false),
+            new("道路", 0.5f, 0.5f, 0.5f, false, true, true),
+        };
+        lt.Restore(states, "道路");
+        Assert.Equal(2, lt.Layers.Count);
+        Assert.Equal("道路", lt.Current.Name);
+        var road = lt.Get("道路")!;
+        Assert.True(road.Frozen); Assert.True(road.Locked); Assert.False(road.Visible);
     }
 }
