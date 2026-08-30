@@ -205,6 +205,9 @@ public partial class MainWindow : Window
     {
         if (sender is Control c && c.Tag is string cmd)
         {
+            if (cmd == "新建") { NewScene(); return; }
+            if (cmd == "打开") { await OpenSceneAsync(); return; }
+            if (cmd == "保存") { await SaveSceneAsync(); return; }
             if (cmd == "导入") { await ImportDxfAsync(); return; }
             if (cmd == "另存为") { await ExportDxfAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
@@ -262,6 +265,56 @@ public partial class MainWindow : Window
         {
             StatusMsg.Text = $"导出失败：{ex.Message}";
         }
+    }
+
+    // ---------- 文件：新建 / 打开 / 保存（绘制场景内部格式）----------
+    private void NewScene()
+    {
+        _scene.Clear();
+        _selected.Clear();
+        Viewport.SetHighlight(null);
+        RefreshScene();
+        StatusMsg.Text = "新建图形";
+    }
+
+    private async Task SaveSceneAsync()
+    {
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "保存图形",
+            DefaultExtension = "pm2d",
+            SuggestedFileName = "drawing.pm2d",
+            FileTypeChoices = new[] { new FilePickerFileType("PitMine 图形") { Patterns = new[] { "*.pm2d" } } }
+        });
+        if (file == null) return;
+        try
+        {
+            File.WriteAllText(file.Path.LocalPath, SceneIO.Save(_scene));
+            StatusMsg.Text = $"已保存 {Path.GetFileName(file.Path.LocalPath)} · {_scene.Count} 实体";
+        }
+        catch (System.Exception ex) { StatusMsg.Text = $"保存失败：{ex.Message}"; }
+    }
+
+    private async Task OpenSceneAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "打开图形",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("PitMine 图形") { Patterns = new[] { "*.pm2d" } } }
+        });
+        if (files.Count == 0) return;
+        try
+        {
+            var loaded = SceneIO.Load(File.ReadAllText(files[0].Path.LocalPath));
+            _scene.Clear();
+            foreach (var e in loaded.Entities) _scene.Add(e);
+            _selected.Clear();
+            Viewport.SetHighlight(null);
+            RefreshScene();
+            StatusMsg.Text = $"已打开 {Path.GetFileName(files[0].Path.LocalPath)} · {_scene.Count} 实体";
+        }
+        catch (System.Exception ex) { StatusMsg.Text = $"打开失败：{ex.Message}"; }
     }
 
     // 共享导入逻辑：加载 → 视口显示 → 对象树 → 状态回报
@@ -578,6 +631,15 @@ public partial class MainWindow : Window
             case "SCALE":
             case "SC":
                 StartEdit(EditMode.Scale, "缩放");
+                break;
+            case "NEW":
+                NewScene();
+                break;
+            case "OPEN":
+                _ = OpenSceneAsync();
+                break;
+            case "SAVE":
+                _ = SaveSceneAsync();
                 break;
             default:
                 if (!ActivateDrawTool(cmd)) StatusMsg.Text = $"执行: {cmd}";
