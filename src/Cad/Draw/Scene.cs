@@ -668,4 +668,13 @@ public sealed class Scene
             if (isShown == null || isShown(e.LayerName)) e.Tessellate(o);
         return o.ToArray();
     }
+
+    /// <summary>把某图层上所有实体改为给定颜色，返回改动数（图层改色用）。</summary>
+    public int RecolorLayer(string layer, float r, float g, float b)
+    {
+        int n = 0;
+        foreach (var e in Entities)
+            if (e.LayerName == layer) { e.Cr = r; e.Cg = g; e.Cb = b; n++; }
+        return n;
+    }
 }

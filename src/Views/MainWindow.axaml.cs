@@ -786,12 +786,14 @@ public partial class MainWindow : Window
             ToolTip.SetTip(lck, "锁定（可见不可选）");
             lck.IsCheckedChanged += (_, _) => { layer.Locked = lck.IsChecked == true; AfterLayerStateChange(); };
 
-            var swatch = new Border
+            var swatch = new Button
             {
-                Width = 14, Height = 14, CornerRadius = new CornerRadius(2),
+                Width = 16, Height = 16, Padding = new Thickness(0), MinWidth = 0,
                 Background = new SolidColorBrush(Color.FromRgb((byte)(layer.Cr * 255), (byte)(layer.Cg * 255), (byte)(layer.Cb * 255))),
                 VerticalAlignment = VerticalAlignment.Center
             };
+            ToolTip.SetTip(swatch, "点击换色（该层实体跟随变色）");
+            swatch.Click += (_, _) => CycleLayerColor(layer);
 
             bool cur = ReferenceEquals(layer, _layers.Current);
             var name = new Button
@@ -816,6 +818,28 @@ public partial class MainWindow : Window
         _selected.RemoveAll(en => !_layers.IsSelectable(en.LayerName));
         HighlightSelection();
         RefreshScene();
+    }
+
+    private static readonly (float r, float g, float b)[] LayerPalette =
+    {
+        (0.86f, 0.90f, 0.60f), (0.90f, 0.50f, 0.40f), (0.50f, 0.80f, 0.95f), (0.70f, 0.85f, 0.50f),
+        (0.90f, 0.75f, 0.40f), (0.75f, 0.60f, 0.90f), (0.55f, 0.90f, 0.70f), (0.90f, 0.60f, 0.75f)
+    };
+
+    // 图层改色：循环到下一预设色，该层实体跟随变色
+    private void CycleLayerColor(Layer l)
+    {
+        int idx = 0;
+        for (int i = 0; i < LayerPalette.Length; i++)
+            if (System.Math.Abs(LayerPalette[i].r - l.Cr) < 0.02f && System.Math.Abs(LayerPalette[i].g - l.Cg) < 0.02f && System.Math.Abs(LayerPalette[i].b - l.Cb) < 0.02f)
+            { idx = i; break; }
+        var c = LayerPalette[(idx + 1) % LayerPalette.Length];
+        l.Cr = c.r; l.Cg = c.g; l.Cb = c.b;
+        int n = _scene.RecolorLayer(l.Name, c.r, c.g, c.b);
+        RefreshScene();
+        HighlightSelection();
+        PopulateDrawingLayers();
+        StatusMsg.Text = $"图层「{l.Name}」改色（{n} 个实体跟随）";
     }
 
     // 帮助：命令与快捷键参考窗口

@@ -552,4 +552,17 @@ public class DrawToolsTests
         int n = s.Entities.FindAll(e => types.Contains(EntityTypeName.Of(e))).Count;
         Assert.Equal(2, n);   // 两条线, 不含圆
     }
+
+    [Fact]
+    public void Scene_recolor_layer_updates_only_that_layer()
+    {
+        var s = new Scene();
+        s.Add(new LineEntity { X0 = 0, Y0 = 0, X1 = 1, Y1 = 0, LayerName = "A" });
+        s.Add(new LineEntity { X0 = 0, Y0 = 0, X1 = 0, Y1 = 1, LayerName = "A" });
+        s.Add(new CircleEntity { Cx = 0, Cy = 0, Radius = 1, LayerName = "B" });
+        int n = s.RecolorLayer("A", 1f, 0f, 0f);
+        Assert.Equal(2, n);
+        Assert.Equal(1f, s.Entities[0].Cr, 4);          // A 层变红
+        Assert.Equal(0.86f, s.Entities[2].Cr, 4);       // B 层保持默认色
+    }
 }
