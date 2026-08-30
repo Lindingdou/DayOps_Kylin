@@ -609,6 +609,41 @@ public static class LineMath
         return (bx0 + u * d2x, by0 + u * d2y);
     }
 
+    /// <summary>无限直线(过 a 两点) 与 圆 的交点（0/1/2 个）。供 TTR 线-圆相切。</summary>
+    public static List<(double x, double y)> IntersectLineCircle(
+        double ax, double ay, double bx, double by, double cx, double cy, double r)
+    {
+        var res = new List<(double x, double y)>();
+        double dx = bx - ax, dy = by - ay;
+        double A = dx * dx + dy * dy;
+        if (A < 1e-12) return res;
+        double fx = ax - cx, fy = ay - cy;
+        double B = 2 * (fx * dx + fy * dy), C = fx * fx + fy * fy - r * r;
+        double disc = B * B - 4 * A * C;
+        if (disc < 0) return res;
+        double sq = Math.Sqrt(disc);
+        double t1 = (-B - sq) / (2 * A), t2 = (-B + sq) / (2 * A);
+        res.Add((ax + t1 * dx, ay + t1 * dy));
+        if (disc > 1e-12) res.Add((ax + t2 * dx, ay + t2 * dy));
+        return res;
+    }
+
+    /// <summary>两圆的交点（0/1/2 个）。供 TTR 圆-圆相切。</summary>
+    public static List<(double x, double y)> IntersectCircleCircle(
+        double c1x, double c1y, double r1, double c2x, double c2y, double r2)
+    {
+        var res = new List<(double x, double y)>();
+        double dx = c2x - c1x, dy = c2y - c1y, d = Math.Sqrt(dx * dx + dy * dy);
+        if (d < 1e-9 || d > r1 + r2 + 1e-9 || d < Math.Abs(r1 - r2) - 1e-9) return res;
+        double a = (r1 * r1 - r2 * r2 + d * d) / (2 * d);
+        double h = Math.Sqrt(Math.Max(0, r1 * r1 - a * a));
+        double mx = c1x + a * dx / d, my = c1y + a * dy / d;
+        double ox = -dy / d * h, oy = dx / d * h;
+        res.Add((mx + ox, my + oy));
+        if (h > 1e-12) res.Add((mx - ox, my - oy));
+        return res;
+    }
+
     /// <summary>两条有限线段是否真相交（用于框选交叉判定；共线相接的退化情形忽略）。</summary>
     public static bool SegmentsIntersect(
         double ax0, double ay0, double ax1, double ay1,

@@ -158,7 +158,7 @@ public partial class MainWindow : Window
                 return;
             }
 
-            // 圆 TTR：依次点两条相切直线（半径走命令行）
+            // 圆 TTR：依次点两个相切参照(直线或圆)（半径走命令行）
             if (_ttrActive && !_ttrAwaitRadius && props.IsLeftButtonPressed)
             {
                 _nav = NavMode.None;
@@ -166,12 +166,12 @@ public partial class MainWindow : Window
                 if (wp != null)
                 {
                     var hit = _scene.Pick(wp.Value.x, wp.Value.y, SnapTolWorld(_lastPointer) * 3, _layers.IsSelectable);
-                    if (hit is LineEntity ln)
+                    if (hit is LineEntity or CircleEntity)
                     {
-                        if (_ttrLine1 == null) { _ttrLine1 = ln; _ttrPick1 = (wp.Value.x, wp.Value.y); StatusMsg.Text = "圆TTR：点第二条相切直线"; }
-                        else if (!ReferenceEquals(ln, _ttrLine1)) { _ttrLine2 = ln; _ttrPick2 = (wp.Value.x, wp.Value.y); _ttrAwaitRadius = true; StatusMsg.Text = "圆TTR：命令行输入半径并回车"; }
+                        if (_ttrRef1 == null) { _ttrRef1 = hit; _ttrPick1 = (wp.Value.x, wp.Value.y); StatusMsg.Text = "圆TTR：点第二个相切参照(直线/圆)"; }
+                        else if (!ReferenceEquals(hit, _ttrRef1)) { _ttrRef2 = hit; _ttrPick2 = (wp.Value.x, wp.Value.y); _ttrAwaitRadius = true; StatusMsg.Text = "圆TTR：命令行输入半径并回车"; }
                     }
-                    else StatusMsg.Text = "圆TTR：请点直线";
+                    else StatusMsg.Text = "圆TTR：请点直线或圆";
                 }
                 return;
             }
@@ -404,7 +404,7 @@ public partial class MainWindow : Window
                 _slideActive = false; _slideDragging = false; _slidePts.Clear();
                 _gripIndex = -1;
                 _selBoxActive = false;
-                _ttrActive = false; _ttrAwaitRadius = false; _ttrLine1 = null; _ttrLine2 = null;
+                _ttrActive = false; _ttrAwaitRadius = false; _ttrRef1 = null; _ttrRef2 = null;
                 _serActive = false; _serAwaitRadius = false; _serStart = null; _serEnd = null;
                 _selected.Clear();
                 Viewport.SetSnapMarker(null);
@@ -459,8 +459,8 @@ public partial class MainWindow : Window
     private int _gripIndex = -1;                    // 夹点拖拽中的夹点序号(-1=无)
     private bool _selBoxActive;                     // 窗口框选拖拽中
     private Avalonia.Point _selBoxStart;            // 框选起点(屏幕)
-    private bool _ttrActive, _ttrAwaitRadius;       // 圆 TTR：选两切线 → 输半径
-    private LineEntity? _ttrLine1, _ttrLine2;
+    private bool _ttrActive, _ttrAwaitRadius;       // 圆 TTR：选两相切参照(线/圆) → 输半径
+    private SceneEntity? _ttrRef1, _ttrRef2;
     private (double x, double y) _ttrPick1, _ttrPick2;
     private bool _serActive, _serAwaitRadius;       // 圆弧 SER：起点端点 → 输半径
     private (double x, double y)? _serStart, _serEnd;
@@ -1254,12 +1254,63 @@ public partial class MainWindow : Window
         StatusMsg.Text = "点击要修剪/延伸的直线（近端点移到与边界最近交点）";
     }
 
+    // 圆心轨迹：线→向点击侧偏移 r 的直线；圆→同心圆(外切 rc+r / 内切 |rc-r|，按点击在圆外/内)
+    private readonly struct Locus
+    {
+        public readonly bool IsLine;
+        public readonly double A, B, C, D;   // 线:x0,y0,x1,y1 ; 圆:cx,cy,r,(-)
+        private Locus(bool line, double a, double b, double c, double d) { IsLine = line; A = a; B = b; C = c; D = d; }
+        public static Locus Line(double x0, double y0, double x1, double y1) => new(true, x0, y0, x1, y1);
+        public static Locus Circle(double cx, double cy, double r) => new(false, cx, cy, r, 0);
+    }
+
+    private static Locus? LocusOf(SceneEntity e, (double x, double y) pick, double r)
+    {
+        if (e is LineEntity l)
+        {
+            var o = LineMath.OffsetToward(l.X0, l.Y0, l.X1, l.Y1, pick.x, pick.y, r);
+            return o == null ? (Locus?)null : Locus.Line(o.Value.x0, o.Value.y0, o.Value.x1, o.Value.y1);
+        }
+        if (e is CircleEntity c)
+        {
+            double dp = System.Math.Sqrt((pick.x - c.Cx) * (pick.x - c.Cx) + (pick.y - c.Cy) * (pick.y - c.Cy));
+            double lr = dp > c.Radius ? c.Radius + r : System.Math.Abs(c.Radius - r);   // 点击在圆外→外切
+            return lr < 1e-9 ? (Locus?)null : Locus.Circle(c.Cx, c.Cy, lr);
+        }
+        return null;
+    }
+
+    private static List<(double x, double y)> IntersectLoci(Locus a, Locus b)
+    {
+        if (a.IsLine && b.IsLine)
+        {
+            var p = LineMath.IntersectInfinite(a.A, a.B, a.C, a.D, b.A, b.B, b.C, b.D);
+            return p == null ? new List<(double x, double y)>() : new List<(double x, double y)> { p.Value };
+        }
+        if (a.IsLine) return LineMath.IntersectLineCircle(a.A, a.B, a.C, a.D, b.A, b.B, b.C);
+        if (b.IsLine) return LineMath.IntersectLineCircle(b.A, b.B, b.C, b.D, a.A, a.B, a.C);
+        return LineMath.IntersectCircleCircle(a.A, a.B, a.C, b.A, b.B, b.C);
+    }
+
+    // TTR：求与两参照(线/圆)相切、半径 r 的圆心，取离两点击中点最近的候选解
+    private (double x, double y)? TtrSolveCenter(SceneEntity r1, (double x, double y) p1, SceneEntity r2, (double x, double y) p2, double r)
+    {
+        var l1 = LocusOf(r1, p1, r); var l2 = LocusOf(r2, p2, r);
+        if (l1 == null || l2 == null) return null;
+        var cands = IntersectLoci(l1.Value, l2.Value);
+        if (cands.Count == 0) return null;
+        double mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+        (double x, double y)? best = null; double bestD = double.MaxValue;
+        foreach (var c in cands) { double d = (c.x - mx) * (c.x - mx) + (c.y - my) * (c.y - my); if (d < bestD) { bestD = d; best = c; } }
+        return best;
+    }
+
     private void StartTTR()
     {
-        _ttrActive = true; _ttrAwaitRadius = false; _ttrLine1 = null; _ttrLine2 = null;
+        _ttrActive = true; _ttrAwaitRadius = false; _ttrRef1 = null; _ttrRef2 = null;
         _tool = null; _measure = null; _editMode = EditMode.None;
         _offsetActive = false; _trimActive = false; _breakActive = false;
-        StatusMsg.Text = "圆TTR：点第一条相切直线（须先有两条直线）";
+        StatusMsg.Text = "圆TTR：点第一个相切参照（直线或圆，须先有两个）";
     }
 
     private void StartArcSer()
@@ -1467,19 +1518,17 @@ public partial class MainWindow : Window
         tb.Text = string.Empty;
 
         // 圆 TTR：等待半径
-        if (_ttrActive && _ttrAwaitRadius && double.TryParse(cmd, out double ttrR) && ttrR > 0)
+        if (_ttrActive && _ttrAwaitRadius && _ttrRef1 != null && _ttrRef2 != null && double.TryParse(cmd, out double ttrR) && ttrR > 0)
         {
-            var c = LineMath.TtrCenter(
-                _ttrLine1!.X0, _ttrLine1.Y0, _ttrLine1.X1, _ttrLine1.Y1, _ttrPick1.x, _ttrPick1.y,
-                _ttrLine2!.X0, _ttrLine2.Y0, _ttrLine2.X1, _ttrLine2.Y1, _ttrPick2.x, _ttrPick2.y, ttrR);
+            var c = TtrSolveCenter(_ttrRef1, _ttrPick1, _ttrRef2, _ttrPick2, ttrR);
             if (c != null)
             {
                 var circ = new CircleEntity { Cx = c.Value.x, Cy = c.Value.y, Radius = ttrR };
                 BeginChange(); AssignLayer(circ); _scene.Add(circ); RefreshScene();
                 StatusMsg.Text = $"圆TTR完成 r={ttrR}";
             }
-            else StatusMsg.Text = "圆TTR：两线平行，无解";
-            _ttrActive = false; _ttrLine1 = null; _ttrLine2 = null; _ttrAwaitRadius = false;
+            else StatusMsg.Text = "圆TTR：该半径下两参照无相切解";
+            _ttrActive = false; _ttrRef1 = null; _ttrRef2 = null; _ttrAwaitRadius = false;
             return;
         }
 

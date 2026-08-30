@@ -500,6 +500,37 @@ public class DrawToolsTests
     }
 
     [Fact]
+    public void IntersectLineCircle_two_points()
+    {
+        // 竖线 x=0 × 单位圆 → (0,1)/(0,-1)
+        var ps = LineMath.IntersectLineCircle(0, -5, 0, 5, 0, 0, 1);
+        Assert.Equal(2, ps.Count);
+        Assert.Contains(ps, p => System.Math.Abs(p.y - 1) < 1e-4);
+        Assert.Contains(ps, p => System.Math.Abs(p.y + 1) < 1e-4);
+    }
+
+    [Fact]
+    public void IntersectLineCircle_miss_is_empty()
+    {
+        Assert.Empty(LineMath.IntersectLineCircle(5, -5, 5, 5, 0, 0, 1));   // x=5 离圆太远
+    }
+
+    [Fact]
+    public void IntersectCircleCircle_two_points()
+    {
+        // 圆(0,0,1) 与 圆(1,0,1) → 两交点 x=0.5
+        var ps = LineMath.IntersectCircleCircle(0, 0, 1, 1, 0, 1);
+        Assert.Equal(2, ps.Count);
+        Assert.All(ps, p => Assert.Equal(0.5, p.x, 4));
+    }
+
+    [Fact]
+    public void IntersectCircleCircle_disjoint_is_empty()
+    {
+        Assert.Empty(LineMath.IntersectCircleCircle(0, 0, 1, 10, 0, 1));   // 相离
+    }
+
+    [Fact]
     public void ArcMath_from_start_center_end_projects_and_bisects()
     {
         // 起点(1,0) 心(0,0) 端点(0,5)→投影到半径1的(0,1)，中点在45°
