@@ -98,4 +98,31 @@ public class DxfImportTests
 
         try { File.Delete(path); } catch { /* 清理失败无碍 */ }
     }
+
+    [Fact]
+    public void Groups_geometry_by_layer()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "pm_dxf_layer_test.dxf");
+
+        var doc = new CadDocument();
+        var wall = new ACadSharp.Tables.Layer("墙");
+        var col = new ACadSharp.Tables.Layer("柱");
+        doc.Layers.Add(wall);
+        doc.Layers.Add(col);
+        doc.Entities.Add(new Line { StartPoint = new XYZ(0, 0, 0), EndPoint = new XYZ(5, 0, 0), Layer = wall });
+        doc.Entities.Add(new Circle { Center = new XYZ(0, 0, 0), Radius = 2, Layer = col });
+        using (var writer = new DxfWriter(path, doc, false))
+            writer.Write();
+
+        var r = DxfImportService.Load(path);
+
+        Assert.True(r.Success, r.Error);
+        Assert.True(r.LayerGeometry.ContainsKey("墙"), "缺图层 墙");
+        Assert.True(r.LayerGeometry.ContainsKey("柱"), "缺图层 柱");
+        Assert.Equal(1, r.LayerCounts["墙"]);
+        Assert.Equal(1, r.LayerCounts["柱"]);
+        Assert.True(r.LayerGeometry["墙"].Length > 0);
+
+        try { File.Delete(path); } catch { /* 清理失败无碍 */ }
+    }
 }

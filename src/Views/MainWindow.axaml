@@ -1040,7 +1040,7 @@
         <Grid Grid.Row="1" ColumnDefinitions="220,*">
         <!-- 左侧对象管理器 -->
         <Border Grid.Column="0" Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,1,0">
-            <Grid RowDefinitions="Auto,Auto,Auto,*,Auto,Auto,*">
+            <Grid RowDefinitions="Auto,Auto,Auto,*,Auto,130,Auto,Auto,*">
                 <!-- 文件管理器 -->
                 <TextBlock Grid.Row="0" Text="文件管理器" FontWeight="SemiBold" FontSize="13"
                            Margin="10,8,10,4" Foreground="#3A3F46" />
@@ -1050,12 +1050,16 @@
                            Margin="10,0,10,4" FontSize="10" Foreground="#8A929C" TextTrimming="CharacterEllipsis" />
                 <ListBox Grid.Row="3" x:Name="FileList" Background="Transparent" BorderThickness="0"
                          Margin="4,0" DoubleTapped="OnFileListDoubleTapped" />
-                <!-- 对象管理器 -->
-                <TextBlock Grid.Row="4" Text="对象管理器" FontWeight="SemiBold" FontSize="13"
+                <!-- 图层管理器 -->
+                <TextBlock Grid.Row="4" Text="图层" FontWeight="SemiBold" FontSize="13"
                            Margin="10,8,10,4" Foreground="#3A3F46" />
-                <TextBlock Grid.Row="5" x:Name="ObjectTreeHint" Text="导入图纸后显示实体"
+                <ListBox Grid.Row="5" x:Name="LayerList" Background="Transparent" BorderThickness="0" Margin="4,0" />
+                <!-- 对象管理器 -->
+                <TextBlock Grid.Row="6" Text="对象管理器" FontWeight="SemiBold" FontSize="13"
+                           Margin="10,8,10,4" Foreground="#3A3F46" />
+                <TextBlock Grid.Row="7" x:Name="ObjectTreeHint" Text="导入图纸后显示实体"
                            Margin="10,0,10,6" FontSize="11" Foreground="#8A929C" />
-                <TreeView Grid.Row="6" x:Name="ObjectTree" Background="Transparent" BorderThickness="0" Margin="4,0" />
+                <TreeView Grid.Row="8" x:Name="ObjectTree" Background="Transparent" BorderThickness="0" Margin="4,0" />
             </Grid>
         </Border>
         <Panel Grid.Column="1" x:Name="ViewportHost" Background="Transparent">

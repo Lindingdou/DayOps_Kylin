@@ -36,6 +36,10 @@ public class CadGlViewport : OpenGlControlBase
     private float[]? _pendingImport;
     private double[]? _pendingBounds;
 
+    // 图层显隐：图层名 → 该层几何；隐藏集
+    private Dictionary<string, float[]>? _layerGeom;
+    private readonly HashSet<string> _hiddenLayers = new();
+
     private readonly Stopwatch _clock = Stopwatch.StartNew();
 
     /// <summary>OpenGL 上下文就绪后回报后端版本串给界面。</summary>
@@ -160,6 +164,40 @@ public class CadGlViewport : OpenGlControlBase
         _pendingImport = lineVertices;
         _pendingBounds = bounds;
         RequestNextFrameRendering();
+    }
+
+    /// <summary>按图层显示导入几何（可分层显隐）+ 范围缩放。</summary>
+    public void ShowImportedLayers(Dictionary<string, float[]> layerGeom, double[] bounds)
+    {
+        _layerGeom = layerGeom;
+        _hiddenLayers.Clear();
+        _pendingImport = ConcatVisible();
+        _pendingBounds = bounds;
+        RequestNextFrameRendering();
+    }
+
+    /// <summary>切换某图层显隐并重建可见几何。</summary>
+    public void SetLayerVisible(string layer, bool visible)
+    {
+        if (_layerGeom == null) return;
+        if (visible) _hiddenLayers.Remove(layer); else _hiddenLayers.Add(layer);
+        _pendingImport = ConcatVisible();
+        _pendingBounds = null;                 // 显隐不重新缩放
+        RequestNextFrameRendering();
+    }
+
+    // 拼接所有可见图层的几何为一段连续缓冲
+    private float[] ConcatVisible()
+    {
+        if (_layerGeom == null) return Array.Empty<float>();
+        int total = 0;
+        foreach (var kv in _layerGeom)
+            if (!_hiddenLayers.Contains(kv.Key)) total += kv.Value.Length;
+        var buf = new float[total];
+        int off = 0;
+        foreach (var kv in _layerGeom)
+            if (!_hiddenLayers.Contains(kv.Key)) { Array.Copy(kv.Value, 0, buf, off, kv.Value.Length); off += kv.Value.Length; }
+        return buf;
     }
 
     /// <summary>切换 2D 平面 / 3D 轨道视图。</summary>

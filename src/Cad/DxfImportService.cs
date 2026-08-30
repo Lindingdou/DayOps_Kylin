@@ -34,6 +34,12 @@ public static class DxfImportService
         public double[] Bounds { get; set; } = { 0, 0, 0, 0 };
         /// <summary>按图元类型（中文名）计数，供对象管理器。</summary>
         public Dictionary<string, int> TypeCounts { get; } = new();
+        /// <summary>各图层几何（图层名 → 交错 P3_C3），供图层管理器按层显隐。</summary>
+        public Dictionary<string, float[]> LayerGeometry { get; } = new();
+        /// <summary>图层出现顺序（稳定，供面板列出）。</summary>
+        public List<string> LayerOrder { get; } = new();
+        /// <summary>按图层的实体计数。</summary>
+        public Dictionary<string, int> LayerCounts { get; } = new();
         public List<string> Warnings { get; } = new();
         public string? Error { get; set; }
     }
@@ -60,6 +66,8 @@ public static class DxfImportService
         }
 
         var verts = new List<float>(4096);
+        var byLayer = new Dictionary<string, List<float>>();
+        List<float> cur = new();                                      // 当前实体所属图层的几何缓冲
         double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
         float cr = LineColor.r, cg = LineColor.g, cb = LineColor.b;   // 逐实体更新
 
@@ -67,6 +75,8 @@ public static class DxfImportService
         {
             verts.Add((float)x0); verts.Add((float)y0); verts.Add((float)z0); verts.Add(cr); verts.Add(cg); verts.Add(cb);
             verts.Add((float)x1); verts.Add((float)y1); verts.Add((float)z1); verts.Add(cr); verts.Add(cg); verts.Add(cb);
+            cur.Add((float)x0); cur.Add((float)y0); cur.Add((float)z0); cur.Add(cr); cur.Add(cg); cur.Add(cb);
+            cur.Add((float)x1); cur.Add((float)y1); cur.Add((float)z1); cur.Add(cr); cur.Add(cg); cur.Add(cb);
             if (x0 < minX) minX = x0; if (y0 < minY) minY = y0; if (x0 > maxX) maxX = x0; if (y0 > maxY) maxY = y0;
             if (x1 < minX) minX = x1; if (y1 < minY) minY = y1; if (x1 > maxX) maxX = x1; if (y1 > maxY) maxY = y1;
         }
@@ -120,6 +130,21 @@ public static class DxfImportService
                 (cr, cg, cb) = ColorOf(e);
                 var cn = CnTypeName(e);
                 if (cn != null) result.TypeCounts[cn] = result.TypeCounts.GetValueOrDefault(cn) + 1;
+
+                // 路由到当前实体所属图层的几何缓冲
+                string layerName = SafeLayerName(e);
+                if (byLayer.TryGetValue(layerName, out var existing))
+                {
+                    cur = existing;
+                }
+                else
+                {
+                    cur = new List<float>();
+                    byLayer[layerName] = cur;
+                    result.LayerOrder.Add(layerName);
+                }
+                result.LayerCounts[layerName] = result.LayerCounts.GetValueOrDefault(layerName) + 1;
+
                 switch (e)
                 {
                     case Line ln:
@@ -188,6 +213,7 @@ public static class DxfImportService
         result.EntityCount = entCount;
         result.SegmentCount = verts.Count / 12;   // 每段 2 顶点 × 6 float
         result.LineVertices = verts.ToArray();
+        foreach (var kv in byLayer) result.LayerGeometry[kv.Key] = kv.Value.ToArray();
         result.Bounds = verts.Count == 0 ? new double[] { 0, 0, 0, 0 } : new[] { minX, minY, maxX, maxY };
         return result;
     }
@@ -224,6 +250,13 @@ public static class DxfImportService
         9 => (0.75f, 0.75f, 0.78f),   // 浅灰
         _ => LineColor                // 其余/未知 → 默认
     };
+
+    /// <summary>实体图层名；空/异常回落 "0"（AutoCAD 默认层）。</summary>
+    private static string SafeLayerName(Entity e)
+    {
+        try { return string.IsNullOrEmpty(e.Layer?.Name) ? "0" : e.Layer!.Name; }
+        catch { return "0"; }
+    }
 
     /// <summary>图元 → 中文类型名（对象管理器用）；不支持的返回 null。</summary>
     private static string? CnTypeName(Entity e) => e switch

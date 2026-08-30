@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -92,9 +93,35 @@ public partial class MainWindow : Window
             StatusMsg.Text = $"导入失败：{r.Error}";
             return;
         }
-        Viewport.ShowImportedGeometry(r.LineVertices, r.Bounds);
+        Viewport.ShowImportedLayers(r.LayerGeometry, r.Bounds);
         PopulateObjectTree(r, Path.GetFileName(path));
-        StatusMsg.Text = $"已导入 {Path.GetFileName(path)} · {r.EntityCount} 实体 · {r.SegmentCount} 线段";
+        PopulateLayers(r);
+        StatusMsg.Text = $"已导入 {Path.GetFileName(path)} · {r.EntityCount} 实体 · {r.SegmentCount} 线段 · {r.LayerOrder.Count} 图层";
+    }
+
+    // 图层管理器：列出图层复选框，勾选控制显隐
+    private void PopulateLayers(DxfImportService.ImportResult r)
+    {
+        var items = new List<CheckBox>();
+        foreach (var name in r.LayerOrder)
+        {
+            var cb = new CheckBox
+            {
+                Content = $"{name}（{r.LayerCounts.GetValueOrDefault(name)}）",
+                IsChecked = true,
+                Tag = name,
+                FontSize = 12
+            };
+            cb.IsCheckedChanged += OnLayerToggle;
+            items.Add(cb);
+        }
+        LayerList.ItemsSource = items;
+    }
+
+    private void OnLayerToggle(object? sender, RoutedEventArgs e)
+    {
+        if (sender is CheckBox cb && cb.Tag is string layer)
+            Viewport.SetLayerVisible(layer, cb.IsChecked == true);
     }
 
     // 文件管理器：选文件夹 → 列出该目录 .dxf
