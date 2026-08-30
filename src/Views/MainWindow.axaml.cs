@@ -669,6 +669,7 @@ public partial class MainWindow : Window
             if (cmd == "坡角估算" || cmd == "工作帮坡角" || cmd == "坡角") { await SlopeEstimateAsync(); return; }
             if (cmd == "台阶参数分析" || cmd == "台阶分析" || cmd == "台阶参数") { await BenchAnalyzeAsync(); return; }
             if (cmd == "达成分析" || cmd == "产量达成" || cmd == "达成率") { await AttainmentAsync(); return; }
+            if (cmd == "车铲匹配" || cmd == "配车匹配" || cmd == "车铲配比") { await FleetMatchAsync(); return; }
             if (cmd == "矿床识别" || cmd == "自动识别" || cmd == "矿床类型识别") { await DepositDetectAsync(); return; }
             if (cmd == "方案综合对比" || cmd == "方案比选" || cmd == "方案对比") { await ProgramCompareAsync(); return; }
             if (cmd == "高程查询" || cmd == "虚拟钻孔" || cmd == "查询高程") { await StartSpotQueryAsync(); return; }
@@ -1088,6 +1089,40 @@ public partial class MainWindow : Window
             report += $" 段{i + 1} 均衡比{s.RatioM3PerT.ToString("0.##", inv)}({s.B - s.A}期,峰值超前{s.PeakLeadWanM3:0.#})";
         }
         StatusMsg.Text = report;
+    }
+
+    // 车铲匹配：CSV(卡车数, 装车节拍min, 循环时间min) → 匹配系数 + Erlang-C 等待概率 + 结论
+    private async Task FleetMatchAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "车铲匹配：选 CSV (卡车数, 装车节拍min, 循环时间min)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("车铲参数 (CSV/TXT)") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (files.Count == 0) return;
+
+        var rows = new List<string>();
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        try
+        {
+            foreach (var raw in System.IO.File.ReadAllLines(files[0].Path.LocalPath))
+            {
+                var line = raw.Trim();
+                if (line.Length == 0 || line.StartsWith("#")) continue;
+                var f = line.Split(new[] { ',', '\t', ' ', ';' }, System.StringSplitOptions.RemoveEmptyEntries);
+                if (f.Length < 3) continue;
+                if (!int.TryParse(f[0].Trim(), out int trucks)) continue;
+                if (!double.TryParse(f[1].Trim(), System.Globalization.NumberStyles.Any, inv, out double loadMin)) continue;
+                if (!double.TryParse(f[2].Trim(), System.Globalization.NumberStyles.Any, inv, out double cycMin)) continue;
+                double mf = FleetMatch.MatchFactor(trucks, loadMin, cycMin);
+                double wait = FleetMatch.ErlangC(System.Math.Max(1, trucks), System.Math.Min(0.999, mf));
+                rows.Add($"{trucks}车: MF {mf.ToString("0.##", inv)}({FleetMatch.Verdict(mf)}) 排队概率 {(wait * 100).ToString("0", inv)}%");
+            }
+        }
+        catch (System.Exception ex) { StatusMsg.Text = $"车铲匹配：读取失败 {ex.Message}"; return; }
+        if (rows.Count == 0) { StatusMsg.Text = "车铲匹配：需每行 卡车数,装车节拍min,循环时间min"; return; }
+        StatusMsg.Text = "车铲匹配  " + string.Join("  |  ", rows);
     }
 
     // 产量达成分析：生产记录 CSV(计划量,实际量,计划工时,实际工时[,故障h,检修h]) → 逐行分解→合并→报表
@@ -3360,6 +3395,10 @@ public partial class MainWindow : Window
             case "ATTAINMENT":
             case "ATTAIN":
                 _ = AttainmentAsync();
+                break;
+            case "FLEETMATCH":
+            case "TRUCKMATCH":
+                _ = FleetMatchAsync();
                 break;
             case "DEPOSITDETECT":
             case "DEPOSIT":
