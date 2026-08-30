@@ -243,6 +243,21 @@ public static class ArcMath
     }
 }
 
+/// <summary>直线相交（无限延长），供修剪/延伸。纯逻辑、可单测。</summary>
+public static class LineMath
+{
+    public static (double x, double y)? IntersectInfinite(
+        double ax0, double ay0, double ax1, double ay1,
+        double bx0, double by0, double bx1, double by1)
+    {
+        double d1x = ax1 - ax0, d1y = ay1 - ay0, d2x = bx1 - bx0, d2y = by1 - by0;
+        double denom = d1x * d2y - d1y * d2x;
+        if (Math.Abs(denom) < 1e-12) return null;   // 平行
+        double t = ((bx0 - ax0) * d2y - (by0 - ay0) * d2x) / denom;
+        return (ax0 + t * d1x, ay0 + t * d1y);
+    }
+}
+
 public sealed class Scene
 {
     public List<SceneEntity> Entities { get; } = new();

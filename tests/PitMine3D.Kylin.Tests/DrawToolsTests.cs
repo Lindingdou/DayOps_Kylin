@@ -169,4 +169,20 @@ public class DrawToolsTests
         var off = (CircleEntity)c.Offset(5, 0)!;                         // 点击距心 5
         Assert.Equal(5, off.Radius, 4);
     }
+
+    [Fact]
+    public void LineMath_intersect_crossing_lines()
+    {
+        // 水平线 y=0 与 竖直线 x=5 → (5,0)
+        var p = LineMath.IntersectInfinite(0, 0, 10, 0, 5, -5, 5, 5);
+        Assert.NotNull(p);
+        Assert.Equal(5, p!.Value.x, 4);
+        Assert.Equal(0, p!.Value.y, 4);
+    }
+
+    [Fact]
+    public void LineMath_parallel_is_null()
+    {
+        Assert.Null(LineMath.IntersectInfinite(0, 0, 10, 0, 0, 5, 10, 5));   // 两条水平线
+    }
 }

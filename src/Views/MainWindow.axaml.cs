@@ -78,6 +78,36 @@ public partial class MainWindow : Window
                 return;
             }
 
+            // 修剪/延伸：点目标线 → 其近端点移到与边界线的交点
+            if (_trimActive && props.IsLeftButtonPressed)
+            {
+                _nav = NavMode.None;
+                var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                if (wp != null && _selected.Count == 1 && _selected[0] is LineEntity boundary)
+                {
+                    var hit = _scene.Pick(wp.Value.x, wp.Value.y, SnapTolWorld(_lastPointer) * 3);
+                    if (hit is LineEntity target && !ReferenceEquals(target, boundary))
+                    {
+                        var isect = LineMath.IntersectInfinite(target.X0, target.Y0, target.X1, target.Y1,
+                                                               boundary.X0, boundary.Y0, boundary.X1, boundary.Y1);
+                        if (isect != null)
+                        {
+                            var nl = (LineEntity)target.Apply(Affine2.Translate(0, 0));   // 克隆
+                            double d0 = Dist2(wp.Value, target.X0, target.Y0), d1 = Dist2(wp.Value, target.X1, target.Y1);
+                            if (d0 < d1) { nl.X0 = isect.Value.x; nl.Y0 = isect.Value.y; }
+                            else { nl.X1 = isect.Value.x; nl.Y1 = isect.Value.y; }
+                            _scene.Replace(target, nl);
+                            StatusMsg.Text = "已修剪/延伸";
+                        }
+                        else StatusMsg.Text = "与边界平行，无法修剪/延伸";
+                    }
+                    else StatusMsg.Text = "未点中目标直线";
+                    RefreshScene();
+                }
+                _trimActive = false;
+                return;
+            }
+
             // 偏移：点击一侧 → 偏移选中实体（保留原实体颜色/图层）
             if (_offsetActive && props.IsLeftButtonPressed)
             {
@@ -188,6 +218,7 @@ public partial class MainWindow : Window
                 _editMode = EditMode.None;
                 _editPts.Clear();
                 _offsetActive = false;
+                _trimActive = false;
                 _selected.Clear();
                 Viewport.SetSnapMarker(null);
                 Viewport.SetHighlight(null);
@@ -218,6 +249,7 @@ public partial class MainWindow : Window
     private EditMode _editMode = EditMode.None;
     private readonly List<(double x, double y)> _editPts = new();   // 编辑取的点（基点/目标点/参照…）
     private bool _offsetActive;                    // 偏移：等待点击一侧
+    private bool _trimActive;                       // 修剪/延伸：等待点目标线
 
     // Ribbon 按钮 → 「导入」走真实 DXF 导入；其余暂回显命令（证明整条 UI 已接线）
     private async void OnRibbonCommand(object? sender, RoutedEventArgs e)
@@ -239,6 +271,7 @@ public partial class MainWindow : Window
             if (cmd == "旋转") { StartEdit(EditMode.Rotate, "旋转"); return; }
             if (cmd == "缩放") { StartEdit(EditMode.Scale, "缩放"); return; }
             if (cmd == "偏移") { StartOffset(); return; }
+            if (cmd == "修剪" || cmd == "延伸") { StartTrim(); return; }
             if (ActivateDrawTool(cmd)) return;
             StatusMsg.Text = $"命令: {cmd}";
             CommandInput.Text = cmd;
@@ -549,6 +582,17 @@ public partial class MainWindow : Window
         StatusMsg.Text = "偏移：点击偏移到的一侧";
     }
 
+    private void StartTrim()
+    {
+        if (_selected.Count != 1 || _selected[0] is not LineEntity)
+        { StatusMsg.Text = "修剪/延伸：请先选一条作为边界的直线"; return; }
+        _trimActive = true; _tool = null; _measure = null; _editMode = EditMode.None; _offsetActive = false;
+        StatusMsg.Text = "点击要修剪/延伸的直线（近端点移到与边界的交点）";
+    }
+
+    private static double Dist2((double x, double y) p, double x, double y)
+        => (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y);
+
     private static int EditPointCount(EditMode m) => m == EditMode.Scale ? 3 : 2;
 
     private static string EditPrompt(EditMode m, int have) => (m, have) switch
@@ -671,6 +715,12 @@ public partial class MainWindow : Window
             case "OFFSET":
             case "O":
                 StartOffset();
+                break;
+            case "TRIM":
+            case "TR":
+            case "EXTEND":
+            case "EX":
+                StartTrim();
                 break;
             case "NEW":
                 NewScene();
