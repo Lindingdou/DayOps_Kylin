@@ -554,6 +554,7 @@ public partial class MainWindow : Window
             if (cmd == "粗糙度" || cmd == "地表粗糙度") { await RoughnessAsync(); return; }
             if (cmd == "曲率" || cmd == "地表曲率") { await CurvatureAsync(); return; }
             if (cmd == "面积" || cmd == "面积测量" || cmd == "周长") { MeasureArea(); return; }
+            if (cmd == "等效运距" || cmd == "运输指标" || cmd == "驱动距离") { await HaulMetricsAsync(); return; }
             if (cmd == "坐标转换") { await CoordTransformAsync(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
@@ -1101,6 +1102,39 @@ public partial class MainWindow : Window
         RefreshScene();
         Viewport.FitBounds(r.Bounds);
         StatusMsg.Text = $"曲率：{n}² 网格 · 范围 {min:0.###}~{max:0.###}（蓝=凸脊 红=凹沟）";
+    }
+
+    // 等效运距：场景多段线建路网 + 运输任务 CSV(fromX,fromY,toX,toY,吨位) → 吨位加权平均运距
+    private async Task HaulMetricsAsync()
+    {
+        var polys = new List<System.Collections.Generic.IReadOnlyList<(double x, double y)>>();
+        foreach (var e in _scene.Entities)
+            if (e is PolylineEntity pl && pl.Points.Count >= 2) polys.Add(pl.Points);
+        if (polys.Count == 0) { StatusMsg.Text = "等效运距：场景无路网（多段线）"; return; }
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "等效运距：选运输任务 CSV (fromX,fromY,toX,toY,吨位)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("运输任务 (CSV/TXT)") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (files.Count == 0) return;
+
+        double tol = System.Math.Max(1e-6, SnapTolWorld(_lastPointer) * 0.5);
+        var (nodes, adj) = RoadNetwork.Build(polys, tol);
+        double totalTon = 0, totalTonDist = 0; int ok = 0, skip = 0;
+        foreach (var raw in System.IO.File.ReadAllLines(files[0].Path.LocalPath))
+        {
+            var t = raw.Split(new[] { ',', '\t', ';', ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
+            if (t.Length < 5) continue;
+            if (!(double.TryParse(t[0], out double fx) && double.TryParse(t[1], out double fy)
+                && double.TryParse(t[2], out double tx) && double.TryParse(t[3], out double ty)
+                && double.TryParse(t[4], out double ton))) continue;
+            var path = RoadNetwork.Dijkstra(adj, RoadNetwork.NearestNode(nodes, fx, fy), RoadNetwork.NearestNode(nodes, tx, ty));
+            if (path.Count < 2) { skip++; continue; }
+            totalTon += ton; totalTonDist += ton * RoadNetwork.PathLength(nodes, path); ok++;
+        }
+        if (ok == 0) { StatusMsg.Text = "等效运距：无可达任务（检查路网/任务坐标）"; return; }
+        StatusMsg.Text = $"等效运距：{ok} 任务 · 吨公里 {totalTonDist:0.#} · 等效运距 {totalTonDist / totalTon:0.###}（跳过 {skip} 不可达）";
     }
 
     // 面积/周长：对选中的多段线(闭合优先)算面积+周长，报状态栏
@@ -2341,6 +2375,9 @@ public partial class MainWindow : Window
                 break;
             case "COORDTRANS":
                 _ = CoordTransformAsync();
+                break;
+            case "HAUL":
+                _ = HaulMetricsAsync();
                 break;
             case "ESTIMATE":
                 _ = EstimateGradeAsync();

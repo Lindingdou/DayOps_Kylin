@@ -47,6 +47,14 @@ public class RoadNetworkTests
     }
 
     [Fact]
+    public void PathLength_sums_segments()
+    {
+        var (nodes, adj) = RoadNetwork.Build(new[] { Poly((0, 0), (3, 0), (3, 4)) }, 1e-6);
+        var path = RoadNetwork.Dijkstra(adj, 0, 2);
+        Assert.Equal(7, RoadNetwork.PathLength(nodes, path), 4);   // 3 + 4
+    }
+
+    [Fact]
     public void Chooses_shorter_of_two_routes()
     {
         // 菱形: 0→1→3 (长) vs 0→2→3 (短)

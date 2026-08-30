@@ -63,6 +63,18 @@ public static class RoadNetwork
         return path;
     }
 
+    /// <summary>路径(节点索引序列)的总长度。</summary>
+    public static double PathLength(List<(double x, double y)> nodes, List<int> path)
+    {
+        double d = 0;
+        for (int i = 1; i < path.Count; i++)
+        {
+            var a = nodes[path[i - 1]]; var b = nodes[path[i]];
+            d += Math.Sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
+        }
+        return d;
+    }
+
     /// <summary>最近节点索引。</summary>
     public static int NearestNode(List<(double x, double y)> nodes, double px, double py)
     {
