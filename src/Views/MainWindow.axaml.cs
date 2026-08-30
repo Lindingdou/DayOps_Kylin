@@ -170,6 +170,19 @@ public partial class MainWindow : Window
                 return;
             }
 
+            // 圆弧 SER：依次取起点、端点（半径走命令行）
+            if (_serActive && !_serAwaitRadius && props.IsLeftButtonPressed)
+            {
+                _nav = NavMode.None;
+                var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                if (wp != null)
+                {
+                    if (_serStart == null) { _serStart = (wp.Value.x, wp.Value.y); StatusMsg.Text = "圆弧SER：指定端点"; }
+                    else { _serEnd = (wp.Value.x, wp.Value.y); _serAwaitRadius = true; StatusMsg.Text = "圆弧SER：命令行输入半径并回车（负值取另一侧）"; }
+                }
+                return;
+            }
+
             // 绘制工具：左键喂点（与命令行坐标共用 FeedPoint）
             if (_tool != null && props.IsLeftButtonPressed)
             {
@@ -386,6 +399,7 @@ public partial class MainWindow : Window
                 _gripIndex = -1;
                 _selBoxActive = false;
                 _ttrActive = false; _ttrAwaitRadius = false; _ttrLine1 = null; _ttrLine2 = null;
+                _serActive = false; _serAwaitRadius = false; _serStart = null; _serEnd = null;
                 _selected.Clear();
                 Viewport.SetSnapMarker(null);
                 Viewport.SetHighlight(null);
@@ -442,6 +456,8 @@ public partial class MainWindow : Window
     private bool _ttrActive, _ttrAwaitRadius;       // 圆 TTR：选两切线 → 输半径
     private LineEntity? _ttrLine1, _ttrLine2;
     private (double x, double y) _ttrPick1, _ttrPick2;
+    private bool _serActive, _serAwaitRadius;       // 圆弧 SER：起点端点 → 输半径
+    private (double x, double y)? _serStart, _serEnd;
 
     // Ribbon 按钮 → 「导入」走真实 DXF 导入；其余暂回显命令（证明整条 UI 已接线）
     private async void OnRibbonCommand(object? sender, RoutedEventArgs e)
@@ -483,6 +499,7 @@ public partial class MainWindow : Window
             if (cmd == "偏移") { StartOffset(); return; }
             if (cmd == "修剪" || cmd == "延伸") { StartTrim(); return; }
             if (cmd == "圆TTR" || cmd == "圆(切切半径)") { StartTTR(); return; }
+            if (cmd == "圆弧SER" || cmd == "圆弧(起点端点半径)") { StartArcSer(); return; }
             if (cmd == "打断") { StartBreak(); return; }
             if (cmd == "滑动多段线") { StartSlide(); return; }
             if (ActivateDrawTool(cmd)) return;
@@ -1239,6 +1256,14 @@ public partial class MainWindow : Window
         StatusMsg.Text = "圆TTR：点第一条相切直线（须先有两条直线）";
     }
 
+    private void StartArcSer()
+    {
+        _serActive = true; _serAwaitRadius = false; _serStart = null; _serEnd = null;
+        _tool = null; _measure = null; _editMode = EditMode.None;
+        _offsetActive = false; _trimActive = false; _breakActive = false; _ttrActive = false;
+        StatusMsg.Text = "圆弧SER：指定起点";
+    }
+
     private void StartBreak()
     {
         if (_selected.Count != 1 || _selected[0] is not (LineEntity or PolylineEntity or ArcEntity))
@@ -1452,6 +1477,21 @@ public partial class MainWindow : Window
             return;
         }
 
+        // 圆弧 SER：等待半径
+        if (_serActive && _serAwaitRadius && _serStart != null && _serEnd != null && double.TryParse(cmd, out double serR) && System.Math.Abs(serR) > 1e-9)
+        {
+            var t = ArcMath.FromStartEndRadius(_serStart.Value.x, _serStart.Value.y, _serEnd.Value.x, _serEnd.Value.y, serR);
+            if (t != null)
+            {
+                var arc = new ArcEntity { X1 = t.Value.x1, Y1 = t.Value.y1, X2 = t.Value.x2, Y2 = t.Value.y2, X3 = t.Value.x3, Y3 = t.Value.y3 };
+                BeginChange(); AssignLayer(arc); _scene.Add(arc); RefreshScene();
+                StatusMsg.Text = $"圆弧SER完成 r={serR}";
+            }
+            else StatusMsg.Text = "圆弧SER：半径太小(＜半弦)，无解";
+            _serActive = false; _serAwaitRadius = false; _serStart = null; _serEnd = null;
+            return;
+        }
+
         if (TryCoordinateInput(cmd)) return;   // 绘制/编辑取点时优先当坐标
 
         switch (cmd.ToUpperInvariant())
@@ -1560,6 +1600,9 @@ public partial class MainWindow : Window
             case "CIRCLETTR":
             case "TTR":
                 StartTTR();
+                break;
+            case "ARCSER":
+                StartArcSer();
                 break;
             case "LAYFRZ":
                 FreezeCurrentLayer(true);

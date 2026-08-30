@@ -554,6 +554,21 @@ public class DrawToolsTests
     }
 
     [Fact]
+    public void ArcMath_from_start_end_radius_reconstructs_circle()
+    {
+        var t = ArcMath.FromStartEndRadius(1, 0, 0, 1, 1)!.Value;   // 单位圆上两点, r=1
+        var cc = ArcMath.Circumcircle(t.x1, t.y1, t.x2, t.y2, t.x3, t.y3)!.Value;
+        Assert.Equal(1, cc.r, 3);
+        Assert.Equal(0, cc.cx, 3); Assert.Equal(0, cc.cy, 3);
+    }
+
+    [Fact]
+    public void ArcMath_from_start_end_radius_too_small_is_null()
+    {
+        Assert.Null(ArcMath.FromStartEndRadius(0, 0, 10, 0, 1));   // 弦长10 > 2r → 无解
+    }
+
+    [Fact]
     public void Scene_recolor_layer_updates_only_that_layer()
     {
         var s = new Scene();

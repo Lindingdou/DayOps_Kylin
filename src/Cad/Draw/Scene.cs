@@ -541,6 +541,21 @@ public static class ArcMath
                 cx + r * Math.Cos(am), cy + r * Math.Sin(am),      // 弧中点
                 cx + r * Math.Cos(a1), cy + r * Math.Sin(a1));     // 端点投影到圆
     }
+
+    /// <summary>起点-端点-半径 → ArcEntity 三点：正半径圆心在 起→终 左侧、负半径右侧；半径不足(＜半弦)返回 null。</summary>
+    public static (double x1, double y1, double x2, double y2, double x3, double y3)? FromStartEndRadius(
+        double sx, double sy, double ex, double ey, double r)
+    {
+        double dx = ex - sx, dy = ey - sy, chord = Math.Sqrt(dx * dx + dy * dy);
+        if (chord < 1e-9) return null;
+        double d = chord / 2, rr = Math.Abs(r);
+        if (rr < d - 1e-9) return null;                       // 半径太小，够不到端点
+        double h = Math.Sqrt(Math.Max(0, rr * rr - d * d));
+        double ux = dx / chord, uy = dy / chord;              // 单位方向
+        double sign = r >= 0 ? 1 : -1;                        // 左/右侧
+        double cx = (sx + ex) / 2 + (-uy) * h * sign, cy = (sy + ey) / 2 + ux * h * sign;
+        return FromStartCenterEnd(sx, sy, cx, cy, ex, ey);
+    }
 }
 
 /// <summary>直线相交（无限延长），供修剪/延伸。纯逻辑、可单测。</summary>

@@ -91,6 +91,7 @@
                                                         <MenuItem Header="三点" Tag="圆弧" Click="OnRibbonCommand" />
                                                         <MenuItem Header="起点、圆心、端点" Tag="圆弧SCE" Click="OnRibbonCommand" />
                                                         <MenuItem Header="圆心、起点、端点" Tag="圆弧CSE" Click="OnRibbonCommand" />
+                                                        <MenuItem Header="起点、端点、半径" Tag="圆弧SER" Click="OnRibbonCommand" />
                                                     </MenuFlyout>
                                                 </Button.Flyout>
                                                 <StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_arc}" /><TextBlock Text="圆弧 ▾" /></StackPanel>
