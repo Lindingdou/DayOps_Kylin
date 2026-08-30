@@ -439,6 +439,8 @@ public partial class MainWindow : Window
     private (double x, double y)? _lastInputPoint; // 上一取点(命令行相对坐标 @ 的基点)
     private float[] _snapVerts = System.Array.Empty<float>();   // 场景几何顶点缓存(对象捕捉源)
     private string? _currentPath;                  // 当前 .pmx 文档路径(保存直接回写)
+    private double _snapTolPx = 12.0;              // 对象捕捉容差(屏幕像素, 选项可调)
+    private bool _gridOn = true;                    // 网格显示状态(选项/GRID 同步)
     private bool _snapShown;                     // 捕捉标记是否已显示
     private bool _slideActive;                   // 滑动多段线：已激活(等待按下)
     private bool _slideDragging;                 // 滑动多段线：正在按住拖动
@@ -485,6 +487,7 @@ public partial class MainWindow : Window
             if (cmd == "3D") { Viewport.SetViewMode(false); StatusMsg.Text = "视图: 3D 轨道"; return; }
             if (cmd == "清空视图") { _selected.Clear(); Viewport.SetHighlight(null); Viewport.SetSnapMarker(null); _snapShown = false; RefreshScene(); StatusMsg.Text = "已清空选择/高亮/捕捉标记"; return; }
             if (cmd == "帮助文档") { ShowHelp(); return; }
+            if (cmd == "选项") { ShowOptions(); return; }
             if (cmd == "注册") { StatusMsg.Text = "注册/授权：需接入国产数据库(达梦)授权系统（记录待做）"; return; }
             if (cmd == "删除") { DeleteSelected(); return; }
             if (cmd == "全部选择") { SelectAll(); return; }
@@ -925,6 +928,38 @@ public partial class MainWindow : Window
         StatusMsg.Text = "已打开帮助";
     }
 
+    // 选项：网格 / 对象捕捉 / 捕捉容差（即时生效）
+    private void ShowOptions()
+    {
+        var grid = new CheckBox { Content = "显示网格", IsChecked = _gridOn };
+        var snap = new CheckBox { Content = "启用对象捕捉", IsChecked = SnapToggle.IsChecked == true };
+        var tolLabel = new TextBlock { Text = "捕捉容差 (像素)", VerticalAlignment = VerticalAlignment.Center };
+        var tol = new TextBox { Text = _snapTolPx.ToString("0"), Width = 80 };
+        var tolRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { tolLabel, tol } };
+
+        var ok = new Button { Content = "确定", MinWidth = 72 };
+        var cancel = new Button { Content = "取消", MinWidth = 72 };
+        var btnRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right, Children = { ok, cancel } };
+
+        var panel = new StackPanel { Margin = new Thickness(16), Spacing = 12, Children = { grid, snap, tolRow, btnRow } };
+        var win = new Window
+        {
+            Title = "选项", Width = 320, Height = 220,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner, CanResize = false,
+            Content = panel
+        };
+        cancel.Click += (_, _) => win.Close();
+        ok.Click += (_, _) =>
+        {
+            SetGrid(grid.IsChecked == true);
+            SnapToggle.IsChecked = snap.IsChecked == true;
+            if (double.TryParse(tol.Text, out double t) && t >= 2 && t <= 60) _snapTolPx = t;
+            StatusMsg.Text = $"选项已应用（网格 {(_gridOn ? "开" : "关")} · 捕捉 {(SnapToggle.IsChecked == true ? "开" : "关")} · 容差 {_snapTolPx:0}px）";
+            win.Close();
+        };
+        win.Show(this);
+    }
+
     // 场景实体 → 类型中文名（对象树高亮 / 快速选择匹配用）
     private static string CnOf(SceneEntity e) => EntityTypeName.Of(e);
 
@@ -962,14 +997,22 @@ public partial class MainWindow : Window
     private void OnCtxZoomExtents(object? s, RoutedEventArgs e) => Viewport.ZoomExtents();
     private void OnCtx2D(object? s, RoutedEventArgs e) { Viewport.SetViewMode(true); StatusMsg.Text = "视图: 2D 平面"; }
     private void OnCtx3D(object? s, RoutedEventArgs e) { Viewport.SetViewMode(false); StatusMsg.Text = "视图: 3D 轨道"; }
-    private void OnCtxGrid(object? s, RoutedEventArgs e) => Viewport.ToggleGrid();
+    private void OnCtxGrid(object? s, RoutedEventArgs e) => SetGrid(!_gridOn);
+
+    // 网格显隐(保持 _gridOn 与视口一致)
+    private void SetGrid(bool on)
+    {
+        if (on == _gridOn) return;
+        _gridOn = on;
+        Viewport.ToggleGrid();
+    }
     private void OnCtxClearHighlight(object? s, RoutedEventArgs e) => Viewport.SetHighlight(null);
 
     // 对象捕捉容差：约 12px 换算到世界单位
     private double SnapTolWorld(Avalonia.Point p)
     {
         var a = Viewport.ScreenToWorld(p.X, p.Y);
-        var b = Viewport.ScreenToWorld(p.X + 12, p.Y);
+        var b = Viewport.ScreenToWorld(p.X + _snapTolPx, p.Y);
         if (a == null || b == null) return 0;
         double dx = b.Value.x - a.Value.x, dy = b.Value.y - a.Value.y;
         return System.Math.Sqrt(dx * dx + dy * dy);
@@ -1590,8 +1633,12 @@ public partial class MainWindow : Window
                 StatusMsg.Text = "范围缩放";
                 break;
             case "GRID":
-                Viewport.ToggleGrid();
-                StatusMsg.Text = "切换网格显示";
+                SetGrid(!_gridOn);
+                StatusMsg.Text = _gridOn ? "网格: 开" : "网格: 关";
+                break;
+            case "OPTIONS":
+            case "OP":
+                ShowOptions();
                 break;
             case "EXPORTDXF":
             case "导出":
