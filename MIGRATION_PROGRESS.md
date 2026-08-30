@@ -231,6 +231,7 @@
 ### GeoDataBase 地质数据库
 - [x] **钻孔 CSV 解析**：`BoreholeImportService`（孔号/X/Y/高程/自/至/岩性 → Borehole+Interval 归组）。+4 单测，137 tests。commit `3b28211`。
 - [x] **钻孔柱状图渲染**：`BoreholeRender` 中轴线 + 岩性配色分层矩形柱（无需文字）；命令 展绘钻孔/钻孔柱状图/ZK。+2 单测，139 tests。commit `ae56a2d`。
+- [x] **钻孔孔号标注**：展绘钻孔时孔口上方加孔号文字(A-Z 字体)。commit `714c890`。
 - [记录] 岩性名/孔号**文字标注** → 需 Skia。钻孔数据**入库/查询** → 需达梦。.xlsx 导入 → 需 ClosedXML。填充色块(实心) → 需 Hatch/Skia。
 
 ### GeoDataBase 续
