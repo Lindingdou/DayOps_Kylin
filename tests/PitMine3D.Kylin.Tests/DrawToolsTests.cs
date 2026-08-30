@@ -528,4 +528,28 @@ public class DrawToolsTests
         Assert.Null(t.AddPoint(1, 0));      // 起点
         Assert.IsType<ArcEntity>(t.AddPoint(0, 1));   // 端点
     }
+
+    [Fact]
+    public void EntityTypeName_maps_types()
+    {
+        Assert.Equal("直线", EntityTypeName.Of(new LineEntity()));
+        Assert.Equal("圆", EntityTypeName.Of(new CircleEntity()));
+        Assert.Equal("圆弧", EntityTypeName.Of(new ArcEntity()));
+        Assert.Equal("多段线", EntityTypeName.Of(new PolylineEntity()));
+        Assert.Equal("正多边形", EntityTypeName.Of(new PolygonEntity()));
+        Assert.Equal("点", EntityTypeName.Of(new PointEntity()));
+    }
+
+    [Fact]
+    public void SelectSimilar_matches_same_type()
+    {
+        // 快速选择的核心筛选：同类型判定
+        var s = new Scene();
+        s.Add(new LineEntity { X0 = 0, Y0 = 0, X1 = 1, Y1 = 0 });
+        s.Add(new LineEntity { X0 = 0, Y0 = 0, X1 = 0, Y1 = 1 });
+        s.Add(new CircleEntity { Cx = 0, Cy = 0, Radius = 1 });
+        var types = new System.Collections.Generic.HashSet<string> { "直线" };
+        int n = s.Entities.FindAll(e => types.Contains(EntityTypeName.Of(e))).Count;
+        Assert.Equal(2, n);   // 两条线, 不含圆
+    }
 }

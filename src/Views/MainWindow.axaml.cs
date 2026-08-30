@@ -459,6 +459,7 @@ public partial class MainWindow : Window
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
             if (cmd == "删除") { DeleteSelected(); return; }
             if (cmd == "全部选择") { SelectAll(); return; }
+            if (cmd == "快速选择" || cmd == "选择类似") { SelectSimilar(); return; }
             if (cmd == "最后") { SelectLast(); return; }
             if (cmd == "上次") { SelectPrevious(); return; }
             if (cmd == "分解") { ExplodeSelected(); return; }
@@ -812,18 +813,21 @@ public partial class MainWindow : Window
         RefreshScene();
     }
 
-    // 场景实体 → 类型中文名（对象树高亮匹配用；椭圆/样条已并为多段线）
-    private static string CnOf(SceneEntity e) => e switch
+    // 场景实体 → 类型中文名（对象树高亮 / 快速选择匹配用）
+    private static string CnOf(SceneEntity e) => EntityTypeName.Of(e);
+
+    // 快速选择（选择类似）：以选中实体的类型为准，选中场景中所有同类型实体
+    private void SelectSimilar()
     {
-        LineEntity => "直线",
-        CircleEntity => "圆",
-        ArcEntity => "圆弧",
-        RectEntity => "矩形",
-        PolylineEntity => "多段线",
-        PointEntity => "点",
-        PolygonEntity => "正多边形",
-        _ => "其他"
-    };
+        if (_selected.Count == 0) { StatusMsg.Text = "快速选择：请先选一个参照实体（再执行选中所有同类）"; return; }
+        var types = new HashSet<string>(_selected.Select(CnOf));
+        SaveSel();
+        var matched = _scene.Entities.Where(en => types.Contains(CnOf(en)) && _layers.IsSelectable(en.LayerName)).ToList();
+        _selected.Clear();
+        _selected.AddRange(matched);
+        HighlightSelection();
+        StatusMsg.Text = $"快速选择：{_selected.Count} 个（类型 {string.Join("/", types)}）";
+    }
 
     // 对象树选中类型 → 高亮该类型几何；选根/无 → 清除
     private void OnObjectTreeSelect(object? sender, SelectionChangedEventArgs e)
@@ -1425,6 +1429,12 @@ public partial class MainWindow : Window
                 break;
             case "ALL":
                 SelectAll();
+                break;
+            case "QSELECT":
+            case "QSEL":
+            case "SELECTSIMILAR":
+            case "SI":
+                SelectSimilar();
                 break;
             case "LAST":
                 SelectLast();

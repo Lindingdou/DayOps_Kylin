@@ -608,6 +608,22 @@ public static class LineMath
     }
 }
 
+/// <summary>实体 → 类型中文名（对象树 / 快速选择用；椭圆/样条导入后并为多段线）。</summary>
+public static class EntityTypeName
+{
+    public static string Of(SceneEntity e) => e switch
+    {
+        LineEntity => "直线",
+        CircleEntity => "圆",
+        ArcEntity => "圆弧",
+        RectEntity => "矩形",
+        PolylineEntity => "多段线",
+        PointEntity => "点",
+        PolygonEntity => "正多边形",
+        _ => "其他"
+    };
+}
+
 public sealed class Scene
 {
     public List<SceneEntity> Entities { get; } = new();
