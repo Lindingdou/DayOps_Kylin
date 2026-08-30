@@ -96,6 +96,7 @@ public partial class MainWindow : Window
                             double d0 = Dist2(wp.Value, target.X0, target.Y0), d1 = Dist2(wp.Value, target.X1, target.Y1);
                             if (d0 < d1) { nl.X0 = isect.Value.x; nl.Y0 = isect.Value.y; }
                             else { nl.X1 = isect.Value.x; nl.Y1 = isect.Value.y; }
+                            BeginChange();
                             _scene.Replace(target, nl);
                             StatusMsg.Text = "已修剪/延伸";
                         }
@@ -116,7 +117,7 @@ public partial class MainWindow : Window
                 if (wp != null && _selected.Count == 1)
                 {
                     var off = _selected[0].Offset(wp.Value.x, wp.Value.y);
-                    if (off != null) { _scene.Add(off); StatusMsg.Text = "已偏移"; }
+                    if (off != null) { BeginChange(); _scene.Add(off); StatusMsg.Text = "已偏移"; }
                     else StatusMsg.Text = "该实体暂不支持偏移（记录：多段线/圆弧偏移待做）";
                     RefreshScene();
                 }
@@ -132,7 +133,7 @@ public partial class MainWindow : Window
                 if (wp != null)
                 {
                     var ent = _tool.AddPoint(wp.Value.x, wp.Value.y);
-                    if (ent != null) { AssignLayer(ent); _scene.Add(ent); }
+                    if (ent != null) { BeginChange(); AssignLayer(ent); _scene.Add(ent); }
                     RefreshScene();
                     StatusMsg.Text = $"{_tool.Prompt}（已画 {_scene.Count}）";
                 }
@@ -198,7 +199,7 @@ public partial class MainWindow : Window
             if (_tool != null && _tool.IsMultiPoint)                      // 双击结束多段线
             {
                 var e = _tool.Finish();
-                if (e != null) { AssignLayer(e); _scene.Add(e); }
+                if (e != null) { BeginChange(); AssignLayer(e); _scene.Add(e); }
                 RefreshScene();
                 StatusMsg.Text = $"多段线完成（已画 {_scene.Count}）";
             }
@@ -230,6 +231,14 @@ public partial class MainWindow : Window
             {
                 DeleteSelected();
             }
+            else if (e.Key == Key.Z && e.KeyModifiers == KeyModifiers.Control)
+            {
+                DoUndo();
+            }
+            else if (e.Key == Key.Y && e.KeyModifiers == KeyModifiers.Control)
+            {
+                DoRedo();
+            }
         };
     }
 
@@ -242,6 +251,7 @@ public partial class MainWindow : Window
     private bool _snapShown;                     // 捕捉标记是否已显示
     private readonly Scene _scene = new();       // 托管绘制场景
     private readonly LayerTable _layers = new();  // 图层表
+    private readonly UndoManager _undo = new();   // 撤销/重做
     private DrawTool? _tool;                      // 当前激活的绘制工具
     private readonly List<SceneEntity> _selected = new();   // 选择集
     private Avalonia.Point _pressPos;             // 按下位置（区分点击/拖拽）
@@ -259,6 +269,8 @@ public partial class MainWindow : Window
             if (cmd == "新建") { NewScene(); return; }
             if (cmd == "打开") { await OpenSceneAsync(); return; }
             if (cmd == "保存") { await SaveSceneAsync(); return; }
+            if (cmd == "撤销") { DoUndo(); return; }
+            if (cmd == "重做") { DoRedo(); return; }
             if (cmd == "导入") { await ImportDxfAsync(); return; }
             if (cmd == "另存为") { await ExportDxfAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
@@ -325,6 +337,7 @@ public partial class MainWindow : Window
     // ---------- 文件：新建 / 打开 / 保存（绘制场景内部格式）----------
     private void NewScene()
     {
+        if (_scene.Count > 0) BeginChange();
         _scene.Clear();
         _selected.Clear();
         Viewport.SetHighlight(null);
@@ -519,6 +532,33 @@ public partial class MainWindow : Window
         return true;
     }
 
+    // 撤销/重做：改动前记快照
+    private void BeginChange() => _undo.Push(SceneIO.Save(_scene));
+
+    private void LoadSceneFrom(string json)
+    {
+        var loaded = SceneIO.Load(json);
+        _scene.Clear();
+        foreach (var e in loaded.Entities) _scene.Add(e);
+        _selected.Clear();
+        Viewport.SetHighlight(null);
+        RefreshScene();
+    }
+
+    private void DoUndo()
+    {
+        var s = _undo.Undo(SceneIO.Save(_scene));
+        if (s == null) { StatusMsg.Text = "无可撤销"; return; }
+        LoadSceneFrom(s); StatusMsg.Text = "已撤销";
+    }
+
+    private void DoRedo()
+    {
+        var s = _undo.Redo(SceneIO.Save(_scene));
+        if (s == null) { StatusMsg.Text = "无可重做"; return; }
+        LoadSceneFrom(s); StatusMsg.Text = "已重做";
+    }
+
     // 新实体归当前图层（名称 + 图层色）
     private void AssignLayer(SceneEntity e)
     {
@@ -559,6 +599,7 @@ public partial class MainWindow : Window
     private void DeleteSelected()
     {
         if (_selected.Count == 0) { StatusMsg.Text = "未选中实体"; return; }
+        BeginChange();
         foreach (var e in _selected) _scene.Remove(e);
         int n = _selected.Count;
         _selected.Clear();
@@ -630,6 +671,7 @@ public partial class MainWindow : Window
     // 对选择集施加仿射变换；copy=true 则加副本，否则替换原实体
     private void ApplyEditTransform(Affine2 m, bool copy)
     {
+        BeginChange();
         var newSel = new List<SceneEntity>();
         foreach (var e in _selected)
         {
@@ -724,6 +766,13 @@ public partial class MainWindow : Window
                 break;
             case "NEW":
                 NewScene();
+                break;
+            case "UNDO":
+            case "U":
+                DoUndo();
+                break;
+            case "REDO":
+                DoRedo();
                 break;
             case "LAYER":
             case "LA":
