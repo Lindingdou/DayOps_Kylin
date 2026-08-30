@@ -136,6 +136,28 @@ public partial class MainWindow : Window
                 return;
             }
 
+            // 线性标注：取两点 → 尺寸线 + 距离文字
+            if (_dimActive && props.IsLeftButtonPressed)
+            {
+                _nav = NavMode.None;
+                var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                if (wp != null)
+                {
+                    if (_dimP1 == null) { _dimP1 = (wp.Value.x, wp.Value.y); StatusMsg.Text = "标注：指定第二点"; }
+                    else
+                    {
+                        double h = System.Math.Max(SnapTolWorld(_lastPointer) * 2.5, 1e-3);
+                        var dim = DimTools.Build(_dimP1.Value.x, _dimP1.Value.y, wp.Value.x, wp.Value.y, h);
+                        BeginChange();
+                        foreach (var de in dim) { de.LayerName = _layers.Current.Name; _scene.Add(de); }
+                        RefreshScene();
+                        StatusMsg.Text = "已标注";
+                        _dimActive = false; _dimP1 = null;
+                    }
+                }
+                return;
+            }
+
             // 高程查询：点击任意点 → IDW 报高程 + 标记（连续，ESC 退出）
             if (_spotActive && props.IsLeftButtonPressed && _spotTerrain != null)
             {
@@ -462,6 +484,7 @@ public partial class MainWindow : Window
                 _benchActive = false; _benchEntity = null;
                 _spotActive = false;
                 _textActive = false;
+                _dimActive = false; _dimP1 = null;
                 _gripIndex = -1;
                 _selBoxActive = false;
                 _ttrActive = false; _ttrAwaitRadius = false; _ttrRef1 = null; _ttrRef2 = null;
@@ -529,6 +552,8 @@ public partial class MainWindow : Window
     private bool _spotActive;                       // 高程查询：点击报高程
     private System.Collections.Generic.List<(double x, double y, double z)>? _spotTerrain;
     private bool _textActive;                        // 文字：等待命令行输入内容
+    private bool _dimActive;                          // 线性标注：取两点
+    private (double x, double y)? _dimP1;
     private bool _selBoxActive;                     // 窗口框选拖拽中
     private Avalonia.Point _selBoxStart;            // 框选起点(屏幕)
     private bool _ttrActive, _ttrAwaitRadius;       // 圆 TTR：选两相切参照(线/圆) → 输半径
@@ -577,6 +602,7 @@ public partial class MainWindow : Window
             if (cmd == "等效运距" || cmd == "运输指标" || cmd == "驱动距离") { await HaulMetricsAsync(); return; }
             if (cmd == "高程查询" || cmd == "虚拟钻孔" || cmd == "查询高程") { await StartSpotQueryAsync(); return; }
             if (cmd == "文字" || cmd == "单行文字") { ArmText(); return; }
+            if (cmd == "标注" || cmd == "线性标注" || cmd == "尺寸标注" || cmd == "标注台阶标高") { StartDim(); return; }
             if (cmd == "坐标转换") { await CoordTransformAsync(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
@@ -1175,6 +1201,14 @@ public partial class MainWindow : Window
         _tool = null; _measure = null; _editMode = EditMode.None;
         Viewport.FitBounds(r.Bounds);
         StatusMsg.Text = $"高程查询：已载入 {r.Points.Count} 点，点击视口任意位置查询高程（ESC 退出）";
+    }
+
+    // 线性标注：取两点
+    private void StartDim()
+    {
+        _dimActive = true; _dimP1 = null;
+        _tool = null; _measure = null; _editMode = EditMode.None;
+        StatusMsg.Text = "线性标注：指定第一点";
     }
 
     // 文字：进入模式，下一条命令行输入即文字内容
@@ -2462,6 +2496,10 @@ public partial class MainWindow : Window
             case "TEXT":
             case "DT":
                 ArmText();
+                break;
+            case "DIM":
+            case "DIMLINEAR":
+                StartDim();
                 break;
             case "DIST":
             case "DI":
