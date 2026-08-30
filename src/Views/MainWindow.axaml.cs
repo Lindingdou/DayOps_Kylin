@@ -726,6 +726,9 @@ public partial class MainWindow : Window
             if (cmd == "确定可采区域" || cmd == "可采区域" || cmd == "可采区域识别") { await MineableAreaAsync(); return; }
             if (cmd == "侧面三角网" || cmd == "侧面放样" || cmd == "放样侧面") { await SideSurfaceAsync(); return; }
             if (cmd == "道路横断面" || cmd == "路面加宽超高" || cmd == "弯道加宽") { RoadCrossSectionCmd(); return; }
+            if (cmd == "平行推进" || cmd == "开采程序确定" || cmd == "工作线推进") { AdvanceCmd(AdvanceMode.Parallel, "平行推进"); return; }
+            if (cmd == "定点回转" || cmd == "定点回转推进") { AdvanceCmd(AdvanceMode.FixedPivot, "定点回转"); return; }
+            if (cmd == "动点回转" || cmd == "动点回转推进") { AdvanceCmd(AdvanceMode.MovingPivot, "动点回转"); return; }
             if (cmd == "螺旋斜坡道" || cmd == "螺旋坑线" || cmd == "螺旋中线") { SpiralRampCmd(); return; }
             if (cmd == "折返斜坡道" || cmd == "折返坑线" || cmd == "折返中线") { SwitchbackRampCmd(); return; }
             if (cmd == "运距指标" || cmd == "循环时间" || cmd == "运距统计") { await HaulRecordMetricsAsync(); return; }
@@ -3638,6 +3641,40 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"道路横断面(基宽{baseWidth:0.#}m·{laneCount}道·V{designSpeed:0}km/h)：最大加宽 {cs.MaxWideningM:0.##}m · 最大超高 {cs.MaxSuperelevationPct:0.#}% · 加宽段长 {cs.WidenedLengthM:0.#}m(左右路缘已入场景)";
     }
 
+    // 开采程序确定·工作线推进：选中折线为拉沟, 按推进方式生成各步工作线(绿→红渐变)入场景
+    private void AdvanceCmd(AdvanceMode mode, string label)
+    {
+        PolylineEntity? boxcut = null;
+        foreach (var e in _selected) if (e is PolylineEntity p && p.Points.Count >= 2) { boxcut = p; break; }
+        if (boxcut == null) { StatusMsg.Text = $"{label}：请先选中一条工作线(拉沟)多段线"; return; }
+        int n = boxcut.Points.Count;
+        var flat = new double[n * 2];
+        for (int i = 0; i < n; i++) { flat[i * 2] = boxcut.Points[i].Item1; flat[i * 2 + 1] = boxcut.Points[i].Item2; }
+        // 推进方位 = 拉沟首末方向的法向(朝远离质心侧)
+        double dx = boxcut.Points[^1].Item1 - boxcut.Points[0].Item1, dy = boxcut.Points[^1].Item2 - boxcut.Points[0].Item2;
+        double nlen = System.Math.Sqrt(dx * dx + dy * dy); if (nlen < 1e-9) { dx = 1; dy = 0; nlen = 1; }
+        double az = System.Math.Atan2(dx / nlen, -dy / nlen) * 180.0 / System.Math.PI;   // 法向方位(度)
+        double cx = 0, cy = 0; foreach (var (px, py) in boxcut.Points) { cx += px; cy += py; } cx /= n; cy /= n;
+        // 采宽默认 = 拉沟长度/10(尺度稳健), 8 步
+        double stepB = nlen > 0 ? System.Math.Max(nlen / 10.0, 1.0) : 30.0;
+        // 定点回转瞬心：拉沟质心沿反法向退 3 倍长度(给一个远瞬心 → 缓弯)
+        double az2 = az * System.Math.PI / 180.0;
+        double pivotX = cx - System.Math.Cos(az2) * nlen * 3, pivotY = cy - System.Math.Sin(az2) * nlen * 3;
+        var lines = AdvancePlanner.GenerateWorkingLines(flat, mode, az, pivotX, pivotY, stepB, 8);
+        if (lines.Count <= 1) { StatusMsg.Text = $"{label}：生成失败(参数无效)"; return; }
+        BeginChange();
+        for (int k = 1; k < lines.Count; k++)   // index0=拉沟自身, 跳过
+        {
+            float t = (float)k / (lines.Count - 1);
+            var pl = new PolylineEntity { Closed = boxcut.Closed, Cr = t, Cg = 0.85f - 0.5f * t, Cb = 1f - t };
+            var arr = lines[k];
+            for (int i = 0; i + 1 < arr.Length; i += 2) pl.Points.Add((arr[i], arr[i + 1]));
+            _scene.Add(pl);
+        }
+        RefreshScene();
+        StatusMsg.Text = $"{label}：{lines.Count - 1} 步工作线(采宽 {stepB:0.#}m, 方位 {az:0.#}°) 已入场景";
+    }
+
     // 螺旋斜坡道中线：默认参数(半径50·2圈·纵坡8%)于视图中心生成螺旋中线折线入场景
     private void SpiralRampCmd()
     {
@@ -4374,6 +4411,16 @@ public partial class MainWindow : Window
             case "ROADSECTION":
             case "ROADWIDEN":
                 RoadCrossSectionCmd();
+                break;
+            case "ADVANCE":
+            case "PARALLELADVANCE":
+                AdvanceCmd(AdvanceMode.Parallel, "平行推进");
+                break;
+            case "FIXEDPIVOT":
+                AdvanceCmd(AdvanceMode.FixedPivot, "定点回转");
+                break;
+            case "MOVINGPIVOT":
+                AdvanceCmd(AdvanceMode.MovingPivot, "动点回转");
                 break;
             case "SPIRALRAMP":
                 SpiralRampCmd();
