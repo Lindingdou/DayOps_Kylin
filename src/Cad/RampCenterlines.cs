@@ -1,0 +1,84 @@
+using System;
+using System.Collections.Generic;
+
+namespace PitMine3D.Kylin.Cad;
+
+/// <summary>
+/// 参数化坑线【中线生成器】——螺旋 / 折返（忠实移植原 <c>MineAssLib.RoadLayout.ParametricCenterlines</c>,
+/// 数值口径镜像 C++ GenerateRamp.cpp）。只出 XY 骨架 + 参考 Z(贴面器会重定 Z、横断面另算),
+/// 纯几何、不依赖引擎、可单测。落地/切帮部分为内核规模, 不在此。
+/// </summary>
+public static class RampCenterlines
+{
+    /// <summary>螺旋：固定半径圆螺旋, 绕 turns 圈沿弧长匀降。ccw=逆时针。gradePct 正=下降。</summary>
+    public static List<(double X, double Y, double Z)> Spiral(
+        double centerX, double centerY, double startZ,
+        double radius, double startAngleDeg, double turns,
+        bool ccw, double gradePct, int segPerTurn = 36)
+    {
+        var pts = new List<(double, double, double)>();
+        if (radius <= 1e-6 || turns <= 1e-9) return pts;
+
+        int n = Math.Max(8, (int)Math.Min(20000.0, Math.Ceiling(turns * Math.Max(8, segPerTurn))));
+        double sign = ccw ? +1.0 : -1.0;
+        double a0 = startAngleDeg * Math.PI / 180.0;
+        double span = turns * 2.0 * Math.PI;
+        double totalArc = turns * 2.0 * Math.PI * radius;
+        double dzTotal = -(gradePct / 100.0) * totalArc;
+
+        for (int i = 0; i <= n; i++)
+        {
+            double t = (double)i / n;
+            double a = a0 + sign * t * span;
+            pts.Add((centerX + radius * Math.Cos(a), centerY + radius * Math.Sin(a), startZ + t * dzTotal));
+        }
+        return pts;
+    }
+
+    /// <summary>折返：直腿 + 180° 回头弧往返, 逐腿下降。turnSide +1=向左甩/-1=向右甩; legs≥2。</summary>
+    public static List<(double X, double Y, double Z)> Switchback(
+        double startX, double startY, double startZ,
+        double azimuthDeg, int turnSide, int legs,
+        double legLength, double gradePct, double curveGradePct, double radius,
+        double legStepM = 8.0, int arcSeg = 18)
+    {
+        var pts = new List<(double, double, double)>();
+        if (legs < 2 || legLength <= 1e-6 || radius <= 1e-6) return pts;
+
+        double sgn = turnSide >= 0 ? +1.0 : -1.0;
+        double gLeg = gradePct / 100.0;
+        double gArc = curveGradePct / 100.0;
+        double th = azimuthDeg * Math.PI / 180.0;
+        double hx = Math.Cos(th), hy = Math.Sin(th);
+        double cx = startX, cy = startY, z = startZ;
+
+        pts.Add((cx, cy, z));
+        for (int k = 0; k < legs; k++)
+        {
+            int nseg = Math.Max(1, (int)Math.Ceiling(legLength / Math.Max(0.5, legStepM)));
+            for (int i = 1; i <= nseg; i++)
+            {
+                double t = (double)i / nseg;
+                pts.Add((cx + hx * legLength * t, cy + hy * legLength * t, z - gLeg * legLength * t));
+            }
+            cx += hx * legLength; cy += hy * legLength; z -= gLeg * legLength;
+            if (k == legs - 1) break;
+
+            double nlx = -hy, nly = hx;
+            double ccx = cx + sgn * nlx * radius, ccy = cy + sgn * nly * radius;
+            double a0 = Math.Atan2(cy - ccy, cx - ccx);
+            double dzArc = gArc * (Math.PI * radius);
+            int seg = Math.Max(4, arcSeg);
+            for (int i = 1; i <= seg; i++)
+            {
+                double t = (double)i / seg;
+                double a = a0 + sgn * Math.PI * t;
+                pts.Add((ccx + radius * Math.Cos(a), ccy + radius * Math.Sin(a), z - dzArc * t));
+            }
+            double a1 = a0 + sgn * Math.PI;
+            cx = ccx + radius * Math.Cos(a1); cy = ccy + radius * Math.Sin(a1); z -= dzArc;
+            hx = -hx; hy = -hy;
+        }
+        return pts;
+    }
+}

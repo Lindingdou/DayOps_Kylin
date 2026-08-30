@@ -717,6 +717,8 @@ public partial class MainWindow : Window
             if (cmd == "区域重叠检测" || cmd == "区域重叠" || cmd == "重叠检测") { CheckRegionOverlap(); return; }
             if (cmd == "平盘宽度识别" || cmd == "现场参数提取" || cmd == "平盘识别") { await BenchWidthAsync(); return; }
             if (cmd == "道路横断面" || cmd == "路面加宽超高" || cmd == "弯道加宽") { RoadCrossSectionCmd(); return; }
+            if (cmd == "螺旋斜坡道" || cmd == "螺旋坑线" || cmd == "螺旋中线") { SpiralRampCmd(); return; }
+            if (cmd == "折返斜坡道" || cmd == "折返坑线" || cmd == "折返中线") { SwitchbackRampCmd(); return; }
             if (cmd == "运距指标" || cmd == "循环时间" || cmd == "运距统计") { await HaulRecordMetricsAsync(); return; }
             if (cmd == "OD运距矩阵" || cmd == "OD矩阵" || cmd == "运距矩阵") { await OdMatrixAsync(); return; }
             if (cmd == "新建图层") { var l = _layers.New(); PopulateDrawingLayers(); StatusMsg.Text = $"新建图层「{l.Name}」并置为当前"; return; }
@@ -3324,6 +3326,46 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"道路横断面(基宽{baseWidth:0.#}m·{laneCount}道·V{designSpeed:0}km/h)：最大加宽 {cs.MaxWideningM:0.##}m · 最大超高 {cs.MaxSuperelevationPct:0.#}% · 加宽段长 {cs.WidenedLengthM:0.#}m(左右路缘已入场景)";
     }
 
+    // 螺旋斜坡道中线：默认参数(半径50·2圈·纵坡8%)于视图中心生成螺旋中线折线入场景
+    private void SpiralRampCmd()
+    {
+        var (cx, cy) = ViewCenterWorld();
+        var pts = RampCenterlines.Spiral(cx, cy, 0, radius: 50, startAngleDeg: 0, turns: 2, ccw: true, gradePct: 8);
+        if (pts.Count < 2) { StatusMsg.Text = "螺旋斜坡道：参数无效"; return; }
+        var pl = new PolylineEntity { Cr = 0.30f, Cg = 0.95f, Cb = 0.95f };
+        foreach (var (x, y, _) in pts) pl.Points.Add((x, y));
+        BeginChange();
+        _scene.Add(pl);
+        RefreshScene();
+        StatusMsg.Text = $"螺旋斜坡道中线：半径50·2圈·纵坡8% → {pts.Count} 点(青, 已入场景; Z 待贴面重定)";
+    }
+
+    // 折返斜坡道中线：默认参数(3腿·腿长100·纵坡8%·回头弧R20)于视图中心生成折返中线折线入场景
+    private void SwitchbackRampCmd()
+    {
+        var (sx, sy) = ViewCenterWorld();
+        var pts = RampCenterlines.Switchback(sx, sy, 0, azimuthDeg: 0, turnSide: +1, legs: 3,
+            legLength: 100, gradePct: 8, curveGradePct: 4, radius: 20);
+        if (pts.Count < 2) { StatusMsg.Text = "折返斜坡道：参数无效"; return; }
+        var pl = new PolylineEntity { Cr = 0.95f, Cg = 0.55f, Cb = 0.20f };
+        foreach (var (x, y, _) in pts) pl.Points.Add((x, y));
+        BeginChange();
+        _scene.Add(pl);
+        RefreshScene();
+        StatusMsg.Text = $"折返斜坡道中线：3腿·腿长100·纵坡8%·回头R20 → {pts.Count} 点(橙, 已入场景; Z 待贴面重定)";
+    }
+
+    // 视图中心的世界坐标(生成体放置点)；取不到时退回原点
+    private (double x, double y) ViewCenterWorld()
+    {
+        try
+        {
+            var w = Viewport.ScreenToWorld(Viewport.Bounds.Width / 2, Viewport.Bounds.Height / 2);
+            return w.HasValue ? (w.Value.x, w.Value.y) : (0, 0);
+        }
+        catch { return (0, 0); }
+    }
+
     // 区域求差：选两条闭合多段线(第1=被减 subject, 第2=减去 clip)→ subject∖clip 最大块作新闭合多段线
     private void SubtractRegions()
     {
@@ -4013,6 +4055,12 @@ public partial class MainWindow : Window
             case "ROADSECTION":
             case "ROADWIDEN":
                 RoadCrossSectionCmd();
+                break;
+            case "SPIRALRAMP":
+                SpiralRampCmd();
+                break;
+            case "SWITCHBACK":
+                SwitchbackRampCmd();
                 break;
             case "HAULMETRICS":
             case "CYCLETIME":
