@@ -151,7 +151,7 @@
 **📂 文件格式矩阵**（原版导入清单见 Explore 调查；打开=.pmx/.pmb，导入=交换格式）：
 | 格式 | 状态 | 说明 |
 |---|---|---|
-| `.dxf` | ✅ | ACadSharp；Line/Poly/Circle/Arc/Point/Ellipse/Insert/Spline → **可编辑实体**（缺文字/填充/标注） |
+| `.dxf` | ✅ | ACadSharp；Line/Poly/Circle/Arc/Point/Ellipse/Insert/Spline/**Text/MText** → 可编辑实体（Latin/数字文字可显; 缺填充/标注; 中文需字库） |
 | `.dwg` | ✅ | ACadSharp DwgReader；与 DXF 同管线 → **可编辑实体**（本平台读写已验证） |
 | `.off` | ✅ | Geomview 网格（顶点+面表→去重边），托管解析 |
 | `.csv/.txt/.xyz/.pts` | ✅ | 点数据（自动识别数值列）→ **可编辑**点实体入场景 |
