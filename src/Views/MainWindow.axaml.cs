@@ -674,6 +674,7 @@ public partial class MainWindow : Window
             if (cmd == "点云高程着色" || cmd == "高程着色" || cmd == "点云着色") { await ElevationColorAsync(); return; }
             if (cmd == "网格度量" || cmd == "网格面积体积" || cmd == "网格体积") { await MeshMetricsAsync(); return; }
             if (cmd == "网格诊断" || cmd == "网格检查" || cmd == "网格拓扑") { await MeshDiagnoseAsync(); return; }
+            if (cmd == "网格焊接" || cmd == "合并顶点" || cmd == "顶点焊接") { await MeshWeldAsync(); return; }
             if (cmd == "SOR去噪" || cmd == "统计去噪" || cmd == "SOR") { await DenoiseAsync(false); return; }
             if (cmd == "ROR去噪" || cmd == "半径去噪" || cmd == "ROR") { await DenoiseAsync(true); return; }
             if (cmd == "矿床识别" || cmd == "自动识别" || cmd == "矿床类型识别") { await DepositDetectAsync(); return; }
@@ -1095,6 +1096,32 @@ public partial class MainWindow : Window
             report += $" 段{i + 1} 均衡比{s.RatioM3PerT.ToString("0.##", inv)}({s.B - s.A}期,峰值超前{s.PeakLeadWanM3:0.#})";
         }
         StatusMsg.Text = report;
+    }
+
+    // 网格焊接：OFF 网格 → 按容差合并重合顶点 → 落 .welded.off + 报表
+    private async Task MeshWeldAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "网格焊接：选 OFF 网格",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } } }
+        });
+        if (files.Count == 0) return;
+        string path = files[0].Path.LocalPath, text;
+        try { text = System.IO.File.ReadAllText(path); }
+        catch (System.Exception ex) { StatusMsg.Text = $"网格焊接：读取失败 {ex.Message}"; return; }
+        var (verts, tris) = MeshMetrics.ParseOff(text);
+        if (tris.Count == 0) { StatusMsg.Text = "网格焊接：未解析到三角网格"; return; }
+        // 容差取包围盒对角的 1e-4（与原「按容差合并重合顶点」同量纲, 缺省保守）
+        var m = MeshMetrics.Compute(verts, tris);
+        double diag = System.Math.Sqrt((m.MaxX - m.MinX) * (m.MaxX - m.MinX) + (m.MaxY - m.MinY) * (m.MaxY - m.MinY) + (m.MaxZ - m.MinZ) * (m.MaxZ - m.MinZ));
+        double tol = diag > 0 ? diag * 1e-4 : 1e-6;
+        var w = MeshWeld.Weld(verts, tris, tol, dropDuplicateTris: true);
+        string outPath = System.IO.Path.ChangeExtension(path, ".welded.off");
+        try { System.IO.File.WriteAllText(outPath, MeshWeld.ToOff(w.Verts, w.Tris)); }
+        catch (System.Exception ex) { StatusMsg.Text = $"网格焊接：写出失败 {ex.Message}"; return; }
+        StatusMsg.Text = $"网格焊接：顶点 {w.InputVerts}→{w.OutputVerts} · 三角 {w.InputTris}→{w.OutputTris}(退化 {w.DroppedDegenerate}·重复 {w.DuplicateTris}) · 容差 {tol.ToString("0.###e0", System.Globalization.CultureInfo.InvariantCulture)} → {System.IO.Path.GetFileName(outPath)}";
     }
 
     // 网格诊断：OFF 网格 → 边界边/非流形边/退化三角/洞数/是否闭合 报表
@@ -3544,6 +3571,10 @@ public partial class MainWindow : Window
             case "MESHDIAGNOSE":
             case "MESHCHECK":
                 _ = MeshDiagnoseAsync();
+                break;
+            case "MESHWELD":
+            case "WELD":
+                _ = MeshWeldAsync();
                 break;
             case "SOR":
                 _ = DenoiseAsync(false);
