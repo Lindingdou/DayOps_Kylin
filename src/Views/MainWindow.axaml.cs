@@ -671,6 +671,8 @@ public partial class MainWindow : Window
             if (cmd == "达成分析" || cmd == "产量达成" || cmd == "达成率") { await AttainmentAsync(); return; }
             if (cmd == "车铲匹配" || cmd == "配车匹配" || cmd == "车铲配比") { await FleetMatchAsync(); return; }
             if (cmd == "点云质量统计" || cmd == "点云统计" || cmd == "点云质量") { await PointCloudStatsAsync(); return; }
+            if (cmd == "SOR去噪" || cmd == "统计去噪" || cmd == "SOR") { await DenoiseAsync(false); return; }
+            if (cmd == "ROR去噪" || cmd == "半径去噪" || cmd == "ROR") { await DenoiseAsync(true); return; }
             if (cmd == "矿床识别" || cmd == "自动识别" || cmd == "矿床类型识别") { await DepositDetectAsync(); return; }
             if (cmd == "方案综合对比" || cmd == "方案比选" || cmd == "方案对比") { await ProgramCompareAsync(); return; }
             if (cmd == "高程查询" || cmd == "虚拟钻孔" || cmd == "查询高程") { await StartSpotQueryAsync(); return; }
@@ -1090,6 +1092,36 @@ public partial class MainWindow : Window
             report += $" 段{i + 1} 均衡比{s.RatioM3PerT.ToString("0.##", inv)}({s.B - s.A}期,峰值超前{s.PeakLeadWanM3:0.#})";
         }
         StatusMsg.Text = report;
+    }
+
+    // 点云去噪 SOR/ROR：点 CSV(x,y,z) → 去噪 → 保留点入场景(黄) + 报表
+    private async Task DenoiseAsync(bool ror)
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = ror ? "ROR 去噪：选点 CSV (x,y,z)" : "SOR 去噪：选点 CSV (x,y,z)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("点云 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success) { StatusMsg.Text = $"去噪：点导入失败 {r.Error}"; return; }
+        if (r.Points.Count == 0) { StatusMsg.Text = "去噪：无点"; return; }
+
+        var pts = new List<(double x, double y, double z)>(r.Points.Count);
+        foreach (var p in r.Points) pts.Add((p.x, p.y, p.z));
+        // 默认参数（原去噪对话框默认口径）：SOR k=8 σ=1.0；ROR 半径=包围盒对角/50、下限=4
+        double diag = System.Math.Sqrt(System.Math.Pow(r.Bounds[2] - r.Bounds[0], 2) + System.Math.Pow(r.Bounds[3] - r.Bounds[1], 2));
+        var kept = ror
+            ? PointDenoise.Ror(pts, System.Math.Max(diag / 50.0, 1e-6), 4)
+            : PointDenoise.Sor(pts, 8, 1.0);
+        if (kept.Count == 0) { StatusMsg.Text = "去噪：全部被剔除（参数过严）"; return; }
+
+        BeginChange();
+        foreach (var p in kept) { var pe = new PointEntity { X = p.x, Y = p.y, Cr = 0.95f, Cg = 0.85f, Cb = 0.3f }; AssignLayer(pe); pe.Cr = 0.95f; pe.Cg = 0.85f; pe.Cb = 0.3f; _scene.Add(pe); }
+        RefreshScene();
+        Viewport.FitBounds(r.Bounds);
+        StatusMsg.Text = $"{(ror ? "ROR" : "SOR")} 去噪：{pts.Count} → 保留 {kept.Count}（剔除 {pts.Count - kept.Count}）";
     }
 
     // 点云质量统计：点 CSV(x,y,z) → 计数/包围盒/XY面积/密度/高程均值·标准差 报表
@@ -3425,6 +3457,12 @@ public partial class MainWindow : Window
             case "PCSTATS":
             case "CLOUDSTATS":
                 _ = PointCloudStatsAsync();
+                break;
+            case "SOR":
+                _ = DenoiseAsync(false);
+                break;
+            case "ROR":
+                _ = DenoiseAsync(true);
                 break;
             case "DEPOSITDETECT":
             case "DEPOSIT":
