@@ -91,10 +91,10 @@
 - [x] **节点编辑器**：`NodeGraph` 模型（节点/连线校验，3 单测）+ Avalonia 画布窗口（添加/拖拽/点击连线）；「工具」按钮 / 命令 `节点编辑器` 打开。13 tests。commit `ee7da6f`。
 - [x] **图层管理器**：几何按图层分组（`LayerGeometry`）+ 左面板「图层」勾选框显隐（`SetLayerVisible`）。+1 单测（墙/柱 分组），14 tests。commit `4760dfe`。
 - [x] **坐标读数**：状态栏显示光标世界坐标（`Mat4.Invert` + 屏幕→世界反投影交 Z=0）。+2 单测，16 tests。commit `0d18dbb`。
+- [x] **视图命令**：`ZE`/`ZOOMEXTENTS` 范围缩放（复用 `FitBounds`）+ `GRID` 网格/轴开关。16 tests 无回归。commit `90161f0`。
 
 **⏳ 待做（可托管、Windows 可验证）—— loop 二次重开后新增：**
 - [ ] 实体选择高亮（对象树 → 视口高亮）
-- [ ] 视图命令（ZE/ZOOMEXTENTS 对当前几何范围缩放、GRID/轴开关）
 - [ ] INSERT 块引用展开（导入更完整，需构造含块 DXF 验证）
 
 > **Loop 状态：二次重开**（job `876a2719`，每 3 分钟）。上次「8 项功能」后我一度停在自定义清单清空；用户要求继续找更多可做功能，遂新增上列待做续做。
