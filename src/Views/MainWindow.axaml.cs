@@ -493,6 +493,7 @@ public partial class MainWindow : Window
             if (cmd == "坡度着色") { await ShadeTinAsync("坡度着色", "绿=平 → 红=陡", TerrainAnalysis.BuildSlopeMap); return; }
             if (cmd == "坡向着色") { await ShadeTinAsync("坡向着色", "按朝向 HSV 配色", TerrainAnalysis.BuildAspectMap); return; }
             if (cmd == "体积计算" || cmd == "算量" || cmd == "土方量") { await VolumeAsync(); return; }
+            if (cmd == "两期点云算量" || cmd == "两期算量" || cmd == "两期土方") { await TwoEpochVolumeAsync(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
             if (cmd == "2D") { Viewport.SetViewMode(true); StatusMsg.Text = "视图: 2D 平面（正交俯视）"; return; }
@@ -852,6 +853,25 @@ public partial class MainWindow : Window
         if (tris.Count == 0) { StatusMsg.Text = "体积计算：点太少或共线"; return; }
         var (above, below, net) = TerrainAnalysis.Volume(r.Points, tris, zmin);
         StatusMsg.Text = $"体积（基准=最低 z {zmin:0.##}）：上方 {above:0.##} · 下方 {below:0.##} · 净 {net:0.##}（{tris.Count} 三角）";
+    }
+
+    // 两期算量：选两期高程点 CSV → 同网格差值 → 挖方/填方/净值
+    private async Task TwoEpochVolumeAsync()
+    {
+        var opt = new System.Func<string, FilePickerOpenOptions>(t => new FilePickerOpenOptions
+        {
+            Title = t, AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("高程点 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        var f1 = await StorageProvider.OpenFilePickerAsync(opt("两期算量：选【第一期】高程点 CSV"));
+        if (f1.Count == 0) return;
+        var f2 = await StorageProvider.OpenFilePickerAsync(opt("两期算量：选【第二期】高程点 CSV"));
+        if (f2.Count == 0) return;
+        var r1 = PointDataImportService.Load(f1[0].Path.LocalPath);
+        var r2 = PointDataImportService.Load(f2[0].Path.LocalPath);
+        if (!r1.Success || !r2.Success) { StatusMsg.Text = "两期算量：点导入失败"; return; }
+        var (cut, fill, net) = TerrainAnalysis.TwoEpochVolume(r1.Points, r2.Points, 64);
+        StatusMsg.Text = $"两期算量：挖方(下降) {cut:0.##} · 填方(上升) {fill:0.##} · 净 {net:0.##}";
     }
 
     // 三角网着色通用流程：散点 CSV → 三角网 → builder 生成着色边入场景
@@ -1809,6 +1829,9 @@ public partial class MainWindow : Window
                 break;
             case "VOLUME":
                 _ = VolumeAsync();
+                break;
+            case "DIFFVOL":
+                _ = TwoEpochVolumeAsync();
                 break;
             case "DIST":
             case "DI":

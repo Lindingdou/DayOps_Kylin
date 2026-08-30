@@ -92,6 +92,32 @@ public static class TerrainAnalysis
         return (above, below, above - below);
     }
 
+    /// <summary>两期高程点差值算量：各自 IDW 到同一 n×n 网格，逐格(2−1)按格面积求和。
+    /// 返回(挖方=下降量, 填方=上升量, 净=填−挖)。</summary>
+    public static (double cut, double fill, double net) TwoEpochVolume(
+        IReadOnlyList<(double x, double y, double z)> a, IReadOnlyList<(double x, double y, double z)> b, int n)
+    {
+        if (a.Count == 0 || b.Count == 0 || n < 2) return (0, 0, 0);
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        void Ext(IReadOnlyList<(double x, double y, double z)> pts) { foreach (var p in pts) { if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y; if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y; } }
+        Ext(a); Ext(b);
+        double dx = maxX > minX ? (maxX - minX) / (n - 1) : 1;
+        double dy = maxY > minY ? (maxY - minY) / (n - 1) : 1;
+        var g1 = Contour.GridInto(a, n, n, minX, minY, dx, dy);
+        var g2 = Contour.GridInto(b, n, n, minX, minY, dx, dy);
+        double cellArea = dx * dy, cut = 0, fill = 0;
+        for (int ix = 0; ix + 1 < n; ix++)
+        for (int iy = 0; iy + 1 < n; iy++)
+        {
+            // 格内 4 角 dz 均值 × 格面积
+            double dz = (Dz(g1, g2, ix, iy) + Dz(g1, g2, ix + 1, iy) + Dz(g1, g2, ix + 1, iy + 1) + Dz(g1, g2, ix, iy + 1)) / 4.0;
+            double v = dz * cellArea;
+            if (v >= 0) fill += v; else cut += -v;
+        }
+        return (cut, fill, fill - cut);
+    }
+    private static double Dz(double[,] g1, double[,] g2, int ix, int iy) => g2[ix, iy] - g1[ix, iy];
+
     private static List<SceneEntity> BuildShaded(
         IReadOnlyList<(double x, double y, double z)> pts, List<(int a, int b, int c)> tris,
         Func<(double x, double y, double z), (double x, double y, double z), (double x, double y, double z), (float r, float g, float b)> color)

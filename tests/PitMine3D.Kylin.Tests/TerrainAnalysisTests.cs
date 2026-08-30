@@ -97,4 +97,16 @@ public class TerrainAnalysisTests
         Assert.Equal(2, below, 4);
         Assert.Equal(-2, net, 4);
     }
+
+    [Fact]
+    public void TwoEpoch_uniform_rise_is_fill()
+    {
+        // 第一期 z=0, 第二期 z=5, 同单位正方形 → 填方=5*面积(1), 挖方=0
+        var e1 = new List<(double x, double y, double z)> { (0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0) };
+        var e2 = new List<(double x, double y, double z)> { (0, 0, 5), (1, 0, 5), (1, 1, 5), (0, 1, 5) };
+        var (cut, fill, net) = TerrainAnalysis.TwoEpochVolume(e1, e2, 16);
+        Assert.Equal(0, cut, 3);
+        Assert.Equal(5, fill, 3);
+        Assert.Equal(5, net, 3);
+    }
 }

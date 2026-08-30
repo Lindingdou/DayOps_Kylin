@@ -85,6 +85,14 @@ public static class Contour
         x0 = minX; y0 = minY;
         dx = maxX > minX ? (maxX - minX) / (nx - 1) : 1;
         dy = maxY > minY ? (maxY - minY) / (ny - 1) : 1;
+        return GridInto(pts, nx, ny, x0, y0, dx, dy);
+    }
+
+    /// <summary>把散点 IDW 插值到指定原点/步距的网格（供两期差值等用同一网格）。</summary>
+    public static double[,] GridInto(
+        IReadOnlyList<(double x, double y, double z)> pts, int nx, int ny, double x0, double y0, double dx, double dy)
+    {
+        var g = new double[nx, ny];
         for (int ix = 0; ix < nx; ix++)
         for (int iy = 0; iy < ny; iy++)
         {
@@ -94,7 +102,7 @@ public static class Contour
             {
                 double d2 = (px - p.x) * (px - p.x) + (py - p.y) * (py - p.y);
                 if (d2 < 1e-9) { exact = p.z; onPoint = true; break; }
-                double w = 1.0 / (d2);   // 1/d^2
+                double w = 1.0 / d2;
                 num += w * p.z; den += w;
             }
             g[ix, iy] = onPoint ? exact : (den > 0 ? num / den : 0);
