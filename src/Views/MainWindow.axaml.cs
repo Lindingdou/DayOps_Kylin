@@ -594,6 +594,7 @@ public partial class MainWindow : Window
     private bool _breakActive;                      // 打断：等待取两点
     private readonly List<(double x, double y)> _breakPts = new();   // 打断的两点
     private int _gripIndex = -1;                    // 夹点拖拽中的夹点序号(-1=无)
+    private bool _gripsOn = true;                    // 夹点显示开关(GIZMO)
     private bool _pathActive;                       // 点对点寻径：等待取两点
     private (double x, double y)? _pathP1;
     private bool _benchActive;                      // 分帮扩帮：等待点方向/步距
@@ -697,6 +698,7 @@ public partial class MainWindow : Window
             if (cmd == "圆TTR" || cmd == "圆(切切半径)") { StartTTR(); return; }
             if (cmd == "圆弧SER" || cmd == "圆弧(起点端点半径)") { StartArcSer(); return; }
             if (cmd == "打断") { StartBreak(); return; }
+            if (cmd == "夹点开关" || cmd == "夹点") { ToggleGizmo(); return; }
             if (cmd == "滑动多段线") { StartSlide(); return; }
             if (ActivateDrawTool(cmd)) return;
             StatusMsg.Text = $"命令: {cmd}";
@@ -2070,7 +2072,7 @@ public partial class MainWindow : Window
         if (_selected.Count == 0) { Viewport.SetHighlight(null); return; }
         var o = new List<float>();
         foreach (var e in _selected) e.Tessellate(o);
-        if (_selected.Count == 1)                       // 单选 → 叠加夹点方块
+        if (_gripsOn && _selected.Count == 1)           // 单选 + 夹点开 → 叠加夹点方块
             foreach (var g in _selected[0].Grips()) AppendGripSquare(o, g.x, g.y, GripSize());
         Viewport.SetHighlight(o.ToArray());
     }
@@ -2098,7 +2100,7 @@ public partial class MainWindow : Window
     // 命中夹点：返回 _selected[0] 上距 (wx,wy) 在容差内的夹点序号，无则 -1
     private int HitGrip(double wx, double wy, double tol)
     {
-        if (_selected.Count != 1) return -1;
+        if (!_gripsOn || _selected.Count != 1) return -1;
         var grips = _selected[0].Grips();
         int best = -1; double bestD = tol * tol;
         for (int i = 0; i < grips.Count; i++)
@@ -2308,6 +2310,15 @@ public partial class MainWindow : Window
         _breakActive = true; _breakPts.Clear();
         _tool = null; _measure = null; _editMode = EditMode.None; _offsetActive = false; _trimActive = false;
         StatusMsg.Text = "打断：指定第一点（两点间的一段将被移除）";
+    }
+
+    // GIZMO：切换夹点显示；关时选中实体不显方块、也不可拖夹点
+    private void ToggleGizmo()
+    {
+        _gripsOn = !_gripsOn;
+        if (!_gripsOn) { _gripIndex = -1; }
+        HighlightSelection();
+        StatusMsg.Text = _gripsOn ? "夹点：开" : "夹点：关";
     }
 
     private void StartSlide()
@@ -2763,6 +2774,9 @@ public partial class MainWindow : Window
             case "BREAK":
             case "BR":
                 StartBreak();
+                break;
+            case "GIZMO":
+                ToggleGizmo();
                 break;
             case "CIRCLETTR":
             case "TTR":
