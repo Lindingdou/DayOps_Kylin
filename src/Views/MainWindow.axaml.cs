@@ -707,6 +707,16 @@ public partial class MainWindow : Window
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
             if (cmd == "2D") { Viewport.SetViewMode(true); StatusMsg.Text = "视图: 2D 平面（正交俯视）"; return; }
             if (cmd == "3D") { Viewport.SetViewMode(false); StatusMsg.Text = "视图: 3D 轨道"; return; }
+            if (cmd == "俯视" || cmd == "顶视") { Viewport.SetView("top"); StatusMsg.Text = "视图: 俯视"; return; }
+            if (cmd == "仰视") { Viewport.SetView("bottom"); StatusMsg.Text = "视图: 仰视"; return; }
+            if (cmd == "主视" || cmd == "前视") { Viewport.SetView("front"); StatusMsg.Text = "视图: 主视"; return; }
+            if (cmd == "后视") { Viewport.SetView("back"); StatusMsg.Text = "视图: 后视"; return; }
+            if (cmd == "左视") { Viewport.SetView("left"); StatusMsg.Text = "视图: 左视"; return; }
+            if (cmd == "右视") { Viewport.SetView("right"); StatusMsg.Text = "视图: 右视"; return; }
+            if (cmd == "西南等轴测" || cmd == "西南轴测") { Viewport.SetView("sw"); StatusMsg.Text = "视图: 西南等轴测"; return; }
+            if (cmd == "东南等轴测" || cmd == "东南轴测") { Viewport.SetView("se"); StatusMsg.Text = "视图: 东南等轴测"; return; }
+            if (cmd == "东北等轴测" || cmd == "东北轴测") { Viewport.SetView("ne"); StatusMsg.Text = "视图: 东北等轴测"; return; }
+            if (cmd == "西北等轴测" || cmd == "西北轴测") { Viewport.SetView("nw"); StatusMsg.Text = "视图: 西北等轴测"; return; }
             if (cmd == "清空视图") { _selected.Clear(); Viewport.SetHighlight(null); Viewport.SetSnapMarker(null); _snapShown = false; RefreshScene(); StatusMsg.Text = "已清空选择/高亮/捕捉标记"; return; }
             if (cmd == "帮助文档") { ShowHelp(); return; }
             if (cmd == "选项") { ShowOptions(); return; }

@@ -347,6 +347,28 @@ public class CadGlViewport : OpenGlControlBase
         RequestNextFrameRendering();
     }
 
+    /// <summary>标准视图预设(Z 上约定)：top/bottom/front/back/left/right/sw/se/ne/nw。俯/仰视走 2D 正交。</summary>
+    public void SetView(string preset)
+    {
+        const double iso = 0.61547971;   // atan(1/√2) ≈ 35.26°
+        const double pi = System.Math.PI;
+        switch (preset)
+        {
+            case "top": _camera.SetMode(true); break;                       // 俯视 = 正交俯视
+            case "bottom": _camera.SetOrientation(-pi / 2, -1.4); break;    // 仰视
+            case "front": _camera.SetOrientation(-pi / 2, 0); break;        // 主视(看向 +Y)
+            case "back": _camera.SetOrientation(pi / 2, 0); break;          // 后视
+            case "left": _camera.SetOrientation(pi, 0); break;             // 左视(看向 +X)
+            case "right": _camera.SetOrientation(0, 0); break;             // 右视
+            case "sw": _camera.SetOrientation(5 * pi / 4, iso); break;      // 西南等轴测
+            case "se": _camera.SetOrientation(-pi / 4, iso); break;         // 东南等轴测
+            case "ne": _camera.SetOrientation(pi / 4, iso); break;          // 东北等轴测
+            case "nw": _camera.SetOrientation(3 * pi / 4, iso); break;      // 西北等轴测
+            default: _camera.SetMode(false); break;
+        }
+        RequestNextFrameRendering();
+    }
+
     /// <summary>当前是否 2D 平面视图。</summary>
     public bool Is2DView => _camera.Is2D;
 

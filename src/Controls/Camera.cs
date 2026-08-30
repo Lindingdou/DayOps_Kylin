@@ -20,6 +20,14 @@ internal sealed class Camera
     /// <summary>切换 2D 平面 / 3D 轨道。</summary>
     public void SetMode(bool is2D) => Is2D = is2D;
 
+    /// <summary>直接设相机朝向（标准视图预设用）：Yaw 绕 Z、Pitch 抬头，切到 3D。</summary>
+    public void SetOrientation(double yaw, double pitch)
+    {
+        Is2D = false;
+        Yaw = yaw;
+        Pitch = Math.Clamp(pitch, -1.4, 1.4);
+    }
+
     /// <summary>鼠标拖拽：3D 轨道旋转 / 2D 平移注视点。</summary>
     public void Orbit(double dYaw, double dPitch)
     {

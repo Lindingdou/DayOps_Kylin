@@ -209,6 +209,23 @@
                                             <Button Classes="ribbon-btn small" Tag="渲染配置" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_render_cfg}" /><TextBlock Text="渲染配置" /></StackPanel></Button>
                                             <Button Classes="ribbon-btn small" Tag="缩放" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_Zoom}" /><TextBlock Text="缩放" /></StackPanel></Button>
                                             <Button Classes="ribbon-btn small" Tag="清空视图" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_clear_marks}" /><TextBlock Text="清空视图" /></StackPanel></Button>
+                                            <Button Classes="ribbon-btn small" ToolTip.Tip="标准视图预设">
+                                                <Button.Flyout>
+                                                    <MenuFlyout>
+                                                        <MenuItem Header="俯视" Tag="俯视" Click="OnRibbonCommand" />
+                                                        <MenuItem Header="仰视" Tag="仰视" Click="OnRibbonCommand" />
+                                                        <MenuItem Header="主视 (前)" Tag="主视" Click="OnRibbonCommand" />
+                                                        <MenuItem Header="后视" Tag="后视" Click="OnRibbonCommand" />
+                                                        <MenuItem Header="左视" Tag="左视" Click="OnRibbonCommand" />
+                                                        <MenuItem Header="右视" Tag="右视" Click="OnRibbonCommand" />
+                                                        <MenuItem Header="西南等轴测" Tag="西南等轴测" Click="OnRibbonCommand" />
+                                                        <MenuItem Header="东南等轴测" Tag="东南等轴测" Click="OnRibbonCommand" />
+                                                        <MenuItem Header="东北等轴测" Tag="东北等轴测" Click="OnRibbonCommand" />
+                                                        <MenuItem Header="西北等轴测" Tag="西北等轴测" Click="OnRibbonCommand" />
+                                                    </MenuFlyout>
+                                                </Button.Flyout>
+                                                <StackPanel Orientation="Horizontal"><TextBlock Text="视图预设 ▾" /></StackPanel>
+                                            </Button>
                                         </WrapPanel>
                                     </StackPanel>
                                 </DockPanel>
