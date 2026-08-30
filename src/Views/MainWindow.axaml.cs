@@ -545,6 +545,7 @@ public partial class MainWindow : Window
             if (cmd == "组合工作线" || cmd == "合并多段线" || cmd == "连接台阶线") { JoinPolylines(); return; }
             if (cmd == "块体模型" || cmd == "导入块体" || cmd == "地质体建模") { await ImportBlockModelAsync(); return; }
             if (cmd == "资源量估算" || cmd == "剥采比" || cmd == "快速估值") { ResourceReport(null); return; }
+            if (cmd == "境界圈定" || cmd == "凸包" || cmd == "确定境界" || cmd == "采场圈定") { await BoundaryHullAsync(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
             if (cmd == "2D") { Viewport.SetViewMode(true); StatusMsg.Text = "视图: 2D 平面（正交俯视）"; return; }
@@ -960,6 +961,31 @@ public partial class MainWindow : Window
         RefreshScene();
         Viewport.FitBounds(r.Bounds);
         StatusMsg.Text = $"块体模型：{r.Blocks.Count} 块 · 品位 {r.GradeMin:0.##}~{r.GradeMax:0.##}(均 {r.GradeMean:0.##})";
+    }
+
+    // 境界圈定：散点 CSV → 凸包 → 闭合边界多段线
+    private async Task BoundaryHullAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "境界圈定：选点 CSV (x,y)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("点 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success) { StatusMsg.Text = $"境界圈定：点导入失败 {r.Error}"; return; }
+        var pts2d = new List<(double x, double y)>();
+        foreach (var p in r.Points) pts2d.Add((p.x, p.y));
+        var hull = GeomHull.ConvexHull(pts2d);
+        if (hull.Count < 3) { StatusMsg.Text = "境界圈定：点太少或共线"; return; }
+        var pl = new PolylineEntity { Closed = true, Cr = 0.95f, Cg = 0.55f, Cb = 0.25f };
+        foreach (var p in hull) pl.Points.Add(p);
+        BeginChange();
+        _scene.Add(pl);
+        RefreshScene();
+        Viewport.FitBounds(r.Bounds);
+        StatusMsg.Text = $"境界圈定：{r.Points.Count} 点 → 凸包 {hull.Count} 顶点";
     }
 
     // 资源量估算 / 剥采比：对最近导入的块体，按 cutoff 分矿废
@@ -2071,6 +2097,9 @@ public partial class MainWindow : Window
                 break;
             case "RESOURCE":
                 ResourceReport(null);
+                break;
+            case "HULL":
+                _ = BoundaryHullAsync();
                 break;
             case "DIST":
             case "DI":
