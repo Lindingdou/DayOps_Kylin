@@ -546,6 +546,7 @@ public partial class MainWindow : Window
             if (cmd == "块体模型" || cmd == "导入块体" || cmd == "地质体建模") { await ImportBlockModelAsync(); return; }
             if (cmd == "资源量估算" || cmd == "剥采比") { ResourceReport(null); return; }
             if (cmd == "快速估值" || cmd == "品位估值" || cmd == "克里金估值") { await EstimateGradeAsync(); return; }
+            if (cmd == "点云抽稀" || cmd == "抽稀" || cmd == "点云精简") { await ThinPointsAsync(); return; }
             if (cmd == "境界圈定" || cmd == "凸包" || cmd == "确定境界" || cmd == "采场圈定") { await BoundaryHullAsync(); return; }
             if (cmd == "剖面分析" || cmd == "剖面" || cmd == "点云剖面") { await SectionProfileAsync(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
@@ -998,6 +999,28 @@ public partial class MainWindow : Window
         _scene.Add(curve);
         RefreshScene();
         StatusMsg.Text = $"剖面分析：{prof.Count} 采样 · 高程 {zmin:0.##}~{zmax:0.##} · 剖面长 {prof[^1].dist:0.##}";
+    }
+
+    // 点云抽稀：XYZ CSV → 体素抽稀 → 抽稀后点入场景 + 报压缩比
+    private async Task ThinPointsAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "点云抽稀：选点 CSV (x,y,z)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("点 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success) { StatusMsg.Text = $"点云抽稀：导入失败 {r.Error}"; return; }
+        double span = System.Math.Max(r.Bounds[2] - r.Bounds[0], r.Bounds[3] - r.Bounds[1]);
+        double cell = System.Math.Max(span / 100.0, 1e-6);   // 约 100 格跨度
+        var thinned = PointThin.Thin(r.Points, cell);
+        BeginChange();
+        foreach (var (x, y, _) in thinned) { var pt = new PointEntity { X = x, Y = y }; AssignLayer(pt); _scene.Add(pt); }
+        RefreshScene();
+        Viewport.FitBounds(r.Bounds);
+        StatusMsg.Text = $"点云抽稀：{r.Points.Count} → {thinned.Count} 点（cell {cell:0.##}，压缩 {100.0 * (1 - (double)thinned.Count / r.Points.Count):0.#}%）";
     }
 
     // 快速估值：品位样本 CSV(x,y,品位) → IDW 网格 → 品位配色估值面
@@ -2166,6 +2189,9 @@ public partial class MainWindow : Window
                 break;
             case "ESTIMATE":
                 _ = EstimateGradeAsync();
+                break;
+            case "THIN":
+                _ = ThinPointsAsync();
                 break;
             case "DIST":
             case "DI":
