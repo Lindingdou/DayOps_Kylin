@@ -541,6 +541,7 @@ public partial class MainWindow : Window
             if (cmd == "点对点寻径" || cmd == "寻径" || cmd == "点对点寻路") { StartPathfind(); return; }
             if (cmd == "排土条带" || cmd == "条带填充" || cmd == "排土条带划分") { DumpStrips(); return; }
             if (cmd == "分帮扩帮" || cmd == "批量台阶扩帮" || cmd == "批量扩坑") { StartBench(); return; }
+            if (cmd == "组合工作线" || cmd == "合并多段线" || cmd == "连接台阶线") { JoinPolylines(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
             if (cmd == "2D") { Viewport.SetViewMode(true); StatusMsg.Text = "视图: 2D 平面（正交俯视）"; return; }
@@ -935,6 +936,29 @@ public partial class MainWindow : Window
             _scene.Add(new LineEntity { X0 = s.x0, Y0 = s.y0, X1 = s.x1, Y1 = s.y1, Cr = 0.80f, Cg = 0.60f, Cb = 0.35f });
         RefreshScene();
         StatusMsg.Text = $"排土条带：{segs.Count} 条（间距 {spacing:0.##}）";
+    }
+
+    // 组合工作线：合并选中的多段线（端点相接连成一条）
+    private void JoinPolylines()
+    {
+        var polys = _selected.FindAll(e => e is PolylineEntity);
+        if (polys.Count < 2) { StatusMsg.Text = "组合工作线：请先选中至少两条多段线"; return; }
+        var inputs = new List<System.Collections.Generic.IReadOnlyList<(double x, double y)>>();
+        foreach (var p in polys) inputs.Add(((PolylineEntity)p).Points);
+        double tol = System.Math.Max(1e-6, SnapTolWorld(_lastPointer) * 0.5);
+        var merged = PolylineJoin.Join(inputs, tol);
+        BeginChange();
+        foreach (var p in polys) _scene.Remove(p);
+        var first = (PolylineEntity)polys[0];
+        foreach (var chain in merged)
+        {
+            var pl = new PolylineEntity { Cr = first.Cr, Cg = first.Cg, Cb = first.Cb, LayerName = first.LayerName };
+            foreach (var pt in chain) pl.Points.Add(pt);
+            _scene.Add(pl);
+        }
+        _selected.Clear(); Viewport.SetHighlight(null);
+        RefreshScene();
+        StatusMsg.Text = $"组合工作线：{polys.Count} 条 → {merged.Count} 条";
     }
 
     // 分帮扩帮：选中台阶线/多段线，点方向 → 批量平行偏移
@@ -2003,6 +2027,9 @@ public partial class MainWindow : Window
                 break;
             case "BENCH":
                 StartBench();
+                break;
+            case "JOINPOLY":
+                JoinPolylines();
                 break;
             case "DIST":
             case "DI":
