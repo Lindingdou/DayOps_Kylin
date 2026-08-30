@@ -667,6 +667,7 @@ public partial class MainWindow : Window
             if (cmd == "工作面线拟合" || cmd == "工作面线" || cmd == "拟合工作面线") { await WorkingFaceLineAsync(); return; }
             if (cmd == "煤质统计" || cmd == "质量统计" || cmd == "煤质分析") { await QualityStatsAsync(); return; }
             if (cmd == "坡角估算" || cmd == "工作帮坡角" || cmd == "坡角") { await SlopeEstimateAsync(); return; }
+            if (cmd == "台阶参数分析" || cmd == "台阶分析" || cmd == "台阶参数") { await BenchAnalyzeAsync(); return; }
             if (cmd == "矿床识别" || cmd == "自动识别" || cmd == "矿床类型识别") { await DepositDetectAsync(); return; }
             if (cmd == "方案综合对比" || cmd == "方案比选" || cmd == "方案对比") { await ProgramCompareAsync(); return; }
             if (cmd == "高程查询" || cmd == "虚拟钻孔" || cmd == "查询高程") { await StartSpotQueryAsync(); return; }
@@ -1086,6 +1087,43 @@ public partial class MainWindow : Window
             report += $" 段{i + 1} 均衡比{s.RatioM3PerT.ToString("0.##", inv)}({s.B - s.A}期,峰值超前{s.PeakLeadWanM3:0.#})";
         }
         StatusMsg.Text = report;
+    }
+
+    // 台阶参数分析：剖面 CSV(里程, 高程) → 分平盘/坡面段 → 台阶高/坡面角/平盘宽/整体帮坡角 报表
+    private async Task BenchAnalyzeAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "台阶参数分析：选剖面 CSV (里程, 高程)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("剖面 (CSV/TXT)") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (files.Count == 0) return;
+
+        var dists = new List<double>(); var zs = new List<double>();
+        try
+        {
+            foreach (var raw in System.IO.File.ReadAllLines(files[0].Path.LocalPath))
+            {
+                var line = raw.Trim();
+                if (line.Length == 0 || line.StartsWith("#")) continue;
+                var parts = line.Split(new[] { ',', '\t', ' ', ';' }, System.StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length < 2) continue;
+                if (double.TryParse(parts[0], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double dd)
+                    && double.TryParse(parts[1], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double zz))
+                { dists.Add(dd); zs.Add(zz); }
+            }
+        }
+        catch (System.Exception ex) { StatusMsg.Text = $"台阶分析：读取失败 {ex.Message}"; return; }
+        if (dists.Count < 2) { StatusMsg.Text = "台阶分析：需 ≥2 个剖面点(里程,高程)"; return; }
+
+        var res = BenchAnalyzer.Analyze(dists, zs);
+        if (res.Rows.Count == 0) { StatusMsg.Text = "台阶分析：未识别出台阶段"; return; }
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        double maxH = 0, sumFaceAng = 0; int fc = 0;
+        foreach (var r in res.Rows) if (r.Kind == "坡面") { if (r.Height > maxH) maxH = r.Height; sumFaceAng += r.FaceAngleDeg; fc++; }
+        string avgAng = fc > 0 ? (sumFaceAng / fc).ToString("0.#", inv) : "—";
+        StatusMsg.Text = $"台阶分析：{res.FaceCount} 坡面 · {res.BermCount} 平盘 · 最大台阶高 {maxH.ToString("0.##", inv)} · 平均坡面角 {avgAng}° · 整体帮坡角 {res.OverallSlopeDeg.ToString("0.#", inv)}°";
     }
 
     // 坡角估算：点集 CSV(x,y,z) → 最小二乘拟合平面 → 最陡坡角(工作帮坡角口径) + 报表
@@ -3275,6 +3313,10 @@ public partial class MainWindow : Window
             case "SLOPEEST":
             case "WORKSLOPE":
                 _ = SlopeEstimateAsync();
+                break;
+            case "BENCHANALYZE":
+            case "PROCESSPARAM":
+                _ = BenchAnalyzeAsync();
                 break;
             case "DEPOSITDETECT":
             case "DEPOSIT":
