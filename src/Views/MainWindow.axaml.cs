@@ -710,6 +710,8 @@ public partial class MainWindow : Window
             if (cmd == "闭合多段线" || cmd == "闭合线") { CloseSelectedPolylines(); return; }
             if (cmd == "删除重复点" || cmd == "去重复点" || cmd == "点去重") { DedupeSelectedPoints(); return; }
             if (cmd == "删除重复线" || cmd == "去重复线" || cmd == "线去重") { DedupeSelectedPolylines(); return; }
+            if (cmd == "区域求差" || cmd == "可采区域求差" || cmd == "多边形求差") { SubtractRegions(); return; }
+            if (cmd == "区域重叠检测" || cmd == "区域重叠" || cmd == "重叠检测") { CheckRegionOverlap(); return; }
             if (cmd == "新建图层") { var l = _layers.New(); PopulateDrawingLayers(); StatusMsg.Text = $"新建图层「{l.Name}」并置为当前"; return; }
             if (cmd == "图层特性管理器") { var l = _layers.CycleCurrent(); StatusMsg.Text = $"当前图层「{l.Name}」 显示{( l.Shown?"开":"关")}/{(l.Locked?"锁":"解锁")}（再点循环切换）"; return; }
             if (cmd == "冻结") { FreezeCurrentLayer(true); return; }
@@ -3044,6 +3046,32 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"删除重复线：原 {polys.Count} · 删除 {dups.Count} · 余 {kept.Count}";
     }
 
+    // 区域求差：选两条闭合多段线(第1=被减 subject, 第2=减去 clip)→ subject∖clip 最大块作新闭合多段线
+    private void SubtractRegions()
+    {
+        var polys = new List<PolylineEntity>();
+        foreach (var e in _selected) if (e is PolylineEntity p && p.Points.Count >= 3) polys.Add(p);
+        if (polys.Count != 2) { StatusMsg.Text = "区域求差：请按序选中两条闭合多段线(第1=被减, 第2=减去)"; return; }
+        var diff = RegionBool.SubtractKeepLargest(polys[0].Points, polys[1].Points);
+        if (diff.Count < 3) { StatusMsg.Text = "区域求差：结果为空(被减区域被完全覆盖)"; return; }
+        var np = new PolylineEntity { Closed = true, Cr = 0.95f, Cg = 0.75f, Cb = 0.25f };   // 橙色差集
+        np.Points.AddRange(diff);
+        BeginChange();
+        _scene.Add(np);
+        RefreshScene();
+        StatusMsg.Text = $"区域求差：subject∖clip → {diff.Count} 顶点(橙色, 已入场景)";
+    }
+
+    // 区域重叠检测：选两条闭合多段线 → 是否成片重叠(重叠面积占较小者 ≥2%)
+    private void CheckRegionOverlap()
+    {
+        var polys = new List<PolylineEntity>();
+        foreach (var e in _selected) if (e is PolylineEntity p && p.Points.Count >= 3) polys.Add(p);
+        if (polys.Count != 2) { StatusMsg.Text = "区域重叠检测：请选中两条闭合多段线"; return; }
+        bool ov = RegionBool.Overlaps(polys[0].Points, polys[1].Points);
+        StatusMsg.Text = ov ? "区域重叠检测：两区域成片重叠(≥2%)——空间不互斥" : "区域重叠检测：两区域不重叠(或仅边界相邻)——互斥";
+    }
+
     // 进入编辑（移动/复制/镜像）：需已有选择
     private void StartEdit(EditMode mode, string name)
     {
@@ -3684,6 +3712,13 @@ public partial class MainWindow : Window
             case "POLYDEDUPE":
             case "DEDUPEPOLY":
                 DedupeSelectedPolylines();
+                break;
+            case "REGIONSUBTRACT":
+            case "REGIONDIFF":
+                SubtractRegions();
+                break;
+            case "REGIONOVERLAP":
+                CheckRegionOverlap();
                 break;
             case "MOVE":
             case "M":
