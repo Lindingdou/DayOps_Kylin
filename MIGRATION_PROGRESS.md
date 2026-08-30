@@ -268,6 +268,7 @@
 - [x] **分帮扩帮**：`BenchTools.BatchOffset`(台阶线批量平行偏移)。命令 分帮扩帮/批量台阶扩帮/BENCH。+2 单测，174 tests。commit `adf9257`。
 - [x] **组合工作线**：`PolylineJoin.Join`(端点相接合并多段线)。命令 组合工作线/合并多段线/JOINPOLY。+4 单测，178 tests。commit `25062c3`。
 - [x] **多边形裁剪**：`PolygonClip.Clip`(Sutherland-Hodgman, 凸边界交集)。命令 裁剪/区运算/CLIP。+3 单测，230 tests。commit `e0ecf09`。
+- [x] **曲线平滑**：`PolylineSmooth.Chaikin`(角点切割光滑)。命令 平滑/光滑/SMOOTH。+3 单测，233 tests。commit `05f02d3`。
 - [记录] 块体交互/切割 → 需内核。
 
 ### BlockModelLib 块体模型（托管切片）
