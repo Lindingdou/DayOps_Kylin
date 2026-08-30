@@ -95,10 +95,11 @@
 - [x] **INSERT 块引用展开**：块内几何按插入变换（平移/旋转/缩放）递归展开（嵌套上限 8）。+2 单测（变换数学 + 含块 DXF round-trip），18 tests。commit `acb2090`。
 - [x] **实体选择高亮**：按类型分组几何（`TypeGeometry`）+ 对象树选类型 → `SetHighlight` 重着色画最上层。+1 单测（Recolor），19 tests。commit `76a588f`。
 - [x] **Spline 样条导入**：De Boor NURBS 求值采样（`EvalBSpline`）+ 退化回退拟合点/控制多边形。+2 单测，21 tests。commit `7afd2a7`。
+- [x] **完整视图导航 + 右键菜单**（应用户要求插入的优先项——基础交互补完整，才好测其余功能）：中键/2D左键平移、3D左键旋转、滚轮朝光标缩放、双击范围缩放；右键菜单（范围缩放/2D-3D/网格/清除高亮）。+2 单测，23 tests。commit `8deb00a`。
 
 **⏳ 待做（可托管、Windows 可验证）—— 续：**
+- [ ] DXF 导出（服务 `DxfExportService` 已写，待接线 + round-trip 单测）
 - [ ] DIST 测距（点两点显示距离，复用屏幕→世界反投影）
-- [ ] DXF 导出（线几何写回 .dxf，round-trip 可验证）
 
 > **Loop 状态：二次重开**（job `876a2719`，每 3 分钟）。上次「8 项功能」后我一度停在自定义清单清空；用户要求继续找更多可做功能，遂新增上列待做续做。
 
