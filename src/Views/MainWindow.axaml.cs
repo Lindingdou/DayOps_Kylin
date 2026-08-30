@@ -7,6 +7,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using PitMine3D.Kylin.Cad;
+using PitMine3D.Kylin.Cad.Draw;
 
 namespace PitMine3D.Kylin.Views;
 
@@ -53,6 +54,24 @@ public partial class MainWindow : Window
                             });
                         _measure = null;
                     }
+                }
+                return;
+            }
+
+            // 绘制工具：左键喂点（凑齐一个实体则加入场景并重绘）
+            if (_tool != null && props.IsLeftButtonPressed)
+            {
+                _nav = NavMode.None;
+                var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                if (wp != null)
+                {
+                    var ent = _tool.AddPoint(wp.Value.x, wp.Value.y);
+                    if (ent != null)
+                    {
+                        _scene.Add(ent);
+                        Viewport.SetSceneGeometry(_scene.BuildGeometry());
+                    }
+                    StatusMsg.Text = $"{_tool.Prompt}（已画 {_scene.Count}）";
                 }
                 return;
             }
@@ -110,6 +129,19 @@ public partial class MainWindow : Window
 
         // 对象树选类型 → 视口高亮该类型几何
         ObjectTree.SelectionChanged += OnObjectTreeSelect;
+
+        // ESC：退出当前绘制/测量
+        KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape)
+            {
+                _tool = null;
+                _measure = null;
+                Viewport.SetSnapMarker(null);
+                _snapShown = false;
+                StatusMsg.Text = "就绪";
+            }
+        };
     }
 
     private enum NavMode { None, Orbit, Pan }
@@ -119,6 +151,8 @@ public partial class MainWindow : Window
     private MeasureState? _measure;
     private (double x, double y)? _snapWorld;   // 当前捕捉到的世界点
     private bool _snapShown;                     // 捕捉标记是否已显示
+    private readonly Scene _scene = new();       // 托管绘制场景
+    private DrawTool? _tool;                      // 当前激活的绘制工具
 
     // Ribbon 按钮 → 「导入」走真实 DXF 导入；其余暂回显命令（证明整条 UI 已接线）
     private async void OnRibbonCommand(object? sender, RoutedEventArgs e)
@@ -128,6 +162,7 @@ public partial class MainWindow : Window
             if (cmd == "导入") { await ImportDxfAsync(); return; }
             if (cmd == "另存为") { await ExportDxfAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
+            if (ActivateDrawTool(cmd)) return;
             StatusMsg.Text = $"命令: {cmd}";
             CommandInput.Text = cmd;
             CommandInput.CaretIndex = cmd.Length;
@@ -293,6 +328,33 @@ public partial class MainWindow : Window
         };
     }
 
+    // 激活绘制工具（Home 绘制命令/按钮；识别中文按钮名与英文命令）。
+    private bool ActivateDrawTool(string cmd)
+    {
+        string u = cmd.Trim().ToUpperInvariant();
+        DrawTool? t = u switch
+        {
+            "LINE" => new LineTool(),
+            "CIRCLE" => new CircleTool(),
+            "RECTANG" or "RECT" => new RectTool(),
+            "POINT" or "PO" => new PointTool(),
+            _ => cmd.Trim() switch
+            {
+                "直线" => new LineTool(),
+                "圆" => new CircleTool(),
+                "矩形" => new RectTool(),
+                "点" => new PointTool(),
+                _ => (DrawTool?)null
+            }
+        };
+        if (t == null) return false;
+        _tool = t;
+        _measure = null;                              // 退出测距
+        Viewport.SetSnapMarker(null); _snapShown = false;
+        StatusMsg.Text = t.Prompt + "（ESC 退出）";
+        return true;
+    }
+
     // 命令行回车 → 命令分发（已实装的走功能，其余回显）
     private void OnCommandKeyDown(object? sender, KeyEventArgs e)
     {
@@ -335,10 +397,11 @@ public partial class MainWindow : Window
             case "DIST":
             case "DI":
                 _measure = new MeasureState();
+                _tool = null;
                 StatusMsg.Text = "测距：点第一点";
                 break;
             default:
-                StatusMsg.Text = $"执行: {cmd}";
+                if (!ActivateDrawTool(cmd)) StatusMsg.Text = $"执行: {cmd}";
                 break;
         }
     }

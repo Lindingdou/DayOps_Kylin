@@ -36,6 +36,12 @@ public class CadGlViewport : OpenGlControlBase
     private float[]? _pendingImport;
     private double[]? _pendingBounds;
 
+    // 托管绘制场景几何（Home 绘制命令画的实体）
+    private GlRenderer.Mesh _scene;
+    private bool _hasScene;
+    private float[]? _pendingScene;
+    private bool _sceneDirty;
+
     // 图层显隐：图层名 → 该层几何；隐藏集
     private Dictionary<string, float[]>? _layerGeom;
     private readonly HashSet<string> _hiddenLayers = new();
@@ -89,6 +95,7 @@ public class CadGlViewport : OpenGlControlBase
         if (_hasImported) _renderer.DeleteMesh(_imported);
         if (_hasHighlight) _renderer.DeleteMesh(_highlight);
         if (_hasSnap) _renderer.DeleteMesh(_snap);
+        if (_hasScene) _renderer.DeleteMesh(_scene);
         _renderer.Deinit();
     }
 
@@ -126,6 +133,14 @@ public class CadGlViewport : OpenGlControlBase
             _hasSnap = !_snap.IsEmpty;
         }
 
+        if (_sceneDirty)
+        {
+            _sceneDirty = false;
+            if (_hasScene) _renderer.DeleteMesh(_scene);
+            _scene = _renderer.Upload(_pendingScene!);
+            _hasScene = !_scene.IsEmpty;
+        }
+
         float[] vp = _camera.ViewProj(aspect);
 
         _renderer.BeginFrame(w, h, 0.13f, 0.14f, 0.16f);
@@ -157,11 +172,10 @@ public class CadGlViewport : OpenGlControlBase
     private void ScenePass(float[] vp)
     {
         _renderer.BeginPass(depthTest: true);
-        if (_hasImported)
-        {
-            _renderer.Draw(_imported, GL_LINES, vp);
-        }
-        else
+        bool any = false;
+        if (_hasImported) { _renderer.Draw(_imported, GL_LINES, vp); any = true; }
+        if (_hasScene) { _renderer.Draw(_scene, GL_LINES, vp); any = true; }
+        if (!any)
         {
             float angle = (float)_clock.Elapsed.TotalSeconds * 0.6f;
             float[] model = Mat4.Mul(Mat4.Translate(0f, 0f, 1.6f), Mat4.RotateZ(angle));
@@ -211,6 +225,14 @@ public class CadGlViewport : OpenGlControlBase
     public void ZoomAt(double sx, double sy, double factor)
     {
         _camera.ZoomAtScreen(sx, sy, Bounds.Width, Bounds.Height, factor);
+        RequestNextFrameRendering();
+    }
+
+    /// <summary>设置托管绘制场景几何（P3_C3）；空 → 清除。</summary>
+    public void SetSceneGeometry(float[] verts)
+    {
+        _pendingScene = verts ?? Array.Empty<float>();
+        _sceneDirty = true;
         RequestNextFrameRendering();
     }
 
