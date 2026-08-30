@@ -40,6 +40,9 @@ public class CadGlViewport : OpenGlControlBase
     private Dictionary<string, float[]>? _layerGeom;
     private readonly HashSet<string> _hiddenLayers = new();
 
+    private double[]? _lastBounds;   // 最近导入的包围盒，供 ZE 重新范围缩放
+    private bool _showGrid = true;   // 网格/轴显隐
+
     private readonly Stopwatch _clock = Stopwatch.StartNew();
 
     /// <summary>OpenGL 上下文就绪后回报后端版本串给界面。</summary>
@@ -110,6 +113,7 @@ public class CadGlViewport : OpenGlControlBase
     /// <summary>地面自适应网格 + XYZ 轴。深度关 —— 作背景，永远在实体之后。</summary>
     private void GridPass(float[] vp)
     {
+        if (!_showGrid) return;
         _renderer.BeginPass(depthTest: false);
         _renderer.Draw(_grid, GL_LINES, vp);
         _renderer.EndPass();
@@ -163,6 +167,7 @@ public class CadGlViewport : OpenGlControlBase
     {
         _pendingImport = lineVertices;
         _pendingBounds = bounds;
+        _lastBounds = bounds;
         RequestNextFrameRendering();
     }
 
@@ -173,6 +178,7 @@ public class CadGlViewport : OpenGlControlBase
         _hiddenLayers.Clear();
         _pendingImport = ConcatVisible();
         _pendingBounds = bounds;
+        _lastBounds = bounds;
         RequestNextFrameRendering();
     }
 
@@ -183,6 +189,21 @@ public class CadGlViewport : OpenGlControlBase
         if (visible) _hiddenLayers.Remove(layer); else _hiddenLayers.Add(layer);
         _pendingImport = ConcatVisible();
         _pendingBounds = null;                 // 显隐不重新缩放
+        RequestNextFrameRendering();
+    }
+
+    /// <summary>范围缩放到最近导入几何（ZE / ZOOMEXTENTS）。</summary>
+    public void ZoomExtents()
+    {
+        if (_lastBounds == null) return;
+        _camera.FitBounds(_lastBounds);
+        RequestNextFrameRendering();
+    }
+
+    /// <summary>切换地面网格 / 轴显隐（GRID）。</summary>
+    public void ToggleGrid()
+    {
+        _showGrid = !_showGrid;
         RequestNextFrameRendering();
     }
 

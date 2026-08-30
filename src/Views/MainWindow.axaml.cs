@@ -188,6 +188,16 @@ public partial class MainWindow : Window
                 new NodeEditorWindow().Show();
                 StatusMsg.Text = "打开节点编辑器";
                 break;
+            case "ZE":
+            case "ZOOM":
+            case "ZOOMEXTENTS":
+                Viewport.ZoomExtents();
+                StatusMsg.Text = "范围缩放";
+                break;
+            case "GRID":
+                Viewport.ToggleGrid();
+                StatusMsg.Text = "切换网格显示";
+                break;
             default:
                 StatusMsg.Text = $"执行: {cmd}";
                 break;
