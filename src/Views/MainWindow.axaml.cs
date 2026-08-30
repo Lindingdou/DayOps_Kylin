@@ -665,6 +665,7 @@ public partial class MainWindow : Window
             if (cmd == "批量台阶扩帮" || cmd == "台阶线生成" || cmd == "台阶扩帮") { GenerateBenchLines(); return; }
             if (cmd == "剥采比均衡" || cmd == "VP曲线" || cmd == "剥采比") { await StrippingBalanceAsync(); return; }
             if (cmd == "工作面线拟合" || cmd == "工作面线" || cmd == "拟合工作面线") { await WorkingFaceLineAsync(); return; }
+            if (cmd == "煤质统计" || cmd == "质量统计" || cmd == "煤质分析") { await QualityStatsAsync(); return; }
             if (cmd == "矿床识别" || cmd == "自动识别" || cmd == "矿床类型识别") { await DepositDetectAsync(); return; }
             if (cmd == "方案综合对比" || cmd == "方案比选" || cmd == "方案对比") { await ProgramCompareAsync(); return; }
             if (cmd == "高程查询" || cmd == "虚拟钻孔" || cmd == "查询高程") { await StartSpotQueryAsync(); return; }
@@ -1084,6 +1085,46 @@ public partial class MainWindow : Window
             report += $" 段{i + 1} 均衡比{s.RatioM3PerT.ToString("0.##", inv)}({s.B - s.A}期,峰值超前{s.PeakLeadWanM3:0.#})";
         }
         StatusMsg.Text = report;
+    }
+
+    // 煤质统计：CSV(可选 煤层标签, 指标值) → 按标签分组算 计数/均值/标准差/min/max/P25/50/75 → 报表
+    private async Task QualityStatsAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "煤质统计：选指标 CSV (可选 煤层, 指标值)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("煤质指标 (CSV/TXT)") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (files.Count == 0) return;
+
+        var groups = new Dictionary<string, List<double>>();
+        try
+        {
+            foreach (var raw in System.IO.File.ReadAllLines(files[0].Path.LocalPath))
+            {
+                var line = raw.Trim();
+                if (line.Length == 0 || line.StartsWith("#")) continue;
+                var parts = line.Split(new[] { ',', '\t', ';' }, System.StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 0) continue;
+                // 末字段为指标值；若前面还有非数值字段, 取第一个作煤层标签
+                if (!double.TryParse(parts[^1].Trim(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double v)) continue;
+                string label = parts.Length >= 2 ? parts[0].Trim() : "全部";
+                if (!groups.TryGetValue(label, out var lst)) { lst = new List<double>(); groups[label] = lst; }
+                lst.Add(v);
+            }
+        }
+        catch (System.Exception ex) { StatusMsg.Text = $"煤质统计：读取失败 {ex.Message}"; return; }
+        if (groups.Count == 0) { StatusMsg.Text = "煤质统计：无有效数值（每行 [煤层,] 指标值）"; return; }
+
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var report = new List<string>();
+        foreach (var kv in groups.OrderBy(k => k.Key))
+        {
+            var s = QualityStatistics.Compute(kv.Value);
+            report.Add($"{kv.Key}: n={s.Count} 均值{s.Mean.ToString("0.##", inv)} σ{s.Std.ToString("0.##", inv)} [{s.Min.ToString("0.##", inv)}~{s.Max.ToString("0.##", inv)}] 中位{s.P50.ToString("0.##", inv)}");
+        }
+        StatusMsg.Text = "煤质统计  " + string.Join("  |  ", report);
     }
 
     // 工作面线拟合：露煤格中心 CSV(x,y) → PCA走向+趋势修正 → 折线段上屏 + 报表
@@ -3204,6 +3245,10 @@ public partial class MainWindow : Window
             case "WORKFACELINE":
             case "WFLINE":
                 _ = WorkingFaceLineAsync();
+                break;
+            case "QUALITYSTATS":
+            case "COALSTATS":
+                _ = QualityStatsAsync();
                 break;
             case "DEPOSITDETECT":
             case "DEPOSIT":
