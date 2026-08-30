@@ -255,4 +255,5 @@
 ### MineAssLib 采矿辅助（托管切片）
 - [x] **排土条带**：`Hatch.ParallelFill`（扫描线法，闭合边界内按间距生成平行线）。命令 排土条带/条带填充/STRIPS。+3 单测，172 tests。commit `ff3642d`。
 - [x] **分帮扩帮**：`BenchTools.BatchOffset`(台阶线批量平行偏移)。命令 分帮扩帮/批量台阶扩帮/BENCH。+2 单测，174 tests。commit `adf9257`。
-- [记录] 组合工作线 · 块体交互 → 部分需内核/更多交互。
+- [x] **组合工作线**：`PolylineJoin.Join`(端点相接合并多段线)。命令 组合工作线/合并多段线/JOINPOLY。+4 单测，178 tests。commit `25062c3`。
+- [记录] 块体交互/切割 → 需内核。
