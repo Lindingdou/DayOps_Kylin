@@ -488,6 +488,7 @@ public partial class MainWindow : Window
             if (cmd == "导入") { await ImportDxfAsync(); return; }
             if (cmd == "导入点") { await ImportPointsAsync(); return; }
             if (cmd == "展绘钻孔" || cmd == "钻孔柱状图" || cmd == "导入钻孔数据" || cmd == "原始钻孔柱状图") { await ImportBoreholesAsync(); return; }
+            if (cmd == "等高线" || cmd == "等高线生产" || cmd == "等值线") { await ContourFromCsvAsync(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
             if (cmd == "2D") { Viewport.SetViewMode(true); StatusMsg.Text = "视图: 2D 平面（正交俯视）"; return; }
@@ -765,6 +766,43 @@ public partial class MainWindow : Window
         RefreshScene();
         Viewport.FitBounds(new[] { r.Bounds[0], r.Bounds[1] - maxDepth * scale, r.Bounds[2] + width, r.Bounds[3] });
         StatusMsg.Text = $"已展绘 {r.Boreholes.Count} 个钻孔 · {cols.Count} 图元（柱状图，岩性配色）";
+    }
+
+    // 等高线：高程点 CSV(x,y,z) → IDW 网格 → 多层 Marching Squares → 彩色等值折线
+    private async Task ContourFromCsvAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "等高线：选高程点 CSV (x,y,z)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("高程点 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success) { StatusMsg.Text = $"等高线：点导入失败 {r.Error}"; return; }
+
+        double zmin = double.MaxValue, zmax = double.MinValue;
+        foreach (var p in r.Points) { if (p.z < zmin) zmin = p.z; if (p.z > zmax) zmax = p.z; }
+        if (zmax - zmin < 1e-6) { StatusMsg.Text = "等高线：z 无起伏（CSV 需带高程列）"; return; }
+
+        int n = 64, levels = 10;
+        var grid = Contour.GridFromPoints(r.Points, n, n, out double gx0, out double gy0, out double gdx, out double gdy);
+        double step = (zmax - zmin) / (levels + 1);
+        BeginChange();
+        int segCount = 0;
+        for (int k = 1; k <= levels; k++)
+        {
+            double L = zmin + step * k;
+            float t = (float)((L - zmin) / (zmax - zmin));
+            foreach (var s in Contour.MarchingSquares(grid, gx0, gy0, gdx, gdy, L))
+            {
+                _scene.Add(new LineEntity { X0 = s.x0, Y0 = s.y0, X1 = s.x1, Y1 = s.y1, Cr = t, Cg = 0.45f, Cb = 1 - t });
+                segCount++;
+            }
+        }
+        RefreshScene();
+        Viewport.FitBounds(r.Bounds);
+        StatusMsg.Text = $"等高线：{r.Points.Count} 点 → {levels} 层 · {segCount} 段（z {zmin:0.#}~{zmax:0.#}）";
     }
 
     // 图层管理器：列出图层复选框，勾选控制显隐
@@ -1682,6 +1720,9 @@ public partial class MainWindow : Window
             case "BOREHOLE":
             case "ZK":
                 _ = ImportBoreholesAsync();
+                break;
+            case "CONTOUR":
+                _ = ContourFromCsvAsync();
                 break;
             case "DIST":
             case "DI":

@@ -70,4 +70,35 @@ public static class Contour
         double den = v1 - v0;
         return System.Math.Abs(den) < 1e-12 ? 0.5 : (L - v0) / den;
     }
+
+    /// <summary>散点 → 规则网格（反距离加权 IDW，power=2）。返回 grid[nx,ny] 及原点/步距。</summary>
+    public static double[,] GridFromPoints(
+        IReadOnlyList<(double x, double y, double z)> pts, int nx, int ny,
+        out double x0, out double y0, out double dx, out double dy)
+    {
+        x0 = y0 = dx = dy = 0;
+        var g = new double[nx < 2 ? 2 : nx, ny < 2 ? 2 : ny];
+        if (pts.Count == 0) return g;
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        foreach (var p in pts) { if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y; if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y; }
+        nx = g.GetLength(0); ny = g.GetLength(1);
+        x0 = minX; y0 = minY;
+        dx = maxX > minX ? (maxX - minX) / (nx - 1) : 1;
+        dy = maxY > minY ? (maxY - minY) / (ny - 1) : 1;
+        for (int ix = 0; ix < nx; ix++)
+        for (int iy = 0; iy < ny; iy++)
+        {
+            double px = x0 + ix * dx, py = y0 + iy * dy;
+            double num = 0, den = 0, exact = 0; bool onPoint = false;
+            foreach (var p in pts)
+            {
+                double d2 = (px - p.x) * (px - p.x) + (py - p.y) * (py - p.y);
+                if (d2 < 1e-9) { exact = p.z; onPoint = true; break; }
+                double w = 1.0 / (d2);   // 1/d^2
+                num += w * p.z; den += w;
+            }
+            g[ix, iy] = onPoint ? exact : (den > 0 ? num / den : 0);
+        }
+        return g;
+    }
 }

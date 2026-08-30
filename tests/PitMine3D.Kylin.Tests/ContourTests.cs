@@ -45,4 +45,18 @@ public class ContourTests
         var segs = Contour.MarchingSquares(g, 0, 0, 1, 1, 1.0);
         Assert.True(segs.Count >= 4, $"segs={segs.Count}");   // 环绕中心的若干段
     }
+
+    [Fact]
+    public void GridFromPoints_reproduces_samples_at_corner_nodes()
+    {
+        // 2x2 网格节点恰为 4 个采样点 → IDW 在点上返回精确 z
+        var pts = new System.Collections.Generic.List<(double x, double y, double z)>
+        {
+            (0, 0, 10), (10, 0, 20), (0, 10, 30), (10, 10, 40)
+        };
+        var g = Contour.GridFromPoints(pts, 2, 2, out double x0, out double y0, out double dx, out double dy);
+        Assert.Equal(0, x0, 4); Assert.Equal(10, dx, 4); Assert.Equal(10, dy, 4);
+        Assert.Equal(10, g[0, 0], 3); Assert.Equal(20, g[1, 0], 3);
+        Assert.Equal(30, g[0, 1], 3); Assert.Equal(40, g[1, 1], 3);
+    }
 }
