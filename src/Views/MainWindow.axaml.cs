@@ -165,6 +165,24 @@ public partial class MainWindow : Window
                 return;
             }
 
+            // 夹点编辑：空闲态单选，左键按在夹点上 → 开始拖拽该夹点
+            if (props.IsLeftButtonPressed && _selected.Count == 1 && _measure == null
+                && _editMode == EditMode.None && !_offsetActive && !_trimActive && !_breakActive && !_slideActive)
+            {
+                var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                if (wp != null)
+                {
+                    int gi = HitGrip(wp.Value.x, wp.Value.y, SnapTolWorld(_lastPointer));
+                    if (gi >= 0)
+                    {
+                        _gripIndex = gi; _nav = NavMode.None;
+                        e.Pointer.Capture(ViewportHost);
+                        StatusMsg.Text = "夹点：拖到目标点松开";
+                        return;
+                    }
+                }
+            }
+
             if (props.IsMiddleButtonPressed)
                 _nav = NavMode.Pan;                                       // 中键拖拽 = 平移
             else if (props.IsLeftButtonPressed)
@@ -212,6 +230,22 @@ public partial class MainWindow : Window
                 : $"视口 px  X {p.X:0}  Y {p.Y:0}";
 
             _cursorWorld = shown;
+
+            // 夹点拖拽：实时预览移动后的实体（高亮通道）
+            if (_gripIndex >= 0 && _selected.Count == 1 && shown != null)
+            {
+                var moved = _selected[0].MoveGrip(_gripIndex, shown.Value.x, shown.Value.y);
+                if (moved != null)
+                {
+                    var o = new List<float>();
+                    moved.Tessellate(o);
+                    foreach (var g in moved.Grips()) AppendGripSquare(o, g.x, g.y, GripSize());
+                    Viewport.SetHighlight(o.ToArray());
+                }
+                _lastPointer = p;
+                return;
+            }
+
             if (_tool != null && _nav == NavMode.None) RefreshScene();   // 橡皮筋预览随光标刷新
 
             if (_nav == NavMode.Pan)
@@ -223,6 +257,28 @@ public partial class MainWindow : Window
         ViewportHost.PointerReleased += (_, e) =>
         {
             var rel = e.GetPosition(ViewportHost);
+
+            // 夹点拖拽：松开 → 用移动后的实体替换原实体
+            if (_gripIndex >= 0)
+            {
+                int gi = _gripIndex; _gripIndex = -1;
+                e.Pointer.Capture(null);
+                var wp = _snapWorld ?? Viewport.ScreenToWorld(rel.X, rel.Y);
+                if (wp != null && _selected.Count == 1)
+                {
+                    var moved = _selected[0].MoveGrip(gi, wp.Value.x, wp.Value.y);
+                    if (moved != null)
+                    {
+                        BeginChange();
+                        _scene.Replace(_selected[0], moved);
+                        _selected.Clear(); _selected.Add(moved);
+                        RefreshScene();
+                        HighlightSelection();
+                        StatusMsg.Text = "夹点编辑完成";
+                    }
+                }
+                return;
+            }
 
             // 滑动多段线：松开 → 采样点成多段线
             if (_slideDragging)
@@ -282,6 +338,7 @@ public partial class MainWindow : Window
                 _trimActive = false;
                 _breakActive = false; _breakPts.Clear();
                 _slideActive = false; _slideDragging = false; _slidePts.Clear();
+                _gripIndex = -1;
                 _selected.Clear();
                 Viewport.SetSnapMarker(null);
                 Viewport.SetHighlight(null);
@@ -332,6 +389,7 @@ public partial class MainWindow : Window
     private bool _trimActive;                       // 修剪/延伸：等待点目标线
     private bool _breakActive;                      // 打断：等待取两点
     private readonly List<(double x, double y)> _breakPts = new();   // 打断的两点
+    private int _gripIndex = -1;                    // 夹点拖拽中的夹点序号(-1=无)
 
     // Ribbon 按钮 → 「导入」走真实 DXF 导入；其余暂回显命令（证明整条 UI 已接线）
     private async void OnRibbonCommand(object? sender, RoutedEventArgs e)
@@ -825,7 +883,43 @@ public partial class MainWindow : Window
         if (_selected.Count == 0) { Viewport.SetHighlight(null); return; }
         var o = new List<float>();
         foreach (var e in _selected) e.Tessellate(o);
+        if (_selected.Count == 1)                       // 单选 → 叠加夹点方块
+            foreach (var g in _selected[0].Grips()) AppendGripSquare(o, g.x, g.y, GripSize());
         Viewport.SetHighlight(o.ToArray());
+    }
+
+    // 夹点方块（小正方形轮廓，蓝色）
+    private static void AppendGripSquare(List<float> o, double cx, double cy, double h)
+    {
+        const float r = 0.30f, g = 0.62f, b = 1.0f;
+        void Seg(double x0, double y0, double x1, double y1)
+        {
+            o.Add((float)x0); o.Add((float)y0); o.Add(0); o.Add(r); o.Add(g); o.Add(b);
+            o.Add((float)x1); o.Add((float)y1); o.Add(0); o.Add(r); o.Add(g); o.Add(b);
+        }
+        Seg(cx - h, cy - h, cx + h, cy - h); Seg(cx + h, cy - h, cx + h, cy + h);
+        Seg(cx + h, cy + h, cx - h, cy + h); Seg(cx - h, cy + h, cx - h, cy - h);
+    }
+
+    // 夹点世界半尺寸（约 5px 换算）
+    private double GripSize()
+    {
+        double w = ViewportHost.Bounds.Width, h = ViewportHost.Bounds.Height;
+        return SnapTolWorld(new Avalonia.Point(w / 2, h / 2)) * 0.45;
+    }
+
+    // 命中夹点：返回 _selected[0] 上距 (wx,wy) 在容差内的夹点序号，无则 -1
+    private int HitGrip(double wx, double wy, double tol)
+    {
+        if (_selected.Count != 1) return -1;
+        var grips = _selected[0].Grips();
+        int best = -1; double bestD = tol * tol;
+        for (int i = 0; i < grips.Count; i++)
+        {
+            double dx = grips[i].x - wx, dy = grips[i].y - wy, d = dx * dx + dy * dy;
+            if (d <= bestD) { bestD = d; best = i; }
+        }
+        return best;
     }
 
     private void DeleteSelected()

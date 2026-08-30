@@ -335,4 +335,63 @@ public class DrawToolsTests
         Assert.Null(s.Pick(5, 0, 1.0, n => n != "locked"));   // 锁定层不可选
         Assert.Same(line, s.Pick(5, 0, 1.0, n => true));      // 无过滤可选
     }
+
+    [Fact]
+    public void LineEntity_grips_and_move_endpoint()
+    {
+        var line = new LineEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 0 };
+        Assert.Equal(3, line.Grips().Count);                  // 两端 + 中点
+        Assert.Equal((5, 0), line.Grips()[1]);                // 中点
+        var m = (LineEntity)line.MoveGrip(2, 10, 5)!;         // 拖终点
+        Assert.Equal(5, m.Y1, 6); Assert.Equal(0, m.Y0, 6);  // 只动终点
+    }
+
+    [Fact]
+    public void LineEntity_move_midpoint_translates_whole()
+    {
+        var line = new LineEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 0 };
+        var m = (LineEntity)line.MoveGrip(1, 5, 3)!;          // 中点上移 3
+        Assert.Equal(3, m.Y0, 6); Assert.Equal(3, m.Y1, 6);  // 整体平移
+    }
+
+    [Fact]
+    public void CircleEntity_grips_and_quadrant_sets_radius()
+    {
+        var c = new CircleEntity { Cx = 0, Cy = 0, Radius = 5 };
+        Assert.Equal(5, c.Grips().Count);                     // 心 + 4 象限
+        var m = (CircleEntity)c.MoveGrip(1, 8, 0)!;           // 拖右象限
+        Assert.Equal(8, m.Radius, 6);
+        var mc = (CircleEntity)c.MoveGrip(0, 3, 4)!;          // 拖圆心
+        Assert.Equal(3, mc.Cx, 6); Assert.Equal(5, mc.Radius, 6);
+    }
+
+    [Fact]
+    public void RectEntity_move_corner_keeps_opposite()
+    {
+        var r = new RectEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 10 };
+        var m = (RectEntity)r.MoveGrip(2, 15, 20)!;           // 拖 (X1,Y1) 角
+        Assert.Equal(15, m.X1, 6); Assert.Equal(20, m.Y1, 6);
+        Assert.Equal(0, m.X0, 6); Assert.Equal(0, m.Y0, 6);  // 对角固定
+    }
+
+    [Fact]
+    public void PolylineEntity_move_vertex()
+    {
+        var pl = new PolylineEntity();
+        pl.Points.Add((0, 0)); pl.Points.Add((10, 0)); pl.Points.Add((10, 10));
+        Assert.Equal(3, pl.Grips().Count);
+        var m = (PolylineEntity)pl.MoveGrip(1, 5, 5)!;
+        Assert.Equal((5, 5), m.Points[1]);
+        Assert.Equal((0, 0), m.Points[0]);                    // 其余不变
+    }
+
+    [Fact]
+    public void PolygonEntity_grip_vertex_sets_radius_and_rotation()
+    {
+        var pg = new PolygonEntity { Cx = 0, Cy = 0, Radius = 5, Sides = 6, Rotation = 0 };
+        Assert.Equal(2, pg.Grips().Count);                    // 心 + 首顶点
+        var m = (PolygonEntity)pg.MoveGrip(1, 0, 10)!;        // 首顶点移到 +Y
+        Assert.Equal(10, m.Radius, 6);
+        Assert.Equal(System.Math.PI / 2, m.Rotation, 4);
+    }
 }

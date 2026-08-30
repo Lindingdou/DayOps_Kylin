@@ -58,6 +58,12 @@ public abstract class SceneEntity
     /// <summary>打断：移除两投影点之间的一段，返回剩余实体（可能为空=整体删除）；不支持返回 null。</summary>
     public virtual List<SceneEntity>? Break(double x1, double y1, double x2, double y2) => null;
 
+    /// <summary>夹点位置（端点/中点/圆心/象限/顶点…）；无夹点返回空。</summary>
+    public virtual List<(double x, double y)> Grips() => new();
+
+    /// <summary>把第 i 个夹点移到 (nx,ny)，返回修改后的新实体；不支持返回 null。</summary>
+    public virtual SceneEntity? MoveGrip(int i, double nx, double ny) => null;
+
     /// <summary>把本实体颜色复制给 e 并返回（变换保留颜色）。</summary>
     protected T Colored<T>(T e) where T : SceneEntity { e.Cr = Cr; e.Cg = Cg; e.Cb = Cb; return e; }
 }
@@ -130,6 +136,16 @@ public sealed class LineEntity : SceneEntity
             res.Add(Colored(new LineEntity { X0 = X0 + dx * t2, Y0 = Y0 + dy * t2, X1 = X1, Y1 = Y1 }));
         return res;   // 非 null=支持打断；空=整体被移除
     }
+    public override List<(double x, double y)> Grips() =>
+        new() { (X0, Y0), ((X0 + X1) / 2, (Y0 + Y1) / 2), (X1, Y1) };   // 两端点 + 中点
+    public override SceneEntity? MoveGrip(int i, double nx, double ny)
+    {
+        var e = Colored(new LineEntity { X0 = X0, Y0 = Y0, X1 = X1, Y1 = Y1 });
+        if (i == 0) { e.X0 = nx; e.Y0 = ny; }
+        else if (i == 2) { e.X1 = nx; e.Y1 = ny; }
+        else { double mx = nx - (X0 + X1) / 2, my = ny - (Y0 + Y1) / 2; e.X0 = X0 + mx; e.Y0 = Y0 + my; e.X1 = X1 + mx; e.Y1 = Y1 + my; }
+        return e;
+    }
 }
 
 public sealed class CircleEntity : SceneEntity
@@ -155,6 +171,14 @@ public sealed class CircleEntity : SceneEntity
     {
         double r = Math.Sqrt((px - Cx) * (px - Cx) + (py - Cy) * (py - Cy));
         return r < 1e-6 ? null : Colored(new CircleEntity { Cx = Cx, Cy = Cy, Radius = r, Segments = Segments });
+    }
+    public override List<(double x, double y)> Grips() =>
+        new() { (Cx, Cy), (Cx + Radius, Cy), (Cx, Cy + Radius), (Cx - Radius, Cy), (Cx, Cy - Radius) };  // 心 + 4 象限
+    public override SceneEntity? MoveGrip(int i, double nx, double ny)
+    {
+        if (i == 0) return Colored(new CircleEntity { Cx = nx, Cy = ny, Radius = Radius, Segments = Segments });  // 移心
+        double r = Math.Sqrt((nx - Cx) * (nx - Cx) + (ny - Cy) * (ny - Cy));   // 象限 → 改半径
+        return Colored(new CircleEntity { Cx = Cx, Cy = Cy, Radius = r, Segments = Segments });
     }
 }
 
@@ -194,6 +218,20 @@ public sealed class RectEntity : SceneEntity
         Colored(new LineEntity { X0 = X1, Y0 = Y1, X1 = X0, Y1 = Y1 }),
         Colored(new LineEntity { X0 = X0, Y0 = Y1, X1 = X0, Y1 = Y0 })
     };
+    public override List<(double x, double y)> Grips() =>
+        new() { (X0, Y0), (X1, Y0), (X1, Y1), (X0, Y1) };   // 4 角
+    public override SceneEntity? MoveGrip(int i, double nx, double ny)
+    {
+        var e = Colored(new RectEntity { X0 = X0, Y0 = Y0, X1 = X1, Y1 = Y1 });
+        switch (i)   // 拖角改相邻两边（对角固定）
+        {
+            case 0: e.X0 = nx; e.Y0 = ny; break;
+            case 1: e.X1 = nx; e.Y0 = ny; break;
+            case 2: e.X1 = nx; e.Y1 = ny; break;
+            case 3: e.X0 = nx; e.Y1 = ny; break;
+        }
+        return e;
+    }
 }
 
 public sealed class PointEntity : SceneEntity
@@ -210,6 +248,8 @@ public sealed class PointEntity : SceneEntity
         var (x, y) = m.Map(X, Y);
         return Colored(new PointEntity { X = x, Y = y, Size = Size });
     }
+    public override List<(double x, double y)> Grips() => new() { (X, Y) };
+    public override SceneEntity? MoveGrip(int i, double nx, double ny) => Colored(new PointEntity { X = nx, Y = ny, Size = Size });
 }
 
 public sealed class ArcEntity : SceneEntity
@@ -241,6 +281,13 @@ public sealed class ArcEntity : SceneEntity
         var (x1, y1) = m.Map(X1, Y1); var (x2, y2) = m.Map(X2, Y2); var (x3, y3) = m.Map(X3, Y3);
         return Colored(new ArcEntity { X1 = x1, Y1 = y1, X2 = x2, Y2 = y2, X3 = x3, Y3 = y3, Segments = Segments });
     }
+    public override List<(double x, double y)> Grips() => new() { (X1, Y1), (X2, Y2), (X3, Y3) };   // 起/中/端
+    public override SceneEntity? MoveGrip(int i, double nx, double ny)
+    {
+        var e = Colored(new ArcEntity { X1 = X1, Y1 = Y1, X2 = X2, Y2 = Y2, X3 = X3, Y3 = Y3, Segments = Segments });
+        switch (i) { case 0: e.X1 = nx; e.Y1 = ny; break; case 1: e.X2 = nx; e.Y2 = ny; break; case 2: e.X3 = nx; e.Y3 = ny; break; }
+        return e;
+    }
 }
 
 public sealed class PolylineEntity : SceneEntity
@@ -268,6 +315,14 @@ public sealed class PolylineEntity : SceneEntity
         if (Closed && Points.Count > 1)
             list.Add(Colored(new LineEntity { X0 = Points[^1].x, Y0 = Points[^1].y, X1 = Points[0].x, Y1 = Points[0].y }));
         return list.Count > 0 ? list : null;
+    }
+    public override List<(double x, double y)> Grips() => new(Points);   // 各顶点
+    public override SceneEntity? MoveGrip(int i, double nx, double ny)
+    {
+        if (i < 0 || i >= Points.Count) return null;
+        var pl = new PolylineEntity { Closed = Closed };
+        for (int k = 0; k < Points.Count; k++) pl.Points.Add(k == i ? (nx, ny) : Points[k]);
+        return Colored(pl);
     }
 }
 
@@ -318,6 +373,14 @@ public sealed class PolygonEntity : SceneEntity
             list.Add(Colored(new LineEntity { X0 = a.x, Y0 = a.y, X1 = b.x, Y1 = b.y }));
         }
         return list;
+    }
+    public override List<(double x, double y)> Grips() =>
+        new() { (Cx, Cy), (Cx + Radius * Math.Cos(Rotation), Cy + Radius * Math.Sin(Rotation)) };   // 心 + 首顶点
+    public override SceneEntity? MoveGrip(int i, double nx, double ny)
+    {
+        if (i == 0) return Colored(new PolygonEntity { Cx = nx, Cy = ny, Radius = Radius, Sides = Sides, Rotation = Rotation });
+        double dx = nx - Cx, dy = ny - Cy;   // 首顶点 → 定半径+朝向
+        return Colored(new PolygonEntity { Cx = Cx, Cy = Cy, Radius = Math.Sqrt(dx * dx + dy * dy), Sides = Sides, Rotation = Math.Atan2(dy, dx) });
     }
 }
 
