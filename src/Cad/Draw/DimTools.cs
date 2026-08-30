@@ -30,4 +30,28 @@ public static class DimTools
         list.Add(new TextEntity { X = mx + ox - tw / 2, Y = my + oy, Height = h, Text = s, Cr = col.r, Cg = col.g, Cb = col.b });
         return list;
     }
+
+    /// <summary>半径标注(DIMRADIAL)：圆心→(dirx,diry) 方向的圆周点，径向线 + 箭头 + "R值"文字。</summary>
+    public static List<SceneEntity> BuildRadial(double cx, double cy, double radius, double dirx, double diry, double h)
+    {
+        var list = new List<SceneEntity>();
+        (float r, float g, float b) col = (0.95f, 0.85f, 0.30f);
+        SceneEntity L(double a, double b, double c, double d) => new LineEntity { X0 = a, Y0 = b, X1 = c, Y1 = d, Cr = col.r, Cg = col.g, Cb = col.b };
+
+        double dl = Math.Sqrt(dirx * dirx + diry * diry);
+        double ux = dl < 1e-9 ? 1 : dirx / dl, uy = dl < 1e-9 ? 0 : diry / dl;   // 单位方向
+        double ex = cx + ux * radius, ey = cy + uy * radius;                       // 圆周端点
+        list.Add(L(cx, cy, ex, ey));                                              // 径向线
+
+        // 圆周端箭头：沿方向回缩，左右各张开
+        double ah = h * 0.5, aw = h * 0.25;
+        double bx = ex - ux * ah, by = ey - uy * ah;   // 箭底
+        double px = -uy, py = ux;                       // 垂向
+        list.Add(L(ex, ey, bx + px * aw, by + py * aw));
+        list.Add(L(ex, ey, bx - px * aw, by - py * aw));
+
+        string s = "R" + radius.ToString("0.##", CultureInfo.InvariantCulture);
+        list.Add(new TextEntity { X = ex + ux * h * 0.3, Y = ey + uy * h * 0.3, Height = h, Text = s, Cr = col.r, Cg = col.g, Cb = col.b });
+        return list;
+    }
 }

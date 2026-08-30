@@ -186,6 +186,25 @@ public partial class MainWindow : Window
                 return;
             }
 
+            // 半径标注：已选圆/弧，点击给方向 → 径向线 + 箭头 + "R值"
+            if (_dimRadActive && _dimRadCircle != null && props.IsLeftButtonPressed)
+            {
+                _nav = NavMode.None;
+                var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                if (wp != null)
+                {
+                    var c = _dimRadCircle.Value;
+                    double h = System.Math.Max(SnapTolWorld(_lastPointer) * 2.5, 1e-3);
+                    var dim = DimTools.BuildRadial(c.cx, c.cy, c.r, wp.Value.x - c.cx, wp.Value.y - c.cy, h);
+                    BeginChange();
+                    foreach (var de in dim) { de.LayerName = _layers.Current.Name; _scene.Add(de); }
+                    RefreshScene();
+                    StatusMsg.Text = $"已标注 R{c.r:0.##}";
+                    _dimRadActive = false; _dimRadCircle = null;
+                }
+                return;
+            }
+
             // 高程查询：点击任意点 → IDW 报高程 + 标记（连续，ESC 退出）
             if (_spotActive && props.IsLeftButtonPressed && _spotTerrain != null)
             {
@@ -514,6 +533,7 @@ public partial class MainWindow : Window
                 _spotActive = false;
                 _textActive = false;
                 _dimActive = false; _dimP1 = null;
+                _dimRadActive = false; _dimRadCircle = null;
                 _gripIndex = -1;
                 _selBoxActive = false;
                 _ttrActive = false; _ttrAwaitRadius = false; _ttrRef1 = null; _ttrRef2 = null;
@@ -584,6 +604,8 @@ public partial class MainWindow : Window
     private bool _textActive;                        // 文字：等待命令行输入内容
     private bool _dimActive;                          // 线性标注：取两点
     private (double x, double y)? _dimP1;
+    private bool _dimRadActive;                        // 半径标注：选圆/弧后指定方向
+    private (double cx, double cy, double r)? _dimRadCircle;
     private bool _selBoxActive;                     // 窗口框选拖拽中
     private Avalonia.Point _selBoxStart;            // 框选起点(屏幕)
     private bool _ttrActive, _ttrAwaitRadius;       // 圆 TTR：选两相切参照(线/圆) → 输半径
@@ -634,6 +656,7 @@ public partial class MainWindow : Window
             if (cmd == "高程查询" || cmd == "虚拟钻孔" || cmd == "查询高程") { await StartSpotQueryAsync(); return; }
             if (cmd == "文字" || cmd == "单行文字") { ArmText(); return; }
             if (cmd == "标注" || cmd == "线性标注" || cmd == "尺寸标注" || cmd == "标注台阶标高") { StartDim(); return; }
+            if (cmd == "半径标注" || cmd == "半径") { StartDimRadial(); return; }
             if (cmd == "裁剪" || cmd == "多边形裁剪" || cmd == "区运算" || cmd == "范围裁剪") { ClipPolygon(); return; }
             if (cmd == "平滑" || cmd == "光滑" || cmd == "曲线平滑" || cmd == "光滑曲线") { SmoothPolyline(); return; }
             if (cmd == "简化" || cmd == "多段线简化" || cmd == "抽稀线") { SimplifyPolyline(); return; }
@@ -1323,6 +1346,21 @@ public partial class MainWindow : Window
         _dimActive = true; _dimP1 = null;
         _tool = null; _measure = null; _editMode = EditMode.None;
         StatusMsg.Text = "线性标注：指定第一点";
+    }
+
+    // 半径标注(DIMRADIAL)：需先选一个圆或弧
+    private void StartDimRadial()
+    {
+        (double cx, double cy, double r)? c = _selected.Count == 1 ? _selected[0] switch
+        {
+            CircleEntity ce => (ce.Cx, ce.Cy, ce.Radius),
+            ArcEntity ae => ArcMath.Circumcircle(ae.X1, ae.Y1, ae.X2, ae.Y2, ae.X3, ae.Y3) is { } v ? (v.Item1, v.Item2, v.Item3) : ((double, double, double)?)null,
+            _ => null
+        } : null;
+        if (c == null) { StatusMsg.Text = "半径标注：请先选中一个圆或弧"; return; }
+        _dimRadCircle = c; _dimRadActive = true;
+        _tool = null; _measure = null; _editMode = EditMode.None;
+        StatusMsg.Text = "半径标注：指定标注方向";
     }
 
     // 文字：进入模式，下一条命令行输入即文字内容
@@ -2613,7 +2651,12 @@ public partial class MainWindow : Window
                 break;
             case "DIM":
             case "DIMLINEAR":
+            case "DIMALIGNED":
                 StartDim();
+                break;
+            case "DIMRADIAL":
+            case "DIMRAD":
+                StartDimRadial();
                 break;
             case "CLIP":
                 ClipPolygon();

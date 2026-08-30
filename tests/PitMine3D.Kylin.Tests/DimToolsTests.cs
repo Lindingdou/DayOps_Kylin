@@ -30,4 +30,25 @@ public class DimToolsTests
         var dim = DimTools.Build(2, 2, 2, 2, 1);
         Assert.Single(dim);                        // 退化 → 只线
     }
+
+    [Fact]
+    public void Radial_line_reaches_circumference_with_R_text()
+    {
+        // 圆心(0,0) 半径5，方向 +X → 径向线终点在 (5,0)，文字 "R5"
+        var dim = DimTools.BuildRadial(0, 0, 5, 1, 0, 1);
+        var line = Assert.IsType<LineEntity>(dim[0]);
+        Assert.Equal(0, line.X0, 4); Assert.Equal(0, line.Y0, 4);
+        Assert.Equal(5, line.X1, 4); Assert.Equal(0, line.Y1, 4);
+        var tx = Assert.IsType<TextEntity>(dim[^1]);
+        Assert.Equal("R5", tx.Text);
+    }
+
+    [Fact]
+    public void Radial_has_arrowhead_and_text()
+    {
+        // 径向线 + 2 箭头线 + 文字 = 4 实体
+        var dim = DimTools.BuildRadial(1, 1, 2, 0, 1, 0.5);
+        Assert.Equal(4, dim.Count);
+        Assert.Equal("R2", ((TextEntity)dim[^1]).Text);
+    }
 }
