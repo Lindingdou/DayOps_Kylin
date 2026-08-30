@@ -487,6 +487,7 @@ public partial class MainWindow : Window
             if (cmd == "重做") { DoRedo(); return; }
             if (cmd == "导入") { await ImportDxfAsync(); return; }
             if (cmd == "导入点") { await ImportPointsAsync(); return; }
+            if (cmd == "展绘钻孔" || cmd == "钻孔柱状图" || cmd == "导入钻孔数据" || cmd == "原始钻孔柱状图") { await ImportBoreholesAsync(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
             if (cmd == "2D") { Viewport.SetViewMode(true); StatusMsg.Text = "视图: 2D 平面（正交俯视）"; return; }
@@ -741,6 +742,29 @@ public partial class MainWindow : Window
         RefreshScene();
         Viewport.FitBounds(r.Bounds);
         StatusMsg.Text = $"已导入 {r.Points.Count} 个点（{Path.GetFileName(path)}）· 跳过 {r.SkippedLines} 行 · 可选中/编辑";
+    }
+
+    // 钻孔导入 + 柱状图展绘（按岩性配色的分层矩形柱）
+    private async Task ImportBoreholesAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "导入钻孔数据（CSV：孔号,X,Y,高程,自,至,岩性）",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("钻孔 CSV/TXT") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (files.Count == 0) return;
+        var r = BoreholeImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success) { StatusMsg.Text = $"钻孔导入失败：{r.Error}"; return; }
+
+        double maxDepth = 0; foreach (var h in r.Boreholes) if (h.TotalDepth > maxDepth) maxDepth = h.TotalDepth;
+        double scale = 1.0, width = 2.0;
+        var cols = BoreholeRender.BuildColumns(r.Boreholes, scale, width);
+        BeginChange();
+        foreach (var e in cols) _scene.Add(e);   // 保留岩性色，不覆盖图层色
+        RefreshScene();
+        Viewport.FitBounds(new[] { r.Bounds[0], r.Bounds[1] - maxDepth * scale, r.Bounds[2] + width, r.Bounds[3] });
+        StatusMsg.Text = $"已展绘 {r.Boreholes.Count} 个钻孔 · {cols.Count} 图元（柱状图，岩性配色）";
     }
 
     // 图层管理器：列出图层复选框，勾选控制显隐
@@ -1654,6 +1678,10 @@ public partial class MainWindow : Window
             case "IMPORTPT":
             case "PTIMPORT":
                 _ = ImportPointsAsync();
+                break;
+            case "BOREHOLE":
+            case "ZK":
+                _ = ImportBoreholesAsync();
                 break;
             case "DIST":
             case "DI":

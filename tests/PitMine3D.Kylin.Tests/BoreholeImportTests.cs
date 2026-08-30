@@ -52,4 +52,22 @@ public class BoreholeImportTests
         Assert.False(r.Success);
         Assert.NotNull(r.Error);
     }
+
+    [Fact]
+    public void Render_builds_axis_plus_interval_rects()
+    {
+        var r = BoreholeImportService.Parse("ZK1,0,0,10,0,5,粘土\nZK1,0,0,10,5,12,煤\n");
+        var geo = BoreholeRender.BuildColumns(r.Boreholes, 1.0, 2.0);
+        Assert.Equal(3, geo.Count);   // 1 中轴 + 2 分层矩形
+        Assert.IsType<PitMine3D.Kylin.Cad.Draw.LineEntity>(geo[0]);
+        Assert.IsType<PitMine3D.Kylin.Cad.Draw.RectEntity>(geo[1]);
+    }
+
+    [Fact]
+    public void Litho_color_coal_is_dark_and_stable()
+    {
+        var coal = BoreholeRender.LithoColor("煤");
+        Assert.True(coal.r < 0.3f && coal.g < 0.3f && coal.b < 0.3f);   // 煤=深色
+        Assert.Equal(BoreholeRender.LithoColor("未知岩性"), BoreholeRender.LithoColor("未知岩性"));   // 未知也稳定
+    }
 }
