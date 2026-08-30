@@ -55,6 +55,9 @@ public abstract class SceneEntity
     /// <summary>分解：拆成更基本的实体（矩形/多段线 → 直线）；不可分解返回 null。</summary>
     public virtual List<SceneEntity>? Explode() => null;
 
+    /// <summary>打断：移除两投影点之间的一段，返回剩余实体（可能为空=整体删除）；不支持返回 null。</summary>
+    public virtual List<SceneEntity>? Break(double x1, double y1, double x2, double y2) => null;
+
     /// <summary>把本实体颜色复制给 e 并返回（变换保留颜色）。</summary>
     protected T Colored<T>(T e) where T : SceneEntity { e.Cr = Cr; e.Cg = Cg; e.Cb = Cb; return e; }
 }
@@ -105,6 +108,21 @@ public sealed class LineEntity : SceneEntity
         double nx = -dy / len, ny = dx / len;               // 单位法线
         double d = (px - X0) * nx + (py - Y0) * ny;         // 点击到直线的带符号法向距离
         return Colored(new LineEntity { X0 = X0 + nx * d, Y0 = Y0 + ny * d, X1 = X1 + nx * d, Y1 = Y1 + ny * d });
+    }
+    public override List<SceneEntity>? Break(double x1, double y1, double x2, double y2)
+    {
+        double dx = X1 - X0, dy = Y1 - Y0, len2 = dx * dx + dy * dy;
+        if (len2 < 1e-12) return null;
+        double t1 = ((x1 - X0) * dx + (y1 - Y0) * dy) / len2;   // 两点在直线上的参数
+        double t2 = ((x2 - X0) * dx + (y2 - Y0) * dy) / len2;
+        if (t1 > t2) (t1, t2) = (t2, t1);
+        t1 = Math.Clamp(t1, 0, 1); t2 = Math.Clamp(t2, 0, 1);
+        var res = new List<SceneEntity>();
+        if (t1 > 1e-6)                                          // 保留前段 [0, t1]
+            res.Add(Colored(new LineEntity { X0 = X0, Y0 = Y0, X1 = X0 + dx * t1, Y1 = Y0 + dy * t1 }));
+        if (t2 < 1 - 1e-6)                                      // 保留后段 [t2, 1]
+            res.Add(Colored(new LineEntity { X0 = X0 + dx * t2, Y0 = Y0 + dy * t2, X1 = X1, Y1 = Y1 }));
+        return res;   // 非 null=支持打断；空=整体被移除
     }
 }
 

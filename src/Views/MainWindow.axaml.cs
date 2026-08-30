@@ -99,6 +99,34 @@ public partial class MainWindow : Window
                 return;
             }
 
+            // 打断：取两点 → 移除选中实体两点间的一段
+            if (_breakActive && props.IsLeftButtonPressed)
+            {
+                _nav = NavMode.None;
+                var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                if (wp != null && _selected.Count == 1)
+                {
+                    _breakPts.Add((wp.Value.x, wp.Value.y));
+                    if (_breakPts.Count < 2) StatusMsg.Text = "打断：指定第二点";
+                    else
+                    {
+                        var parts = _selected[0].Break(_breakPts[0].x, _breakPts[0].y, _breakPts[1].x, _breakPts[1].y);
+                        if (parts != null)
+                        {
+                            BeginChange();
+                            _scene.Remove(_selected[0]);
+                            foreach (var pe in parts) _scene.Add(pe);
+                            _selected.Clear(); Viewport.SetHighlight(null);
+                            StatusMsg.Text = $"已打断（剩 {parts.Count} 段）";
+                        }
+                        else StatusMsg.Text = "该实体暂不支持打断（记录：仅直线，多段线/圆弧待做）";
+                        _breakActive = false; _breakPts.Clear();
+                        RefreshScene();
+                    }
+                }
+                return;
+            }
+
             // 偏移：点击一侧 → 偏移选中实体（保留原实体颜色/图层）
             if (_offsetActive && props.IsLeftButtonPressed)
             {
@@ -251,6 +279,7 @@ public partial class MainWindow : Window
                 _editPts.Clear();
                 _offsetActive = false;
                 _trimActive = false;
+                _breakActive = false; _breakPts.Clear();
                 _slideActive = false; _slideDragging = false; _slidePts.Clear();
                 _selected.Clear();
                 Viewport.SetSnapMarker(null);
@@ -299,6 +328,8 @@ public partial class MainWindow : Window
     private readonly List<(double x, double y)> _editPts = new();   // 编辑取的点（基点/目标点/参照…）
     private bool _offsetActive;                    // 偏移：等待点击一侧
     private bool _trimActive;                       // 修剪/延伸：等待点目标线
+    private bool _breakActive;                      // 打断：等待取两点
+    private readonly List<(double x, double y)> _breakPts = new();   // 打断的两点
 
     // Ribbon 按钮 → 「导入」走真实 DXF 导入；其余暂回显命令（证明整条 UI 已接线）
     private async void OnRibbonCommand(object? sender, RoutedEventArgs e)
@@ -327,6 +358,7 @@ public partial class MainWindow : Window
             if (cmd == "缩放") { StartEdit(EditMode.Scale, "缩放"); return; }
             if (cmd == "偏移") { StartOffset(); return; }
             if (cmd == "修剪" || cmd == "延伸") { StartTrim(); return; }
+            if (cmd == "打断") { StartBreak(); return; }
             if (cmd == "滑动多段线") { StartSlide(); return; }
             if (ActivateDrawTool(cmd)) return;
             StatusMsg.Text = $"命令: {cmd}";
@@ -746,6 +778,15 @@ public partial class MainWindow : Window
         StatusMsg.Text = "点击要修剪/延伸的直线（近端点移到与边界的交点）";
     }
 
+    private void StartBreak()
+    {
+        if (_selected.Count != 1 || _selected[0] is not LineEntity)
+        { StatusMsg.Text = "打断：请先选一条直线（多段线/圆弧打断待做）"; return; }
+        _breakActive = true; _breakPts.Clear();
+        _tool = null; _measure = null; _editMode = EditMode.None; _offsetActive = false; _trimActive = false;
+        StatusMsg.Text = "打断：指定第一点（两点间的一段将被移除）";
+    }
+
     private void StartSlide()
     {
         _tool = null; _measure = null; _editMode = EditMode.None; _editPts.Clear();
@@ -976,6 +1017,10 @@ public partial class MainWindow : Window
             case "PLDRAG":
             case "SPL":
                 StartSlide();
+                break;
+            case "BREAK":
+            case "BR":
+                StartBreak();
                 break;
             case "NEW":
                 NewScene();

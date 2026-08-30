@@ -263,4 +263,27 @@ public class DrawToolsTests
         Assert.Equal(5, moved.Radius, 6);
         Assert.Equal(4, moved.Sides);
     }
+
+    [Fact]
+    public void LineEntity_break_removes_middle()
+    {
+        var line = new LineEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 0 };
+        var parts = line.Break(3, 0, 7, 0);           // 移除 [3,7]
+        Assert.NotNull(parts);
+        Assert.Equal(2, parts!.Count);
+        var a = Assert.IsType<LineEntity>(parts[0]);
+        Assert.Equal(0, a.X0, 6); Assert.Equal(3, a.X1, 6);
+        var b = Assert.IsType<LineEntity>(parts[1]);
+        Assert.Equal(7, b.X0, 6); Assert.Equal(10, b.X1, 6);
+    }
+
+    [Fact]
+    public void LineEntity_break_at_end_leaves_one()
+    {
+        var line = new LineEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 0 };
+        var parts = line.Break(0, 0, 4, 0);           // 从起点断到 4 → 只剩 [4,10]
+        Assert.Single(parts!);
+        Assert.Equal(4, ((LineEntity)parts![0]).X0, 6);
+        Assert.Equal(10, ((LineEntity)parts![0]).X1, 6);
+    }
 }
