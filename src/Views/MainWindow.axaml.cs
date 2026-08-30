@@ -190,12 +190,13 @@ public partial class MainWindow : Window
                 return;
             }
 
-            // 对象捕捉：吸附到最近顶点
+            // 对象捕捉：吸附到最近顶点（优先场景几何；显示态导入用其网格顶点）
             _snapWorld = null;
-            if (w != null && SnapToggle.IsChecked == true && _lastImport != null)
+            var snapSrc = _lastImport?.LineVertices ?? _snapVerts;
+            if (w != null && SnapToggle.IsChecked == true && snapSrc.Length > 0)
             {
                 double tol = SnapTolWorld(p);
-                _snapWorld = SnapPoints.FindNearest(_lastImport.LineVertices, w.Value.x, w.Value.y, tol);
+                _snapWorld = SnapPoints.FindNearest(snapSrc, w.Value.x, w.Value.y, tol);
                 if (_snapWorld != null)
                 {
                     Viewport.SetSnapMarker(SnapCross(_snapWorld.Value.x, _snapWorld.Value.y, tol * 0.6));
@@ -311,6 +312,7 @@ public partial class MainWindow : Window
     private (double x, double y)? _snapWorld;   // 当前捕捉到的世界点
     private (double x, double y)? _cursorWorld; // 当前光标世界点(橡皮筋预览用)
     private (double x, double y)? _lastInputPoint; // 上一取点(命令行相对坐标 @ 的基点)
+    private float[] _snapVerts = System.Array.Empty<float>();   // 场景几何顶点缓存(对象捕捉源)
     private bool _snapShown;                     // 捕捉标记是否已显示
     private bool _slideActive;                   // 滑动多段线：已激活(等待按下)
     private bool _slideDragging;                 // 滑动多段线：正在按住拖动
@@ -437,6 +439,7 @@ public partial class MainWindow : Window
         Viewport.SetSnapMarker(null); _snapShown = false;
         LayerList.ItemsSource = null;
         ObjectTree.ItemsSource = null;
+        ObjectTreeHint.IsVisible = true;
 
         _layers.Reset();
         _undo.Clear();
@@ -484,22 +487,42 @@ public partial class MainWindow : Window
         catch (System.Exception ex) { StatusMsg.Text = $"打开失败：{ex.Message}"; }
     }
 
-    // 共享导入逻辑：加载 → 视口显示 → 对象树 → 状态回报
+    // 共享导入逻辑：CAD(dxf/dwg) → 可编辑实体入场景；OFF 等网格 → 显示态
     private void ImportPath(string path)
     {
         StatusMsg.Text = $"正在导入 {Path.GetFileName(path)} …";
         string ext = Path.GetExtension(path).ToLowerInvariant();
-        var r = ext == ".off" ? OffImportService.Load(path) : DxfImportService.Load(path);
-        if (!r.Success)
-        {
-            StatusMsg.Text = $"导入失败：{r.Error}";
-            return;
-        }
+        if (ext == ".dxf" || ext == ".dwg") { ImportCadEditable(path); return; }
+
+        var r = OffImportService.Load(path);
+        if (!r.Success) { StatusMsg.Text = $"导入失败：{r.Error}"; return; }
         _lastImport = r;
         Viewport.ShowImportedLayers(r.LayerGeometry, r.Bounds);
         PopulateObjectTree(r, Path.GetFileName(path));
         PopulateLayers(r);
         StatusMsg.Text = $"已导入 {Path.GetFileName(path)} · {r.EntityCount} 实体 · {r.SegmentCount} 线段 · {r.LayerOrder.Count} 图层";
+    }
+
+    // CAD 导入为可编辑实体：入绘制场景 + 图层并入绘制图层表（可选中/编辑/删除/按层管理）
+    private void ImportCadEditable(string path)
+    {
+        var er = DxfImportService.LoadEntities(path);
+        if (!er.Success) { StatusMsg.Text = $"导入失败：{er.Error}"; return; }
+        BeginChange();
+        foreach (var ln in er.LayerOrder)
+        {
+            var c = er.LayerColors[ln];
+            _layers.EnsureImported(ln, c.r, c.g, c.b);
+        }
+        foreach (var en in er.Entities) _scene.Add(en);
+        _lastImport = null;                    // 捕捉改用场景几何
+        Viewport.ClearImported();               // 不再用显示态网格
+        RefreshScene();
+        Viewport.FitBounds(er.Bounds);
+        PopulateObjectTreeCounts(er.TypeCounts, Path.GetFileName(path), er.Entities.Count);
+        PopulateDrawingLayers();
+        string warn = er.Warnings.Count > 0 ? $" · 跳过 {er.Warnings.Count} 类未支持" : "";
+        StatusMsg.Text = $"已导入 {Path.GetFileName(path)} · {er.Entities.Count} 可编辑实体 · {er.LayerOrder.Count} 图层（可选中/编辑/删除）{warn}";
     }
 
     // 点数据导入：CSV/TXT/XYZ/PTS → 可编辑的点实体（进入绘制场景，可选中/编辑/删除）
@@ -595,14 +618,66 @@ public partial class MainWindow : Window
         ObjectTree.ItemsSource = new[] { root };
     }
 
+    // 对象管理器：按类型列出（可编辑导入）
+    private void PopulateObjectTreeCounts(Dictionary<string, int> typeCounts, string fileName, int total)
+    {
+        ObjectTreeHint.IsVisible = false;
+        var root = new TreeViewItem { Header = $"{fileName}（{total} 实体）", IsExpanded = true };
+        foreach (var kv in typeCounts)
+            root.Items.Add(new TreeViewItem { Header = $"{kv.Key} × {kv.Value}", Tag = kv.Key });
+        ObjectTree.ItemsSource = new[] { root };
+    }
+
+    // 图层面板：由绘制图层表驱动（勾选=显隐；含导入并入的层）
+    private void PopulateDrawingLayers()
+    {
+        var items = new List<CheckBox>();
+        foreach (var l in _layers.Layers)
+        {
+            var cb = new CheckBox { Content = l.Name, IsChecked = l.Shown, Tag = l.Name, FontSize = 12 };
+            cb.IsCheckedChanged += OnDrawingLayerToggle;
+            items.Add(cb);
+        }
+        LayerList.ItemsSource = items;
+    }
+
+    private void OnDrawingLayerToggle(object? sender, RoutedEventArgs e)
+    {
+        if (sender is CheckBox cb && cb.Tag is string name)
+        {
+            var l = _layers.Get(name);
+            if (l != null) { l.Visible = cb.IsChecked == true; RefreshScene(); }
+        }
+    }
+
+    // 场景实体 → 类型中文名（对象树高亮匹配用；椭圆/样条已并为多段线）
+    private static string CnOf(SceneEntity e) => e switch
+    {
+        LineEntity => "直线",
+        CircleEntity => "圆",
+        ArcEntity => "圆弧",
+        RectEntity => "矩形",
+        PolylineEntity => "多段线",
+        PointEntity => "点",
+        PolygonEntity => "正多边形",
+        _ => "其他"
+    };
+
     // 对象树选中类型 → 高亮该类型几何；选根/无 → 清除
     private void OnObjectTreeSelect(object? sender, SelectionChangedEventArgs e)
     {
-        if (_lastImport != null && ObjectTree.SelectedItem is TreeViewItem { Tag: string type }
-            && _lastImport.TypeGeometry.TryGetValue(type, out var geom))
-            Viewport.SetHighlight(geom);
-        else
-            Viewport.SetHighlight(null);
+        if (ObjectTree.SelectedItem is TreeViewItem { Tag: string type })
+        {
+            if (_lastImport != null && _lastImport.TypeGeometry.TryGetValue(type, out var geom))
+                Viewport.SetHighlight(geom);
+            else
+            {
+                var o = new List<float>();
+                foreach (var en in _scene.Entities) if (CnOf(en) == type) en.Tessellate(o);
+                Viewport.SetHighlight(o.Count > 0 ? o.ToArray() : null);
+            }
+        }
+        else Viewport.SetHighlight(null);
     }
 
     // ---------- 右键上下文菜单 ----------
@@ -719,7 +794,8 @@ public partial class MainWindow : Window
     // 重绘场景（含当前工具进行中的预览：已点的段 + 到光标的橡皮筋）
     private void RefreshScene()
     {
-        var list = new List<float>(_scene.BuildGeometry(_layers.IsShown));
+        _snapVerts = _scene.BuildGeometry(_layers.IsShown);
+        var list = new List<float>(_snapVerts);
         _tool?.AppendPreview(list, _cursorWorld);
         if (_slideDragging && _slidePts.Count > 1)     // 滑动多段线拖动预览
         {

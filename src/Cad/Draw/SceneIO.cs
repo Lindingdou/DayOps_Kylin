@@ -17,6 +17,7 @@ public static class SceneIO
         public List<double[]>? P { get; set; }
         public bool Closed { get; set; }
         public float[] C { get; set; } = { 0.86f, 0.9f, 0.6f };
+        public string L { get; set; } = "0";   // 图层名
     }
 
     public static string Save(Scene scene)
@@ -24,22 +25,30 @@ public static class SceneIO
         var list = new List<Dto>();
         foreach (var e in scene.Entities)
         {
-            var c = new[] { e.Cr, e.Cg, e.Cb };
-            switch (e)
+            Dto? d = e switch
             {
-                case LineEntity l: list.Add(new Dto { T = "line", N = new[] { l.X0, l.Y0, l.X1, l.Y1 }, C = c }); break;
-                case CircleEntity ci: list.Add(new Dto { T = "circle", N = new[] { ci.Cx, ci.Cy, ci.Radius }, C = c }); break;
-                case RectEntity r: list.Add(new Dto { T = "rect", N = new[] { r.X0, r.Y0, r.X1, r.Y1 }, C = c }); break;
-                case PointEntity p: list.Add(new Dto { T = "point", N = new[] { p.X, p.Y }, C = c }); break;
-                case ArcEntity a: list.Add(new Dto { T = "arc", N = new[] { a.X1, a.Y1, a.X2, a.Y2, a.X3, a.Y3 }, C = c }); break;
-                case PolylineEntity pl:
-                    var pts = new List<double[]>();
-                    foreach (var pt in pl.Points) pts.Add(new[] { pt.x, pt.y });
-                    list.Add(new Dto { T = "poly", P = pts, Closed = pl.Closed, C = c });
-                    break;
-            }
+                LineEntity l => new Dto { T = "line", N = new[] { l.X0, l.Y0, l.X1, l.Y1 } },
+                CircleEntity ci => new Dto { T = "circle", N = new[] { ci.Cx, ci.Cy, ci.Radius } },
+                RectEntity r => new Dto { T = "rect", N = new[] { r.X0, r.Y0, r.X1, r.Y1 } },
+                PointEntity p => new Dto { T = "point", N = new[] { p.X, p.Y } },
+                ArcEntity a => new Dto { T = "arc", N = new[] { a.X1, a.Y1, a.X2, a.Y2, a.X3, a.Y3 } },
+                PolygonEntity pg => new Dto { T = "polygon", N = new[] { pg.Cx, pg.Cy, pg.Radius, pg.Rotation, pg.Sides } },
+                PolylineEntity pl => PolyDto(pl),
+                _ => null
+            };
+            if (d == null) continue;
+            d.C = new[] { e.Cr, e.Cg, e.Cb };
+            d.L = e.LayerName;
+            list.Add(d);
         }
         return JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    private static Dto PolyDto(PolylineEntity pl)
+    {
+        var pts = new List<double[]>();
+        foreach (var pt in pl.Points) pts.Add(new[] { pt.x, pt.y });
+        return new Dto { T = "poly", P = pts, Closed = pl.Closed };
     }
 
     public static Scene Load(string json)
@@ -56,11 +65,13 @@ public static class SceneIO
                 "rect" when d.N.Length >= 4 => new RectEntity { X0 = d.N[0], Y0 = d.N[1], X1 = d.N[2], Y1 = d.N[3] },
                 "point" when d.N.Length >= 2 => new PointEntity { X = d.N[0], Y = d.N[1] },
                 "arc" when d.N.Length >= 6 => new ArcEntity { X1 = d.N[0], Y1 = d.N[1], X2 = d.N[2], Y2 = d.N[3], X3 = d.N[4], Y3 = d.N[5] },
+                "polygon" when d.N.Length >= 5 => new PolygonEntity { Cx = d.N[0], Cy = d.N[1], Radius = d.N[2], Rotation = d.N[3], Sides = (int)d.N[4] },
                 "poly" => BuildPoly(d),
                 _ => null
             };
             if (e == null) continue;
             if (d.C is { Length: >= 3 }) { e.Cr = d.C[0]; e.Cg = d.C[1]; e.Cb = d.C[2]; }
+            e.LayerName = string.IsNullOrEmpty(d.L) ? "0" : d.L;
             scene.Add(e);
         }
         return scene;
