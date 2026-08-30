@@ -553,6 +553,7 @@ public partial class MainWindow : Window
             if (cmd == "剖面分析" || cmd == "剖面" || cmd == "点云剖面") { await SectionProfileAsync(); return; }
             if (cmd == "粗糙度" || cmd == "地表粗糙度") { await RoughnessAsync(); return; }
             if (cmd == "曲率" || cmd == "地表曲率") { await CurvatureAsync(); return; }
+            if (cmd == "面积" || cmd == "面积测量" || cmd == "周长") { MeasureArea(); return; }
             if (cmd == "坐标转换") { await CoordTransformAsync(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
@@ -1100,6 +1101,16 @@ public partial class MainWindow : Window
         RefreshScene();
         Viewport.FitBounds(r.Bounds);
         StatusMsg.Text = $"曲率：{n}² 网格 · 范围 {min:0.###}~{max:0.###}（蓝=凸脊 红=凹沟）";
+    }
+
+    // 面积/周长：对选中的多段线(闭合优先)算面积+周长，报状态栏
+    private void MeasureArea()
+    {
+        if (_selected.Count != 1 || _selected[0] is not PolylineEntity pl || pl.Points.Count < 3)
+        { StatusMsg.Text = "面积：请先选中一条至少 3 点的多段线（闭合更准）"; return; }
+        double area = GeomMeasure.Area(pl.Points);
+        double peri = GeomMeasure.Perimeter(pl.Points, true);
+        StatusMsg.Text = $"面积 {area:0.###} · 周长(闭合) {peri:0.###} · {pl.Points.Count} 顶点";
     }
 
     // 坐标转换：控制点对 CSV(srcX,srcY,dstX,dstY) → Helmert 4参 → 套用全场景
@@ -2342,6 +2353,10 @@ public partial class MainWindow : Window
                 break;
             case "C2C":
                 _ = CloudCompareAsync();
+                break;
+            case "AREA":
+            case "AA":
+                MeasureArea();
                 break;
             case "DIST":
             case "DI":
