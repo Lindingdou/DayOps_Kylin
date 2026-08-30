@@ -524,7 +524,7 @@ public static class DxfImportService
                     Finalize(new DrawText { X = te.InsertPoint.X, Y = te.InsertPoint.Y, Height = te.Height > 0 ? te.Height : 1, Text = te.Value ?? "" }, xf, col, layer);
                     break;
                 case MText mt:
-                    Finalize(new DrawText { X = mt.InsertPoint.X, Y = mt.InsertPoint.Y, Height = mt.Height > 0 ? mt.Height : 1, Text = mt.Value ?? "" }, xf, col, layer);
+                    Finalize(new DrawText { X = mt.InsertPoint.X, Y = mt.InsertPoint.Y, Height = mt.Height > 0 ? mt.Height : 1, Text = StripMTextFormatting(mt.Value ?? "") }, xf, col, layer);
                     break;
                 case Solid so:
                 {
@@ -641,6 +641,48 @@ public static class DxfImportService
     {
         if (loop.Count > 0 && Math.Abs(loop[^1].x - x) < 1e-9 && Math.Abs(loop[^1].y - y) < 1e-9) return;
         loop.Add((x, y));
+    }
+
+    // MText 格式控制码剥离（移植自原 DwgDxfImportService.StripMTextFormatting）——
+    // 去 \H字高 \W字宽 \F字体 \C颜色 \A对齐 等带参(到 ';')码、成对开关码、{} 分组括号，只留可见文字。
+    internal static string StripMTextFormatting(string input)
+    {
+        if (string.IsNullOrEmpty(input)) return input ?? "";
+        var sb = new System.Text.StringBuilder(input.Length);
+        for (int i = 0; i < input.Length; i++)
+        {
+            char ch = input[i];
+            if (ch == '{' || ch == '}') continue;            // 分组括号：去掉留内容
+            if (ch == '\\' && i + 1 < input.Length)
+            {
+                char code = input[i + 1];
+                switch (code)
+                {
+                    // 带参、以 ';' 结束的控制码（仅当真有 ';' 才剥离，保护 "C:\Files" 这类合法反斜杠）
+                    case 'f': case 'F': case 'H': case 'W': case 'C': case 'c':
+                    case 'T': case 'Q': case 'A': case 'p': case 'S':
+                    {
+                        int semi = input.IndexOf(';', i + 2);
+                        if (semi < 0) sb.Append('\\');       // 无 ';' → 字面反斜杠
+                        else i = semi;                        // 跳到 ';'
+                        break;
+                    }
+                    // 无参开关码（下/上划线、删除线，成对）：去掉 '\'+letter
+                    case 'L': case 'l': case 'O': case 'o': case 'K': case 'k':
+                        i++;
+                        break;
+                    case 'P': case 'X': sb.Append(' '); i++; break;   // 段落换行 → 空格
+                    case '~': sb.Append(' '); i++; break;             // 不间断空格
+                    case '\\': sb.Append('\\'); i++; break;           // 转义反斜杠
+                    case '{': sb.Append('{'); i++; break;
+                    case '}': sb.Append('}'); i++; break;
+                    default: sb.Append('\\'); break;                  // 未知码：留 '\'
+                }
+                continue;
+            }
+            sb.Append(ch);
+        }
+        return sb.ToString();
     }
 
     /// <summary>实体颜色：ByLayer 取图层色；真彩色直接用 RGB；否则按 ACI 索引映射。失败回落统一色。</summary>
