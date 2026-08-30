@@ -65,6 +65,34 @@ public partial class MainWindow : Window
                 return;
             }
 
+            // 三点测角模式：顶点 → 第一射线端 → 第二射线端
+            if (_angle != null && props.IsLeftButtonPressed)
+            {
+                _nav = NavMode.None;
+                var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                if (wp != null)
+                {
+                    var v = _angle.Vertex; var a = _angle.FirstRay;
+                    var deg = _angle.AddPoint(wp.Value.x, wp.Value.y);
+                    if (deg == null)
+                        StatusMsg.Text = _angle.HasFirstRay ? "测角：点第二边端点" : "测角：点第一边端点";
+                    else
+                    {
+                        StatusMsg.Text = $"角度 = {deg:0.##}°";
+                        if (v != null && a != null)
+                            Viewport.SetHighlight(new float[]
+                            {
+                                (float)a.Value.x, (float)a.Value.y, 0, 0, 0, 0,
+                                (float)v.Value.x, (float)v.Value.y, 0, 0, 0, 0,
+                                (float)v.Value.x, (float)v.Value.y, 0, 0, 0, 0,
+                                (float)wp.Value.x, (float)wp.Value.y, 0, 0, 0, 0
+                            });
+                        _angle = null;
+                    }
+                }
+                return;
+            }
+
             // 编辑（移动/复制/镜像）：左键取点（与命令行坐标共用 FeedPoint）
             if (_editMode != EditMode.None && props.IsLeftButtonPressed)
             {
@@ -474,6 +502,7 @@ public partial class MainWindow : Window
             {
                 _tool = null;
                 _measure = null;
+                _angle = null;
                 _editMode = EditMode.None;
                 _editPts.Clear();
                 _offsetActive = false;
@@ -516,6 +545,7 @@ public partial class MainWindow : Window
     private Avalonia.Point _lastPointer;
     private DxfImportService.ImportResult? _lastImport;
     private MeasureState? _measure;
+    private AngleState? _angle;                  // 三点测角(MANG)
     private (double x, double y)? _snapWorld;   // 当前捕捉到的世界点
     private (double x, double y)? _cursorWorld; // 当前光标世界点(橡皮筋预览用)
     private (double x, double y)? _lastInputPoint; // 上一取点(命令行相对坐标 @ 的基点)
@@ -599,6 +629,7 @@ public partial class MainWindow : Window
             if (cmd == "粗糙度" || cmd == "地表粗糙度") { await RoughnessAsync(); return; }
             if (cmd == "曲率" || cmd == "地表曲率") { await CurvatureAsync(); return; }
             if (cmd == "面积" || cmd == "面积测量" || cmd == "周长") { MeasureArea(); return; }
+            if (cmd == "角度" || cmd == "测量角度" || cmd == "三点测角") { _angle = new AngleState(); _tool = null; _measure = null; StatusMsg.Text = "测角：点顶点"; return; }
             if (cmd == "等效运距" || cmd == "运输指标" || cmd == "驱动距离") { await HaulMetricsAsync(); return; }
             if (cmd == "高程查询" || cmd == "虚拟钻孔" || cmd == "查询高程") { await StartSpotQueryAsync(); return; }
             if (cmd == "文字" || cmd == "单行文字") { ArmText(); return; }
@@ -721,7 +752,7 @@ public partial class MainWindow : Window
         // 完整文档重置：绘图 / 导入 / 图层 / 选择 / 撤销 / 进行中的命令
         _scene.Clear();
         _selected.Clear(); _prevSelected = new();
-        _tool = null; _measure = null;
+        _tool = null; _measure = null; _angle = null;
         _editMode = EditMode.None; _editPts.Clear();
         _offsetActive = false; _trimActive = false;
         _breakActive = false; _breakPts.Clear();
@@ -2632,6 +2663,12 @@ public partial class MainWindow : Window
                 _measure = new MeasureState();
                 _tool = null;
                 StatusMsg.Text = "测距：点第一点";
+                break;
+            case "MANG":
+            case "ANG":
+                _angle = new AngleState();
+                _tool = null; _measure = null;
+                StatusMsg.Text = "测角：点顶点";
                 break;
             case "ERASE":
             case "E":
