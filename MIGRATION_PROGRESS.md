@@ -246,3 +246,7 @@
 - [x] **两期差值算量**：`TwoEpochVolume`(两期→同 IDW 网格→逐格差值→挖方/填方/净)。命令 两期点云算量/两期算量/DIFFVOL。+1 单测，159 tests。commit `74032da`。
 - [x] **圈范围算量**：`VolumeWithinBoundary`(三角质心在选中闭合多段线内才计) + `LineMath.PointInPolygon`。命令 圈范围算量/BNDVOL。+2 单测，161 tests。commit `c13b686`。
 - [x] **高程分带着色**：ElevationColor(低绿→中黄→高棕) + BuildElevationMap。命令 高程着色/分色显示/ELEV。+1 单测，162 tests。commit `ce4d778`。
+
+### RoadLib 道路（托管切片）
+- [x] **提取道路中心线**：`RoadTools.Centerline`（两路边多段线→逐点最近中点连线）。命令 提取道路中心线/道路中线/CENTERLINE。+3 单测，165 tests。commit `e305b4e`。
+- [记录] 路网寻径(A*)、路网存档/更新、结构路面 → 需路网数据模型/持久化(部分可托管，待评估)。
