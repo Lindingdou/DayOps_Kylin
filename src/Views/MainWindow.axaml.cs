@@ -660,6 +660,7 @@ public partial class MainWindow : Window
             if (cmd == "剥采比均衡" || cmd == "VP曲线" || cmd == "剥采比") { await StrippingBalanceAsync(); return; }
             if (cmd == "工作面线拟合" || cmd == "工作面线" || cmd == "拟合工作面线") { await WorkingFaceLineAsync(); return; }
             if (cmd == "矿床识别" || cmd == "自动识别" || cmd == "矿床类型识别") { await DepositDetectAsync(); return; }
+            if (cmd == "方案综合对比" || cmd == "方案比选" || cmd == "方案对比") { await ProgramCompareAsync(); return; }
             if (cmd == "高程查询" || cmd == "虚拟钻孔" || cmd == "查询高程") { await StartSpotQueryAsync(); return; }
             if (cmd == "文字" || cmd == "单行文字") { ArmText(); return; }
             if (cmd == "标注" || cmd == "线性标注" || cmd == "尺寸标注" || cmd == "标注台阶标高") { StartDim(); return; }
@@ -1134,6 +1135,45 @@ public partial class MainWindow : Window
         RefreshScene();
         Viewport.FitBounds(r.Bounds);
         StatusMsg.Text = $"矿床识别：倾角 {sig.Value.DipDeg:0.#}° · 走向 {sig.Value.StrikeAzimuthDeg:0.#}° · 煤层 {sig.Value.SeamCount} · 煤单元 {sig.Value.CoalCellCount}（Z 层厚 {zLayer:0.##}）";
+    }
+
+    // 方案综合对比：读方案指标 CSV → 多准则加权评分 → 排名 + 推荐 报表
+    private async Task ProgramCompareAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "方案综合对比：选方案指标 CSV (名称,峰值剥采比,基建剥离,内排率,达产年,服务年限,储量均衡,NPV)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("方案指标 (CSV/TXT)") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (files.Count == 0) return;
+
+        var plans = new List<ProgramComparer.Plan>();
+        try
+        {
+            foreach (var raw in System.IO.File.ReadAllLines(files[0].Path.LocalPath))
+            {
+                var line = raw.Trim();
+                if (line.Length == 0 || line.StartsWith("#")) continue;
+                var parts = line.Split(new[] { ',', '\t', ';' }, System.StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length < 8) continue;
+                var nums = new double[7];
+                bool ok = true;
+                for (int k = 0; k < 7; k++)
+                    if (!double.TryParse(parts[parts.Length - 7 + k].Trim(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out nums[k])) { ok = false; break; }
+                if (!ok) continue;
+                string name = parts.Length > 7 ? parts[0].Trim() : $"方案{plans.Count + 1}";
+                plans.Add(new ProgramComparer.Plan(name, nums[0], nums[1], nums[2], nums[3], nums[4], nums[5], nums[6]));
+            }
+        }
+        catch (System.Exception ex) { StatusMsg.Text = $"方案对比：读取失败 {ex.Message}"; return; }
+        if (plans.Count == 0) { StatusMsg.Text = "方案对比：需每行 名称+7 项指标(峰值剥采比,基建剥离,内排率,达产年,服务年限,储量均衡,NPV)"; return; }
+
+        var (scored, best) = ProgramComparer.Score(plans);
+        var ranked = scored.OrderByDescending(s => s.CompositeScore).ToList();
+        string report = $"方案综合对比：{plans.Count} 套 · 推荐【{best}】 | " +
+            string.Join(" · ", ranked.Select(s => $"{s.Name} {s.CompositeScore:0}分"));
+        StatusMsg.Text = report;
     }
 
     // 创建三角网：散点 CSV → Delaunay → 三角边线框入场景
@@ -2958,6 +2998,10 @@ public partial class MainWindow : Window
             case "DEPOSITDETECT":
             case "DEPOSIT":
                 _ = DepositDetectAsync();
+                break;
+            case "PROGRAMCOMPARE":
+            case "PLANCOMPARE":
+                _ = ProgramCompareAsync();
                 break;
             case "CIRCLETTR":
             case "TTR":
