@@ -185,4 +185,29 @@ public class DrawToolsTests
     {
         Assert.Null(LineMath.IntersectInfinite(0, 0, 10, 0, 0, 5, 10, 5));   // 两条水平线
     }
+
+    [Fact]
+    public void RectEntity_explodes_to_4_lines()
+    {
+        var parts = new RectEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 5 }.Explode();
+        Assert.NotNull(parts);
+        Assert.Equal(4, parts!.Count);
+        Assert.All(parts, p => Assert.IsType<LineEntity>(p));
+    }
+
+    [Fact]
+    public void PolylineEntity_explodes_to_segments()
+    {
+        var pl = new PolylineEntity { Closed = false };
+        pl.Points.Add((0, 0)); pl.Points.Add((10, 0)); pl.Points.Add((10, 10));
+        Assert.Equal(2, pl.Explode()!.Count);       // 3 点 → 2 段
+        pl.Closed = true;
+        Assert.Equal(3, pl.Explode()!.Count);       // 闭合 → +1
+    }
+
+    [Fact]
+    public void LineEntity_not_explodable()
+    {
+        Assert.Null(new LineEntity().Explode());
+    }
 }

@@ -52,6 +52,9 @@ public abstract class SceneEntity
     /// <summary>偏移：向点击 (px,py) 一侧平行偏移，返回新实体；不支持返回 null。</summary>
     public virtual SceneEntity? Offset(double px, double py) => null;
 
+    /// <summary>分解：拆成更基本的实体（矩形/多段线 → 直线）；不可分解返回 null。</summary>
+    public virtual List<SceneEntity>? Explode() => null;
+
     /// <summary>把本实体颜色复制给 e 并返回（变换保留颜色）。</summary>
     protected T Colored<T>(T e) where T : SceneEntity { e.Cr = Cr; e.Cg = Cg; e.Cb = Cb; return e; }
 }
@@ -160,6 +163,13 @@ public sealed class RectEntity : SceneEntity
         double off = inside ? -d : d;
         return Colored(new RectEntity { X0 = minX - off, Y0 = minY - off, X1 = maxX + off, Y1 = maxY + off });
     }
+    public override List<SceneEntity>? Explode() => new()
+    {
+        Colored(new LineEntity { X0 = X0, Y0 = Y0, X1 = X1, Y1 = Y0 }),
+        Colored(new LineEntity { X0 = X1, Y0 = Y0, X1 = X1, Y1 = Y1 }),
+        Colored(new LineEntity { X0 = X1, Y0 = Y1, X1 = X0, Y1 = Y1 }),
+        Colored(new LineEntity { X0 = X0, Y0 = Y1, X1 = X0, Y1 = Y0 })
+    };
 }
 
 public sealed class PointEntity : SceneEntity
@@ -225,6 +235,15 @@ public sealed class PolylineEntity : SceneEntity
         var pl = new PolylineEntity { Closed = Closed };
         foreach (var p in Points) pl.Points.Add(m.Map(p.x, p.y));
         return Colored(pl);
+    }
+    public override List<SceneEntity>? Explode()
+    {
+        var list = new List<SceneEntity>();
+        for (int i = 0; i + 1 < Points.Count; i++)
+            list.Add(Colored(new LineEntity { X0 = Points[i].x, Y0 = Points[i].y, X1 = Points[i + 1].x, Y1 = Points[i + 1].y }));
+        if (Closed && Points.Count > 1)
+            list.Add(Colored(new LineEntity { X0 = Points[^1].x, Y0 = Points[^1].y, X1 = Points[0].x, Y1 = Points[0].y }));
+        return list.Count > 0 ? list : null;
     }
 }
 

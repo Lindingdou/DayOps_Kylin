@@ -254,6 +254,7 @@ public partial class MainWindow : Window
     private readonly UndoManager _undo = new();   // 撤销/重做
     private DrawTool? _tool;                      // 当前激活的绘制工具
     private readonly List<SceneEntity> _selected = new();   // 选择集
+    private List<SceneEntity> _prevSelected = new();         // 上次选择集
     private Avalonia.Point _pressPos;             // 按下位置（区分点击/拖拽）
     private enum EditMode { None, Move, Copy, Mirror, Rotate, Scale }
     private EditMode _editMode = EditMode.None;
@@ -275,6 +276,10 @@ public partial class MainWindow : Window
             if (cmd == "另存为") { await ExportDxfAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
             if (cmd == "删除") { DeleteSelected(); return; }
+            if (cmd == "全部选择") { SelectAll(); return; }
+            if (cmd == "最后") { SelectLast(); return; }
+            if (cmd == "上次") { SelectPrevious(); return; }
+            if (cmd == "分解") { ExplodeSelected(); return; }
             if (cmd == "新建图层") { var l = _layers.New(); StatusMsg.Text = $"新建图层「{l.Name}」并置为当前"; return; }
             if (cmd == "图层特性管理器") { var l = _layers.CycleCurrent(); StatusMsg.Text = $"当前图层「{l.Name}」（共 {_layers.Layers.Count} 层，再点循环切换）"; return; }
             if (cmd == "移动") { StartEdit(EditMode.Move, "移动"); return; }
@@ -579,6 +584,7 @@ public partial class MainWindow : Window
     {
         var w = _snapWorld ?? Viewport.ScreenToWorld(rel.X, rel.Y);
         if (w == null) return;
+        SaveSel();
         double tol = SnapTolWorld(rel);
         var hit = _scene.Pick(w.Value.x, w.Value.y, tol);
         if (hit == null) _selected.Clear();
@@ -606,6 +612,57 @@ public partial class MainWindow : Window
         Viewport.SetHighlight(null);
         RefreshScene();
         StatusMsg.Text = $"已删除 {n} 个实体";
+    }
+
+    // ---------- 选择命令（全选/最后/上次）+ 分解 ----------
+    private void SaveSel() => _prevSelected = new List<SceneEntity>(_selected);
+
+    private void SelectAll()
+    {
+        SaveSel();
+        _selected.Clear();
+        _selected.AddRange(_scene.Entities);
+        HighlightSelection();
+        StatusMsg.Text = $"全选 {_selected.Count} 个";
+    }
+
+    private void SelectLast()
+    {
+        if (_scene.Count == 0) { StatusMsg.Text = "无实体"; return; }
+        SaveSel();
+        _selected.Clear();
+        _selected.Add(_scene.Entities[_scene.Count - 1]);
+        HighlightSelection();
+        StatusMsg.Text = "已选最后创建的实体";
+    }
+
+    private void SelectPrevious()
+    {
+        var tmp = new List<SceneEntity>(_selected);
+        _selected.Clear();
+        _selected.AddRange(_prevSelected);
+        _prevSelected = tmp;
+        HighlightSelection();
+        StatusMsg.Text = $"恢复上次选择 {_selected.Count} 个";
+    }
+
+    private void ExplodeSelected()
+    {
+        var explodable = _selected.FindAll(e => e.Explode() != null);
+        if (explodable.Count == 0) { StatusMsg.Text = "无可分解实体（矩形/多段线）"; return; }
+        BeginChange();
+        var newSel = new List<SceneEntity>();
+        foreach (var e in explodable)
+        {
+            var parts = e.Explode()!;
+            _scene.Remove(e);
+            foreach (var p in parts) { _scene.Add(p); newSel.Add(p); }
+        }
+        _selected.Clear();
+        _selected.AddRange(newSel);
+        HighlightSelection();
+        RefreshScene();
+        StatusMsg.Text = $"已分解为 {newSel.Count} 段";
     }
 
     // 进入编辑（移动/复制/镜像）：需已有选择
@@ -733,6 +790,20 @@ public partial class MainWindow : Window
             case "ERASE":
             case "E":
                 DeleteSelected();
+                break;
+            case "ALL":
+                SelectAll();
+                break;
+            case "LAST":
+                SelectLast();
+                break;
+            case "PREVIOUS":
+            case "P":
+                SelectPrevious();
+                break;
+            case "EXPLODE":
+            case "X":
+                ExplodeSelected();
                 break;
             case "MOVE":
             case "M":
