@@ -257,6 +257,7 @@
 ### RoadLib 道路（托管切片）
 - [x] **提取道路中心线**：`RoadTools.Centerline`（两路边多段线→逐点最近中点连线）。命令 提取道路中心线/道路中线/CENTERLINE。+3 单测，165 tests。commit `e305b4e`。
 - [x] **点对点寻径**：`RoadNetwork`(多段线建图+Dijkstra) + 两点交互→青色路径+长度。命令 点对点寻径/寻径/PATH。+4 单测，169 tests。commit `548785b`+`51ffd4c`。
+- [x] **等效运距**：`RoadNetwork.PathLength` + 任务吨位加权平均运距(吨公里)。命令 等效运距/运输指标/HAUL。+1 单测，213 tests。commit `695ba95`。
 - [记录] 路网存档/更新/预览、结构路面、驱动距离/量 → 需路网数据模型/持久化(部分可托管，待评估)。
 
 ### MineAssLib 采矿辅助（托管切片）
