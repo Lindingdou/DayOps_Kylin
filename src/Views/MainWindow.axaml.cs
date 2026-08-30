@@ -552,6 +552,7 @@ public partial class MainWindow : Window
             if (cmd == "境界圈定" || cmd == "凸包" || cmd == "确定境界" || cmd == "采场圈定") { await BoundaryHullAsync(); return; }
             if (cmd == "剖面分析" || cmd == "剖面" || cmd == "点云剖面") { await SectionProfileAsync(); return; }
             if (cmd == "粗糙度" || cmd == "地表粗糙度") { await RoughnessAsync(); return; }
+            if (cmd == "坐标转换") { await CoordTransformAsync(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
             if (cmd == "2D") { Viewport.SetViewMode(true); StatusMsg.Text = "视图: 2D 平面（正交俯视）"; return; }
@@ -1074,6 +1075,38 @@ public partial class MainWindow : Window
         RefreshScene();
         Viewport.FitBounds(r.Bounds);
         StatusMsg.Text = $"点云抽稀：{r.Points.Count} → {thinned.Count} 点（cell {cell:0.##}，压缩 {100.0 * (1 - (double)thinned.Count / r.Points.Count):0.#}%）";
+    }
+
+    // 坐标转换：控制点对 CSV(srcX,srcY,dstX,dstY) → Helmert 4参 → 套用全场景
+    private async Task CoordTransformAsync()
+    {
+        if (_scene.Count == 0) { StatusMsg.Text = "坐标转换：场景为空"; return; }
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "坐标转换：选控制点对 CSV (srcX,srcY,dstX,dstY)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("控制点 (CSV/TXT)") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (files.Count == 0) return;
+        var pairs = new List<(double sx, double sy, double dx, double dy)>();
+        foreach (var raw in System.IO.File.ReadAllLines(files[0].Path.LocalPath))
+        {
+            var t = raw.Split(new[] { ',', '\t', ';', ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
+            if (t.Length < 4) continue;
+            if (double.TryParse(t[0], out double a) && double.TryParse(t[1], out double b2)
+                && double.TryParse(t[2], out double c) && double.TryParse(t[3], out double d))
+                pairs.Add((a, b2, c, d));
+        }
+        var h = CoordTransform.Solve(pairs);
+        if (h == null) { StatusMsg.Text = "坐标转换：需≥2 对有效控制点(srcX,srcY,dstX,dstY)"; return; }
+        var m = CoordTransform.ToAffine(h.Value);
+        BeginChange();
+        for (int i = 0; i < _scene.Entities.Count; i++) _scene.Entities[i] = _scene.Entities[i].Apply(m);
+        _selected.Clear(); Viewport.SetHighlight(null);
+        RefreshScene();
+        double scale = System.Math.Sqrt(h.Value.a * h.Value.a + h.Value.b * h.Value.b);
+        double rot = System.Math.Atan2(h.Value.b, h.Value.a) * 180 / System.Math.PI;
+        StatusMsg.Text = $"坐标转换完成（{pairs.Count} 控制点）：缩放 {scale:0.####} · 旋转 {rot:0.##}° · 平移({h.Value.tx:0.##},{h.Value.ty:0.##})";
     }
 
     // 粗糙度：地形 CSV → IDW 网格 → 3×3 邻域极差 → 配色格
@@ -2266,6 +2299,9 @@ public partial class MainWindow : Window
                 break;
             case "ROUGHNESS":
                 _ = RoughnessAsync();
+                break;
+            case "COORDTRANS":
+                _ = CoordTransformAsync();
                 break;
             case "ESTIMATE":
                 _ = EstimateGradeAsync();
