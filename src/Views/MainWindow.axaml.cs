@@ -588,6 +588,8 @@ public partial class MainWindow : Window
     private readonly List<SceneEntity> _selected = new();   // 选择集
     private List<SceneEntity> _prevSelected = new();         // 上次选择集
     private readonly Cad.Draw.CadClipboard _clip = new();    // 实体剪贴板（COPYCLIP/CUTCLIP/PASTECLIP）
+    private readonly Cad.Draw.NamedSelections _selSets = new(); // 命名选择集（创建/调用选择集）
+    private int _selSetCycle = -1;                            // 调用选择集轮转序号
     private Avalonia.Point _pressPos;             // 按下位置（区分点击/拖拽）
     private enum EditMode { None, Move, Copy, Mirror, Rotate, Scale }
     private EditMode _editMode = EditMode.None;
@@ -707,6 +709,10 @@ public partial class MainWindow : Window
             if (cmd == "剪切") { CutClip(); return; }
             if (cmd == "粘贴") { PasteClip(); return; }
             if (cmd == "删除全部" || cmd == "全部删除" || cmd == "清空实体") { EraseAll(); return; }
+            if (cmd == "创建选择集" || cmd == "选择集") { CreateSelSet(); return; }
+            if (cmd == "调用选择集") { RecallSelSet(); return; }
+            if (cmd == "刷新") { Regen(); return; }
+            if (cmd == "清理标记" || cmd == "清除标记") { ClrMark(); return; }
             if (cmd == "修剪" || cmd == "延伸") { StartTrim(); return; }
             if (cmd == "圆TTR" || cmd == "圆(切切半径)") { StartTTR(); return; }
             if (cmd == "圆弧SER" || cmd == "圆弧(起点端点半径)") { StartArcSer(); return; }
@@ -2418,6 +2424,42 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"已删除全部 {n} 个实体";
     }
 
+    // ---------- 命名选择集（创建/调用）+ 刷新 + 清理标记 ----------
+    private void CreateSelSet()
+    {
+        if (_selected.Count == 0) { StatusMsg.Text = "创建选择集：未选中实体"; return; }
+        string name = $"选择集{_selSets.Count + 1}";
+        _selSets.Store(name, _selected);
+        StatusMsg.Text = $"已创建「{name}」（{_selected.Count} 实体）";
+    }
+
+    private void RecallSelSet()
+    {
+        if (_selSets.Count == 0) { StatusMsg.Text = "调用选择集：暂无选择集（先用创建选择集）"; return; }
+        _selSetCycle++;
+        var s = _selSets.At(_selSetCycle);
+        if (s == null) return;
+        _selected.Clear();
+        foreach (var e in s.Value.ents) if (_scene.Entities.Contains(e)) _selected.Add(e);   // 剔除已删
+        HighlightSelection();
+        StatusMsg.Text = $"调用「{s.Value.name}」（{_selected.Count} 实体，再点循环下一组）";
+    }
+
+    private void Regen()   // 刷新 / REGEN：重建显示几何
+    {
+        RefreshScene();
+        HighlightSelection();
+        StatusMsg.Text = "已刷新";
+    }
+
+    private void ClrMark()   // 清理标记 / CLRMARK：清高亮/捕捉标记
+    {
+        Viewport.SetHighlight(null);
+        Viewport.SetSnapMarker(null);
+        _snapShown = false;
+        StatusMsg.Text = "已清理标记";
+    }
+
     // ---------- 选择命令（全选/最后/上次）+ 分解 ----------
     private void SaveSel() => _prevSelected = new List<SceneEntity>(_selected);
 
@@ -3049,6 +3091,21 @@ public partial class MainWindow : Window
                 break;
             case "ERASEALL":
                 EraseAll();
+                break;
+            case "GROUP":
+            case "SELSET":
+                CreateSelSet();
+                break;
+            case "SELSETCALL":
+            case "GROUPCALL":
+                RecallSelSet();
+                break;
+            case "REGEN":
+            case "RE":
+                Regen();
+                break;
+            case "CLRMARK":
+                ClrMark();
                 break;
             case "ALL":
                 SelectAll();
