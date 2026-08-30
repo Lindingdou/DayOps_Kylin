@@ -666,6 +666,7 @@ public partial class MainWindow : Window
             if (cmd == "剥采比均衡" || cmd == "VP曲线" || cmd == "剥采比") { await StrippingBalanceAsync(); return; }
             if (cmd == "工作面线拟合" || cmd == "工作面线" || cmd == "拟合工作面线") { await WorkingFaceLineAsync(); return; }
             if (cmd == "煤质统计" || cmd == "质量统计" || cmd == "煤质分析") { await QualityStatsAsync(); return; }
+            if (cmd == "坡角估算" || cmd == "工作帮坡角" || cmd == "坡角") { await SlopeEstimateAsync(); return; }
             if (cmd == "矿床识别" || cmd == "自动识别" || cmd == "矿床类型识别") { await DepositDetectAsync(); return; }
             if (cmd == "方案综合对比" || cmd == "方案比选" || cmd == "方案对比") { await ProgramCompareAsync(); return; }
             if (cmd == "高程查询" || cmd == "虚拟钻孔" || cmd == "查询高程") { await StartSpotQueryAsync(); return; }
@@ -1085,6 +1086,27 @@ public partial class MainWindow : Window
             report += $" 段{i + 1} 均衡比{s.RatioM3PerT.ToString("0.##", inv)}({s.B - s.A}期,峰值超前{s.PeakLeadWanM3:0.#})";
         }
         StatusMsg.Text = report;
+    }
+
+    // 坡角估算：点集 CSV(x,y,z) → 最小二乘拟合平面 → 最陡坡角(工作帮坡角口径) + 报表
+    private async Task SlopeEstimateAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "坡角估算：选面上点 CSV (x,y,z)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("面点 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success) { StatusMsg.Text = $"坡角估算：点导入失败 {r.Error}"; return; }
+        if (r.Points.Count < 3) { StatusMsg.Text = "坡角估算：需 ≥3 个不共线点"; return; }
+
+        var pts = new List<(double x, double y, double z)>(r.Points.Count);
+        foreach (var p in r.Points) pts.Add((p.x, p.y, p.z));
+        var deg = SlopeEstimator.MaxSlopeDeg(pts);
+        if (deg == null) { StatusMsg.Text = "坡角估算：点近共线，拟合不出平面"; return; }
+        StatusMsg.Text = $"坡角估算：{pts.Count} 点拟合平面 → 最陡坡角 ≈ {deg.Value:0.##}°";
     }
 
     // 煤质统计：CSV(可选 煤层标签, 指标值) → 按标签分组算 计数/均值/标准差/min/max/P25/50/75 → 报表
@@ -3249,6 +3271,10 @@ public partial class MainWindow : Window
             case "QUALITYSTATS":
             case "COALSTATS":
                 _ = QualityStatsAsync();
+                break;
+            case "SLOPEEST":
+            case "WORKSLOPE":
+                _ = SlopeEstimateAsync();
                 break;
             case "DEPOSITDETECT":
             case "DEPOSIT":
