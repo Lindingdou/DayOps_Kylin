@@ -605,6 +605,7 @@ public partial class MainWindow : Window
             if (cmd == "标注" || cmd == "线性标注" || cmd == "尺寸标注" || cmd == "标注台阶标高") { StartDim(); return; }
             if (cmd == "裁剪" || cmd == "多边形裁剪" || cmd == "区运算" || cmd == "范围裁剪") { ClipPolygon(); return; }
             if (cmd == "平滑" || cmd == "光滑" || cmd == "曲线平滑" || cmd == "光滑曲线") { SmoothPolyline(); return; }
+            if (cmd == "简化" || cmd == "多段线简化" || cmd == "抽稀线") { SimplifyPolyline(); return; }
             if (cmd == "坐标转换") { await CoordTransformAsync(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
@@ -1213,6 +1214,22 @@ public partial class MainWindow : Window
         _tool = null; _measure = null; _editMode = EditMode.None;
         Viewport.FitBounds(r.Bounds);
         StatusMsg.Text = $"高程查询：已载入 {r.Points.Count} 点，点击视口任意位置查询高程（ESC 退出）";
+    }
+
+    // 多段线简化：Douglas-Peucker 减顶点保形
+    private void SimplifyPolyline()
+    {
+        if (_selected.Count != 1 || _selected[0] is not PolylineEntity pl || pl.Points.Count < 3)
+        { StatusMsg.Text = "简化：请先选中一条至少 3 点的多段线"; return; }
+        double eps = System.Math.Max(SnapTolWorld(_lastPointer) * 0.5, 1e-6);
+        var simp = PolylineSimplify.DouglasPeucker(pl.Points, eps);
+        var np = new PolylineEntity { Closed = pl.Closed, Cr = pl.Cr, Cg = pl.Cg, Cb = pl.Cb, LayerName = pl.LayerName };
+        foreach (var p in simp) np.Points.Add(p);
+        BeginChange();
+        _scene.Replace(pl, np);
+        _selected.Clear(); _selected.Add(np);
+        RefreshScene(); HighlightSelection();
+        StatusMsg.Text = $"多段线简化：{pl.Points.Count} → {np.Points.Count} 点（容差 {eps:0.##}）";
     }
 
     // 曲线平滑：对选中多段线做 Chaikin 平滑替换
@@ -2550,6 +2567,10 @@ public partial class MainWindow : Window
                 break;
             case "SMOOTH":
                 SmoothPolyline();
+                break;
+            case "SIMPLIFY":
+            case "DP":
+                SimplifyPolyline();
                 break;
             case "DIST":
             case "DI":
