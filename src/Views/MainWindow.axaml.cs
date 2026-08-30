@@ -656,6 +656,7 @@ public partial class MainWindow : Window
             if (cmd == "面积" || cmd == "面积测量" || cmd == "周长") { MeasureArea(); return; }
             if (cmd == "角度" || cmd == "测量角度" || cmd == "三点测角") { _angle = new AngleState(); _tool = null; _measure = null; StatusMsg.Text = "测角：点顶点"; return; }
             if (cmd == "等效运距" || cmd == "运输指标" || cmd == "驱动距离") { await HaulMetricsAsync(); return; }
+            if (cmd == "批量台阶扩帮" || cmd == "台阶线生成" || cmd == "台阶扩帮") { GenerateBenchLines(); return; }
             if (cmd == "高程查询" || cmd == "虚拟钻孔" || cmd == "查询高程") { await StartSpotQueryAsync(); return; }
             if (cmd == "文字" || cmd == "单行文字") { ArmText(); return; }
             if (cmd == "标注" || cmd == "线性标注" || cmd == "尺寸标注" || cmd == "标注台阶标高") { StartDim(); return; }
@@ -2312,6 +2313,29 @@ public partial class MainWindow : Window
         StatusMsg.Text = "打断：指定第一点（两点间的一段将被移除）";
     }
 
+    // 批量台阶扩帮(几何核)：选中闭合多段线 → 逐圈定距内偏移生成台阶顶线
+    private void GenerateBenchLines()
+    {
+        if (_selected.Count != 1 || _selected[0] is not PolylineEntity pl || !pl.Closed || pl.Points.Count < 3)
+        { StatusMsg.Text = "批量台阶扩帮：请先选中一条闭合多段线(境界)"; return; }
+        // 台阶距默认 = 境界包围盒短边/10（真实应由帮参数 W+H/tanα 定，对话框待接）
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        foreach (var p in pl.Points) { minX = System.Math.Min(minX, p.x); minY = System.Math.Min(minY, p.y); maxX = System.Math.Max(maxX, p.x); maxY = System.Math.Max(maxY, p.y); }
+        double d = System.Math.Max(System.Math.Min(maxX - minX, maxY - minY) / 10.0, 1e-6);
+        var rings = BenchLines.Generate(pl.Points, d, 20);
+        if (rings.Count == 0) { StatusMsg.Text = "批量台阶扩帮：未生成台阶线(境界过小/自交)"; return; }
+        BeginChange();
+        foreach (var ring in rings)
+        {
+            var bl = new PolylineEntity { Closed = true };
+            bl.Points.AddRange(ring);
+            AssignLayer(bl);
+            _scene.Add(bl);
+        }
+        RefreshScene();
+        StatusMsg.Text = $"批量台阶扩帮：生成 {rings.Count} 圈台阶线(台阶距 {d:0.##})";
+    }
+
     // GIZMO：切换夹点显示；关时选中实体不显方块、也不可拖夹点
     private void ToggleGizmo()
     {
@@ -2777,6 +2801,10 @@ public partial class MainWindow : Window
                 break;
             case "GIZMO":
                 ToggleGizmo();
+                break;
+            case "BENCHLINES":
+            case "BENCHEXPAND":
+                GenerateBenchLines();
                 break;
             case "CIRCLETTR":
             case "TTR":
