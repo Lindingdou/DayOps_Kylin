@@ -548,6 +548,7 @@ public partial class MainWindow : Window
             if (cmd == "快速估值" || cmd == "品位估值" || cmd == "克里金估值") { await EstimateGradeAsync(); return; }
             if (cmd == "点云抽稀" || cmd == "抽稀" || cmd == "点云精简") { await ThinPointsAsync(); return; }
             if (cmd == "地面点滤波" || cmd == "地面滤波") { await GroundFilterAsync(); return; }
+            if (cmd == "C2C" || cmd == "点云比对" || cmd == "演化对比") { await CloudCompareAsync(); return; }
             if (cmd == "境界圈定" || cmd == "凸包" || cmd == "确定境界" || cmd == "采场圈定") { await BoundaryHullAsync(); return; }
             if (cmd == "剖面分析" || cmd == "剖面" || cmd == "点云剖面") { await SectionProfileAsync(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
@@ -1000,6 +1001,34 @@ public partial class MainWindow : Window
         _scene.Add(curve);
         RefreshScene();
         StatusMsg.Text = $"剖面分析：{prof.Count} 采样 · 高程 {zmin:0.##}~{zmax:0.##} · 剖面长 {prof[^1].dist:0.##}";
+    }
+
+    // C2C 点云比对：两期 XYZ → A 每点到 B 最近距离 → 按偏差配色点 + 报最大/平均偏差
+    private async Task CloudCompareAsync()
+    {
+        var opt = new System.Func<string, FilePickerOpenOptions>(t => new FilePickerOpenOptions
+        {
+            Title = t, AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("点 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        var f1 = await StorageProvider.OpenFilePickerAsync(opt("C2C 比对：选【当前】点云 CSV"));
+        if (f1.Count == 0) return;
+        var f2 = await StorageProvider.OpenFilePickerAsync(opt("C2C 比对：选【参考】点云 CSV"));
+        if (f2.Count == 0) return;
+        var ra = PointDataImportService.Load(f1[0].Path.LocalPath);
+        var rb = PointDataImportService.Load(f2[0].Path.LocalPath);
+        if (!ra.Success || !rb.Success) { StatusMsg.Text = "C2C：点导入失败"; return; }
+        var dists = CloudCompare.Distances(ra.Points, rb.Points);
+        var (max, mean) = CloudCompare.Stats(dists);
+        BeginChange();
+        for (int i = 0; i < ra.Points.Count; i++)
+        {
+            var (cr, cg, cb) = BlockModel.GradeColor(dists[i], 0, max);   // 蓝(近)→红(远)
+            _scene.Add(new PointEntity { X = ra.Points[i].x, Y = ra.Points[i].y, Cr = cr, Cg = cg, Cb = cb });
+        }
+        RefreshScene();
+        Viewport.FitBounds(ra.Bounds);
+        StatusMsg.Text = $"C2C 比对：{ra.Points.Count} 点 · 最大偏差 {max:0.###} · 平均 {mean:0.###}";
     }
 
     // 地面点滤波：XYZ CSV → 每 XY 格取最低点(≈地面) → 点入场景
@@ -2218,6 +2247,9 @@ public partial class MainWindow : Window
                 break;
             case "GROUND":
                 _ = GroundFilterAsync();
+                break;
+            case "C2C":
+                _ = CloudCompareAsync();
                 break;
             case "DIST":
             case "DI":
