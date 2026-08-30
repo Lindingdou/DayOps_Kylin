@@ -183,4 +183,26 @@ public class DxfImportTests
         Assert.Equal(0, a.x, 4); Assert.Equal(0, a.y, 4);     // 起点 = P0
         Assert.Equal(3, b.x, 4); Assert.Equal(0, b.y, 4);     // 终点 = P3
     }
+
+    [Fact]
+    public void Export_roundtrip_preserves_segments()
+    {
+        string src = Path.Combine(Path.GetTempPath(), "pm_exp_src.dxf");
+        string outp = Path.Combine(Path.GetTempPath(), "pm_exp_out.dxf");
+
+        var doc = new CadDocument();
+        doc.Entities.Add(new Line { StartPoint = new XYZ(0, 0, 0), EndPoint = new XYZ(10, 0, 0) });
+        doc.Entities.Add(new Circle { Center = new XYZ(0, 0, 0), Radius = 5 });
+        using (var w = new DxfWriter(src, doc, false)) w.Write();
+
+        var r1 = DxfImportService.Load(src);
+        int written = DxfExportService.Export(r1.LineVertices, outp);
+        var r2 = DxfImportService.Load(outp);
+
+        Assert.True(r2.Success, r2.Error);
+        Assert.Equal(r1.SegmentCount, written);            // 每段写 1 条 Line
+        Assert.Equal(r1.SegmentCount, r2.SegmentCount);    // 再导入段数一致
+
+        try { File.Delete(src); File.Delete(outp); } catch { /* 清理失败无碍 */ }
+    }
 }

@@ -78,6 +78,7 @@ public partial class MainWindow : Window
         if (sender is Control c && c.Tag is string cmd)
         {
             if (cmd == "导入") { await ImportDxfAsync(); return; }
+            if (cmd == "另存为") { await ExportDxfAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
             StatusMsg.Text = $"命令: {cmd}";
             CommandInput.Text = cmd;
@@ -99,6 +100,33 @@ public partial class MainWindow : Window
         });
         if (files.Count == 0) return;
         ImportPath(files[0].Path.LocalPath);
+    }
+
+    // 导出：把当前显示的线段几何写回 .dxf
+    private async Task ExportDxfAsync()
+    {
+        if (_lastImport == null || _lastImport.LineVertices.Length == 0)
+        {
+            StatusMsg.Text = "无可导出的几何（先导入图纸）";
+            return;
+        }
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "导出 DXF",
+            DefaultExtension = "dxf",
+            SuggestedFileName = "export.dxf",
+            FileTypeChoices = new[] { new FilePickerFileType("DXF 图纸") { Patterns = new[] { "*.dxf" } } }
+        });
+        if (file == null) return;
+        try
+        {
+            int n = DxfExportService.Export(_lastImport.LineVertices, file.Path.LocalPath);
+            StatusMsg.Text = $"已导出 {Path.GetFileName(file.Path.LocalPath)} · {n} 段";
+        }
+        catch (System.Exception ex)
+        {
+            StatusMsg.Text = $"导出失败：{ex.Message}";
+        }
     }
 
     // 共享导入逻辑：加载 → 视口显示 → 对象树 → 状态回报
@@ -230,6 +258,10 @@ public partial class MainWindow : Window
             case "GRID":
                 Viewport.ToggleGrid();
                 StatusMsg.Text = "切换网格显示";
+                break;
+            case "EXPORTDXF":
+            case "导出":
+                _ = ExportDxfAsync();
                 break;
             default:
                 StatusMsg.Text = $"执行: {cmd}";
