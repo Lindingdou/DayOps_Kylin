@@ -680,6 +680,7 @@ public partial class MainWindow : Window
             if (cmd == "网格焊接" || cmd == "合并顶点" || cmd == "顶点焊接") { await MeshWeldAsync(); return; }
             if (cmd == "合并三角网" || cmd == "网格合并" || cmd == "合并网格") { await MeshMergeAsync(); return; }
             if (cmd == "固化成体" || cmd == "固化实体") { await SolidifyAsync(); return; }
+            if (cmd == "体素格网体积" || cmd == "体素体积" || cmd == "体素算量") { await VoxelVolumeAsync(); return; }
             if (cmd == "立方体" || cmd == "长方体") { await BoxPrimitiveAsync(); return; }
             if (cmd == "球体" || cmd == "球") { await SpherePrimitiveAsync(); return; }
             if (cmd == "圆柱" || cmd == "圆柱体") { await CylinderPrimitiveAsync(); return; }
@@ -1219,6 +1220,46 @@ public partial class MainWindow : Window
         try { System.IO.File.WriteAllText(outPath, MeshWeld.ToOff(w.Verts, w.Tris)); }
         catch (System.Exception ex) { StatusMsg.Text = $"固化成体：写出失败 {ex.Message}"; return; }
         StatusMsg.Text = $"固化成体：{paths.Count} 网焊成 {w.OutputTris} 三角 · {(watertight ? "水密(闭合实体)" : $"非水密(开放边 {d.BoundaryEdges}·非流形 {d.NonManifoldEdges})")} → {System.IO.Path.GetFileName(outPath)}";
+    }
+
+    // 体素格网体积：选封闭 OFF → 广义缠绕数逐格判内外 → 占用格数×格体积 = 体素体积(与散度定理精确体积对比)
+    private async Task VoxelVolumeAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "体素格网体积：选封闭 OFF 网格",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } } }
+        });
+        if (files.Count == 0) return;
+        string text;
+        try { text = System.IO.File.ReadAllText(files[0].Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"体素格网体积：读取失败 {ex.Message}"; return; }
+        var (mv, mt) = MeshMetrics.ParseOff(text);
+        if (mt.Count == 0) { StatusMsg.Text = "体素格网体积：无三角"; return; }
+        var fv = new double[mv.Count * 3];
+        for (int i = 0; i < mv.Count; i++) { fv[i * 3] = mv[i].x; fv[i * 3 + 1] = mv[i].y; fv[i * 3 + 2] = mv[i].z; }
+        var ft = new int[mt.Count * 3];
+        for (int i = 0; i < mt.Count; i++) { ft[i * 3] = mt[i].a; ft[i * 3 + 1] = mt[i].b; ft[i * 3 + 2] = mt[i].c; }
+
+        WindingNumberTester wn;
+        try { wn = new WindingNumberTester(fv, ft); }
+        catch (System.Exception ex) { StatusMsg.Text = $"体素格网体积：建测试器失败 {ex.Message}"; return; }
+        double dx = wn.MaxX - wn.MinX, dy = wn.MaxY - wn.MinY, dz = wn.MaxZ - wn.MinZ;
+        double diag = System.Math.Sqrt(dx * dx + dy * dy + dz * dz);
+        double cell = diag > 0 ? diag / 60.0 : 1.0;   // 格边=包围盒对角/60(约束总格数)
+        long occupied = 0, total = 0;
+        for (double z = wn.MinZ + cell * 0.5; z <= wn.MaxZ; z += cell)
+            for (double y = wn.MinY + cell * 0.5; y <= wn.MaxY; y += cell)
+                for (double x = wn.MinX + cell * 0.5; x <= wn.MaxX; x += cell)
+                {
+                    total++;
+                    if (wn.IsInsideClosed(x, y, z)) occupied++;
+                }
+        double voxelVol = occupied * cell * cell * cell;
+        var m = MeshMetrics.Compute(mv, mt);
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        StatusMsg.Text = $"体素格网体积：格边 {cell.ToString("0.##", inv)} · 占用 {occupied}/{total} 格 · 体素体积 {voxelVol.ToString("0.#", inv)}(精确 {m.Volume.ToString("0.#", inv)})";
     }
 
     // 基本几何体：生成拓扑闭合三角网 → 保存 OFF + 度量报表
@@ -4408,6 +4449,10 @@ public partial class MainWindow : Window
                 break;
             case "SOLIDIFY":
                 _ = SolidifyAsync();
+                break;
+            case "VOXELVOLUME":
+            case "VOXEL":
+                _ = VoxelVolumeAsync();
                 break;
             case "BOX":
                 _ = BoxPrimitiveAsync();
