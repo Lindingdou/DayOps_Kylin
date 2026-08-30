@@ -244,4 +244,4 @@
 - [记录] 布尔/光滑/补洞 mesh 编辑 → 需内核。倾斜摄影/OSGB → 需内核。面填充 → 需 Hatch。
 - [x] **体积/土方量计算**：`TerrainAnalysis.Volume`（TIN 相对基准面棱柱求和 → 挖方/填方/净值）。命令 体积计算/算量/VOLUME。+2 单测，158 tests。commit `2c9eaa1`。
 - [x] **两期差值算量**：`TwoEpochVolume`(两期→同 IDW 网格→逐格差值→挖方/填方/净)。命令 两期点云算量/两期算量/DIFFVOL。+1 单测，159 tests。commit `74032da`。
-- [记录] 圈范围算量(边界裁剪) → 可托管做，待评估。
+- [x] **圈范围算量**：`VolumeWithinBoundary`(三角质心在选中闭合多段线内才计) + `LineMath.PointInPolygon`。命令 圈范围算量/BNDVOL。+2 单测，161 tests。commit `c13b686`。
