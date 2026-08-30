@@ -547,6 +547,7 @@ public partial class MainWindow : Window
             if (cmd == "资源量估算" || cmd == "剥采比") { ResourceReport(null); return; }
             if (cmd == "快速估值" || cmd == "品位估值" || cmd == "克里金估值") { await EstimateGradeAsync(); return; }
             if (cmd == "点云抽稀" || cmd == "抽稀" || cmd == "点云精简") { await ThinPointsAsync(); return; }
+            if (cmd == "地面点滤波" || cmd == "地面滤波") { await GroundFilterAsync(); return; }
             if (cmd == "境界圈定" || cmd == "凸包" || cmd == "确定境界" || cmd == "采场圈定") { await BoundaryHullAsync(); return; }
             if (cmd == "剖面分析" || cmd == "剖面" || cmd == "点云剖面") { await SectionProfileAsync(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
@@ -999,6 +1000,28 @@ public partial class MainWindow : Window
         _scene.Add(curve);
         RefreshScene();
         StatusMsg.Text = $"剖面分析：{prof.Count} 采样 · 高程 {zmin:0.##}~{zmax:0.##} · 剖面长 {prof[^1].dist:0.##}";
+    }
+
+    // 地面点滤波：XYZ CSV → 每 XY 格取最低点(≈地面) → 点入场景
+    private async Task GroundFilterAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "地面点滤波：选点 CSV (x,y,z)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("点 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success) { StatusMsg.Text = $"地面点滤波：导入失败 {r.Error}"; return; }
+        double span = System.Math.Max(r.Bounds[2] - r.Bounds[0], r.Bounds[3] - r.Bounds[1]);
+        double cell = System.Math.Max(span / 80.0, 1e-6);
+        var ground = GroundFilter.LowestPerCell(r.Points, cell);
+        BeginChange();
+        foreach (var (x, y, _) in ground) { var pt = new PointEntity { X = x, Y = y }; AssignLayer(pt); _scene.Add(pt); }
+        RefreshScene();
+        Viewport.FitBounds(r.Bounds);
+        StatusMsg.Text = $"地面点滤波：{r.Points.Count} → {ground.Count} 地面点（cell {cell:0.##}）";
     }
 
     // 点云抽稀：XYZ CSV → 体素抽稀 → 抽稀后点入场景 + 报压缩比
@@ -2192,6 +2215,9 @@ public partial class MainWindow : Window
                 break;
             case "THIN":
                 _ = ThinPointsAsync();
+                break;
+            case "GROUND":
+                _ = GroundFilterAsync();
                 break;
             case "DIST":
             case "DI":
