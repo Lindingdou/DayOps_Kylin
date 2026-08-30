@@ -282,9 +282,9 @@ public partial class MainWindow : Window
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = "保存图形",
-            DefaultExtension = "pm2d",
-            SuggestedFileName = "drawing.pm2d",
-            FileTypeChoices = new[] { new FilePickerFileType("PitMine 图形") { Patterns = new[] { "*.pm2d" } } }
+            DefaultExtension = "pmx",
+            SuggestedFileName = "drawing.pmx",
+            FileTypeChoices = new[] { new FilePickerFileType("PitMine 图形") { Patterns = new[] { "*.pmx" } } }
         });
         if (file == null) return;
         try
@@ -301,7 +301,7 @@ public partial class MainWindow : Window
         {
             Title = "打开图形",
             AllowMultiple = false,
-            FileTypeFilter = new[] { new FilePickerFileType("PitMine 图形") { Patterns = new[] { "*.pm2d" } } }
+            FileTypeFilter = new[] { new FilePickerFileType("PitMine 图形") { Patterns = new[] { "*.pmx" } } }
         });
         if (files.Count == 0) return;
         try
