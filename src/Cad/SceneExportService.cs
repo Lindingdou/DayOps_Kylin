@@ -7,6 +7,7 @@ using ACadSharp.IO;
 using CSMath;
 using PitMine3D.Kylin.Cad.Draw;
 using AcLayer = ACadSharp.Tables.Layer;
+using DrawText = PitMine3D.Kylin.Cad.Draw.TextEntity;
 
 namespace PitMine3D.Kylin.Cad;
 
@@ -69,6 +70,9 @@ public static class SceneExportService
                 break;
             case PointEntity p:
                 yield return new Point { Location = new XYZ(p.X, p.Y, 0) };
+                break;
+            case DrawText t:
+                yield return new ACadSharp.Entities.TextEntity { InsertPoint = new XYZ(t.X, t.Y, 0), Height = t.Height, Value = t.Text };
                 break;
             case RectEntity r:
                 yield return Poly(new[] { (r.X0, r.Y0), (r.X1, r.Y0), (r.X1, r.Y1), (r.X0, r.Y1) }, true);

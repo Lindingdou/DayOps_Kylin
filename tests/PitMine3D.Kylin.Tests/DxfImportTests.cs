@@ -293,6 +293,21 @@ public class DxfImportTests
     }
 
     [Fact]
+    public void Text_roundtrips_through_dxf()
+    {
+        var s = new Scene();
+        s.Add(new PitMine3D.Kylin.Cad.Draw.TextEntity { X = 5, Y = 6, Height = 2.5, Text = "ZK01" });
+        string path = Path.Combine(Path.GetTempPath(), "pm_text_rt.dxf");
+        SceneExportService.Export(s, path);
+        var er = DxfImportService.LoadEntities(path);
+        Assert.True(er.Success, er.Error);
+        var t = Assert.IsType<PitMine3D.Kylin.Cad.Draw.TextEntity>(Assert.Single(er.Entities));
+        Assert.Equal("ZK01", t.Text);
+        Assert.Equal(2.5, t.Height, 3);
+        try { File.Delete(path); } catch { /* 清理失败无碍 */ }
+    }
+
+    [Fact]
     public void Export_roundtrip_preserves_segments()
     {
         string src = Path.Combine(Path.GetTempPath(), "pm_exp_src.dxf");
