@@ -10,6 +10,7 @@ namespace PitMine3D.Kylin.Cad.Draw;
 public abstract class SceneEntity
 {
     public float Cr = 0.86f, Cg = 0.9f, Cb = 0.6f;   // 绘制实体默认色（浅黄绿，区别于导入）
+    public string LayerName = "0";                    // 所属图层
 
     /// <summary>把自身镶嵌为线段（交错 P3_C3）追加到 o。</summary>
     public abstract void Tessellate(List<float> o);

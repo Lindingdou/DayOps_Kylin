@@ -86,7 +86,7 @@ public partial class MainWindow : Window
                 if (wp != null)
                 {
                     var ent = _tool.AddPoint(wp.Value.x, wp.Value.y);
-                    if (ent != null) _scene.Add(ent);
+                    if (ent != null) { AssignLayer(ent); _scene.Add(ent); }
                     RefreshScene();
                     StatusMsg.Text = $"{_tool.Prompt}（已画 {_scene.Count}）";
                 }
@@ -152,7 +152,7 @@ public partial class MainWindow : Window
             if (_tool != null && _tool.IsMultiPoint)                      // 双击结束多段线
             {
                 var e = _tool.Finish();
-                if (e != null) _scene.Add(e);
+                if (e != null) { AssignLayer(e); _scene.Add(e); }
                 RefreshScene();
                 StatusMsg.Text = $"多段线完成（已画 {_scene.Count}）";
             }
@@ -193,6 +193,7 @@ public partial class MainWindow : Window
     private (double x, double y)? _snapWorld;   // 当前捕捉到的世界点
     private bool _snapShown;                     // 捕捉标记是否已显示
     private readonly Scene _scene = new();       // 托管绘制场景
+    private readonly LayerTable _layers = new();  // 图层表
     private DrawTool? _tool;                      // 当前激活的绘制工具
     private readonly List<SceneEntity> _selected = new();   // 选择集
     private Avalonia.Point _pressPos;             // 按下位置（区分点击/拖拽）
@@ -212,6 +213,8 @@ public partial class MainWindow : Window
             if (cmd == "另存为") { await ExportDxfAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
             if (cmd == "删除") { DeleteSelected(); return; }
+            if (cmd == "新建图层") { var l = _layers.New(); StatusMsg.Text = $"新建图层「{l.Name}」并置为当前"; return; }
+            if (cmd == "图层特性管理器") { var l = _layers.CycleCurrent(); StatusMsg.Text = $"当前图层「{l.Name}」（共 {_layers.Layers.Count} 层，再点循环切换）"; return; }
             if (cmd == "移动") { StartEdit(EditMode.Move, "移动"); return; }
             if (cmd == "复制") { StartEdit(EditMode.Copy, "复制"); return; }
             if (cmd == "镜像") { StartEdit(EditMode.Mirror, "镜像"); return; }
@@ -464,6 +467,13 @@ public partial class MainWindow : Window
         return true;
     }
 
+    // 新实体归当前图层（名称 + 图层色）
+    private void AssignLayer(SceneEntity e)
+    {
+        e.LayerName = _layers.Current.Name;
+        e.Cr = _layers.Current.Cr; e.Cg = _layers.Current.Cg; e.Cb = _layers.Current.Cb;
+    }
+
     // 重绘场景（含当前工具进行中的预览，如多段线已点的段）
     private void RefreshScene()
     {
@@ -634,6 +644,10 @@ public partial class MainWindow : Window
                 break;
             case "NEW":
                 NewScene();
+                break;
+            case "LAYER":
+            case "LA":
+                { var l = _layers.CycleCurrent(); StatusMsg.Text = $"当前图层「{l.Name}」"; }
                 break;
             case "OPEN":
                 _ = OpenSceneAsync();
