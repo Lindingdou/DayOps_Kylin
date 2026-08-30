@@ -673,6 +673,7 @@ public partial class MainWindow : Window
             if (cmd == "点云质量统计" || cmd == "点云统计" || cmd == "点云质量") { await PointCloudStatsAsync(); return; }
             if (cmd == "点云高程着色" || cmd == "高程着色" || cmd == "点云着色") { await ElevationColorAsync(); return; }
             if (cmd == "网格度量" || cmd == "网格面积体积" || cmd == "网格体积") { await MeshMetricsAsync(); return; }
+            if (cmd == "网格诊断" || cmd == "网格检查" || cmd == "网格拓扑") { await MeshDiagnoseAsync(); return; }
             if (cmd == "SOR去噪" || cmd == "统计去噪" || cmd == "SOR") { await DenoiseAsync(false); return; }
             if (cmd == "ROR去噪" || cmd == "半径去噪" || cmd == "ROR") { await DenoiseAsync(true); return; }
             if (cmd == "矿床识别" || cmd == "自动识别" || cmd == "矿床类型识别") { await DepositDetectAsync(); return; }
@@ -1094,6 +1095,25 @@ public partial class MainWindow : Window
             report += $" 段{i + 1} 均衡比{s.RatioM3PerT.ToString("0.##", inv)}({s.B - s.A}期,峰值超前{s.PeakLeadWanM3:0.#})";
         }
         StatusMsg.Text = report;
+    }
+
+    // 网格诊断：OFF 网格 → 边界边/非流形边/退化三角/洞数/是否闭合 报表
+    private async Task MeshDiagnoseAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "网格诊断：选 OFF 网格",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } } }
+        });
+        if (files.Count == 0) return;
+        string text;
+        try { text = System.IO.File.ReadAllText(files[0].Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"网格诊断：读取失败 {ex.Message}"; return; }
+        var (verts, tris) = MeshMetrics.ParseOff(text);
+        if (tris.Count == 0) { StatusMsg.Text = "网格诊断：未解析到三角网格"; return; }
+        var d = MeshDiagnose.Analyze(verts, tris);
+        StatusMsg.Text = $"网格诊断：{d.TriangleCount} 三角 · {d.EdgeCount} 边 · 边界边 {d.BoundaryEdges} · 非流形边 {d.NonManifoldEdges} · 退化三角 {d.DegenerateTriangles} · 洞 {d.BoundaryLoops} · {(d.IsClosed ? "闭合(水密)" : "非闭合")}";
     }
 
     // 网格度量：OFF 网格 → 表面积/体积/包围盒 报表
@@ -3520,6 +3540,10 @@ public partial class MainWindow : Window
             case "MESHMETRICS":
             case "MESHVOLUME":
                 _ = MeshMetricsAsync();
+                break;
+            case "MESHDIAGNOSE":
+            case "MESHCHECK":
+                _ = MeshDiagnoseAsync();
                 break;
             case "SOR":
                 _ = DenoiseAsync(false);
