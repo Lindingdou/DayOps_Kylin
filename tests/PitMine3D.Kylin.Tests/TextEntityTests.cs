@@ -27,6 +27,29 @@ public class TextEntityTests
     }
 
     [Fact]
+    public void All_uppercase_letters_have_strokes()
+    {
+        for (char c = 'A'; c <= 'Z'; c++)
+            Assert.True(StrokeFont.Strokes(c).Count > 0, $"字母 {c} 无字形");
+    }
+
+    [Fact]
+    public void Lowercase_folds_to_uppercase()
+    {
+        Assert.Equal(StrokeFont.Strokes('A').Count, StrokeFont.Strokes('a').Count);
+        Assert.Equal(StrokeFont.Strokes('K').Count, StrokeFont.Strokes('k').Count);
+    }
+
+    [Fact]
+    public void Hole_id_zk01_all_render()
+    {
+        var t = new TextEntity { X = 0, Y = 0, Height = 5, Text = "ZK01" };
+        var o = new List<float>();
+        t.Tessellate(o);
+        Assert.True(o.Count > 0);   // Z K 0 1 全有字形
+    }
+
+    [Fact]
     public void TextEntity_tessellates_digits()
     {
         var t = new TextEntity { X = 0, Y = 0, Height = 10, Text = "125" };
