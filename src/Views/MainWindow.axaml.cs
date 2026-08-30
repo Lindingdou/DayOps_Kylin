@@ -342,6 +342,7 @@ public partial class MainWindow : Window
             if (cmd == "撤销") { DoUndo(); return; }
             if (cmd == "重做") { DoRedo(); return; }
             if (cmd == "导入") { await ImportDxfAsync(); return; }
+            if (cmd == "导入点") { await ImportPointsAsync(); return; }
             if (cmd == "另存为") { await ExportDxfAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
             if (cmd == "删除") { DeleteSelected(); return; }
@@ -377,13 +378,13 @@ public partial class MainWindow : Window
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "导入 CAD 图纸",
+            Title = "导入图形（DXF/DWG/OFF）",
             AllowMultiple = false,
             FileTypeFilter = new[]
             {
+                new FilePickerFileType("支持的格式 (DXF/DWG/OFF)") { Patterns = new[] { "*.dxf", "*.dwg", "*.off" } },
                 new FilePickerFileType("CAD 图纸 (DXF/DWG)") { Patterns = new[] { "*.dxf", "*.dwg" } },
-                new FilePickerFileType("DXF") { Patterns = new[] { "*.dxf" } },
-                new FilePickerFileType("DWG") { Patterns = new[] { "*.dwg" } }
+                new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } }
             }
         });
         if (files.Count == 0) return;
@@ -487,7 +488,8 @@ public partial class MainWindow : Window
     private void ImportPath(string path)
     {
         StatusMsg.Text = $"正在导入 {Path.GetFileName(path)} …";
-        var r = DxfImportService.Load(path);
+        string ext = Path.GetExtension(path).ToLowerInvariant();
+        var r = ext == ".off" ? OffImportService.Load(path) : DxfImportService.Load(path);
         if (!r.Success)
         {
             StatusMsg.Text = $"导入失败：{r.Error}";
@@ -498,6 +500,38 @@ public partial class MainWindow : Window
         PopulateObjectTree(r, Path.GetFileName(path));
         PopulateLayers(r);
         StatusMsg.Text = $"已导入 {Path.GetFileName(path)} · {r.EntityCount} 实体 · {r.SegmentCount} 线段 · {r.LayerOrder.Count} 图层";
+    }
+
+    // 点数据导入：CSV/TXT/XYZ/PTS → 可编辑的点实体（进入绘制场景，可选中/编辑/删除）
+    private async Task ImportPointsAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "导入点数据（CSV/TXT/XYZ）",
+            AllowMultiple = false,
+            FileTypeFilter = new[]
+            {
+                new FilePickerFileType("点数据 (CSV/TXT/XYZ/PTS)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz", "*.pts" } }
+            }
+        });
+        if (files.Count == 0) return;
+        ImportPointsPath(files[0].Path.LocalPath);
+    }
+
+    private void ImportPointsPath(string path)
+    {
+        var r = PointDataImportService.Load(path);
+        if (!r.Success) { StatusMsg.Text = $"点导入失败：{r.Error}"; return; }
+        BeginChange();
+        foreach (var (x, y, _) in r.Points)
+        {
+            var pt = new PointEntity { X = x, Y = y };
+            AssignLayer(pt);
+            _scene.Add(pt);
+        }
+        RefreshScene();
+        Viewport.FitBounds(r.Bounds);
+        StatusMsg.Text = $"已导入 {r.Points.Count} 个点（{Path.GetFileName(path)}）· 跳过 {r.SkippedLines} 行 · 可选中/编辑";
     }
 
     // 图层管理器：列出图层复选框，勾选控制显隐
@@ -1008,6 +1042,10 @@ public partial class MainWindow : Window
             case "EXPORTDXF":
             case "导出":
                 _ = ExportDxfAsync();
+                break;
+            case "IMPORTPT":
+            case "PTIMPORT":
+                _ = ImportPointsAsync();
                 break;
             case "DIST":
             case "DI":

@@ -286,6 +286,15 @@ public class CadGlViewport : OpenGlControlBase
         RequestNextFrameRendering();
     }
 
+    /// <summary>框住指定包围盒 [minX,minY,maxX,maxY]（供绘制/点导入等非导入几何缩放），并记为 ZE 目标。</summary>
+    public void FitBounds(double[] bounds)
+    {
+        if (bounds == null || bounds.Length < 4) return;
+        _lastBounds = bounds;
+        _camera.FitBounds(bounds);
+        RequestNextFrameRendering();
+    }
+
     /// <summary>切换地面网格 / 轴显隐（GRID）。</summary>
     public void ToggleGrid()
     {
