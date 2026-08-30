@@ -721,6 +721,7 @@ public partial class MainWindow : Window
             if (cmd == "区域求差" || cmd == "可采区域求差" || cmd == "多边形求差") { SubtractRegions(); return; }
             if (cmd == "区域重叠检测" || cmd == "区域重叠" || cmd == "重叠检测") { CheckRegionOverlap(); return; }
             if (cmd == "平盘宽度识别" || cmd == "现场参数提取" || cmd == "平盘识别") { await BenchWidthAsync(); return; }
+            if (cmd == "确定可采区域" || cmd == "可采区域" || cmd == "可采区域识别") { await MineableAreaAsync(); return; }
             if (cmd == "道路横断面" || cmd == "路面加宽超高" || cmd == "弯道加宽") { RoadCrossSectionCmd(); return; }
             if (cmd == "螺旋斜坡道" || cmd == "螺旋坑线" || cmd == "螺旋中线") { SpiralRampCmd(); return; }
             if (cmd == "折返斜坡道" || cmd == "折返坑线" || cmd == "折返中线") { SwitchbackRampCmd(); return; }
@@ -1386,6 +1387,78 @@ public partial class MainWindow : Window
         double maxH = HaulMetrics.MaxHaulM(dists);
         double avgCycle = sumCycle / samples.Count;
         StatusMsg.Text = $"运距指标({samples.Count} 车·{truck.PayloadT:0}t)：加权平均运距 {wavg:0.#}m · 最大 {maxH:0.#}m · 等效总里程 {sumEquiv / 1000.0:0.##}km · 平均循环 {avgCycle:0.#}min · 总量 {sumTons:0.#}t";
+    }
+
+    // 确定可采区域：选煤层底板 OFF + 台阶线 CSV(lineId,x,y,z) → 找采煤台阶+可采面积+上覆揭露量 报表
+    private async Task MineableAreaAsync()
+    {
+        var mf = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "确定可采区域：① 选煤层底板 OFF 网格",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } } }
+        });
+        if (mf.Count == 0) return;
+        string mtext;
+        try { mtext = System.IO.File.ReadAllText(mf[0].Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"确定可采区域：底板读取失败 {ex.Message}"; return; }
+        var (mv, mt) = MeshMetrics.ParseOff(mtext);
+        if (mt.Count == 0) { StatusMsg.Text = "确定可采区域：底板网格无三角"; return; }
+        // tuple → flat
+        var fv = new double[mv.Count * 3];
+        for (int i = 0; i < mv.Count; i++) { fv[i * 3] = mv[i].x; fv[i * 3 + 1] = mv[i].y; fv[i * 3 + 2] = mv[i].z; }
+        var ft = new int[mt.Count * 3];
+        for (int i = 0; i < mt.Count; i++) { ft[i * 3] = mt[i].a; ft[i * 3 + 1] = mt[i].b; ft[i * 3 + 2] = mt[i].c; }
+
+        var bf = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "确定可采区域：② 选台阶线 CSV (lineId,x,y,z)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("台阶线 CSV") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (bf.Count == 0) return;
+        string[] rows;
+        try { rows = System.IO.File.ReadAllLines(bf[0].Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"确定可采区域：台阶线读取失败 {ex.Message}"; return; }
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var groups = new Dictionary<string, List<double>>(); var order = new List<string>();
+        foreach (var raw in rows)
+        {
+            var s = raw.Trim();
+            if (s.Length == 0 || s.StartsWith("#")) continue;
+            var t = s.Split(new[] { ',', '\t', ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
+            if (t.Length < 4) continue;
+            if (!double.TryParse(t[1], System.Globalization.NumberStyles.Float, inv, out double x)) continue;
+            if (!double.TryParse(t[2], System.Globalization.NumberStyles.Float, inv, out double y)) continue;
+            if (!double.TryParse(t[3], System.Globalization.NumberStyles.Float, inv, out double z)) continue;
+            string id = t[0];
+            if (!groups.TryGetValue(id, out var list)) { list = new(); groups[id] = list; order.Add(id); }
+            list.Add(x); list.Add(y); list.Add(z);
+        }
+        var benches = new List<MineableAreaIdentifier.BenchLine>();
+        foreach (var id in order)
+        {
+            var arr = groups[id].ToArray();
+            if (arr.Length < 6) continue;
+            // 首末点近重合 → 判闭合
+            bool closed = arr.Length >= 9 &&
+                System.Math.Abs(arr[0] - arr[arr.Length - 3]) < 1e-6 && System.Math.Abs(arr[1] - arr[arr.Length - 2]) < 1e-6;
+            benches.Add(MineableAreaIdentifier.BenchLine.From(arr, closed));
+        }
+        if (benches.Count == 0) { StatusMsg.Text = "确定可采区域：未解析到台阶线"; return; }
+        var r = MineableAreaIdentifier.Identify(fv, ft, benches, wMin: 20, benchH: 15, faceAngleDeg: 65, bermW: 5);
+        if (!r.Ok) { StatusMsg.Text = $"确定可采区域：{r.Message}"; return; }
+        // 高亮采煤台阶环
+        if (r.CoalBench != null && r.CoalBench.Xyz.Length >= 6)
+        {
+            var pl = new PolylineEntity { Closed = r.CoalBench.Closed, Cr = 0.95f, Cg = 0.3f, Cb = 0.3f };
+            for (int i = 0; i + 2 < r.CoalBench.Xyz.Length; i += 3) pl.Points.Add((r.CoalBench.Xyz[i], r.CoalBench.Xyz[i + 1]));
+            BeginChange(); _scene.Add(pl); RefreshScene();
+        }
+        string strip = r.Overburden.Count > 0
+            ? $" · 上覆揭露: " + string.Join(", ", r.Overburden.Select(o => $"Z{o.Z:0}退{o.StripBackM:0.#}m"))
+            : "";
+        StatusMsg.Text = $"确定可采区域：{r.Message}{strip}";
     }
 
     // 平盘宽度识别(现场参数提取)：读台阶线 CSV(lineId,x,y,z) → 圈出宽度 ≥ 目标 的平盘 → 多边形入场景
@@ -4145,6 +4218,9 @@ public partial class MainWindow : Window
             case "BENCHWIDTH":
             case "WIDEBENCH":
                 _ = BenchWidthAsync();
+                break;
+            case "MINEABLEAREA":
+                _ = MineableAreaAsync();
                 break;
             case "ROADSECTION":
             case "ROADWIDEN":
