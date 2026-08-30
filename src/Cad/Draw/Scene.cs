@@ -49,6 +49,9 @@ public abstract class SceneEntity
     /// <summary>应用仿射变换，返回变换后的新实体（移动/旋转/缩放/镜像）。</summary>
     public abstract SceneEntity Apply(Affine2 m);
 
+    /// <summary>偏移：向点击 (px,py) 一侧平行偏移，返回新实体；不支持返回 null。</summary>
+    public virtual SceneEntity? Offset(double px, double py) => null;
+
     /// <summary>把本实体颜色复制给 e 并返回（变换保留颜色）。</summary>
     protected T Colored<T>(T e) where T : SceneEntity { e.Cr = Cr; e.Cg = Cg; e.Cb = Cb; return e; }
 }
@@ -92,6 +95,14 @@ public sealed class LineEntity : SceneEntity
         var (x0, y0) = m.Map(X0, Y0); var (x1, y1) = m.Map(X1, Y1);
         return Colored(new LineEntity { X0 = x0, Y0 = y0, X1 = x1, Y1 = y1 });
     }
+    public override SceneEntity? Offset(double px, double py)
+    {
+        double dx = X1 - X0, dy = Y1 - Y0, len = Math.Sqrt(dx * dx + dy * dy);
+        if (len < 1e-9) return null;
+        double nx = -dy / len, ny = dx / len;               // 单位法线
+        double d = (px - X0) * nx + (py - Y0) * ny;         // 点击到直线的带符号法向距离
+        return Colored(new LineEntity { X0 = X0 + nx * d, Y0 = Y0 + ny * d, X1 = X1 + nx * d, Y1 = Y1 + ny * d });
+    }
 }
 
 public sealed class CircleEntity : SceneEntity
@@ -112,6 +123,11 @@ public sealed class CircleEntity : SceneEntity
     {
         var (cx, cy) = m.Map(Cx, Cy);
         return Colored(new CircleEntity { Cx = cx, Cy = cy, Radius = Radius * m.ScaleMag, Segments = Segments });
+    }
+    public override SceneEntity? Offset(double px, double py)
+    {
+        double r = Math.Sqrt((px - Cx) * (px - Cx) + (py - Cy) * (py - Cy));
+        return r < 1e-6 ? null : Colored(new CircleEntity { Cx = Cx, Cy = Cy, Radius = r, Segments = Segments });
     }
 }
 
@@ -135,6 +151,14 @@ public sealed class RectEntity : SceneEntity
         pl.Points.Add(m.Map(X0, Y0)); pl.Points.Add(m.Map(X1, Y0));
         pl.Points.Add(m.Map(X1, Y1)); pl.Points.Add(m.Map(X0, Y1));
         return Colored(pl);
+    }
+    public override SceneEntity? Offset(double px, double py)
+    {
+        double minX = Math.Min(X0, X1), maxX = Math.Max(X0, X1), minY = Math.Min(Y0, Y1), maxY = Math.Max(Y0, Y1);
+        bool inside = px > minX && px < maxX && py > minY && py < maxY;
+        double d = DistanceTo(px, py);
+        double off = inside ? -d : d;
+        return Colored(new RectEntity { X0 = minX - off, Y0 = minY - off, X1 = maxX + off, Y1 = maxY + off });
     }
 }
 

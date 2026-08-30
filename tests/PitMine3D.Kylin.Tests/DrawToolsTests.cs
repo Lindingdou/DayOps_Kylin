@@ -152,4 +152,21 @@ public class DrawToolsTests
         var s = (CircleEntity)c.Apply(Affine2.Scale(3, 0, 0));
         Assert.Equal(6, s.Radius, 4);
     }
+
+    [Fact]
+    public void LineEntity_offset_perpendicular()
+    {
+        var line = new LineEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 0 };   // 沿 X 轴
+        var off = (LineEntity)line.Offset(5, 3)!;                        // 点击上方 3
+        Assert.Equal(3, off.Y0, 4);
+        Assert.Equal(3, off.Y1, 4);
+    }
+
+    [Fact]
+    public void CircleEntity_offset_to_click_radius()
+    {
+        var c = new CircleEntity { Cx = 0, Cy = 0, Radius = 2 };
+        var off = (CircleEntity)c.Offset(5, 0)!;                         // 点击距心 5
+        Assert.Equal(5, off.Radius, 4);
+    }
 }

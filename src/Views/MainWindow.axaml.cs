@@ -78,6 +78,22 @@ public partial class MainWindow : Window
                 return;
             }
 
+            // 偏移：点击一侧 → 偏移选中实体（保留原实体颜色/图层）
+            if (_offsetActive && props.IsLeftButtonPressed)
+            {
+                _nav = NavMode.None;
+                var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                if (wp != null && _selected.Count == 1)
+                {
+                    var off = _selected[0].Offset(wp.Value.x, wp.Value.y);
+                    if (off != null) { _scene.Add(off); StatusMsg.Text = "已偏移"; }
+                    else StatusMsg.Text = "该实体暂不支持偏移（记录：多段线/圆弧偏移待做）";
+                    RefreshScene();
+                }
+                _offsetActive = false;
+                return;
+            }
+
             // 绘制工具：左键喂点（凑齐一个实体则加入场景并重绘）
             if (_tool != null && props.IsLeftButtonPressed)
             {
@@ -171,6 +187,7 @@ public partial class MainWindow : Window
                 _measure = null;
                 _editMode = EditMode.None;
                 _editPts.Clear();
+                _offsetActive = false;
                 _selected.Clear();
                 Viewport.SetSnapMarker(null);
                 Viewport.SetHighlight(null);
@@ -200,6 +217,7 @@ public partial class MainWindow : Window
     private enum EditMode { None, Move, Copy, Mirror, Rotate, Scale }
     private EditMode _editMode = EditMode.None;
     private readonly List<(double x, double y)> _editPts = new();   // 编辑取的点（基点/目标点/参照…）
+    private bool _offsetActive;                    // 偏移：等待点击一侧
 
     // Ribbon 按钮 → 「导入」走真实 DXF 导入；其余暂回显命令（证明整条 UI 已接线）
     private async void OnRibbonCommand(object? sender, RoutedEventArgs e)
@@ -220,6 +238,7 @@ public partial class MainWindow : Window
             if (cmd == "镜像") { StartEdit(EditMode.Mirror, "镜像"); return; }
             if (cmd == "旋转") { StartEdit(EditMode.Rotate, "旋转"); return; }
             if (cmd == "缩放") { StartEdit(EditMode.Scale, "缩放"); return; }
+            if (cmd == "偏移") { StartOffset(); return; }
             if (ActivateDrawTool(cmd)) return;
             StatusMsg.Text = $"命令: {cmd}";
             CommandInput.Text = cmd;
@@ -523,6 +542,13 @@ public partial class MainWindow : Window
         StatusMsg.Text = mode == EditMode.Mirror ? $"{name}：指定镜像线第一点" : $"{name}：指定基点";
     }
 
+    private void StartOffset()
+    {
+        if (_selected.Count != 1) { StatusMsg.Text = "偏移：请先选中一个实体"; return; }
+        _offsetActive = true; _tool = null; _measure = null; _editMode = EditMode.None;
+        StatusMsg.Text = "偏移：点击偏移到的一侧";
+    }
+
     private static int EditPointCount(EditMode m) => m == EditMode.Scale ? 3 : 2;
 
     private static string EditPrompt(EditMode m, int have) => (m, have) switch
@@ -641,6 +667,10 @@ public partial class MainWindow : Window
             case "SCALE":
             case "SC":
                 StartEdit(EditMode.Scale, "缩放");
+                break;
+            case "OFFSET":
+            case "O":
+                StartOffset();
                 break;
             case "NEW":
                 NewScene();
