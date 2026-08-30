@@ -100,4 +100,22 @@ public class DrawToolsTests
         t.AddPoint(0, 0);
         Assert.Null(t.Finish());   // 只 1 点，不成线
     }
+
+    [Fact]
+    public void LineEntity_distance_to_point()
+    {
+        var line = new LineEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 0 };
+        Assert.Equal(2, line.DistanceTo(5, 2), 4);   // 垂距
+        Assert.Equal(0, line.DistanceTo(5, 0), 4);   // 线上
+    }
+
+    [Fact]
+    public void Scene_pick_within_tolerance()
+    {
+        var s = new Scene();
+        var line = new LineEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 0 };
+        s.Add(line);
+        Assert.Same(line, s.Pick(5, 0.5, 1.0));   // 容差内命中
+        Assert.Null(s.Pick(5, 5, 1.0));           // 容差外
+    }
 }

@@ -19,6 +19,31 @@ public abstract class SceneEntity
         o.Add((float)x0); o.Add((float)y0); o.Add(0); o.Add(Cr); o.Add(Cg); o.Add(Cb);
         o.Add((float)x1); o.Add((float)y1); o.Add(0); o.Add(Cr); o.Add(Cg); o.Add(Cb);
     }
+
+    /// <summary>点 (px,py) 到本实体几何的最近距离（拾取用；对自身镶嵌的每段求点到线段距离取最小）。</summary>
+    public double DistanceTo(double px, double py)
+    {
+        var o = new List<float>();
+        Tessellate(o);
+        double best = double.MaxValue;
+        for (int i = 0; i + 11 < o.Count; i += 12)
+        {
+            double d = SegDist(px, py, o[i], o[i + 1], o[i + 6], o[i + 7]);
+            if (d < best) best = d;
+        }
+        return best;
+    }
+
+    /// <summary>点到线段距离。</summary>
+    protected static double SegDist(double px, double py, double ax, double ay, double bx, double by)
+    {
+        double dx = bx - ax, dy = by - ay;
+        double len2 = dx * dx + dy * dy;
+        double t = len2 < 1e-12 ? 0 : ((px - ax) * dx + (py - ay) * dy) / len2;
+        t = Math.Clamp(t, 0, 1);
+        double cx = ax + t * dx, cy = ay + t * dy;
+        return Math.Sqrt((px - cx) * (px - cx) + (py - cy) * (py - cy));
+    }
 }
 
 public sealed class LineEntity : SceneEntity
@@ -131,6 +156,21 @@ public sealed class Scene
         Entities.RemoveAt(Entities.Count - 1);
         return true;
     }
+
+    /// <summary>拾取：容差 tol 内离 (x,y) 最近的实体；无则 null。</summary>
+    public SceneEntity? Pick(double x, double y, double tol)
+    {
+        SceneEntity? best = null;
+        double bestD = tol;
+        foreach (var e in Entities)
+        {
+            double d = e.DistanceTo(x, y);
+            if (d <= bestD) { bestD = d; best = e; }
+        }
+        return best;
+    }
+
+    public bool Remove(SceneEntity e) => Entities.Remove(e);
 
     public float[] BuildGeometry()
     {

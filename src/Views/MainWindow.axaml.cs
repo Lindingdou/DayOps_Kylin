@@ -31,6 +31,7 @@ public partial class MainWindow : Window
         {
             var props = e.GetCurrentPoint(ViewportHost).Properties;
             _lastPointer = e.GetPosition(ViewportHost);
+            _pressPos = _lastPointer;
 
             // 测距模式：左键取点（第一/第二点）
             if (_measure != null && props.IsLeftButtonPressed)
@@ -114,8 +115,13 @@ public partial class MainWindow : Window
         };
         ViewportHost.PointerReleased += (_, e) =>
         {
+            var rel = e.GetPosition(ViewportHost);
+            // 无拖动 + 非绘制/测距 → 视为点选
+            bool wasClick = _nav != NavMode.None && _tool == null && _measure == null
+                && System.Math.Abs(rel.X - _pressPos.X) < 4 && System.Math.Abs(rel.Y - _pressPos.Y) < 4;
             _nav = NavMode.None;
             e.Pointer.Capture(null);
+            if (wasClick) PickAt(rel);
         };
         ViewportHost.PointerWheelChanged += (_, e) =>
         {
@@ -144,10 +150,16 @@ public partial class MainWindow : Window
             {
                 _tool = null;
                 _measure = null;
+                _selected.Clear();
                 Viewport.SetSnapMarker(null);
+                Viewport.SetHighlight(null);
                 _snapShown = false;
                 RefreshScene();          // 清除进行中的预览
                 StatusMsg.Text = "就绪";
+            }
+            else if (e.Key == Key.Delete)
+            {
+                DeleteSelected();
             }
         };
     }
@@ -161,6 +173,8 @@ public partial class MainWindow : Window
     private bool _snapShown;                     // 捕捉标记是否已显示
     private readonly Scene _scene = new();       // 托管绘制场景
     private DrawTool? _tool;                      // 当前激活的绘制工具
+    private readonly List<SceneEntity> _selected = new();   // 选择集
+    private Avalonia.Point _pressPos;             // 按下位置（区分点击/拖拽）
 
     // Ribbon 按钮 → 「导入」走真实 DXF 导入；其余暂回显命令（证明整条 UI 已接线）
     private async void OnRibbonCommand(object? sender, RoutedEventArgs e)
@@ -170,6 +184,7 @@ public partial class MainWindow : Window
             if (cmd == "导入") { await ImportDxfAsync(); return; }
             if (cmd == "另存为") { await ExportDxfAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
+            if (cmd == "删除") { DeleteSelected(); return; }
             if (ActivateDrawTool(cmd)) return;
             StatusMsg.Text = $"命令: {cmd}";
             CommandInput.Text = cmd;
@@ -375,6 +390,39 @@ public partial class MainWindow : Window
         Viewport.SetSceneGeometry(list.ToArray());
     }
 
+    // 点选：命中则单选(再点取消)，未命中清空
+    private void PickAt(Avalonia.Point rel)
+    {
+        var w = _snapWorld ?? Viewport.ScreenToWorld(rel.X, rel.Y);
+        if (w == null) return;
+        double tol = SnapTolWorld(rel);
+        var hit = _scene.Pick(w.Value.x, w.Value.y, tol);
+        if (hit == null) _selected.Clear();
+        else if (_selected.Contains(hit)) _selected.Remove(hit);
+        else { _selected.Clear(); _selected.Add(hit); }
+        HighlightSelection();
+        StatusMsg.Text = _selected.Count > 0 ? $"已选 {_selected.Count} 个实体" : "未选中";
+    }
+
+    private void HighlightSelection()
+    {
+        if (_selected.Count == 0) { Viewport.SetHighlight(null); return; }
+        var o = new List<float>();
+        foreach (var e in _selected) e.Tessellate(o);
+        Viewport.SetHighlight(o.ToArray());
+    }
+
+    private void DeleteSelected()
+    {
+        if (_selected.Count == 0) { StatusMsg.Text = "未选中实体"; return; }
+        foreach (var e in _selected) _scene.Remove(e);
+        int n = _selected.Count;
+        _selected.Clear();
+        Viewport.SetHighlight(null);
+        RefreshScene();
+        StatusMsg.Text = $"已删除 {n} 个实体";
+    }
+
     // 命令行回车 → 命令分发（已实装的走功能，其余回显）
     private void OnCommandKeyDown(object? sender, KeyEventArgs e)
     {
@@ -419,6 +467,10 @@ public partial class MainWindow : Window
                 _measure = new MeasureState();
                 _tool = null;
                 StatusMsg.Text = "测距：点第一点";
+                break;
+            case "ERASE":
+            case "E":
+                DeleteSelected();
                 break;
             default:
                 if (!ActivateDrawTool(cmd)) StatusMsg.Text = $"执行: {cmd}";
