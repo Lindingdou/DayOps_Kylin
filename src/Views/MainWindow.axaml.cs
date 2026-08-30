@@ -604,6 +604,7 @@ public partial class MainWindow : Window
             if (cmd == "文字" || cmd == "单行文字") { ArmText(); return; }
             if (cmd == "标注" || cmd == "线性标注" || cmd == "尺寸标注" || cmd == "标注台阶标高") { StartDim(); return; }
             if (cmd == "裁剪" || cmd == "多边形裁剪" || cmd == "区运算" || cmd == "范围裁剪") { ClipPolygon(); return; }
+            if (cmd == "平滑" || cmd == "光滑" || cmd == "曲线平滑" || cmd == "光滑曲线") { SmoothPolyline(); return; }
             if (cmd == "坐标转换") { await CoordTransformAsync(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
@@ -1212,6 +1213,21 @@ public partial class MainWindow : Window
         _tool = null; _measure = null; _editMode = EditMode.None;
         Viewport.FitBounds(r.Bounds);
         StatusMsg.Text = $"高程查询：已载入 {r.Points.Count} 点，点击视口任意位置查询高程（ESC 退出）";
+    }
+
+    // 曲线平滑：对选中多段线做 Chaikin 平滑替换
+    private void SmoothPolyline()
+    {
+        if (_selected.Count != 1 || _selected[0] is not PolylineEntity pl || pl.Points.Count < 3)
+        { StatusMsg.Text = "平滑：请先选中一条至少 3 点的多段线"; return; }
+        var sm = PolylineSmooth.Chaikin(pl.Points, 3, pl.Closed);
+        var np = new PolylineEntity { Closed = pl.Closed, Cr = pl.Cr, Cg = pl.Cg, Cb = pl.Cb, LayerName = pl.LayerName };
+        foreach (var p in sm) np.Points.Add(p);
+        BeginChange();
+        _scene.Replace(pl, np);
+        _selected.Clear(); _selected.Add(np);
+        RefreshScene(); HighlightSelection();
+        StatusMsg.Text = $"曲线平滑：{pl.Points.Count} → {np.Points.Count} 点（Chaikin×3）";
     }
 
     // 多边形裁剪：选两条多段线(第1=被裁, 第2=凸裁剪边界)→交集
@@ -2531,6 +2547,9 @@ public partial class MainWindow : Window
                 break;
             case "CLIP":
                 ClipPolygon();
+                break;
+            case "SMOOTH":
+                SmoothPolyline();
                 break;
             case "DIST":
             case "DI":
