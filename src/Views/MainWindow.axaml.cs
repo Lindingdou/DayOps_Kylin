@@ -725,6 +725,8 @@ public partial class MainWindow : Window
             if (cmd == "区域重叠检测" || cmd == "区域重叠" || cmd == "重叠检测") { CheckRegionOverlap(); return; }
             if (cmd == "平盘宽度识别" || cmd == "现场参数提取" || cmd == "平盘识别") { await BenchWidthAsync(); return; }
             if (cmd == "确定可采区域" || cmd == "可采区域" || cmd == "可采区域识别") { await MineableAreaAsync(); return; }
+            if (cmd == "点落到面上" || cmd == "点落面" || cmd == "点投影到面") { await ProjectPointsToMeshAsync(); return; }
+            if (cmd == "线落到面上" || cmd == "线落面" || cmd == "线投影到面") { await ProjectPolylinesToMeshAsync(); return; }
             if (cmd == "侧面三角网" || cmd == "侧面放样" || cmd == "放样侧面") { await SideSurfaceAsync(); return; }
             if (cmd == "道路横断面" || cmd == "路面加宽超高" || cmd == "弯道加宽") { RoadCrossSectionCmd(); return; }
             if (cmd == "平行推进" || cmd == "开采程序确定" || cmd == "工作线推进") { AdvanceCmd(AdvanceMode.Parallel, "平行推进"); return; }
@@ -1608,6 +1610,99 @@ public partial class MainWindow : Window
             ? $" · 上覆揭露: " + string.Join(", ", r.Overburden.Select(o => $"Z{o.Z:0}退{o.StripBackM:0.#}m"))
             : "";
         StatusMsg.Text = $"确定可采区域：{r.Message}{strip}";
+    }
+
+    // 读网格 OFF → flat (verts, tris)；失败返回 (null,null)
+    private (double[]? v, int[]? t) ReadMeshFlat(string path)
+    {
+        string text;
+        try { text = System.IO.File.ReadAllText(path); } catch { return (null, null); }
+        var (mv, mt) = MeshMetrics.ParseOff(text);
+        if (mt.Count == 0) return (null, null);
+        var v = new double[mv.Count * 3];
+        for (int i = 0; i < mv.Count; i++) { v[i * 3] = mv[i].x; v[i * 3 + 1] = mv[i].y; v[i * 3 + 2] = mv[i].z; }
+        var t = new int[mt.Count * 3];
+        for (int i = 0; i < mt.Count; i++) { t[i * 3] = mt[i].a; t[i * 3 + 1] = mt[i].b; t[i * 3 + 2] = mt[i].c; }
+        return (v, t);
+    }
+
+    // 点落到面上：选网格 OFF + 点 CSV(x,y) → 逐点重心插值取 Z → 落 .draped.csv(x,y,z) + 点入场景
+    private async Task ProjectPointsToMeshAsync()
+    {
+        var mf = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "点落到面上：① 选网格 OFF", AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } } }
+        });
+        if (mf.Count == 0) return;
+        var (v, t) = ReadMeshFlat(mf[0].Path.LocalPath);
+        if (v == null || t == null) { StatusMsg.Text = "点落到面上：网格无三角"; return; }
+        var pfp = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "点落到面上：② 选点 CSV (x,y)", AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("点 CSV") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (pfp.Count == 0) return;
+        var r = PointDataImportService.Load(pfp[0].Path.LocalPath);
+        if (!r.Success) { StatusMsg.Text = $"点落到面上：点导入失败 {r.Error}"; return; }
+        var xy = new List<(double x, double y)>();
+        foreach (var p in r.Points) xy.Add((p.x, p.y));
+        var (draped, missed) = MeshProjector.Drape(v, t, xy);
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var sb = new System.Text.StringBuilder("x,y,z\n");
+        foreach (var (x, y, z) in draped) sb.Append(x.ToString("R", inv)).Append(',').Append(y.ToString("R", inv)).Append(',').Append(z.ToString("R", inv)).Append('\n');
+        string outPath = System.IO.Path.ChangeExtension(pfp[0].Path.LocalPath, ".draped.csv");
+        try { System.IO.File.WriteAllText(outPath, sb.ToString()); } catch (System.Exception ex) { StatusMsg.Text = $"点落到面上：写出失败 {ex.Message}"; return; }
+        BeginChange();
+        foreach (var (x, y, _) in draped) _scene.Add(new PointEntity { X = x, Y = y, Cr = 0.3f, Cg = 0.85f, Cb = 0.95f });
+        RefreshScene();
+        StatusMsg.Text = $"点落到面上：{draped.Count} 点投影(未命中 {missed}) → {System.IO.Path.GetFileName(outPath)}(x,y,z)";
+    }
+
+    // 线落到面上：选网格 OFF + 线 CSV(lineId,x,y) → 逐顶点重心插值取 Z → 落 .draped.csv(lineId,x,y,z) + 线入场景
+    private async Task ProjectPolylinesToMeshAsync()
+    {
+        var mf = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "线落到面上：① 选网格 OFF", AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } } }
+        });
+        if (mf.Count == 0) return;
+        var (v, t) = ReadMeshFlat(mf[0].Path.LocalPath);
+        if (v == null || t == null) { StatusMsg.Text = "线落到面上：网格无三角"; return; }
+        var lf = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "线落到面上：② 选线 CSV (lineId,x,y)", AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("线 CSV") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (lf.Count == 0) return;
+        var evo = ReadEvoLines(lf[0].Path.LocalPath);   // 复用分组(lineId,x,y[,z]) → EvoLine
+        if (evo.Count == 0) { StatusMsg.Text = "线落到面上：未解析到线(需 lineId,x,y, 每线≥2点)"; return; }
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var sb = new System.Text.StringBuilder("lineId,x,y,z\n");
+        int totV = 0, missed = 0;
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        BeginChange();
+        foreach (var ln in evo)
+        {
+            var xy = new List<(double x, double y)>();
+            foreach (var p in ln.Centerline) xy.Add((p.X, p.Y));
+            var (draped, miss) = MeshProjector.Drape(v, t, xy);
+            missed += miss; totV += draped.Count;
+            var pl = new PolylineEntity { Cr = 0.35f, Cg = 0.9f, Cb = 0.55f };
+            foreach (var (x, y, z) in draped)
+            {
+                pl.Points.Add((x, y));
+                sb.Append(ln.Id).Append(',').Append(x.ToString("R", inv)).Append(',').Append(y.ToString("R", inv)).Append(',').Append(z.ToString("R", inv)).Append('\n');
+                if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y;
+            }
+            _scene.Add(pl);
+        }
+        RefreshScene();
+        if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
+        string outPath = System.IO.Path.ChangeExtension(lf[0].Path.LocalPath, ".draped.csv");
+        try { System.IO.File.WriteAllText(outPath, sb.ToString()); } catch (System.Exception ex) { StatusMsg.Text = $"线落到面上：写出失败 {ex.Message}"; return; }
+        StatusMsg.Text = $"线落到面上：{evo.Count} 线·{totV} 顶点投影(未命中 {missed}) → {System.IO.Path.GetFileName(outPath)}";
     }
 
     // 平盘宽度识别(现场参数提取)：读台阶线 CSV(lineId,x,y,z) → 圈出宽度 ≥ 目标 的平盘 → 多边形入场景
@@ -4484,6 +4579,12 @@ public partial class MainWindow : Window
                 break;
             case "MINEABLEAREA":
                 _ = MineableAreaAsync();
+                break;
+            case "POINTPROJECT":
+                _ = ProjectPointsToMeshAsync();
+                break;
+            case "POLYPROJECT":
+                _ = ProjectPolylinesToMeshAsync();
                 break;
             case "SIDESURFACE":
             case "LOFT":
