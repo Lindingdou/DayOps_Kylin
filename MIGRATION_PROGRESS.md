@@ -286,3 +286,4 @@
 ### 文字（单笔画解锁）
 - [x] **文字(数字/符号)**：`StrokeFont`(7段数字+.-+:/ XYZM) + `TextEntity`(镶嵌线段, Apply/Grips/SceneIO)。命令 文字/TEXT。部分解锁原 Skia 阻塞——数字/坐标/尺寸标注可显。+5 单测，219 tests。commit `a0f84c5`。
 - [记录] **中文字形/完整 Latin** → 需矢量字库(单笔画 Hershey 或轮廓字体+三角化)；填充/字体样式 → 需 Skia。
+- [x] **线性标注(尺寸)**：`DimTools.Build`(尺寸线+刻度+距离文字, 复用单笔画字体)。命令 标注/线性标注/DIM。文字解锁后新增。+3 单测，222 tests。commit `e0a0d07`。
