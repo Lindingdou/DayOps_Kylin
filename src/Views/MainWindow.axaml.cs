@@ -903,21 +903,28 @@ public partial class MainWindow : Window
         int n = 64, levels = 10;
         var grid = Contour.GridFromPoints(r.Points, n, n, out double gx0, out double gy0, out double gdx, out double gdy);
         double step = (zmax - zmin) / (levels + 1);
+        double labelH = System.Math.Max((r.Bounds[2] - r.Bounds[0]) / 60.0, 1e-3);   // 标注字高
         BeginChange();
         int segCount = 0;
         for (int k = 1; k <= levels; k++)
         {
             double L = zmin + step * k;
             float t = (float)((L - zmin) / (zmax - zmin));
-            foreach (var s in Contour.MarchingSquares(grid, gx0, gy0, gdx, gdy, L))
+            var segs = Contour.MarchingSquares(grid, gx0, gy0, gdx, gdy, L);
+            foreach (var s in segs)
             {
                 _scene.Add(new LineEntity { X0 = s.x0, Y0 = s.y0, X1 = s.x1, Y1 = s.y1, Cr = t, Cg = 0.45f, Cb = 1 - t });
                 segCount++;
             }
+            if (segs.Count > 0)   // 每层一个高程数字标注(取中间那段)
+            {
+                var mid = segs[segs.Count / 2];
+                _scene.Add(new TextEntity { X = mid.x0, Y = mid.y0, Height = labelH, Text = L.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture), Cr = t, Cg = 0.45f, Cb = 1 - t });
+            }
         }
         RefreshScene();
         Viewport.FitBounds(r.Bounds);
-        StatusMsg.Text = $"等高线：{r.Points.Count} 点 → {levels} 层 · {segCount} 段（z {zmin:0.#}~{zmax:0.#}）";
+        StatusMsg.Text = $"等高线：{r.Points.Count} 点 → {levels} 层 · {segCount} 段 + 高程标注（z {zmin:0.#}~{zmax:0.#}）";
     }
 
     // 创建三角网：散点 CSV → Delaunay → 三角边线框入场景
