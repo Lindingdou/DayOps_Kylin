@@ -21,6 +21,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         PopulateDrawingLayers();   // 启动即显示绘制图层("0")，可管理
+        SetDocPath(null);          // 初始标题=未命名
 
         // OpenGL 上下文就绪后，把真实后端版本显示到视口与状态栏
         Viewport.GlReady += backend =>
@@ -437,6 +438,7 @@ public partial class MainWindow : Window
     private (double x, double y)? _cursorWorld; // 当前光标世界点(橡皮筋预览用)
     private (double x, double y)? _lastInputPoint; // 上一取点(命令行相对坐标 @ 的基点)
     private float[] _snapVerts = System.Array.Empty<float>();   // 场景几何顶点缓存(对象捕捉源)
+    private string? _currentPath;                  // 当前 .pmx 文档路径(保存直接回写)
     private bool _snapShown;                     // 捕捉标记是否已显示
     private bool _slideActive;                   // 滑动多段线：已激活(等待按下)
     private bool _slideDragging;                 // 滑动多段线：正在按住拖动
@@ -574,8 +576,8 @@ public partial class MainWindow : Window
         string ext = Path.GetExtension(path).ToLowerInvariant();
         try
         {
-            if (ext == ".pmx") { File.WriteAllText(path, SceneIO.Save(_scene)); StatusMsg.Text = $"已另存 {Path.GetFileName(path)} · {_scene.Count} 实体"; }
-            else { int n = SceneExportService.Export(_scene, path); StatusMsg.Text = $"已另存 {Path.GetFileName(path)} · {n} 实体"; }
+            if (ext == ".pmx") { File.WriteAllText(path, SceneIO.Save(_scene)); SetDocPath(path); StatusMsg.Text = $"已另存 {Path.GetFileName(path)} · {_scene.Count} 实体"; }
+            else { int n = SceneExportService.Export(_scene, path); StatusMsg.Text = $"已导出 {Path.GetFileName(path)} · {n} 实体（.dxf/.dwg 不改当前文档）"; }
         }
         catch (System.Exception ex) { StatusMsg.Text = $"另存失败：{ex.Message}"; }
     }
@@ -603,24 +605,38 @@ public partial class MainWindow : Window
         _layers.Reset();
         PopulateDrawingLayers();
         _undo.Clear();
+        SetDocPath(null);
         RefreshScene();
         StatusMsg.Text = "新建图形（已重置：绘图/导入/图层/选择/撤销）";
     }
 
+    // 设置当前文档路径并更新窗口标题
+    private void SetDocPath(string? path)
+    {
+        _currentPath = path;
+        Title = "PitMine3D · Kylin — " + (path == null ? "未命名" : Path.GetFileName(path));
+    }
+
     private async Task SaveSceneAsync()
     {
-        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        string? path = _currentPath;
+        if (path == null || Path.GetExtension(path).ToLowerInvariant() != ".pmx")   // 无当前 .pmx → 弹框
         {
-            Title = "保存图形",
-            DefaultExtension = "pmx",
-            SuggestedFileName = "drawing.pmx",
-            FileTypeChoices = new[] { new FilePickerFileType("PitMine 图形") { Patterns = new[] { "*.pmx" } } }
-        });
-        if (file == null) return;
+            var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = "保存图形",
+                DefaultExtension = "pmx",
+                SuggestedFileName = "drawing.pmx",
+                FileTypeChoices = new[] { new FilePickerFileType("PitMine 图形") { Patterns = new[] { "*.pmx" } } }
+            });
+            if (file == null) return;
+            path = file.Path.LocalPath;
+        }
         try
         {
-            File.WriteAllText(file.Path.LocalPath, SceneIO.Save(_scene));
-            StatusMsg.Text = $"已保存 {Path.GetFileName(file.Path.LocalPath)} · {_scene.Count} 实体";
+            File.WriteAllText(path, SceneIO.Save(_scene));
+            SetDocPath(path);
+            StatusMsg.Text = $"已保存 {Path.GetFileName(path)} · {_scene.Count} 实体";
         }
         catch (System.Exception ex) { StatusMsg.Text = $"保存失败：{ex.Message}"; }
     }
@@ -642,6 +658,7 @@ public partial class MainWindow : Window
             _selected.Clear();
             Viewport.SetHighlight(null);
             RefreshScene();
+            SetDocPath(files[0].Path.LocalPath);
             StatusMsg.Text = $"已打开 {Path.GetFileName(files[0].Path.LocalPath)} · {_scene.Count} 实体";
         }
         catch (System.Exception ex) { StatusMsg.Text = $"打开失败：{ex.Message}"; }
