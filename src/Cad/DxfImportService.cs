@@ -470,6 +470,25 @@ public static class DxfImportService
                     if (pl.Points.Count >= 2) Finalize(pl, xf, col, layer);
                     break;
                 }
+                case Polyline3D p3:
+                {
+                    var pl = new PolylineEntity { Closed = p3.IsClosed };
+                    foreach (var v in p3.Vertices) pl.Points.Add((v.Location.X, v.Location.Y));
+                    if (pl.Points.Count >= 2) Finalize(pl, xf, col, layer);
+                    break;
+                }
+                case XLine xl:   // 构造线(无限)→ 过点双向长线段近似
+                {
+                    var s = xl.FirstPoint; var d = xl.Direction;
+                    Finalize(new LineEntity { X0 = s.X - d.X * 10000, Y0 = s.Y - d.Y * 10000, X1 = s.X + d.X * 10000, Y1 = s.Y + d.Y * 10000 }, xf, col, layer);
+                    break;
+                }
+                case Ray ry:     // 射线(半无限)→ 起点朝方向长线段近似
+                {
+                    var s = ry.StartPoint; var d = ry.Direction;
+                    Finalize(new LineEntity { X0 = s.X, Y0 = s.Y, X1 = s.X + d.X * 10000, Y1 = s.Y + d.Y * 10000 }, xf, col, layer);
+                    break;
+                }
                 case Arc ar:   // 须在 Circle 之前（Arc : Circle）
                 {
                     double a0 = ar.StartAngle, a1 = ar.EndAngle;

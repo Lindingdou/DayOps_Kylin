@@ -401,6 +401,40 @@ public class DxfImportTests
     }
 
     [Fact]
+    public void Polyline3D_imports_as_polyline()
+    {
+        string src = Path.Combine(Path.GetTempPath(), "pm_pl3d.dxf");
+        var doc = new CadDocument();
+        var p3 = new Polyline3D();
+        p3.Vertices.Add(new Vertex3D { Location = new XYZ(0, 0, 0) });
+        p3.Vertices.Add(new Vertex3D { Location = new XYZ(5, 0, 1) });
+        p3.Vertices.Add(new Vertex3D { Location = new XYZ(5, 5, 2) });
+        doc.Entities.Add(p3);
+        using (var w = new DxfWriter(src, doc, false)) w.Write();
+
+        var er = DxfImportService.LoadEntities(src);
+        Assert.True(er.Success, er.Error);
+        var pl = Assert.IsType<PolylineEntity>(Assert.Single(er.Entities));
+        Assert.Equal(3, pl.Points.Count);
+        try { File.Delete(src); } catch { /* 清理失败无碍 */ }
+    }
+
+    [Fact]
+    public void XLine_imports_as_long_line_both_directions()
+    {
+        string src = Path.Combine(Path.GetTempPath(), "pm_xline.dxf");
+        var doc = new CadDocument();
+        doc.Entities.Add(new XLine { FirstPoint = new XYZ(0, 0, 0), Direction = new XYZ(1, 0, 0) });
+        using (var w = new DxfWriter(src, doc, false)) w.Write();
+
+        var er = DxfImportService.LoadEntities(src);
+        Assert.True(er.Success, er.Error);
+        var ln = Assert.IsType<LineEntity>(Assert.Single(er.Entities));
+        Assert.True(ln.X1 - ln.X0 > 10000, "构造线应近似为长线段");   // 双向 ±10000
+        try { File.Delete(src); } catch { /* 清理失败无碍 */ }
+    }
+
+    [Fact]
     public void Export_roundtrip_preserves_segments()
     {
         string src = Path.Combine(Path.GetTempPath(), "pm_exp_src.dxf");

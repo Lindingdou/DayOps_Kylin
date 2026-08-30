@@ -151,7 +151,7 @@
 **📂 文件格式矩阵**（原版导入清单见 Explore 调查；打开=.pmx/.pmb，导入=交换格式）：
 | 格式 | 状态 | 说明 |
 |---|---|---|
-| `.dxf` | ✅ | ACadSharp；Line/Poly(**含 bulge 弧段**)/Circle/Arc/Point/Ellipse/Insert/Spline/**Text/MText/Solid/Face3D/Dimension(爆炸渲染块)/Hatch(边界轮廓)** → 可编辑实体（Latin/数字文字可显; Solid/Face3D/Hatch 取轮廓不填充; 中文需字库） |
+| `.dxf` | ✅ | ACadSharp；Line/Poly2D(**含 bulge 弧段**)/**Poly3D**/Circle/Arc/Point/Ellipse/Insert/Spline/**Text/MText/Solid/Face3D/Dimension(爆炸渲染块)/Hatch(边界轮廓)/XLine·Ray(长线段近似)** → 可编辑实体（Latin/数字文字可显; Solid/Face3D/Hatch 取轮廓不填充; 中文需字库） |
 | `.dwg` | ✅ | ACadSharp DwgReader；与 DXF 同管线 → **可编辑实体**（本平台读写已验证） |
 | `.off` | ✅ | Geomview 网格（顶点+面表→去重边），托管解析 |
 | `.csv/.txt/.xyz/.pts` | ✅ | 点数据（自动识别数值列）→ **可编辑**点实体入场景 |
@@ -311,4 +311,5 @@
 - [x] **LwPolyline/Polyline2D 凸度(bulge)→弧 · 保真修复**：`BulgeArc.Interior`(弦中点沿左法向抬矢高得弧顶→三点外接圆+过中点扫向插值)。**修复真实保真 bug**——此前含弧段的多段线被当直线弦导入(常见: 圆角边界/腰形孔)，现还原成弧；导入(可编辑+显示两路径)均已修。+4 单测(半圆点在圆上/零凸度直线/负凸度反向/弧顶) +1 端到端(DXF bulge→导入多点弧, 弧顶 y≈1)，271 tests。commit `ceefecb`。
 - [x] **导入补 Solid/Face3D/Dimension · 保真**：此前静默丢弃——2D 实心(Solid)/三维面(Face3D)→角点闭合多段线轮廓(不填充)；**标注(Dimension 全子类)→爆炸其渲染块**(复用 Insert 的 Emit 递归, 尺寸线/箭头/文字随之还原)。命中 DXF 常见但原漏读的实体。+1 端到端(Solid→闭合四点多段线); Dimension 经块爆炸机制(同 Insert 已测); 272 tests。commit `1d86a58`。**记录**：Solid/Face3D 填充需 Skia; Hatch/MLine/Leader 仍未读(Hatch 边界可托管但多环+弧边界较繁, 记录待补)。
 - [x] **导入补 Hatch 边界轮廓 · 保真**：填充实体取边界环为闭合多段线轮廓(不填充=Skia)。**忠实移植原 `DwgDxfImportService.ExtractHatchBoundaries`**——`Paths→Edges` 处理 Line/Arc(16段细分)/Polyline 三类边、剥首尾重合点、丢顶点<3 的环；别名 `AcHatch` 消歧本项目静态类 `Cad.Hatch`。+1 端到端(构造 4 边界线 Hatch→DXF→导入闭合四点多段线)，273 tests。commit `0b0c7df`。**记录**：填充本体/图案需 Skia；边界的 Ellipse/Spline 边(罕见)暂按原逻辑跳过。
+- [x] **导入补 Polyline3D/XLine/Ray · 保真**：3D 多段线→多段线(取 XY)；构造线 XLine(无限)→过点**双向**长线段、Ray(半无限)→起点朝向长线段(±10000, 移植原 `DwgDxfImportService` 近似)。此前均静默丢弃。+2 端到端(Poly3D→3点多段线; XLine→长线段跨度>1e4)，275 tests。commit `pending12`。→ **DXF 实体覆盖对齐原程序导入器**(Line/Poly2D+3D/Circle/Arc/Point/Ellipse/Spline/Text/MText/Insert/Solid/Face3D/Dimension/Hatch/XLine/Ray)；仅剩 Mesh/PolyfaceMesh(3D 网格, 本项目 2D 平面场景无网格实体, 记录)。
 - [记录·受阻] **KDF(WeCAD) 导入/导出**：原 `KdfReader`(811行)/`KdfWriter`(417行) 是自足二进制编解码器(magic `wecad_bin_version_2021`, 逆向自单一样例), 依赖 System+CSMath(本项目 ACadSharp 已带), GBK 用 `CodePagesEncodingProvider` 原码已处理 → **可移植**。但**验证受阻**：无真 .kdf 样例, 逐字转写逆向格式仅靠 writer↔reader 往返对称是弱验证(原作者亦标 WeCAD 兼容"未验证")。给一个样例 .kdf 即可移植并按真实字节验证。原 .las/.blk/.osgb/.3dm/.3ds 同理需样例/大依赖。
