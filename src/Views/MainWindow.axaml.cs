@@ -136,6 +136,27 @@ public partial class MainWindow : Window
                 return;
             }
 
+            // 分帮扩帮：点方向/步距 → 批量偏移台阶线
+            if (_benchActive && props.IsLeftButtonPressed)
+            {
+                _nav = NavMode.None;
+                var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                if (wp != null && _benchEntity != null)
+                {
+                    var lines = BenchTools.BatchOffset(_benchEntity, wp.Value.x, wp.Value.y, _benchCount);
+                    if (lines.Count > 0)
+                    {
+                        BeginChange();
+                        foreach (var bl in lines) _scene.Add(bl);
+                        RefreshScene();
+                        StatusMsg.Text = $"分帮扩帮：生成 {lines.Count} 条平行台阶";
+                    }
+                    else StatusMsg.Text = "分帮扩帮：无法偏移（仅线/多段线）";
+                }
+                _benchActive = false; _benchEntity = null;
+                return;
+            }
+
             // 点对点寻径：取起点、终点
             if (_pathActive && props.IsLeftButtonPressed)
             {
@@ -423,6 +444,7 @@ public partial class MainWindow : Window
                 _breakActive = false; _breakPts.Clear();
                 _slideActive = false; _slideDragging = false; _slidePts.Clear();
                 _pathActive = false; _pathP1 = null;
+                _benchActive = false; _benchEntity = null;
                 _gripIndex = -1;
                 _selBoxActive = false;
                 _ttrActive = false; _ttrAwaitRadius = false; _ttrRef1 = null; _ttrRef2 = null;
@@ -483,6 +505,9 @@ public partial class MainWindow : Window
     private int _gripIndex = -1;                    // 夹点拖拽中的夹点序号(-1=无)
     private bool _pathActive;                       // 点对点寻径：等待取两点
     private (double x, double y)? _pathP1;
+    private bool _benchActive;                      // 分帮扩帮：等待点方向/步距
+    private SceneEntity? _benchEntity;
+    private int _benchCount = 5;
     private bool _selBoxActive;                     // 窗口框选拖拽中
     private Avalonia.Point _selBoxStart;            // 框选起点(屏幕)
     private bool _ttrActive, _ttrAwaitRadius;       // 圆 TTR：选两相切参照(线/圆) → 输半径
@@ -515,6 +540,7 @@ public partial class MainWindow : Window
             if (cmd == "提取道路中心线" || cmd == "道路中线" || cmd == "提取道路中线") { ExtractCenterline(); return; }
             if (cmd == "点对点寻径" || cmd == "寻径" || cmd == "点对点寻路") { StartPathfind(); return; }
             if (cmd == "排土条带" || cmd == "条带填充" || cmd == "排土条带划分") { DumpStrips(); return; }
+            if (cmd == "分帮扩帮" || cmd == "批量台阶扩帮" || cmd == "批量扩坑") { StartBench(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
             if (cmd == "2D") { Viewport.SetViewMode(true); StatusMsg.Text = "视图: 2D 平面（正交俯视）"; return; }
@@ -909,6 +935,17 @@ public partial class MainWindow : Window
             _scene.Add(new LineEntity { X0 = s.x0, Y0 = s.y0, X1 = s.x1, Y1 = s.y1, Cr = 0.80f, Cg = 0.60f, Cb = 0.35f });
         RefreshScene();
         StatusMsg.Text = $"排土条带：{segs.Count} 条（间距 {spacing:0.##}）";
+    }
+
+    // 分帮扩帮：选中台阶线/多段线，点方向 → 批量平行偏移
+    private void StartBench()
+    {
+        if (_selected.Count != 1 || _selected[0] is not (LineEntity or PolylineEntity))
+        { StatusMsg.Text = "分帮扩帮：请先选中一条台阶线（直线/多段线）"; return; }
+        _benchEntity = _selected[0]; _benchActive = true;
+        _tool = null; _measure = null; _editMode = EditMode.None;
+        _offsetActive = false; _trimActive = false; _breakActive = false; _pathActive = false;
+        StatusMsg.Text = $"分帮扩帮：点一侧确定方向与步距（生成 {_benchCount} 条）";
     }
 
     // 点对点寻径：场景所有多段线建路网 → 两点最近节点 Dijkstra → 高亮路径
@@ -1963,6 +2000,9 @@ public partial class MainWindow : Window
                 break;
             case "STRIPS":
                 DumpStrips();
+                break;
+            case "BENCH":
+                StartBench();
                 break;
             case "DIST":
             case "DI":
