@@ -49,6 +49,10 @@ public static class SceneExportService
             foreach (var ent in Map(e))
             {
                 ent.Layer = LayerFor(e.LayerName);
+                ent.Color = new Color(                        // 场景烘焙的 RGB → 真彩色（保留可见颜色）
+                    (byte)Math.Clamp(e.Cr * 255f, 0, 255),
+                    (byte)Math.Clamp(e.Cg * 255f, 0, 255),
+                    (byte)Math.Clamp(e.Cb * 255f, 0, 255));
                 doc.Entities.Add(ent);
             }
         }

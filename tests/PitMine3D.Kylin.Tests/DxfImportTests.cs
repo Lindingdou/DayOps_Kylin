@@ -453,6 +453,23 @@ public class DxfImportTests
     }
 
     [Fact]
+    public void Export_roundtrip_preserves_entity_color()
+    {
+        var s = new Scene();
+        s.Add(new LineEntity { X0 = 0, Y0 = 0, X1 = 5, Y1 = 0, Cr = 0.90f, Cg = 0.10f, Cb = 0.10f });   // 偏红
+        string path = Path.Combine(Path.GetTempPath(), "pm_color_rt.dxf");
+        SceneExportService.Export(s, path);
+
+        var er = DxfImportService.LoadEntities(path);
+        Assert.True(er.Success, er.Error);
+        var e = Assert.Single(er.Entities);
+        Assert.InRange(e.Cr, 0.85f, 0.95f);   // 真彩色往返(255 量化容差内)
+        Assert.InRange(e.Cg, 0.05f, 0.15f);
+        Assert.InRange(e.Cb, 0.05f, 0.15f);
+        try { File.Delete(path); } catch { /* 清理失败无碍 */ }
+    }
+
+    [Fact]
     public void Export_roundtrip_preserves_segments()
     {
         string src = Path.Combine(Path.GetTempPath(), "pm_exp_src.dxf");
