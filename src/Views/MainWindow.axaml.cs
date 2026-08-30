@@ -402,8 +402,10 @@ public partial class MainWindow : Window
             else if (_snapShown) { Viewport.SetSnapMarker(null); _snapShown = false; }
 
             var shown = _snapWorld ?? w;
+            if (shown != null && _snapWorld == null)   // osnap 未命中 → 预览点也应用 栅格/正交(与落点 PickWorld 一致)
+                shown = ApplyDraftAids(shown.Value.x, shown.Value.y);
             CoordText.Text = shown != null
-                ? $"X {shown.Value.x:0.00}  Y {shown.Value.y:0.00}{(_snapWorld != null ? "  [捕捉]" : "")}"
+                ? $"X {shown.Value.x:0.00}  Y {shown.Value.y:0.00}{(_snapWorld != null ? "  [捕捉]" : (_orthoOn || _snapOn ? "  [辅助]" : ""))}"
                 : $"视口 px  X {p.X:0}  Y {p.Y:0}";
 
             _cursorWorld = shown;
@@ -2765,18 +2767,20 @@ public partial class MainWindow : Window
     private bool _snapOn;           // 栅格捕捉（SNAP）
     private double _snapStep = 1.0; // 栅格步长（世界单位）
 
+    /// <summary>按开关对点应用栅格捕捉 / 正交约束（默认关闭 → 原样返回）。osnap 命中的点不应调用此(osnap 优先)。</summary>
+    private (double x, double y) ApplyDraftAids(double x, double y)
+    {
+        if (_snapOn) (x, y) = Cad.Draw.DraftAids.Snap(x, y, _snapStep);
+        if (_orthoOn && _lastInputPoint != null) (x, y) = Cad.Draw.DraftAids.Ortho(_lastInputPoint.Value.x, _lastInputPoint.Value.y, x, y);
+        return (x, y);
+    }
+
     /// <summary>取当前世界点：对象捕捉优先，其后按开关应用栅格捕捉 / 正交约束（默认关闭 → 等价原逻辑）。</summary>
     private (double x, double y)? PickWorld()
     {
         var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
         if (wp == null) return null;
-        var p = wp.Value;
-        if (_snapWorld == null)   // 命中对象捕捉时不再网格/正交扰动（osnap 优先）
-        {
-            if (_snapOn) p = Cad.Draw.DraftAids.Snap(p.x, p.y, _snapStep);
-            if (_orthoOn && _lastInputPoint != null) p = Cad.Draw.DraftAids.Ortho(_lastInputPoint.Value.x, _lastInputPoint.Value.y, p.x, p.y);
-        }
-        return p;
+        return _snapWorld == null ? ApplyDraftAids(wp.Value.x, wp.Value.y) : wp.Value;
     }
 
     /// <summary>命令行是否空闲（无进行中的绘制/编辑/测量/交互）——空 Enter 仅在此态重复上次命令。</summary>
