@@ -658,6 +658,7 @@ public partial class MainWindow : Window
             if (cmd == "等效运距" || cmd == "运输指标" || cmd == "驱动距离") { await HaulMetricsAsync(); return; }
             if (cmd == "批量台阶扩帮" || cmd == "台阶线生成" || cmd == "台阶扩帮") { GenerateBenchLines(); return; }
             if (cmd == "剥采比均衡" || cmd == "VP曲线" || cmd == "剥采比") { await StrippingBalanceAsync(); return; }
+            if (cmd == "工作面线拟合" || cmd == "工作面线" || cmd == "拟合工作面线") { await WorkingFaceLineAsync(); return; }
             if (cmd == "高程查询" || cmd == "虚拟钻孔" || cmd == "查询高程") { await StartSpotQueryAsync(); return; }
             if (cmd == "文字" || cmd == "单行文字") { ArmText(); return; }
             if (cmd == "标注" || cmd == "线性标注" || cmd == "尺寸标注" || cmd == "标注台阶标高") { StartDim(); return; }
@@ -1057,6 +1058,39 @@ public partial class MainWindow : Window
             report += $" 段{i + 1} 均衡比{s.RatioM3PerT.ToString("0.##", inv)}({s.B - s.A}期,峰值超前{s.PeakLeadWanM3:0.#})";
         }
         StatusMsg.Text = report;
+    }
+
+    // 工作面线拟合：露煤格中心 CSV(x,y) → PCA走向+趋势修正 → 折线段上屏 + 报表
+    private async Task WorkingFaceLineAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "工作面线拟合：选露煤格中心 CSV (x,y)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("露煤点 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success) { StatusMsg.Text = $"工作面线：点导入失败 {r.Error}"; return; }
+
+        var pts = new List<(double X, double Y)>(r.Points.Count);
+        foreach (var p in r.Points) pts.Add((p.x, p.y));
+        var fit = WorkingFaceLineFitter.Fit(pts);
+        if (!fit.Ok) { StatusMsg.Text = $"工作面线：{fit.Message}"; return; }
+
+        BeginChange();
+        foreach (var seg in fit.Segments)
+        {
+            var pl = new PolylineEntity { Cr = 0.95f, Cg = 0.55f, Cb = 0.2f };
+            for (int i = 0; i + 1 < seg.Length; i += 2) pl.Points.Add((seg[i], seg[i + 1]));
+            AssignLayer(pl); pl.Cr = 0.95f; pl.Cg = 0.55f; pl.Cb = 0.2f; _scene.Add(pl);
+        }
+        RefreshScene();
+        Viewport.FitBounds(r.Bounds);
+        string msg = fit.Message;
+        if (fit.DroppedSpeckle > 0 || fit.PulledBack > 0 || fit.DroppedOutlier > 0)
+            msg += $"（斑点丢 {fit.DroppedSpeckle} · 拉回 {fit.PulledBack} · 离群丢 {fit.DroppedOutlier}）";
+        StatusMsg.Text = msg;
     }
 
     // 创建三角网：散点 CSV → Delaunay → 三角边线框入场景
@@ -2873,6 +2907,10 @@ public partial class MainWindow : Window
             case "VPBALANCE":
             case "STRIPBALANCE":
                 _ = StrippingBalanceAsync();
+                break;
+            case "WORKFACELINE":
+            case "WFLINE":
+                _ = WorkingFaceLineAsync();
                 break;
             case "CIRCLETTR":
             case "TTR":
