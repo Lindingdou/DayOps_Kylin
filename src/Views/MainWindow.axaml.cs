@@ -675,6 +675,7 @@ public partial class MainWindow : Window
             if (cmd == "网格度量" || cmd == "网格面积体积" || cmd == "网格体积") { await MeshMetricsAsync(); return; }
             if (cmd == "网格诊断" || cmd == "网格检查" || cmd == "网格拓扑") { await MeshDiagnoseAsync(); return; }
             if (cmd == "网格焊接" || cmd == "合并顶点" || cmd == "顶点焊接") { await MeshWeldAsync(); return; }
+            if (cmd == "网格边界" || cmd == "边界环提取" || cmd == "提取边界") { await MeshBoundaryAsync(); return; }
             if (cmd == "SOR去噪" || cmd == "统计去噪" || cmd == "SOR") { await DenoiseAsync(false); return; }
             if (cmd == "ROR去噪" || cmd == "半径去噪" || cmd == "ROR") { await DenoiseAsync(true); return; }
             if (cmd == "矿床识别" || cmd == "自动识别" || cmd == "矿床类型识别") { await DepositDetectAsync(); return; }
@@ -1096,6 +1097,42 @@ public partial class MainWindow : Window
             report += $" 段{i + 1} 均衡比{s.RatioM3PerT.ToString("0.##", inv)}({s.B - s.A}期,峰值超前{s.PeakLeadWanM3:0.#})";
         }
         StatusMsg.Text = report;
+    }
+
+    // 网格边界：OFF 网格 → 提取开放边边界环 → 各环作闭合折线(投影 XY)入场景
+    private async Task MeshBoundaryAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "网格边界：选 OFF 网格",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } } }
+        });
+        if (files.Count == 0) return;
+        string text;
+        try { text = System.IO.File.ReadAllText(files[0].Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"网格边界：读取失败 {ex.Message}"; return; }
+        var (verts, tris) = MeshMetrics.ParseOff(text);
+        if (tris.Count == 0) { StatusMsg.Text = "网格边界：未解析到三角网格"; return; }
+        var loops = MeshBoundaryLoops.Extract(verts, tris);
+        if (loops.Count == 0) { StatusMsg.Text = "网格边界：无开放边(网格闭合/水密), 无边界环"; return; }
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        int totPts = 0;
+        BeginChange();
+        foreach (var loop in loops)
+        {
+            var pl = new PolylineEntity { Closed = true, Cr = 0.35f, Cg = 0.9f, Cb = 0.55f };   // 绿色边界环
+            foreach (var (x, y, _) in loop)
+            {
+                pl.Points.Add((x, y));
+                if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y;
+            }
+            totPts += loop.Count;
+            _scene.Add(pl);
+        }
+        RefreshScene();
+        if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
+        StatusMsg.Text = $"网格边界：{loops.Count} 环 · {totPts} 点(投影 XY 作闭合折线入场景)";
     }
 
     // 网格焊接：OFF 网格 → 按容差合并重合顶点 → 落 .welded.off + 报表
@@ -3575,6 +3612,10 @@ public partial class MainWindow : Window
             case "MESHWELD":
             case "WELD":
                 _ = MeshWeldAsync();
+                break;
+            case "MESHBOUNDARY":
+            case "MESHBOUND":
+                _ = MeshBoundaryAsync();
                 break;
             case "SOR":
                 _ = DenoiseAsync(false);
