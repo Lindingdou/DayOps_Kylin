@@ -333,6 +333,28 @@ public class DxfImportTests
     }
 
     [Fact]
+    public void LwPolyline_bulge_imports_as_arc_not_chord()
+    {
+        string src = Path.Combine(Path.GetTempPath(), "pm_bulge.dxf");
+        var doc = new CadDocument();
+        var lwp = new LwPolyline();
+        lwp.Vertices.Add(new LwPolyline.Vertex(new XY(0, 0)) { Bulge = 1.0 });   // 半圆
+        lwp.Vertices.Add(new LwPolyline.Vertex(new XY(2, 0)));
+        doc.Entities.Add(lwp);
+        using (var w = new DxfWriter(src, doc, false)) w.Write();
+
+        var er = DxfImportService.LoadEntities(src);
+        Assert.True(er.Success, er.Error);
+        var pl = Assert.IsType<PolylineEntity>(Assert.Single(er.Entities));
+        Assert.True(pl.Points.Count > 8, $"弧应细分为多点, 实得 {pl.Points.Count}");   // 非直线弦(2点)
+        // 弧顶应鼓到 y≈1（半圆峰值）
+        double maxY = 0; foreach (var p in pl.Points) if (p.y > maxY) maxY = p.y;
+        Assert.True(maxY > 0.8, $"半圆弧顶 y 应≈1, 实得 {maxY:0.##}");
+
+        try { File.Delete(src); } catch { /* 清理失败无碍 */ }
+    }
+
+    [Fact]
     public void Export_roundtrip_preserves_segments()
     {
         string src = Path.Combine(Path.GetTempPath(), "pm_exp_src.dxf");

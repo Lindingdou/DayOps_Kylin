@@ -178,20 +178,38 @@ public static class DxfImportService
                 case LwPolyline lp:
                 {
                     var vs = lp.Vertices;
-                    for (int i = 0; i + 1 < vs.Count; i++)
-                        Seg(vs[i].Location.X, vs[i].Location.Y, lp.Elevation, vs[i + 1].Location.X, vs[i + 1].Location.Y, lp.Elevation);
-                    if (lp.IsClosed && vs.Count > 1)
-                        Seg(vs[vs.Count - 1].Location.X, vs[vs.Count - 1].Location.Y, lp.Elevation, vs[0].Location.X, vs[0].Location.Y, lp.Elevation);
+                    int n = vs.Count, last = lp.IsClosed ? n : n - 1;
+                    for (int i = 0; i < last && n > 1; i++)
+                    {
+                        var a = vs[i]; var b = vs[(i + 1) % n];
+                        if (Math.Abs(a.Bulge) > 1e-9)                    // 弧段 → 细分
+                        {
+                            double px = a.Location.X, py = a.Location.Y;
+                            foreach (var ap in BulgeArc.Interior(a.Location.X, a.Location.Y, b.Location.X, b.Location.Y, a.Bulge))
+                            { Seg(px, py, lp.Elevation, ap.x, ap.y, lp.Elevation); px = ap.x; py = ap.y; }
+                            Seg(px, py, lp.Elevation, b.Location.X, b.Location.Y, lp.Elevation);
+                        }
+                        else Seg(a.Location.X, a.Location.Y, lp.Elevation, b.Location.X, b.Location.Y, lp.Elevation);
+                    }
                     break;
                 }
 
                 case Polyline2D p2:
                 {
                     var vs = p2.Vertices;
-                    for (int i = 0; i + 1 < vs.Count; i++)
-                        Seg(vs[i].Location.X, vs[i].Location.Y, vs[i].Location.Z, vs[i + 1].Location.X, vs[i + 1].Location.Y, vs[i + 1].Location.Z);
-                    if (p2.IsClosed && vs.Count > 1)
-                        Seg(vs[vs.Count - 1].Location.X, vs[vs.Count - 1].Location.Y, vs[vs.Count - 1].Location.Z, vs[0].Location.X, vs[0].Location.Y, vs[0].Location.Z);
+                    int n = vs.Count, last = p2.IsClosed ? n : n - 1;
+                    for (int i = 0; i < last && n > 1; i++)
+                    {
+                        var a = vs[i]; var b = vs[(i + 1) % n];
+                        if (Math.Abs(a.Bulge) > 1e-9)
+                        {
+                            double px = a.Location.X, py = a.Location.Y;
+                            foreach (var ap in BulgeArc.Interior(a.Location.X, a.Location.Y, b.Location.X, b.Location.Y, a.Bulge))
+                            { Seg(px, py, a.Location.Z, ap.x, ap.y, a.Location.Z); px = ap.x; py = ap.y; }
+                            Seg(px, py, a.Location.Z, b.Location.X, b.Location.Y, b.Location.Z);
+                        }
+                        else Seg(a.Location.X, a.Location.Y, a.Location.Z, b.Location.X, b.Location.Y, b.Location.Z);
+                    }
                     break;
                 }
 
@@ -420,14 +438,34 @@ public static class DxfImportService
                 case LwPolyline lp:
                 {
                     var pl = new PolylineEntity { Closed = lp.IsClosed };
-                    foreach (var v in lp.Vertices) pl.Points.Add((v.Location.X, v.Location.Y));
+                    var lvs = lp.Vertices;
+                    for (int i = 0; i < lvs.Count; i++)
+                    {
+                        var v = lvs[i];
+                        pl.Points.Add((v.Location.X, v.Location.Y));
+                        int ni = i + 1;
+                        if (ni >= lvs.Count) { if (!lp.IsClosed) break; ni = 0; }
+                        if (Math.Abs(v.Bulge) > 1e-9)                     // 该段为弧 → 插入弧点
+                            foreach (var ap in BulgeArc.Interior(v.Location.X, v.Location.Y, lvs[ni].Location.X, lvs[ni].Location.Y, v.Bulge))
+                                pl.Points.Add(ap);
+                    }
                     if (pl.Points.Count >= 2) Finalize(pl, xf, col, layer);
                     break;
                 }
                 case Polyline2D p2:
                 {
                     var pl = new PolylineEntity { Closed = p2.IsClosed };
-                    foreach (var v in p2.Vertices) pl.Points.Add((v.Location.X, v.Location.Y));
+                    var pvs = new List<Vertex2D>(p2.Vertices);
+                    for (int i = 0; i < pvs.Count; i++)
+                    {
+                        var v = pvs[i];
+                        pl.Points.Add((v.Location.X, v.Location.Y));
+                        int ni = i + 1;
+                        if (ni >= pvs.Count) { if (!p2.IsClosed) break; ni = 0; }
+                        if (Math.Abs(v.Bulge) > 1e-9)
+                            foreach (var ap in BulgeArc.Interior(v.Location.X, v.Location.Y, pvs[ni].Location.X, pvs[ni].Location.Y, v.Bulge))
+                                pl.Points.Add(ap);
+                    }
                     if (pl.Points.Count >= 2) Finalize(pl, xf, col, layer);
                     break;
                 }
