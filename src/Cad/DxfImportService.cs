@@ -70,9 +70,12 @@ public static class DxfImportService
         List<float> cur = new();                                      // 当前实体所属图层的几何缓冲
         double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
         float cr = LineColor.r, cg = LineColor.g, cb = LineColor.b;   // 逐实体更新
+        Func<(double x, double y), (double x, double y)>? xform = null;   // 块引用展开时的累积变换
+        int insertDepth = 0;
 
         void Seg(double x0, double y0, double z0, double x1, double y1, double z1)
         {
+            if (xform != null) { (x0, y0) = xform((x0, y0)); (x1, y1) = xform((x1, y1)); }
             verts.Add((float)x0); verts.Add((float)y0); verts.Add((float)z0); verts.Add(cr); verts.Add(cg); verts.Add(cb);
             verts.Add((float)x1); verts.Add((float)y1); verts.Add((float)z1); verts.Add(cr); verts.Add(cg); verts.Add(cb);
             cur.Add((float)x0); cur.Add((float)y0); cur.Add((float)z0); cur.Add(cr); cur.Add(cg); cur.Add(cb);
@@ -120,6 +123,95 @@ public static class DxfImportService
             }
         }
 
+        // 单个实体 → 线段（Insert 递归展开）
+        void Emit(Entity ent)
+        {
+            switch (ent)
+            {
+                case Line ln:
+                    Seg(ln.StartPoint.X, ln.StartPoint.Y, ln.StartPoint.Z, ln.EndPoint.X, ln.EndPoint.Y, ln.EndPoint.Z);
+                    break;
+
+                case LwPolyline lp:
+                {
+                    var vs = lp.Vertices;
+                    for (int i = 0; i + 1 < vs.Count; i++)
+                        Seg(vs[i].Location.X, vs[i].Location.Y, lp.Elevation, vs[i + 1].Location.X, vs[i + 1].Location.Y, lp.Elevation);
+                    if (lp.IsClosed && vs.Count > 1)
+                        Seg(vs[vs.Count - 1].Location.X, vs[vs.Count - 1].Location.Y, lp.Elevation, vs[0].Location.X, vs[0].Location.Y, lp.Elevation);
+                    break;
+                }
+
+                case Polyline2D p2:
+                {
+                    var vs = p2.Vertices;
+                    for (int i = 0; i + 1 < vs.Count; i++)
+                        Seg(vs[i].Location.X, vs[i].Location.Y, vs[i].Location.Z, vs[i + 1].Location.X, vs[i + 1].Location.Y, vs[i + 1].Location.Z);
+                    if (p2.IsClosed && vs.Count > 1)
+                        Seg(vs[vs.Count - 1].Location.X, vs[vs.Count - 1].Location.Y, vs[vs.Count - 1].Location.Z, vs[0].Location.X, vs[0].Location.Y, vs[0].Location.Z);
+                    break;
+                }
+
+                case Arc ar:
+                {
+                    double a0 = ar.StartAngle, a1 = ar.EndAngle;
+                    if (a1 <= a0) a1 += Math.PI * 2;
+                    ArcSegs(ar.Center.X, ar.Center.Y, ar.Center.Z, ar.Radius, a0, a1);
+                    break;
+                }
+
+                case Circle ci:
+                    ArcSegs(ci.Center.X, ci.Center.Y, ci.Center.Z, ci.Radius, 0, Math.PI * 2);
+                    break;
+
+                case Point pt:
+                {
+                    const double s = 0.5;   // 点标记十字半长
+                    Seg(pt.Location.X - s, pt.Location.Y, pt.Location.Z, pt.Location.X + s, pt.Location.Y, pt.Location.Z);
+                    Seg(pt.Location.X, pt.Location.Y - s, pt.Location.Z, pt.Location.X, pt.Location.Y + s, pt.Location.Z);
+                    break;
+                }
+
+                case Ellipse ell:
+                    EllipseSegs(ell);
+                    break;
+
+                case Insert ins:
+                    ExpandInsert(ins);
+                    break;
+
+                default:
+                    result.Warnings.Add($"跳过未支持实体：{ent.GetType().Name}");
+                    break;
+            }
+        }
+
+        // 块引用展开：块内实体按插入变换(平移/旋转/缩放)发出；嵌套块递归(深度上限 8)
+        void ExpandInsert(Insert ins)
+        {
+            if (insertDepth >= 8) return;
+            var block = ins.Block;
+            if (block == null) return;
+            var outer = xform;
+            double ipx = ins.InsertPoint.X, ipy = ins.InsertPoint.Y;
+            double sx = ins.XScale == 0 ? 1 : ins.XScale;
+            double sy = ins.YScale == 0 ? 1 : ins.YScale;
+            double rot = ins.Rotation;
+            xform = p =>
+            {
+                var t = ApplyInsert(p.x, p.y, ipx, ipy, sx, sy, rot);
+                return outer != null ? outer(t) : t;
+            };
+            insertDepth++;
+            foreach (var be in block.Entities)
+            {
+                (cr, cg, cb) = ColorOf(be);
+                Emit(be);
+            }
+            insertDepth--;
+            xform = outer;
+        }
+
         int entCount = 0;
         try
         {
@@ -145,62 +237,7 @@ public static class DxfImportService
                 }
                 result.LayerCounts[layerName] = result.LayerCounts.GetValueOrDefault(layerName) + 1;
 
-                switch (e)
-                {
-                    case Line ln:
-                        Seg(ln.StartPoint.X, ln.StartPoint.Y, ln.StartPoint.Z, ln.EndPoint.X, ln.EndPoint.Y, ln.EndPoint.Z);
-                        break;
-
-                    case LwPolyline lp:
-                    {
-                        var vs = lp.Vertices;
-                        for (int i = 0; i + 1 < vs.Count; i++)
-                            Seg(vs[i].Location.X, vs[i].Location.Y, lp.Elevation, vs[i + 1].Location.X, vs[i + 1].Location.Y, lp.Elevation);
-                        if (lp.IsClosed && vs.Count > 1)
-                            Seg(vs[vs.Count - 1].Location.X, vs[vs.Count - 1].Location.Y, lp.Elevation, vs[0].Location.X, vs[0].Location.Y, lp.Elevation);
-                        break;
-                    }
-
-                    // Polyline2D 同时接住 Polyline3D（ACadSharp 中后者派生自前者）
-                    case Polyline2D p2:
-                    {
-                        var vs = p2.Vertices;
-                        for (int i = 0; i + 1 < vs.Count; i++)
-                            Seg(vs[i].Location.X, vs[i].Location.Y, vs[i].Location.Z, vs[i + 1].Location.X, vs[i + 1].Location.Y, vs[i + 1].Location.Z);
-                        if (p2.IsClosed && vs.Count > 1)
-                            Seg(vs[vs.Count - 1].Location.X, vs[vs.Count - 1].Location.Y, vs[vs.Count - 1].Location.Z, vs[0].Location.X, vs[0].Location.Y, vs[0].Location.Z);
-                        break;
-                    }
-
-                    // Arc 必须在 Circle 之前（ACadSharp 中 Arc 派生自 Circle）
-                    case Arc ar:
-                    {
-                        double a0 = ar.StartAngle, a1 = ar.EndAngle;
-                        if (a1 <= a0) a1 += Math.PI * 2;
-                        ArcSegs(ar.Center.X, ar.Center.Y, ar.Center.Z, ar.Radius, a0, a1);
-                        break;
-                    }
-
-                    case Circle ci:
-                        ArcSegs(ci.Center.X, ci.Center.Y, ci.Center.Z, ci.Radius, 0, Math.PI * 2);
-                        break;
-
-                    case Point pt:
-                    {
-                        const double s = 0.5;   // 点标记十字半长
-                        Seg(pt.Location.X - s, pt.Location.Y, pt.Location.Z, pt.Location.X + s, pt.Location.Y, pt.Location.Z);
-                        Seg(pt.Location.X, pt.Location.Y - s, pt.Location.Z, pt.Location.X, pt.Location.Y + s, pt.Location.Z);
-                        break;
-                    }
-
-                    case Ellipse ell:
-                        EllipseSegs(ell);
-                        break;
-
-                    default:
-                        result.Warnings.Add($"跳过未支持实体：{e.GetType().Name}");
-                        break;
-                }
+                Emit(e);
             }
         }
         catch (Exception ex)
@@ -268,6 +305,15 @@ public static class DxfImportService
         Circle => "圆",
         Point => "点",
         Ellipse => "椭圆",
+        Insert => "块引用",
         _ => null
     };
+
+    /// <summary>块引用变换：块内坐标 → 缩放 → 绕原点旋转 → 平移到插入点。</summary>
+    internal static (double x, double y) ApplyInsert(double x, double y, double ipx, double ipy, double sx, double sy, double rot)
+    {
+        double xs = x * sx, ys = y * sy;
+        double cos = Math.Cos(rot), sin = Math.Sin(rot);
+        return (xs * cos - ys * sin + ipx, xs * sin + ys * cos + ipy);
+    }
 }

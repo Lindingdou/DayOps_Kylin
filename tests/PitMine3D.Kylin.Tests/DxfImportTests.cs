@@ -125,4 +125,35 @@ public class DxfImportTests
 
         try { File.Delete(path); } catch { /* 清理失败无碍 */ }
     }
+
+    [Fact]
+    public void ApplyInsert_scales_rotates_translates()
+    {
+        // (1,0) 缩放×2 → (2,0)；旋转 90° → (0,2)；平移 (10,5) → (10,7)
+        var (x, y) = DxfImportService.ApplyInsert(1, 0, 10, 5, 2, 2, System.Math.PI / 2);
+        Assert.Equal(10, x, 4);
+        Assert.Equal(7, y, 4);
+    }
+
+    [Fact]
+    public void Expands_block_reference()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "pm_dxf_insert_test.dxf");
+
+        var doc = new CadDocument();
+        var block = new ACadSharp.Tables.BlockRecord("blk");
+        block.Entities.Add(new Line { StartPoint = new XYZ(0, 0, 0), EndPoint = new XYZ(1, 0, 0) });
+        doc.BlockRecords.Add(block);
+        doc.Entities.Add(new Insert(block) { InsertPoint = new XYZ(100, 0, 0) });
+        using (var writer = new DxfWriter(path, doc, false))
+            writer.Write();
+
+        var r = DxfImportService.Load(path);
+
+        Assert.True(r.Success, r.Error);
+        // 块内直线经插入点平移，包围盒应到达 x≈100（未展开则不会）
+        Assert.True(r.Bounds[2] >= 100.0, $"maxX={r.Bounds[2]}（块未展开?）");
+
+        try { File.Delete(path); } catch { /* 清理失败无碍 */ }
+    }
 }
