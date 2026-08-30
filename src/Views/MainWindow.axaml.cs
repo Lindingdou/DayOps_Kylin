@@ -546,6 +546,7 @@ public partial class MainWindow : Window
             if (cmd == "块体模型" || cmd == "导入块体" || cmd == "地质体建模") { await ImportBlockModelAsync(); return; }
             if (cmd == "资源量估算" || cmd == "剥采比" || cmd == "快速估值") { ResourceReport(null); return; }
             if (cmd == "境界圈定" || cmd == "凸包" || cmd == "确定境界" || cmd == "采场圈定") { await BoundaryHullAsync(); return; }
+            if (cmd == "剖面分析" || cmd == "剖面" || cmd == "点云剖面") { await SectionProfileAsync(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
             if (cmd == "2D") { Viewport.SetViewMode(true); StatusMsg.Text = "视图: 2D 平面（正交俯视）"; return; }
@@ -961,6 +962,41 @@ public partial class MainWindow : Window
         RefreshScene();
         Viewport.FitBounds(r.Bounds);
         StatusMsg.Text = $"块体模型：{r.Blocks.Count} 块 · 品位 {r.GradeMin:0.##}~{r.GradeMax:0.##}(均 {r.GradeMean:0.##})";
+    }
+
+    // 剖面分析：选中剖面线(直线/多段线) + 地形高程点 CSV → 距离-高程剖面曲线
+    private async Task SectionProfileAsync()
+    {
+        var section = new List<(double x, double y)>();
+        if (_selected.Count == 1 && _selected[0] is PolylineEntity spl) section.AddRange(spl.Points);
+        else if (_selected.Count == 1 && _selected[0] is LineEntity sl) { section.Add((sl.X0, sl.Y0)); section.Add((sl.X1, sl.Y1)); }
+        else { StatusMsg.Text = "剖面分析：请先选中一条剖面线（直线/多段线）"; return; }
+
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "剖面分析：选地形高程点 CSV (x,y,z)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("高程点 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success) { StatusMsg.Text = $"剖面分析：点导入失败 {r.Error}"; return; }
+
+        var prof = Profile.Sample(section, r.Points, 100);
+        if (prof.Count < 2) { StatusMsg.Text = "剖面分析：采样失败"; return; }
+        double zmin = double.MaxValue, zmax = double.MinValue;
+        foreach (var p in prof) { if (p.z < zmin) zmin = p.z; if (p.z > zmax) zmax = p.z; }
+
+        // 剖面曲线画在剖面线包围盒下方（X=沿线距离，Y=高程）
+        double baseX = section[0].x, baseY = 0;
+        foreach (var p in section) if (p.y < baseY || baseY == 0) baseY = p.y;
+        baseY -= (zmax - zmin) + 10;
+        var curve = new PolylineEntity { Cr = 0.30f, Cg = 0.90f, Cb = 0.50f };
+        foreach (var (dist, z) in prof) curve.Points.Add((baseX + dist, baseY + (z - zmin)));
+        BeginChange();
+        _scene.Add(curve);
+        RefreshScene();
+        StatusMsg.Text = $"剖面分析：{prof.Count} 采样 · 高程 {zmin:0.##}~{zmax:0.##} · 剖面长 {prof[^1].dist:0.##}";
     }
 
     // 境界圈定：散点 CSV → 凸包 → 闭合边界多段线
@@ -2100,6 +2136,9 @@ public partial class MainWindow : Window
                 break;
             case "HULL":
                 _ = BoundaryHullAsync();
+                break;
+            case "PROFILE":
+                _ = SectionProfileAsync();
                 break;
             case "DIST":
             case "DI":
