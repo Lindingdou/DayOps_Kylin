@@ -541,6 +541,19 @@ public static class LineMath
         return (ax0 + t * d1x, ay0 + t * d1y);
     }
 
+    /// <summary>过 A 两点的无限直线 与 有限线段 B 的交点；平行或交点不在 B 段内返回 null（供修剪/延伸边界为任意实体）。</summary>
+    public static (double x, double y)? IntersectInfiniteWithSegment(
+        double ax0, double ay0, double ax1, double ay1,
+        double bx0, double by0, double bx1, double by1)
+    {
+        double d1x = ax1 - ax0, d1y = ay1 - ay0, d2x = bx1 - bx0, d2y = by1 - by0;
+        double denom = d1x * d2y - d1y * d2x;
+        if (Math.Abs(denom) < 1e-12) return null;
+        double u = ((bx0 - ax0) * d1y - (by0 - ay0) * d1x) / denom;   // 边界段参数
+        if (u < -1e-9 || u > 1 + 1e-9) return null;
+        return (bx0 + u * d2x, by0 + u * d2y);
+    }
+
     /// <summary>两条有限线段是否真相交（用于框选交叉判定；共线相接的退化情形忽略）。</summary>
     public static bool SegmentsIntersect(
         double ax0, double ay0, double ax1, double ay1,

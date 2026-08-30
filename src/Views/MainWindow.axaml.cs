@@ -68,31 +68,22 @@ public partial class MainWindow : Window
                 return;
             }
 
-            // 修剪/延伸：点目标线 → 其近端点移到与边界线的交点
+            // 修剪/延伸：点目标线 → 其近端点移到与边界(任意实体)的最近交点
             if (_trimActive && props.IsLeftButtonPressed)
             {
                 _nav = NavMode.None;
                 var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
-                if (wp != null && _selected.Count == 1 && _selected[0] is LineEntity boundary)
+                if (wp != null && _selected.Count == 1)
                 {
+                    var boundary = _selected[0];
                     var hit = _scene.Pick(wp.Value.x, wp.Value.y, SnapTolWorld(_lastPointer) * 3, _layers.IsSelectable);
                     if (hit is LineEntity target && !ReferenceEquals(target, boundary))
                     {
-                        var isect = LineMath.IntersectInfinite(target.X0, target.Y0, target.X1, target.Y1,
-                                                               boundary.X0, boundary.Y0, boundary.X1, boundary.Y1);
-                        if (isect != null)
-                        {
-                            var nl = (LineEntity)target.Apply(Affine2.Translate(0, 0));   // 克隆
-                            double d0 = Dist2(wp.Value, target.X0, target.Y0), d1 = Dist2(wp.Value, target.X1, target.Y1);
-                            if (d0 < d1) { nl.X0 = isect.Value.x; nl.Y0 = isect.Value.y; }
-                            else { nl.X1 = isect.Value.x; nl.Y1 = isect.Value.y; }
-                            BeginChange();
-                            _scene.Replace(target, nl);
-                            StatusMsg.Text = "已修剪/延伸";
-                        }
-                        else StatusMsg.Text = "与边界平行，无法修剪/延伸";
+                        var nl = TrimExtend(target, boundary, (wp.Value.x, wp.Value.y));
+                        if (nl != null) { BeginChange(); _scene.Replace(target, nl); StatusMsg.Text = "已修剪/延伸"; }
+                        else StatusMsg.Text = "与边界无交点，无法修剪/延伸";
                     }
-                    else StatusMsg.Text = "未点中目标直线";
+                    else StatusMsg.Text = "未点中目标直线（目标须为直线，多段线/圆弧目标待做）";
                     RefreshScene();
                 }
                 _trimActive = false;
@@ -1075,10 +1066,10 @@ public partial class MainWindow : Window
 
     private void StartTrim()
     {
-        if (_selected.Count != 1 || _selected[0] is not LineEntity)
-        { StatusMsg.Text = "修剪/延伸：请先选一条作为边界的直线"; return; }
+        if (_selected.Count != 1)
+        { StatusMsg.Text = "修剪/延伸：请先选一个作为边界的实体（线/多段线/圆/弧/矩形）"; return; }
         _trimActive = true; _tool = null; _measure = null; _editMode = EditMode.None; _offsetActive = false;
-        StatusMsg.Text = "点击要修剪/延伸的直线（近端点移到与边界的交点）";
+        StatusMsg.Text = "点击要修剪/延伸的直线（近端点移到与边界最近交点）";
     }
 
     private void StartBreak()
@@ -1193,6 +1184,30 @@ public partial class MainWindow : Window
 
     private static double Dist2((double x, double y) p, double x, double y)
         => (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y);
+
+    // 修剪/延伸：目标直线的近点击端 移到 与边界(任意实体, 镶嵌成段)最近的交点
+    private LineEntity? TrimExtend(LineEntity target, SceneEntity boundary, (double x, double y) click)
+    {
+        var o = new List<float>();
+        boundary.Tessellate(o);
+        double d0 = Dist2(click, target.X0, target.Y0), d1 = Dist2(click, target.X1, target.Y1);
+        bool moveStart = d0 < d1;
+        double ex = moveStart ? target.X0 : target.X1, ey = moveStart ? target.Y0 : target.Y1;
+        (double x, double y)? best = null; double bestD = double.MaxValue;
+        for (int i = 0; i + 11 < o.Count; i += 12)
+        {
+            var isect = LineMath.IntersectInfiniteWithSegment(
+                target.X0, target.Y0, target.X1, target.Y1, o[i], o[i + 1], o[i + 6], o[i + 7]);
+            if (isect == null) continue;
+            double d = Dist2(isect.Value, ex, ey);
+            if (d < bestD) { bestD = d; best = isect; }
+        }
+        if (best == null) return null;
+        var nl = (LineEntity)target.Apply(Affine2.Translate(0, 0));
+        if (moveStart) { nl.X0 = best.Value.x; nl.Y0 = best.Value.y; }
+        else { nl.X1 = best.Value.x; nl.Y1 = best.Value.y; }
+        return nl;
+    }
 
     private static int EditPointCount(EditMode m) => m == EditMode.Scale ? 3 : 2;
 

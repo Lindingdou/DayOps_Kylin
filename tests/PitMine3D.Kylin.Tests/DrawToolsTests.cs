@@ -466,4 +466,20 @@ public class DrawToolsTests
         var outside = new LineEntity { X0 = 20, Y0 = 0, X1 = 20, Y1 = 20 };  // 完全在外
         Assert.False(SelectionBox.Match(outside, 0, 0, 10, 10, crossing: true));
     }
+
+    [Fact]
+    public void IntersectInfiniteWithSegment_hits_within_segment()
+    {
+        // 无限竖线 x=0 × 水平段 (-5,5)-(5,5) → (0,5)
+        var p = LineMath.IntersectInfiniteWithSegment(0, 0, 0, 10, -5, 5, 5, 5);
+        Assert.NotNull(p);
+        Assert.Equal(0, p!.Value.x, 4); Assert.Equal(5, p!.Value.y, 4);
+    }
+
+    [Fact]
+    public void IntersectInfiniteWithSegment_misses_outside_or_parallel()
+    {
+        Assert.Null(LineMath.IntersectInfiniteWithSegment(0, 0, 0, 10, 2, 5, 8, 5));   // 交点不在边界段内
+        Assert.Null(LineMath.IntersectInfiniteWithSegment(0, 0, 10, 0, 0, 5, 10, 5));  // 平行
+    }
 }
