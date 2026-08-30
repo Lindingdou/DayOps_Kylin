@@ -59,22 +59,12 @@ public partial class MainWindow : Window
                 return;
             }
 
-            // 编辑（移动/复制/镜像）：左键取两点
+            // 编辑（移动/复制/镜像）：左键取点（与命令行坐标共用 FeedPoint）
             if (_editMode != EditMode.None && props.IsLeftButtonPressed)
             {
                 _nav = NavMode.None;
                 var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
-                if (wp != null)
-                {
-                    _editPts.Add((wp.Value.x, wp.Value.y));
-                    if (_editPts.Count >= EditPointCount(_editMode))
-                    {
-                        ApplyEditTransform(BuildEditTransform(), _editMode == EditMode.Copy);
-                        _editMode = EditMode.None; _editPts.Clear();
-                        StatusMsg.Text = "编辑完成";
-                    }
-                    else StatusMsg.Text = EditPrompt(_editMode, _editPts.Count);
-                }
+                if (wp != null) FeedPoint(wp.Value.x, wp.Value.y);
                 return;
             }
 
@@ -138,18 +128,12 @@ public partial class MainWindow : Window
                 return;
             }
 
-            // 绘制工具：左键喂点（凑齐一个实体则加入场景并重绘）
+            // 绘制工具：左键喂点（与命令行坐标共用 FeedPoint）
             if (_tool != null && props.IsLeftButtonPressed)
             {
                 _nav = NavMode.None;
                 var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
-                if (wp != null)
-                {
-                    var ent = _tool.AddPoint(wp.Value.x, wp.Value.y);
-                    if (ent != null) { BeginChange(); AssignLayer(ent); _scene.Add(ent); }
-                    RefreshScene();
-                    StatusMsg.Text = $"{_tool.Prompt}（已画 {_scene.Count}）";
-                }
+                if (wp != null) FeedPoint(wp.Value.x, wp.Value.y);
                 return;
             }
 
@@ -297,6 +281,7 @@ public partial class MainWindow : Window
     private MeasureState? _measure;
     private (double x, double y)? _snapWorld;   // 当前捕捉到的世界点
     private (double x, double y)? _cursorWorld; // 当前光标世界点(橡皮筋预览用)
+    private (double x, double y)? _lastInputPoint; // 上一取点(命令行相对坐标 @ 的基点)
     private bool _snapShown;                     // 捕捉标记是否已显示
     private bool _slideActive;                   // 滑动多段线：已激活(等待按下)
     private bool _slideDragging;                 // 滑动多段线：正在按住拖动
@@ -573,7 +558,7 @@ public partial class MainWindow : Window
             string digits = new string(cmd.Where(char.IsDigit).ToArray());
             if (digits.Length > 0 && int.TryParse(digits, out int n) && n >= 3 && n <= 120) sides = n;
             _tool = new PolygonTool { Sides = sides };
-            _measure = null; Viewport.SetSnapMarker(null); _snapShown = false;
+            _measure = null; Viewport.SetSnapMarker(null); _snapShown = false; _lastInputPoint = null;
             StatusMsg.Text = _tool.Prompt + "（ESC 退出）";
             return true;
         }
@@ -600,7 +585,7 @@ public partial class MainWindow : Window
         if (t == null) return false;
         _tool = t;
         _measure = null;                              // 退出测距
-        Viewport.SetSnapMarker(null); _snapShown = false;
+        Viewport.SetSnapMarker(null); _snapShown = false; _lastInputPoint = null;
         StatusMsg.Text = t.Prompt + "（ESC 退出）";
         return true;
     }
@@ -742,7 +727,7 @@ public partial class MainWindow : Window
     private void StartEdit(EditMode mode, string name)
     {
         if (_selected.Count == 0) { StatusMsg.Text = $"{name}：请先选实体"; return; }
-        _editMode = mode; _editPts.Clear(); _tool = null; _measure = null;
+        _editMode = mode; _editPts.Clear(); _tool = null; _measure = null; _lastInputPoint = null;
         StatusMsg.Text = mode == EditMode.Mirror ? $"{name}：指定镜像线第一点" : $"{name}：指定基点";
     }
 
@@ -768,6 +753,75 @@ public partial class MainWindow : Window
         _slideActive = true; _slideDragging = false; _slidePts.Clear();
         Viewport.SetSnapMarker(null); _snapShown = false;
         StatusMsg.Text = "滑动多段线：在视口按住左键拖动采样，松开成线（ESC 退出）";
+    }
+
+    // 命令行精确坐标：绘制/编辑取点时把 "x,y" / "@dx,dy" / "@d<ang" 当作一次点击
+    private bool TryCoordinateInput(string cmd)
+    {
+        if (_tool == null && _editMode == EditMode.None) return false;   // 仅取点态接受坐标
+        var pt = ParseCoord(cmd, _lastInputPoint);
+        if (pt == null) return false;
+        FeedPoint(pt.Value.x, pt.Value.y);
+        return true;
+    }
+
+    /// <summary>解析坐标：x,y=绝对直角；@dx,dy=相对；d&lt;ang=绝对极(角度°)；@d&lt;ang=相对极。无法解析返回 null。</summary>
+    internal static (double x, double y)? ParseCoord(string s, (double x, double y)? last)
+    {
+        s = s.Trim();
+        bool rel = s.StartsWith("@");
+        if (rel) s = s.Substring(1).Trim();
+
+        int lt = s.IndexOf('<');
+        if (lt > 0)   // 极坐标 距离<角度
+        {
+            if (double.TryParse(s.Substring(0, lt).Trim(), out double dist) &&
+                double.TryParse(s.Substring(lt + 1).Trim(), out double ang))
+            {
+                double rad = ang * System.Math.PI / 180.0;
+                double dx = dist * System.Math.Cos(rad), dy = dist * System.Math.Sin(rad);
+                if (!rel) return (dx, dy);
+                return last == null ? null : (last.Value.x + dx, last.Value.y + dy);
+            }
+            return null;
+        }
+
+        int comma = s.IndexOf(',');
+        if (comma > 0)   // 直角 x,y
+        {
+            if (double.TryParse(s.Substring(0, comma).Trim(), out double x) &&
+                double.TryParse(s.Substring(comma + 1).Trim(), out double y))
+            {
+                if (!rel) return (x, y);
+                return last == null ? null : (last.Value.x + x, last.Value.y + y);
+            }
+        }
+        return null;
+    }
+
+    // 把一个世界点喂给当前取点态(编辑/绘制)，等效一次点击
+    private void FeedPoint(double x, double y)
+    {
+        _lastInputPoint = (x, y);
+        if (_editMode != EditMode.None)
+        {
+            _editPts.Add((x, y));
+            if (_editPts.Count >= EditPointCount(_editMode))
+            {
+                ApplyEditTransform(BuildEditTransform(), _editMode == EditMode.Copy);
+                _editMode = EditMode.None; _editPts.Clear();
+                StatusMsg.Text = "编辑完成";
+            }
+            else StatusMsg.Text = EditPrompt(_editMode, _editPts.Count);
+            return;
+        }
+        if (_tool != null)
+        {
+            var ent = _tool.AddPoint(x, y);
+            if (ent != null) { BeginChange(); AssignLayer(ent); _scene.Add(ent); }
+            RefreshScene();
+            StatusMsg.Text = $"{_tool.Prompt}（已画 {_scene.Count}）";
+        }
     }
 
     private static double Dist2((double x, double y) p, double x, double y)
@@ -831,6 +885,8 @@ public partial class MainWindow : Window
 
         string cmd = tb.Text.Trim();
         tb.Text = string.Empty;
+
+        if (TryCoordinateInput(cmd)) return;   // 绘制/编辑取点时优先当坐标
 
         switch (cmd.ToUpperInvariant())
         {
