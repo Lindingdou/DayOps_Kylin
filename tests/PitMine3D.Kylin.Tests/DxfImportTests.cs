@@ -158,4 +158,29 @@ public class DxfImportTests
 
         try { File.Delete(path); } catch { /* 清理失败无碍 */ }
     }
+
+    [Fact]
+    public void EvalBSpline_degree1_is_linear()
+    {
+        var px = new double[] { 0, 10 };
+        var py = new double[] { 0, 0 };
+        var pz = new double[] { 0, 0 };
+        var knots = new double[] { 0, 0, 1, 1 };
+        Assert.Equal(0, DxfImportService.EvalBSpline(px, py, pz, knots, 1, 0.0).x, 4);
+        Assert.Equal(5, DxfImportService.EvalBSpline(px, py, pz, knots, 1, 0.5).x, 4);
+        Assert.Equal(10, DxfImportService.EvalBSpline(px, py, pz, knots, 1, 1.0).x, 4);
+    }
+
+    [Fact]
+    public void EvalBSpline_clamped_hits_endpoints()
+    {
+        var px = new double[] { 0, 1, 2, 3 };
+        var py = new double[] { 0, 5, 5, 0 };
+        var pz = new double[] { 0, 0, 0, 0 };
+        var knots = new double[] { 0, 0, 0, 0, 1, 1, 1, 1 };   // clamped 三次
+        var a = DxfImportService.EvalBSpline(px, py, pz, knots, 3, 0.0);
+        var b = DxfImportService.EvalBSpline(px, py, pz, knots, 3, 1.0);
+        Assert.Equal(0, a.x, 4); Assert.Equal(0, a.y, 4);     // 起点 = P0
+        Assert.Equal(3, b.x, 4); Assert.Equal(0, b.y, 4);     // 终点 = P3
+    }
 }

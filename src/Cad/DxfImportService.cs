@@ -129,6 +129,41 @@ public static class DxfImportService
             }
         }
 
+        // 样条：De Boor 采样为折线；无有效节点则退回拟合点 / 控制多边形
+        void SplineSegs(Spline sp)
+        {
+            var cps = sp.ControlPoints;
+            int deg = sp.Degree;
+            var knots = sp.Knots;
+            if (cps == null || cps.Count < 2)
+            {
+                var fps = sp.FitPoints;
+                if (fps != null)
+                    for (int i = 0; i + 1 < fps.Count; i++)
+                        Seg(fps[i].X, fps[i].Y, fps[i].Z, fps[i + 1].X, fps[i + 1].Y, fps[i + 1].Z);
+                return;
+            }
+            if (knots == null || deg < 1 || knots.Count < cps.Count + deg + 1)
+            {
+                for (int i = 0; i + 1 < cps.Count; i++)
+                    Seg(cps[i].X, cps[i].Y, cps[i].Z, cps[i + 1].X, cps[i + 1].Y, cps[i + 1].Z);
+                return;
+            }
+            var sx = new double[cps.Count]; var sy = new double[cps.Count]; var sz = new double[cps.Count];
+            for (int i = 0; i < cps.Count; i++) { sx[i] = cps[i].X; sy[i] = cps[i].Y; sz[i] = cps[i].Z; }
+            int n = cps.Count - 1;
+            double u0 = knots[deg], u1 = knots[n + 1];
+            int samples = Math.Max(CircleSegments, cps.Count * 8);
+            double prevx = 0, prevy = 0, prevz = 0;
+            for (int s = 0; s <= samples; s++)
+            {
+                double u = s == samples ? u1 : u0 + (u1 - u0) * s / samples;
+                var pt = EvalBSpline(sx, sy, sz, knots, deg, u);
+                if (s > 0) Seg(prevx, prevy, prevz, pt.x, pt.y, pt.z);
+                prevx = pt.x; prevy = pt.y; prevz = pt.z;
+            }
+        }
+
         // 单个实体 → 线段（Insert 递归展开）
         void Emit(Entity ent)
         {
@@ -184,6 +219,10 @@ public static class DxfImportService
 
                 case Insert ins:
                     ExpandInsert(ins);
+                    break;
+
+                case Spline sp:
+                    SplineSegs(sp);
                     break;
 
                 default:
@@ -318,6 +357,7 @@ public static class DxfImportService
         Point => "点",
         Ellipse => "椭圆",
         Insert => "块引用",
+        Spline => "样条",
         _ => null
     };
 
@@ -327,5 +367,42 @@ public static class DxfImportService
         double xs = x * sx, ys = y * sy;
         double cos = Math.Cos(rot), sin = Math.Sin(rot);
         return (xs * cos - ys * sin + ipx, xs * sin + ys * cos + ipy);
+    }
+
+    /// <summary>非有理 B 样条 De Boor 求值（Piegl &amp; Tiller）。px/py/pz 控制点分量，knots 节点，degree 阶，u 参数。</summary>
+    internal static (double x, double y, double z) EvalBSpline(
+        IReadOnlyList<double> px, IReadOnlyList<double> py, IReadOnlyList<double> pz,
+        IReadOnlyList<double> knots, int degree, double u)
+    {
+        int n = px.Count - 1;
+        int k = FindSpan(n, degree, u, knots);
+        var dx = new double[degree + 1];
+        var dy = new double[degree + 1];
+        var dz = new double[degree + 1];
+        for (int j = 0; j <= degree; j++) { int idx = k - degree + j; dx[j] = px[idx]; dy[j] = py[idx]; dz[j] = pz[idx]; }
+        for (int r = 1; r <= degree; r++)
+            for (int j = degree; j >= r; j--)
+            {
+                int i = k - degree + j;
+                double denom = knots[i + degree - r + 1] - knots[i];
+                double a = denom > 1e-12 ? (u - knots[i]) / denom : 0.0;
+                dx[j] = (1 - a) * dx[j - 1] + a * dx[j];
+                dy[j] = (1 - a) * dy[j - 1] + a * dy[j];
+                dz[j] = (1 - a) * dz[j - 1] + a * dz[j];
+            }
+        return (dx[degree], dy[degree], dz[degree]);
+    }
+
+    private static int FindSpan(int n, int degree, double u, IReadOnlyList<double> knots)
+    {
+        if (u >= knots[n + 1]) return n;
+        if (u <= knots[degree]) return degree;
+        int lo = degree, hi = n + 1, mid = (lo + hi) / 2;
+        while (u < knots[mid] || u >= knots[mid + 1])
+        {
+            if (u < knots[mid]) hi = mid; else lo = mid;
+            mid = (lo + hi) / 2;
+        }
+        return mid;
     }
 }
