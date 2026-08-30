@@ -173,6 +173,55 @@ public sealed class ArcTool : DrawTool
     public override void Reset() { _p1 = null; _p2 = null; }
 }
 
+/// <summary>圆弧：起点 → 圆心 → 端点（逆时针）。</summary>
+public sealed class ArcSceTool : DrawTool
+{
+    private (double x, double y)? _s, _c;
+    public override string Prompt => _s == null ? "圆弧(起点圆心端点)：起点" : _c == null ? "圆弧：圆心" : "圆弧：端点";
+    public override SceneEntity? AddPoint(double x, double y)
+    {
+        if (_s == null) { _s = (x, y); return null; }
+        if (_c == null) { _c = (x, y); return null; }
+        var s = _s.Value; var c = _c.Value; _s = null; _c = null;
+        return MakeSce(s.x, s.y, c.x, c.y, x, y);
+    }
+    internal static SceneEntity? MakeSce(double sx, double sy, double cx, double cy, double ex, double ey)
+    {
+        var t = ArcMath.FromStartCenterEnd(sx, sy, cx, cy, ex, ey);
+        return t == null ? null : new ArcEntity { X1 = t.Value.x1, Y1 = t.Value.y1, X2 = t.Value.x2, Y2 = t.Value.y2, X3 = t.Value.x3, Y3 = t.Value.y3 };
+    }
+    public override void AppendPreview(List<float> o, (double x, double y)? cursor)
+    {
+        if (cursor == null || _s == null) return;
+        if (_c == null) { Tint(new LineEntity { X0 = _s.Value.x, Y0 = _s.Value.y, X1 = cursor.Value.x, Y1 = cursor.Value.y }).Tessellate(o); return; }
+        var e = MakeSce(_s.Value.x, _s.Value.y, _c.Value.x, _c.Value.y, cursor.Value.x, cursor.Value.y);
+        if (e != null) Tint(e).Tessellate(o);
+    }
+    public override void Reset() { _s = null; _c = null; }
+}
+
+/// <summary>圆弧：圆心 → 起点 → 端点（逆时针）。</summary>
+public sealed class ArcCseTool : DrawTool
+{
+    private (double x, double y)? _c, _s;
+    public override string Prompt => _c == null ? "圆弧(圆心起点端点)：圆心" : _s == null ? "圆弧：起点" : "圆弧：端点";
+    public override SceneEntity? AddPoint(double x, double y)
+    {
+        if (_c == null) { _c = (x, y); return null; }
+        if (_s == null) { _s = (x, y); return null; }
+        var c = _c.Value; var s = _s.Value; _c = null; _s = null;
+        return ArcSceTool.MakeSce(s.x, s.y, c.x, c.y, x, y);
+    }
+    public override void AppendPreview(List<float> o, (double x, double y)? cursor)
+    {
+        if (cursor == null || _c == null) return;
+        if (_s == null) { Tint(new LineEntity { X0 = _c.Value.x, Y0 = _c.Value.y, X1 = cursor.Value.x, Y1 = cursor.Value.y }).Tessellate(o); return; }
+        var e = ArcSceTool.MakeSce(_s.Value.x, _s.Value.y, _c.Value.x, _c.Value.y, cursor.Value.x, cursor.Value.y);
+        if (e != null) Tint(e).Tessellate(o);
+    }
+    public override void Reset() { _c = null; _s = null; }
+}
+
 /// <summary>多段线：连续点，双击结束。</summary>
 public sealed class PolylineTool : DrawTool
 {

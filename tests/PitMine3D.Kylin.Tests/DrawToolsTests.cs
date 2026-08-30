@@ -498,4 +498,34 @@ public class DrawToolsTests
     {
         Assert.Null(LineMath.TtrCenter(0, 0, 10, 0, 5, 1, 0, 5, 10, 5, 5, 6, 2));   // 两平行线
     }
+
+    [Fact]
+    public void ArcMath_from_start_center_end_projects_and_bisects()
+    {
+        // 起点(1,0) 心(0,0) 端点(0,5)→投影到半径1的(0,1)，中点在45°
+        var t = ArcMath.FromStartCenterEnd(1, 0, 0, 0, 0, 5)!.Value;
+        Assert.Equal(1, t.x1, 4); Assert.Equal(0, t.y1, 4);
+        Assert.Equal(0, t.x3, 4); Assert.Equal(1, t.y3, 4);
+        Assert.Equal(System.Math.Cos(System.Math.PI / 4), t.x2, 4);
+        Assert.Equal(System.Math.Sin(System.Math.PI / 4), t.y2, 4);
+    }
+
+    [Fact]
+    public void ArcSceTool_start_center_end_makes_arc()
+    {
+        var t = new ArcSceTool();
+        Assert.Null(t.AddPoint(1, 0));      // 起点
+        Assert.Null(t.AddPoint(0, 0));      // 圆心
+        var arc = Assert.IsType<ArcEntity>(t.AddPoint(0, 1));   // 端点 → 四分之一弧
+        Assert.Equal(1, arc.X1, 4);
+    }
+
+    [Fact]
+    public void ArcCseTool_center_start_end_makes_arc()
+    {
+        var t = new ArcCseTool();
+        Assert.Null(t.AddPoint(0, 0));      // 圆心
+        Assert.Null(t.AddPoint(1, 0));      // 起点
+        Assert.IsType<ArcEntity>(t.AddPoint(0, 1));   // 端点
+    }
 }

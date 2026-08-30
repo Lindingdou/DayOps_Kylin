@@ -85,8 +85,15 @@
                                                 </Button.Flyout>
                                                 <StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_circle}" /><TextBlock Text="圆 ▾" /></StackPanel>
                                             </Button>
-                                            <Button Classes="ribbon-btn small" Tag="圆弧" Click="OnRibbonCommand">
-                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_arc}" /><TextBlock Text="圆弧" /></StackPanel>
+                                            <Button Classes="ribbon-btn small" ToolTip.Tip="圆弧的多种画法">
+                                                <Button.Flyout>
+                                                    <MenuFlyout>
+                                                        <MenuItem Header="三点" Tag="圆弧" Click="OnRibbonCommand" />
+                                                        <MenuItem Header="起点、圆心、端点" Tag="圆弧SCE" Click="OnRibbonCommand" />
+                                                        <MenuItem Header="圆心、起点、端点" Tag="圆弧CSE" Click="OnRibbonCommand" />
+                                                    </MenuFlyout>
+                                                </Button.Flyout>
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_arc}" /><TextBlock Text="圆弧 ▾" /></StackPanel>
                                             </Button>
                                             <Button Classes="ribbon-btn small" Tag="矩形" Click="OnRibbonCommand">
                                                 <StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_rectangle}" /><TextBlock Text="矩形" /></StackPanel>

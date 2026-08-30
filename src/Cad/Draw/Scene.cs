@@ -525,6 +525,22 @@ public static class ArcMath
         double r = Math.Sqrt((x1 - ux) * (x1 - ux) + (y1 - uy) * (y1 - uy));
         return (ux, uy, r);
     }
+
+    /// <summary>起点-圆心-端点 → ArcEntity 的三点(起/中/端)：半径取 |起-心|，端点投影到圆，逆时针取弧。退化返回 null。</summary>
+    public static (double x1, double y1, double x2, double y2, double x3, double y3)? FromStartCenterEnd(
+        double sx, double sy, double cx, double cy, double ex, double ey)
+    {
+        double r = Math.Sqrt((sx - cx) * (sx - cx) + (sy - cy) * (sy - cy));
+        if (r < 1e-9) return null;
+        double a0 = Math.Atan2(sy - cy, sx - cx);
+        double a1 = Math.Atan2(ey - cy, ex - cx);
+        double sweep = a1 - a0;
+        while (sweep <= 1e-9) sweep += 2 * Math.PI;   // 逆时针 (0, 2π]
+        double am = a0 + sweep / 2;
+        return (sx, sy,
+                cx + r * Math.Cos(am), cy + r * Math.Sin(am),      // 弧中点
+                cx + r * Math.Cos(a1), cy + r * Math.Sin(a1));     // 端点投影到圆
+    }
 }
 
 /// <summary>直线相交（无限延长），供修剪/延伸。纯逻辑、可单测。</summary>
