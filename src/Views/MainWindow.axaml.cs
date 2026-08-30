@@ -43,7 +43,7 @@ public partial class MainWindow : Window
             if (_measure != null && props.IsLeftButtonPressed)
             {
                 _nav = NavMode.None;
-                var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                var wp = PickWorld();
                 if (wp != null)
                 {
                     var first = _measure.First;
@@ -69,7 +69,7 @@ public partial class MainWindow : Window
             if (_angle != null && props.IsLeftButtonPressed)
             {
                 _nav = NavMode.None;
-                var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                var wp = PickWorld();
                 if (wp != null)
                 {
                     var v = _angle.Vertex; var a = _angle.FirstRay;
@@ -97,7 +97,7 @@ public partial class MainWindow : Window
             if (_editMode != EditMode.None && props.IsLeftButtonPressed)
             {
                 _nav = NavMode.None;
-                var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                var wp = PickWorld();
                 if (wp != null) FeedPoint(wp.Value.x, wp.Value.y);
                 return;
             }
@@ -106,7 +106,7 @@ public partial class MainWindow : Window
             if (_trimActive && props.IsLeftButtonPressed)
             {
                 _nav = NavMode.None;
-                var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                var wp = PickWorld();
                 if (wp != null && _selected.Count == 1)
                 {
                     var boundary = _selected[0];
@@ -140,7 +140,7 @@ public partial class MainWindow : Window
             if (_breakActive && props.IsLeftButtonPressed)
             {
                 _nav = NavMode.None;
-                var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                var wp = PickWorld();
                 if (wp != null && _selected.Count == 1)
                 {
                     _breakPts.Add((wp.Value.x, wp.Value.y));
@@ -168,7 +168,7 @@ public partial class MainWindow : Window
             if (_dimActive && props.IsLeftButtonPressed)
             {
                 _nav = NavMode.None;
-                var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                var wp = PickWorld();
                 if (wp != null)
                 {
                     if (_dimP1 == null) { _dimP1 = (wp.Value.x, wp.Value.y); StatusMsg.Text = "标注：指定第二点"; }
@@ -191,7 +191,7 @@ public partial class MainWindow : Window
             if (_dimRadActive && _dimRadCircle != null && props.IsLeftButtonPressed)
             {
                 _nav = NavMode.None;
-                var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                var wp = PickWorld();
                 if (wp != null)
                 {
                     var c = _dimRadCircle.Value;
@@ -210,7 +210,7 @@ public partial class MainWindow : Window
             if (_spotActive && props.IsLeftButtonPressed && _spotTerrain != null)
             {
                 _nav = NavMode.None;
-                var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                var wp = PickWorld();
                 if (wp != null)
                 {
                     double z = Contour.IdwAt(_spotTerrain, wp.Value.x, wp.Value.y);
@@ -225,7 +225,7 @@ public partial class MainWindow : Window
             if (_benchActive && props.IsLeftButtonPressed)
             {
                 _nav = NavMode.None;
-                var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                var wp = PickWorld();
                 if (wp != null && _benchEntity != null)
                 {
                     var lines = BenchTools.BatchOffset(_benchEntity, wp.Value.x, wp.Value.y, _benchCount);
@@ -246,7 +246,7 @@ public partial class MainWindow : Window
             if (_pathActive && props.IsLeftButtonPressed)
             {
                 _nav = NavMode.None;
-                var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                var wp = PickWorld();
                 if (wp != null)
                 {
                     if (_pathP1 == null) { _pathP1 = (wp.Value.x, wp.Value.y); StatusMsg.Text = "点对点寻径：点终点"; }
@@ -259,7 +259,7 @@ public partial class MainWindow : Window
             if (_offsetActive && props.IsLeftButtonPressed)
             {
                 _nav = NavMode.None;
-                var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                var wp = PickWorld();
                 if (wp != null && _selected.Count == 1)
                 {
                     var off = _selected[0].Offset(wp.Value.x, wp.Value.y);
@@ -288,7 +288,7 @@ public partial class MainWindow : Window
             if (_ttrActive && !_ttrAwaitRadius && props.IsLeftButtonPressed)
             {
                 _nav = NavMode.None;
-                var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                var wp = PickWorld();
                 if (wp != null)
                 {
                     var hit = _scene.Pick(wp.Value.x, wp.Value.y, SnapTolWorld(_lastPointer) * 3, _layers.IsSelectable);
@@ -306,7 +306,7 @@ public partial class MainWindow : Window
             if (_serActive && !_serAwaitRadius && props.IsLeftButtonPressed)
             {
                 _nav = NavMode.None;
-                var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                var wp = PickWorld();
                 if (wp != null)
                 {
                     if (_serStart == null) { _serStart = (wp.Value.x, wp.Value.y); StatusMsg.Text = "圆弧SER：指定端点"; }
@@ -319,7 +319,7 @@ public partial class MainWindow : Window
             if (_tool != null && props.IsLeftButtonPressed)
             {
                 _nav = NavMode.None;
-                var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                var wp = PickWorld();
                 if (wp != null) FeedPoint(wp.Value.x, wp.Value.y);
                 return;
             }
@@ -328,7 +328,7 @@ public partial class MainWindow : Window
             if (props.IsLeftButtonPressed && _selected.Count == 1 && _measure == null
                 && _editMode == EditMode.None && !_offsetActive && !_trimActive && !_breakActive && !_slideActive)
             {
-                var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                var wp = PickWorld();
                 if (wp != null)
                 {
                     int gi = HitGrip(wp.Value.x, wp.Value.y, SnapTolWorld(_lastPointer));
@@ -709,6 +709,8 @@ public partial class MainWindow : Window
             if (cmd == "圆弧SER" || cmd == "圆弧(起点端点半径)") { StartArcSer(); return; }
             if (cmd == "打断") { StartBreak(); return; }
             if (cmd == "夹点开关" || cmd == "夹点") { ToggleGizmo(); return; }
+            if (cmd == "正交" || cmd == "正交开关") { _orthoOn = !_orthoOn; StatusMsg.Text = _orthoOn ? "正交: 开" : "正交: 关"; return; }
+            if (cmd == "栅格捕捉" || cmd == "捕捉开关") { _snapOn = !_snapOn; StatusMsg.Text = _snapOn ? $"栅格捕捉: 开（步长 {_snapStep:0.##}）" : "栅格捕捉: 关"; return; }
             if (cmd == "滑动多段线") { StartSlide(); return; }
             if (ActivateDrawTool(cmd)) return;
             StatusMsg.Text = $"命令: {cmd}";
@@ -2759,6 +2761,23 @@ public partial class MainWindow : Window
 
     // 命令行回车 → 命令分发（已实装的走功能，其余回显）
     private string? _lastCommand;   // 上次成功派发的命令（空命令行 + Enter 重复用）
+    private bool _orthoOn;          // 正交约束（ORTHO）
+    private bool _snapOn;           // 栅格捕捉（SNAP）
+    private double _snapStep = 1.0; // 栅格步长（世界单位）
+
+    /// <summary>取当前世界点：对象捕捉优先，其后按开关应用栅格捕捉 / 正交约束（默认关闭 → 等价原逻辑）。</summary>
+    private (double x, double y)? PickWorld()
+    {
+        var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+        if (wp == null) return null;
+        var p = wp.Value;
+        if (_snapWorld == null)   // 命中对象捕捉时不再网格/正交扰动（osnap 优先）
+        {
+            if (_snapOn) p = Cad.Draw.DraftAids.Snap(p.x, p.y, _snapStep);
+            if (_orthoOn && _lastInputPoint != null) p = Cad.Draw.DraftAids.Ortho(_lastInputPoint.Value.x, _lastInputPoint.Value.y, p.x, p.y);
+        }
+        return p;
+    }
 
     /// <summary>命令行是否空闲（无进行中的绘制/编辑/测量/交互）——空 Enter 仅在此态重复上次命令。</summary>
     private bool CommandIdle() =>
@@ -3066,6 +3085,14 @@ public partial class MainWindow : Window
                 break;
             case "GIZMO":
                 ToggleGizmo();
+                break;
+            case "ORTHO":
+                _orthoOn = !_orthoOn;
+                StatusMsg.Text = _orthoOn ? "正交: 开（取点锁定水平/垂直）" : "正交: 关";
+                break;
+            case "SNAP":
+                _snapOn = !_snapOn;
+                StatusMsg.Text = _snapOn ? $"栅格捕捉: 开（步长 {_snapStep:0.##}）" : "栅格捕捉: 关";
                 break;
             case "BENCHLINES":
             case "BENCHEXPAND":
