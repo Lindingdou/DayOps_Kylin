@@ -35,7 +35,7 @@ public partial class MainWindow : Window
             if (_measure != null && props.IsLeftButtonPressed)
             {
                 _nav = NavMode.None;
-                var wp = Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                var wp = _snapWorld ?? Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
                 if (wp != null)
                 {
                     var first = _measure.First;
@@ -69,9 +69,27 @@ public partial class MainWindow : Window
         {
             var p = e.GetPosition(ViewportHost);
             var w = Viewport.ScreenToWorld(p.X, p.Y);
-            CoordText.Text = w != null
-                ? $"X {w.Value.x:0.00}  Y {w.Value.y:0.00}"
+
+            // 对象捕捉：吸附到最近顶点
+            _snapWorld = null;
+            if (w != null && SnapToggle.IsChecked == true && _lastImport != null)
+            {
+                double tol = SnapTolWorld(p);
+                _snapWorld = SnapPoints.FindNearest(_lastImport.LineVertices, w.Value.x, w.Value.y, tol);
+                if (_snapWorld != null)
+                {
+                    Viewport.SetSnapMarker(SnapCross(_snapWorld.Value.x, _snapWorld.Value.y, tol * 0.6));
+                    _snapShown = true;
+                }
+                else if (_snapShown) { Viewport.SetSnapMarker(null); _snapShown = false; }
+            }
+            else if (_snapShown) { Viewport.SetSnapMarker(null); _snapShown = false; }
+
+            var shown = _snapWorld ?? w;
+            CoordText.Text = shown != null
+                ? $"X {shown.Value.x:0.00}  Y {shown.Value.y:0.00}{(_snapWorld != null ? "  [捕捉]" : "")}"
                 : $"视口 px  X {p.X:0}  Y {p.Y:0}";
+
             if (_nav == NavMode.Pan)
                 Viewport.Pan(_lastPointer.X, _lastPointer.Y, p.X, p.Y);
             else if (_nav == NavMode.Orbit)
@@ -99,6 +117,8 @@ public partial class MainWindow : Window
     private Avalonia.Point _lastPointer;
     private DxfImportService.ImportResult? _lastImport;
     private MeasureState? _measure;
+    private (double x, double y)? _snapWorld;   // 当前捕捉到的世界点
+    private bool _snapShown;                     // 捕捉标记是否已显示
 
     // Ribbon 按钮 → 「导入」走真实 DXF 导入；其余暂回显命令（证明整条 UI 已接线）
     private async void OnRibbonCommand(object? sender, RoutedEventArgs e)
@@ -251,6 +271,27 @@ public partial class MainWindow : Window
     private void OnCtx3D(object? s, RoutedEventArgs e) { Viewport.SetViewMode(false); StatusMsg.Text = "视图: 3D 轨道"; }
     private void OnCtxGrid(object? s, RoutedEventArgs e) => Viewport.ToggleGrid();
     private void OnCtxClearHighlight(object? s, RoutedEventArgs e) => Viewport.SetHighlight(null);
+
+    // 对象捕捉容差：约 12px 换算到世界单位
+    private double SnapTolWorld(Avalonia.Point p)
+    {
+        var a = Viewport.ScreenToWorld(p.X, p.Y);
+        var b = Viewport.ScreenToWorld(p.X + 12, p.Y);
+        if (a == null || b == null) return 0;
+        double dx = b.Value.x - a.Value.x, dy = b.Value.y - a.Value.y;
+        return System.Math.Sqrt(dx * dx + dy * dy);
+    }
+
+    // 捕捉标记：绿色十字几何（P3_C3）
+    private static float[] SnapCross(double x, double y, double s)
+    {
+        const float g0 = 0.2f, g1 = 1f, g2 = 0.4f;
+        return new float[]
+        {
+            (float)(x - s), (float)y, 0, g0, g1, g2,  (float)(x + s), (float)y, 0, g0, g1, g2,
+            (float)x, (float)(y - s), 0, g0, g1, g2,  (float)x, (float)(y + s), 0, g0, g1, g2
+        };
+    }
 
     // 命令行回车 → 命令分发（已实装的走功能，其余回显）
     private void OnCommandKeyDown(object? sender, KeyEventArgs e)

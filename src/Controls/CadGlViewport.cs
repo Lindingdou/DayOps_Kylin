@@ -49,6 +49,12 @@ public class CadGlViewport : OpenGlControlBase
     private float[]? _pendingHighlight;
     private bool _highlightDirty;
 
+    // 对象捕捉标记（光标吸附点的十字）
+    private GlRenderer.Mesh _snap;
+    private bool _hasSnap;
+    private float[]? _pendingSnap;
+    private bool _snapDirty;
+
     private readonly Stopwatch _clock = Stopwatch.StartNew();
 
     /// <summary>OpenGL 上下文就绪后回报后端版本串给界面。</summary>
@@ -82,6 +88,7 @@ public class CadGlViewport : OpenGlControlBase
         _renderer.DeleteMesh(_gizmo);
         if (_hasImported) _renderer.DeleteMesh(_imported);
         if (_hasHighlight) _renderer.DeleteMesh(_highlight);
+        if (_hasSnap) _renderer.DeleteMesh(_snap);
         _renderer.Deinit();
     }
 
@@ -109,6 +116,14 @@ public class CadGlViewport : OpenGlControlBase
             if (_hasHighlight) _renderer.DeleteMesh(_highlight);
             _highlight = _renderer.Upload(_pendingHighlight!);
             _hasHighlight = !_highlight.IsEmpty;
+        }
+
+        if (_snapDirty)
+        {
+            _snapDirty = false;
+            if (_hasSnap) _renderer.DeleteMesh(_snap);
+            _snap = _renderer.Upload(_pendingSnap!);
+            _hasSnap = !_snap.IsEmpty;
         }
 
         float[] vp = _camera.ViewProj(aspect);
@@ -158,9 +173,10 @@ public class CadGlViewport : OpenGlControlBase
     /// <summary>选择高亮：选中类型的几何用高亮色画在最上层。深度关。</summary>
     private void HighlightPass(float[] vp)
     {
-        if (!_hasHighlight) return;
+        if (!_hasHighlight && !_hasSnap) return;
         _renderer.BeginPass(depthTest: false);
-        _renderer.Draw(_highlight, GL_LINES, vp);
+        if (_hasHighlight) _renderer.Draw(_highlight, GL_LINES, vp);
+        if (_hasSnap) _renderer.Draw(_snap, GL_LINES, vp);
         _renderer.EndPass();
     }
 
@@ -260,6 +276,14 @@ public class CadGlViewport : OpenGlControlBase
         var dst = (float[])src.Clone();
         for (int i = 0; i + 5 < dst.Length; i += 6) { dst[i + 3] = r; dst[i + 4] = g; dst[i + 5] = b; }
         return dst;
+    }
+
+    /// <summary>设置对象捕捉标记几何（P3_C3，已含颜色）；null/空 → 清除。</summary>
+    public void SetSnapMarker(float[]? cross)
+    {
+        _pendingSnap = (cross == null || cross.Length == 0) ? Array.Empty<float>() : cross;
+        _snapDirty = true;
+        RequestNextFrameRendering();
     }
 
     // 拼接所有可见图层的几何为一段连续缓冲
