@@ -1091,7 +1091,7 @@
         </TabControl>
 
         <!-- ============================ 3D 视口 ============================ -->
-        <Grid Grid.Row="1" ColumnDefinitions="220,*">
+        <Grid Grid.Row="1" ColumnDefinitions="220,Auto,*,Auto,260">
         <!-- 左侧对象管理器 -->
         <Border Grid.Column="0" Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,1,0">
             <Grid RowDefinitions="Auto,Auto,Auto,*,Auto,130,Auto,Auto,*">
@@ -1116,7 +1116,8 @@
                 <TreeView Grid.Row="8" x:Name="ObjectTree" Background="Transparent" BorderThickness="0" Margin="4,0" />
             </Grid>
         </Border>
-        <Panel Grid.Column="1" x:Name="ViewportHost" Background="Transparent">
+        <GridSplitter Grid.Column="1" Width="4" Background="#DCDFE4" ResizeDirection="Columns" HorizontalAlignment="Center" />
+        <Panel Grid.Column="2" x:Name="ViewportHost" Background="Transparent">
             <Panel.ContextMenu>
                 <ContextMenu>
                     <MenuItem Header="范围缩放" Click="OnCtxZoomExtents" />
@@ -1144,6 +1145,19 @@
                 <TextBlock Text="Z 上 · CGCS2000 约定" Foreground="#C9D6E6" FontSize="11" />
             </Border>
         </Panel>
+        <GridSplitter Grid.Column="3" Width="4" Background="#DCDFE4" ResizeDirection="Columns" HorizontalAlignment="Center" />
+        <!-- 右侧特性面板 -->
+        <Border Grid.Column="4" Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="1,0,0,0">
+            <Grid RowDefinitions="Auto,Auto,*">
+                <TextBlock Grid.Row="0" Text="特性" FontWeight="SemiBold" FontSize="13"
+                           Margin="10,8,10,4" Foreground="#3A3F46" />
+                <TextBlock Grid.Row="1" x:Name="PropertyHint" Text="选中单个实体查看特性"
+                           Margin="10,0,10,6" FontSize="11" Foreground="#8A929C" />
+                <ScrollViewer Grid.Row="2" Margin="4,0,4,8">
+                    <StackPanel x:Name="PropertyPanel" />
+                </ScrollViewer>
+            </Grid>
+        </Border>
         </Grid>
 
         <!-- ============================ 命令行 ============================ -->

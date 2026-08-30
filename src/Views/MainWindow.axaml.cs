@@ -3398,12 +3398,35 @@ public partial class MainWindow : Window
 
     private void HighlightSelection()
     {
+        UpdatePropertyPanel();
         if (_selected.Count == 0) { Viewport.SetHighlight(null); return; }
         var o = new List<float>();
         foreach (var e in _selected) e.Tessellate(o);
         if (_gripsOn && _selected.Count == 1)           // 单选 + 夹点开 → 叠加夹点方块
             foreach (var g in _selected[0].Grips()) AppendGripSquare(o, g.x, g.y, GripSize());
         Viewport.SetHighlight(o.ToArray());
+    }
+
+    // 右侧特性面板：随选择更新（单选=逐行属性; 多选=计数; 空=提示）
+    private void UpdatePropertyPanel()
+    {
+        if (PropertyPanel == null || PropertyHint == null) return;
+        PropertyPanel.Children.Clear();
+        if (_selected.Count == 0) { PropertyHint.Text = "选中单个实体查看特性"; PropertyHint.IsVisible = true; return; }
+        if (_selected.Count > 1) { PropertyHint.Text = $"选中 {_selected.Count} 个实体（单选查看特性）"; PropertyHint.IsVisible = true; return; }
+        PropertyHint.IsVisible = false;
+        foreach (var (_, label, value) in Cad.Draw.EntityProperties.Describe(_selected[0]))
+            PropertyPanel.Children.Add(PropRow(label, value));
+    }
+
+    private static Control PropRow(string label, string value)
+    {
+        var g = new Grid { ColumnDefinitions = new ColumnDefinitions("92,*"), Margin = new Thickness(6, 2, 6, 2) };
+        var l = new TextBlock { Text = label, FontSize = 11, Foreground = Brush.Parse("#6A727C") };
+        var v = new TextBlock { Text = value, FontSize = 11, Foreground = Brush.Parse("#2A2F36"), TextWrapping = TextWrapping.Wrap };
+        Grid.SetColumn(l, 0); Grid.SetColumn(v, 1);
+        g.Children.Add(l); g.Children.Add(v);
+        return g;
     }
 
     // 夹点方块（小正方形轮廓，蓝色）
