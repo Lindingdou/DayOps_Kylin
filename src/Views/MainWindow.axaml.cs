@@ -457,6 +457,11 @@ public partial class MainWindow : Window
             if (cmd == "导入点") { await ImportPointsAsync(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
+            if (cmd == "2D") { Viewport.SetViewMode(true); StatusMsg.Text = "视图: 2D 平面（正交俯视）"; return; }
+            if (cmd == "3D") { Viewport.SetViewMode(false); StatusMsg.Text = "视图: 3D 轨道"; return; }
+            if (cmd == "清空视图") { _selected.Clear(); Viewport.SetHighlight(null); Viewport.SetSnapMarker(null); _snapShown = false; RefreshScene(); StatusMsg.Text = "已清空选择/高亮/捕捉标记"; return; }
+            if (cmd == "帮助文档") { ShowHelp(); return; }
+            if (cmd == "注册") { StatusMsg.Text = "注册/授权：需接入国产数据库(达梦)授权系统（记录待做）"; return; }
             if (cmd == "删除") { DeleteSelected(); return; }
             if (cmd == "全部选择") { SelectAll(); return; }
             if (cmd == "快速选择" || cmd == "选择类似") { SelectSimilar(); return; }
@@ -811,6 +816,49 @@ public partial class MainWindow : Window
         _selected.RemoveAll(en => !_layers.IsSelectable(en.LayerName));
         HighlightSelection();
         RefreshScene();
+    }
+
+    // 帮助：命令与快捷键参考窗口
+    private void ShowHelp()
+    {
+        const string help =
+            "PitMine3D · Kylin 移植版 — 命令与快捷键\n" +
+            "（Home 绘制/编辑为内核到位前的托管重实现）\n" +
+            "\n【鼠标】\n" +
+            "  中键拖拽 = 平移 · 滚轮 = 朝光标缩放\n" +
+            "  2D 左键拖拽 = 窗口框选（左→右全含，右→左交叉）\n" +
+            "  3D 左键拖拽 = 轨道旋转 · 右键 = 上下文菜单\n" +
+            "  双击 = 结束多段线 / 否则范围缩放\n" +
+            "\n【快捷键】\n" +
+            "  ESC 取消当前命令 · Del 删除选中 · Ctrl+Z 撤销 · Ctrl+Y 重做\n" +
+            "\n【绘制】\n" +
+            "  直线 LINE · 圆 CIRCLE(下拉:2P/3P/TTR) · 圆弧 ARC(下拉:三点/SCE/CSE)\n" +
+            "  矩形 RECT · 多段线 PLINE · 滑动多段线 PLDRAG · 点 POINT · 正多边形 POLYGON(可带边数)\n" +
+            "\n【修改】\n" +
+            "  移动 M · 复制 CO · 旋转 RO · 缩放 SC · 镜像 MI · 删除 E\n" +
+            "  偏移 O · 修剪/延伸 TR/EX · 打断 BR · 分解 X · 夹点(选中后拖方块)\n" +
+            "\n【选择】\n" +
+            "  全部 ALL · 最后 LAST · 上次 P · 快速选择(选类似) QSELECT\n" +
+            "\n【文件】\n" +
+            "  新建 NEW · 打开 OPEN(.pmx) · 保存 SAVE(.pmx) · 另存为(.pmx/.dxf/.dwg)\n" +
+            "  导入 DXF/DWG/OFF · 导入点 CSV/TXT · 导出 DXF\n" +
+            "\n【精确坐标】命令行输入：\n" +
+            "  x,y 绝对 · @dx,dy 相对 · d<角 极坐标 · @d<角 相对极\n" +
+            "\n【图层】左侧面板每层：显隐/冻结/锁定/设当前/色块\n" +
+            "\n【视图】2D · 3D · 网格 GRID · 范围缩放 ZE";
+
+        var win = new Window
+        {
+            Title = "帮助 — 命令与快捷键",
+            Width = 560, Height = 660,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Content = new ScrollViewer
+            {
+                Content = new TextBlock { Text = help, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(16), FontSize = 13 }
+            }
+        };
+        win.Show(this);
+        StatusMsg.Text = "已打开帮助";
     }
 
     // 场景实体 → 类型中文名（对象树高亮 / 快速选择匹配用）
