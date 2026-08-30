@@ -713,6 +713,7 @@ public partial class MainWindow : Window
             if (cmd == "区域求差" || cmd == "可采区域求差" || cmd == "多边形求差") { SubtractRegions(); return; }
             if (cmd == "区域重叠检测" || cmd == "区域重叠" || cmd == "重叠检测") { CheckRegionOverlap(); return; }
             if (cmd == "平盘宽度识别" || cmd == "现场参数提取" || cmd == "平盘识别") { await BenchWidthAsync(); return; }
+            if (cmd == "道路横断面" || cmd == "路面加宽超高" || cmd == "弯道加宽") { RoadCrossSectionCmd(); return; }
             if (cmd == "新建图层") { var l = _layers.New(); PopulateDrawingLayers(); StatusMsg.Text = $"新建图层「{l.Name}」并置为当前"; return; }
             if (cmd == "图层特性管理器") { var l = _layers.CycleCurrent(); StatusMsg.Text = $"当前图层「{l.Name}」 显示{( l.Shown?"开":"关")}/{(l.Locked?"锁":"解锁")}（再点循环切换）"; return; }
             if (cmd == "冻结") { FreezeCurrentLayer(true); return; }
@@ -3099,6 +3100,43 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"删除重复线：原 {polys.Count} · 删除 {dups.Count} · 余 {kept.Count}";
     }
 
+    // 道路横断面：选一条中线折线 → 按曲率算弯道加宽/超高 → 左右加宽路缘线入场景 + 报表
+    private void RoadCrossSectionCmd()
+    {
+        PolylineEntity? center = null;
+        foreach (var e in _selected) if (e is PolylineEntity p && p.Points.Count >= 2) { center = p; break; }
+        if (center == null) { StatusMsg.Text = "道路横断面：请先选中一条中线多段线(≥2 点)"; return; }
+        // 典型露天矿运输道路参数(本环境无参数对话框, 取标准默认)
+        const double baseWidth = 15.0, widenThreshold = 100.0, wheelbase = 6.0, designSpeed = 30.0, maxSuper = 8.0;
+        const int laneCount = 2;
+        var pts = new List<(double X, double Y, double Z)>(center.Points.Count);
+        foreach (var (x, y) in center.Points) pts.Add((x, y, 0));
+        var cs = RoadCrossSection.ComputeAlong(pts, baseWidth, widenThreshold, laneCount, wheelbase, designSpeed, maxSuper);
+        // 逐站按半宽沿法向偏移出左右路缘
+        var left = new PolylineEntity { Cr = 0.6f, Cg = 0.6f, Cb = 0.65f };
+        var right = new PolylineEntity { Cr = 0.6f, Cg = 0.6f, Cb = 0.65f };
+        int n = center.Points.Count;
+        for (int k = 0; k < n; k++)
+        {
+            // 法向：相邻段方向均值的垂直
+            double dx, dy;
+            var cur = center.Points[k];
+            if (k == 0) { dx = center.Points[1].Item1 - cur.Item1; dy = center.Points[1].Item2 - cur.Item2; }
+            else if (k == n - 1) { dx = cur.Item1 - center.Points[k - 1].Item1; dy = cur.Item2 - center.Points[k - 1].Item2; }
+            else { dx = center.Points[k + 1].Item1 - center.Points[k - 1].Item1; dy = center.Points[k + 1].Item2 - center.Points[k - 1].Item2; }
+            double len = System.Math.Sqrt(dx * dx + dy * dy);
+            if (len < 1e-9) { dx = 1; dy = 0; len = 1; }
+            double nxp = -dy / len, nyp = dx / len;           // 左法向
+            double half = cs.WidthM[k] / 2.0;
+            left.Points.Add((cur.Item1 + nxp * half, cur.Item2 + nyp * half));
+            right.Points.Add((cur.Item1 - nxp * half, cur.Item2 - nyp * half));
+        }
+        BeginChange();
+        _scene.Add(left); _scene.Add(right);
+        RefreshScene();
+        StatusMsg.Text = $"道路横断面(基宽{baseWidth:0.#}m·{laneCount}道·V{designSpeed:0}km/h)：最大加宽 {cs.MaxWideningM:0.##}m · 最大超高 {cs.MaxSuperelevationPct:0.#}% · 加宽段长 {cs.WidenedLengthM:0.#}m(左右路缘已入场景)";
+    }
+
     // 区域求差：选两条闭合多段线(第1=被减 subject, 第2=减去 clip)→ subject∖clip 最大块作新闭合多段线
     private void SubtractRegions()
     {
@@ -3776,6 +3814,10 @@ public partial class MainWindow : Window
             case "BENCHWIDTH":
             case "WIDEBENCH":
                 _ = BenchWidthAsync();
+                break;
+            case "ROADSECTION":
+            case "ROADWIDEN":
+                RoadCrossSectionCmd();
                 break;
             case "MOVE":
             case "M":
