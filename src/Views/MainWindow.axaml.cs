@@ -606,6 +606,8 @@ public partial class MainWindow : Window
             if (cmd == "裁剪" || cmd == "多边形裁剪" || cmd == "区运算" || cmd == "范围裁剪") { ClipPolygon(); return; }
             if (cmd == "平滑" || cmd == "光滑" || cmd == "曲线平滑" || cmd == "光滑曲线") { SmoothPolyline(); return; }
             if (cmd == "简化" || cmd == "多段线简化" || cmd == "抽稀线") { SimplifyPolyline(); return; }
+            if (cmd == "圈选" || cmd == "窗口圈选") { PolygonSelect(false); return; }
+            if (cmd == "交叉圈选") { PolygonSelect(true); return; }
             if (cmd == "坐标转换") { await CoordTransformAsync(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
@@ -1214,6 +1216,26 @@ public partial class MainWindow : Window
         _tool = null; _measure = null; _editMode = EditMode.None;
         Viewport.FitBounds(r.Bounds);
         StatusMsg.Text = $"高程查询：已载入 {r.Points.Count} 点，点击视口任意位置查询高程（ESC 退出）";
+    }
+
+    // 多边形圈选：以选中的闭合多段线为边界，选中其内实体
+    private void PolygonSelect(bool crossing)
+    {
+        if (_selected.Count != 1 || _selected[0] is not PolylineEntity bnd || !bnd.Closed || bnd.Points.Count < 3)
+        { StatusMsg.Text = "圈选：请先选中一条闭合多段线作边界"; return; }
+        var poly = bnd.Points;
+        SaveSel();
+        var picked = new List<SceneEntity>();
+        foreach (var en in _scene.Entities)
+        {
+            if (ReferenceEquals(en, bnd)) continue;
+            if (!_layers.IsSelectable(en.LayerName)) continue;
+            if (SelectionBox.MatchPolygon(en, poly, crossing)) picked.Add(en);
+        }
+        _selected.Clear();
+        _selected.AddRange(picked);
+        HighlightSelection();
+        StatusMsg.Text = $"圈选 {_selected.Count} 个（{(crossing ? "交叉" : "窗口")}，边界内）";
     }
 
     // 多段线简化：Douglas-Peucker 减顶点保形
@@ -2571,6 +2593,12 @@ public partial class MainWindow : Window
             case "SIMPLIFY":
             case "DP":
                 SimplifyPolyline();
+                break;
+            case "WP":
+                PolygonSelect(false);
+                break;
+            case "CP":
+                PolygonSelect(true);
                 break;
             case "DIST":
             case "DI":

@@ -458,6 +458,17 @@ public class DrawToolsTests
     }
 
     [Fact]
+    public void SelectionBox_polygon_window_needs_all_inside()
+    {
+        var poly = new System.Collections.Generic.List<(double x, double y)> { (0, 0), (10, 0), (10, 10), (0, 10) };
+        var inside = new LineEntity { X0 = 2, Y0 = 2, X1 = 8, Y1 = 8 };
+        var partial = new LineEntity { X0 = 5, Y0 = 5, X1 = 20, Y1 = 5 };
+        Assert.True(SelectionBox.MatchPolygon(inside, poly, crossing: false));    // 全含
+        Assert.False(SelectionBox.MatchPolygon(partial, poly, crossing: false));  // 部分出界
+        Assert.True(SelectionBox.MatchPolygon(partial, poly, crossing: true));    // 交叉含部分
+    }
+
+    [Fact]
     public void SelectionBox_crossing_catches_passthrough()
     {
         var through = new LineEntity { X0 = -5, Y0 = 5, X1 = 15, Y1 = 5 };   // 横穿两端在外

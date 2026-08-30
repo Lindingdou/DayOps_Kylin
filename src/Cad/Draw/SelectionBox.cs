@@ -27,6 +27,22 @@ public static class SelectionBox
         return crossing ? hit : all;
     }
 
+    /// <summary>实体是否被多边形圈选。crossing=false 全含(所有顶点在多边形内)；true 任一顶点在内。</summary>
+    public static bool MatchPolygon(SceneEntity e, IReadOnlyList<(double x, double y)> poly, bool crossing)
+    {
+        if (poly.Count < 3) return false;
+        var o = new List<float>();
+        e.Tessellate(o);
+        if (o.Count == 0) return false;
+        bool all = true, any = false;
+        for (int i = 0; i + 1 < o.Count; i += 6)
+        {
+            bool inside = LineMath.PointInPolygon(o[i], o[i + 1], poly);
+            if (inside) any = true; else all = false;
+        }
+        return crossing ? any : all;
+    }
+
     private static bool In(double x, double y, double minX, double minY, double maxX, double maxY)
         => x >= minX && x <= maxX && y >= minY && y <= maxY;
 
