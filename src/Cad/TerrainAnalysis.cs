@@ -94,6 +94,23 @@ public static class TerrainAnalysis
 
     /// <summary>两期高程点差值算量：各自 IDW 到同一 n×n 网格，逐格(2−1)按格面积求和。
     /// 返回(挖方=下降量, 填方=上升量, 净=填−挖)。</summary>
+    /// <summary>圈范围算量：仅统计质心落在边界多边形内的三角柱体积(相对 baseZ)。返回(上/下/净)。</summary>
+    public static (double above, double below, double net) VolumeWithinBoundary(
+        IReadOnlyList<(double x, double y, double z)> pts, List<(int a, int b, int c)> tris, double baseZ,
+        IReadOnlyList<(double x, double y)> boundary)
+    {
+        double above = 0, below = 0;
+        foreach (var t in tris)
+        {
+            double cx = (pts[t.a].x + pts[t.b].x + pts[t.c].x) / 3.0;
+            double cy = (pts[t.a].y + pts[t.b].y + pts[t.c].y) / 3.0;
+            if (!LineMath.PointInPolygon(cx, cy, boundary)) continue;   // 边界外不计
+            double v = PrismVolume(pts[t.a], pts[t.b], pts[t.c], baseZ);
+            if (v >= 0) above += v; else below += -v;
+        }
+        return (above, below, above - below);
+    }
+
     public static (double cut, double fill, double net) TwoEpochVolume(
         IReadOnlyList<(double x, double y, double z)> a, IReadOnlyList<(double x, double y, double z)> b, int n)
     {

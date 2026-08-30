@@ -494,6 +494,7 @@ public partial class MainWindow : Window
             if (cmd == "坡向着色") { await ShadeTinAsync("坡向着色", "按朝向 HSV 配色", TerrainAnalysis.BuildAspectMap); return; }
             if (cmd == "体积计算" || cmd == "算量" || cmd == "土方量") { await VolumeAsync(); return; }
             if (cmd == "两期点云算量" || cmd == "两期算量" || cmd == "两期土方") { await TwoEpochVolumeAsync(); return; }
+            if (cmd == "圈范围算量") { await BoundaryVolumeAsync(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
             if (cmd == "2D") { Viewport.SetViewMode(true); StatusMsg.Text = "视图: 2D 平面（正交俯视）"; return; }
@@ -853,6 +854,29 @@ public partial class MainWindow : Window
         if (tris.Count == 0) { StatusMsg.Text = "体积计算：点太少或共线"; return; }
         var (above, below, net) = TerrainAnalysis.Volume(r.Points, tris, zmin);
         StatusMsg.Text = $"体积（基准=最低 z {zmin:0.##}）：上方 {above:0.##} · 下方 {below:0.##} · 净 {net:0.##}（{tris.Count} 三角）";
+    }
+
+    // 圈范围算量：选中的闭合多段线作边界 → TIN → 边界内三角体积
+    private async Task BoundaryVolumeAsync()
+    {
+        if (_selected.Count != 1 || _selected[0] is not PolylineEntity boundary || !boundary.Closed || boundary.Points.Count < 3)
+        { StatusMsg.Text = "圈范围算量：请先选中一条闭合多段线作边界"; return; }
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "圈范围算量：选高程点 CSV (x,y,z)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("高程点 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success) { StatusMsg.Text = $"圈范围算量：点导入失败 {r.Error}"; return; }
+        var pts2d = new List<(double x, double y)>();
+        double zmin = double.MaxValue;
+        foreach (var p in r.Points) { pts2d.Add((p.x, p.y)); if (p.z < zmin) zmin = p.z; }
+        var tris = Delaunay.Triangulate(pts2d);
+        if (tris.Count == 0) { StatusMsg.Text = "圈范围算量：点太少或共线"; return; }
+        var (above, below, net) = TerrainAnalysis.VolumeWithinBoundary(r.Points, tris, zmin, boundary.Points);
+        StatusMsg.Text = $"圈范围算量（基准 z {zmin:0.##}）：上方 {above:0.##} · 下方 {below:0.##} · 净 {net:0.##}";
     }
 
     // 两期算量：选两期高程点 CSV → 同网格差值 → 挖方/填方/净值
@@ -1832,6 +1856,9 @@ public partial class MainWindow : Window
                 break;
             case "DIFFVOL":
                 _ = TwoEpochVolumeAsync();
+                break;
+            case "BNDVOL":
+                _ = BoundaryVolumeAsync();
                 break;
             case "DIST":
             case "DI":

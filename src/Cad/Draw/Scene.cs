@@ -644,6 +644,21 @@ public static class LineMath
         return res;
     }
 
+    /// <summary>点是否在多边形内（射线法，供圈范围算量/裁剪）。</summary>
+    public static bool PointInPolygon(double px, double py, IReadOnlyList<(double x, double y)> poly)
+    {
+        bool inside = false;
+        int n = poly.Count;
+        for (int i = 0, j = n - 1; i < n; j = i++)
+        {
+            var a = poly[i]; var b = poly[j];
+            if (((a.y > py) != (b.y > py)) &&
+                (px < (b.x - a.x) * (py - a.y) / (b.y - a.y) + a.x))
+                inside = !inside;
+        }
+        return inside;
+    }
+
     /// <summary>两条有限线段是否真相交（用于框选交叉判定；共线相接的退化情形忽略）。</summary>
     public static bool SegmentsIntersect(
         double ax0, double ay0, double ax1, double ay1,

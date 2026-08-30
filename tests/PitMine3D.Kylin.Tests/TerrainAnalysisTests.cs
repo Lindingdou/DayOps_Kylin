@@ -99,6 +99,29 @@ public class TerrainAnalysisTests
     }
 
     [Fact]
+    public void PointInPolygon_square()
+    {
+        var poly = new List<(double x, double y)> { (0, 0), (4, 0), (4, 4), (0, 4) };
+        Assert.True(PitMine3D.Kylin.Cad.Draw.LineMath.PointInPolygon(2, 2, poly));
+        Assert.False(PitMine3D.Kylin.Cad.Draw.LineMath.PointInPolygon(5, 5, poly));
+    }
+
+    [Fact]
+    public void VolumeWithinBoundary_excludes_outside_triangles()
+    {
+        // 两三角: 一个质心在边界内、一个在外 → 只算内的
+        var pts = new List<(double x, double y, double z)>
+        {
+            (0, 0, 10), (1, 0, 10), (1, 1, 10),   // 三角0 质心≈(0.67,0.33) 在内
+            (10, 10, 10), (11, 10, 10), (11, 11, 10) // 三角1 质心≈(10.67,10.33) 在外
+        };
+        var tris = new List<(int a, int b, int c)> { (0, 1, 2), (3, 4, 5) };
+        var boundary = new List<(double x, double y)> { (-1, -1), (2, -1), (2, 2), (-1, 2) };
+        var (above, _, _) = TerrainAnalysis.VolumeWithinBoundary(pts, tris, 0, boundary);
+        Assert.Equal(0.5 * 10, above, 3);   // 只 1 个三角(面积0.5, 高10)
+    }
+
+    [Fact]
     public void TwoEpoch_uniform_rise_is_fill()
     {
         // 第一期 z=0, 第二期 z=5, 同单位正方形 → 填方=5*面积(1), 挖方=0
