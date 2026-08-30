@@ -659,6 +659,7 @@ public partial class MainWindow : Window
             if (cmd == "批量台阶扩帮" || cmd == "台阶线生成" || cmd == "台阶扩帮") { GenerateBenchLines(); return; }
             if (cmd == "剥采比均衡" || cmd == "VP曲线" || cmd == "剥采比") { await StrippingBalanceAsync(); return; }
             if (cmd == "工作面线拟合" || cmd == "工作面线" || cmd == "拟合工作面线") { await WorkingFaceLineAsync(); return; }
+            if (cmd == "矿床识别" || cmd == "自动识别" || cmd == "矿床类型识别") { await DepositDetectAsync(); return; }
             if (cmd == "高程查询" || cmd == "虚拟钻孔" || cmd == "查询高程") { await StartSpotQueryAsync(); return; }
             if (cmd == "文字" || cmd == "单行文字") { ArmText(); return; }
             if (cmd == "标注" || cmd == "线性标注" || cmd == "尺寸标注" || cmd == "标注台阶标高") { StartDim(); return; }
@@ -1091,6 +1092,48 @@ public partial class MainWindow : Window
         if (fit.DroppedSpeckle > 0 || fit.PulledBack > 0 || fit.DroppedOutlier > 0)
             msg += $"（斑点丢 {fit.DroppedSpeckle} · 拉回 {fit.PulledBack} · 离群丢 {fit.DroppedOutlier}）";
         StatusMsg.Text = msg;
+    }
+
+    // 矿床识别：煤单元中心 CSV(x,y,z) → PCA 倾角/走向 + Z 层游程煤层数 → 走向线上屏 + 报告
+    private async Task DepositDetectAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "矿床识别：选煤单元中心 CSV (x,y,z)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("煤单元中心 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success) { StatusMsg.Text = $"矿床识别：点导入失败 {r.Error}"; return; }
+        if (r.Points.Count < 8) { StatusMsg.Text = "矿床识别：煤单元中心需 ≥8 点"; return; }
+
+        // Z 层厚：取相邻唯一 z 的中位间隔，退化用 z 幅度/10
+        var zs = new List<double>();
+        foreach (var p in r.Points) zs.Add(p.z);
+        zs.Sort();
+        var gaps = new List<double>();
+        for (int i = 1; i < zs.Count; i++) { double g = zs[i] - zs[i - 1]; if (g > 1e-6) gaps.Add(g); }
+        double zLayer;
+        if (gaps.Count > 0) { gaps.Sort(); zLayer = gaps[gaps.Count / 2]; }
+        else zLayer = System.Math.Max((zs[^1] - zs[0]) / 10.0, 1.0);
+
+        var cells = new List<(double X, double Y, double Z)>(r.Points.Count);
+        foreach (var p in r.Points) cells.Add((p.x, p.y, p.z));
+        var sig = DepositAutoDetector.Detect(cells, zLayer);
+        if (sig == null) { StatusMsg.Text = "矿床识别：煤单元过少或退化，识别不出"; return; }
+
+        // 过质心画走向线（水平面内，方位角 az，长度=平面对角 0.6）
+        double cx = 0, cy = 0; foreach (var p in r.Points) { cx += p.x; cy += p.y; } cx /= r.Points.Count; cy /= r.Points.Count;
+        double diag = System.Math.Sqrt(System.Math.Pow(r.Bounds[2] - r.Bounds[0], 2) + System.Math.Pow(r.Bounds[3] - r.Bounds[1], 2));
+        double half = System.Math.Max(diag * 0.3, 1e-3);
+        double azr = sig.Value.StrikeAzimuthDeg * System.Math.PI / 180.0;
+        double dx = System.Math.Sin(azr), dy = System.Math.Cos(azr);   // 方位角(从 +Y 顺时针)→方向
+        BeginChange();
+        _scene.Add(new LineEntity { X0 = cx - dx * half, Y0 = cy - dy * half, X1 = cx + dx * half, Y1 = cy + dy * half, Cr = 0.95f, Cg = 0.4f, Cb = 0.85f });
+        RefreshScene();
+        Viewport.FitBounds(r.Bounds);
+        StatusMsg.Text = $"矿床识别：倾角 {sig.Value.DipDeg:0.#}° · 走向 {sig.Value.StrikeAzimuthDeg:0.#}° · 煤层 {sig.Value.SeamCount} · 煤单元 {sig.Value.CoalCellCount}（Z 层厚 {zLayer:0.##}）";
     }
 
     // 创建三角网：散点 CSV → Delaunay → 三角边线框入场景
@@ -2911,6 +2954,10 @@ public partial class MainWindow : Window
             case "WORKFACELINE":
             case "WFLINE":
                 _ = WorkingFaceLineAsync();
+                break;
+            case "DEPOSITDETECT":
+            case "DEPOSIT":
+                _ = DepositDetectAsync();
                 break;
             case "CIRCLETTR":
             case "TTR":
