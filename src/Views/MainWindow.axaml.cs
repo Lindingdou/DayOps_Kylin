@@ -508,6 +508,7 @@ public partial class MainWindow : Window
     private bool _benchActive;                      // 分帮扩帮：等待点方向/步距
     private SceneEntity? _benchEntity;
     private int _benchCount = 5;
+    private System.Collections.Generic.List<BlockModel.Block>? _lastBlocks;   // 最近导入的块体(资源量用)
     private bool _selBoxActive;                     // 窗口框选拖拽中
     private Avalonia.Point _selBoxStart;            // 框选起点(屏幕)
     private bool _ttrActive, _ttrAwaitRadius;       // 圆 TTR：选两相切参照(线/圆) → 输半径
@@ -543,6 +544,7 @@ public partial class MainWindow : Window
             if (cmd == "分帮扩帮" || cmd == "批量台阶扩帮" || cmd == "批量扩坑") { StartBench(); return; }
             if (cmd == "组合工作线" || cmd == "合并多段线" || cmd == "连接台阶线") { JoinPolylines(); return; }
             if (cmd == "块体模型" || cmd == "导入块体" || cmd == "地质体建模") { await ImportBlockModelAsync(); return; }
+            if (cmd == "资源量估算" || cmd == "剥采比" || cmd == "快速估值") { ResourceReport(null); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
             if (cmd == "2D") { Viewport.SetViewMode(true); StatusMsg.Text = "视图: 2D 平面（正交俯视）"; return; }
@@ -951,12 +953,24 @@ public partial class MainWindow : Window
         if (files.Count == 0) return;
         var r = BlockModel.Load(files[0].Path.LocalPath);
         if (!r.Success) { StatusMsg.Text = $"块体导入失败：{r.Error}"; return; }
+        _lastBlocks = r.Blocks;   // 供资源量估算
         var cells = BlockModel.BuildCells(r.Blocks, r.GradeMin, r.GradeMax);
         BeginChange();
         foreach (var e in cells) _scene.Add(e);
         RefreshScene();
         Viewport.FitBounds(r.Bounds);
         StatusMsg.Text = $"块体模型：{r.Blocks.Count} 块 · 品位 {r.GradeMin:0.##}~{r.GradeMax:0.##}(均 {r.GradeMean:0.##})";
+    }
+
+    // 资源量估算 / 剥采比：对最近导入的块体，按 cutoff 分矿废
+    private void ResourceReport(double? cutoff)
+    {
+        if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "资源量：请先导入块体模型（块体模型命令）"; return; }
+        double gsum = 0, gmin = double.MaxValue, gmax = double.MinValue;
+        foreach (var b in _lastBlocks) { gsum += b.Grade; if (b.Grade < gmin) gmin = b.Grade; if (b.Grade > gmax) gmax = b.Grade; }
+        double cut = cutoff ?? gsum / _lastBlocks.Count;   // 默认=平均品位
+        var (ore, waste, strip, avg, metal, tonnage) = BlockModel.Resource(_lastBlocks, cut, 2.7);
+        StatusMsg.Text = $"资源量(cutoff {cut:0.##})：矿量 {ore:0.#} 吨位 {tonnage:0.#} · 废 {waste:0.#} · 剥采比 {strip:0.##} · 平均品位 {avg:0.###} · 金属 {metal:0.#}";
     }
 
     // 组合工作线：合并选中的多段线（端点相接连成一条）
@@ -2054,6 +2068,9 @@ public partial class MainWindow : Window
                 break;
             case "BLOCKMODEL":
                 _ = ImportBlockModelAsync();
+                break;
+            case "RESOURCE":
+                ResourceReport(null);
                 break;
             case "DIST":
             case "DI":

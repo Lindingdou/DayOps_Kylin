@@ -45,4 +45,18 @@ public class BlockModelTests
     {
         Assert.False(BlockModel.Parse("x,y,z\n说明,甲,乙\n").Success);
     }
+
+    [Fact]
+    public void Resource_splits_ore_waste_by_cutoff()
+    {
+        // 两块 尺寸2(体积8), 品位1和3, cutoff2, 密度2.5
+        var r = BlockModel.Parse("0,0,0,2,1\n2,0,0,2,3\n");
+        var (ore, waste, strip, avg, metal, tonnage) = BlockModel.Resource(r.Blocks, 2, 2.5);
+        Assert.Equal(8, ore, 4);         // 品位3 那块
+        Assert.Equal(8, waste, 4);       // 品位1 那块
+        Assert.Equal(1, strip, 4);       // 8/8
+        Assert.Equal(3, avg, 4);         // 矿石平均品位
+        Assert.Equal(24, metal, 4);      // 3*8
+        Assert.Equal(20, tonnage, 4);    // 8*2.5
+    }
 }

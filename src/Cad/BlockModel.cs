@@ -57,6 +57,23 @@ public static class BlockModel
         return r;
     }
 
+    /// <summary>资源量/剥采比：按边界品位 cutoff 分矿石/废石(块体积=尺寸³)。
+    /// 返回(矿石体积, 废石体积, 剥采比=废/矿, 矿石平均品位, 金属量=品位·体积Σ, 矿石吨位=体积·密度)。</summary>
+    public static (double oreVol, double wasteVol, double stripRatio, double avgGrade, double metal, double tonnage)
+        Resource(IReadOnlyList<Block> blocks, double cutoff, double density)
+    {
+        double ore = 0, waste = 0, gsum = 0;
+        foreach (var b in blocks)
+        {
+            double vol = b.Size * b.Size * b.Size;
+            if (b.Grade >= cutoff) { ore += vol; gsum += b.Grade * vol; }
+            else waste += vol;
+        }
+        double strip = ore > 1e-9 ? waste / ore : 0;
+        double avg = ore > 1e-9 ? gsum / ore : 0;
+        return (ore, waste, strip, avg, gsum, ore * density);
+    }
+
     /// <summary>品位 → 蓝(低)→红(高)。</summary>
     public static (float r, float g, float b) GradeColor(double grade, double min, double max)
     {
