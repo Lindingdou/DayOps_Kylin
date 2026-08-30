@@ -71,6 +71,58 @@ public sealed class CircleTool : DrawTool
     public override void Reset() => _c = null;
 }
 
+/// <summary>圆(2点)：两点为直径端点。</summary>
+public sealed class Circle2PTool : DrawTool
+{
+    private (double x, double y)? _p0;
+    public override string Prompt => _p0 == null ? "圆(2点)：指定直径第一端点" : "圆(2点)：指定直径第二端点";
+    public override SceneEntity? AddPoint(double x, double y)
+    {
+        if (_p0 == null) { _p0 = (x, y); return null; }
+        var a = _p0.Value; _p0 = null;
+        return Make(a.x, a.y, x, y);
+    }
+    private static CircleEntity Make(double x0, double y0, double x1, double y1)
+    {
+        double dx = x1 - x0, dy = y1 - y0;
+        return new CircleEntity { Cx = (x0 + x1) / 2, Cy = (y0 + y1) / 2, Radius = Math.Sqrt(dx * dx + dy * dy) / 2 };
+    }
+    public override void AppendPreview(List<float> o, (double x, double y)? cursor)
+    {
+        if (_p0 != null && cursor != null)
+            Tint(Make(_p0.Value.x, _p0.Value.y, cursor.Value.x, cursor.Value.y)).Tessellate(o);
+    }
+    public override void Reset() => _p0 = null;
+}
+
+/// <summary>圆(3点)：过三点（三点外接圆）。</summary>
+public sealed class Circle3PTool : DrawTool
+{
+    private (double x, double y)? _p1, _p2;
+    public override string Prompt =>
+        _p1 == null ? "圆(3点)：第一点" : _p2 == null ? "圆(3点)：第二点" : "圆(3点)：第三点";
+    public override SceneEntity? AddPoint(double x, double y)
+    {
+        if (_p1 == null) { _p1 = (x, y); return null; }
+        if (_p2 == null) { _p2 = (x, y); return null; }
+        var a = _p1.Value; var b = _p2.Value; _p1 = null; _p2 = null;
+        var cc = ArcMath.Circumcircle(a.x, a.y, b.x, b.y, x, y);
+        return cc == null ? null : new CircleEntity { Cx = cc.Value.cx, Cy = cc.Value.cy, Radius = cc.Value.r };
+    }
+    public override void AppendPreview(List<float> o, (double x, double y)? cursor)
+    {
+        if (cursor == null || _p1 == null) return;
+        if (_p2 == null)
+            Tint(new LineEntity { X0 = _p1.Value.x, Y0 = _p1.Value.y, X1 = cursor.Value.x, Y1 = cursor.Value.y }).Tessellate(o);
+        else
+        {
+            var cc = ArcMath.Circumcircle(_p1.Value.x, _p1.Value.y, _p2.Value.x, _p2.Value.y, cursor.Value.x, cursor.Value.y);
+            if (cc != null) Tint(new CircleEntity { Cx = cc.Value.cx, Cy = cc.Value.cy, Radius = cc.Value.r }).Tessellate(o);
+        }
+    }
+    public override void Reset() { _p1 = null; _p2 = null; }
+}
+
 /// <summary>矩形：角点 → 对角点。</summary>
 public sealed class RectTool : DrawTool
 {

@@ -286,4 +286,33 @@ public class DrawToolsTests
         Assert.Equal(4, ((LineEntity)parts![0]).X0, 6);
         Assert.Equal(10, ((LineEntity)parts![0]).X1, 6);
     }
+
+    [Fact]
+    public void Circle2PTool_diameter_endpoints()
+    {
+        var t = new Circle2PTool();
+        Assert.Null(t.AddPoint(0, 0));
+        var c = Assert.IsType<CircleEntity>(t.AddPoint(10, 0));   // 直径两端
+        Assert.Equal(5, c.Cx, 6); Assert.Equal(0, c.Cy, 6);
+        Assert.Equal(5, c.Radius, 6);
+    }
+
+    [Fact]
+    public void Circle3PTool_through_three_points()
+    {
+        var t = new Circle3PTool();
+        Assert.Null(t.AddPoint(1, 0));
+        Assert.Null(t.AddPoint(0, 1));
+        var c = Assert.IsType<CircleEntity>(t.AddPoint(-1, 0));   // 单位圆
+        Assert.Equal(0, c.Cx, 4); Assert.Equal(0, c.Cy, 4);
+        Assert.Equal(1, c.Radius, 4);
+    }
+
+    [Fact]
+    public void Circle3PTool_collinear_yields_null()
+    {
+        var t = new Circle3PTool();
+        t.AddPoint(0, 0); t.AddPoint(1, 0);
+        Assert.Null(t.AddPoint(2, 0));   // 三点共线 → 无圆
+    }
 }

@@ -599,6 +599,8 @@ public partial class MainWindow : Window
         {
             "LINE" => new LineTool(),
             "CIRCLE" => new CircleTool(),
+            "CIRCLE2P" or "C2P" => new Circle2PTool(),
+            "CIRCLE3P" or "C3P" => new Circle3PTool(),
             "ARC" => new ArcTool(),
             "RECTANG" or "RECT" => new RectTool(),
             "PLINE" or "POLYLINE" => new PolylineTool(),
@@ -607,6 +609,8 @@ public partial class MainWindow : Window
             {
                 "直线" => new LineTool(),
                 "圆" => new CircleTool(),
+                "圆2P" or "圆(2点)" => new Circle2PTool(),
+                "圆3P" or "圆(3点)" => new Circle3PTool(),
                 "圆弧" => new ArcTool(),
                 "矩形" => new RectTool(),
                 "多段线" => new PolylineTool(),
