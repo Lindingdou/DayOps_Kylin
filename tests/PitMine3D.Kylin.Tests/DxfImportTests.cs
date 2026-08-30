@@ -378,6 +378,29 @@ public class DxfImportTests
     }
 
     [Fact]
+    public void Hatch_imports_boundary_as_closed_polyline()
+    {
+        string src = Path.Combine(Path.GetTempPath(), "pm_hatch.dxf");
+        var doc = new CadDocument();
+        var ha = new ACadSharp.Entities.Hatch();
+        var bp = new ACadSharp.Entities.Hatch.BoundaryPath();
+        bp.Edges.Add(new ACadSharp.Entities.Hatch.BoundaryPath.Line { Start = new XY(0, 0), End = new XY(4, 0) });
+        bp.Edges.Add(new ACadSharp.Entities.Hatch.BoundaryPath.Line { Start = new XY(4, 0), End = new XY(4, 3) });
+        bp.Edges.Add(new ACadSharp.Entities.Hatch.BoundaryPath.Line { Start = new XY(4, 3), End = new XY(0, 3) });
+        bp.Edges.Add(new ACadSharp.Entities.Hatch.BoundaryPath.Line { Start = new XY(0, 3), End = new XY(0, 0) });
+        ha.Paths.Add(bp);
+        doc.Entities.Add(ha);
+        using (var w = new DxfWriter(src, doc, false)) w.Write();
+
+        var er = DxfImportService.LoadEntities(src);
+        Assert.True(er.Success, er.Error);
+        var pl = Assert.IsType<PolylineEntity>(Assert.Single(er.Entities));
+        Assert.True(pl.Closed);
+        Assert.Equal(4, pl.Points.Count);                 // 方形边界 4 点(首尾重合点已剥)
+        try { File.Delete(src); } catch { /* 清理失败无碍 */ }
+    }
+
+    [Fact]
     public void Export_roundtrip_preserves_segments()
     {
         string src = Path.Combine(Path.GetTempPath(), "pm_exp_src.dxf");

@@ -6,6 +6,7 @@ using ACadSharp.Entities;
 using ACadSharp.IO;
 using PitMine3D.Kylin.Cad.Draw;
 using DrawText = PitMine3D.Kylin.Cad.Draw.TextEntity;   // 与 ACadSharp.Entities.TextEntity 消歧
+using AcHatch = ACadSharp.Entities.Hatch;               // 与本项目静态类 Cad.Hatch 消歧
 
 namespace PitMine3D.Kylin.Cad;
 
@@ -533,6 +534,16 @@ public static class DxfImportService
                         Emit(be, xf, ColorOf(be), layer, depth + 1);
                     break;
                 }
+                case AcHatch ha:   // 填充：取边界环为闭合多段线轮廓(不填充=Skia)；边界含 Line/Arc/Polyline 边
+                {
+                    foreach (var loop in ExtractHatchBoundaries(ha))
+                    {
+                        var pl = new PolylineEntity { Closed = true };
+                        foreach (var p in loop) pl.Points.Add(p);
+                        Finalize(pl, xf, col, layer);
+                    }
+                    break;
+                }
                 case Insert ins:
                 {
                     if (depth >= 8 || ins.Block == null) break;
@@ -566,6 +577,51 @@ public static class DxfImportService
 
         result.Bounds = result.Entities.Count == 0 ? new double[] { 0, 0, 0, 0 } : new[] { minX, minY, maxX, maxY };
         return result;
+    }
+
+    // Hatch 边界环 → 闭合点环列表（移植自原 DwgDxfImportService.ExtractHatchBoundaries：
+    // Line/Arc/Polyline 边；剥首尾重合点；丢顶点 <3 的环）。填充本体需 Skia，此处仅取轮廓。
+    private static List<List<(double x, double y)>> ExtractHatchBoundaries(AcHatch hatch)
+    {
+        var boundaries = new List<List<(double x, double y)>>();
+        foreach (var path in hatch.Paths)
+        {
+            var loop = new List<(double x, double y)>();
+            foreach (var edge in path.Edges)
+            {
+                switch (edge)
+                {
+                    case AcHatch.BoundaryPath.Line le:
+                        AddHatchPt(loop, le.Start.X, le.Start.Y);
+                        AddHatchPt(loop, le.End.X, le.End.Y);
+                        break;
+                    case AcHatch.BoundaryPath.Arc ae:
+                    {
+                        double sweep = ae.EndAngle - ae.StartAngle;
+                        if (sweep < 0) sweep += 2 * Math.PI;
+                        for (int i = 0; i <= 16; i++)
+                        {
+                            double a = ae.StartAngle + sweep * i / 16.0;
+                            AddHatchPt(loop, ae.Center.X + ae.Radius * Math.Cos(a), ae.Center.Y + ae.Radius * Math.Sin(a));
+                        }
+                        break;
+                    }
+                    case AcHatch.BoundaryPath.Polyline pe:
+                        foreach (var v in pe.Vertices) AddHatchPt(loop, v.X, v.Y);
+                        break;
+                }
+            }
+            if (loop.Count >= 2 && Math.Abs(loop[0].x - loop[^1].x) < 1e-9 && Math.Abs(loop[0].y - loop[^1].y) < 1e-9)
+                loop.RemoveAt(loop.Count - 1);
+            if (loop.Count >= 3) boundaries.Add(loop);
+        }
+        return boundaries;
+    }
+
+    private static void AddHatchPt(List<(double x, double y)> loop, double x, double y)
+    {
+        if (loop.Count > 0 && Math.Abs(loop[^1].x - x) < 1e-9 && Math.Abs(loop[^1].y - y) < 1e-9) return;
+        loop.Add((x, y));
     }
 
     /// <summary>实体颜色：ByLayer 取图层色；真彩色直接用 RGB；否则按 ACI 索引映射。失败回落统一色。</summary>
