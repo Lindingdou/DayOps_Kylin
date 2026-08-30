@@ -657,7 +657,7 @@ public partial class MainWindow : Window
             if (cmd == "快速估值" || cmd == "品位估值" || cmd == "克里金估值") { await EstimateGradeAsync(); return; }
             if (cmd == "点云抽稀" || cmd == "抽稀" || cmd == "点云精简") { await ThinPointsAsync(); return; }
             if (cmd == "地面点滤波" || cmd == "地面滤波") { await GroundFilterAsync(); return; }
-            if (cmd == "C2C" || cmd == "点云比对" || cmd == "演化对比") { await CloudCompareAsync(); return; }
+            if (cmd == "C2C" || cmd == "点云比对") { await CloudCompareAsync(); return; }
             if (cmd == "境界圈定" || cmd == "凸包" || cmd == "确定境界" || cmd == "采场圈定") { await BoundaryHullAsync(); return; }
             if (cmd == "剖面分析" || cmd == "剖面" || cmd == "点云剖面") { await SectionProfileAsync(); return; }
             if (cmd == "粗糙度" || cmd == "地表粗糙度") { await RoughnessAsync(); return; }
