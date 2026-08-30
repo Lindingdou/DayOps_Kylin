@@ -240,6 +240,18 @@ public class DxfImportTests
     }
 
     [Fact]
+    public void MapDocument_imports_text()
+    {
+        var doc = new CadDocument();
+        doc.Entities.Add(new ACadSharp.Entities.TextEntity { InsertPoint = new XYZ(5, 6, 0), Height = 2.5, Value = "ZK01" });
+        var r = DxfImportService.MapDocument(doc);
+        Assert.True(r.Success, r.Error);
+        var t = Assert.IsType<PitMine3D.Kylin.Cad.Draw.TextEntity>(Assert.Single(r.Entities));
+        Assert.Equal("ZK01", t.Text);
+        Assert.Equal(5, t.X, 4); Assert.Equal(2.5, t.Height, 4);
+    }
+
+    [Fact]
     public void MapDocument_captures_layer_name()
     {
         var doc = new CadDocument();

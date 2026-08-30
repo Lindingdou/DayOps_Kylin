@@ -5,6 +5,7 @@ using ACadSharp;
 using ACadSharp.Entities;
 using ACadSharp.IO;
 using PitMine3D.Kylin.Cad.Draw;
+using DrawText = PitMine3D.Kylin.Cad.Draw.TextEntity;   // 与 ACadSharp.Entities.TextEntity 消歧
 
 namespace PitMine3D.Kylin.Cad;
 
@@ -461,6 +462,12 @@ public static class DxfImportService
                     if (pl != null) Finalize(pl, xf, col, layer);
                     break;
                 }
+                case ACadSharp.Entities.TextEntity te:
+                    Finalize(new DrawText { X = te.InsertPoint.X, Y = te.InsertPoint.Y, Height = te.Height > 0 ? te.Height : 1, Text = te.Value ?? "" }, xf, col, layer);
+                    break;
+                case MText mt:
+                    Finalize(new DrawText { X = mt.InsertPoint.X, Y = mt.InsertPoint.Y, Height = mt.Height > 0 ? mt.Height : 1, Text = mt.Value ?? "" }, xf, col, layer);
+                    break;
                 case Insert ins:
                 {
                     if (depth >= 8 || ins.Block == null) break;
