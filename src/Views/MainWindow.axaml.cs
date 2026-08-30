@@ -552,6 +552,7 @@ public partial class MainWindow : Window
             if (cmd == "境界圈定" || cmd == "凸包" || cmd == "确定境界" || cmd == "采场圈定") { await BoundaryHullAsync(); return; }
             if (cmd == "剖面分析" || cmd == "剖面" || cmd == "点云剖面") { await SectionProfileAsync(); return; }
             if (cmd == "粗糙度" || cmd == "地表粗糙度") { await RoughnessAsync(); return; }
+            if (cmd == "曲率" || cmd == "地表曲率") { await CurvatureAsync(); return; }
             if (cmd == "坐标转换") { await CoordTransformAsync(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
             if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
@@ -1075,6 +1076,30 @@ public partial class MainWindow : Window
         RefreshScene();
         Viewport.FitBounds(r.Bounds);
         StatusMsg.Text = $"点云抽稀：{r.Points.Count} → {thinned.Count} 点（cell {cell:0.##}，压缩 {100.0 * (1 - (double)thinned.Count / r.Points.Count):0.#}%）";
+    }
+
+    // 曲率：地形 CSV → IDW 网格 → 拉普拉斯曲率 → 配色格(蓝凸/红凹)
+    private async Task CurvatureAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "曲率：选高程点 CSV (x,y,z)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("高程点 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success) { StatusMsg.Text = $"曲率：导入失败 {r.Error}"; return; }
+        int n = 48;
+        var grid = Contour.GridFromPoints(r.Points, n, n, out double gx0, out double gy0, out double gdx, out double gdy);
+        var curv = Curvature.Compute(grid, gdx);
+        var (min, max) = Estimation.Range(curv);
+        var cells = Estimation.BuildCells(curv, gx0, gy0, gdx, gdy, min, max);
+        BeginChange();
+        foreach (var e in cells) _scene.Add(e);
+        RefreshScene();
+        Viewport.FitBounds(r.Bounds);
+        StatusMsg.Text = $"曲率：{n}² 网格 · 范围 {min:0.###}~{max:0.###}（蓝=凸脊 红=凹沟）";
     }
 
     // 坐标转换：控制点对 CSV(srcX,srcY,dstX,dstY) → Helmert 4参 → 套用全场景
@@ -2299,6 +2324,9 @@ public partial class MainWindow : Window
                 break;
             case "ROUGHNESS":
                 _ = RoughnessAsync();
+                break;
+            case "CURVATURE":
+                _ = CurvatureAsync();
                 break;
             case "COORDTRANS":
                 _ = CoordTransformAsync();
