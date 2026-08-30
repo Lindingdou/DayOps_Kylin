@@ -183,10 +183,19 @@ public partial class MainWindow : Window
                 }
             }
 
+            // 窗口框选（仅 2D 空闲态左键）：拖=选择框，不拖=点选（平移改中键）
+            if (props.IsLeftButtonPressed && Viewport.Is2DView && _tool == null && _measure == null
+                && _editMode == EditMode.None && !_offsetActive && !_trimActive && !_breakActive && !_slideActive)
+            {
+                _selBoxActive = true; _selBoxStart = _lastPointer; _nav = NavMode.None;
+                e.Pointer.Capture(ViewportHost);
+                return;
+            }
+
             if (props.IsMiddleButtonPressed)
                 _nav = NavMode.Pan;                                       // 中键拖拽 = 平移
             else if (props.IsLeftButtonPressed)
-                _nav = Viewport.Is2DView ? NavMode.Pan : NavMode.Orbit;   // 2D 左键平移 / 3D 左键旋转
+                _nav = NavMode.Orbit;                                     // 3D 左键旋转
             else
                 _nav = NavMode.None;                                      // 右键留给上下文菜单
             if (_nav != NavMode.None) e.Pointer.Capture(ViewportHost);
@@ -195,6 +204,15 @@ public partial class MainWindow : Window
         {
             var p = e.GetPosition(ViewportHost);
             var w = Viewport.ScreenToWorld(p.X, p.Y);
+
+            // 窗口框选：画选框(交叉=蓝，窗口=绿)
+            if (_selBoxActive)
+            {
+                Viewport.SetSnapMarker(BoxRect(_selBoxStart, p, p.X < _selBoxStart.X));
+                _snapShown = true;
+                _lastPointer = p;
+                return;
+            }
 
             // 滑动多段线：拖动中按像素间距采样
             if (_slideDragging)
@@ -257,6 +275,19 @@ public partial class MainWindow : Window
         ViewportHost.PointerReleased += (_, e) =>
         {
             var rel = e.GetPosition(ViewportHost);
+
+            // 窗口框选：松开 → 拖动成框则框选，未拖动则点选
+            if (_selBoxActive)
+            {
+                _selBoxActive = false;
+                e.Pointer.Capture(null);
+                Viewport.SetSnapMarker(null); _snapShown = false;
+                if (System.Math.Abs(rel.X - _selBoxStart.X) < 4 && System.Math.Abs(rel.Y - _selBoxStart.Y) < 4)
+                    PickAt(rel);                    // 无拖动 → 点选
+                else
+                    BoxSelect(_selBoxStart, rel);   // 拖动成框 → 框选
+                return;
+            }
 
             // 夹点拖拽：松开 → 用移动后的实体替换原实体
             if (_gripIndex >= 0)
@@ -339,6 +370,7 @@ public partial class MainWindow : Window
                 _breakActive = false; _breakPts.Clear();
                 _slideActive = false; _slideDragging = false; _slidePts.Clear();
                 _gripIndex = -1;
+                _selBoxActive = false;
                 _selected.Clear();
                 Viewport.SetSnapMarker(null);
                 Viewport.SetHighlight(null);
@@ -390,6 +422,8 @@ public partial class MainWindow : Window
     private bool _breakActive;                      // 打断：等待取两点
     private readonly List<(double x, double y)> _breakPts = new();   // 打断的两点
     private int _gripIndex = -1;                    // 夹点拖拽中的夹点序号(-1=无)
+    private bool _selBoxActive;                     // 窗口框选拖拽中
+    private Avalonia.Point _selBoxStart;            // 框选起点(屏幕)
 
     // Ribbon 按钮 → 「导入」走真实 DXF 导入；其余暂回显命令（证明整条 UI 已接线）
     private async void OnRibbonCommand(object? sender, RoutedEventArgs e)
@@ -920,6 +954,45 @@ public partial class MainWindow : Window
             if (d <= bestD) { bestD = d; best = i; }
         }
         return best;
+    }
+
+    // 框选选框(世界坐标 P3_C3, 交叉=蓝/窗口=绿)
+    private float[] BoxRect(Avalonia.Point a, Avalonia.Point b, bool crossing)
+    {
+        var c0 = Viewport.ScreenToWorld(a.X, a.Y);
+        var c1 = Viewport.ScreenToWorld(b.X, a.Y);
+        var c2 = Viewport.ScreenToWorld(b.X, b.Y);
+        var c3 = Viewport.ScreenToWorld(a.X, b.Y);
+        if (c0 == null || c1 == null || c2 == null || c3 == null) return System.Array.Empty<float>();
+        float r = 0.4f, g = crossing ? 0.7f : 0.95f, bl = crossing ? 1.0f : 0.5f;
+        var o = new List<float>();
+        void Seg((double x, double y) p, (double x, double y) q)
+        {
+            o.Add((float)p.x); o.Add((float)p.y); o.Add(0); o.Add(r); o.Add(g); o.Add(bl);
+            o.Add((float)q.x); o.Add((float)q.y); o.Add(0); o.Add(r); o.Add(g); o.Add(bl);
+        }
+        Seg(c0.Value, c1.Value); Seg(c1.Value, c2.Value); Seg(c2.Value, c3.Value); Seg(c3.Value, c0.Value);
+        return o.ToArray();
+    }
+
+    // 框选：窗口选(左→右,全含)/交叉选(右→左,相交或含)
+    private void BoxSelect(Avalonia.Point a, Avalonia.Point b)
+    {
+        var wa = Viewport.ScreenToWorld(a.X, a.Y);
+        var wb = Viewport.ScreenToWorld(b.X, b.Y);
+        if (wa == null || wb == null) return;
+        double minX = System.Math.Min(wa.Value.x, wb.Value.x), maxX = System.Math.Max(wa.Value.x, wb.Value.x);
+        double minY = System.Math.Min(wa.Value.y, wb.Value.y), maxY = System.Math.Max(wa.Value.y, wb.Value.y);
+        bool crossing = b.X < a.X;
+        SaveSel();
+        _selected.Clear();
+        foreach (var en in _scene.Entities)
+        {
+            if (!_layers.IsSelectable(en.LayerName)) continue;
+            if (SelectionBox.Match(en, minX, minY, maxX, maxY, crossing)) _selected.Add(en);
+        }
+        HighlightSelection();
+        StatusMsg.Text = _selected.Count > 0 ? $"框选 {_selected.Count} 个（{(crossing ? "交叉" : "窗口")}）" : "框选：未选中";
     }
 
     private void DeleteSelected()

@@ -438,4 +438,32 @@ public class DrawToolsTests
         Assert.Equal(2, parts.Count);
         Assert.All(parts, p => Assert.IsType<ArcEntity>(p));
     }
+
+    [Fact]
+    public void SegmentsIntersect_detects_crossing()
+    {
+        Assert.True(LineMath.SegmentsIntersect(0, 0, 10, 0, 5, -5, 5, 5));    // 十字相交
+        Assert.False(LineMath.SegmentsIntersect(0, 0, 10, 0, 0, 5, 10, 5));   // 平行
+        Assert.False(LineMath.SegmentsIntersect(0, 0, 4, 0, 5, -5, 5, 5));    // 不够长
+    }
+
+    [Fact]
+    public void SelectionBox_window_needs_full_containment()
+    {
+        var inside = new LineEntity { X0 = 2, Y0 = 2, X1 = 8, Y1 = 8 };
+        var partial = new LineEntity { X0 = 2, Y0 = 2, X1 = 20, Y1 = 20 };
+        Assert.True(SelectionBox.Match(inside, 0, 0, 10, 10, crossing: false));    // 全含 → 窗口选中
+        Assert.False(SelectionBox.Match(partial, 0, 0, 10, 10, crossing: false));  // 部分 → 窗口不选
+        Assert.True(SelectionBox.Match(partial, 0, 0, 10, 10, crossing: true));    // 部分 → 交叉选中
+    }
+
+    [Fact]
+    public void SelectionBox_crossing_catches_passthrough()
+    {
+        var through = new LineEntity { X0 = -5, Y0 = 5, X1 = 15, Y1 = 5 };   // 横穿两端在外
+        Assert.True(SelectionBox.Match(through, 0, 0, 10, 10, crossing: true));
+        Assert.False(SelectionBox.Match(through, 0, 0, 10, 10, crossing: false));
+        var outside = new LineEntity { X0 = 20, Y0 = 0, X1 = 20, Y1 = 20 };  // 完全在外
+        Assert.False(SelectionBox.Match(outside, 0, 0, 10, 10, crossing: true));
+    }
 }

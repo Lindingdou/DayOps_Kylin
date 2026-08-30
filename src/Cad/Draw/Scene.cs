@@ -540,6 +540,19 @@ public static class LineMath
         double t = ((bx0 - ax0) * d2y - (by0 - ay0) * d2x) / denom;
         return (ax0 + t * d1x, ay0 + t * d1y);
     }
+
+    /// <summary>两条有限线段是否真相交（用于框选交叉判定；共线相接的退化情形忽略）。</summary>
+    public static bool SegmentsIntersect(
+        double ax0, double ay0, double ax1, double ay1,
+        double bx0, double by0, double bx1, double by1)
+    {
+        double C(double ox, double oy, double px, double py) => ox * py - oy * px;
+        double d1 = C(bx1 - bx0, by1 - by0, ax0 - bx0, ay0 - by0);
+        double d2 = C(bx1 - bx0, by1 - by0, ax1 - bx0, ay1 - by0);
+        double d3 = C(ax1 - ax0, ay1 - ay0, bx0 - ax0, by0 - ay0);
+        double d4 = C(ax1 - ax0, ay1 - ay0, bx1 - ax0, by1 - ay0);
+        return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+    }
 }
 
 public sealed class Scene
