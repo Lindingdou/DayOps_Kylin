@@ -3983,8 +3983,13 @@ public partial class MainWindow : Window
         foreach (var (dist, z) in prof) curve.Points.Add((baseX + dist, baseY + (z - zmin)));
         BeginChange();
         _scene.Add(curve);
+        // 剖面图框架(里程/标高 轴 + 网格 + 刻度)——忠实原版"剖面图"
+        double profLen = prof[^1].dist;
+        double frameTextH = System.Math.Max((zmax - zmin) * 0.06, profLen * 0.02);
+        foreach (var fe in ProfilePlot.Frame(baseX, baseY, profLen, zmin, zmax, System.Math.Max(frameTextH, 1e-3)))
+        { fe.LayerName = _layers.Current.Name; _scene.Add(fe); }
         RefreshScene();
-        StatusMsg.Text = $"剖面分析：{prof.Count} 采样 · 高程 {zmin:0.##}~{zmax:0.##} · 剖面长 {prof[^1].dist:0.##}";
+        StatusMsg.Text = $"剖面分析：{prof.Count} 采样 · 高程 {zmin:0.##}~{zmax:0.##} · 剖面长 {profLen:0.##}（带里程/标高轴）";
     }
 
     // C2C 点云比对：两期 XYZ → A 每点到 B 最近距离 → 按偏差配色点 + 报最大/平均偏差
