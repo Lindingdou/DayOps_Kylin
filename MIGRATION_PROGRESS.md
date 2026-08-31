@@ -517,3 +517,12 @@
 **TaskExploder 输入复杂度定论**：`ExploderConfig.FaceInput` 字段极富(Zone/工程位ID/单元ID/可采储量/推进方位/采宽/源XYZ/物料码/物料构成 Mix/目的地 Sink/运距/等效运距/Splits/日目标/煤质/设备编组/铲型偏好/工序… + DrillInput + ShiftWindow + MaterialMix + CoalQuality + EquipmentGroup)——**非最小 plan 可移**(§七技巧因求解器只读少数标量才成立), 需 DM8 域数据填充。故 TaskExploder(生产任务编制/分解) 确定**非 tick 尺度可做**, 记录待专项。可移的核心算法(车铲匹配 MatchFactor/ErlangC)早已落地。
 
 **穷尽性定论(本会话终)**：多维走查(交互/绘制/面板/导入/导出/存载) + 复核受阻分类(AI 面板真解锁、TaskLib/Mesh/PointCloud 逐一核实)后——**tick 尺度内 clear + 忠实可见 + 可验证** 的功能集已穷尽。余项二分: ①**大域专项**(TaskLib 排产链, 托管但 20k 行 + 需 DM8 数据 + 对话框, 多会话级); ②**确凿受阻**(C++ 内核 mesh 修复·分割/点云 native PMTB/倾斜摄影/地质模型/PitDesign, DM8 持久化, 对话框基建, Skia 实心填充, 引擎命名图案库)。均已记录, 按忠实性不臆测。
+
+## 二十三、★重大解锁：§四/§八 数据层是 SQLite 非 DM8（根本性纠正）
+
+**贯穿全程的最大误判纠正**：§四 地质数据库 / §八 日常生产组织 的持久化, 我(及 memory、前文多处)一直记「需 DM8 受阻」。**读源发现：原 PitMine3D 的 `SqlLib` 是纯 SQLite**(Microsoft.Data.Sqlite 8.0.10 + Dapper, `ConnectionFactory`→`SqliteConnection`, `SqliteDialect`, **无任何 DM8/达梦/Oracle 代码**), `GeoDataBase` 带 **50 个迁移**(V001 建 15 表 + V002~V050 灌**真实矿山种子数据**: 真实车队/产能/KPI/生产/故障/月计划/验收/地质/煤质/钻孔…, 共 42,389 行 SQL)。**SQLite 嵌入式跨平台, 本机(Windows)全可跑**——DM8 从来不是必需, 是我把"上机生产用 DM8"误当成"开发/功能也需 DM8"。
+
+- [x] **SQLite 数据基座**(commit `667687d`)：csproj 引 Microsoft.Data.Sqlite+Dapper(NuGet 缓存已有); 50 迁移 SQL **逐字复制**入 `src/Data/Migrations` 作嵌入资源(2.7MB); `GeoDatabase.OpenSeeded`(忠实精简 MigrationRunner: `_schema_migration` 历史表跳过已应用、按版本序、迁移期关外键同原)。+4 单测(50 迁移全应用/15 表建成/种子非空/文件库幂等)。
+- [x] **首批 §四/§八 功能**(commit `6233e4b`)：`GeoDataQueries`(查询核) + 3 命令——设备台账概览(总数/分类/在役)、设备生产数据统计(记录/产量/工时/故障/作业率)、产能分析排名(累计产量 Top×型号)。+3 单测(对真实种子库)。
+
+**★受阻清单重大重写**：§四/§八 **移出 DM8 受阻** —— 数据层 SQLite 本机可跑、自带真实数据、可单测。剩余 §四/§八 死按钮(达成度/煤质/故障/KPI/月计划/编制/看板…)中, **纯查询分析类**皆可在此基座上续接落地; 仅 **CRUD 对话框**(录入/编辑窗)受对话框基建阻(但读侧分析全可做)。这是 ~45 个原判"DM8 阻"按钮的实质解锁通道。
