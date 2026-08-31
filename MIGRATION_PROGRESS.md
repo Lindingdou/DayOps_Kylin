@@ -1796,3 +1796,14 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - **教训(双查纪律复发)**: 我据假阳性加了冗余「采区划分」命令(§797, 与既有 §880 撞且遮蔽), 编译前**未 grep 既有 `cmd == "采区划分"`** → `git revert 9118685`(75669d2)。**tested-but-unwired 审计必按 src 文件里的实际类名(非文件名)查引用**; 且**加任何命令前必 `grep 'cmd == "该名"'` 双查既有**(见 [[unlock-blocked-insights]] #14 双查纪律)。
 
 **结论**: 无真 tested-but-unwired 能力(4 候选皆假阳性/已接线)。本会话仍 86 真功能/保真(采区划分冗余已撤), 1010 测。
+
+## 一四九、权威命令清单交叉核对 —— 2D 可做命令 100% 覆盖(功能收敛确认)
+
+对**原版自身的命令注册表**(而非我的推测)做穷尽交叉核对:
+- **AI 菜单(MockAiEngine)24 条**: 3DORBIT/3DVIEW/CIRCLE/COPY/DIMALIGNED/DIMRADIAL/DIST/ERASE/GIZMO/LINE/MANG/MIRROR/MOVE/OFFSET/PAN/PLINE/POINT/POLYGON/RECTANG/ROTATE/SCALE/TRIM/ZOOMEXTENTS → **24/24 已派发** ✓(3D 视图命令映射 Viewport.SetViewMode 真实 2D/3D 切换)。
+- **插件注册命令(~40 条)**: 全部 2D 可做者均已实现(**中文命令名**):POLYSIMPLIFY=`简化/多段线简化`, POLYJOIN=`合并多段线/连接多段线`, POLYCLIP=`线裁剪/裁剪`, BOUNDARY=`境界圈定/凸包`+`提取边界`, POLYDENSIFY/POLYDEDUPE/POLYCLOSE/POLYPROJECT/POINTDEDUPE/POINTPROJECT/POLYINTERSECT 均在; KPI=`KPI分析/KPI趋势/导入KPI`, RGB=`LAS真彩色`, DIAGNOSE=`网格诊断`, SPLIT=`分割三角网`, CLIP=`裁剪三角网`。
+- **仅缺(皆已记录受阻)**: POLYUNIFYZ/POINTSETZ(逐顶点/逐点 Z——2D 无 per-vertex-Z 架构受阻); BOOL*/MERGEMESH/SIDEMESH/SOLIDIFY/WELD/REPAIR/EMBED/CUTBYKNIFE/OBLIQUETIN/TIN/QUICKMODEL/GEOMODEL/VOLSPLIT/INTERSECT(3D 网格/内核尺度受阻); PMBI/PMRD/RS2/V005/V030(二进制/版本互操作格式受阻)。
+
+**★关键教训(会话内 6 次假阳性)**: 完整性核对**必须按实际中文派发串** grep, **非英文 token**。英文 token grep 给出 6 个假 0(POLYSIMPLIFY/POLYJOIN/POLYCLIP/BOUNDARY/KPI 等实则皆在中文名下)——与「文件名≠类名」同类错误。**核对三律: 按中文命令串、按实际类名、grep 既有再动手。**
+
+**结论**: 对照原版自身命令注册表, **所有 2D 可做命令 100% 覆盖**; 缺口全为已记录架构边界(per-vertex-Z / 3D 内核 / 二进制格式)。功能面**收敛**。本会话 86 真功能/保真 + 4 潜伏 bug, 1010 测全绿。
