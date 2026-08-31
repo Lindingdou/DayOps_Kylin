@@ -904,4 +904,6 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
   - **记录**：LAS(LiDAR 点云)——原 AlgoCore LasLib 为 **native 无托管 reader**, 记录。WP region 环拓扑重建弱可验暂记。
 - [x] **3DMine .3dm 二进制网格导入**(`本次`)：**又一"无样本→扩大搜索解锁"**——TDM 族原以为无样本, 但发现 **TDM 用 `.3dm` 扩展名**(magic `3DMine_2011_Bin`), 测试目录 23 个 .3dm 中 **17 个是 3DMine 二进制**(其余 Rhino/变体)! `TdmImportService.cs` 忠实移植 TdmReader(271行): 锚点扫描(`solid`+09), AcDbFace 类名→标签(GBK)+色, nVerts + 顶点段(25B/顶点=3double+1B) + 三角段(16B/三角)。**网格→去重三角边线框(保留 Z, 3D 曲面)** → 复用 ImportResult 走 OFF 式网格显示通道。文件选择器 + ImportPath 加 .3dm(仅识 3DMine_2011_Bin, Rhino/文本报错)。
   - **★强 Euler 校验**：解析真实煤层底板 TIN(`4-2底面.3dm` 1.2MB) → **43018 三角 · 65213 去重边 · UTM 坐标域[615500,4374400]–[622500,4381600]**。**边数 65213 ≈ 3×顶点−边界(Euler 拓扑自洽), 且 三角数<边数<3×三角数**——证网格解析忠实。+3 单测(真样本 skip-if-absent Euler 合理性/保留非零 Z/坏输入报错/magic 探测)。
-  - **记录**：3DMine Solid 文本格式(TdmSolidReader, 6 个 len=71 变体 .3dm)+ TdmStringReader 暂缓——源可见但需分别验; 优先级低(二进制网格是主用例)。
+- [x] **3DMine Solid 文本格式(.3dm)导入**(`本次`)：测试目录 6 个变体 .3dm 是 **3DMine Solid File 文本**(file_version=3DMine_2009, 6.5MB 实体煤层模型)。`TdmImportService` 加 `ReadSolidTextMeshes` 忠实移植 TdmSolidReader: 顶点块(X,Y,Z 含小数)→solids 尾标(名+归一化 RGB)→面块(整数三元组)→重复→End; **面块中出现浮点行=下一实体顶点块起始**。`Parse` 自动分派 二进制/Solid 文本/报错(同原 TdmImportService)。+1 单测(真样本 `9煤底.3dm`)。
+  - **发现**：该 solid 为**三角汤**(顶点不按索引共享)→ 去重边=恰 3×三角(vs 二进制 index-shared 网格边<3×三角), 两种拓扑均正确, 测试断言相应放宽为 ≤3×。
+  - **记录**：TdmStringReader(3DMine 字符串/线)暂缓——测试目录无对应样本; 源可见有样本可移。

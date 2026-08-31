@@ -54,13 +54,30 @@ public static class TdmImportService
         return result;
     }
 
+    /// <summary>是否为 3DMine Solid 文本格式(首行以 "3DMine Solid File" 结尾)。</summary>
+    public static bool LooksLikeSolidFile(byte[] data)
+    {
+        if (data == null || data.Length < 32) return false;
+        int end = Math.Min(data.Length, 1024);
+        int nl = Array.IndexOf(data, (byte)'\n', 0, end);
+        int lineLen = nl >= 0 ? nl : end;
+        string firstLine = Encoding.Latin1.GetString(data, 0, lineLen);
+        return firstLine.IndexOf("3DMine Solid File", StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
     private static void Parse(byte[] data, DxfImportService.ImportResult result)
     {
-        int n = data.Length;
-        if (!IsBinary3dm(data))
-            throw new InvalidDataException("非 3DMine_2011_Bin 二进制(Rhino .3dm 或 3DMine Solid 文本暂不支持)");
-        if (n < MagicHeaderSize + 14) throw new InvalidDataException($"文件过小({n} 字节)");
+        List<Mesh> meshes;
+        if (IsBinary3dm(data)) meshes = ReadBinaryMeshes(data, result);
+        else if (LooksLikeSolidFile(data)) meshes = ReadSolidTextMeshes(data, result);
+        else throw new InvalidDataException("非 3DMine .3dm(既非 3DMine_2011_Bin 二进制，也非 3DMine Solid 文本；Rhino .3dm 不支持)");
+        BuildResult(meshes, result);
+    }
 
+    private static List<Mesh> ReadBinaryMeshes(byte[] data, DxfImportService.ImportResult result)
+    {
+        int n = data.Length;
+        if (n < MagicHeaderSize + 14) throw new InvalidDataException($"文件过小({n} 字节)");
         var gbk = Gbk();
         var meshes = new List<Mesh>();
         int pos = MagicHeaderSize;
@@ -74,7 +91,84 @@ public static class TdmImportService
             try { meshes.Add(ReadOneMesh(data, n, anchorAt, gbk, out int next)); pos = next; }
             catch (Exception ex) { result.Warnings.Add($"第 {meshes.Count + 1} 网格解析失败:{ex.Message}"); break; }
         }
+        return meshes;
+    }
 
+    // 3DMine Solid 文本(file_version=3DMine_2009)：顶点块(X,Y,Z, 含小数) → solids 尾标(名+RGB) → 面块(整数三元组) → 重复 → End。忠实原 TdmSolidReader。
+    private static List<Mesh> ReadSolidTextMeshes(byte[] data, DxfImportService.ImportResult result)
+    {
+        var meshes = new List<Mesh>();
+        string[] lines = Gbk().GetString(data).Split('\n');
+        var vx = new List<double>(); var vy = new List<double>(); var vz = new List<double>();
+        var faces = new List<int>();
+        string name = ""; bool hasColor = false; byte pr = 0, pg = 0, pb = 0; int skipped = 0;
+        bool readingFaces = false;
+
+        void Flush()
+        {
+            if (vx.Count > 0 && faces.Count > 0)
+                meshes.Add(new Mesh { Tag = name, HasColor = hasColor, Cr = pr, Cg = pg, Cb = pb, Vx = vx.ToArray(), Vy = vy.ToArray(), Vz = vz.ToArray(), Indices = faces.ToArray(), Skipped = skipped });
+            vx.Clear(); vy.Clear(); vz.Clear(); faces.Clear();
+            name = ""; hasColor = false; pr = pg = pb = 0; skipped = 0; readingFaces = false;
+        }
+
+        for (int li = 2; li < lines.Length; li++)   // 前两行是路径/版本头
+        {
+            string line = lines[li];
+            if (line.Length > 0 && line[line.Length - 1] == '\r') line = line.Substring(0, line.Length - 1);
+            line = line.Trim();
+            if (line.Length == 0) continue;
+            if (line.Equals("End", StringComparison.OrdinalIgnoreCase)) break;
+
+            if (line.StartsWith("solids,", StringComparison.OrdinalIgnoreCase))
+            {
+                var f = line.Split(',');
+                if (f.Length >= 2) name = f[1].Trim();
+                if (f.Length >= 6 && double.TryParse(f[3], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double cr)
+                    && double.TryParse(f[4], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double cg)
+                    && double.TryParse(f[5], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double cb))
+                { pr = ToByte(cr); pg = ToByte(cg); pb = ToByte(cb); hasColor = true; }
+                readingFaces = true;
+                continue;
+            }
+
+            bool isVertex = line.IndexOf('.') >= 0;   // 浮点=顶点; 纯整数=面索引
+            if (!readingFaces) { if (TryVertex(line, out double x, out double y, out double z)) { vx.Add(x); vy.Add(y); vz.Add(z); } }
+            else if (isVertex) { Flush(); if (TryVertex(line, out double x, out double y, out double z)) { vx.Add(x); vy.Add(y); vz.Add(z); } }   // 面块里出现浮点 → 下一实体顶点块
+            else { if (!TryFace(line, vx.Count, faces)) skipped++; }
+        }
+        Flush();
+        return meshes;
+    }
+
+    private static bool TryVertex(string line, out double x, out double y, out double z)
+    {
+        x = y = z = 0;
+        int c0 = line.IndexOf(','); if (c0 < 0) return false;
+        int c1 = line.IndexOf(',', c0 + 1); if (c1 < 0) return false;
+        int c2 = line.IndexOf(',', c1 + 1); int zEnd = c2 < 0 ? line.Length : c2;
+        var inv = System.Globalization.CultureInfo.InvariantCulture; var fl = System.Globalization.NumberStyles.Float;
+        return double.TryParse(line.AsSpan(0, c0), fl, inv, out x)
+            && double.TryParse(line.AsSpan(c0 + 1, c1 - c0 - 1), fl, inv, out y)
+            && double.TryParse(line.AsSpan(c1 + 1, zEnd - c1 - 1), fl, inv, out z);
+    }
+
+    private static bool TryFace(string line, int vertCount, List<int> faces)
+    {
+        int c0 = line.IndexOf(','); if (c0 < 0) return false;
+        int c1 = line.IndexOf(',', c0 + 1); if (c1 < 0) return false;
+        int c2 = line.IndexOf(',', c1 + 1); int i2End = c2 < 0 ? line.Length : c2;
+        var inv = System.Globalization.CultureInfo.InvariantCulture; var it = System.Globalization.NumberStyles.Integer;
+        if (!int.TryParse(line.AsSpan(0, c0), it, inv, out int i0) || !int.TryParse(line.AsSpan(c0 + 1, c1 - c0 - 1), it, inv, out int i1) || !int.TryParse(line.AsSpan(c1 + 1, i2End - c1 - 1), it, inv, out int i2)) return false;
+        if ((uint)i0 >= (uint)vertCount || (uint)i1 >= (uint)vertCount || (uint)i2 >= (uint)vertCount) return false;
+        faces.Add(i0); faces.Add(i1); faces.Add(i2);
+        return true;
+    }
+
+    private static byte ToByte(double v) => v <= 0 ? (byte)0 : v >= 1 ? (byte)255 : (byte)Math.Round(v * 255.0);
+
+    private static void BuildResult(List<Mesh> meshes, DxfImportService.ImportResult result)
+    {
         // 网格 → 去重三角边线框(保留 Z), 各网格标签作图层
         var allVerts = new List<float>(4096);
         double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;

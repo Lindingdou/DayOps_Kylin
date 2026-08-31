@@ -54,6 +54,39 @@ public class TdmImportTests
         Assert.True(anyZ, "3D 曲面应保留非零 Z");
     }
 
+    private static readonly string[] SolidCandidates =
+    {
+        @"C:\Users\cFore\Desktop\2026年6月测试文件\平朔数据\三维地质模型\9煤底.3dm",
+    };
+
+    private static string? FindSolidFixture()
+    {
+        foreach (var p in SolidCandidates) if (File.Exists(p)) return p;
+        return null;
+    }
+
+    [Fact]
+    public void Solid_text_3dm_parses_faithfully()
+    {
+        string? fx = FindSolidFixture();
+        if (fx == null) return;   // 无样本机器跳过
+
+        var r = TdmImportService.Load(fx);
+        Assert.True(r.Success, $"3DMine Solid 文本应解析成功：{r.Error}");
+        Assert.True(r.EntityCount > 100, $"实体煤层模型应有大量三角，实 {r.EntityCount}");
+        Assert.True(r.SegmentCount > 100);
+        Assert.Equal(r.SegmentCount * 12, r.LineVertices.Length);
+        // 每三角≤3 去重边（该 solid 为三角汤=顶点不按索引共享 → 恰 3×；index-shared 网格则更少）
+        Assert.True(r.SegmentCount <= r.EntityCount * 3, "去重边 ≤ 3×三角");
+        Assert.True(r.SegmentCount >= r.EntityCount, "边数 ≥ 三角数");
+        double xmin = r.Bounds[0], ymin = r.Bounds[1], xmax = r.Bounds[2], ymax = r.Bounds[3];
+        Assert.True(xmax > xmin && ymax > ymin, "bbox 非退化");
+        // 保留非零 Z
+        bool anyZ = false;
+        for (int i = 2; i < r.LineVertices.Length && !anyZ; i += 6) if (Math.Abs(r.LineVertices[i]) > 1e-6) anyZ = true;
+        Assert.True(anyZ, "实体模型应保留非零 Z");
+    }
+
     [Fact]
     public void Non_3dmine_3dm_errors_without_crash()
     {
