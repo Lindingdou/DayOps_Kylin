@@ -76,6 +76,20 @@ public class CoalAnalyticsTests
         Assert.Equal(r.Evaluated, r.Samples.Count(e => e.Evaluated));
     }
 
+    [Fact]
+    public void Compliance_to_csv_header_and_rows()
+    {
+        var rows = new List<CoalSample> { S(1, "5", 25, 0.8, 23), S(2, "5", 35, 0.8, 23) };  // 1达标 2灰超
+        var r = CoalAnalytics.Evaluate(rows, Lim());
+        string csv = CoalAnalytics.ComplianceToCsv(r);
+        var lines = csv.TrimEnd('\n').Split('\n');
+        Assert.Equal(3, lines.Length);                        // 表头 + 2 段
+        Assert.Contains("hole_id,seam", lines[0]);            // 表头
+        Assert.Contains("H2", csv);                           // 含孔号
+        Assert.Contains("Ad", csv);                           // 超标原因含 Ad(样2灰超)
+        Assert.Contains(",1,", csv);                          // 有 evaluated=1
+    }
+
     // 带厚度/密度的样本(GradeTonnage/ByElevation 用)
     private static CoalSample ST(long id, string seam, double ad, double z, double th, double dens)
         => new(id, "H" + id, seam, 0, 0, z, ad, null, null, null, null, null, null, null, th, dens);

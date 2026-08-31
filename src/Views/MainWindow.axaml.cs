@@ -721,6 +721,7 @@ public partial class MainWindow : Window
             if (cmd == "钻孔管理" || cmd == "钻孔统计" || cmd == "钻孔信息") { BoreholeStatsCmd(); return; }
             if (cmd == "煤质统计" || cmd == "煤质数据管理" || cmd == "煤质分析" || cmd == "质量·配煤分析" || cmd == "配煤分析") { CoalQualityStatsCmd(); return; }
             if (cmd == "商品煤符合性" || cmd == "煤质达标" || cmd == "商品煤达标" || cmd.StartsWith("商品煤符合性 ") || cmd.StartsWith("煤质达标 ")) { CoalComplianceCmd(cmd); return; }
+            if (cmd == "导出符合性" || cmd == "符合性导出" || cmd == "导出超标段") { await ExportComplianceAsync(cmd); return; }
             if (cmd == "品位储量曲线" || cmd == "品位-储量曲线" || cmd == "灰分储量曲线" || cmd.StartsWith("品位储量曲线 ")) { GradeTonnageCmd(cmd); return; }
             if (cmd == "分标高煤质" || cmd == "标高煤质" || cmd.StartsWith("分标高煤质 ")) { CoalByElevationCmd(cmd); return; }
             if (cmd == "煤质离群" || cmd == "离群质检" || cmd == "煤质异常" || cmd.StartsWith("煤质离群 ")) { CoalOutlierCmd(cmd); return; }
@@ -5591,6 +5592,26 @@ public partial class MainWindow : Window
     private static string CoalIndicator(string[] tk, int idx, string def)
         => tk.Length > idx && (tk[idx] is "ad" or "std" or "vdaf" or "qgr" or "qnet") ? tk[idx] : def;
 
+    // 导出商品煤符合性：逐化验段(含超标段坐标/原因)→ CSV，供定位处置
+    private async Task ExportComplianceAsync(string cmd)
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var samples = Data.GeoDataQueries.GetCoalSamples(db.Connection);
+        if (samples.Count == 0) { StatusMsg.Text = "导出符合性：无煤样数据"; return; }
+        var lim = new Data.ComplianceLimits(false, true, 30, true, 1.0, true, 21, Data.CalorificKind.Qgr, false, 0, 0);
+        var r = Data.CoalAnalytics.Evaluate(samples, lim);
+        var file = await StorageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
+        {
+            Title = "导出商品煤符合性", DefaultExtension = "csv", SuggestedFileName = "coal_compliance.csv",
+            FileTypeChoices = new[] { new Avalonia.Platform.Storage.FilePickerFileType("CSV") { Patterns = new[] { "*.csv" } } }
+        });
+        if (file == null) return;
+        try { System.IO.File.WriteAllText(file.Path.LocalPath, Data.CoalAnalytics.ComplianceToCsv(r)); }
+        catch (System.Exception ex) { StatusMsg.Text = $"导出符合性：写出失败 {ex.Message}"; return; }
+        int fails = r.Samples.Count(e => e.Evaluated && !e.Pass);
+        StatusMsg.Text = $"导出符合性：{r.Evaluated} 可判段(超标 {fails}) → {System.IO.Path.GetFileName(file.Path.LocalPath)}";
+    }
+
     // 品位-储量曲线：厚度×密度加权, 灰/硫累计≤限值、热量累计≥限值
     private void GradeTonnageCmd(string cmd)
     {
@@ -6163,7 +6184,7 @@ public partial class MainWindow : Window
         "设备台账","生产数据","产能分析","故障分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据",
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","数据看板","煤种分类",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
-        "产能分类对比","故障类型分布","分工序验收合格率","数据导出","达成度评价","产量预测","时序预测","编组优化","智能编组优化","商品煤符合性","煤质达标","品位储量曲线","分标高煤质","煤质离群","洗选提质","用途适宜性",
+        "产能分类对比","故障类型分布","分工序验收合格率","数据导出","达成度评价","产量预测","时序预测","编组优化","智能编组优化","商品煤符合性","煤质达标","导出符合性","品位储量曲线","分标高煤质","煤质离群","洗选提质","用途适宜性",
         // TaskLib 自足计算
         "生产量核算","物料换算","采剥平衡","排土场按量推进","配煤核算","工序进度跟踪","编组产能","环节降效",
     };

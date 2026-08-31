@@ -91,6 +91,18 @@ public static class CoalAnalytics
             evaluated > 0 ? passCount * 100.0 / evaluated : 0, insufficient);
     }
 
+    /// <summary>符合性结果 → CSV（表头 + 逐化验段：孔号/煤层/坐标/各指标/判定/超标原因）。供导出定位处置。</summary>
+    public static string ComplianceToCsv(ComplianceResult r)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("hole_id,seam,x,y,z,ad,st,cal,vdaf,evaluated,pass,fails\n");
+        static string F(double? v) => v.HasValue ? v.Value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) : "";
+        static string Q(string s) => "\"" + (s ?? "").Replace("\"", "\"\"") + "\"";
+        foreach (var e in r.Samples)
+            sb.Append($"{Q(e.HoleId)},{Q(e.SeamCode)},{F(e.X)},{F(e.Y)},{F(e.Z)},{F(e.Ad)},{F(e.St)},{F(e.Cal)},{F(e.Vdaf)},{(e.Evaluated ? 1 : 0)},{(e.Pass ? 1 : 0)},{Q(e.Fails)}\n");
+        return sb.ToString();
+    }
+
     // ── 指标选择器 + 质量代理 ──
     /// <summary>取指标值：ad/std/vdaf 支持 raw|clean; qgr/qnet 无洗选分。</summary>
     public static double? Value(CoalSample s, string indicator, bool useClean) => indicator switch
