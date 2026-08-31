@@ -27,6 +27,23 @@ public static class DashPattern
         return q;
     }
 
+    /// <summary>样式 → 标准线型名(ByName 的逆, 供导出用能被再导入识别的名)。未匹配标准样式 → "DASHED"(保虚线性)。</summary>
+    public static string NameOf(double[]? dash)
+    {
+        if (dash == null || dash.Length == 0) return "Continuous";
+        bool Eq(double[] a, double[] b)
+        {
+            if (a.Length != b.Length) return false;
+            for (int i = 0; i < a.Length; i++) if (System.Math.Abs(a[i] - b[i]) > 1e-6) return false;
+            return true;
+        }
+        if (Eq(dash, new[] { 6.0, 3.0 })) return "DASHED";
+        if (Eq(dash, new[] { 0.3, 3.0 })) return "DOTTED";
+        if (Eq(dash, new[] { 9.0, 3.0, 0.3, 3.0 })) return "DASHDOT";
+        if (Eq(dash, new[] { 9.0, 3.0, 0.3, 3.0, 0.3, 3.0 })) return "DIVIDE";
+        return "DASHED";   // 自定义样式 → 按虚线导出(段长仍精确写入 DXF LineType)
+    }
+
     /// <summary>把线段 (x0,y0)->(x1,y1) 按样式切成"画"子段。样式空/零周期/零长线 → 原样一整段。</summary>
     public static List<(double sx, double sy, double ex, double ey)> Dashes(
         double x0, double y0, double x1, double y1, IReadOnlyList<double>? pattern)

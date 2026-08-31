@@ -590,4 +590,17 @@ public class DxfImportTests
         Assert.Equal(0.3, txt.ObliqueAngle, 2);   // 弧度→度→弧度往返
         Assert.Equal(0.2, txt.Rotation, 2);
     }
+
+    [Fact]
+    public void Dashed_line_survives_export_import_roundtrip()
+    {
+        var scene = new Scene();
+        scene.Add(new LineEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 0, Dash = PitMine3D.Kylin.Cad.Draw.DashPattern.ByName("虚线") });
+        var doc = SceneExportService.BuildDocument(scene);
+        var res = DxfImportService.MapDocument(doc);
+        var line = System.Linq.Enumerable.FirstOrDefault(System.Linq.Enumerable.OfType<LineEntity>(res.Entities));
+        Assert.NotNull(line);
+        Assert.NotNull(line!.Dash);                       // 虚线保留(非实线)
+        Assert.Equal(new[] { 6.0, 3.0 }, line.Dash!);     // 样式往返(名 DASHED→ByName)
+    }
 }

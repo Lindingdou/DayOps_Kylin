@@ -50,8 +50,26 @@ public static class SceneExportService
             return l;
         }
 
+        var ltCache = new Dictionary<string, ACadSharp.Tables.LineType>();
+        ACadSharp.Tables.LineType? LineTypeFor(double[]? dash)   // 线型: 虚线样式→ DXF LineType(段长±=画/空), 实线返 null
+        {
+            if (dash == null || dash.Length == 0) return null;
+            string key = string.Join("_", dash);
+            if (ltCache.TryGetValue(key, out var c)) return c;
+            // 名用标准线型名(ByName 逆)→ 再导入可识别; 段长仍精确写入
+            string name = PitMine3D.Kylin.Cad.Draw.DashPattern.NameOf(dash);
+            if (doc.LineTypes.Contains(name)) { var ex = doc.LineTypes[name]; ltCache[key] = ex; return ex; }   // 同名复用(防重复)
+            var lt = new ACadSharp.Tables.LineType(name);
+            for (int i = 0; i < dash.Length; i++)
+                lt.AddSegment(new ACadSharp.Tables.LineType.Segment { Length = (i % 2 == 0) ? dash[i] : -dash[i] });
+            doc.LineTypes.Add(lt);
+            ltCache[key] = lt;
+            return lt;
+        }
+
         foreach (var e in scene.Entities)
         {
+            var lt = LineTypeFor(e.Dash);
             foreach (var ent in Map(e))
             {
                 ent.Layer = LayerFor(e.LayerName);
@@ -59,6 +77,7 @@ public static class SceneExportService
                     (byte)Math.Clamp(e.Cr * 255f, 0, 255),
                     (byte)Math.Clamp(e.Cg * 255f, 0, 255),
                     (byte)Math.Clamp(e.Cb * 255f, 0, 255));
+                if (lt != null) ent.LineType = lt;            // 线型导出保真
                 doc.Entities.Add(ent);
             }
         }

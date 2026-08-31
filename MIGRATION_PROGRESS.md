@@ -1334,3 +1334,12 @@ pc_quality「点数/密度/包围盒/高程分布/**强度分类**」的强度/�
 - 文字保真现**导入+导出双向完整**。
 
 **本会话累计补 51 真功能 + 1 并发修复 + 1 潜伏字形 bug 修 + 1 latent 攻克 + GWN 硬化, 952 测。**
+
+## 一〇四、线型导出 —— 线型完整 round-trip
+
+§一〇〇 只做了线型导入。导出侧补:
+- [x] **线型导出**(`SceneExport` BuildDocument 加 `LineTypeFor`): 虚线样式 → ACadSharp `LineType`(段长±=画/空, `AddSegment`), 名用 `DashPattern.NameOf`(逆映射标准名 DASHED/DOTTED/DASHDOT, 让再导入的 ByName 可识别), 注册进 `doc.LineTypes`(同名复用防重), 设 `ent.LineType`。
+- [x] **线型完整 round-trip 验证**: Kylin 虚线 → 导出(LineType 段长+标准名)→ 导入(ResolveDash 读名 ByName)→ 样式 [6,3] 保留。1 round-trip 测。
+- **CAD 保真 round-trip 完整**: 文字五属性(§一〇三)+ 线型(本节)导入导出双向齐。
+
+**本会话累计补 52 真功能 + 1 并发修复 + 1 潜伏字形 bug 修 + 1 latent 攻克 + GWN 硬化, 953 测。** CAD 属性/文字保真透镜彻底收敛(导入+导出+绘制全齐), 余线宽渲染(需 GL 管线改)记录。
