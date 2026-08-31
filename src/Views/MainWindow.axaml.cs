@@ -896,7 +896,8 @@ public partial class MainWindow : Window
             if (cmd == "点云高程着色" || cmd == "高程着色" || cmd == "点云着色") { await ElevationColorAsync(); return; }
             if (cmd == "色带" || cmd == "配色方案" || cmd.StartsWith("色带 ") || cmd.StartsWith("配色方案 ")) { SetColormapCmd(cmd); return; }
             if (cmd == "加载点云" || cmd == "展点" || cmd == "导入点云" || cmd == "加载点") { await LoadPointCloudAsync(); return; }
-            if (cmd == "导入LAS" || cmd == "加载LAS" || cmd == "LAS导入" || cmd == "导入激光点云") { await LoadLasAsync(); return; }
+            if (cmd == "导入LAS" || cmd == "加载LAS" || cmd == "LAS导入" || cmd == "导入激光点云") { await LoadLasAsync("导入LAS"); return; }
+            if (cmd == "LAS真彩色" || cmd == "点云真实色" || cmd == "真实色导入LAS" || cmd == "LAS真实色") { await LoadLasAsync("LAS真彩色"); return; }
             if (cmd == "正射着色" || cmd == "真实色" || cmd == "影像着色" || cmd == "正射影像着色") { await OrthoColorAsync(); return; }
             if (cmd == "逐点坡度/坡向" || cmd == "逐点坡度坡向" || cmd == "法向估计" || cmd == "点云法向") { await PointNormalsAsync(); return; }
             if (cmd == "高程截断" || cmd == "高程裁剪" || cmd == "Z截断") { await ElevationClipAsync(); return; }
@@ -3043,7 +3044,7 @@ public partial class MainWindow : Window
     }
 
     // 导入 LAS 点云(公开 LAS 1.2/1.4 规范, 托管解析)：读头 + 抽稀点入场景(俯视灰点)
-    private async Task LoadLasAsync()
+    private async Task LoadLasAsync(string cmd = "导入LAS")
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
@@ -3055,19 +3056,26 @@ public partial class MainWindow : Window
         var r = LasImportService.Load(files[0].Path.LocalPath, 200000);
         if (!r.Success) { StatusMsg.Text = $"导入 LAS：{r.Error}"; return; }
         if (r.Points.Count == 0) { StatusMsg.Text = "导入 LAS：头有效但无点"; return; }
+        bool wantRgb = cmd.Contains("真");                 // "LAS真彩色/点云真实色" → 用捕获的 RGB 着色
+        bool useRgb = wantRgb && r.Colors != null && r.Colors.Count == r.Points.Count;
         BeginChange();
-        foreach (var p in r.Points)
+        for (int i = 0; i < r.Points.Count; i++)
         {
-            var pe = new PointEntity { X = p.x, Y = p.y, Cr = 0.75f, Cg = 0.78f, Cb = 0.82f };
-            AssignLayer(pe); pe.Cr = 0.75f; pe.Cg = 0.78f; pe.Cb = 0.82f;
+            var p = r.Points[i];
+            var pe = new PointEntity { X = p.x, Y = p.y };
+            if (useRgb) { var c = r.Colors![i]; pe.Cr = c.r; pe.Cg = c.g; pe.Cb = c.b; }
+            else { pe.Cr = 0.75f; pe.Cg = 0.78f; pe.Cb = 0.82f; }
+            AssignLayer(pe);
+            if (useRgb) { var c = r.Colors![i]; pe.Cr = c.r; pe.Cg = c.g; pe.Cb = c.b; }   // AssignLayer 可能改色, 真彩色后置回
             _scene.Add(pe);
         }
         RefreshScene();
         Viewport.FitBounds(new[] { r.MinX, r.MinY, r.MaxX, r.MaxY });
         var inv = System.Globalization.CultureInfo.InvariantCulture;
+        string colorNote = useRgb ? "真实色(RGB)" : (wantRgb ? $"无RGB(点格式{r.PointFormat}), 灰显" : "灰显");
         StatusMsg.Text = $"导入 LAS(v{r.VersionMajor}.{r.VersionMinor})：{r.PointCount} 点"
             + (r.Points.Count < r.PointCount ? $"(抽稀显示 {r.Points.Count})" : "")
-            + $" · 范围 X[{r.MinX.ToString("0.#", inv)}~{r.MaxX.ToString("0.#", inv)}] Z[{r.MinZ.ToString("0.#", inv)}~{r.MaxZ.ToString("0.#", inv)}]（可着色/抽稀/统计）";
+            + $" · {colorNote} · 范围 X[{r.MinX.ToString("0.#", inv)}~{r.MaxX.ToString("0.#", inv)}] Z[{r.MinZ.ToString("0.#", inv)}~{r.MaxZ.ToString("0.#", inv)}]";
     }
 
     // 正射着色(真实色)：选点 CSV + GeoTIFF 正射影像 → 逐点采像素色 → 真实色点云入场景

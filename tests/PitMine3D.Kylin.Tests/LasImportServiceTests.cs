@@ -107,4 +107,54 @@ public class LasImportServiceTests
             Assert.InRange(p.z, r.MinZ - 1, r.MaxZ + 1);
         }
     }
+
+    // 构造 LAS 1.2 point format 2(带 RGB, recLen 26, RGB 在记录偏移 20)
+    private static byte[] MakeLasRgb(params (double x, double y, double z, ushort r, ushort g, ushort b)[] pts)
+    {
+        double sx = 0.01, sy = 0.01, sz = 0.01, ox = 1000, oy = 2000, oz = 0;
+        ushort recLen = 26; uint offsetToPoints = 227;
+        var ms = new MemoryStream(); var bw = new BinaryWriter(ms);
+        bw.Write(new byte[offsetToPoints]);
+        void At(long o, Action w) { ms.Seek(o, SeekOrigin.Begin); w(); }
+        At(0, () => bw.Write(new[] { (byte)'L', (byte)'A', (byte)'S', (byte)'F' }));
+        At(24, () => { bw.Write((byte)1); bw.Write((byte)2); });
+        At(96, () => bw.Write(offsetToPoints));
+        At(104, () => { bw.Write((byte)2); bw.Write(recLen); });   // 格式 2, recLen 26
+        At(107, () => bw.Write((uint)pts.Length));
+        At(131, () => { bw.Write(sx); bw.Write(sy); bw.Write(sz); bw.Write(ox); bw.Write(oy); bw.Write(oz); });
+        At(179, () => { bw.Write(3000.0); bw.Write(900.0); bw.Write(3000.0); bw.Write(1900.0); bw.Write(100.0); bw.Write(-10.0); });
+        ms.Seek(offsetToPoints, SeekOrigin.Begin);
+        foreach (var p in pts)
+        {
+            bw.Write((int)Math.Round((p.x - ox) / sx));
+            bw.Write((int)Math.Round((p.y - oy) / sy));
+            bw.Write((int)Math.Round((p.z - oz) / sz));
+            bw.Write(new byte[8]);                                 // intensity..pointsource (偏移 12..19)
+            bw.Write(p.r); bw.Write(p.g); bw.Write(p.b);           // RGB 在偏移 20
+        }
+        return ms.ToArray();
+    }
+
+    [Fact]
+    public void Format2_reads_real_rgb_colors()
+    {
+        // 全红(65535,0,0) + 全绿(0,65535,0)
+        var bytes = MakeLasRgb((1000.5, 2000.5, 5.0, 65535, 0, 0), (1001.0, 2002.0, 10.0, 0, 65535, 0));
+        var r = LasImportService.Read(new MemoryStream(bytes));
+        Assert.True(r.Success, r.Error);
+        Assert.Equal((byte)2, r.PointFormat);
+        Assert.Equal(2, r.Points.Count);
+        Assert.NotNull(r.Colors);
+        Assert.Equal(2, r.Colors!.Count);                          // Colors 与 Points 同长
+        Assert.Equal(1f, r.Colors[0].r, 3); Assert.Equal(0f, r.Colors[0].g, 3);   // 全红 → r=1
+        Assert.Equal(1f, r.Colors[1].g, 3); Assert.Equal(0f, r.Colors[1].r, 3);   // 全绿 → g=1
+    }
+
+    [Fact]
+    public void Format0_has_no_colors()
+    {
+        var r = LasImportService.Read(new MemoryStream(MakeLas((1000.5, 2000.5, 5.0))));
+        Assert.True(r.Success, r.Error);
+        Assert.Null(r.Colors);                                     // 格式 0 无 RGB
+    }
 }

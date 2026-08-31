@@ -17,8 +17,12 @@ public static class LasImportService
         public byte VersionMajor, VersionMinor, PointFormat;
         public long PointCount;                                   // 头声明的总点数
         public List<(double x, double y, double z)> Points = new();  // 抽稀后实际读入
+        public List<(float r, float g, float b)>? Colors;        // 含 RGB 的点格式(2/3/5/7/8)才非 null; 与 Points 同长
         public double MinX, MaxX, MinY, MaxY, MinZ, MaxZ;         // 头里的包围盒
     }
+
+    /// <summary>点格式的 RGB 字段字节偏移(ASPRS 规范); 无 RGB 返回 -1。格式 2=20/3=28/5=28/7=30/8=30。</summary>
+    private static int RgbOffset(byte format) => format switch { 2 => 20, 3 => 28, 5 => 28, 7 => 30, 8 => 30, _ => -1 };
 
     public static LasResult Load(string path, int maxPoints = 500000)
     {
@@ -54,6 +58,7 @@ public static class LasImportService
 
         if (recLen < 12 || offsetToPoints < 227 || pointCount <= 0) { r.Success = true; return r; }   // 头有效但无点
 
+        int rgbOff = RgbOffset(r.PointFormat);   // 有 RGB 的点格式 → 逐点读真实色
         long step = (maxPoints > 0 && pointCount > maxPoints) ? pointCount / maxPoints : 1;
         if (step < 1) step = 1;
         for (long i = 0; i < pointCount; i += step)
@@ -63,6 +68,17 @@ public static class LasImportService
             s.Seek(off, SeekOrigin.Begin);
             int xi = br.ReadInt32(), yi = br.ReadInt32(), zi = br.ReadInt32();
             r.Points.Add((xi * sx + ox, yi * sy + oy, zi * sz + oz));
+            if (rgbOff >= 0)                      // 真实色(RGB uint16 归一化); 保 Colors 与 Points 同长
+            {
+                r.Colors ??= new List<(float, float, float)>();
+                if (off + rgbOff + 6 <= s.Length)
+                {
+                    s.Seek(off + rgbOff, SeekOrigin.Begin);
+                    ushort rr = br.ReadUInt16(), gg = br.ReadUInt16(), bb = br.ReadUInt16();
+                    r.Colors.Add((rr / 65535f, gg / 65535f, bb / 65535f));
+                }
+                else r.Colors.Add((0, 0, 0));    // 截断记录兜底
+            }
             if (maxPoints > 0 && r.Points.Count >= maxPoints) break;
         }
         r.Success = true;
