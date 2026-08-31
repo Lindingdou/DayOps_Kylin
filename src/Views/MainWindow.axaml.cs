@@ -4309,9 +4309,36 @@ public partial class MainWindow : Window
     internal static string? RepeatCommand(string typed, string? last)
         => typed.Length > 0 ? typed : (string.IsNullOrEmpty(last) ? null : last);
 
+    // 命令框未识别 → 合成 Tag 转派整条中文命令链(复用 OnRibbonCommand，命令框亦可打中文命令)
+    private void DispatchRibbon(string cmd) => OnRibbonCommand(new Button { Tag = cmd }, new RoutedEventArgs());
+
+    // 命令历史（供命令行 ↑/↓ 回溯）
+    private readonly List<string> _cmdHistory = new();
+    private int _cmdHistoryIdx = -1;   // -1/末尾 = 停在当前输入(空)
+
+    private void PushHistory(string cmd)
+    {
+        if (string.IsNullOrWhiteSpace(cmd)) return;
+        if (_cmdHistory.Count == 0 || _cmdHistory[^1] != cmd) _cmdHistory.Add(cmd);   // 去连续重复
+        if (_cmdHistory.Count > 200) _cmdHistory.RemoveAt(0);
+        _cmdHistoryIdx = -1;
+    }
+
+    private void RecallHistory(TextBox tb, int dir)   // dir=-1 较早, +1 较新
+    {
+        if (_cmdHistory.Count == 0) return;
+        if (_cmdHistoryIdx < 0) _cmdHistoryIdx = _cmdHistory.Count;   // 从"末尾之后"(当前输入)起
+        _cmdHistoryIdx = System.Math.Clamp(_cmdHistoryIdx + dir, 0, _cmdHistory.Count);
+        if (_cmdHistoryIdx >= _cmdHistory.Count) { tb.Text = string.Empty; }
+        else { tb.Text = _cmdHistory[_cmdHistoryIdx]; tb.CaretIndex = tb.Text.Length; }
+    }
+
     private void OnCommandKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Enter || sender is not TextBox tb) return;
+        if (sender is not TextBox tb) return;
+        if (e.Key == Key.Up) { RecallHistory(tb, -1); e.Handled = true; return; }     // ↑ 回溯较早命令
+        if (e.Key == Key.Down) { RecallHistory(tb, +1); e.Handled = true; return; }   // ↓ 回溯较新命令
+        if (e.Key != Key.Enter) return;
 
         string cmd = tb.Text.Trim();
         if (cmd.Length == 0)   // 空命令行 + Enter = 重复上次命令（AutoCAD 行为；仅空闲态，不干预进行中的交互）
@@ -4357,6 +4384,7 @@ public partial class MainWindow : Window
         if (TryCoordinateInput(cmd)) return;   // 绘制/编辑取点时优先当坐标
 
         _lastCommand = cmd;                    // 记录供"空命令行 + Enter 重复"（坐标已在上一步返回，不会记为命令）
+        PushHistory(cmd);                      // 入命令历史（供 ↑/↓ 回溯；坐标/交互输入不入）
 
         switch (cmd.ToUpperInvariant())
         {
@@ -4856,7 +4884,7 @@ public partial class MainWindow : Window
                 _ = SaveSceneAsync();
                 break;
             default:
-                if (!ActivateDrawTool(cmd)) StatusMsg.Text = $"执行: {cmd}";
+                if (!ActivateDrawTool(cmd)) DispatchRibbon(cmd);   // 英文 switch 未识别 → 转中文命令链(命令框也能打中文命令)
                 break;
         }
     }
