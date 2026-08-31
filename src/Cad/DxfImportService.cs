@@ -553,7 +553,7 @@ public static class DxfImportService
                     var ap = te.AlignmentPoint;
                     bool useAlign = (ha != 0 || va != 0) && (ap.X != 0 || ap.Y != 0);
                     double tx = useAlign ? ap.X : te.InsertPoint.X, ty = useAlign ? ap.Y : te.InsertPoint.Y;
-                    Finalize(new DrawText { X = tx, Y = ty, Height = te.Height > 0 ? te.Height : 1, Rotation = te.Rotation, HAlign = ha, VAlign = va, WidthFactor = te.WidthFactor > 0 ? te.WidthFactor : 1, Text = te.Value ?? "" }, xf, col, layer);
+                    Finalize(new DrawText { X = tx, Y = ty, Height = te.Height > 0 ? te.Height : 1, Rotation = te.Rotation, HAlign = ha, VAlign = va, WidthFactor = te.WidthFactor > 0 ? te.WidthFactor : 1, ObliqueAngle = te.ObliqueAngle * System.Math.PI / 180.0, Text = te.Value ?? "" }, xf, col, layer);
                     break;
                 }
                 case MText mt:

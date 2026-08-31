@@ -756,11 +756,13 @@ public sealed class TextEntity : SceneEntity
     public int HAlign;        // 水平对齐: 0=左(锚点在左端,向后兼容)/1=中/2=右
     public int VAlign;        // 垂直对齐: 0=底(基线)/1=中/2=顶
     public double WidthFactor = 1;   // 字宽系数(水平缩放); 1=正常(向后兼容)
+    public double ObliqueAngle;      // 倾斜角(弧度, 正=向右倾/斜体); 0=直立(向后兼容)
     public string Text = "";
     public override void Tessellate(List<float> o)
     {
         double c = Math.Cos(Rotation), s = Math.Sin(Rotation);
         double wf = WidthFactor <= 0 ? 1 : WidthFactor;
+        double tanOb = Math.Tan(ObliqueAngle);
         double adv = Height * 0.8 * wf;
         double width = (Text?.Length ?? 0) * adv;
         double hOff = HAlign == 1 ? -width / 2 : HAlign == 2 ? -width : 0;   // 对齐偏移(局部)
@@ -770,8 +772,8 @@ public sealed class TextEntity : SceneEntity
         {
             foreach (var (sx0, sy0, sx1, sy1) in StrokeFont.Strokes(ch))
             {
-                double lx0 = cursor + sx0 * Height * wf, ly0 = vOff + sy0 * Height;   // x 按字宽系数缩放
-                double lx1 = cursor + sx1 * Height * wf, ly1 = vOff + sy1 * Height;
+                double lx0 = cursor + sx0 * Height * wf + sy0 * Height * tanOb, ly0 = vOff + sy0 * Height;   // x 按字宽缩放 + 倾斜斜切
+                double lx1 = cursor + sx1 * Height * wf + sy1 * Height * tanOb, ly1 = vOff + sy1 * Height;
                 Seg(o, X + lx0 * c - ly0 * s, Y + lx0 * s + ly0 * c,      // 旋转后平移到锚点
                        X + lx1 * c - ly1 * s, Y + lx1 * s + ly1 * c);
             }
@@ -782,10 +784,10 @@ public sealed class TextEntity : SceneEntity
     {
         var (x, y) = m.Map(X, Y);
         double addRot = Math.Atan2(m.B, m.A);   // 仿射的旋转分量并入文字角
-        return Colored(new TextEntity { X = x, Y = y, Height = Height * m.ScaleMag, Rotation = Rotation + addRot, HAlign = HAlign, VAlign = VAlign, WidthFactor = WidthFactor, Text = Text });
+        return Colored(new TextEntity { X = x, Y = y, Height = Height * m.ScaleMag, Rotation = Rotation + addRot, HAlign = HAlign, VAlign = VAlign, WidthFactor = WidthFactor, ObliqueAngle = ObliqueAngle, Text = Text });
     }
     public override List<(double x, double y)> Grips() => new() { (X, Y) };
-    public override SceneEntity? MoveGrip(int i, double nx, double ny) => Colored(new TextEntity { X = nx, Y = ny, Height = Height, Rotation = Rotation, HAlign = HAlign, VAlign = VAlign, WidthFactor = WidthFactor, Text = Text });
+    public override SceneEntity? MoveGrip(int i, double nx, double ny) => Colored(new TextEntity { X = nx, Y = ny, Height = Height, Rotation = Rotation, HAlign = HAlign, VAlign = VAlign, WidthFactor = WidthFactor, ObliqueAngle = ObliqueAngle, Text = Text });
 }
 
 /// <summary>实体 → 类型中文名（对象树 / 快速选择用；椭圆/样条导入后并为多段线）。</summary>

@@ -794,6 +794,15 @@ public class DrawToolsTests
     }
 
     [Fact]
+    public void Text_oblique_slants_upper_points_right()
+    {
+        double MaxX(TextEntity t) { var o = new List<float>(); t.Tessellate(o); double m = double.MinValue; for (int i = 0; i + 1 < o.Count; i += 6) if (o[i] > m) m = o[i]; return m; }
+        var upright = new TextEntity { X = 0, Y = 0, Height = 1, Text = "A", ObliqueAngle = 0 };
+        var slanted = new TextEntity { X = 0, Y = 0, Height = 1, Text = "A", ObliqueAngle = System.Math.PI / 4 };
+        Assert.True(MaxX(slanted) > MaxX(upright), "倾斜应把上部点右移, 增大水平范围");
+    }
+
+    [Fact]
     public void Text_valign_shifts_down_and_default_is_backward_compatible()
     {
         var baseline = new TextEntity { X = 0, Y = 0, Height = 1, Text = "A", VAlign = 0 };
