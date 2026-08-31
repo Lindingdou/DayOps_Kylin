@@ -22,6 +22,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         PopulateDrawingLayers();   // 启动即显示绘制图层("0")，可管理
         SetDocPath(null);          // 初始标题=未命名
+        RenderAssistant(_assistant.Current());   // 智能助手：启动显示欢迎 + 主菜单
 
         // OpenGL 上下文就绪后，把真实后端版本显示到视口与状态栏
         Viewport.GlReady += backend =>
@@ -619,6 +620,7 @@ public partial class MainWindow : Window
     private List<SceneEntity> _prevSelected = new();         // 上次选择集
     private readonly Cad.Draw.CadClipboard _clip = new();    // 实体剪贴板（COPYCLIP/CUTCLIP/PASTECLIP）
     private readonly Cad.Draw.NamedSelections _selSets = new(); // 命名选择集（创建/调用选择集）
+    private readonly AssistantEngine _assistant = new();         // 智能助手（菜单引导，点选即执行命令）
     private int _selSetCycle = -1;                            // 调用选择集轮转序号
     private Avalonia.Point _pressPos;             // 按下位置（区分点击/拖拽）
     private enum EditMode { None, Move, Copy, Mirror, Rotate, Scale }
@@ -4983,6 +4985,83 @@ public partial class MainWindow : Window
     private bool _suppressCmdLog;   // DispatchRibbon 转派时抑制 OnRibbonCommand 重复回显(命令框侧已回显)
     private void DispatchRibbon(string cmd) { _suppressCmdLog = true; OnRibbonCommand(new Button { Tag = cmd }, new RoutedEventArgs()); }
 
+    // ---------- 智能助手面板（菜单引导，点选即执行命令）----------
+    private void RenderAssistant(AssistantEngine.Reply r)
+    {
+        if (AssistantPanel == null) return;
+        AssistantPanel.Children.Clear();
+        AssistantPanel.Children.Add(new TextBlock
+        {
+            Text = r.Content, FontSize = 12, TextWrapping = TextWrapping.Wrap,
+            Foreground = Brush.Parse("#3A3F46"), Margin = new Thickness(4, 2, 4, 8)
+        });
+        foreach (var opt in r.Options)
+        {
+            var btn = new Button
+            {
+                Content = opt.Command == null ? opt.Label : $"{opt.Label}  ›",
+                FontSize = 12, HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Left,
+                Margin = new Thickness(0, 0, 0, 3), Padding = new Thickness(8, 4, 8, 4),
+                Background = Brush.Parse(opt.Command == null ? "#E8EDF3" : "#DDEBFB"),
+                BorderBrush = Brush.Parse("#C7D2DE")
+            };
+            var captured = opt;
+            btn.Click += (_, _) => OnAssistantOption(captured);
+            AssistantPanel.Children.Add(btn);
+        }
+        AssistantScrollToEnd();
+    }
+
+    private void AssistantScrollToEnd()
+    {
+        if (AssistantPanel?.Parent is ScrollViewer sv) sv.ScrollToEnd();
+    }
+
+    private void OnAssistantOption(AssistantEngine.Option opt)
+    {
+        if (!string.IsNullOrEmpty(opt.Command))
+        {
+            LogCommand(opt.Command!);
+            ExecuteCommandToken(opt.Command!);
+        }
+        RenderAssistant(_assistant.Select(opt));
+    }
+
+    private void OnAssistantSend(object? sender, RoutedEventArgs e) => AssistantSubmit();
+    private void OnAssistantInputKeyDown(object? sender, KeyEventArgs e)
+    { if (e.Key == Key.Enter) { AssistantSubmit(); e.Handled = true; } }
+
+    private void AssistantSubmit()
+    {
+        if (AssistantInput == null) return;
+        string text = (AssistantInput.Text ?? "").Trim();
+        if (text.Length == 0) return;
+        AssistantInput.Text = string.Empty;
+        var reply = _assistant.HandleText(text, IsKnownCommand);
+        if (IsKnownCommand(text)) { LogCommand(text); ExecuteCommandToken(text); }
+        RenderAssistant(reply);
+    }
+
+    // 判定一个 token 是否为可执行命令（命令目录 或 绘图工具 或 中文命令链已知）。
+    private bool IsKnownCommand(string token)
+    {
+        string t = token.Trim();
+        if (t.Length == 0) return false;
+        string u = t.ToUpperInvariant();
+        foreach (var c in CommandCatalog) if (string.Equals(c, t, System.StringComparison.OrdinalIgnoreCase)) return true;
+        // 助手菜单用到的英文命令 + 常见别名
+        switch (u)
+        {
+            case "CIRCLE": case "RECTANG": case "LINE": case "PLINE": case "POLYGON": case "POINT":
+            case "MOVE": case "COPY": case "ROTATE": case "SCALE": case "MIRROR": case "OFFSET": case "TRIM": case "ERASE":
+            case "DIMALIGNED": case "DIMRADIAL": case "DIST": case "MANG":
+            case "ZOOMEXTENTS": case "PAN": case "3DORBIT": case "3DVIEW": case "GIZMO":
+                return true;
+        }
+        return false;
+    }
+
     // 命令历史/输出面板：回显执行的命令（▸ cmd），滚动到底，上限 100 行
     private void LogCommand(string cmd)
     {
@@ -5128,7 +5207,12 @@ public partial class MainWindow : Window
         _lastCommand = cmd;                    // 记录供"空命令行 + Enter 重复"（坐标已在上一步返回，不会记为命令）
         PushHistory(cmd);                      // 入命令历史（供 ↑/↓ 回溯；坐标/交互输入不入）
         LogCommand(cmd);                       // 命令输出面板回显(typed; 转派中文由 _suppressCmdLog 防重复)
+        ExecuteCommandToken(cmd);
+    }
 
+    // 执行一个命令 token（英文命令 switch；未识别 → 中文命令链/绘图工具）。供命令框与智能助手复用。
+    private void ExecuteCommandToken(string cmd)
+    {
         switch (cmd.ToUpperInvariant())
         {
             case "2D":

@@ -1260,14 +1260,31 @@
         <GridSplitter Grid.Column="3" Width="4" Background="#DCDFE4" ResizeDirection="Columns" HorizontalAlignment="Center" />
         <!-- 右侧特性面板 -->
         <Border Grid.Column="4" Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="1,0,0,0">
-            <Grid RowDefinitions="Auto,Auto,*">
-                <TextBlock Grid.Row="0" Text="特性" FontWeight="SemiBold" FontSize="13"
-                           Margin="10,8,10,4" Foreground="#3A3F46" />
-                <TextBlock Grid.Row="1" x:Name="PropertyHint" Text="选中单个实体查看特性"
-                           Margin="10,0,10,6" FontSize="11" Foreground="#8A929C" />
-                <ScrollViewer Grid.Row="2" Margin="4,0,4,8">
-                    <StackPanel x:Name="PropertyPanel" />
-                </ScrollViewer>
+            <Grid RowDefinitions="*,Auto,1.6*">
+                <!-- 特性面板 -->
+                <Grid Grid.Row="0" RowDefinitions="Auto,Auto,*">
+                    <TextBlock Grid.Row="0" Text="特性" FontWeight="SemiBold" FontSize="13"
+                               Margin="10,8,10,4" Foreground="#3A3F46" />
+                    <TextBlock Grid.Row="1" x:Name="PropertyHint" Text="选中单个实体查看特性"
+                               Margin="10,0,10,6" FontSize="11" Foreground="#8A929C" />
+                    <ScrollViewer Grid.Row="2" Margin="4,0,4,8">
+                        <StackPanel x:Name="PropertyPanel" />
+                    </ScrollViewer>
+                </Grid>
+                <GridSplitter Grid.Row="1" Height="4" Background="#DCDFE4" ResizeDirection="Rows" HorizontalAlignment="Stretch" VerticalAlignment="Center" />
+                <!-- 智能助手（菜单引导，点选即执行命令） -->
+                <Grid Grid.Row="2" RowDefinitions="Auto,*,Auto" Background="#F2F4F7">
+                    <TextBlock Grid.Row="0" Text="智能助手 🤖" FontWeight="SemiBold" FontSize="13"
+                               Margin="10,8,10,4" Foreground="#3A3F46" />
+                    <ScrollViewer Grid.Row="1" Margin="6,0,6,4">
+                        <StackPanel x:Name="AssistantPanel" />
+                    </ScrollViewer>
+                    <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="6,2,6,8">
+                        <TextBox Grid.Column="0" x:Name="AssistantInput" Watermark="输入命令名或问题…" FontSize="12"
+                                 Padding="4,2" KeyDown="OnAssistantInputKeyDown" />
+                        <Button Grid.Column="1" Content="发送" FontSize="12" Margin="4,0,0,0" Padding="8,2" Click="OnAssistantSend" />
+                    </Grid>
+                </Grid>
             </Grid>
         </Border>
         </Grid>
