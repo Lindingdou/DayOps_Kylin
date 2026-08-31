@@ -23,7 +23,9 @@ public static class GeoDataQueries
             while (rd.Read()) byCat.Add(new CategoryCount(rd.IsDBNull(0) ? "(未分类)" : rd.GetString(0), rd.GetInt32(1)));
         }
         int total = (int)Scalar(conn, "SELECT COUNT(*) FROM equipment");
-        int inSvc = (int)Scalar(conn, "SELECT COUNT(*) FROM equipment WHERE status IN ('在役','运行','正常','服役') OR status IS NULL");
+        // 种子 status 词表: 在用/待报废/租赁/报废/退租(见原 EquipmentStatus 枚举 InUse+实际库)。
+        // 在役 = 在用 + 租赁(排除 待报废/报废/退租); NULL 按默认在用计。
+        int inSvc = (int)Scalar(conn, "SELECT COUNT(*) FROM equipment WHERE status IN ('在用','租赁') OR status IS NULL");
         return new EquipmentRoster(total, byCat, inSvc);
     }
 
@@ -125,7 +127,8 @@ public static class GeoDataQueries
     public static EfficiencyForecast GetEfficiencyForecast(SqliteConnection conn)
     {
         double baseMonthly = ScalarDouble(conn, "SELECT COALESCE(AVG(output_m3),0)/10000.0 FROM capacity_monthly WHERE output_m3 > 0");
-        int active = (int)Scalar(conn, "SELECT COUNT(*) FROM equipment WHERE status IS NULL OR status IN ('在役','运行','正常','服役')");
+        // 在役 = 在用 + 租赁(种子词表 在用/待报废/租赁/报废/退租); NULL 按默认在用计。
+        int active = (int)Scalar(conn, "SELECT COUNT(*) FROM equipment WHERE status IS NULL OR status IN ('在用','租赁')");
         double av, rr;
         using (var cmd = conn.CreateCommand())
         {

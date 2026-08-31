@@ -15,6 +15,8 @@ public class GeoDataQueriesTests
         Assert.True(r.Total >= 5, $"设备总数 {r.Total}");
         Assert.NotEmpty(r.ByCategory);
         Assert.Equal(r.Total, Sum(r));               // 分类计数之和 = 总数
+        Assert.True(r.InService > 0 && r.InService <= r.Total, $"在役 {r.InService}");   // 回归:status 词表在用/租赁, 曾误用在役恒0
+        Assert.True(r.InService >= r.Total / 2, "在役应占多数(种子 在用477/518)");
     }
 
     private static int Sum(GeoDataQueries.EquipmentRoster r)
@@ -295,6 +297,7 @@ public class GeoDataQueriesTests
         Assert.True(f.BaselineMonthlyWanM3 > 0, "基线月产");
         Assert.InRange(f.AvgAvailabilityPct, 0, 100);
         Assert.True(f.ProjectedAnnualWanM3 > f.BaselineMonthlyWanM3, "投影年产 > 单台月产");
+        Assert.True(f.ActiveEquipment > 1, $"在役台数 {f.ActiveEquipment}(回归:曾恒0被兜底成1台)");   // 种子约485台
     }
 
     [Fact]
