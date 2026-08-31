@@ -481,3 +481,12 @@
 **确认原上下文菜单余项**：`转Select`(选择模式)= Kylin 空闲态默认即选择模式, ESC 取消当前工具等价, 不新增(冗余)。
 
 **六轴走查终结**：ribbon(两级两向)·修改命令·绘制命令·对象捕捉·命令注册表(引擎侧不可见→ribbon 为准)·面板/右键交互——**clear+忠实可见+可验证的功能集已穷尽**。余 91 死按钮 + 少量对话框/DB/内核项确系环境受阻(DM8/C++ 内核 mesh·点云·地质模型/TaskLib 排程/对话框基建/引擎命名图案库/Skia 实心填充), 或原算法不可见按忠实性不臆测——均已记录。
+
+## 二十、DXF 导入保真：补 Leader/MLine + 导出保真核对
+
+- [x] **DXF 补 Leader(引线)/MLine(多线)**(commit `69bf560`)：原导入器覆盖 17 类实体(Line/LwPolyline/Polyline2D·3D/XLine/Ray/Arc/Circle/Point/Ellipse/Spline/Text/MText/Solid/Face3D/Dimension/Hatch/Insert), Leader/MLine 落 default 丢弃。二者皆折线几何(标准可见)→ 托管读: Leader→顶点折线; MLine→中心线顶点折线(偏移线族需 MLineStyle, 记录)。显示缓冲(Emit→Seg)+ 可编辑实体(Finalize→Polyline)双通道 + CnTypeName 计数。+1 单测。现覆盖 **19 类**。
+- **导出保真核对**：`SceneExportService` 已按类型映射原生 DXF——LineEntity→Line·CircleEntity→Circle·ArcEntity→Arc(真圆弧起止角)·PointEntity→Point·TextEntity→Text·Polyline→LwPolyline·Rect/Polygon→闭合折线。**无导出保真缺口**(非压平为线段)。
+
+**记录·DXF 导入余项**：MultiLeader(多重引线, 嵌套 context/content 块 + landing, API 繁)、Wipeout(遮罩)、Tolerance(形位公差框)、Mesh(多边形网格, 走 3D 网格路径非 2D 线)、MLine 偏移线族。均较罕见或需深解析, 记录待需时补。
+
+**本会话累计 8 项功能(502→527 测试)**：块体模型组·运输指标报表·对象捕捉六模式·图案填充·平移命令·特性面板可编辑·右键选择集·DXF Leader/MLine。
