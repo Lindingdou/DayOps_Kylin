@@ -721,6 +721,9 @@ public partial class MainWindow : Window
             if (cmd == "钻孔管理" || cmd == "钻孔统计" || cmd == "钻孔信息") { BoreholeStatsCmd(); return; }
             if (cmd == "煤质统计" || cmd == "煤质数据管理" || cmd == "煤质分析" || cmd == "质量·配煤分析" || cmd == "配煤分析") { CoalQualityStatsCmd(); return; }
             if (cmd == "商品煤符合性" || cmd == "煤质达标" || cmd == "商品煤达标" || cmd.StartsWith("商品煤符合性 ") || cmd.StartsWith("煤质达标 ")) { CoalComplianceCmd(cmd); return; }
+            if (cmd == "品位储量曲线" || cmd == "品位-储量曲线" || cmd == "灰分储量曲线" || cmd.StartsWith("品位储量曲线 ")) { GradeTonnageCmd(cmd); return; }
+            if (cmd == "分标高煤质" || cmd == "标高煤质" || cmd.StartsWith("分标高煤质 ")) { CoalByElevationCmd(cmd); return; }
+            if (cmd == "煤质离群" || cmd == "离群质检" || cmd == "煤质异常" || cmd.StartsWith("煤质离群 ")) { CoalOutlierCmd(cmd); return; }
             if (cmd == "煤层管理" || cmd == "煤层定义" || cmd == "煤层列表") { CoalSeamsCmd(); return; }
             if (cmd == "见煤统计" || cmd == "煤层对比" || cmd == "见煤对比" || cmd == "钻孔见煤") { SeamIntersectionsCmd(); return; }
             if (cmd == "分煤层煤质" || cmd == "煤层煤质" || cmd == "分层煤质") { CoalQualityBySeamCmd(); return; }
@@ -5582,6 +5585,54 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"商品煤符合性（原煤 Ad≤{adMax:0.#}%·St≤{stMax:0.##}%·Qgr≥{qMin:0.#}MJ/kg）：达标 {r.Pass}/{r.Evaluated}（{r.PassPct:0.#}%）· 数据不足 {r.Insufficient} · 分煤层 " + string.Join(" ", seamParts);
     }
 
+    private static string CoalIndicator(string[] tk, int idx, string def)
+        => tk.Length > idx && (tk[idx] is "ad" or "std" or "vdaf" or "qgr" or "qnet") ? tk[idx] : def;
+
+    // 品位-储量曲线：厚度×密度加权, 灰/硫累计≤限值、热量累计≥限值
+    private void GradeTonnageCmd(string cmd)
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var s = Data.GeoDataQueries.GetCoalSamples(db.Connection);
+        if (s.Count == 0) { StatusMsg.Text = "品位储量曲线：无煤样"; return; }
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        string ind = CoalIndicator(tk, 1, "ad");
+        var r = Data.CoalAnalytics.GradeTonnage(s, ind, useClean: false);
+        if (r.Curve.Count == 0) { StatusMsg.Text = $"品位储量曲线({ind})：无有效样(缺厚度)"; return; }
+        var mid = r.Curve[r.Curve.Count / 2];
+        StatusMsg.Text = $"品位-储量曲线（{ind}·{(r.BelowCutoff ? "累计≤" : "累计≥")}·质量代理{(r.DensityUsed ? "厚×密度" : "厚度")}）：{r.N} 样·总质量 {r.TotalMass:0.#} · 中点限值 {mid.Cutoff:0.##}→累计 {mid.CumMassPct:0.#}%(均值 {mid.CumMeanGrade:0.##})";
+    }
+
+    // 分标高煤质：按标高带厚度加权均值
+    private void CoalByElevationCmd(string cmd)
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var s = Data.GeoDataQueries.GetCoalSamples(db.Connection);
+        if (s.Count == 0) { StatusMsg.Text = "分标高煤质：无煤样"; return; }
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        string ind = CoalIndicator(tk, 1, "ad");
+        double band = 20; if (tk.Length > 2) double.TryParse(tk[2], out band);
+        var bands = Data.CoalAnalytics.ByElevation(s, ind, useClean: false, band);
+        if (bands.Count == 0) { StatusMsg.Text = $"分标高煤质({ind})：无有效样(缺标高/厚度)"; return; }
+        var parts = new List<string>();
+        foreach (var b in bands) parts.Add($"[{b.ZLow:0}~{b.ZHigh:0}]{b.WeightedMean:0.##}({b.N})");
+        StatusMsg.Text = $"分标高煤质（{ind}·带高{band:0}m·厚度加权均值）：" + string.Join(" ", parts);
+    }
+
+    // 煤质离群 QC：Tukey IQR 1.5×IQR 栅栏
+    private void CoalOutlierCmd(string cmd)
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var s = Data.GeoDataQueries.GetCoalSamples(db.Connection);
+        if (s.Count == 0) { StatusMsg.Text = "煤质离群：无煤样"; return; }
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        string ind = CoalIndicator(tk, 1, "ad");
+        var r = Data.CoalAnalytics.DetectOutliers(s, ind, useClean: false);
+        if (r.N < 5) { StatusMsg.Text = $"煤质离群({ind})：样本不足(<5)"; return; }
+        var top = new List<string>();
+        foreach (var o in r.Outliers) { if (top.Count >= 5) break; top.Add($"{o.HoleId}/{o.SeamCode} {o.Value:0.##}({o.Kind}{o.Severity:0.#}IQR)"); }
+        StatusMsg.Text = $"煤质离群 QC（{ind}·Tukey 1.5×IQR）：{r.N}样 中位{r.Median:0.##} Q1{r.Q1:0.##}/Q3{r.Q3:0.##} 栅栏[{r.Lower:0.##},{r.Upper:0.##}] → 离群 {r.Outliers.Count} 段" + (top.Count > 0 ? "：" + string.Join(" · ", top) : "");
+    }
+
     private void ShiftOutputCmd()
     {
         var db = EnsureGeoDb(); if (db == null) return;
@@ -6054,7 +6105,7 @@ public partial class MainWindow : Window
         "设备台账","生产数据","产能分析","故障分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构",
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","数据看板","煤种分类",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
-        "产能分类对比","故障类型分布","分工序验收合格率","数据导出","达成度评价","产量预测","时序预测","编组优化","智能编组优化","商品煤符合性","煤质达标",
+        "产能分类对比","故障类型分布","分工序验收合格率","数据导出","达成度评价","产量预测","时序预测","编组优化","智能编组优化","商品煤符合性","煤质达标","品位储量曲线","分标高煤质","煤质离群",
         // TaskLib 自足计算
         "生产量核算","物料换算","采剥平衡","排土场按量推进","配煤核算","工序进度跟踪","编组产能","环节降效",
     };

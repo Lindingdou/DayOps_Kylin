@@ -75,4 +75,61 @@ public class CoalAnalyticsTests
         Assert.InRange(r.PassPct, 0, 100);
         Assert.Equal(r.Evaluated, r.Samples.Count(e => e.Evaluated));
     }
+
+    // 带厚度/密度的样本(GradeTonnage/ByElevation 用)
+    private static CoalSample ST(long id, string seam, double ad, double z, double th, double dens)
+        => new(id, "H" + id, seam, 0, 0, z, ad, null, null, null, null, null, null, null, th, dens);
+
+    [Fact]
+    public void GradeTonnage_cumulative_monotone_below_cutoff()
+    {
+        var rows = new List<CoalSample>
+        {
+            ST(1, "5", 10, 100, 2, 1.4), ST(2, "5", 20, 90, 2, 1.4), ST(3, "5", 30, 80, 2, 1.4), ST(4, "5", 40, 70, 2, 1.4),
+        };
+        var r = CoalAnalytics.GradeTonnage(rows, "ad", useClean: false, steps: 10);
+        Assert.True(r.BelowCutoff);                     // 灰分低者优 → 累计≤
+        Assert.Equal(4, r.N);
+        Assert.True(r.TotalMass > 0);
+        // 累计"≤限值"质量应随限值递增(单调不减)
+        for (int i = 1; i < r.Curve.Count; i++) Assert.True(r.Curve[i].CumMass >= r.Curve[i - 1].CumMass - 1e-9);
+        Assert.Equal(100.0, r.Curve[^1].CumMassPct, 1);  // 最高限值含全部质量
+    }
+
+    [Fact]
+    public void ByElevation_thickness_weighted_bands()
+    {
+        var rows = new List<CoalSample>
+        {
+            ST(1, "5", 10, 100, 3, 1.4), ST(2, "5", 20, 105, 1, 1.4),   // 带[100~120]: 加权=(10×3+20×1)/(3+1)... 但密度同→(10×3+20×1)/4=12.5
+            ST(3, "5", 30, 130, 2, 1.4),                                 // 带[120~140]
+        };
+        var bands = CoalAnalytics.ByElevation(rows, "ad", useClean: false, band: 20);
+        Assert.NotEmpty(bands);
+        var b0 = bands[0];
+        Assert.Equal(2, b0.N);
+        Assert.Equal(12.5, b0.WeightedMean, 3);          // 厚度加权 (10×3+20×1)/4
+        Assert.True(b0.Min <= b0.WeightedMean && b0.WeightedMean <= b0.Max);
+    }
+
+    [Fact]
+    public void DetectOutliers_iqr_flags_extreme()
+    {
+        var rows = new List<CoalSample>();
+        for (int i = 0; i < 10; i++) rows.Add(ST(i + 1, "5", 20 + i * 0.5, 0, 1, 1)); // 20~24.5 紧凑
+        rows.Add(ST(100, "5", 90, 0, 1, 1));   // 明显偏高离群
+        var r = CoalAnalytics.DetectOutliers(rows, "ad", useClean: false);
+        Assert.True(r.N >= 11);
+        Assert.Contains(r.Outliers, o => o.Id == 100 && o.Kind == "偏高");
+        Assert.True(r.Upper > r.Q3);           // 上栅栏 > Q3
+        Assert.True(r.Outliers[0].Severity > 0);
+    }
+
+    [Fact]
+    public void DetectOutliers_small_sample_no_result()
+    {
+        var rows = new List<CoalSample> { ST(1, "5", 20, 0, 1, 1), ST(2, "5", 21, 0, 1, 1) };  // <5
+        var r = CoalAnalytics.DetectOutliers(rows, "ad", useClean: false);
+        Assert.Empty(r.Outliers);
+    }
 }
