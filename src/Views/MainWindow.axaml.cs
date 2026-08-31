@@ -901,6 +901,7 @@ public partial class MainWindow : Window
             if (cmd == "LAS强度色" || cmd == "点云强度着色" || cmd == "强度着色导入LAS" || cmd == "LAS强度着色") { await LoadLasAsync("LAS强度色"); return; }
             if (cmd == "LAS分类着色" || cmd == "点云分类着色" || cmd == "按分类着色") { await LoadLasAsync("LAS分类着色"); return; }
             if (cmd == "LAS剔除植被建筑" || cmd == "点云剔除非地面" || cmd == "剔除植被建筑" || cmd == "LAS保留地面") { await LoadLasAsync("LAS剔除植被"); return; }
+            if (cmd == "LAS分类统计" || cmd == "点云分类统计" || cmd == "LAS质量报告" || cmd == "LAS强度分类") { await LasQualityAsync(); return; }
             if (cmd == "正射着色" || cmd == "真实色" || cmd == "影像着色" || cmd == "正射影像着色") { await OrthoColorAsync(); return; }
             if (cmd == "逐点坡度/坡向" || cmd == "逐点坡度坡向" || cmd == "法向估计" || cmd == "点云法向") { await PointNormalsAsync(); return; }
             if (cmd == "高程截断" || cmd == "高程裁剪" || cmd == "Z截断") { await ElevationClipAsync(); return; }
@@ -3097,6 +3098,27 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"导入 LAS(v{r.VersionMajor}.{r.VersionMinor})：{r.PointCount} 点"
             + (r.Points.Count < r.PointCount ? $"(抽稀显示 {r.Points.Count})" : "")
             + $" · {colorNote} · 范围 X[{r.MinX.ToString("0.#", inv)}~{r.MaxX.ToString("0.#", inv)}] Z[{r.MinZ.ToString("0.#", inv)}~{r.MaxZ.ToString("0.#", inv)}]";
+    }
+
+    // LAS 分类统计(原 pc_quality「强度分类」)：选 LAS → 逐分类码点数 + 强度分布 → 上屏 + 导出 CSV
+    private async Task LasQualityAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "LAS 分类统计：选 LAS", AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("LAS 点云") { Patterns = new[] { "*.las" } } }
+        });
+        if (files.Count == 0) return;
+        var r = LasImportService.Load(files[0].Path.LocalPath, 2000000);
+        if (!r.Success) { StatusMsg.Text = $"LAS 分类统计：{r.Error}"; return; }
+        if (r.Points.Count == 0) { StatusMsg.Text = "LAS 分类统计：无点"; return; }
+        var breakdown = LasQualityReport.ClassBreakdown(r.Classification);
+        var iSummary = Statistics.Describe(r.Intensity.Select(x => (double)x).ToList());
+        string top = breakdown.Count > 0 ? string.Join(" · ", breakdown.Take(4).Select(b => $"{b.Name} {b.Count}")) : "无分类";
+        string csv = "# 分类统计\n" + LasQualityReport.ClassBreakdownCsv(breakdown) + "\n# 强度直方图\n" + Statistics.HistogramCsv(iSummary);
+        var name = await SaveCsvAsync("导出 LAS 质量报告", "las_quality.csv", csv);
+        StatusMsg.Text = $"LAS 分类统计：{r.PointCount} 点 · {breakdown.Count} 类[{top}] · 强度 {Statistics.SummaryLine(iSummary)}"
+            + (name != null ? $" → {name}" : "");
     }
 
     // 正射着色(真实色)：选点 CSV + GeoTIFF 正射影像 → 逐点采像素色 → 真实色点云入场景
