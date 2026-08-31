@@ -329,6 +329,52 @@ public static class CoalAnalytics
         return sb.ToString();
     }
 
+    private static readonly System.Globalization.CultureInfo Inv = System.Globalization.CultureInfo.InvariantCulture;
+    private static string Csv(string s) => "\"" + (s ?? "").Replace("\"", "\"\"") + "\"";
+
+    /// <summary>品位-储量曲线 → CSV（限值/累计质量/累计占比%/累计均值）。</summary>
+    public static string GradeTonnageToCsv(GradeTonnageResult r)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"# indicator={r.Indicator} below_cutoff={r.BelowCutoff} density_used={r.DensityUsed} total_mass={r.TotalMass.ToString("0.###", Inv)} n={r.N}\n");
+        sb.Append("cutoff,cum_mass,cum_mass_pct,cum_mean_grade\n");
+        foreach (var p in r.Curve)
+            sb.Append($"{p.Cutoff.ToString("0.####", Inv)},{p.CumMass.ToString("0.###", Inv)},{p.CumMassPct.ToString("0.##", Inv)},{p.CumMeanGrade.ToString("0.####", Inv)}\n");
+        return sb.ToString();
+    }
+
+    /// <summary>分标高煤质 → CSV（标高带/段数/加权均值/极值/质量权）。</summary>
+    public static string ElevationToCsv(IReadOnlyList<ElevationBand> bands)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("z_low,z_high,n,weighted_mean,min,max,mass_weight\n");
+        foreach (var b in bands)
+            sb.Append($"{b.ZLow.ToString("0.##", Inv)},{b.ZHigh.ToString("0.##", Inv)},{b.N},{b.WeightedMean.ToString("0.####", Inv)},{b.Min.ToString("0.####", Inv)},{b.Max.ToString("0.####", Inv)},{b.MassWeight.ToString("0.###", Inv)}\n");
+        return sb.ToString();
+    }
+
+    /// <summary>洗选提质 → CSV（煤层/成对数/原煤·浮煤/降灰率·脱硫率·挥发变化/回收率）。</summary>
+    public static string WashingToCsv(IReadOnlyList<WashingRow> rows)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("seam,paired_ash,ad_raw,ad_clean,deash_pct,paired_sulfur,st_raw,st_clean,desulfur_pct,paired_vdaf,vdaf_raw,vdaf_clean,vdaf_shift,yield_n,yield_mean\n");
+        static string F(double? v) => v.HasValue ? v.Value.ToString("0.###", Inv) : "";
+        foreach (var w in rows)
+            sb.Append($"{Csv(w.SeamCode)},{w.PairedAsh},{F(w.AdRaw)},{F(w.AdClean)},{F(w.DeAshPct)},{w.PairedSulfur},{F(w.StRaw)},{F(w.StClean)},{F(w.DeSulfurPct)},{w.PairedVdaf},{F(w.VdafRaw)},{F(w.VdafClean)},{F(w.VdafShift)},{w.YieldN},{F(w.YieldMean)}\n");
+        return sb.ToString();
+    }
+
+    /// <summary>用途适宜性 → CSV（煤层/段数/各指标均值/动力煤评级·说明/炼焦煤类·说明）。</summary>
+    public static string UtilizationToCsv(IReadOnlyList<UtilizationRow> rows)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("seam,n,ad,st,cal,vdaf,g,plastic_y,steam_grade,steam_note,coking_type,coking_note\n");
+        static string F(double? v) => v.HasValue ? v.Value.ToString("0.###", Inv) : "";
+        foreach (var u in rows)
+            sb.Append($"{Csv(u.SeamCode)},{u.N},{F(u.Ad)},{F(u.St)},{F(u.Cal)},{F(u.Vdaf)},{F(u.G)},{F(u.PlasticY)},{Csv(u.SteamGrade)},{Csv(u.SteamNote)},{Csv(u.CokingType)},{Csv(u.CokingNote)}\n");
+        return sb.ToString();
+    }
+
     /// <summary>线性插值分位数（p∈[0,100]）；vals 须已升序。</summary>
     private static double Percentile(IReadOnlyList<double> sorted, double p)
     {

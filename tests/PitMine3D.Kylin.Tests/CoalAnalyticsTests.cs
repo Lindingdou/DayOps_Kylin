@@ -204,6 +204,30 @@ public class CoalAnalyticsTests
     }
 
     [Fact]
+    public void Analytics_to_csv_serializers()
+    {
+        var samples = new List<CoalSample>
+        {
+            ST(1, "5", 20, 100, 2, 1.4), ST(2, "5", 30, 90, 2, 1.4), ST(3, "9", 15, 80, 2, 1.4),
+        };
+        // 品位-储量
+        var gt = CoalAnalytics.GradeTonnageToCsv(CoalAnalytics.GradeTonnage(samples, "ad", false, 5));
+        Assert.Contains("cutoff,cum_mass,cum_mass_pct,cum_mean_grade", gt);
+        Assert.Contains("indicator=ad", gt);
+        // 分标高
+        var el = CoalAnalytics.ElevationToCsv(CoalAnalytics.ByElevation(samples, "ad", false, 20));
+        Assert.Contains("z_low,z_high,n,weighted_mean", el);
+        // 洗选
+        var wash = new List<CoalSample> { W(1, "5", 30, 12, 1.5, 0.9, 75) };
+        var wc = CoalAnalytics.WashingToCsv(CoalAnalytics.WashingBySeam(wash, false));
+        Assert.Contains("seam,paired_ash,ad_raw,ad_clean,deash_pct", wc);
+        // 用途
+        var uc = CoalAnalytics.UtilizationToCsv(CoalAnalytics.UtilizationBySeam(samples));
+        Assert.Contains("seam,n,ad,st,cal,vdaf,g,plastic_y,steam_grade", uc);
+        Assert.Contains("\"5\"", uc);   // 煤层名带引号
+    }
+
+    [Fact]
     public void Utilization_from_seed_runs()
     {
         using var db = GeoDatabase.OpenSeeded();

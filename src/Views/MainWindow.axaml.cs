@@ -726,6 +726,10 @@ public partial class MainWindow : Window
             if (cmd == "分标高煤质" || cmd == "标高煤质" || cmd.StartsWith("分标高煤质 ")) { CoalByElevationCmd(cmd); return; }
             if (cmd == "煤质离群" || cmd == "离群质检" || cmd == "煤质异常" || cmd.StartsWith("煤质离群 ")) { CoalOutlierCmd(cmd); return; }
             if (cmd == "导出离群" || cmd == "离群导出" || cmd.StartsWith("导出离群 ")) { await ExportOutliersAsync(cmd); return; }
+            if (cmd == "导出品位储量" || cmd == "品位储量导出" || cmd.StartsWith("导出品位储量 ")) { await ExportGradeTonnageAsync(cmd); return; }
+            if (cmd == "导出分标高" || cmd == "分标高导出" || cmd.StartsWith("导出分标高 ")) { await ExportElevationAsync(cmd); return; }
+            if (cmd == "导出洗选" || cmd == "洗选导出") { await ExportWashingAsync(); return; }
+            if (cmd == "导出用途" || cmd == "用途导出") { await ExportUtilizationAsync(); return; }
             if (cmd == "洗选提质" || cmd == "洗选分析" || cmd == "降灰脱硫") { CoalWashingCmd(); return; }
             if (cmd == "用途适宜性" || cmd == "煤炭用途" || cmd == "动力炼焦评价") { CoalUtilizationCmd(); return; }
             if (cmd == "煤层管理" || cmd == "煤层定义" || cmd == "煤层列表") { CoalSeamsCmd(); return; }
@@ -5593,6 +5597,70 @@ public partial class MainWindow : Window
     private static string CoalIndicator(string[] tk, int idx, string def)
         => tk.Length > idx && (tk[idx] is "ad" or "std" or "vdaf" or "qgr" or "qnet") ? tk[idx] : def;
 
+    // 通用 CSV 保存：SaveFilePicker → WriteAllText；成功返回文件名，取消/失败返回 null(状态自报)。
+    private async Task<string?> SaveCsvAsync(string title, string suggestedName, string content)
+    {
+        var file = await StorageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
+        {
+            Title = title, DefaultExtension = "csv", SuggestedFileName = suggestedName,
+            FileTypeChoices = new[] { new Avalonia.Platform.Storage.FilePickerFileType("CSV") { Patterns = new[] { "*.csv" } } }
+        });
+        if (file == null) return null;
+        try { System.IO.File.WriteAllText(file.Path.LocalPath, content); return System.IO.Path.GetFileName(file.Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"{title}：写出失败 {ex.Message}"; return null; }
+    }
+
+    // 导出品位-储量曲线
+    private async Task ExportGradeTonnageAsync(string cmd)
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var s = Data.GeoDataQueries.GetCoalSamples(db.Connection);
+        if (s.Count == 0) { StatusMsg.Text = "导出品位储量：无煤样"; return; }
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        string ind = CoalIndicator(tk, 1, "ad");
+        var r = Data.CoalAnalytics.GradeTonnage(s, ind, useClean: false);
+        if (r.Curve.Count == 0) { StatusMsg.Text = $"导出品位储量({ind})：无有效样(缺厚度)"; return; }
+        var name = await SaveCsvAsync("导出品位-储量曲线", $"grade_tonnage_{ind}.csv", Data.CoalAnalytics.GradeTonnageToCsv(r));
+        if (name != null) StatusMsg.Text = $"导出品位储量({ind})：{r.Curve.Count} 点曲线 → {name}";
+    }
+
+    // 导出分标高煤质
+    private async Task ExportElevationAsync(string cmd)
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var s = Data.GeoDataQueries.GetCoalSamples(db.Connection);
+        if (s.Count == 0) { StatusMsg.Text = "导出分标高：无煤样"; return; }
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        string ind = CoalIndicator(tk, 1, "ad");
+        double band = 20; if (tk.Length > 2) double.TryParse(tk[2], out band);
+        var bands = Data.CoalAnalytics.ByElevation(s, ind, useClean: false, band);
+        if (bands.Count == 0) { StatusMsg.Text = $"导出分标高({ind})：无有效样"; return; }
+        var name = await SaveCsvAsync("导出分标高煤质", $"coal_by_elevation_{ind}.csv", Data.CoalAnalytics.ElevationToCsv(bands));
+        if (name != null) StatusMsg.Text = $"导出分标高({ind})：{bands.Count} 标高带 → {name}";
+    }
+
+    // 导出洗选提质
+    private async Task ExportWashingAsync()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var s = Data.GeoDataQueries.GetCoalSamples(db.Connection);
+        if (s.Count == 0) { StatusMsg.Text = "导出洗选：无煤样"; return; }
+        var rows = Data.CoalAnalytics.WashingBySeam(s);
+        var name = await SaveCsvAsync("导出洗选提质", "coal_washing.csv", Data.CoalAnalytics.WashingToCsv(rows));
+        if (name != null) StatusMsg.Text = $"导出洗选：{rows.Count} 行 → {name}";
+    }
+
+    // 导出用途适宜性
+    private async Task ExportUtilizationAsync()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var s = Data.GeoDataQueries.GetCoalSamples(db.Connection);
+        if (s.Count == 0) { StatusMsg.Text = "导出用途：无煤样"; return; }
+        var rows = Data.CoalAnalytics.UtilizationBySeam(s);
+        var name = await SaveCsvAsync("导出用途适宜性", "coal_utilization.csv", Data.CoalAnalytics.UtilizationToCsv(rows));
+        if (name != null) StatusMsg.Text = $"导出用途：{rows.Count} 煤层 → {name}";
+    }
+
     // 导出商品煤符合性：逐化验段(含超标段坐标/原因)→ CSV，供定位处置
     private async Task ExportComplianceAsync(string cmd)
     {
@@ -6206,7 +6274,8 @@ public partial class MainWindow : Window
         "设备台账","生产数据","产能分析","故障分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据",
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","数据看板","煤种分类",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
-        "产能分类对比","故障类型分布","分工序验收合格率","数据导出","达成度评价","产量预测","时序预测","编组优化","智能编组优化","商品煤符合性","煤质达标","导出符合性","品位储量曲线","分标高煤质","煤质离群","导出离群","洗选提质","用途适宜性",
+        "产能分类对比","故障类型分布","分工序验收合格率","数据导出","达成度评价","产量预测","时序预测","编组优化","智能编组优化",
+        "商品煤符合性","煤质达标","导出符合性","品位储量曲线","导出品位储量","分标高煤质","导出分标高","煤质离群","导出离群","洗选提质","导出洗选","用途适宜性","导出用途",
         // TaskLib 自足计算
         "生产量核算","物料换算","采剥平衡","排土场按量推进","配煤核算","工序进度跟踪","编组产能","环节降效",
     };
