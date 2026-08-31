@@ -103,6 +103,21 @@ public class EntityPropertyEditTests
     }
 
     [Fact]
+    public void Edit_transparency_via_panel()
+    {
+        var l = new LineEntity { X0 = 0, Y0 = 0, X1 = 1, Y1 = 0 };   // 默认 -1=随层
+        var rows = EntityProperties.Describe(l);
+        Assert.Contains(rows, r => r.label == "透明度" && r.value == "随层");
+        var e = EntityProperties.WithEdited(l, "透明度", "50%") as LineEntity;
+        Assert.NotNull(e);
+        Assert.Equal(50, e!.Transparency);
+        var op = EntityProperties.WithEdited(l, "透明度", "不透明") as LineEntity;
+        Assert.Equal(0, op!.Transparency);
+        Assert.Null(EntityProperties.WithEdited(l, "透明度", "150"));   // 越界(>90)拒绝
+        Assert.Contains(EntityProperties.Describe(e), r => r.label == "透明度" && r.value == "50%");
+    }
+
+    [Fact]
     public void Edit_visibility_via_panel()
     {
         var l = new LineEntity { X0 = 0, Y0 = 0, X1 = 1, Y1 = 0, Visible = true };

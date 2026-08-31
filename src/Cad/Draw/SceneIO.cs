@@ -28,6 +28,7 @@ public static class SceneIO
         // ── 属性保真(缺省省略 → 旧 .pmx 兼容; 缺字段回退默认) ──
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public double[]? D { get; set; }   // 线型虚线样式(null=实线)
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public short? W { get; set; }       // 线宽(null=ByLayer -1)
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public short? Tr { get; set; }      // 透明度(null=随层 -1)
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool H { get; set; }         // 隐藏(false=可见)
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public double? Wf { get; set; }     // 文字字宽比(null=1)
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public double Ob { get; set; }      // 文字倾斜角(0)
@@ -87,6 +88,7 @@ public static class SceneIO
             d.L = e.LayerName;
             d.D = e.Dash;                                              // 线型
             d.W = e.LineWeight == -1 ? (short?)null : e.LineWeight;    // 线宽(ByLayer 省略)
+            d.Tr = e.Transparency == -1 ? (short?)null : e.Transparency;   // 透明度(随层省略)
             d.H = !e.Visible;                                          // 隐藏
             if (e is TextEntity txe)                                   // 文字格式
             {
@@ -120,6 +122,7 @@ public static class SceneIO
             e.LayerName = string.IsNullOrEmpty(d.L) ? "0" : d.L;
             e.Dash = d.D;                              // 线型
             e.LineWeight = d.W ?? -1;                  // 线宽(缺=ByLayer)
+            e.Transparency = d.Tr ?? -1;              // 透明度(缺=随层)
             e.Visible = !d.H;                          // 隐藏
             if (e is TextEntity txe)                   // 文字格式
             {

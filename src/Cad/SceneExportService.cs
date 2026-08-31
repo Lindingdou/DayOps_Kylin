@@ -86,6 +86,7 @@ public static class SceneExportService
                     (byte)Math.Clamp(e.Cb * 255f, 0, 255));
                 if (lt != null) ent.LineType = lt;            // 线型导出保真
                 ent.LineWeight = (ACadSharp.LineWeightType)e.LineWeight;   // 线宽 round-trip 保值(不渲染变宽, 但存回 DXF)
+                ent.Transparency = e.Transparency < 0 ? ACadSharp.Transparency.ByLayer : new ACadSharp.Transparency(e.Transparency);   // 透明度 round-trip(不渲染 alpha, 但存回 DXF)
                 ent.IsInvisible = !e.Visible;                             // 逐实体隐藏状态 round-trip(隐藏对象→存盘→重开仍隐)
                 doc.Entities.Add(ent);
             }

@@ -14,6 +14,7 @@ public abstract class SceneEntity
     public bool Visible = true;                        // 逐实体隐藏(隐藏对象/结束隐藏)；false=不上屏且不可拾取
     public double[]? Dash;                             // 线型虚线样式(画/空,世界单位); null=实线
     public short LineWeight = -1;                      // 线宽(DXF LineWeightType 值: -1=ByLayer, -3=Default, 0..211=0.01mm); 当前不渲染变宽线, 但 round-trip 保值供下游绘图
+    public short Transparency = -1;                    // 透明度(-1=随层 ByLayer, 0..90=百分比); 当前渲染不透明(P3_C3 无 alpha), 但 round-trip 保值供下游/重导出
 
     /// <summary>把自身镶嵌为线段（交错 P3_C3）追加到 o。</summary>
     public abstract void Tessellate(List<float> o);
@@ -79,7 +80,7 @@ public abstract class SceneEntity
     /// 单一枢纽: 变换深拷(Colored)与各处手工构造新实体(简化/平滑/裁剪)都经此, 加样式字段只改这一处。</summary>
     public void CopyStyleFrom(SceneEntity s)
     {
-        Cr = s.Cr; Cg = s.Cg; Cb = s.Cb; Dash = s.Dash; LineWeight = s.LineWeight; Visible = s.Visible; LayerName = s.LayerName;
+        Cr = s.Cr; Cg = s.Cg; Cb = s.Cb; Dash = s.Dash; LineWeight = s.LineWeight; Transparency = s.Transparency; Visible = s.Visible; LayerName = s.LayerName;
     }
 
     // 变换/克隆深拷: 保留全部非几何属性。图层保留使 移动/复制/镜像/剪贴板 不改层;

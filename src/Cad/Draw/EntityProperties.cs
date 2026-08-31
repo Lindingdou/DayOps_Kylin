@@ -23,6 +23,7 @@ public static class EntityProperties
             ("常规", "颜色", $"#{(int)Math.Round(e.Cr * 255):X2}{(int)Math.Round(e.Cg * 255):X2}{(int)Math.Round(e.Cb * 255):X2}"),
             ("常规", "线型", DashPattern.DisplayName(e.Dash)),
             ("常规", "线宽", LineWeightUtil.Display(e.LineWeight)),
+            ("常规", "透明度", TranspDisplay(e.Transparency)),
             ("常规", "可见", e.Visible ? "是" : "否"),
         };
         switch (e)
@@ -73,7 +74,7 @@ public static class EntityProperties
     /// <summary>该实体在特性面板中可编辑的行标签集合(其余只读, 如长度/宽/高等派生量)。</summary>
     public static HashSet<string> EditableLabels(SceneEntity e)
     {
-        var s = new HashSet<string> { "图层", "颜色", "线型", "线宽", "可见" };   // 常规: 图层/颜色/线型/线宽/可见 恒可编辑
+        var s = new HashSet<string> { "图层", "颜色", "线型", "线宽", "透明度", "可见" };   // 常规恒可编辑
         switch (e)
         {
             case LineEntity: s.Add("起点"); s.Add("终点"); break;
@@ -109,6 +110,11 @@ public static class EntityProperties
             if (!LineWeightUtil.TryParse(text, out short lw)) return null;
             var c = CloneShallow(e); if (c == null) return null; c.LineWeight = lw; return c;
         }
+        if (label == "透明度")
+        {
+            if (!TryTransp(text, out short tr)) return null;
+            var c = CloneShallow(e); if (c == null) return null; c.Transparency = tr; return c;
+        }
         if (label == "可见")
         {
             string t = text.Trim();
@@ -139,7 +145,19 @@ public static class EntityProperties
         return null;
     }
 
-    // 复制全样式(色/线型/线宽/可见/层 + 文字专属格式)到新实体 —— 属性编辑不丢样式。
+    // 透明度显示/解析(-1=随层, 0=不透明, 1..90=百分比)。对应原版特性面板"透明度"(int)。
+    private static string TranspDisplay(short t) => t < 0 ? "随层" : t == 0 ? "不透明" : t + "%";
+    private static bool TryTransp(string text, out short t)
+    {
+        t = -1; string s = text.Trim();
+        if (s is "随层" or "ByLayer" or "bylayer" or "BYLAYER") { t = -1; return true; }
+        if (s is "不透明" or "opaque" or "Opaque" or "OPAQUE") { t = 0; return true; }
+        s = s.Replace("%", "").Trim();
+        if (!int.TryParse(s, out int v) || v < 0 || v > 90) return false;
+        t = (short)v; return true;
+    }
+
+    // 复制全样式(色/线型/线宽/透明度/可见/层 + 文字专属格式)到新实体 —— 属性编辑不丢样式。
     private static SceneEntity Style(SceneEntity src, SceneEntity dst)
     {
         dst.CopyStyleFrom(src);

@@ -1494,3 +1494,16 @@ CopyStyleFrom 审计续查 `.LayerName = 源.LayerName` 模式, 又揪 3 处纯�
 原版 `TdmProjectImportService` 导 .3dp = Microsoft Cabinet(MSCF)归档, 内含若干 .3dm/.3ds/config, 用 Windows `expand.exe` 解包再逐成员分派。**成员格式 Kylin 现已全支持**(二进制/Solid/String), 缺的仅 CAB 容器解包:
 - `expand.exe` 是 Windows 专有, 不可移植到麒麟/Linux; 跨平台需 `cabextract`(运行时依赖不保证)或托管 CAB 解压器(MSZIP=deflate 可做, LZX 复杂)。
 - 无 .3dp 样本, 且验证需配套 CAB 写入器 → **记录为容器解包受阻**(成员分派逻辑已具备, 补 CAB 解压即可接通)。
+
+## 一一八、透明度 数据层 —— 特性面板与原版 bag 完全对齐
+
+§一一四 记录透明度为渲染受阻。按规程"能补的功能补, 无法验的记录": 透明度**数据层**可做且可验(往返测), 与线宽数据层一致; 仅**视觉渲染(alpha 混合)**不可验(像素级无法自动验)记录。补:
+- [x] **`SceneEntity.Transparency`**(short, -1=随层, 0..90=百分比; CopyStyleFrom 拷)。
+- [x] **DXF 往返**: 导出 `ent.Transparency = -1?ByLayer:new Transparency(v)`; 导入 `IsByLayer?-1:Value`(emitTransp)。
+- [x] **.pmx 往返**(SceneIO Dto.Tr, 缺省省略, 旧档回退 -1)。
+- [x] **特性面板 显示+编辑**(透明度: 随层/不透明/N%; 解析 0..90 越界拒绝)。
+- [x] 4 测: DXF 往返(40%) + 面板编辑(50%/不透明/越界拒绝) + .pmx 往返 + 旧档默认。972 测。
+- **特性面板 vs 原版 `EntityPropertyBag` 完全对齐**: 常规 = 图层/颜色/线型/线宽/**透明度**/可见 全齐(线型为 Kylin 额外 surfacing)。
+- **视觉渲染记录**: 透明度 alpha + 线宽变宽线 —— 两者均需改核心渲染管线(P3_C3→P3_C4+GL 混合 / 变宽线四边形化), 横跨所有 Tessellate, 像素不可自动验; 数据层已全保真不丢, 渲染待管线投入。
+
+**本会话累计补 61 真功能 + 1 并发修复 + 4 潜伏 bug 修 + 9 样式保真点统一 + 1 latent 攻克, 972 测。**

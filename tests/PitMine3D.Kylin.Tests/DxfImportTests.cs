@@ -617,6 +617,18 @@ public class DxfImportTests
     }
 
     [Fact]
+    public void Transparency_survives_export_import_roundtrip()
+    {
+        var scene = new Scene();
+        scene.Add(new LineEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 0, Transparency = 40 });   // 40% 透明
+        var doc = SceneExportService.BuildDocument(scene);
+        var res = DxfImportService.MapDocument(doc);
+        var line = System.Linq.Enumerable.FirstOrDefault(System.Linq.Enumerable.OfType<LineEntity>(res.Entities));
+        Assert.NotNull(line);
+        Assert.Equal(40, line!.Transparency);             // 透明度值往返(DXF Transparency)
+    }
+
+    [Fact]
     public void Layer_state_survives_export_import_roundtrip()
     {
         var layers = new LayerTable();
