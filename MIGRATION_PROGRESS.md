@@ -662,3 +662,18 @@
 **★TaskLib 自足计算/公式提取完成——8 个功能**(生产量核算/物料换算/采剥平衡/排土场按量推进/配煤核算[+达标]/工序进度跟踪/车铲循环产能/按环节降效)，全在 `src/Cad/Tasks/`，忠实逐字/公式移植 + 全单测(~45 测) + 复用已移基元(HaulMetrics/FleetMatch)，均安全不 destabilize。607 测试, 死按钮 60。
 
 **TaskLib 余下 = 引擎管线(无自足切片)**：数据结构(ViolationCodes/PlanViolation/Dispatch/TaskInstance/full ProductionTask 474/ExploderConfig 561, 纯基础) + 引擎(TaskExploder 971/HaulDumpDeriver 448/FlowAssigner 1032/DispatchEngine 987/MonthlyShiftDecomposer 658)。引擎类死按钮(生产任务编制/派工/派车/台账/动态模拟 ~20)需先移 ~1000 行共享基础(feature-less, 且 refactor 已工作代码有风险) + 复杂引擎(971 行管线本机无法比对原输出→保真难验)。→ 触"不满足验证条件先跳过、无法验证先记录"：**引擎管线记录为大工程边界, 自足计算已尽**。
+
+## 三十六、§四/§八 分析视图续补 + ★核对种子揭 2 真实 bug（85 功能, 616 测试）
+
+沿 SQLite 基座续补**互异**管理分析视图，并以"核对种子实际值"纪律做一次 latent-bug 审计：
+
+- [x] **班次产量对比**(commit `0e77b44`)：production_record 按班次 产量/工时/作业率降序（找高效班次）。命令 班次产量对比/班产对比。
+- [x] **设备KPI趋势**(commit `c53dd7f`)：equipment_kpi_monthly 按年 平均可用率/利用率时序。比率自适应 0..1/0..100。命令 KPI趋势。
+- [x] **产能分类对比**(commit `3178c07`)：capacity_monthly join equipment.category 按类型(铲/车/钻) 累计产量+台数+占比降序（产能主力，区别于个体机排名）。命令 产能分类对比。
+- [x] **故障类型分布**(commit `29ef2a8`)：fault_event 按 fault_type 事件数/停机时/占比降序（故障构成）。命令 故障类型分布/故障构成。
+- [x] **分工序验收合格率**(commit `29ef2a8`)：parameter_acceptance join process_phase 按工序合格率升序（薄弱环节在前）。命令 分工序验收/工序验收。
+- [x] **★fix 验收合格率恒0**(commit `29ef2a8`)：种子 parameter_acceptance.status 实为英文枚举 `pass/warning/fail/pending`(V011 CHECK)，原用中文 `'合格'/'通过'` 匹配恒 0。改 `status='pass'`(种子约66%)。
+- [x] **★fix 设备在役计数恒0**(commit `fd7bada`)：诊断种子 equipment.status 分布 = **在用477/待报废26/租赁8/报废6/退租1(无NULL)**，原用 `IN('在役','运行','正常','服役') OR IS NULL` 无一匹配 → GetEquipmentRoster.InService 恒 0(未测未暴露) + GetEfficiencyForecast.ActiveEquipment 恒 0 被 `(active>0?active:1)` 兜底成 1 台(投影年产严重低估但假绿)。依原 EquipmentStatus 枚举改 在役=在用+租赁。回归断言锁定。
+- 审计另核对 `borehole_seam_result.status LIKE '%尖灭%'`：种子确含 尖灭=2(分布 正常650/未达30/不取芯23/…)，**正确无 bug**。
+
+**教训**：凡 WHERE/CASE 里假设的字面量(status/type/枚举/中英文)必须先诊断种子实际值再定；测试若只验 InRange/>0 可能放过"恒 0/恒兜底"的 latent bug —— 关键计数应断言其**语义量级**(占多数/>1)。见 memory [[verify-seed-enum-values-before-filter]]。
