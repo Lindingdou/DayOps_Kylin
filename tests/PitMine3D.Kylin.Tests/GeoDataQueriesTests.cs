@@ -9,6 +9,29 @@ namespace PitMine3D.Kylin.Tests;
 public class GeoDataQueriesTests
 {
     [Fact]
+    public void Data_dictionary_lists_tables_and_columns()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var tables = GeoDataQueries.ListTables(db.Connection);
+        Assert.NotEmpty(tables);
+        Assert.Contains("borehole", tables);
+        Assert.Contains("coal_sample", tables);
+        Assert.Contains("equipment", tables);
+        Assert.DoesNotContain(tables, t => t.StartsWith("sqlite_"));   // 排除内部表
+
+        string csv = GeoDataQueries.DataDictionaryCsv(db.Connection);
+        Assert.StartsWith("table,column,type,notnull,pk", csv);        // 表头
+        // borehole 的关键列应在字典里
+        Assert.Contains("borehole,hole_id,", csv);
+        // 行数 ≈ 各表列数之和，远多于表数
+        var lines = csv.TrimEnd('\n').Split('\n');
+        int rows = lines.Length - 1;                                   // 减表头
+        Assert.True(rows > tables.Count, $"字典行(列数){rows} 应 > 表数 {tables.Count}");
+        // pk 是末列；至少一列是主键(末列=1)
+        Assert.Contains(lines.Skip(1), line => line.EndsWith(",1"));
+    }
+
+    [Fact]
     public void Equipment_roster_from_seed()
     {
         using var db = GeoDatabase.OpenSeeded();

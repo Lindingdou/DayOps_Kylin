@@ -438,6 +438,39 @@ public static class GeoDataQueries
         return "\"" + v.Replace("\"", "\"\"") + "\"";
     }
 
+    /// <summary>库内所有用户表名(排除 sqlite 内部表)，按名排序。忠实原 SqlLib「查看所有表结构」。</summary>
+    public static List<string> ListTables(SqliteConnection conn)
+    {
+        var tables = new List<string>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name";
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read()) tables.Add(rd.GetString(0));
+        return tables;
+    }
+
+    /// <summary>数据字典导出（原 SqlLib「导出数据字典」）：全部用户表 → 每列(表,列,类型,非空,主键) CSV。</summary>
+    public static string DataDictionaryCsv(SqliteConnection conn)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("table,column,type,notnull,pk\n");
+        foreach (var t in ListTables(conn))
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = $"PRAGMA table_info(\"{t.Replace("\"", "\"\"")}\")";   // 表名来自 sqlite_master(非用户输入)
+            using var rd = cmd.ExecuteReader();
+            while (rd.Read())
+            {
+                string col = rd.GetString(1);                              // name
+                string typ = rd.IsDBNull(2) ? "" : rd.GetString(2);        // type
+                long notnull = rd.GetInt64(3);                             // notnull
+                long pk = rd.GetInt64(5);                                  // pk
+                sb.Append($"{CsvCell(t)},{CsvCell(col)},{CsvCell(typ)},{notnull},{pk}\n");
+            }
+        }
+        return sb.ToString();
+    }
+
     public sealed record KpiTrendRow(int Year, double AvgAvailabilityPct, double AvgUtilizationPct);
 
     /// <summary>KPI 趋势：equipment_kpi_monthly 按年平均 可用率/利用率（比率自适应 0..1 或 0..100）。</summary>

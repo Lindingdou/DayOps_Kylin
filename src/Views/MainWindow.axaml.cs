@@ -785,6 +785,7 @@ public partial class MainWindow : Window
             if (cmd == "产量预测" || cmd == "产量趋势预测" || cmd == "时序预测") { OutputForecastCmd(false); return; }
             if (cmd == "Holt预测" || cmd == "产量预测Holt") { OutputForecastCmd(true); return; }
             if (cmd == "数据导入导出" || cmd == "数据导出" || cmd == "导出数据库" || cmd == "地质数据导出") { await ExportGeoDataAsync(); return; }
+            if (cmd == "数据字典" || cmd == "导出数据字典" || cmd == "表结构" || cmd == "库结构") { await ExportDataDictionaryAsync(); return; }
             if (cmd == "点云抽稀" || cmd == "抽稀" || cmd == "点云精简") { await ThinPointsAsync(); return; }
             if (cmd == "地面点滤波" || cmd == "地面滤波") { await GroundFilterAsync(); return; }
             if (cmd == "C2C" || cmd == "点云比对" || cmd == "位移监测 C2C" || cmd == "位移监测") { await CloudCompareAsync(); return; }
@@ -6487,6 +6488,17 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"数据导出：{ok}/{tables.Length} 张 §四 表 → {dir}（导入需模板对话框，受阻记录）";
     }
 
+    // 数据字典导出(原 SqlLib「导出数据字典」)：全部用户表结构(表,列,类型,非空,主键)→ CSV。
+    private async System.Threading.Tasks.Task ExportDataDictionaryAsync()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var tables = Data.GeoDataQueries.ListTables(db.Connection);
+        string csv = Data.GeoDataQueries.DataDictionaryCsv(db.Connection);
+        int cols = System.Math.Max(0, csv.Split('\n').Length - 2);   // 减表头 + 末空行
+        var name = await SaveCsvAsync("数据字典", "data_dictionary.csv", csv);
+        if (name != null) StatusMsg.Text = $"数据字典：{tables.Count} 表 · {cols} 列 → {name}（表名/列名/类型/非空/主键）";
+    }
+
     private void EfficiencyForecastCmd()
     {
         var db = EnsureGeoDb(); if (db == null) return;
@@ -6721,7 +6733,7 @@ public partial class MainWindow : Window
         "设备台账","生产数据","产能分析","故障分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","层位求交","导入生产记录","导入月度产能","导入故障记录","导入月度KPI","导入设备台账","导入煤质","导入观测点","导入月度计划","导入见煤成果","导入路况","导入边坡","导入模板","导出分析",
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","数据看板","煤种分类",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
-        "产能分类对比","故障类型分布","分工序验收合格率","数据导出","达成度评价","产量预测","时序预测","编组优化","智能编组优化","导出编组","导出预测",
+        "产能分类对比","故障类型分布","分工序验收合格率","数据导出","数据字典","达成度评价","产量预测","时序预测","编组优化","智能编组优化","导出编组","导出预测",
         "商品煤符合性","煤质达标","导出符合性","品位储量曲线","导出品位储量","分标高煤质","导出分标高","煤质离群","导出离群","洗选提质","导出洗选","用途适宜性","导出用途",
         // TaskLib 自足计算
         "生产量核算","物料换算","采剥平衡","排土场按量推进","配煤核算","工序进度跟踪","编组产能","环节降效",
