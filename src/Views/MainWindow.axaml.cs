@@ -943,6 +943,7 @@ public partial class MainWindow : Window
             if (cmd == "平盘宽度识别" || cmd == "现场参数提取" || cmd == "平盘识别" || cmd == "采场参数识别") { await BenchWidthAsync(); return; }
             if (cmd == "确定可采区域" || cmd == "可采区域" || cmd == "可采区域识别") { await MineableAreaAsync(); return; }
             if (cmd == "点落到面上" || cmd == "点落面" || cmd == "点投影到面") { await ProjectPointsToMeshAsync(); return; }
+            if (cmd == "网格交线" || cmd == "两网交线" || cmd == "面交线" || cmd == "求交线") { await MeshIntersectionAsync(); return; }
             if (cmd == "线落到面上" || cmd == "线落面" || cmd == "线投影到面") { await ProjectPolylinesToMeshAsync(); return; }
             if (cmd == "侧面三角网" || cmd == "侧面放样" || cmd == "放样侧面") { await SideSurfaceAsync(); return; }
             if (cmd == "道路横断面" || cmd == "路面加宽超高" || cmd == "弯道加宽") { RoadCrossSectionCmd(); return; }
@@ -2288,6 +2289,36 @@ public partial class MainWindow : Window
     }
 
     // 点落到面上：选网格 OFF + 点 CSV(x,y) → 逐点重心插值取 Z → 落 .draped.csv(x,y,z) + 点入场景
+    // 两网交线：选两份 OFF → tri-tri 求交段 → 交线 2D 折线入场景 + 导出 3D 交点 CSV。典型：现状∩顶/底板煤层露头线。
+    private async Task MeshIntersectionAsync()
+    {
+        var m1 = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        { Title = "网格交线：① 选第一份网格 OFF", AllowMultiple = false, FileTypeFilter = new[] { new FilePickerFileType("OFF") { Patterns = new[] { "*.off" } } } });
+        if (m1.Count == 0) return;
+        var (v1, t1) = ReadConcatOff(new[] { m1[0].Path.LocalPath });
+        if (t1.Count == 0) { StatusMsg.Text = "网格交线：第一份网格无三角"; return; }
+        var m2 = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        { Title = "网格交线：② 选第二份网格 OFF", AllowMultiple = false, FileTypeFilter = new[] { new FilePickerFileType("OFF") { Patterns = new[] { "*.off" } } } });
+        if (m2.Count == 0) return;
+        var (v2, t2) = ReadConcatOff(new[] { m2[0].Path.LocalPath });
+        if (t2.Count == 0) { StatusMsg.Text = "网格交线：第二份网格无三角"; return; }
+
+        var segs = Cad.MeshIntersect.IntersectionSegments(v1, t1, v2, t2);
+        if (segs.Count == 0) { StatusMsg.Text = "网格交线：两网无交线（不相交/共面）"; return; }
+        // 交段 2D 投影入场景(琥珀色)
+        BeginChange();
+        foreach (var s in segs)
+            _scene.Add(new LineEntity { X0 = s.A.x, Y0 = s.A.y, X1 = s.B.x, Y1 = s.B.y, Cr = 0.95f, Cg = 0.7f, Cb = 0.2f, LayerName = "网格交线" });
+        RefreshScene();
+        // 导出 3D 交点 CSV(x,y,z)
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var sb = new System.Text.StringBuilder("x,y,z\n");
+        foreach (var s in segs)
+        { sb.Append($"{s.A.x.ToString("R", inv)},{s.A.y.ToString("R", inv)},{s.A.z.ToString("R", inv)}\n"); sb.Append($"{s.B.x.ToString("R", inv)},{s.B.y.ToString("R", inv)},{s.B.z.ToString("R", inv)}\n"); }
+        try { string outPath = System.IO.Path.ChangeExtension(m1[0].Path.LocalPath, ".intersect.csv"); System.IO.File.WriteAllText(outPath, sb.ToString(), new System.Text.UTF8Encoding(true)); StatusMsg.Text = $"网格交线：{segs.Count} 段交线入场景 + 3D 交点 → {System.IO.Path.GetFileName(outPath)}"; }
+        catch { StatusMsg.Text = $"网格交线：{segs.Count} 段交线入场景（图层 网格交线；CSV 写出失败）"; }
+    }
+
     private async Task ProjectPointsToMeshAsync()
     {
         var mf = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
@@ -6721,7 +6752,7 @@ public partial class MainWindow : Window
         // 线编辑
         "加密多段线","简化","抽稀等值线","两线交点","闭合多段线","删除重复点","删除重复线","连接多段线","组合工作线",
         // 网格/建模
-        "网格度量","网格诊断","创建三角网","约束三角网","裁剪三角网","网格焊接","网格边界","合并三角网","固化成体","侧面三角网","立方体","球体","圆柱","体素格网体积","实体转块体",
+        "网格度量","网格诊断","创建三角网","约束三角网","裁剪三角网","网格焊接","网格边界","网格交线","合并三角网","固化成体","侧面三角网","立方体","球体","圆柱","体素格网体积","实体转块体",
         // 区域/地形/点云
         "区域求差","区域重叠检测","克里金估值","快速估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","地面点滤波","高程着色","点云质量统计","点云裁剪",
