@@ -1167,7 +1167,8 @@ public partial class MainWindow : Window
             {
                 new FilePickerFileType("PitMine 图形 (PMX)") { Patterns = new[] { "*.pmx" } },
                 new FilePickerFileType("DXF 图纸") { Patterns = new[] { "*.dxf" } },
-                new FilePickerFileType("DWG 图纸") { Patterns = new[] { "*.dwg" } }
+                new FilePickerFileType("DWG 图纸") { Patterns = new[] { "*.dwg" } },
+                new FilePickerFileType("WeCAD 地质地形图 (KDF)") { Patterns = new[] { "*.kdf" } }
             }
         });
         if (file == null) return;
@@ -1176,6 +1177,7 @@ public partial class MainWindow : Window
         try
         {
             if (ext == ".pmx") { File.WriteAllText(path, SceneIO.SaveDoc(_scene, _layers.Layers, _layers.Current.Name)); SetDocPath(path); StatusMsg.Text = $"已另存 {Path.GetFileName(path)} · {_scene.Count} 实体"; }
+            else if (ext == ".kdf") { int n = KdfExportService.Export(_scene, path, _layers); StatusMsg.Text = $"已导出 {Path.GetFileName(path)} · {n} 实体（KDF, 点/图案填充不导出）"; }
             else { int n = SceneExportService.Export(_scene, path, _layers); StatusMsg.Text = $"已导出 {Path.GetFileName(path)} · {n} 实体（.dxf/.dwg 不改当前文档）"; }
         }
         catch (System.Exception ex) { StatusMsg.Text = $"另存失败：{ex.Message}"; }

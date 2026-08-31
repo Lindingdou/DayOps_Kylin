@@ -1450,3 +1450,15 @@ CopyStyleFrom 审计续查 `.LayerName = 源.LayerName` 模式, 又揪 3 处纯�
 - 线型面板行: 原版 bag 无(线型在工具栏/命令, Kylin 亦有 线型 命令); 面板显示为合理 surfacing 既有数据, 保留。
 
 **本会话累计补 58 真功能 + 1 并发修复 + 4 潜伏 bug 修 + 9 样式保真点统一 + 1 latent 攻克, 965 测。** 特性面板 vs 原版 bag 已对齐(除渲染受阻的透明度)。
+
+## 一一五、KDF 导出 —— 补齐导入导出不对称(原版有,Kylin 缺)
+
+差异审计: 原版 `KdfExportService`+`KdfWriter`(WeCAD KDF 二进制), Kylin 只导入。补:
+- [x] **`KdfExportService`**(忠实复刻原 KdfWriter 字节布局): 文件头(magic 23B)+ BlockTable/Model_Space 骨架 + LayerTable(记录含开/锁) + 实体。
+- [x] **实体映射**: 直线/多段线/矩形/多边形/圆(72段)/圆弧(按弧长采样) → AcDb3DPolyline(折线化); 文字 → AcDbText(GBK, 高/字宽/旋转/倾斜 tag02)。点/图案填充无 KDF 对应 → 跳过(记录)。
+- [x] **公共头精确**: u32字段数+tag06图层(GBK)+3B BGR+6B零+double1.0+2B flags+u32 —— 与 `KdfImportService.ReadCommon` 23B skip 对齐; 折线每顶点 33B(24 XYZ+8保留+1 strlen); 文字 tag02 idx0=高 idx2=旋转。
+- [x] **验证 = 往返**(同 DXF 导出靠 ACadSharp 回读): `BuildBytes`→`KdfImportService.LoadBytes`(新增内存回读入口), 直线/闭合多段线(首点回写)/圆(72点半径3)/文字(内容位置高度)/图层 全保真。2 测。
+- [x] 接入 `SaveAsAsync`(.kdf 选项)。
+- **验证边界记录**: 往返经 Kylin 自家 reader(忠实移植原 KdfReader)证内部一致; 无 WeCAD/原版运行时不能证其读取, 但字节布局已逐字段对齐原 KdfWriter。
+
+**本会话累计补 59 真功能 + 1 并发修复 + 4 潜伏 bug 修 + 9 样式保真点统一 + 1 latent 攻克, 967 测。**

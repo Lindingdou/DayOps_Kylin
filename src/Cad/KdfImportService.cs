@@ -29,6 +29,13 @@ public static class KdfImportService
         byte[] data;
         try { data = File.ReadAllBytes(path); }
         catch (Exception ex) { result.Error = $"读取失败：{ex.Message}"; return result; }
+        return LoadBytes(data);
+    }
+
+    /// <summary>从内存字节解析 KDF(可单测: 导出字节直接回读)。</summary>
+    public static DxfImportService.EntityImportResult LoadBytes(byte[] data)
+    {
+        var result = new DxfImportService.EntityImportResult();
         try { Parse(data, result); }
         catch (Exception ex) { result.Error = $"KDF 解析失败：{ex.Message}"; }
         return result;
