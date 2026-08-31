@@ -1104,3 +1104,13 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 **本会话累计补 20 真功能, 860 测。过度记录纠正累计 9 处**(drape/mesh光顺交线/剔面/虚拟钻孔/**LAS/GeoTIFF/JPEG/PMB**)。**判据终态**: **公开规范/可见源码 + (有样本 或 可生成参照 或 可按规格自构) + 可实现 → 可做**。**native 二进制细分(关键)**: ①**save 格式(读取器可见+数据是用户模型可重现)→可做**(PMB✓); ②**native 计算结果(解析器可见但产生数据的计算是 native 不可托管重现)→阻**(PMTB 坡顶底线/PMSG 点云分割/PMSL——解析器在但检测算法 native, 无原程序跑不出数据可解析, 解析器无用)。**仍记录**(真边界): OSGB(native capability + 3D纹理显示) · **PMTB/PMSG/PMSL(native 计算结果, 无法托管产数据)** · JPEG 渐进式 SOF2(rare) · mesh 布尔刀切(鲁棒) · TaskLib 引擎(不可验) · 面填充/3D/per-entity Z/多属性块(架构)。
 - **记录(2D 场景架构阻)**：**点/节点 Z 编辑**(统一Z/POINTSETZ/Z=aX+bY+c 平面赋Z/POLYUNIFYZ)——场景实体 2D 无 Z(PointEntity 仅 X,Y; PolylineEntity.Points 是 `(x,y)`), 无 Z 可设, 属线段渲染架构边界。
 - **latent 记录(非本轮引入)**：loft+weld(QuickModelAsync/LayerSolid)产**边流形水密但定向不一致**网格 → MeshMetrics 散度体积对定向敏感(随 z 位置变); 但实际取体积走**体素/缠绕数**路径(WindingNumberTester, 定向无关 robust), 工作流不受影响。
+
+## 七十七、格式读取器全交叉核对 —— BLK 八叉树块体 + 格式全景闭环
+
+**扫原程序全部 `*Reader/*Import/*Loader.cs` 交叉核对**: 大多覆盖(Borehole/HaulRoad/Orthophoto=GeoTiffSampler)或记录(3D 台阶/TaskLib/native PMxx/PlanLib 短期)。一真缺口:
+
+- [x] **Block_Model_2.0 (.blk) 八叉树块体导入**(`d834ee7`)：原 `BlkReader` 支持外部逆向格式(平朔/3DMine 导出), Kylin 把 .blk 当 CSV 未真解析。补 `BlkImportService`(7-bit变长串+GBK, magic+origin+根盒+schema+blockCount×{u64 loc 位打包, 属性×4B}; loc bit0-3=sub/Z=5..23/Y=24..42/X=43..; 细格=根盒/2^maxSub; 叶块中心+首数值属性) + 导入BLK 命令。4 测(合成规格符合性 + **真实东露天.blk skip-if-absent** 坐标范围验)。**864 tests**。
+
+**格式全景闭环**(本会话累计): **导入** DWG/DXF/OFF/3DMine(TDM)/MapGIS(WL/WT/WP)/KDF/**LAS/GeoTIFF(全压缩)/PMB/BLK**/pmx/CSV; **导出** OBJ/PLY/STL/DXF/DWG/CSV/OFF。**.octree = 点云八叉树缓存(原 LAS→.bin→.octree mmap 快路径), 非导入格式**(直接导 LAS)。**仍记录**: OSGB(native+3D) · PMxx(native 计算结果) · JPEG 渐进(rare) · office(.xls/.docx=表/文档非几何)。
+
+**本会话累计补 21 真功能, 864 测。格式贬(公开规范/可见源+样本/参照)彻底榨尽**。剩余真边界: native 计算结果(PMxx)/native capability(OSGB)/鲁棒(mesh布尔)/不可验引擎(TaskLib/PlanLib)/架构(面填充·3D·per-entity Z·多属性块)。
