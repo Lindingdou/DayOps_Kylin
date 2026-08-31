@@ -1489,3 +1489,8 @@ CopyStyleFrom 审计续查 `.LayerName = 源.LayerName` 模式, 又揪 3 处纯�
 - **导入对称完整**: DXF/DWG · KDF · MapGIS(WL/WT/WP/MPJ工程) · OFF · 3DMine(二进制/Solid/**String**) · BLK · PMB · LAS · 点数据 全覆盖。余 PMX-二进制(无 reader 不可验)记录。
 
 **本会话累计补 60 真功能 + 1 并发修复 + 4 潜伏 bug 修 + 9 样式保真点统一 + 1 latent 攻克, 970 测。** 导入导出双向符号性审计收官。
+
+### 一一七补：.3dp 工程包(CAB)记录
+原版 `TdmProjectImportService` 导 .3dp = Microsoft Cabinet(MSCF)归档, 内含若干 .3dm/.3ds/config, 用 Windows `expand.exe` 解包再逐成员分派。**成员格式 Kylin 现已全支持**(二进制/Solid/String), 缺的仅 CAB 容器解包:
+- `expand.exe` 是 Windows 专有, 不可移植到麒麟/Linux; 跨平台需 `cabextract`(运行时依赖不保证)或托管 CAB 解压器(MSZIP=deflate 可做, LZX 复杂)。
+- 无 .3dp 样本, 且验证需配套 CAB 写入器 → **记录为容器解包受阻**(成员分派逻辑已具备, 补 CAB 解压即可接通)。
