@@ -134,6 +134,24 @@ public static class BlockModel
     public static List<SceneEntity> BuildCells(IReadOnlyList<Block> blocks, double gmin, double gmax)
         => BuildCellsColored(blocks, b => GradeColor(b.Grade, gmin, gmax));
 
+    /// <summary>
+    /// 分级(graduated)配色的类号：ascBreaks 升序上界, v 落第一个 v&lt;break 的类; 均不小于则末类。
+    /// breaks.Count+1 个类：[−∞,b0) → 0, [b0,b1) → 1, …, [b_{k-1},+∞) → k。忠实原「分级区间 [Min,Max)」。
+    /// </summary>
+    public static int ClassOf(double v, IReadOnlyList<double> ascBreaks)
+    {
+        for (int i = 0; i < ascBreaks.Count; i++) if (v < ascBreaks[i]) return i;
+        return ascBreaks.Count;
+    }
+
+    /// <summary>
+    /// 块体分级区间配色（忠实原 ColoringDialog「分级区间着色」）——按属性值落哪个 [Min,Max) 区间取该级固定色。
+    /// 区别于连续渐变(平滑)与分类离散(每异值异色): 连续属性按自定义区间分级。colors 须 ≥ breaks.Count+1 个。
+    /// </summary>
+    public static List<SceneEntity> BuildCellsClassed(
+        IReadOnlyList<Block> blocks, IReadOnlyList<double> ascBreaks, IReadOnlyList<(float r, float g, float b)> colors)
+        => BuildCellsColored(blocks, b => colors[Math.Min(ClassOf(b.Grade, ascBreaks), colors.Count - 1)]);
+
     /// <summary>块体 → 方块, 逐块取色函数(供连续/分类离散配色)。</summary>
     public static List<SceneEntity> BuildCellsColored(IReadOnlyList<Block> blocks, Func<Block, (float r, float g, float b)> color)
     {

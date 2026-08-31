@@ -752,6 +752,7 @@ public partial class MainWindow : Window
             if (cmd == "属性报告" || cmd == "块体属性报告" || cmd == "多属性统计" || cmd == "多属性报告") { await BlockAttrReportAsync(); return; }
             if (cmd == "块体着色" || cmd == "块体配色") { ColorBlocksCmd(); return; }
             if (cmd == "块体分类着色" || cmd == "块体离散着色" || cmd == "分类着色" || cmd == "块体分类配色") { ColorBlocksCategoricalCmd(); return; }
+            if (cmd == "块体分级着色" || cmd.StartsWith("块体分级着色 ") || cmd == "分级着色" || cmd == "块体分级配色" || cmd == "区间着色") { ColorBlocksClassedCmd(cmd); return; }
             if (cmd == "切换属性" || cmd.StartsWith("切换属性 ") || cmd == "切换品位属性" || cmd.StartsWith("切换品位属性 ") || cmd == "切换活动属性" || cmd.StartsWith("切换活动属性 ")) { SwitchGradeAttrCmd(cmd); return; }
             if (cmd == "筛选块体" || cmd == "块体筛选") { FilterBlocksCmd(); return; }
             if (cmd.StartsWith("表达式筛选块 ") || cmd.StartsWith("表达式筛选 ") || cmd.StartsWith("块体表达式 ") || cmd.StartsWith("按表达式筛选 ")) { BlockExpressionFilterCmd(cmd); return; }
@@ -3836,6 +3837,39 @@ public partial class MainWindow : Window
         foreach (var c in cells) { _scene.Add(c); _blockCellEntities.Add(c); }
         RefreshScene();
         StatusMsg.Text = $"块体分类着色：{catId.Count} 类别(按属性值离散配色，各类异色) · {_lastBlocks.Count} 块（块体着色 恢复连续品位色）";
+    }
+
+    // 块体分级区间着色(原 ColoringDialog「分级区间着色」)：连续属性按自定义区间上界分级, 各级固定色。
+    // "块体分级着色 1,3,5" → 上界1/3/5(4级); 缺省→四分位 Q1/median/Q3(4级)。区别于连续渐变与分类离散。
+    private void ColorBlocksClassedCmd(string cmd)
+    {
+        if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "块体分级着色：请先导入/生成块体"; return; }
+        var breaks = new System.Collections.Generic.List<double>();
+        int sp = cmd.IndexOf(' ');
+        if (sp >= 0)
+            foreach (var tok in cmd.Substring(sp + 1).Split(new[] { ',', ' ', '，' }, System.StringSplitOptions.RemoveEmptyEntries))
+                if (double.TryParse(tok, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double bv)) breaks.Add(bv);
+        if (breaks.Count == 0)
+        {
+            var sorted = _lastBlocks.Select(b => b.Grade).OrderBy(x => x).ToList();
+            breaks.Add(Statistics.Percentile(sorted, 25));
+            breaks.Add(Statistics.Percentile(sorted, 50));
+            breaks.Add(Statistics.Percentile(sorted, 75));
+        }
+        breaks.Sort();
+        var uniq = new System.Collections.Generic.List<double>();
+        foreach (var bk in breaks) if (uniq.Count == 0 || bk > uniq[uniq.Count - 1] + 1e-9) uniq.Add(bk);
+        breaks = uniq;
+        int k = breaks.Count + 1;
+        var colors = new System.Collections.Generic.List<(float, float, float)>();
+        for (int i = 0; i < k; i++) colors.Add(BlockModel.GradeColor(i, 0, k - 1));   // 蓝(低级)→红(高级)
+        foreach (var e in _blockCellEntities) _scene.Remove(e);
+        _blockCellEntities.Clear();
+        var cells = BlockModel.BuildCellsClassed(_lastBlocks, breaks, colors);
+        BeginChange();
+        foreach (var c in cells) { _scene.Add(c); _blockCellEntities.Add(c); }
+        RefreshScene();
+        StatusMsg.Text = $"块体分级着色：{k} 级(区间上界 {string.Join("/", breaks.Select(x => x.ToString("0.###")))}) · {_lastBlocks.Count} 块（块体着色 恢复连续色）";
     }
 
     // 切换活动品位属性(免重导, 原「多属性显示切换」)：从持有的全属性数组重取 grade → 重渲配色。
