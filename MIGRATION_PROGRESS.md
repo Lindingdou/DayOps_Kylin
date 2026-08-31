@@ -526,3 +526,25 @@
 - [x] **首批 §四/§八 功能**(commit `6233e4b`)：`GeoDataQueries`(查询核) + 3 命令——设备台账概览(总数/分类/在役)、设备生产数据统计(记录/产量/工时/故障/作业率)、产能分析排名(累计产量 Top×型号)。+3 单测(对真实种子库)。
 
 **★受阻清单重大重写**：§四/§八 **移出 DM8 受阻** —— 数据层 SQLite 本机可跑、自带真实数据、可单测。剩余 §四/§八 死按钮(达成度/煤质/故障/KPI/月计划/编制/看板…)中, **纯查询分析类**皆可在此基座上续接落地; 仅 **CRUD 对话框**(录入/编辑窗)受对话框基建阻(但读侧分析全可做)。这是 ~45 个原判"DM8 阻"按钮的实质解锁通道。
+
+## 二十四、§四/§八 读侧分析批量落地（SQLite 基座上，12 功能）
+
+数据实测(种子库行数)远比 grep 显示丰富(INSERT OR IGNORE 多行): equipment 518 · equipment_model 50 · production_record 10,098 · capacity_monthly 12,546 · equipment_kpi_monthly 12,628 · fault_event 1,602 · dispatch_rule 40 · borehole 241 · borehole_seam_result 778 · coal_sample 257 · coal_seam_def 7 · parameter_acceptance 156 · process(系统8/工序26/模板3) · working_face 5 · monthly_plan 5 等。
+
+**已落地 12 个 §四/§八 读侧分析功能**(GeoDataQueries + 命令, 均 +单测, 读真实种子)：
+| 功能 | 命令 | 数据 | 提交 |
+|------|------|------|------|
+| 设备台账概览 | 设备信息管理/设备台账 | equipment | `6233e4b` |
+| 设备生产数据 | 设备生产数据/设备数据分析 | production_record | `6233e4b` |
+| 产能分析排名 | 产能分析/设备能力 | capacity_monthly | `6233e4b` |
+| 故障分析 | 故障分析/设备状态·故障报修 | fault_event | `ab5a49c` |
+| KPI 分析 | KPI分析 | equipment_kpi_monthly | `ab5a49c` |
+| 钻孔管理 | 钻孔管理/钻孔统计 | borehole+seam_result | `01373dc` |
+| 煤质统计 | 煤质统计/煤质数据管理 | coal_sample | `01373dc` |
+| 煤层管理 | 煤层管理 | coal_seam_def | `01373dc` |
+| 设备智能编组 | 设备智能编组/调度规则 | dispatch_rule | `4ae3bfa` |
+| 工艺架构定义 | 工艺架构定义/平盘工艺地图 | process_* | `4ae3bfa` |
+| 现场验收录入 | 现场验收录入/参数验收 | parameter_acceptance | `4ae3bfa` |
+| 作业面台账 | 作业面台账/采场参数 | working_face | `4ae3bfa` |
+
+**§四/§八 死按钮攻克进展**：原判 ~45 个"DM8 阻", 已实质解锁 12 个读侧分析(数据本机自带真实种子, 全可单测)。**余下二分**: ① 更多读侧分析(月度计划达成/blast/更多地质剖析) 可续接同法; ② **CRUD 录入/编辑窗**(录入、改台账、审批流) + **看板图表**(数据看板/调度态势看板/机群总览, 需图表控件) 受对话框/图表 UI 基建阻——但**数据与读侧分析已通**。
