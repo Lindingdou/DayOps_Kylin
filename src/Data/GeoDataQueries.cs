@@ -344,6 +344,32 @@ public static class GeoDataQueries
         return list;
     }
 
+    /// <summary>煤层观测点坐标 + 煤厚：供展绘 + 统计。</summary>
+    public static List<(string pointId, double x, double y, double thickness, string seam)> GetObservationPoints(SqliteConnection conn)
+    {
+        var rows = new List<(string, double, double, double, string)>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"SELECT COALESCE(point_id,''), x, y, COALESCE(seam_thickness,0), COALESCE(seam_code,'')
+                            FROM coal_observation_point WHERE x IS NOT NULL AND y IS NOT NULL ORDER BY point_id";
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read()) rows.Add((rd.GetString(0), rd.GetDouble(1), rd.GetDouble(2), rd.GetDouble(3), rd.GetString(4)));
+        return rows;
+    }
+
+    public sealed record MineLocationRow(string Code, string Name, double Elevation, string Team, bool Active);
+
+    /// <summary>采区/采场位置列表。</summary>
+    public static List<MineLocationRow> GetMineLocations(SqliteConnection conn)
+    {
+        var rows = new List<MineLocationRow>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"SELECT location_code, COALESCE(name,''), COALESCE(elevation_m,0), COALESCE(team,''), COALESCE(is_active,1)
+                            FROM mine_location ORDER BY location_code";
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read()) rows.Add(new MineLocationRow(rd.GetString(0), rd.GetString(1), rd.GetDouble(2), rd.GetString(3), rd.GetInt64(4) != 0));
+        return rows;
+    }
+
     /// <summary>开孔坐标：读所有有平面坐标的钻孔 (hole_id, x, y, z_collar)。供展绘点位。</summary>
     public static List<(string holeId, double x, double y, double z)> GetBoreholeCoords(SqliteConnection conn)
     {

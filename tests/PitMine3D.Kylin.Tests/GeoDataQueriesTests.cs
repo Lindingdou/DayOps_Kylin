@@ -181,4 +181,14 @@ public class GeoDataQueriesTests
         Assert.True(GeoDataQueries.GetEquipmentConstraints(db.Connection).Total > 0);  // 种子 15
         Assert.NotEmpty(GeoDataQueries.GetCoalGradeRules(db.Connection));         // 种子 15
     }
+
+    [Fact]
+    public void Observation_points_and_locations_from_seed()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var obs = GeoDataQueries.GetObservationPoints(db.Connection);
+        Assert.True(obs.Count > 50, $"观测点 {obs.Count}");                        // 种子 119
+        Assert.All(obs, p => Assert.NotEqual(0.0, p.x + p.y));
+        Assert.NotEmpty(GeoDataQueries.GetMineLocations(db.Connection));           // 种子 10
+    }
 }

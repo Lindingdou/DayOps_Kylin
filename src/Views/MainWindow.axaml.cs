@@ -735,6 +735,8 @@ public partial class MainWindow : Window
             if (cmd == "煤层台阶参数" || cmd == "台阶参数" || cmd == "煤层参数") { SeamBenchParamsCmd(); return; }
             if (cmd == "设备约束条件" || cmd == "设备约束" || cmd == "能力约束") { EquipmentConstraintsCmd(); return; }
             if (cmd == "煤质分级" || cmd == "煤质分级规则" || cmd == "分级规则") { CoalGradeRulesCmd(); return; }
+            if (cmd == "展绘观测点" || cmd == "煤层观测点" || cmd == "观测点" || cmd == "露头观测点") { DrawObservationPointsCmd(); return; }
+            if (cmd == "采区列表" || cmd == "采区管理" || cmd == "矿区位置" || cmd == "采场位置") { MineLocationsCmd(); return; }
             if (cmd == "点云抽稀" || cmd == "抽稀" || cmd == "点云精简") { await ThinPointsAsync(); return; }
             if (cmd == "地面点滤波" || cmd == "地面滤波") { await GroundFilterAsync(); return; }
             if (cmd == "C2C" || cmd == "点云比对" || cmd == "位移监测 C2C" || cmd == "位移监测") { await CloudCompareAsync(); return; }
@@ -5219,6 +5221,34 @@ public partial class MainWindow : Window
         var parts = new List<string>();
         foreach (var r in rows) parts.Add($"{r.Type}:{r.LevelName}({r.Min:0.#}~{r.Max:0.#})");
         StatusMsg.Text = $"煤质分级规则（{rows.Count} 级）：" + string.Join(" · ", parts);
+    }
+
+    private void DrawObservationPointsCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var pts = Data.GeoDataQueries.GetObservationPoints(db.Connection);
+        if (pts.Count == 0) { StatusMsg.Text = "展绘观测点：库中无带坐标观测点"; return; }
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue, sumT = 0; int nT = 0;
+        BeginChange();
+        foreach (var (pid, x, y, thick, _) in pts)
+        {
+            _scene.Add(new PointEntity { X = x, Y = y, Size = 2.0, Cr = 0.95f, Cg = 0.55f, Cb = 0.25f, LayerName = "煤层观测点" });
+            if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y;
+            if (thick > 0) { sumT += thick; nT++; }
+        }
+        RefreshScene();
+        if (maxX > minX && maxY > minY) Viewport.FitBounds(new double[] { minX, minY, maxX, maxY });
+        StatusMsg.Text = $"展绘观测点：{pts.Count} 点入场景（图层「煤层观测点」）· 平均煤厚 {(nT > 0 ? sumT / nT : 0):0.##}m（{nT} 有效）";
+    }
+
+    private void MineLocationsCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var locs = Data.GeoDataQueries.GetMineLocations(db.Connection);
+        if (locs.Count == 0) { StatusMsg.Text = "采区列表：无位置数据"; return; }
+        var parts = new List<string>();
+        foreach (var l in locs) parts.Add($"{l.Code}{(string.IsNullOrEmpty(l.Name) ? "" : " " + l.Name)}(标高{l.Elevation:0.#}m{(string.IsNullOrEmpty(l.Team) ? "" : "/" + l.Team)}{(l.Active ? "" : "/停用")})");
+        StatusMsg.Text = $"采区列表（{locs.Count} 处）：" + string.Join(" · ", parts);
     }
 
     // 展绘钻孔 / 开孔坐标管理：读库钻孔平面坐标 → 点位入场景(可见几何) + 缩放到范围。
