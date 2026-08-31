@@ -162,6 +162,7 @@
                                         <Button Classes="ribbon-btn small" Tag="剪切" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="剪切" /></StackPanel></Button>
                                         <Button Classes="ribbon-btn small" Tag="复制到剪贴板" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="复制" /></StackPanel></Button>
                                         <Button Classes="ribbon-btn small" Tag="粘贴" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="粘贴" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="基点粘贴" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="基点粘贴" /></StackPanel></Button>
                                     </WrapPanel>
                                 </DockPanel>
                             </Border>

@@ -27,4 +27,13 @@ public sealed class CadClipboard
         foreach (var e in _items) res.Add(e.Apply(Affine2.Translate(dx, dy)));
         return res;
     }
+
+    /// <summary>剪贴板内容的夹点质心（基点粘贴的参照点）；空则 null。</summary>
+    public (double x, double y)? Centroid()
+    {
+        double sx = 0, sy = 0; int n = 0;
+        foreach (var e in _items)
+            foreach (var g in e.Grips()) { sx += g.x; sy += g.y; n++; }
+        return n > 0 ? (sx / n, sy / n) : null;
+    }
 }

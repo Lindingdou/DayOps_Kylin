@@ -255,6 +255,15 @@ public partial class MainWindow : Window
                 return;
             }
 
+            // 基点粘贴：拾取插入点
+            if (_pasteBaseActive && props.IsLeftButtonPressed)
+            {
+                _nav = NavMode.None;
+                var wp = PickWorld();
+                if (wp != null) { PasteAtPoint(wp.Value); _pasteBaseActive = false; }
+                return;
+            }
+
             // 偏移：点击一侧 → 偏移选中实体（保留原实体颜色/图层）
             if (_offsetActive && props.IsLeftButtonPressed)
             {
@@ -532,6 +541,7 @@ public partial class MainWindow : Window
                 _breakActive = false; _breakPts.Clear();
                 _slideActive = false; _slideDragging = false; _slidePts.Clear();
                 _pathActive = false; _pathP1 = null; _kpathMode = false;
+                _pasteBaseActive = false;
                 _benchActive = false; _benchEntity = null;
                 _spotActive = false;
                 _textActive = false;
@@ -764,6 +774,7 @@ public partial class MainWindow : Window
             if (cmd == "复制到剪贴板" || cmd == "剪贴板复制") { CopyClip(); return; }
             if (cmd == "剪切") { CutClip(); return; }
             if (cmd == "粘贴" || cmd == "原坐标粘贴") { PasteClip(); return; }
+            if (cmd == "基点粘贴") { StartPasteBase(); return; }
             if (cmd == "删除全部" || cmd == "全部删除" || cmd == "清空实体") { EraseAll(); return; }
             if (cmd == "创建选择集" || cmd == "选择集") { CreateSelSet(); return; }
             if (cmd == "调用选择集") { RecallSelSet(); return; }
@@ -3564,6 +3575,26 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"已剪切 {n} 个实体到剪贴板";
     }
 
+    private bool _pasteBaseActive;   // 基点粘贴：等待拾取插入点
+    private void StartPasteBase()
+    {
+        if (_clip.IsEmpty) { StatusMsg.Text = "基点粘贴：剪贴板为空"; return; }
+        _pasteBaseActive = true; _tool = null; _measure = null; _editMode = EditMode.None;
+        StatusMsg.Text = "基点粘贴：点插入点（剪贴板内容质心对齐到该点）";
+    }
+
+    // 基点粘贴：剪贴板质心平移到 target 后粘入
+    private void PasteAtPoint((double x, double y) target)
+    {
+        var c = _clip.Centroid() ?? (0.0, 0.0);
+        var pasted = _clip.Paste(target.x - c.x, target.y - c.y);
+        BeginChange();
+        foreach (var e in pasted) _scene.Add(e);
+        _selected.Clear(); _selected.AddRange(pasted);
+        RefreshScene(); HighlightSelection();
+        StatusMsg.Text = $"基点粘贴：{pasted.Count} 个实体已插入（可继续移动）";
+    }
+
     private void PasteClip()
     {
         if (_clip.IsEmpty) { StatusMsg.Text = "粘贴：剪贴板为空"; return; }
@@ -4626,6 +4657,9 @@ public partial class MainWindow : Window
             case "PASTECLIP":
             case "PASTEORIG":
                 PasteClip();
+                break;
+            case "PASTEBASE":
+                StartPasteBase();
                 break;
             case "ERASEALL":
                 EraseAll();
