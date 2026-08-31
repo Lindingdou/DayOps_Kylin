@@ -57,6 +57,32 @@ public class DrawToolsTests
     }
 
     [Fact]
+    public void Hide_objects_removes_from_geometry_pick_and_snap_then_restore()
+    {
+        var s = new Scene();
+        var a = new LineEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 0 };
+        var b = new LineEntity { X0 = 0, Y0 = 5, X1 = 10, Y1 = 5 };
+        s.Add(a); s.Add(b);
+        int geomBoth = s.BuildGeometry().Length;
+        Assert.Equal(24, geomBoth);                         // 2 段
+        int snapBoth = s.SnapCandidates().Length;
+        // 隐藏 a
+        Assert.Equal(1, s.HideEntities(new[] { a }));
+        Assert.Equal(1, s.HiddenCount);
+        Assert.Equal(12, s.BuildGeometry().Length);         // 只剩 b 上屏
+        Assert.True(s.SnapCandidates().Length < snapBoth);  // a 的捕捉点消失
+        Assert.Null(s.Pick(5, 0, 0.5));                     // a 所在处不可拾取
+        Assert.Same(b, s.Pick(5, 5, 0.5));                  // b 仍可拾取
+        // 重复隐藏不双计
+        Assert.Equal(0, s.HideEntities(new[] { a }));
+        // 结束隐藏 → 全恢复
+        Assert.Equal(1, s.ShowAllHidden());
+        Assert.Equal(0, s.HiddenCount);
+        Assert.Equal(geomBoth, s.BuildGeometry().Length);
+        Assert.Same(a, s.Pick(5, 0, 0.5));                  // a 复现可拾取
+    }
+
+    [Fact]
     public void Circumcircle_of_unit_points()
     {
         var c = ArcMath.Circumcircle(1, 0, 0, 1, -1, 0);

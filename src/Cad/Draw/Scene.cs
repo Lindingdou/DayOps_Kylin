@@ -11,6 +11,7 @@ public abstract class SceneEntity
 {
     public float Cr = 0.86f, Cg = 0.9f, Cb = 0.6f;   // 绘制实体默认色（浅黄绿，区别于导入）
     public string LayerName = "0";                    // 所属图层
+    public bool Visible = true;                        // 逐实体隐藏(隐藏对象/结束隐藏)；false=不上屏且不可拾取
 
     /// <summary>把自身镶嵌为线段（交错 P3_C3）追加到 o。</summary>
     public abstract void Tessellate(List<float> o);
@@ -809,6 +810,7 @@ public sealed class Scene
         double bestD = tol;
         foreach (var e in Entities)
         {
+            if (!e.Visible) continue;                                     // 隐藏对象不可拾取
             if (canSelect != null && !canSelect(e.LayerName)) continue;   // 锁定/隐藏层不可选
             double d = e.DistanceTo(x, y);
             if (d <= bestD) { bestD = d; best = e; }
@@ -817,6 +819,25 @@ public sealed class Scene
     }
 
     public bool Remove(SceneEntity e) => Entities.Remove(e);
+
+    /// <summary>隐藏给定实体(Visible=false)。返回实际隐藏数(已隐藏的不重复计)。忠实 OnCtxHideObjectClick。</summary>
+    public int HideEntities(IEnumerable<SceneEntity> es)
+    {
+        int n = 0;
+        foreach (var e in es) if (e.Visible) { e.Visible = false; n++; }
+        return n;
+    }
+
+    /// <summary>恢复所有被隐藏的实体(Visible=true)。返回恢复数。忠实 OnCtxShowAllClick(实体部分)。</summary>
+    public int ShowAllHidden()
+    {
+        int n = 0;
+        foreach (var e in Entities) if (!e.Visible) { e.Visible = true; n++; }
+        return n;
+    }
+
+    /// <summary>当前被隐藏实体数(供状态/测试)。</summary>
+    public int HiddenCount { get { int n = 0; foreach (var e in Entities) if (!e.Visible) n++; return n; } }
 
     /// <summary>把 from 图层上的实体全部改指派到 to 图层（删图层时实体不丢，移到目标层）。返回移动数。</summary>
     public int ReassignLayer(string from, string to)
@@ -838,7 +859,7 @@ public sealed class Scene
     {
         var o = new List<float>();
         foreach (var e in Entities)
-            if (isShown == null || isShown(e.LayerName)) e.Tessellate(o);
+            if (e.Visible && (isShown == null || isShown(e.LayerName))) e.Tessellate(o);
         return o.ToArray();
     }
 
@@ -849,6 +870,7 @@ public sealed class Scene
         void P(double x, double y) { o.Add((float)x); o.Add((float)y); o.Add(0); o.Add(0); o.Add(0); o.Add(0); }
         foreach (var e in Entities)
         {
+            if (!e.Visible) continue;                              // 隐藏对象不参与捕捉
             if (isShown != null && !isShown(e.LayerName)) continue;
             foreach (var g in e.Grips()) P(g.x, g.y);              // 端点/中点/圆心/象限/顶点
             if (e is PolylineEntity pl)                             // 补：段中点

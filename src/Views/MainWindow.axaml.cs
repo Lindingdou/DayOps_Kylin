@@ -618,6 +618,7 @@ public partial class MainWindow : Window
     private DrawTool? _tool;                      // 当前激活的绘制工具
     private readonly List<SceneEntity> _selected = new();   // 选择集
     private List<SceneEntity> _prevSelected = new();         // 上次选择集
+    private readonly HashSet<string> _hiddenLayers = new();  // 隐藏同一图层对象 记录的层名，结束隐藏一并恢复
     private readonly Cad.Draw.CadClipboard _clip = new();    // 实体剪贴板（COPYCLIP/CUTCLIP/PASTECLIP）
     private readonly Cad.Draw.NamedSelections _selSets = new(); // 命名选择集（创建/调用选择集）
     private readonly AssistantEngine _assistant = new();         // 智能助手（菜单引导，点选即执行命令）
@@ -912,6 +913,9 @@ public partial class MainWindow : Window
             if (cmd == "范围缩放" || cmd == "全部缩放" || cmd == "范围") { Viewport.ZoomExtents(); StatusMsg.Text = "视图: 范围缩放"; return; }
             if (cmd == "上一视图" || cmd == "返回视图") { StatusMsg.Text = Viewport.PrevView() ? "视图: 已返回上一视图" : "视图: 无更早视图"; return; }
             if (cmd == "清空视图") { _selected.Clear(); Viewport.SetHighlight(null); Viewport.SetSnapMarker(null); _snapShown = false; RefreshScene(); StatusMsg.Text = "已清空选择/高亮/捕捉标记"; return; }
+            if (cmd == "隐藏对象" || cmd == "隐藏") { HideSelectedObjects(); return; }
+            if (cmd == "隐藏同一图层对象" || cmd == "隐藏图层" || cmd == "隐藏同层") { HideSelectedLayers(); return; }
+            if (cmd == "结束隐藏" || cmd == "取消隐藏" || cmd == "显示全部" || cmd == "全部显示") { EndHide(); return; }
             if (cmd == "帮助文档") { ShowHelp(); return; }
             if (cmd == "选项") { ShowOptions(); return; }
             if (cmd == "注册") { StatusMsg.Text = "注册/授权：需接入国产数据库(达梦)授权系统（记录待做）"; return; }
@@ -5310,6 +5314,50 @@ public partial class MainWindow : Window
         StatusMsg.Text = "所有图层已打开（解冻）";
     }
 
+    // 隐藏对象：选中实体 Visible=false（忠实 OnCtxHideObjectClick）。不可拾取、不上屏、不参与捕捉。
+    private void HideSelectedObjects()
+    {
+        if (_selected.Count == 0) { StatusMsg.Text = "隐藏对象：没有选中实体"; return; }
+        int n = _scene.HideEntities(_selected);
+        _selected.Clear(); Viewport.SetHighlight(null);
+        RefreshScene();
+        StatusMsg.Text = $"隐藏对象：{n} 个（结束隐藏可恢复，共隐藏 {_scene.HiddenCount}）";
+    }
+
+    // 隐藏同一图层对象：把选中实体所在图层整体隐藏（忠实 OnCtxHideLayerClick），记录层名待恢复。
+    private void HideSelectedLayers()
+    {
+        if (_selected.Count == 0) { StatusMsg.Text = "隐藏同一图层对象：没有选中实体"; return; }
+        var names = new HashSet<string>(System.StringComparer.Ordinal);
+        foreach (var e in _selected) names.Add(e.LayerName);
+        int ok = 0;
+        foreach (var name in names)
+        {
+            var ly = _layers.Get(name);
+            if (ly != null && ly.Visible) { ly.Visible = false; _hiddenLayers.Add(name); ok++; }
+        }
+        _selected.Clear(); Viewport.SetHighlight(null);
+        AfterLayerStateChange(); PopulateDrawingLayers();
+        StatusMsg.Text = $"隐藏图层 {ok} 个：{string.Join(", ", names)}（结束隐藏可恢复）";
+    }
+
+    // 结束隐藏：恢复所有被隐藏实体 + 本会话隐藏的图层（忠实 OnCtxShowAllClick）。
+    private void EndHide()
+    {
+        int eOk = _scene.ShowAllHidden();
+        int lOk = 0;
+        foreach (var name in _hiddenLayers)
+        {
+            var ly = _layers.Get(name);
+            if (ly != null && !ly.Visible) { ly.Visible = true; lOk++; }
+        }
+        int lTotal = _hiddenLayers.Count;
+        _hiddenLayers.Clear();
+        AfterLayerStateChange(); PopulateDrawingLayers();
+        RefreshScene();
+        StatusMsg.Text = $"结束隐藏：恢复实体 {eOk} 个，恢复图层 {lOk}/{lTotal} 个";
+    }
+
     // 命令行精确坐标：绘制/编辑取点时把 "x,y" / "@dx,dy" / "@d<ang" 当作一次点击
     private bool TryCoordinateInput(string cmd)
     {
@@ -6393,6 +6441,8 @@ public partial class MainWindow : Window
         "正交","栅格","栅格捕捉",
         // 图层/视图
         "新建图层","删除图层","图层特性管理器","冻结","锁定","全开",
+        // 隐藏/隔离
+        "隐藏对象","隐藏同一图层对象","结束隐藏",
         "2D","3D","俯视","仰视","主视","后视","左视","右视","西南等轴测","东南等轴测","东北等轴测","西北等轴测","缩放","清空视图","清理标记",
         // 注释/测量/剪贴板/选择
         "线性标注","对齐标注","半径标注","连续标注",
