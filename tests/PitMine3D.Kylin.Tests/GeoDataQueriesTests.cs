@@ -303,6 +303,11 @@ public class GeoDataQueriesTests
         Assert.InRange(f.AvgAvailabilityPct, 0, 100);
         Assert.True(f.ProjectedAnnualWanM3 > f.BaselineMonthlyWanM3, "投影年产 > 单台月产");
         Assert.True(f.ActiveEquipment > 1, $"在役台数 {f.ActiveEquipment}(回归:曾恒0被兜底成1台)");   // 种子约485台
+        Assert.True(f.ProducingUnits > 0 && f.ProducingUnits < f.ActiveEquipment, $"产出设备 {f.ProducingUnits} 应<在役 {f.ActiveEquipment}");
+        // 回归:投影须用产出设备数(非全在役)——口径一致则投影≈实际年产总量, 不应高估50%+
+        double actualMaxAnnual = 0;
+        foreach (var r in GeoDataQueries.GetAnnualOutput(db.Connection)) actualMaxAnnual = System.Math.Max(actualMaxAnnual, r.OutputWanM3);
+        Assert.InRange(f.ProjectedAnnualWanM3, actualMaxAnnual * 0.5, actualMaxAnnual * 1.6);   // 同量级(曾×全在役485高估至1.55×)
     }
 
     [Fact]

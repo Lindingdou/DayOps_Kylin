@@ -117,18 +117,20 @@ public static class GeoDataQueries
         return new KpiStats(n, avPct, utPct, rd.GetInt32(3), rd.GetInt32(4));
     }
 
-    public sealed record EfficiencyForecast(int ActiveEquipment, double BaselineMonthlyWanM3, double AvgAvailabilityPct, double AvgRunRatePct, double ProjectedAnnualWanM3);
+    public sealed record EfficiencyForecast(int ActiveEquipment, int ProducingUnits, double BaselineMonthlyWanM3, double AvgAvailabilityPct, double AvgRunRatePct, double ProjectedAnnualWanM3);
 
     /// <summary>
-    /// 设备效能预测（基线 + 投影）——忠实原 EquipmentForecastWindow 基线口径:
-    /// 基线月产量 = 近期产能均值(万m³); 可用率/作业率取 KPI 均值; 投影年产 = 基线月产 × 12 × 台数。
-    /// (原窗口在此基线上以滑块做交互 what-if 情景; 交互部分需 UI, 此出基线+投影。)
+    /// 设备效能预测（基线 + 投影）：基线月产量 = 产出设备月均(万m³); 可用率/作业率取 KPI 均值;
+    /// 投影年产 = 基线月产 × 12 × **产出设备数**(非全在役——基线口径是"每产出设备月均"，须乘产出设备
+    /// 数才口径一致；乘全在役含卡车/钻机等非独立产出者会高估)。ActiveEquipment=在役总数(参考)。
     /// </summary>
     public static EfficiencyForecast GetEfficiencyForecast(SqliteConnection conn)
     {
         double baseMonthly = ScalarDouble(conn, "SELECT COALESCE(AVG(output_m3),0)/10000.0 FROM capacity_monthly WHERE output_m3 > 0");
         // 在役 = 在用 + 租赁(种子词表 在用/待报废/租赁/报废/退租); NULL 按默认在用计。
         int active = (int)Scalar(conn, "SELECT COUNT(*) FROM equipment WHERE status IS NULL OR status IN ('在用','租赁')");
+        // 产出设备数 = capacity_monthly 中有产出记录的设备(与 baseMonthly 口径一致)。
+        int producing = (int)Scalar(conn, "SELECT COUNT(DISTINCT equipment_id) FROM capacity_monthly WHERE output_m3 > 0");
         double av, rr;
         using (var cmd = conn.CreateCommand())
         {
@@ -138,8 +140,8 @@ public static class GeoDataQueries
         }
         double avPct = av <= 1.0 ? av * 100 : av;
         double rrPct = rr <= 1.0 ? rr * 100 : rr;
-        double projAnnual = baseMonthly * 12 * (active > 0 ? active : 1);
-        return new EfficiencyForecast(active, baseMonthly, avPct, rrPct, projAnnual);
+        double projAnnual = baseMonthly * 12 * (producing > 0 ? producing : 1);
+        return new EfficiencyForecast(active, producing, baseMonthly, avPct, rrPct, projAnnual);
     }
 
     public sealed record BoreholeStats(int Holes, double TotalDepthM, double AvgDepthM, int SeamResults, IReadOnlyList<CategoryCount> ByCategory);
@@ -506,6 +508,17 @@ public static class GeoDataQueries
         var rows = new List<FaultTypeRow>();
         foreach (var r in raw) rows.Add(new FaultTypeRow(r.t, r.n, r.dt, tot > 0 ? r.dt / tot * 100 : 0));
         return rows;
+    }
+
+    /// <summary>月度总产量时间序列（万m³，按年月升序）——供 ForecastModels 时序预测。</summary>
+    public static List<double> GetMonthlyOutputSeries(SqliteConnection conn)
+    {
+        var series = new List<double>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT SUM(output_m3)/1e4 FROM capacity_monthly GROUP BY year, month ORDER BY year, month";
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read()) series.Add(rd.IsDBNull(0) ? 0 : rd.GetDouble(0));
+        return series;
     }
 
     public sealed record AnnualOutputRow(int Year, double OutputWanM3);

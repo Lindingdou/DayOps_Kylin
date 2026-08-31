@@ -747,6 +747,8 @@ public partial class MainWindow : Window
             if (cmd == "展绘观测点" || cmd == "煤层观测点" || cmd == "观测点" || cmd == "露头观测点") { DrawObservationPointsCmd(); return; }
             if (cmd == "采区列表" || cmd == "采区管理" || cmd == "矿区位置" || cmd == "采场位置") { MineLocationsCmd(); return; }
             if (cmd == "设备效能预测" || cmd == "效能预测" || cmd == "班次效能预测" || cmd == "产能预测") { EfficiencyForecastCmd(); return; }
+            if (cmd == "产量预测" || cmd == "产量趋势预测" || cmd == "时序预测") { OutputForecastCmd(false); return; }
+            if (cmd == "Holt预测" || cmd == "产量预测Holt") { OutputForecastCmd(true); return; }
             if (cmd == "数据导入导出" || cmd == "数据导出" || cmd == "导出数据库" || cmd == "地质数据导出") { await ExportGeoDataAsync(); return; }
             if (cmd == "点云抽稀" || cmd == "抽稀" || cmd == "点云精简") { await ThinPointsAsync(); return; }
             if (cmd == "地面点滤波" || cmd == "地面滤波") { await GroundFilterAsync(); return; }
@@ -5792,7 +5794,18 @@ public partial class MainWindow : Window
     {
         var db = EnsureGeoDb(); if (db == null) return;
         var f = Data.GeoDataQueries.GetEfficiencyForecast(db.Connection);
-        StatusMsg.Text = $"设备效能预测（基线+投影）：基线月产 {f.BaselineMonthlyWanM3:0.##}万m³/台 · 可用率 {f.AvgAvailabilityPct:0.#}% · 作业率 {f.AvgRunRatePct:0.#}% · 投影年产 {f.ProjectedAnnualWanM3:0.#}万m³（{f.ActiveEquipment}台）· 交互情景 what-if 需 UI";
+        StatusMsg.Text = $"设备效能预测（基线+投影）：基线月产 {f.BaselineMonthlyWanM3:0.##}万m³/产出设备 · 可用率 {f.AvgAvailabilityPct:0.#}% · 作业率 {f.AvgRunRatePct:0.#}% · 投影年产 {f.ProjectedAnnualWanM3:0.#}万m³（产出设备 {f.ProducingUnits}台 · 在役 {f.ActiveEquipment}台）";
+    }
+
+    // 产量时序预测：ForecastModels(LSQ趋势+EWMA融合/Holt) 对月度产量序列做点预测 + 趋势 + 异常
+    private void OutputForecastCmd(bool holt)
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var series = Data.GeoDataQueries.GetMonthlyOutputSeries(db.Connection);
+        if (series.Count < 3) { StatusMsg.Text = "产量预测：月度序列样本不足(<3)"; return; }
+        var r = Data.ForecastModels.Forecast(series, 6, method: holt ? Data.ForecastMethod.Holt : Data.ForecastMethod.Fusion);
+        double lo = r.Next - r.HalfWidthAt(0), hi = r.Next + r.HalfWidthAt(0);
+        StatusMsg.Text = $"产量时序预测（{r.Method}）：下期 {r.Next:0.#}万m³ [95%区间 {System.Math.Max(0, lo):0.#}~{hi:0.#}] · 趋势{r.TrendLabel}(斜率{r.Slope:+0.0;-0.0}/月, R²{r.R2:0.00}) · 历史异常 {r.AnomalyCount} 期 · 6期路径 {string.Join("/", System.Array.ConvertAll(r.Path, v => v.ToString("0")))}";
     }
 
     private void MineLocationsCmd()
@@ -5949,7 +5962,7 @@ public partial class MainWindow : Window
         "设备台账","生产数据","产能分析","故障分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构",
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","数据看板","煤种分类",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
-        "产能分类对比","故障类型分布","分工序验收合格率","数据导出","达成度评价",
+        "产能分类对比","故障类型分布","分工序验收合格率","数据导出","达成度评价","产量预测","时序预测",
         // TaskLib 自足计算
         "生产量核算","物料换算","采剥平衡","排土场按量推进","配煤核算","工序进度跟踪","编组产能","环节降效",
     };
