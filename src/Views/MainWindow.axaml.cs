@@ -715,6 +715,8 @@ public partial class MainWindow : Window
             if (cmd == "设备信息管理" || cmd == "设备台账" || cmd == "设备台账管理" || cmd == "设备信息") { EquipmentRosterCmd(); return; }
             if (cmd == "设备生产数据" || cmd == "生产数据" || cmd == "设备数据分析") { ProductionStatsCmd(); return; }
             if (cmd == "产能分析" || cmd == "设备能力" || cmd == "能力分析" || cmd == "产能") { CapacityRankingCmd(); return; }
+            if (cmd == "故障分析" || cmd == "设备状态·故障报修" || cmd == "故障报修" || cmd == "设备状态") { FaultStatsCmd(); return; }
+            if (cmd == "KPI分析" || cmd == "KPI" || cmd == "设备KPI") { KpiStatsCmd(); return; }
             if (cmd == "点云抽稀" || cmd == "抽稀" || cmd == "点云精简") { await ThinPointsAsync(); return; }
             if (cmd == "地面点滤波" || cmd == "地面滤波") { await GroundFilterAsync(); return; }
             if (cmd == "C2C" || cmd == "点云比对" || cmd == "位移监测 C2C" || cmd == "位移监测") { await CloudCompareAsync(); return; }
@@ -5026,6 +5028,21 @@ public partial class MainWindow : Window
         var top = new List<string>();
         foreach (var r in rows) top.Add($"{r.EquipmentId}{(string.IsNullOrEmpty(r.Model) ? "" : "(" + r.Model + ")")} {r.TotalOutputM3:0.#}");
         StatusMsg.Text = $"产能分析（累计产量 Top{rows.Count}）：" + string.Join(" · ", top);
+    }
+
+    private void FaultStatsCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var f = Data.GeoDataQueries.GetFaultStats(db.Connection);
+        StatusMsg.Text = $"故障分析：{f.Events} 起 · 累计停机 {f.DowntimeHours:0.#}h · 未修复 {f.Unresolved} · 最多「{f.TopType}」×{f.TopTypeCount}";
+    }
+
+    private void KpiStatsCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var k = Data.GeoDataQueries.GetKpiStats(db.Connection);
+        if (k.Records == 0) { StatusMsg.Text = "KPI 分析：无 KPI 数据"; return; }
+        StatusMsg.Text = $"KPI 分析：{k.Records} 条 · 平均可用率 {k.AvgAvailabilityPct:0.#}% · 平均利用率 {k.AvgUtilizationPct:0.#}% · 最新 {k.LatestYear}-{k.LatestMonth:00}";
     }
 
     // ---------- 智能助手面板（菜单引导，点选即执行命令）----------

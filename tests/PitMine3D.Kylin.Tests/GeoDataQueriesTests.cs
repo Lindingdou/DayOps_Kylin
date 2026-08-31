@@ -40,4 +40,24 @@ public class GeoDataQueriesTests
         for (int i = 1; i < rows.Count; i++)
             Assert.True(rows[i - 1].TotalOutputM3 >= rows[i].TotalOutputM3, "按产量降序");
     }
+
+    [Fact]
+    public void Fault_stats_from_seed()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var f = GeoDataQueries.GetFaultStats(db.Connection);
+        Assert.True(f.Events > 0, "故障事件数");
+        Assert.True(f.DowntimeHours >= 0);
+        Assert.True(f.Unresolved <= f.Events);           // 未修复 ≤ 总数
+    }
+
+    [Fact]
+    public void Kpi_stats_from_seed()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var k = GeoDataQueries.GetKpiStats(db.Connection);
+        Assert.True(k.Records > 0, "KPI 记录数");
+        Assert.InRange(k.AvgAvailabilityPct, 0, 100);
+        Assert.InRange(k.AvgUtilizationPct, 0, 100);
+    }
 }

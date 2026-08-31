@@ -59,6 +59,50 @@ public static class GeoDataQueries
         return rows;
     }
 
+    public sealed record FaultStats(int Events, double DowntimeHours, int Unresolved, string TopType, int TopTypeCount);
+
+    /// <summary>故障分析（设备状态·故障报修）：事件数 / 累计停机时 / 未修复数 / 最多故障类型。</summary>
+    public static FaultStats GetFaultStats(SqliteConnection conn)
+    {
+        int events = (int)Scalar(conn, "SELECT COUNT(*) FROM fault_event");
+        double downtime = ScalarDouble(conn, "SELECT COALESCE(SUM(duration_hours),0) FROM fault_event");
+        int unresolved = (int)Scalar(conn, "SELECT COUNT(*) FROM fault_event WHERE is_resolved = 0");
+        string topType = "(无)"; int topCount = 0;
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT COALESCE(fault_type,'(未分类)'), COUNT(*) c FROM fault_event GROUP BY fault_type ORDER BY c DESC LIMIT 1";
+            using var rd = cmd.ExecuteReader();
+            if (rd.Read()) { topType = rd.GetString(0); topCount = rd.GetInt32(1); }
+        }
+        return new FaultStats(events, downtime, unresolved, topType, topCount);
+    }
+
+    public sealed record KpiStats(int Records, double AvgAvailabilityPct, double AvgUtilizationPct, int LatestYear, int LatestMonth);
+
+    /// <summary>KPI 分析：equipment_kpi_monthly 平均可用率/利用率 + 最新期。</summary>
+    public static KpiStats GetKpiStats(SqliteConnection conn)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"SELECT COUNT(*), COALESCE(AVG(availability),0), COALESCE(AVG(utilization_rate),0),
+                            COALESCE(MAX(year),0), COALESCE(MAX(month),0) FROM equipment_kpi_monthly";
+        using var rd = cmd.ExecuteReader();
+        rd.Read();
+        int n = rd.GetInt32(0);
+        double av = rd.GetDouble(1), ut = rd.GetDouble(2);
+        // availability/utilization 可能存为 0..1 或 0..100，统一按 <=1 视为比率×100。
+        double avPct = av <= 1.0 ? av * 100 : av;
+        double utPct = ut <= 1.0 ? ut * 100 : ut;
+        return new KpiStats(n, avPct, utPct, rd.GetInt32(3), rd.GetInt32(4));
+    }
+
+    private static double ScalarDouble(SqliteConnection conn, string sql)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql;
+        var v = cmd.ExecuteScalar();
+        return v == null || v is System.DBNull ? 0 : System.Convert.ToDouble(v);
+    }
+
     private static long Scalar(SqliteConnection conn, string sql)
     {
         using var cmd = conn.CreateCommand();
