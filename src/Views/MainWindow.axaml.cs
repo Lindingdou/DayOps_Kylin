@@ -617,6 +617,17 @@ public partial class MainWindow : Window
     private SceneEntity? _benchEntity;
     private int _benchCount = 5;
     private System.Collections.Generic.List<BlockModel.Block>? _lastBlocks;   // 最近导入的块体(资源量用)
+    private readonly List<SceneEntity> _blockCellEntities = new();            // 块体配色方块(供筛选/约束/删除 重渲)
+    private double _blockGmin, _blockGmax = 1;                                // 块体品位范围(重渲配色一致)
+
+    // 渲染一组块体为品位配色方块：清旧块方块 → 按 _lastBlocks 全域品位范围配色 → 入场景并追踪
+    private void RenderBlocks(IReadOnlyList<BlockModel.Block> toShow)
+    {
+        foreach (var e in _blockCellEntities) _scene.Remove(e);
+        _blockCellEntities.Clear();
+        var cells = BlockModel.BuildCells(toShow, _blockGmin, _blockGmax);
+        foreach (var c in cells) { _scene.Add(c); _blockCellEntities.Add(c); }
+    }
     private bool _spotActive;                       // 高程查询：点击报高程
     private System.Collections.Generic.List<(double x, double y, double z)>? _spotTerrain;
     private bool _textActive;                        // 文字：等待命令行输入内容
@@ -672,6 +683,11 @@ public partial class MainWindow : Window
             if (cmd == "资源量估算" || cmd == "剥采比") { ResourceReport(null); return; }
             if (cmd == "导出块体" || cmd == "块体导出") { await ExportBlocksAsync(); return; }
             if (cmd == "输出报告" || cmd == "资源量报告" || cmd == "块体报告") { await ExportResourceReportAsync(); return; }
+            if (cmd == "块体着色" || cmd == "块体配色") { ColorBlocksCmd(); return; }
+            if (cmd == "筛选块体" || cmd == "块体筛选") { FilterBlocksCmd(); return; }
+            if (cmd == "约束块体" || cmd == "块体约束") { ConstrainBlocksCmd(); return; }
+            if (cmd == "删除块体" || cmd == "清除块体") { DeleteBlocksCmd(); return; }
+            if (cmd == "切面剖切" || cmd == "块体剖切" || cmd == "切面") { SectionBlocksCmd(); return; }
             if (cmd == "快速估值" || cmd == "品位估值" || cmd == "克里金估值" || cmd == "空间分布") { await EstimateGradeAsync(); return; }
             if (cmd == "点云抽稀" || cmd == "抽稀" || cmd == "点云精简") { await ThinPointsAsync(); return; }
             if (cmd == "地面点滤波" || cmd == "地面滤波") { await GroundFilterAsync(); return; }
@@ -1381,13 +1397,13 @@ public partial class MainWindow : Window
                 for (double x = wn.MinX + cell * 0.5; x <= wn.MaxX; x += cell)
                     if (wn.IsInsideClosed(x, y, z)) blocks.Add(new BlockModel.Block { X = x, Y = y, Z = z, Size = cell, Grade = 0 });
         if (blocks.Count == 0) { StatusMsg.Text = "实体转块体：无占用块体(网格可能非闭合/朝向不一致)"; return; }
-        var cells = BlockModel.BuildCells(blocks, 0, 0);
+        _lastBlocks = blocks;   // 供资源量/剥采比等复用
+        _blockGmin = 0; _blockGmax = 1;   // 体素化块体品位置 0(几何)
         BeginChange();
-        foreach (var c in cells) _scene.Add(c);
+        RenderBlocks(blocks);
         RefreshScene();
         Viewport.FitBounds(new[] { wn.MinX, wn.MinY, wn.MaxX, wn.MaxY });
         var inv = System.Globalization.CultureInfo.InvariantCulture;
-        _lastBlocks = blocks;   // 供资源量/剥采比等复用
         StatusMsg.Text = $"实体转块体：格边 {cell.ToString("0.##", inv)} · {blocks.Count} 块 · 体积 {(blocks.Count * cell * cell * cell).ToString("0.#", inv)}(已入场景, 可接资源量/筛选)";
     }
 
@@ -2438,9 +2454,9 @@ public partial class MainWindow : Window
         var r = BlockModel.Load(files[0].Path.LocalPath);
         if (!r.Success) { StatusMsg.Text = $"块体导入失败：{r.Error}"; return; }
         _lastBlocks = r.Blocks;   // 供资源量估算
-        var cells = BlockModel.BuildCells(r.Blocks, r.GradeMin, r.GradeMax);
+        _blockGmin = r.GradeMin; _blockGmax = r.GradeMax;
         BeginChange();
-        foreach (var e in cells) _scene.Add(e);
+        RenderBlocks(r.Blocks);
         RefreshScene();
         Viewport.FitBounds(r.Bounds);
         StatusMsg.Text = $"块体模型：{r.Blocks.Count} 块 · 品位 {r.GradeMin:0.##}~{r.GradeMax:0.##}(均 {r.GradeMean:0.##})";
@@ -2670,6 +2686,83 @@ public partial class MainWindow : Window
         try { System.IO.File.WriteAllText(file.Path.LocalPath, txt); }
         catch (System.Exception ex) { StatusMsg.Text = $"输出报告：写出失败 {ex.Message}"; return; }
         StatusMsg.Text = $"输出报告：资源量报告已保存 → {System.IO.Path.GetFileName(file.Path.LocalPath)}";
+    }
+
+    // 块体着色：按品位配色重渲全部块体(恢复全显)
+    private void ColorBlocksCmd()
+    {
+        if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "块体着色：请先导入/生成块体"; return; }
+        BeginChange(); RenderBlocks(_lastBlocks); RefreshScene();
+        StatusMsg.Text = $"块体着色：{_lastBlocks.Count} 块按品位配色（蓝低→红高）";
+    }
+
+    // 筛选块体：只显示品位 ≥ 平均品位 的块(矿块)
+    private void FilterBlocksCmd()
+    {
+        if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "筛选块体：请先导入/生成块体"; return; }
+        double gsum = 0; foreach (var b in _lastBlocks) gsum += b.Grade; double cutoff = gsum / _lastBlocks.Count;
+        var sub = _lastBlocks.Where(b => b.Grade >= cutoff).ToList();
+        BeginChange(); RenderBlocks(sub); RefreshScene();
+        StatusMsg.Text = $"筛选块体：品位≥{cutoff:0.###} → 显示 {sub.Count}/{_lastBlocks.Count} 块（块体着色 恢复全显）";
+    }
+
+    // 约束块体：只保留(显示)落在选中闭合多段线内的块
+    private void ConstrainBlocksCmd()
+    {
+        if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "约束块体：请先导入/生成块体"; return; }
+        PolylineEntity? bnd = null;
+        foreach (var e in _selected) if (e is PolylineEntity p && p.Closed && p.Points.Count >= 3) { bnd = p; break; }
+        if (bnd == null) { StatusMsg.Text = "约束块体：请先选中一条闭合多段线作约束边界"; return; }
+        var sub = _lastBlocks.Where(b => LineMath.PointInPolygon(b.X, b.Y, bnd.Points)).ToList();
+        if (sub.Count == 0) { StatusMsg.Text = "约束块体：边界内无块体"; return; }
+        BeginChange(); RenderBlocks(sub); RefreshScene();
+        StatusMsg.Text = $"约束块体：边界内 {sub.Count}/{_lastBlocks.Count} 块（块体着色 恢复全显）";
+    }
+
+    // 删除块体：移除全部块体方块 + 清工作集
+    private void DeleteBlocksCmd()
+    {
+        if (_blockCellEntities.Count == 0 && (_lastBlocks == null || _lastBlocks.Count == 0)) { StatusMsg.Text = "删除块体：无块体"; return; }
+        BeginChange();
+        foreach (var e in _blockCellEntities) _scene.Remove(e);
+        _blockCellEntities.Clear(); _lastBlocks = null;
+        RefreshScene();
+        StatusMsg.Text = "已删除全部块体";
+    }
+
+    // 切面剖切：只显示中心落在 选中直线/多段线 一个块宽带内的块(沿线剖面切片)
+    private void SectionBlocksCmd()
+    {
+        if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "切面剖切：请先导入/生成块体"; return; }
+        List<(double x, double y)>? line = null;
+        foreach (var e in _selected)
+        {
+            if (e is LineEntity l) { line = new() { (l.X0, l.Y0), (l.X1, l.Y1) }; break; }
+            if (e is PolylineEntity p && p.Points.Count >= 2) { line = new List<(double x, double y)>(p.Points); break; }
+        }
+        if (line == null) { StatusMsg.Text = "切面剖切：请先选中一条直线/多段线作剖切线"; return; }
+        double band = _lastBlocks[0].Size;
+        var sub = _lastBlocks.Where(b => PtToPolylineDist(b.X, b.Y, line) <= band).ToList();
+        if (sub.Count == 0) { StatusMsg.Text = "切面剖切：剖切线附近无块体"; return; }
+        BeginChange(); RenderBlocks(sub); RefreshScene();
+        StatusMsg.Text = $"切面剖切：沿线切片 {sub.Count}/{_lastBlocks.Count} 块（带宽 {band:0.##}；块体着色 恢复全显）";
+    }
+
+    // 点到折线最近距离(逐段点-段距)
+    private static double PtToPolylineDist(double px, double py, IReadOnlyList<(double x, double y)> line)
+    {
+        double best = double.MaxValue;
+        for (int i = 0; i + 1 < line.Count; i++)
+        {
+            var a = line[i]; var b = line[i + 1];
+            double dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
+            double t = l2 < 1e-12 ? 0 : ((px - a.x) * dx + (py - a.y) * dy) / l2;
+            t = t < 0 ? 0 : (t > 1 ? 1 : t);
+            double qx = a.x + t * dx, qy = a.y + t * dy, ex = px - qx, ey = py - qy;
+            double d = System.Math.Sqrt(ex * ex + ey * ey);
+            if (d < best) best = d;
+        }
+        return best;
     }
 
     // 多边形圈选：以选中的闭合多段线为边界，选中其内实体
