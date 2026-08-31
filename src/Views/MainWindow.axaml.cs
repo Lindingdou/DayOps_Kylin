@@ -1931,18 +1931,20 @@ public partial class MainWindow : Window
         double dx = wn.MaxX - wn.MinX, dy = wn.MaxY - wn.MinY, dz = wn.MaxZ - wn.MinZ;
         double diag = System.Math.Sqrt(dx * dx + dy * dy + dz * dz);
         double cell = diag > 0 ? diag / 60.0 : 1.0;   // 格边=包围盒对角/60(约束总格数)
-        long occupied = 0, total = 0;
-        for (double z = wn.MinZ + cell * 0.5; z <= wn.MaxZ; z += cell)
-            for (double y = wn.MinY + cell * 0.5; y <= wn.MaxY; y += cell)
-                for (double x = wn.MinX + cell * 0.5; x <= wn.MaxX; x += cell)
-                {
-                    total++;
-                    if (wn.IsInsideClosed(x, y, z)) occupied++;
-                }
-        double voxelVol = occupied * cell * cell * cell;
+        // 分标高体素体积(忠实原「整体+分标高」)：10 个高程带，各带占用体积
+        double bandH = (wn.MaxZ - wn.MinZ) / 10.0;
+        var bands = VoxelBands.ByElevation(wn.MinX, wn.MaxX, wn.MinY, wn.MaxY, wn.MinZ, wn.MaxZ,
+            cell, bandH, wn.IsInsideClosed);
+        long occupied = 0;
+        double voxelVol = 0;
+        foreach (var b in bands) { occupied += b.Cells; voxelVol += b.Volume; }
         var m = MeshMetrics.Compute(mv, mt);
         var inv = System.Globalization.CultureInfo.InvariantCulture;
-        StatusMsg.Text = $"体素格网体积：格边 {cell.ToString("0.##", inv)} · 占用 {occupied}/{total} 格 · 体素体积 {voxelVol.ToString("0.#", inv)}(精确 {m.Volume.ToString("0.#", inv)})";
+        var name = await SaveCsvAsync("导出分标高体积", "voxel_volume_by_elevation.csv", VoxelBands.ToCsv(bands));
+        var top = bands.Count > 0 ? bands.OrderByDescending(b => b.Volume).First() : default;
+        StatusMsg.Text = $"体素格网体积：格边 {cell.ToString("0.##", inv)} · 占用 {occupied} 格 · 体素体积 {voxelVol.ToString("0.#", inv)}(精确 {m.Volume.ToString("0.#", inv)}) · {bands.Count} 标高带"
+            + (bands.Count > 0 ? $"(峰 {top.ZLow.ToString("0.#", inv)}~{top.ZHigh.ToString("0.#", inv)}m={top.Volume.ToString("0.#", inv)})" : "")
+            + (name != null ? $" → {name}" : "");
     }
 
     // 实体转块体：选封闭 OFF → GWN 逐格判内外 → 占用格作块体(BlockModel.Block)入场景
