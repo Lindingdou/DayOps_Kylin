@@ -134,8 +134,10 @@ public sealed class NodeGraph
             {
                 var c = AsV3(EvalInput(n, 0, visiting));
                 int sides = Math.Max(3, AsI(EvalInput(n, 1, visiting), 6));
-                double r = AsD(EvalInput(n, 2, visiting), 10);
-                return new PolygonEntity { Cx = c.X, Cy = c.Y, Radius = Math.Abs(r), Sides = sides, Rotation = 0 };
+                double r = Math.Abs(AsD(EvalInput(n, 2, visiting), 10));
+                bool inscribed = EvalInput(n, 3, visiting) is bool ib ? ib : true;   // true=内接(顶点在半径圆上), false=外切(边中点在半径圆上)
+                if (!inscribed && sides >= 3) r /= Math.Cos(Math.PI / sides);         // 外切: 顶点半径放大到边中点=输入半径
+                return new PolygonEntity { Cx = c.X, Cy = c.Y, Radius = r, Sides = sides, Rotation = 0 };
             }
             case NodeKind.Polyline:
             {
@@ -174,7 +176,7 @@ public sealed class NodeGraph
         NodeKind.Circle => ("圆", 2, 1, new object?[] { new Vec3(0, 0, 0), 10.0 }, null),
         NodeKind.Arc => ("圆弧", 4, 1, new object?[] { new Vec3(0, 0, 0), 10.0, 0.0, 90.0 }, null),
         NodeKind.Rectangle => ("矩形", 2, 1, new object?[] { new Vec3(0, 0, 0), new Vec3(10, 10, 0) }, null),
-        NodeKind.Polygon => ("多边形", 3, 1, new object?[] { new Vec3(0, 0, 0), 6, 10.0 }, null),
+        NodeKind.Polygon => ("多边形", 4, 1, new object?[] { new Vec3(0, 0, 0), 6, 10.0, true }, null),   // 内接开关(忠实原 PolygonNode: Center/Sides/Radius/Inscribed)
         NodeKind.Polyline => ("多段线", 2, 1, new object?[] { new List<Vec3> { new(0, 0, 0), new(10, 0, 0), new(10, 10, 0) }, false }, null),
         NodeKind.Bake => ("烘焙", 1, 1, new object?[] { null }, null),
         _ => ("节点", 1, 1, new object?[] { null }, null)

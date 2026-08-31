@@ -1675,3 +1675,11 @@ follow-on 续: KDF 导出(#59)+多行文字(#70)交叉——KDF 导出多行文�
 - **多行文字跨格式保真闭环**: 创建 + 渲染 + **DXF(MText)** + **KDF(AcDbMText)** + .pmx(JSON \n) 全往返, 导入均归单一多行实体。
 
 **本会话累计补 73 真功能/保真 + 4 潜伏 bug 修 + 多处忠实性/深度证伪, 991 测。**
+
+## 一三五、节点编辑器 多边形节点 内接开关 —— 节点参数 diff
+
+present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入参数** vs 原版 `Modules/.../Nodes/*Node.cs` 的 `AddInput`。原 `PolygonNode` = **4 入**(Center/Sides/Radius/**Inscribed**), Kylin `NodeKind.Polygon` 只 3 入(缺 Inscribed)。补:
+- [x] **多边形节点加 Inscribed 输入**(第 4 入, 默认 true): 内接(顶点在半径圆)/外切(边中点在半径圆, 半径 `r/cos(π/sides)` 放大)。
+- [x] 1 测: 默认内接半径 10; 连 false 布尔→外切 6 边半径 `10/cos(30°)` 放大。992 测。
+
+**本会话累计补 74 真功能/保真 + 4 潜伏 bug 修 + 多处忠实性/深度证伪, 992 测。** 新透镜: 节点编辑器逐节点参数 diff(下步核其余节点)。

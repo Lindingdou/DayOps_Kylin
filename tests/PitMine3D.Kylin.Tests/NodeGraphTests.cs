@@ -112,6 +112,21 @@ public class NodeGraphTests
     }
 
     [Fact]
+    public void Polygon_node_inscribed_vs_circumscribed()
+    {
+        var g = new NodeGraph();
+        var poly = g.AddNode(NodeKind.Polygon, 0, 0);
+        Assert.Equal(4, poly.InputCount);                     // Center/Sides/Radius/Inscribed(忠实原 PolygonNode)
+        var inscr = Assert.IsType<PolygonEntity>(g.Evaluate(poly.Id));
+        Assert.Equal(10, inscr.Radius, 4);                    // 默认内接: 顶点半径=10
+
+        var bl = g.AddNode(NodeKind.Bool, 0, 0);              // 布尔默认 false → 外切
+        Assert.True(g.Connect(bl.Id, 0, poly.Id, 3));
+        var circum = Assert.IsType<PolygonEntity>(g.Evaluate(poly.Id));
+        Assert.Equal(10.0 / System.Math.Cos(System.Math.PI / 6), circum.Radius, 4);   // 外切 6 边: 半径放大到边中点=10
+    }
+
+    [Fact]
     public void Arc_geometry_matches_center_radius_angles()
     {
         // 默认 圆心(0,0) 半径10 起0° 终90° → 起点(10,0) 端点(0,10)
