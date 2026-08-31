@@ -899,6 +899,8 @@ public partial class MainWindow : Window
             if (cmd == "导入LAS" || cmd == "加载LAS" || cmd == "LAS导入" || cmd == "导入激光点云") { await LoadLasAsync("导入LAS"); return; }
             if (cmd == "LAS真彩色" || cmd == "点云真实色" || cmd == "真实色导入LAS" || cmd == "LAS真实色") { await LoadLasAsync("LAS真彩色"); return; }
             if (cmd == "LAS强度色" || cmd == "点云强度着色" || cmd == "强度着色导入LAS" || cmd == "LAS强度着色") { await LoadLasAsync("LAS强度色"); return; }
+            if (cmd == "LAS分类着色" || cmd == "点云分类着色" || cmd == "按分类着色") { await LoadLasAsync("LAS分类着色"); return; }
+            if (cmd == "LAS剔除植被建筑" || cmd == "点云剔除非地面" || cmd == "剔除植被建筑" || cmd == "LAS保留地面") { await LoadLasAsync("LAS剔除植被"); return; }
             if (cmd == "正射着色" || cmd == "真实色" || cmd == "影像着色" || cmd == "正射影像着色") { await OrthoColorAsync(); return; }
             if (cmd == "逐点坡度/坡向" || cmd == "逐点坡度坡向" || cmd == "法向估计" || cmd == "点云法向") { await PointNormalsAsync(); return; }
             if (cmd == "高程截断" || cmd == "高程裁剪" || cmd == "Z截断") { await ElevationClipAsync(); return; }
@@ -3064,26 +3066,34 @@ public partial class MainWindow : Window
         if (wantIntensity) foreach (var iv in r.Intensity) { if (iv < iMin) iMin = iv; if (iv > iMax) iMax = iv; }
         float iRange = iMax > iMin ? iMax - iMin : 1;
         bool useIntensity = wantIntensity && r.Intensity.Count == r.Points.Count && iMax > iMin;
+        bool wantClassColor = cmd.Contains("分类");        // "LAS分类着色" → 按 ASPRS 分类码离散配色
+        bool wantGroundFilter = cmd.Contains("非地面") || cmd.Contains("剔除植被");   // 语义剔除植被/建筑(pc_remove_obs)
+        bool hasClass = r.Classification.Count == r.Points.Count;
+        bool useClassColor = wantClassColor && hasClass;
+        int filtered = 0;
         BeginChange();
         for (int i = 0; i < r.Points.Count; i++)
         {
+            byte cls = hasClass ? r.Classification[i] : (byte)0;
+            if (wantGroundFilter && (cls == 3 || cls == 4 || cls == 5 || cls == 6 || cls == 7)) { filtered++; continue; }   // 低/中/高植被/建筑/噪声
             var p = r.Points[i];
             var pe = new PointEntity { X = p.x, Y = p.y };
             (float cr, float cg, float cb) Col()
             {
                 if (useRgb) { var c = r.Colors![i]; return (c.r, c.g, c.b); }
                 if (useIntensity) { float g = (r.Intensity[i] - iMin) / iRange; return (g, g, g); }
+                if (useClassColor) return HueColor(cls);
                 return (0.75f, 0.78f, 0.82f);
             }
             var (cr0, cg0, cb0) = Col(); pe.Cr = cr0; pe.Cg = cg0; pe.Cb = cb0;
             AssignLayer(pe);
-            if (useRgb || useIntensity) { var (cr, cg, cb) = Col(); pe.Cr = cr; pe.Cg = cg; pe.Cb = cb; }   // AssignLayer 可能改色, 置回
+            if (useRgb || useIntensity || useClassColor) { var (cr, cg, cb) = Col(); pe.Cr = cr; pe.Cg = cg; pe.Cb = cb; }   // AssignLayer 可能改色, 置回
             _scene.Add(pe);
         }
         RefreshScene();
         Viewport.FitBounds(new[] { r.MinX, r.MinY, r.MaxX, r.MaxY });
         var inv = System.Globalization.CultureInfo.InvariantCulture;
-        string colorNote = useRgb ? "真实色(RGB)" : useIntensity ? $"强度灰阶[{iMin:0}~{iMax:0}]" : (wantRgb ? $"无RGB(点格式{r.PointFormat}), 灰显" : wantIntensity ? "强度无变化, 灰显" : "灰显");
+        string colorNote = wantGroundFilter ? $"剔除植被/建筑 {filtered} 点(按分类)" : useRgb ? "真实色(RGB)" : useIntensity ? $"强度灰阶[{iMin:0}~{iMax:0}]" : useClassColor ? "分类离散色" : (wantRgb ? $"无RGB(点格式{r.PointFormat}), 灰显" : wantIntensity ? "强度无变化, 灰显" : "灰显");
         StatusMsg.Text = $"导入 LAS(v{r.VersionMajor}.{r.VersionMinor})：{r.PointCount} 点"
             + (r.Points.Count < r.PointCount ? $"(抽稀显示 {r.Points.Count})" : "")
             + $" · {colorNote} · 范围 X[{r.MinX.ToString("0.#", inv)}~{r.MaxX.ToString("0.#", inv)}] Z[{r.MinZ.ToString("0.#", inv)}~{r.MaxZ.ToString("0.#", inv)}]";

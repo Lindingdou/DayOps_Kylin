@@ -19,6 +19,7 @@ public static class LasImportService
         public List<(double x, double y, double z)> Points = new();  // 抽稀后实际读入
         public List<(float r, float g, float b)>? Colors;        // 含 RGB 的点格式(2/3/5/7/8)才非 null; 与 Points 同长
         public List<float> Intensity = new();                    // 回波强度(所有点格式偏移12均有, uint16 原值); 与 Points 同长
+        public List<byte> Classification = new();                // ASPRS 分类码(2=地面/3-5=植被/6=建筑…); 与 Points 同长
         public double MinX, MaxX, MinY, MaxY, MinZ, MaxZ;         // 头里的包围盒
     }
 
@@ -60,6 +61,7 @@ public static class LasImportService
         if (recLen < 12 || offsetToPoints < 227 || pointCount <= 0) { r.Success = true; return r; }   // 头有效但无点
 
         int rgbOff = RgbOffset(r.PointFormat);   // 有 RGB 的点格式 → 逐点读真实色
+        int classOff = r.PointFormat <= 5 ? 15 : 16;   // 分类码字节偏移(ASPRS: 格式0-5=15, 格式6-10=16)
         long step = (maxPoints > 0 && pointCount > maxPoints) ? pointCount / maxPoints : 1;
         if (step < 1) step = 1;
         for (long i = 0; i < pointCount; i += step)
@@ -70,6 +72,8 @@ public static class LasImportService
             int xi = br.ReadInt32(), yi = br.ReadInt32(), zi = br.ReadInt32();
             r.Points.Add((xi * sx + ox, yi * sy + oy, zi * sz + oz));
             r.Intensity.Add(off + 14 <= s.Length ? br.ReadUInt16() : 0);   // 强度: 偏移12(紧接XYZ), 原值
+            if (off + classOff + 1 <= s.Length) { s.Seek(off + classOff, SeekOrigin.Begin); r.Classification.Add(br.ReadByte()); }
+            else r.Classification.Add(0);         // 分类码: 格式≤5 偏移15 / 格式≥6 偏移16
             if (rgbOff >= 0)                      // 真实色(RGB uint16 归一化); 保 Colors 与 Points 同长
             {
                 r.Colors ??= new List<(float, float, float)>();

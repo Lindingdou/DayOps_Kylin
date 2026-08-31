@@ -130,7 +130,9 @@ public class LasImportServiceTests
             bw.Write((int)Math.Round((p.y - oy) / sy));
             bw.Write((int)Math.Round((p.z - oz) / sz));
             bw.Write((ushort)5000);                                // intensity (偏移 12)
-            bw.Write(new byte[6]);                                 // flags..pointsource (偏移 14..19)
+            bw.Write((byte)0);                                     // return-bits (偏移 14)
+            bw.Write((byte)2);                                     // classification=2 地面 (偏移 15)
+            bw.Write(new byte[4]);                                 // scan/user/pointsource (偏移 16..19)
             bw.Write(p.r); bw.Write(p.g); bw.Write(p.b);           // RGB 在偏移 20
         }
         return ms.ToArray();
@@ -152,6 +154,9 @@ public class LasImportServiceTests
         // 强度(偏移12)也读到, 与 Points 同长
         Assert.Equal(2, r.Intensity.Count);
         Assert.Equal(5000f, r.Intensity[0], 1);
+        // 分类码(偏移15)=2 地面, 与 Points 同长
+        Assert.Equal(2, r.Classification.Count);
+        Assert.Equal((byte)2, r.Classification[0]);
     }
 
     [Fact]
