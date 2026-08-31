@@ -909,6 +909,8 @@ public partial class MainWindow : Window
             if (cmd == "点云高程着色" || cmd == "高程着色" || cmd == "点云着色") { await ElevationColorAsync(); return; }
             if (cmd == "色带" || cmd == "配色方案" || cmd.StartsWith("色带 ") || cmd.StartsWith("配色方案 ")) { SetColormapCmd(cmd); return; }
             if (cmd == "图例" || cmd == "色带图例" || cmd.StartsWith("图例 ")) { PlaceLegend(cmd); return; }   // 图例 [min max]
+            if (cmd == "指北针" || cmd == "指北" || cmd == "北针") { PlaceNorthArrow(); return; }
+            if (cmd == "比例尺" || cmd == "标尺") { PlaceScaleBar(); return; }
             if (cmd == "加载点云" || cmd == "展点" || cmd == "导入点云" || cmd == "加载点") { await LoadPointCloudAsync(); return; }
             if (cmd == "导入LAS" || cmd == "加载LAS" || cmd == "LAS导入" || cmd == "导入激光点云") { await LoadLasAsync("导入LAS"); return; }
             if (cmd == "LAS真彩色" || cmd == "点云真实色" || cmd == "真实色导入LAS" || cmd == "LAS真实色") { await LoadLasAsync("LAS真彩色"); return; }
@@ -2973,6 +2975,31 @@ public partial class MainWindow : Window
     }
 
     // 色带切换：「色带 <名>」设当前色带(Terrain/Jet/Grayscale/Viridis/Turbo/Magma/Plasma), 影响后续高程/属性着色。
+    // 指北针：竖直箭头(指上=北)入场景右下。忠实原版"指北针"
+    private void PlaceNorthArrow()
+    {
+        double w = ViewportHost.Bounds.Width, h = ViewportHost.Bounds.Height;
+        var p0 = Viewport.ScreenToWorld(w * 0.9, h * 0.85) ?? (0.0, 0.0);
+        var p1 = Viewport.ScreenToWorld(w * 0.9, h * 0.68) ?? (0.0, 10.0);
+        double size = System.Math.Abs(p1.y - p0.y); if (size < 1e-6) size = 10;
+        var ents = MapDecor.NorthArrow(p0.x, System.Math.Min(p0.y, p1.y), size);
+        BeginChange(); foreach (var e in ents) { e.LayerName = _layers.Current.Name; _scene.Add(e); } RefreshScene();
+        StatusMsg.Text = "指北针：入场景（右下，Y+ 为北，可移动/删除）";
+    }
+
+    // 比例尺：取整长度的水平标尺入场景左下。忠实原版"比例尺"
+    private void PlaceScaleBar()
+    {
+        double w = ViewportHost.Bounds.Width, h = ViewportHost.Bounds.Height;
+        var pL = Viewport.ScreenToWorld(w * 0.06, h * 0.94) ?? (0.0, 0.0);
+        var pR = Viewport.ScreenToWorld(w * 0.26, h * 0.94) ?? (100.0, 0.0);
+        double worldLen = MapDecor.NiceLength(System.Math.Abs(pR.x - pL.x));
+        double textH = System.Math.Max(worldLen * 0.08, 1e-3);
+        var ents = MapDecor.ScaleBar(pL.x, pL.y, worldLen, textH);
+        BeginChange(); foreach (var e in ents) { e.LayerName = _layers.Current.Name; _scene.Add(e); } RefreshScene();
+        StatusMsg.Text = $"比例尺：{worldLen:0.#} 世界单位（入场景，可移动/删除）";
+    }
+
     // 色带图例：色条(当前色带渐变)+值标签 入场景左下(世界坐标)。忠实原版"图例"。值域=命令给或最近着色
     private void PlaceLegend(string cmd)
     {
@@ -7893,7 +7920,7 @@ public partial class MainWindow : Window
         "网格度量","网格诊断","创建三角网","约束三角网","裁剪三角网","网格焊接","网格边界","网格交线","网格剖面","网格光顺","合并三角网","固化成体","侧面三角网","立方体","球体","圆柱","体素格网体积","实体转块体",
         // 区域/地形/点云
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
-        "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","点云质量统计","点云裁剪",
+        "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","点云质量统计","点云裁剪",
         // 块体/运输/路网
         "块体模型","资源量","道路横断面","路面生成","纵坡分析","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","演化对比","螺旋斜坡道","折返斜坡道",
         // 生产计划/投影
