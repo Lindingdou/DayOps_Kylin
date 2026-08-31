@@ -31,6 +31,34 @@ public class SceneIOTests
     }
 
     [Fact]
+    public void Save_load_roundtrip_preserves_style_attributes()
+    {
+        var s = new Scene();
+        s.Add(new LineEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 0, Dash = DashPattern.ByName("虚线"), LineWeight = 25, Visible = false });
+        s.Add(new TextEntity { X = 1, Y = 2, Height = 3, Text = "甲", HAlign = 1, VAlign = 2, WidthFactor = 0.8, ObliqueAngle = 0.3 });
+
+        var s2 = SceneIO.Load(SceneIO.Save(s));
+
+        var line = Assert.IsType<LineEntity>(s2.Entities[0]);
+        Assert.Equal(new[] { 6.0, 3.0 }, line.Dash!);   // 线型持久化
+        Assert.Equal(25, line.LineWeight);              // 线宽持久化
+        Assert.False(line.Visible);                     // 隐藏持久化
+        var txt = Assert.IsType<TextEntity>(s2.Entities[1]);
+        Assert.Equal(1, txt.HAlign); Assert.Equal(2, txt.VAlign);   // 对齐持久化
+        Assert.Equal(0.8, txt.WidthFactor, 6);          // 字宽持久化
+        Assert.Equal(0.3, txt.ObliqueAngle, 6);         // 倾斜持久化
+    }
+
+    [Fact]
+    public void Old_pmx_without_style_fields_loads_with_defaults()
+    {
+        // 旧 .pmx(无 D/W/H/Wf 字段) 仍可读, 属性回退默认(实线/ByLayer/可见/字宽1)
+        var s2 = SceneIO.Load("[{\"T\":\"line\",\"N\":[0,0,10,0],\"C\":[0.8,0.8,0.8],\"L\":\"0\"}]");
+        var line = Assert.IsType<LineEntity>(s2.Entities[0]);
+        Assert.Null(line.Dash); Assert.Equal(-1, line.LineWeight); Assert.True(line.Visible);
+    }
+
+    [Fact]
     public void Load_empty_or_garbage_is_safe()
     {
         Assert.Equal(0, SceneIO.Load("[]").Count);

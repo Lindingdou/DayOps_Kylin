@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace PitMine3D.Kylin.Cad.Draw;
 
@@ -24,6 +25,14 @@ public static class SceneIO
         public float[] C { get; set; } = { 0.86f, 0.9f, 0.6f };
         public string L { get; set; } = "0";   // 图层名
         public string? S { get; set; }          // 文字内容
+        // ── 属性保真(缺省省略 → 旧 .pmx 兼容; 缺字段回退默认) ──
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public double[]? D { get; set; }   // 线型虚线样式(null=实线)
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public short? W { get; set; }       // 线宽(null=ByLayer -1)
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool H { get; set; }         // 隐藏(false=可见)
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public double? Wf { get; set; }     // 文字字宽比(null=1)
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public double Ob { get; set; }      // 文字倾斜角(0)
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public int Ha { get; set; }         // 文字水平对齐(0=左)
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public int Va { get; set; }         // 文字垂直对齐(0=基线)
     }
 
     private sealed class LayerDto
@@ -76,6 +85,14 @@ public static class SceneIO
             if (d == null) continue;
             d.C = new[] { e.Cr, e.Cg, e.Cb };
             d.L = e.LayerName;
+            d.D = e.Dash;                                              // 线型
+            d.W = e.LineWeight == -1 ? (short?)null : e.LineWeight;    // 线宽(ByLayer 省略)
+            d.H = !e.Visible;                                          // 隐藏
+            if (e is TextEntity txe)                                   // 文字格式
+            {
+                if (txe.WidthFactor != 1) d.Wf = txe.WidthFactor;
+                d.Ob = txe.ObliqueAngle; d.Ha = txe.HAlign; d.Va = txe.VAlign;
+            }
             list.Add(d);
         }
         return list;
@@ -101,6 +118,13 @@ public static class SceneIO
             if (e == null) continue;
             if (d.C is { Length: >= 3 }) { e.Cr = d.C[0]; e.Cg = d.C[1]; e.Cb = d.C[2]; }
             e.LayerName = string.IsNullOrEmpty(d.L) ? "0" : d.L;
+            e.Dash = d.D;                              // 线型
+            e.LineWeight = d.W ?? -1;                  // 线宽(缺=ByLayer)
+            e.Visible = !d.H;                          // 隐藏
+            if (e is TextEntity txe)                   // 文字格式
+            {
+                txe.WidthFactor = d.Wf ?? 1; txe.ObliqueAngle = d.Ob; txe.HAlign = d.Ha; txe.VAlign = d.Va;
+            }
             scene.Add(e);
         }
     }
