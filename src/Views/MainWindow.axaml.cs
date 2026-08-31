@@ -672,6 +672,7 @@ public partial class MainWindow : Window
             if (cmd == "C2C" || cmd == "点云比对") { await CloudCompareAsync(); return; }
             if (cmd == "境界圈定" || cmd == "凸包" || cmd == "确定境界" || cmd == "采场圈定" || cmd == "采场/排土场圈定") { await BoundaryHullAsync(); return; }
             if (cmd == "采区划分" || cmd == "采区" || cmd == "储量均衡划分") { PanelSplitCmd(); return; }
+            if (cmd == "规划计算" || cmd == "开采程序评价" || cmd == "程序评价") { ProgramEvaluateCmd(); return; }
             if (cmd == "剖面分析" || cmd == "剖面" || cmd == "点云剖面") { await SectionProfileAsync(); return; }
             if (cmd == "粗糙度" || cmd == "地表粗糙度") { await RoughnessAsync(); return; }
             if (cmd == "曲率" || cmd == "地表曲率") { await CurvatureAsync(); return; }
@@ -2788,6 +2789,22 @@ public partial class MainWindow : Window
         double totCoal = panels.Sum(p => p.CoalWanT);
         var first = panels.OrderBy(p => p.Order).First();
         StatusMsg.Text = $"采区划分：{panels.Count} 采区(等煤量) · 总煤 {totCoal:0} 万t · 首采区剥采比 {first.StripRatio:0.##} · 服务 {first.ServiceLifeYears:0.#}a(蓝→红=开采序)";
+    }
+
+    // 规划计算：块体→剥采比场→采区划分→开采程序系统指标评价 报表
+    private void ProgramEvaluateCmd()
+    {
+        if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "规划计算：请先导入/生成块体"; return; }
+        double gsum = 0; foreach (var b in _lastBlocks) gsum += b.Grade;
+        double cutoff = gsum / _lastBlocks.Count;
+        var blocks = _lastBlocks.Select(b => (b.X, b.Y, b.Z, b.Size, b.Grade)).ToList();
+        var field = StripRatioField.FromBlocks(blocks, cutoff, 1.35);
+        if (field == null) { StatusMsg.Text = "规划计算：剥采比场构建失败"; return; }
+        var plan = new MiningPlanParams();
+        var panels = PanelSplitter.Split(plan, field);
+        if (panels.Count == 0) { StatusMsg.Text = "规划计算：未切出采区"; return; }
+        var r = ProgramEvaluator.Evaluate(plan, panels);
+        StatusMsg.Text = $"规划计算：{r.PanelCount} 采区 · 服务 {r.ServiceLifeYears:0.#}a · 峰值剥采比 {r.ProductionRatioPeak:0.##} · 储量均衡 {r.ReserveBalanceCoef:0.##} · 内排率 {r.InnerDumpPct:0}% · 基建剥离 {r.BasicStrippingYiM3:0.##}亿m³ · 平均运距 {r.AvgHaulKm:0.##}km · NPV {r.Npv:0}万元 · 校核{(r.Ok ? "通过" : "待校核")}";
     }
 
     // 组合工作线：合并选中的多段线（端点相接连成一条）

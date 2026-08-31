@@ -79,4 +79,36 @@ public class PanelSplitTests
         var f = new StripRatioField { Nx = 0, Ny = 0, Density = 1.35 };
         Assert.Empty(PanelSplitter.Split(new MiningPlanParams(), f));
     }
+
+    [Fact]
+    public void Evaluate_computes_system_indicators()
+    {
+        var f = UniformField(12, 12, 1_000_000, 1_500_000);   // 现实体积(万t 不舍入为 0)
+        var plan = new MiningPlanParams { Split = SplitObjective.FixedN, PanelCount = 4, AdvanceAzimuthDeg = 0 };
+        var panels = PanelSplitter.Split(plan, f);
+        var r = ProgramEvaluator.Evaluate(plan, panels);
+        Assert.Equal(4, r.PanelCount);
+        Assert.True(r.ProductionRatioPeak > 0);
+        Assert.InRange(r.ReserveBalanceCoef, 0.0, 1.0);
+        // 均匀场 → 采区煤量相等 → 储量均衡系数≈1
+        Assert.Equal(1.0, r.ReserveBalanceCoef, 1);
+        Assert.True(r.ServiceLifeYears > 0);
+    }
+
+    [Fact]
+    public void Evaluate_uniform_field_peak_equals_uniform_strip()
+    {
+        var f = UniformField(10, 10, 100, 200);   // 剥采比 200/(100·1.35)=1.48
+        var plan = new MiningPlanParams { Split = SplitObjective.FixedN, PanelCount = 5, AdvanceAzimuthDeg = 0 };
+        var r = ProgramEvaluator.Evaluate(plan, PanelSplitter.Split(plan, f));
+        Assert.Equal(1.48, r.ProductionRatioPeak, 2);   // 峰值=均匀剥采比
+    }
+
+    [Fact]
+    public void Evaluate_empty_panels_not_ok()
+    {
+        var r = ProgramEvaluator.Evaluate(new MiningPlanParams(), new List<MiningPanel>());
+        Assert.False(r.Ok);
+        Assert.Equal(0, r.PanelCount);
+    }
 }
