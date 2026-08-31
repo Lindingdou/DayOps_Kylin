@@ -41,6 +41,32 @@ public static class MapDecor
         return list;
     }
 
+    /// <summary>
+    /// 标题栏: 外框 + 顶行标题(大字) + 中/底行标签(比例/图号 · 制图/日期)。锚点 (x,y)=左下角。
+    /// 忠实原版"标题栏"。scale 为比例文字(如 "1:1000"), 空则留占位。
+    /// </summary>
+    public static List<SceneEntity> TitleBlock(double x, double y, double w, double h, double textH, string title, string scale)
+    {
+        var list = new List<SceneEntity>();
+        if (w <= 0 || h <= 0 || textH <= 0) return list;
+        // 外框
+        list.Add(L(x, y, x + w, y)); list.Add(L(x + w, y, x + w, y + h));
+        list.Add(L(x + w, y + h, x, y + h)); list.Add(L(x, y + h, x, y));
+        double r = h / 3;                                            // 3 行等高
+        list.Add(L(x, y + r, x + w, y + r));                         // 分隔线(底↔中)
+        list.Add(L(x, y + 2 * r, x + w, y + 2 * r));                 // 分隔线(中↔顶)
+        list.Add(L(x + w / 2, y, x + w / 2, y + 2 * r));             // 下两行竖分隔
+        // 顶行: 标题(大字)
+        list.Add(new TextEntity { X = x + w * 0.04, Y = y + 2 * r + r * 0.3, Height = textH * 1.4, Text = string.IsNullOrEmpty(title) ? "标题" : title, Cr = Col.r, Cg = Col.g, Cb = Col.b });
+        // 中行: 比例 | 图号
+        list.Add(new TextEntity { X = x + w * 0.04, Y = y + r + r * 0.3, Height = textH, Text = "比例 " + (string.IsNullOrEmpty(scale) ? "" : scale), Cr = Col.r, Cg = Col.g, Cb = Col.b });
+        list.Add(new TextEntity { X = x + w * 0.54, Y = y + r + r * 0.3, Height = textH, Text = "图号", Cr = Col.r, Cg = Col.g, Cb = Col.b });
+        // 底行: 制图 | 日期
+        list.Add(new TextEntity { X = x + w * 0.04, Y = y + r * 0.3, Height = textH, Text = "制图", Cr = Col.r, Cg = Col.g, Cb = Col.b });
+        list.Add(new TextEntity { X = x + w * 0.54, Y = y + r * 0.3, Height = textH, Text = "日期", Cr = Col.r, Cg = Col.g, Cb = Col.b });
+        return list;
+    }
+
     /// <summary>取"整"长度: ≈ target 的 1/2/5 × 10^n(比例尺常用刻度)。</summary>
     public static double NiceLength(double target)
     {
