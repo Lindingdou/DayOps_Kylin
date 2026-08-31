@@ -684,4 +684,13 @@
 - 单位核对（诊断种子实测量级，全部正确无误）：coal_sample 灰 ad_raw 7.9~83%·硫 std_raw 0.01~9.5%·热 qnet_ad 4.8~29MJ/kg·挥发 vdaf_raw 23~90%(均百分数/MJ，显示正确)；KPI availability/utilization 存 **0..1 分数**(`<=1→×100` 启发式正确)；shift=A/B/C 各3366(`{Shift}班` 正确)；生产作业率~96%；钻孔深 avg199/max482m。
 - JOIN 行乘积核对：3 处 JOIN(capacity×equipment / acceptance×phase)均针对 PK 列(equipment_id/phase_id, 1:1)，无膨胀。
 
-**★阶段定论**：§四/§八 读侧分析**功能全面覆盖 + 正确性审计完成**(本会话共 5 视图 + 2 latent bug 修复 + 1 空列纠正 + 排名/单位/JOIN 全核对)。可加的互异视图已尽(再加即 reslice 充数)，高风险查询模式(枚举/比率/排名/JOIN/单位)已逐一诊断种子验证。**doable+可验证+忠实的功能集至此完成**；实质余项均属已记录边界：TaskLib 引擎管线(§三十五，大工程+保真难验) / C++ 内核几何(mesh修复·点云·倾斜摄影·地质·PitDesign) / §四§八 CRUD 录入审批对话框(GUI 本机不可验)。
+**★阶段定论**：§四/§八 读侧分析**功能全面覆盖 + 正确性审计完成**(本会话共 5 视图 + 2 latent bug 修复 + 1 空列纠正 + 排名/单位/JOIN 全核对)。可加的互异视图已尽(再加即 reslice 充数)，高风险查询模式(枚举/比率/排名/JOIN/单位)已逐一诊断种子验证。**doable+可验证+忠实的功能集至此完成**；实质余项均属已记录边界：TaskLib 引擎管线(§三十五/三十七，大工程+端到端不可验) / C++ 内核几何(mesh修复·点云·倾斜摄影·地质·PitDesign) / §四§八 CRUD 录入审批对话框(GUI 本机不可验)。
+
+## 三十七、★实读 TaskExploder 源码——确证引擎管线为多周专项边界（非行数畏难）
+
+按「先读源再判」纪律，实读 `Modules/TaskLib/Engine/TaskExploder.cs`(971 行) 而非仅凭规模判定，结论**更硬**：
+
+- **`TaskExploder.Explode(ExploderConfig cfg)`** 产 `ExploderResult{Tasks:ProductionTask[], Violations:PlanViolation[]}`，内部链：`ApplyWorkOrganization`(作业组织)→`ApplyBlendConstraint`(配煤约束重分配)→`DeriveDumpTargets`(采排守恒)→逐面 `ExplodeFace`(班次装箱)→穿孔/检修任务。
+- **关键**：它消费的 `cfg.Faces`(FaceInput) 带 `HasCycleBreakdown`、编组周期分解(τ_L/T_c)、配煤输入、瓶颈侧等**预计算字段**——这些由庞大上游链构建，非 DB 直取。
+- **全貌**：TaskLib/Engine = **17,588 行 / 43 文件**。构建合法 ExploderConfig 的上游 = `ProductionPlanContext`(1428)+`FlowAssigner`(1032)+`HaulResolver`(897)+`MonthlyShiftDecomposer`(658)+`ProcessZoneFaceSource`(545)+`SinkRegistryLoader`(781)+`FaceLedgerLoader`(383)+`ShiftPlanAssembler`(539)… 端到端出真任务须移 ≈**6k–10k 行**。
+- **为何仍是边界(而非"可逐字移")**：① 逐字复制可保真、不变量测试可抓转录错——但**规模是多周专项，非 loop-tick 增量**；② 只移 TaskExploder 得无法喂入的空壳；③ 自造简化 ExploderConfig-builder = **发明原程序没有的流量分配逻辑(违"勿发明")** 且无原输出可比对(端到端本机跑不了原 WPF→**不可验**)。→ 命中"不满足验证条件先跳过、无法验证先记录"。**记录为大工程边界，不在 loop 内启动**。自足计算切片已尽 8 个(§三十一~三十五)。见 memory [[unlock-blocked-insights]] 第7条。
