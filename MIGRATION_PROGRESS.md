@@ -805,3 +805,7 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 - **PMF 地面滤波(记录 native)**：原 地面点滤波 用 **渐进形态学 PMF**(button 描述明示)，但经 `IPointCloudCapability.GroundFilterComputeAsync`(参数 CellSize/MaxWindowM/TerrainSlopeDeg/InitElevThresh)——**算法在 native capability 不可见**。PMF 虽 published 但原变体不可见+变体敏感(不同 PMF→不同地面分类→下游 DEM/体积)。按忠实规则"原算法不可见→不臆测替代"(区别 ForecastModels/FleetOptimizer 源码可见→逐字移；ObjectSnap 平凡无歧义→可移)记录为 native 边界；现最小高程滤波是可用简单托管占位。
 
 **★实现忠实度轴产出丰**：ForecastModels(回归)+FleetOptimizer(编组优化)+BenchLines(台阶距) 三个原**可见托管真实算法**被我用粗略近似/只读表代替，现已逐字补齐。→ 下轴续：CoalQualityEstimator/Analytics 等 GeoDataBase 可见算法服务是否也被近似。
+
+**实现忠实度轴续（commit `f11f18a`）——普通克里金 OK（名实不符修复）**：
+- [x] **克里金估值实为 IDW → 移植真 OK 克里金**：命令名"克里金估值"却做 IDW(`Estimation.cs` 注"IDW 插值")，而原 `CoalQualityEstimator.cs`(336行)有真**普通克里金 OK**——球状变差函数自动拟合(sill=样本方差/range=95%sill滞后/nugget首箱) + 解 (k+1) 阶克里金方程组 + **克里金方差**。逐字移植 OK 核 `src/Cad/OrdinaryKriging.cs`(Variogram 球状 γ(h)/FitVariogram/Krige 方程组/高斯消元 Solve) + 克里金估值命令改用真 OK(逐格 EstimateAt·半径外回落 IDW 免留洞·出平均克里金方差)；IDW 保留为 快速估值。+7 单测(控制点精确内插方差0·球状变差 γ(0)=0/γ(≥range)=sill·方差非负·半径外 null·线性场贴近·单点·空)。
+- **★实现忠实度轴累计 4 真实算法**：ForecastModels(时序回归)/FleetOptimizer(编组优化 DP)/BenchLines(台阶距 W+H/tanα)/OrdinaryKriging(OK 克里金)——皆原**可见托管算法**被我用粗略近似(baseline×12/只读表/短边/10/IDV替克里金)代替，现逐字补齐 + 不变量验证。→ 下候选：CoalQualityAnalytics(647行·洗选/商品煤符合性/用途/品位-储量/分标高/离群QC)。
