@@ -671,7 +671,8 @@ public partial class MainWindow : Window
             if (cmd == "快速估值" || cmd == "品位估值" || cmd == "克里金估值" || cmd == "空间分布") { await EstimateGradeAsync(); return; }
             if (cmd == "点云抽稀" || cmd == "抽稀" || cmd == "点云精简") { await ThinPointsAsync(); return; }
             if (cmd == "地面点滤波" || cmd == "地面滤波") { await GroundFilterAsync(); return; }
-            if (cmd == "C2C" || cmd == "点云比对") { await CloudCompareAsync(); return; }
+            if (cmd == "C2C" || cmd == "点云比对" || cmd == "位移监测 C2C" || cmd == "位移监测") { await CloudCompareAsync(); return; }
+            if (cmd == "画道路中线" || cmd == "手动标定线路" || cmd == "道路中线绘制") { ActivateDrawTool("多段线"); StatusMsg.Text = "画道路中线：绘制折线作道路中线（供路网/寻径/演化对比）"; return; }
             if (cmd == "境界圈定" || cmd == "凸包" || cmd == "采场圈定" || cmd == "采场/排土场圈定") { await BoundaryHullAsync(); return; }
             if (cmd == "确定境界" || cmd == "境界优化" || cmd == "最优坑深" || cmd == "经济境界") { PitDepthCmd(); return; }
             if (cmd == "采区划分" || cmd == "采区" || cmd == "储量均衡划分") { PanelSplitCmd(); return; }
