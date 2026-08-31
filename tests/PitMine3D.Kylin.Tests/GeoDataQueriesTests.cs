@@ -164,6 +164,26 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Import_observation_points_from_csv()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        string seam;
+        using (var c = db.Connection.CreateCommand()) { c.CommandText = "SELECT code FROM coal_seam_def LIMIT 1"; seam = (string)c.ExecuteScalar(); }
+        long before = db.ScalarLong("SELECT COUNT(*) FROM coal_observation_point");
+        var o1 = GeoDataQueries.ImportObservationPoints(db.Connection, new[]
+        { (IReadOnlyDictionary<string,string>)new Dictionary<string,string>{["point_id"]="OBSZZ1",["seam_code"]=seam,["x"]="12345",["y"]="67890",["seam_thickness"]="3.2",["floor_elevation"]="1100"} }, true);
+        Assert.True(o1.Inserted == 1, $"观测点插入: ins={o1.Inserted} err={o1.Errors}");
+        Assert.Equal(before + 1, db.ScalarLong("SELECT COUNT(*) FROM coal_observation_point"));
+        var o2 = GeoDataQueries.ImportObservationPoints(db.Connection, new[]
+        { (IReadOnlyDictionary<string,string>)new Dictionary<string,string>{["point_id"]="OBSZZ1",["seam_code"]=seam,["x"]="1",["y"]="2"} }, true);
+        Assert.Equal(1, o2.Updated);
+        // 缺 x → 错误
+        var o3 = GeoDataQueries.ImportObservationPoints(db.Connection, new[]
+        { (IReadOnlyDictionary<string,string>)new Dictionary<string,string>{["point_id"]="P",["seam_code"]=seam,["y"]="2"} }, true);
+        Assert.Equal(1, o3.Errors);
+    }
+
+    [Fact]
     public void Import_coal_samples_from_csv_with_hole_lookup()
     {
         using var db = GeoDatabase.OpenSeeded();

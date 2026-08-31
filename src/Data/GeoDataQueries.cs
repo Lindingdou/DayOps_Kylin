@@ -691,6 +691,29 @@ public static class GeoDataQueries
         return new ImportOutcome(ins, upd, skip, err);
     }
 
+    /// <summary>见煤观测点 CSV 入库（忠实 CurrentStatePointExcelIo，CSV 替 Excel）：按 point_id+seam_code upsert。列: point_id,seam_code,x,y[,seam_thickness,floor_elevation,original_y_format]。</summary>
+    public static ImportOutcome ImportObservationPoints(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
+    {
+        int ins = 0, upd = 0, skip = 0, err = 0;
+        foreach (var row in rows)
+        {
+            string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
+            string pid = Get("point_id"), seam = Get("seam_code");
+            if (pid.Length == 0 || seam.Length == 0 || !double.TryParse(Get("x"), out double x) || !double.TryParse(Get("y"), out double y)) { err++; continue; }
+            object Num(string k) => double.TryParse(Get(k), out double v) ? v : (object)System.DBNull.Value;
+            int yfmt = int.TryParse(Get("original_y_format"), out int yf) ? yf : 8;
+            bool exists;
+            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM coal_observation_point WHERE point_id=@p AND seam_code=@s"; q.Parameters.AddWithValue("@p", pid); q.Parameters.AddWithValue("@s", seam); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
+            using var cmd = conn.CreateCommand();
+            if (exists) { if (!overwrite) { skip++; continue; } cmd.CommandText = "UPDATE coal_observation_point SET x=@x, y=@y, seam_thickness=@t, floor_elevation=@f, original_y_format=@yf WHERE point_id=@p AND seam_code=@s"; upd++; }
+            else { cmd.CommandText = "INSERT INTO coal_observation_point (point_id, seam_code, x, y, original_y_format, seam_thickness, floor_elevation) VALUES (@p,@s,@x,@y,@yf,@t,@f)"; ins++; }
+            cmd.Parameters.AddWithValue("@p", pid); cmd.Parameters.AddWithValue("@s", seam); cmd.Parameters.AddWithValue("@x", x); cmd.Parameters.AddWithValue("@y", y);
+            cmd.Parameters.AddWithValue("@yf", yfmt); cmd.Parameters.AddWithValue("@t", Num("seam_thickness")); cmd.Parameters.AddWithValue("@f", Num("floor_elevation"));
+            try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
+        }
+        return new ImportOutcome(ins, upd, skip, err);
+    }
+
     public sealed record HorizonPoint(string SeamCode, bool IsRoof, double X, double Y, double Z);
 
     /// <summary>层位展点（忠实 HorizonPointBuilder）：borehole_seam_result join 孔位 → 分煤层 底板(floor_elevation)/顶板(底+采用厚度) 高程点。</summary>

@@ -686,6 +686,7 @@ public partial class MainWindow : Window
             if (cmd == "导入KPI" || cmd == "导入月度KPI" || cmd == "KPI导入" || cmd == "导入可用率") { await ImportCsvToDbAsync("导入月度KPI", "equipment_id,year,month,plan_hours,work_hours,fault_hours,availability,actual_run_rate,utilization_rate", rs => Data.GeoDataQueries.ImportKpiMonthly(EnsureGeoDb()!.Connection, rs, true)); return; }
             if (cmd == "导入设备台账" || cmd == "设备台账导入" || cmd == "导入设备") { await ImportCsvToDbAsync("导入设备台账", "equipment_id,category[,model,manufacturer,origin,status]", rs => Data.GeoDataQueries.ImportEquipmentLedger(EnsureGeoDb()!.Connection, rs, true)); return; }
             if (cmd == "导入煤质" || cmd == "煤质导入" || cmd == "导入煤质化验" || cmd == "煤质数据导入") { await ImportCsvToDbAsync("导入煤质化验", "hole_id,seam_code,depth_from[,ad_raw,std_raw,qgr_d,vdaf_raw,sample_thickness,apparent_density,coal_type,…]", rs => Data.GeoDataQueries.ImportCoalSamples(EnsureGeoDb()!.Connection, rs, true)); return; }
+            if (cmd == "导入观测点" || cmd == "观测点导入" || cmd == "导入见煤点") { await ImportCsvToDbAsync("导入见煤观测点", "point_id,seam_code,x,y[,seam_thickness,floor_elevation]", rs => Data.GeoDataQueries.ImportObservationPoints(EnsureGeoDb()!.Connection, rs, true)); return; }
             if (cmd == "展绘钻孔" || cmd == "钻孔柱状图" || cmd == "导入钻孔数据" || cmd == "原始钻孔柱状图") { await ImportBoreholesAsync(); return; }
             if (cmd == "煤厚分析" || cmd == "煤层厚度分析" || cmd == "煤厚") { await CoalThicknessAsync(); return; }
             if (cmd == "等高线" || cmd == "等高线生产" || cmd == "等值线") { await ContourFromCsvAsync(); return; }
@@ -6361,7 +6362,7 @@ public partial class MainWindow : Window
         // 生产计划/投影
         "境界圈定","剥采比均衡","方案综合对比","开采程序确定","平盘宽度识别","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
-        "设备台账","生产数据","产能分析","故障分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","导入生产记录","导入月度产能","导入故障记录","导入月度KPI","导入设备台账","导入煤质",
+        "设备台账","生产数据","产能分析","故障分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","导入生产记录","导入月度产能","导入故障记录","导入月度KPI","导入设备台账","导入煤质","导入观测点",
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","数据看板","煤种分类",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
         "产能分类对比","故障类型分布","分工序验收合格率","数据导出","达成度评价","产量预测","时序预测","编组优化","智能编组优化","导出编组","导出预测",
