@@ -61,4 +61,30 @@ public class MeshMetricsTests
         Assert.Equal(0, m.SurfaceArea, 6);
         Assert.Equal(0, m.Volume, 6);
     }
+
+    // 单位四面体(0,0,0)(1,0,0)(0,1,0)(0,0,1), 外向绕序, 体积=1/6
+    private static (List<(double x, double y, double z)> v, List<(int a, int b, int c)> t) Tet(bool closed)
+    {
+        var v = new List<(double x, double y, double z)> { (0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1) };
+        var t = new List<(int a, int b, int c)> { (0, 2, 1), (0, 1, 3), (0, 3, 2) };
+        if (closed) t.Add((1, 2, 3));   // 第4面(斜面)
+        return (v, t);
+    }
+
+    [Fact]
+    public void RobustVolume_watertight_tetra_exact()
+    {
+        var (v, t) = Tet(closed: true);
+        Assert.True(MeshDiagnose.Analyze(v, t).IsClosed);
+        Assert.Equal(1.0 / 6.0, MeshMetrics.RobustVolume(v, t), 6);   // 严密 1/6
+    }
+
+    [Fact]
+    public void RobustVolume_open_tetra_caps_and_recovers()
+    {
+        var (v, t) = Tet(closed: false);          // 缺斜面 → 非水密
+        Assert.False(MeshDiagnose.Analyze(v, t).IsClosed);
+        // 补洞封盖后恢复 ≈ 1/6(扇形补洞在缺面平面上, 体积不变)
+        Assert.Equal(1.0 / 6.0, MeshMetrics.RobustVolume(v, t), 4);
+    }
 }

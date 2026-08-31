@@ -26,23 +26,57 @@ public static class MeshMetrics
             if (v.x < minX) minX = v.x; if (v.y < minY) minY = v.y; if (v.z < minZ) minZ = v.z;
             if (v.x > maxX) maxX = v.x; if (v.y > maxY) maxY = v.y; if (v.z > maxZ) maxZ = v.z;
         }
-        double area = 0, vol6 = 0;
+        double area = 0;
         int nt = 0;
         foreach (var (ia, ib, ic) in tris)
         {
             if (ia < 0 || ib < 0 || ic < 0 || ia >= verts.Count || ib >= verts.Count || ic >= verts.Count) continue;
             var a = verts[ia]; var b = verts[ib]; var c = verts[ic];
-            // 面积 = 0.5·|(b-a)×(c-a)|
             double ux = b.x - a.x, uy = b.y - a.y, uz = b.z - a.z;
             double vx = c.x - a.x, vy = c.y - a.y, vz = c.z - a.z;
             double cx = uy * vz - uz * vy, cy = uz * vx - ux * vz, cz = ux * vy - uy * vx;
             area += 0.5 * Math.Sqrt(cx * cx + cy * cy + cz * cz);
-            // 体积 6× = a·(b×c)
-            double bx = b.y * c.z - b.z * c.y, by = b.z * c.x - b.x * c.z, bz = b.x * c.y - b.y * c.x;
-            vol6 += a.x * bx + a.y * by + a.z * bz;
             nt++;
         }
-        return new MeshMetricsResult(verts.Count, nt, area, Math.Abs(vol6) / 6.0, minX, minY, minZ, maxX, maxY, maxZ);
+        return new MeshMetricsResult(verts.Count, nt, area, RobustVolume(verts, tris), minX, minY, minZ, maxX, maxY, maxZ);
+    }
+
+    /// <summary>有向四面体散度法（6×体积）：Σ a·(b×c)。水密网格严密。</summary>
+    private static double SignedVolume6(IReadOnlyList<(double x, double y, double z)> verts, IReadOnlyList<(int a, int b, int c)> tris)
+    {
+        double vol6 = 0;
+        foreach (var (ia, ib, ic) in tris)
+        {
+            if (ia < 0 || ib < 0 || ic < 0 || ia >= verts.Count || ib >= verts.Count || ic >= verts.Count) continue;
+            var a = verts[ia]; var b = verts[ib]; var c = verts[ic];
+            double bx = b.y * c.z - b.z * c.y, by = b.z * c.x - b.x * c.z, bz = b.x * c.y - b.y * c.x;
+            vol6 += a.x * bx + a.y * by + a.z * bz;
+        }
+        return vol6;
+    }
+
+    /// <summary>
+    /// 三角网体积（忠实原 MeshVolume 分级容错）：① 水密 → 散度法【严密】；
+    /// ② 非水密 → 焊接拓扑 + 扇形补洞封盖 → 散度取绝对值（近似正解）。
+    /// </summary>
+    public static double RobustVolume(IReadOnlyList<(double x, double y, double z)> verts, IReadOnlyList<(int a, int b, int c)> tris)
+    {
+        if (verts == null || verts.Count == 0 || tris == null || tris.Count == 0) return 0;
+        var diag = MeshDiagnose.Analyze(verts, tris);
+        if (diag.IsClosed) return Math.Abs(SignedVolume6(verts, tris)) / 6.0;   // 水密 → 严密
+        // 非水密：焊接 → 补洞封盖 → 再散度
+        try
+        {
+            // 焊接容差按坐标尺度取(合并浮点重合顶点, 使补洞能找到闭合环)
+            double mnx = double.MaxValue, mny = double.MaxValue, mnz = double.MaxValue, mxx = double.MinValue, mxy = double.MinValue, mxz = double.MinValue;
+            foreach (var v in verts) { if (v.x < mnx) mnx = v.x; if (v.y < mny) mny = v.y; if (v.z < mnz) mnz = v.z; if (v.x > mxx) mxx = v.x; if (v.y > mxy) mxy = v.y; if (v.z > mxz) mxz = v.z; }
+            double bboxDiag = Math.Sqrt((mxx - mnx) * (mxx - mnx) + (mxy - mny) * (mxy - mny) + (mxz - mnz) * (mxz - mnz));
+            double tol = Math.Max(1e-9, bboxDiag * 1e-7);
+            var w = MeshWeld.Weld(verts, tris, tol);
+            var (cv, ct, _) = MeshHoleFill.Fill(w.Verts, w.Tris);
+            return Math.Abs(SignedVolume6(cv, ct)) / 6.0;
+        }
+        catch { return Math.Abs(SignedVolume6(verts, tris)) / 6.0; }   // 修复失败 → 原始散度兜底
     }
 
     /// <summary>解析 OFF 为 3D (verts, tris)；多边形面按扇形三角化。失败返回 (空, 空)。</summary>
