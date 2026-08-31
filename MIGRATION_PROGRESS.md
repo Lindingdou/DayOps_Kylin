@@ -399,3 +399,14 @@
 - **§七 规划域链**：采区划分/规划计算/派生计划方案/确定开采程序/月度·短期·中长远 计划编制·动态模拟/进度计划出图/刀量切割 —— 需 MiningProgramPlan+PitScheme+StripRatioField 域模型链(见 §十一 记录)。
 - **§六 道路维护/表征**：路况显示/路网预览·更新·存档/增量增删边/边状态/时段快照/分色显示/运输指标报表(🚧) — 需路网图编辑+状态+属性。
 - **UI/对话框**：渲染配置、点云管理、显示/隐藏、AI 助手(聊天引擎)。
+
+## 十三、§七 生产计划求解链落地（原判「受阻·需域链」→ 最小 plan 洞察攻克）
+
+**关键洞察**：PanelSplitter.Split / ProgramEvaluator.Evaluate **只用 MiningProgramPlan 的少数标量字段 + 静态公式**, 无需移全 428 行 MiningProgramPlan + 305 行 PitScheme 域链。以「最小 plan(实际用到的字段 + 默认值照搬)」+ StripRatioField(从稀疏块体按品位阈值聚合的托管采样) 化解。`PanelSplit.cs` 自足。
+
+- [x] **采区划分** commit `813dc6e`：`StripRatioField.FromBlocks`(块体→剥采比场) + `PanelSplitter.Split`(**逐字**, 沿推进轴等煤量/等距切 N 采区, 逐采区 煤/岩/剥采比/工作线长/推进度/序/内外排/服务年限) + `MiningPlanParams`(最小 plan) + `MiningPanel` + `AdvanceRateFrom`。命令 采区划分/储量均衡划分：最近块体→划分→采区矩形(蓝→红=序)入场景+报表。+6 单测。
+- [x] **规划计算** commit `255fc47`：`ProgramEvaluator.Evaluate`(**逐字**, 服务年限/峰值剥采比/储量均衡系数/基建剥离/内外排容量平衡(松散1.2)/达产时间/平均运距(煤量加权)/NPV(分期折现)/校核) + `ProgramResult`。经济口径原取 ProductionCostBook.Current, 此用典型默认(煤价300/采煤80/剥离20/折现8%)。命令 规划计算/开采程序评价。+3 单测。
+- [x] **派生计划方案** commit(本次)：基于 Split+Evaluate 编排——按 采区数{2..6}×方位{0,90} 派生多方案→逐一评价→按 NPV 排名→推荐+前三 报表。命令 派生计划方案/多方案派生。
+- 方案综合对比(ProgramComparer)已于早前会话移植(§十一)。
+
+**记录**：确定开采程序(BoxcutAdvanceOption 打分, 需 BoxcutWeights.Recompute)可续；中长远/短期/月度 计划编制·刀量切割·进度出图 仍需 TaskLib 排产/内核几何。**采区划分参数(采区数/方位/产能/内排)本环境取默认, 无参数对话框**；剥采比场煤岩判别以品位阈值替代原属性分类器(块体仅品位)。

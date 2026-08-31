@@ -673,6 +673,7 @@ public partial class MainWindow : Window
             if (cmd == "境界圈定" || cmd == "凸包" || cmd == "确定境界" || cmd == "采场圈定" || cmd == "采场/排土场圈定") { await BoundaryHullAsync(); return; }
             if (cmd == "采区划分" || cmd == "采区" || cmd == "储量均衡划分") { PanelSplitCmd(); return; }
             if (cmd == "规划计算" || cmd == "开采程序评价" || cmd == "程序评价") { ProgramEvaluateCmd(); return; }
+            if (cmd == "派生计划方案" || cmd == "派生方案" || cmd == "多方案派生") { DerivePlansCmd(); return; }
             if (cmd == "剖面分析" || cmd == "剖面" || cmd == "点云剖面") { await SectionProfileAsync(); return; }
             if (cmd == "粗糙度" || cmd == "地表粗糙度") { await RoughnessAsync(); return; }
             if (cmd == "曲率" || cmd == "地表曲率") { await CurvatureAsync(); return; }
@@ -2805,6 +2806,31 @@ public partial class MainWindow : Window
         if (panels.Count == 0) { StatusMsg.Text = "规划计算：未切出采区"; return; }
         var r = ProgramEvaluator.Evaluate(plan, panels);
         StatusMsg.Text = $"规划计算：{r.PanelCount} 采区 · 服务 {r.ServiceLifeYears:0.#}a · 峰值剥采比 {r.ProductionRatioPeak:0.##} · 储量均衡 {r.ReserveBalanceCoef:0.##} · 内排率 {r.InnerDumpPct:0}% · 基建剥离 {r.BasicStrippingYiM3:0.##}亿m³ · 平均运距 {r.AvgHaulKm:0.##}km · NPV {r.Npv:0}万元 · 校核{(r.Ok ? "通过" : "待校核")}";
+    }
+
+    // 派生计划方案：块体→场→按不同采区数/推进方位派生多方案→逐一评价→按 NPV 排名 报表
+    private void DerivePlansCmd()
+    {
+        if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "派生计划方案：请先导入/生成块体"; return; }
+        double gsum = 0; foreach (var b in _lastBlocks) gsum += b.Grade;
+        double cutoff = gsum / _lastBlocks.Count;
+        var blocks = _lastBlocks.Select(b => (b.X, b.Y, b.Z, b.Size, b.Grade)).ToList();
+        var field = StripRatioField.FromBlocks(blocks, cutoff, 1.35);
+        if (field == null) { StatusMsg.Text = "派生计划方案：剥采比场构建失败"; return; }
+        var variants = new List<(string label, ProgramResult r)>();
+        foreach (int pc in new[] { 2, 3, 4, 5, 6 })
+            foreach (double az in new[] { 0.0, 90.0 })
+            {
+                var plan = new MiningPlanParams { Split = SplitObjective.FixedN, PanelCount = pc, AdvanceAzimuthDeg = az };
+                var panels = PanelSplitter.Split(plan, field);
+                if (panels.Count == 0) continue;
+                var r = ProgramEvaluator.Evaluate(plan, panels);
+                variants.Add(($"{pc}采区/方位{az:0}", r));
+            }
+        if (variants.Count == 0) { StatusMsg.Text = "派生计划方案：未派生出可行方案"; return; }
+        var ranked = variants.OrderByDescending(v => v.r.Npv).ToList();
+        var top = ranked.Take(3).Select(v => $"{v.label}(NPV {v.r.Npv:0}·剥采比{v.r.ProductionRatioPeak:0.##}·均衡{v.r.ReserveBalanceCoef:0.##})");
+        StatusMsg.Text = $"派生计划方案：{variants.Count} 方案 · 推荐 {ranked[0].label} · 前三: " + string.Join(" | ", top);
     }
 
     // 组合工作线：合并选中的多段线（端点相接连成一条）
