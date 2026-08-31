@@ -732,6 +732,9 @@ public partial class MainWindow : Window
             if (cmd == "机群总览" || cmd == "设备总览" || cmd == "机群") { FleetOverviewCmd(); return; }
             if (cmd == "数据看板" || cmd == "看板" || cmd == "调度态势看板" || cmd == "态势看板") { DataBoardCmd(); return; }
             if (cmd == "煤种分类" || cmd == "煤类分类" || cmd == "煤炭分类") { CoalClassificationCmd(); return; }
+            if (cmd == "煤层台阶参数" || cmd == "台阶参数" || cmd == "煤层参数") { SeamBenchParamsCmd(); return; }
+            if (cmd == "设备约束条件" || cmd == "设备约束" || cmd == "能力约束") { EquipmentConstraintsCmd(); return; }
+            if (cmd == "煤质分级" || cmd == "煤质分级规则" || cmd == "分级规则") { CoalGradeRulesCmd(); return; }
             if (cmd == "点云抽稀" || cmd == "抽稀" || cmd == "点云精简") { await ThinPointsAsync(); return; }
             if (cmd == "地面点滤波" || cmd == "地面滤波") { await GroundFilterAsync(); return; }
             if (cmd == "C2C" || cmd == "点云比对" || cmd == "位移监测 C2C" || cmd == "位移监测") { await CloudCompareAsync(); return; }
@@ -5188,6 +5191,34 @@ public partial class MainWindow : Window
         var parts = new List<string>();
         foreach (var c in cls) parts.Add($"{c.Code} {c.NameCn}(Vdaf {c.VdafMin:0.#}~{c.VdafMax:0.#}%)");
         StatusMsg.Text = $"煤种分类（{cls.Count} 种）：" + string.Join(" · ", parts);
+    }
+
+    private void SeamBenchParamsCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var rows = Data.GeoDataQueries.GetSeamBenchParams(db.Connection);
+        if (rows.Count == 0) { StatusMsg.Text = "煤层台阶参数：无数据"; return; }
+        var parts = new List<string>();
+        foreach (var r in rows) parts.Add($"{r.SeamCode}(台阶{r.BenchHeight:0.#}m/坡{r.SlopeAngle:0.#}°/平台{r.BermWidth:0.#}m/最小采厚{r.MinThick:0.##}m)");
+        StatusMsg.Text = $"煤层台阶参数（{rows.Count} 煤层）：" + string.Join(" · ", parts);
+    }
+
+    private void EquipmentConstraintsCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var c = Data.GeoDataQueries.GetEquipmentConstraints(db.Connection);
+        var ty = new List<string>(); foreach (var t in c.ByType) ty.Add($"{t.Category} {t.Count}");
+        StatusMsg.Text = $"设备约束条件：{c.Total} 条（在役 {c.Active}）· 类型: " + string.Join(" / ", ty);
+    }
+
+    private void CoalGradeRulesCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var rows = Data.GeoDataQueries.GetCoalGradeRules(db.Connection);
+        if (rows.Count == 0) { StatusMsg.Text = "煤质分级：无规则"; return; }
+        var parts = new List<string>();
+        foreach (var r in rows) parts.Add($"{r.Type}:{r.LevelName}({r.Min:0.#}~{r.Max:0.#})");
+        StatusMsg.Text = $"煤质分级规则（{rows.Count} 级）：" + string.Join(" · ", parts);
     }
 
     // 展绘钻孔 / 开孔坐标管理：读库钻孔平面坐标 → 点位入场景(可见几何) + 缩放到范围。

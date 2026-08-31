@@ -294,6 +294,46 @@ public static class GeoDataQueries
         return rows;
     }
 
+    public sealed record SeamBenchRow(string SeamCode, double BenchHeight, double SlopeAngle, double BermWidth, double MinThick);
+
+    /// <summary>煤层台阶参数：各煤层 台阶高/坡角/平台宽/最小可采厚。</summary>
+    public static List<SeamBenchRow> GetSeamBenchParams(SqliteConnection conn)
+    {
+        var rows = new List<SeamBenchRow>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"SELECT COALESCE(seam_code,''), COALESCE(bench_height_m,0), COALESCE(bench_slope_angle_deg,0),
+                            COALESCE(berm_width_m,0), COALESCE(min_mineable_thick_m,0)
+                            FROM seam_bench_param WHERE is_active = 1 ORDER BY seam_code";
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read()) rows.Add(new SeamBenchRow(rd.GetString(0), rd.GetDouble(1), rd.GetDouble(2), rd.GetDouble(3), rd.GetDouble(4)));
+        return rows;
+    }
+
+    public sealed record ConstraintStats(int Total, int Active, IReadOnlyList<CategoryCount> ByType);
+
+    /// <summary>设备约束条件：约束总数 / 在役 / 按约束类型。</summary>
+    public static ConstraintStats GetEquipmentConstraints(SqliteConnection conn)
+    {
+        int total = (int)Scalar(conn, "SELECT COUNT(*) FROM equipment_constraint");
+        int active = (int)Scalar(conn, "SELECT COUNT(*) FROM equipment_constraint WHERE is_active = 1");
+        var byType = GroupCount(conn, "SELECT COALESCE(constraint_type,'(无)'), COUNT(*) c FROM equipment_constraint GROUP BY constraint_type ORDER BY c DESC");
+        return new ConstraintStats(total, active, byType);
+    }
+
+    public sealed record GradeRuleRow(string Type, string LevelCode, string LevelName, double Min, double Max);
+
+    /// <summary>煤质分级规则：各分级(类型/级别/区间)。</summary>
+    public static List<GradeRuleRow> GetCoalGradeRules(SqliteConnection conn)
+    {
+        var rows = new List<GradeRuleRow>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"SELECT COALESCE(rule_type,''), COALESCE(level_code,''), COALESCE(level_name,''),
+                            COALESCE(value_min,0), COALESCE(value_max,0) FROM coal_grade_rule ORDER BY rule_type, COALESCE(sort_order,0)";
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read()) rows.Add(new GradeRuleRow(rd.GetString(0), rd.GetString(1), rd.GetString(2), rd.GetDouble(3), rd.GetDouble(4)));
+        return rows;
+    }
+
     private static List<CategoryCount> GroupCount(SqliteConnection conn, string sql)
     {
         var list = new List<CategoryCount>();

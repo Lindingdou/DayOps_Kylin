@@ -172,4 +172,13 @@ public class GeoDataQueriesTests
         Assert.NotEmpty(f.ByStatus);
         Assert.NotEmpty(GeoDataQueries.GetCoalClassification(db.Connection));   // 种子 16
     }
+
+    [Fact]
+    public void Seam_bench_constraints_grades_from_seed()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        Assert.NotEmpty(GeoDataQueries.GetSeamBenchParams(db.Connection));        // 种子 7
+        Assert.True(GeoDataQueries.GetEquipmentConstraints(db.Connection).Total > 0);  // 种子 15
+        Assert.NotEmpty(GeoDataQueries.GetCoalGradeRules(db.Connection));         // 种子 15
+    }
 }
