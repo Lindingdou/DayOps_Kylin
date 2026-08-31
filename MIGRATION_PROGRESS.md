@@ -1141,4 +1141,9 @@ grade-only 数据模型无法持多属性(架构限, 记录), 但可**部分缓�
 - [x] **BLK 全属性读取**(`BlkImportService.AllAttrs`)：pass1 循环从读单属性改为读全属性入 `double[][]`, 收进 `AllAttrs[name]=values`(长度==块数)。grade 仍取选定属性。1 测(全属性逐块值均被持有, 未选中的一样在)。
 - [x] **"切换属性 <属性名>" 命令**(`SwitchGradeAttrCmd`)：从持有的 `_blockAttrs` 按名取数组 → 逐块回写 Grade(Block 为 struct 需回写)→ RenderBlocks 重配色, 报值域/均值。缺省列可选属性名; 长度不符/无此属性/未持多属性 均友好提示。非 BLK 导入(CSV/PMB/实体转块)+删除块 均清 `_blockAttrs` 防陈旧错配。
 
-**本会话累计补 26 真功能, 880 测。** 块体多属性体验：导入选属性 + **免重导自由切换活动属性**(BLK)+ 连续/分类着色 —— 贴近原「多属性显示切换」。**仍受 grade-only 架构限的是: 同屏并列多属性 / 逐属性联合分析(如品位×密度散点)**, 记录(切换已让单活动属性可自由换)。
+## 八十一、多属性统计报告 + JPEG 解码线程安全修复
+
+- [x] **块体多属性统计报告**(`Statistics.MultiAttrReportCsv` + "属性报告"命令)：核原 `BlockReportGenerator` 确有「每属性 min/max/mean/std/count + 20桶直方图」表(遍历 CellData 全列, 非仅品位)。既已持 `AllAttrs`, 遂对全属性各算 `Describe` → CSV(attribute,count,min,max,mean,std,q1,median,q3)。属性名含逗号加引号转义。3 测。**忠实原确有的每属性统计表**(散点/相关系数原**无** —— "散点"命中的是点云 TIN, 故未臆造)。
+- [x] **JPEG IDCT 余弦表竞态修复**(`JpegDecoder._cos`)：全套测试并发跑时 `Jpeg_geotiff_decodes_and_samples` 偶发 maxDiff>5(孤立跑必过)。查为惰性 `if(_cos==null){_cos=new;填充}` 非线程安全 —— B 线程见 `_cos` 已非 null(刚赋值)但仍零填充中 → IDCT 读零 → 错。改 `static readonly _cos = BuildCosTable()`(CLR 类型初始化锁保证建毕才可读)。全套连跑 3× 883 绿。**真并发 bug(app 并发解瓦片同样受影响), 非仅测试抖动。**
+
+**本会话累计补 27 真功能 + 1 并发修复, 883 测。** 块体多属性体验：导入选属性 + 免重导切换活动属性 + 连续/分类着色 + **全属性统计报告** —— 贴近原「多属性显示切换 + 每属性统计表」。**仍受 grade-only 架构限的是: 同屏并列多属性渲染 / 逐属性联合分析(散点交会 —— 但原亦无此)**, 记录。

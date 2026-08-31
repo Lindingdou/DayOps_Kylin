@@ -125,4 +125,44 @@ public class StatisticsTests
         Assert.True(s.Q1 <= s.Median && s.Median <= s.Q3, "Q1≤中位≤Q3");
         Assert.True(s.Min <= s.Q1 && s.Q3 <= s.Max);
     }
+
+    // ── 多属性报告(忠实原 BlockReportGenerator 每属性统计表) ──
+    [Fact]
+    public void Multi_attr_report_one_row_per_attribute()
+    {
+        var attrs = new Dictionary<string, double[]>
+        {
+            ["density"] = new double[] { 2.5, 2.6, 2.7, 2.8, 2.9 },
+            ["grade"]   = new double[] { 1, 2, 3, 4, 5 },
+        };
+        var csv = Statistics.MultiAttrReportCsv(attrs);
+        var lines = csv.TrimEnd('\n').Split('\n');
+        Assert.Equal("attribute,count,min,max,mean,std,q1,median,q3", lines[0]);
+        Assert.Equal(3, lines.Length);                       // 表头 + 2 属性
+        // grade 行: count=5 min=1 max=5 mean=3
+        var grade = lines.First(l => l.StartsWith("grade,")).Split(',');
+        Assert.Equal("5", grade[1]);
+        Assert.Equal(1, double.Parse(grade[2], System.Globalization.CultureInfo.InvariantCulture), 6);
+        Assert.Equal(5, double.Parse(grade[3], System.Globalization.CultureInfo.InvariantCulture), 6);
+        Assert.Equal(3, double.Parse(grade[4], System.Globalization.CultureInfo.InvariantCulture), 6);
+        // density 行 mean=2.7
+        var dens = lines.First(l => l.StartsWith("density,")).Split(',');
+        Assert.Equal(2.7, double.Parse(dens[4], System.Globalization.CultureInfo.InvariantCulture), 6);
+    }
+
+    [Fact]
+    public void Multi_attr_report_quotes_names_with_comma()
+    {
+        var attrs = new Dictionary<string, double[]> { ["a,b"] = new double[] { 1, 2 } };
+        var csv = Statistics.MultiAttrReportCsv(attrs);
+        Assert.Contains("\"a,b\",2,", csv);                  // 含逗号属性名被引号包裹
+    }
+
+    [Fact]
+    public void Multi_attr_report_null_and_empty_safe()
+    {
+        Assert.Equal("attribute,count,min,max,mean,std,q1,median,q3\n", Statistics.MultiAttrReportCsv(null!));
+        Assert.Equal("attribute,count,min,max,mean,std,q1,median,q3\n",
+            Statistics.MultiAttrReportCsv(new Dictionary<string, double[]>()));
+    }
 }

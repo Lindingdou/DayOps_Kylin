@@ -206,16 +206,20 @@ public static class JpegDecoder
         Idct8x8(coef, outBlock);
     }
 
-    private static float[]? _cos;
+    // IDCT 余弦表：static readonly 初始化器由 CLR 类型初始化锁保证只建一次且线程安全。
+    // (曾为惰性 if(_cos==null){...}, 并发解码时 B 线程见非 null 但仍零填充的数组 → IDCT 错, 已修。)
+    private static readonly float[] _cos = BuildCosTable();
+    private static float[] BuildCosTable()
+    {
+        var c = new float[64];
+        for (int k = 0; k < 8; k++)
+            for (int f = 0; f < 8; f++)
+                c[k * 8 + f] = (float)((f == 0 ? 1.0 / Math.Sqrt(2) : 1.0) * Math.Cos((2 * k + 1) * f * Math.PI / 16.0));
+        return c;
+    }
+
     private static void Idct8x8(int[] F, float[] outBlock)
     {
-        if (_cos == null)
-        {
-            _cos = new float[64];
-            for (int k = 0; k < 8; k++)
-                for (int f = 0; f < 8; f++)
-                    _cos[k * 8 + f] = (float)((f == 0 ? 1.0 / Math.Sqrt(2) : 1.0) * Math.Cos((2 * k + 1) * f * Math.PI / 16.0));
-        }
         var tmp = new float[64];
         for (int v = 0; v < 8; v++)                 // 行 IDCT(沿 u)
             for (int x = 0; x < 8; x++)

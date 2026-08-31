@@ -749,6 +749,7 @@ public partial class MainWindow : Window
             if (cmd == "导出块体" || cmd == "块体导出") { await ExportBlocksAsync(); return; }
             if (cmd == "输出报告" || cmd == "资源量报告" || cmd == "块体报告") { await ExportResourceReportAsync(); return; }
             if (cmd == "属性统计" || cmd == "品位统计" || cmd == "直方图" || cmd == "统计报告") { await GradeStatsAsync(); return; }
+            if (cmd == "属性报告" || cmd == "块体属性报告" || cmd == "多属性统计" || cmd == "多属性报告") { await BlockAttrReportAsync(); return; }
             if (cmd == "块体着色" || cmd == "块体配色") { ColorBlocksCmd(); return; }
             if (cmd == "块体分类着色" || cmd == "块体离散着色" || cmd == "分类着色" || cmd == "块体分类配色") { ColorBlocksCategoricalCmd(); return; }
             if (cmd == "切换属性" || cmd.StartsWith("切换属性 ") || cmd == "切换品位属性" || cmd.StartsWith("切换品位属性 ") || cmd == "切换活动属性" || cmd.StartsWith("切换活动属性 ")) { SwitchGradeAttrCmd(cmd); return; }
@@ -3801,6 +3802,17 @@ public partial class MainWindow : Window
         var s = Statistics.Describe(grades, 20);
         var name = await SaveCsvAsync("导出品位直方图", "grade_histogram.csv", Statistics.HistogramCsv(s));
         StatusMsg.Text = $"属性统计(品位)：{Statistics.SummaryLine(s)} · 20 桶直方图" + (name != null ? $" → {name}" : "");
+    }
+
+    // 块体多属性统计报告(原 BlockReportGenerator「每属性 min/max/mean/std/count+直方图」表格部分):
+    // 对持有的全属性各算 min/max/mean/std/Q1/median/Q3 → CSV。仅 BLK 导入持全属性。
+    private async Task BlockAttrReportAsync()
+    {
+        if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "属性报告：请先导入块体"; return; }
+        if (_blockAttrs == null || _blockAttrs.Count == 0) { StatusMsg.Text = "属性报告：当前块体未持多属性(仅 BLK 导入持全属性; 重新 导入BLK)"; return; }
+        var csv = Statistics.MultiAttrReportCsv(_blockAttrs, 20);
+        var name = await SaveCsvAsync("导出块体属性报告", "block_attr_report.csv", csv);
+        StatusMsg.Text = $"属性报告：{_blockAttrs.Count} 属性 ×(min/max/mean/std/Q1/median/Q3)" + (name != null ? $" → {name}" : "（取消保存）");
     }
 
     // 块体着色：按品位配色重渲全部块体(恢复全显)

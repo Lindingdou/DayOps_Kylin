@@ -83,6 +83,31 @@ public static class Statistics
                $"Q1={s.Q1.ToString("0.###", inv)} median={s.Median.ToString("0.###", inv)} Q3={s.Q3.ToString("0.###", inv)}";
     }
 
+    /// <summary>
+    /// 多属性统计报告 → CSV(attribute,count,min,max,mean,std,q1,median,q3) —— 逐属性各算 Describe。
+    /// 忠实原 BlockReportGenerator「每属性 min/max/mean/std/count(+直方图)」的表格部分, 供块体全属性分布概览。
+    /// </summary>
+    public static string MultiAttrReportCsv(IReadOnlyDictionary<string, double[]> attrs, int buckets = 20)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var sb = new System.Text.StringBuilder("attribute,count,min,max,mean,std,q1,median,q3\n");
+        if (attrs == null) return sb.ToString();
+        foreach (var kv in attrs)
+        {
+            var s = Describe(kv.Value, buckets);
+            sb.Append(CsvField(kv.Key)).Append(',').Append(s.Count).Append(',')
+              .Append(s.Min.ToString("R", inv)).Append(',').Append(s.Max.ToString("R", inv)).Append(',')
+              .Append(s.Mean.ToString("R", inv)).Append(',').Append(s.Std.ToString("R", inv)).Append(',')
+              .Append(s.Q1.ToString("R", inv)).Append(',').Append(s.Median.ToString("R", inv)).Append(',')
+              .Append(s.Q3.ToString("R", inv)).Append('\n');
+        }
+        return sb.ToString();
+    }
+
+    private static string CsvField(string s)
+        => (s.IndexOf(',') >= 0 || s.IndexOf('"') >= 0 || s.IndexOf('\n') >= 0)
+            ? "\"" + s.Replace("\"", "\"\"") + "\"" : s;
+
     /// <summary>箱线图五数概括 → CSV(min,q1,median,q3,max)。IQR=Q3−Q1, 须要时可外推须。</summary>
     public static string BoxplotCsv(Summary s)
     {
