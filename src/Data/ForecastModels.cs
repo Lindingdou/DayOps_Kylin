@@ -46,6 +46,23 @@ public sealed class ForecastResult
 
 public static class ForecastModels
 {
+    /// <summary>预测结果 → CSV（元信息 + 历史序列 + 未来 horizon 期点预测 + 95% 区间）。</summary>
+    public static string PathToCsv(IReadOnlyList<double> history, ForecastResult r)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"# method={r.Method.Replace(",", ";")} slope={r.Slope.ToString("0.###", inv)} r2={r.R2.ToString("0.###", inv)} trend={r.TrendLabel} anomalies={r.AnomalyCount}\n");
+        sb.Append("index,kind,value,lower95,upper95\n");
+        int n = history?.Count ?? 0;
+        for (int i = 0; i < n; i++) sb.Append($"{i},history,{history![i].ToString("0.###", inv)},,\n");
+        for (int k = 0; k < r.Path.Length; k++)
+        {
+            double hw = r.HalfWidthAt(k);
+            sb.Append($"{n + k},forecast,{r.Path[k].ToString("0.###", inv)},{System.Math.Max(0, r.Path[k] - hw).ToString("0.###", inv)},{(r.Path[k] + hw).ToString("0.###", inv)}\n");
+        }
+        return sb.ToString();
+    }
+
     /// <summary>趋势+EWMA 融合 / Holt 双指数预测。series 按时间升序。</summary>
     public static ForecastResult Forecast(IReadOnlyList<double> series, int horizon,
         double alpha = 0.4, ForecastMethod method = ForecastMethod.Fusion, double beta = 0.2)

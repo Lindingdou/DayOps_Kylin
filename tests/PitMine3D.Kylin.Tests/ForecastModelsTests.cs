@@ -68,6 +68,19 @@ public class ForecastModelsTests
     }
 
     [Fact]
+    public void PathToCsv_history_and_forecast()
+    {
+        var s = Enumerable.Range(0, 8).Select(i => 10.0 + 2 * i).ToList();
+        var r = ForecastModels.Forecast(s, 4);
+        string csv = ForecastModels.PathToCsv(s, r);
+        Assert.Contains("index,kind,value,lower95,upper95", csv);   // 表头
+        Assert.Contains(",history,", csv);                          // 历史行
+        Assert.Contains(",forecast,", csv);                         // 预测行
+        var lines = csv.TrimEnd('\n').Split('\n');
+        Assert.Equal(1 + 1 + 8 + 4, lines.Length);                  // 元信息 + 表头 + 8史 + 4测
+    }
+
+    [Fact]
     public void Empty_series_no_crash()
     {
         var r = ForecastModels.Forecast(new List<double>(), 3);

@@ -23,6 +23,16 @@ public class FleetOptimizerTests
     }
 
     [Fact]
+    public void ToCsv_header_and_rows()
+    {
+        var r = FleetOptimizer.Optimize(new FleetOptInput { DailyTargetM3 = 50000, Rules = new List<FleetDispatchRule> { Rule() } });
+        string csv = FleetOptimizer.ToCsv(r);
+        Assert.Contains("shovel_model,shovel_count,truck_model", csv);   // 表头
+        Assert.Contains("target_m3=50000", csv);                         // 元信息
+        Assert.Contains("WK-35", csv);                                   // 含铲型
+    }
+
+    [Fact]
     public void Optimize_meets_target_when_unconstrained()
     {
         var inp = new FleetOptInput { DailyTargetM3 = 50000, Rules = new List<FleetDispatchRule> { Rule() } };

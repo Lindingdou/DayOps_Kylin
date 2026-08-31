@@ -73,6 +73,20 @@ public sealed class FleetOptResult
 
 public static class FleetOptimizer
 {
+    /// <summary>编组优化结果 → CSV（表头 + 逐编组方案：铲型/铲数/车型/每铲车数/组日产/匹配系数/瓶颈 + 汇总/说明行）。</summary>
+    public static string ToCsv(FleetOptResult r)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        static string Q(string s) => "\"" + (s ?? "").Replace("\"", "\"\"") + "\"";
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"# target_m3={r.TargetM3.ToString("0", inv)} met={r.TargetMet} total_daily_m3={r.TotalDailyM3.ToString("0", inv)} shovels={r.TotalShovels} trucks={r.TotalTrucks}\n");
+        sb.Append("shovel_model,shovel_count,truck_model,trucks_per_shovel,total_trucks,group_daily_m3,match_factor,eff_cycle_min,bottleneck\n");
+        foreach (var g in r.Groups)
+            sb.Append($"{Q(g.Rule.ShovelModel)},{g.ShovelCount},{Q(g.Rule.TruckModel)},{g.TrucksPerShovel},{g.TotalTrucks},{g.GroupDailyM3.ToString("0", inv)},{g.MatchFactor.ToString("0.##", inv)},{g.EffectiveCycleMin.ToString("0.#", inv)},{Q(g.Bottleneck)}\n");
+        foreach (var n in r.Notes) sb.Append($"# {n.Replace("\n", " ")}\n");
+        return sb.ToString();
+    }
+
     public static FleetOptResult Optimize(FleetOptInput inp)
     {
         var res = new FleetOptResult { TargetM3 = inp.DailyTargetM3 };

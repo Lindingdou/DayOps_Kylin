@@ -730,6 +730,8 @@ public partial class MainWindow : Window
             if (cmd == "导出分标高" || cmd == "分标高导出" || cmd.StartsWith("导出分标高 ")) { await ExportElevationAsync(cmd); return; }
             if (cmd == "导出洗选" || cmd == "洗选导出") { await ExportWashingAsync(); return; }
             if (cmd == "导出用途" || cmd == "用途导出") { await ExportUtilizationAsync(); return; }
+            if (cmd == "导出编组" || cmd == "编组导出" || cmd.StartsWith("导出编组 ")) { await ExportFleetOptAsync(cmd); return; }
+            if (cmd == "导出预测" || cmd == "预测导出") { await ExportForecastAsync(); return; }
             if (cmd == "洗选提质" || cmd == "洗选分析" || cmd == "降灰脱硫") { CoalWashingCmd(); return; }
             if (cmd == "用途适宜性" || cmd == "煤炭用途" || cmd == "动力炼焦评价") { CoalUtilizationCmd(); return; }
             if (cmd == "煤层管理" || cmd == "煤层定义" || cmd == "煤层列表") { CoalSeamsCmd(); return; }
@@ -5661,6 +5663,32 @@ public partial class MainWindow : Window
         if (name != null) StatusMsg.Text = $"导出用途：{rows.Count} 煤层 → {name}";
     }
 
+    // 导出编组优化方案
+    private async Task ExportFleetOptAsync(string cmd)
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var rules = Data.GeoDataQueries.GetFleetDispatchRules(db.Connection);
+        if (rules.Count == 0) { StatusMsg.Text = "导出编组：无编组规则"; return; }
+        double targetM3;
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        if (tk.Length >= 2 && double.TryParse(tk[1], out double wan)) targetM3 = wan * 1e4;
+        else { double sw = 0; foreach (var p in Data.GeoDataQueries.GetMonthlyPlans(db.Connection)) sw = System.Math.Max(sw, p.PlanStripWanM3); targetM3 = (sw > 0 ? sw : 1000) * 1e4 / 26.0; }
+        var r = Data.FleetOptimizer.Optimize(new Data.FleetOptInput { DailyTargetM3 = targetM3, Rules = rules });
+        var name = await SaveCsvAsync("导出编组优化方案", "fleet_optimization.csv", Data.FleetOptimizer.ToCsv(r));
+        if (name != null) StatusMsg.Text = $"导出编组：{r.Groups.Count} 编组方案(铲{r.TotalShovels}/车{r.TotalTrucks}) → {name}";
+    }
+
+    // 导出产量预测(历史+未来+区间)
+    private async Task ExportForecastAsync()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var series = Data.GeoDataQueries.GetMonthlyOutputSeries(db.Connection);
+        if (series.Count < 3) { StatusMsg.Text = "导出预测：月度序列样本不足(<3)"; return; }
+        var r = Data.ForecastModels.Forecast(series, 12);
+        var name = await SaveCsvAsync("导出产量预测", "output_forecast.csv", Data.ForecastModels.PathToCsv(series, r));
+        if (name != null) StatusMsg.Text = $"导出预测：{series.Count} 历史 + 12 期预测(趋势{r.TrendLabel}) → {name}";
+    }
+
     // 导出商品煤符合性：逐化验段(含超标段坐标/原因)→ CSV，供定位处置
     private async Task ExportComplianceAsync(string cmd)
     {
@@ -6274,7 +6302,7 @@ public partial class MainWindow : Window
         "设备台账","生产数据","产能分析","故障分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据",
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","数据看板","煤种分类",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
-        "产能分类对比","故障类型分布","分工序验收合格率","数据导出","达成度评价","产量预测","时序预测","编组优化","智能编组优化",
+        "产能分类对比","故障类型分布","分工序验收合格率","数据导出","达成度评价","产量预测","时序预测","编组优化","智能编组优化","导出编组","导出预测",
         "商品煤符合性","煤质达标","导出符合性","品位储量曲线","导出品位储量","分标高煤质","导出分标高","煤质离群","导出离群","洗选提质","导出洗选","用途适宜性","导出用途",
         // TaskLib 自足计算
         "生产量核算","物料换算","采剥平衡","排土场按量推进","配煤核算","工序进度跟踪","编组产能","环节降效",
