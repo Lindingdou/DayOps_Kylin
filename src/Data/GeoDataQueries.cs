@@ -388,6 +388,19 @@ public static class GeoDataQueries
         return "\"" + v.Replace("\"", "\"\"") + "\"";
     }
 
+    public sealed record AnnualOutputRow(int Year, double OutputWanM3);
+
+    /// <summary>年度产量趋势：capacity_monthly 按年聚合总产量（万m³）。</summary>
+    public static List<AnnualOutputRow> GetAnnualOutput(SqliteConnection conn)
+    {
+        var rows = new List<AnnualOutputRow>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT year, SUM(output_m3)/1e4 FROM capacity_monthly GROUP BY year ORDER BY year";
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read()) rows.Add(new AnnualOutputRow(rd.GetInt32(0), rd.GetDouble(1)));
+        return rows;
+    }
+
     public sealed record SeamQualityRow(string SeamCode, int Samples, double AvgAshPct, double AvgVolatilePct, double AvgCalorificMJ);
 
     /// <summary>分煤层煤质：各煤层 煤样数 / 平均 灰分Ad / 挥发分Vdaf / 发热量Qnet（coal_sample 按 seam_code 分组）。</summary>

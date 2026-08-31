@@ -113,6 +113,16 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Annual_output_from_seed_sorted_by_year()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var rows = GeoDataQueries.GetAnnualOutput(db.Connection);
+        Assert.NotEmpty(rows);
+        Assert.All(rows, r => Assert.True(r.OutputWanM3 > 0));
+        for (int i = 1; i < rows.Count; i++) Assert.True(rows[i - 1].Year < rows[i].Year);   // 按年升序
+    }
+
+    [Fact]
     public void Dispatch_rules_sorted_by_score()
     {
         using var db = GeoDatabase.OpenSeeded();

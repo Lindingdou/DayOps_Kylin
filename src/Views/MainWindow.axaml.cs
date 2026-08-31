@@ -722,6 +722,7 @@ public partial class MainWindow : Window
             if (cmd == "煤层管理" || cmd == "煤层定义" || cmd == "煤层列表") { CoalSeamsCmd(); return; }
             if (cmd == "见煤统计" || cmd == "煤层对比" || cmd == "见煤对比" || cmd == "钻孔见煤") { SeamIntersectionsCmd(); return; }
             if (cmd == "分煤层煤质" || cmd == "煤层煤质" || cmd == "分层煤质") { CoalQualityBySeamCmd(); return; }
+            if (cmd == "年度产量" || cmd == "产量趋势" || cmd == "年度产量趋势" || cmd == "年产量") { AnnualOutputCmd(); return; }
             if (cmd == "设备智能编组" || cmd == "调度规则" || cmd == "配车规则" || cmd == "铲车配比") { DispatchRulesCmd(); return; }
             if (cmd == "工艺架构定义" || cmd == "工艺架构" || cmd == "平盘工艺地图" || cmd == "工艺系统") { ProcessArchitectureCmd(); return; }
             if (cmd == "现场验收录入" || cmd == "现场验收" || cmd == "参数验收") { AcceptanceStatsCmd(); return; }
@@ -5473,6 +5474,17 @@ public partial class MainWindow : Window
         var q = Data.GeoDataQueries.GetCoalQualityStats(db.Connection);
         if (q.Samples == 0) { StatusMsg.Text = "煤质统计：无煤样数据"; return; }
         StatusMsg.Text = $"煤质统计：{q.Samples} 样 / {q.Seams} 煤层 · 平均 灰分Ad {q.AvgAshPct:0.##}% · 挥发分Vdaf {q.AvgVolatilePct:0.##}% · 发热量Qnet {q.AvgCalorificMJ:0.##}MJ/kg · 全硫St {q.AvgSulfurPct:0.###}%";
+    }
+
+    private void AnnualOutputCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var rows = Data.GeoDataQueries.GetAnnualOutput(db.Connection);
+        if (rows.Count == 0) { StatusMsg.Text = "年度产量：无产能数据"; return; }
+        var parts = new List<string>();
+        double tot = 0;
+        foreach (var r in rows) { parts.Add($"{r.Year}: {r.OutputWanM3:0.#}万m³"); tot += r.OutputWanM3; }
+        StatusMsg.Text = $"年度产量趋势（{rows.Count} 年 · 累计 {tot:0.#}万m³）：" + string.Join(" · ", parts);
     }
 
     private void CoalQualityBySeamCmd()
