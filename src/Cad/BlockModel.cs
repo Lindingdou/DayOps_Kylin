@@ -8,7 +8,8 @@ namespace PitMine3D.Kylin.Cad;
 
 /// <summary>
 /// 块体模型（BlockModelLib 托管切片）—— CSV 块体导入(x,y,z[,尺寸[,品位]]) + 品位配色方块 + 统计。
-/// 对应外部交换格式(.blk 思路)；原版 .pmb 私有二进制需格式规范/样本(记录待做)。纯逻辑、可单测。
+/// 对应外部交换格式(.blk 思路)；.pmb(PitMine 块体, 公开格式)已由 <see cref="PmbImportService"/> 支持,
+/// .blk(Block_Model_2.0 八叉树)由 <see cref="BlkImportService"/> 支持。纯逻辑、可单测。
 /// </summary>
 public static class BlockModel
 {

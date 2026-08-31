@@ -5,7 +5,7 @@ namespace PitMine3D.Kylin.Cad;
 
 /// <summary>
 /// 点云抽稀（PointCloudLib 托管切片）—— 体素网格抽稀：每个 cell 尺寸的立方体格保留首个点。
-/// 对 XYZ 点集有效（LAS 二进制解析需内核，记录待做）。纯逻辑、可单测。
+/// 对 XYZ 点集有效（LAS 二进制解析已由 <see cref="LasImportService"/> 支持, 解出的点可直接抽稀）。纯逻辑、可单测。
 /// </summary>
 public static class PointThin
 {
