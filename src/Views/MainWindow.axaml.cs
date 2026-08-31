@@ -711,7 +711,8 @@ public partial class MainWindow : Window
             if (cmd == "约束块体" || cmd == "块体约束") { ConstrainBlocksCmd(); return; }
             if (cmd == "删除块体" || cmd == "清除块体") { DeleteBlocksCmd(); return; }
             if (cmd == "切面剖切" || cmd == "块体剖切" || cmd == "切面") { SectionBlocksCmd(); return; }
-            if (cmd == "快速估值" || cmd == "品位估值" || cmd == "克里金估值" || cmd == "空间分布") { await EstimateGradeAsync(); return; }
+            if (cmd == "克里金估值" || cmd == "OK估值" || cmd == "克里金") { await EstimateGradeAsync(kriging: true); return; }
+            if (cmd == "快速估值" || cmd == "品位估值" || cmd == "IDW估值" || cmd == "空间分布") { await EstimateGradeAsync(kriging: false); return; }
             if (cmd == "设备信息管理" || cmd == "设备台账" || cmd == "设备台账管理" || cmd == "设备信息") { EquipmentRosterCmd(); return; }
             if (cmd == "设备生产数据" || cmd == "生产数据" || cmd == "设备数据分析") { ProductionStatsCmd(); return; }
             if (cmd == "产能分析" || cmd == "设备能力" || cmd == "能力分析" || cmd == "产能") { CapacityRankingCmd(); return; }
@@ -3430,27 +3431,56 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"粗糙度：{n}² 网格 · 极差 {min:0.###}~{max:0.###}（红=粗糙）";
     }
 
-    // 快速估值：品位样本 CSV(x,y,品位) → IDW 网格 → 品位配色估值面
-    private async Task EstimateGradeAsync()
+    // 快速估值：品位样本 CSV(x,y,品位) → IDW/克里金 网格 → 品位配色估值面
+    private async Task EstimateGradeAsync(bool kriging = false)
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "快速估值：选品位样本 CSV (x,y,品位)",
+            Title = (kriging ? "克里金估值" : "快速估值") + "：选品位样本 CSV (x,y,品位)",
             AllowMultiple = false,
             FileTypeFilter = new[] { new FilePickerFileType("样本 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
         });
         if (files.Count == 0) return;
         var r = PointDataImportService.Load(files[0].Path.LocalPath);
-        if (!r.Success) { StatusMsg.Text = $"快速估值：样本导入失败 {r.Error}"; return; }
+        if (!r.Success) { StatusMsg.Text = $"{(kriging ? "克里金估值" : "快速估值")}：样本导入失败 {r.Error}"; return; }
         int n = 48;
-        var grid = Contour.GridFromPoints(r.Points, n, n, out double gx0, out double gy0, out double gdx, out double gdy);
+        double[,] grid; double gx0, gy0, gdx, gdy; double avgVar = 0; string extra = "";
+        if (kriging)
+        {
+            grid = BuildKrigingGrid(r.Points, n, n, out gx0, out gy0, out gdx, out gdy, out avgVar);
+            extra = $" · OK克里金 avg克里金方差 {avgVar:0.###}";
+        }
+        else
+        {
+            grid = Contour.GridFromPoints(r.Points, n, n, out gx0, out gy0, out gdx, out gdy);
+        }
         var (min, max) = Estimation.Range(grid);
         var cells = Estimation.BuildCells(grid, gx0, gy0, gdx, gdy, min, max);
         BeginChange();
         foreach (var e in cells) _scene.Add(e);
         RefreshScene();
         Viewport.FitBounds(r.Bounds);
-        StatusMsg.Text = $"快速估值：{r.Points.Count} 样本 → {n}² 网格 · 品位 {min:0.###}~{max:0.###}";
+        StatusMsg.Text = $"{(kriging ? "克里金估值" : "快速估值")}：{r.Points.Count} 样本 → {n}² 网格 · 品位 {min:0.###}~{max:0.###}{extra}";
+    }
+
+    // OK 克里金网格：逐格用 OrdinaryKriging.EstimateAt 估值；半径外(null)回落 IDW 值免留洞；出平均克里金方差
+    private static double[,] BuildKrigingGrid(IReadOnlyList<(double x, double y, double z)> pts, int nx, int ny,
+        out double x0, out double y0, out double dx, out double dy, out double avgVar)
+    {
+        var idw = Contour.GridFromPoints(pts, nx, ny, out x0, out y0, out dx, out dy);   // 布局 + 半径外回落
+        nx = idw.GetLength(0); ny = idw.GetLength(1);
+        var cps = new List<OrdinaryKriging.ControlPoint>(pts.Count);
+        foreach (var p in pts) cps.Add(new OrdinaryKriging.ControlPoint(p.x, p.y, 0, p.z));
+        var vg = cps.Count > 0 ? OrdinaryKriging.FitVariogram(cps) : null;
+        double varSum = 0; int varCnt = 0;
+        for (int i = 0; i < nx; i++)
+            for (int j = 0; j < ny; j++)
+            {
+                var e = OrdinaryKriging.EstimateAt(cps, x0 + i * dx, y0 + j * dy, 0, 12, 0, vg);
+                if (e != null) { idw[i, j] = e.Value.est; varSum += e.Value.variance; varCnt++; }
+            }
+        avgVar = varCnt > 0 ? varSum / varCnt : 0;
+        return idw;
     }
 
     // 境界圈定：散点 CSV → 凸包 → 闭合边界多段线
@@ -5994,7 +6024,7 @@ public partial class MainWindow : Window
         // 网格/建模
         "网格度量","网格诊断","网格焊接","网格边界","合并三角网","固化成体","侧面三角网","立方体","球体","圆柱","体素格网体积","实体转块体",
         // 区域/地形/点云
-        "区域求差","区域重叠检测",
+        "区域求差","区域重叠检测","克里金估值","快速估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","地面点滤波","高程着色","点云质量统计",
         // 块体/运输/路网
         "块体模型","资源量","道路横断面","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","演化对比","螺旋斜坡道","折返斜坡道",
