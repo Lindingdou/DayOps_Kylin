@@ -510,6 +510,22 @@ public static class GeoDataQueries
         return rows;
     }
 
+    /// <summary>煤质化验段（join borehole 取坐标/孔号）——供 CoalAnalytics 商品煤符合性等分析。</summary>
+    public static List<CoalSample> GetCoalSamples(SqliteConnection conn)
+    {
+        var rows = new List<CoalSample>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"SELECT cs.id, COALESCE(b.hole_id,''), cs.seam_code, COALESCE(b.x,0), COALESCE(b.y,0), cs.z_sample,
+                                   cs.ad_raw, cs.ad_clean, cs.std_raw, cs.std_clean, cs.qgr_d, cs.qnet_ad, cs.vdaf_raw, cs.vdaf_clean
+                            FROM coal_sample cs LEFT JOIN borehole b ON b.id = cs.borehole_id";
+        using var rd = cmd.ExecuteReader();
+        double? D(int i) => rd.IsDBNull(i) ? (double?)null : rd.GetDouble(i);
+        while (rd.Read())
+            rows.Add(new CoalSample(rd.GetInt64(0), rd.GetString(1), rd.GetString(2), rd.GetDouble(3), rd.GetDouble(4), D(5),
+                D(6), D(7), D(8), D(9), D(10), D(11), D(12), D(13)));
+        return rows;
+    }
+
     /// <summary>编组优化规则：dispatch_rule join equipment_model 取 卡车载重/电铲斗容（供 FleetOptimizer）。</summary>
     public static List<FleetDispatchRule> GetFleetDispatchRules(SqliteConnection conn)
     {

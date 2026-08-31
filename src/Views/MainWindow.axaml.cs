@@ -720,6 +720,7 @@ public partial class MainWindow : Window
             if (cmd == "KPI分析" || cmd == "KPI" || cmd == "设备KPI") { KpiStatsCmd(); return; }
             if (cmd == "钻孔管理" || cmd == "钻孔统计" || cmd == "钻孔信息") { BoreholeStatsCmd(); return; }
             if (cmd == "煤质统计" || cmd == "煤质数据管理" || cmd == "煤质分析" || cmd == "质量·配煤分析" || cmd == "配煤分析") { CoalQualityStatsCmd(); return; }
+            if (cmd == "商品煤符合性" || cmd == "煤质达标" || cmd == "商品煤达标" || cmd.StartsWith("商品煤符合性 ") || cmd.StartsWith("煤质达标 ")) { CoalComplianceCmd(cmd); return; }
             if (cmd == "煤层管理" || cmd == "煤层定义" || cmd == "煤层列表") { CoalSeamsCmd(); return; }
             if (cmd == "见煤统计" || cmd == "煤层对比" || cmd == "见煤对比" || cmd == "钻孔见煤") { SeamIntersectionsCmd(); return; }
             if (cmd == "分煤层煤质" || cmd == "煤层煤质" || cmd == "分层煤质") { CoalQualityBySeamCmd(); return; }
@@ -5562,6 +5563,25 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"煤质统计：{q.Samples} 样 / {q.Seams} 煤层 · 平均 灰分Ad {q.AvgAshPct:0.##}% · 挥发分Vdaf {q.AvgVolatilePct:0.##}% · 发热量Qnet {q.AvgCalorificMJ:0.##}MJ/kg · 全硫St {q.AvgSulfurPct:0.###}%";
     }
 
+    // 商品煤符合性(CoalAnalytics)：逐化验段判 Ad≤/St≤/Q≥ → 达标率 + 按煤层 + 超标数。缺省 Ad≤30/St≤1/Qgr≥21
+    private void CoalComplianceCmd(string cmd)
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var samples = Data.GeoDataQueries.GetCoalSamples(db.Connection);
+        if (samples.Count == 0) { StatusMsg.Text = "商品煤符合性：无煤样数据"; return; }
+        double adMax = 30, stMax = 1.0, qMin = 21;   // 缺省商品煤限值; 可 "商品煤符合性 <灰max> <硫max> <热min>"
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        if (tk.Length >= 2) double.TryParse(tk[1], out adMax);
+        if (tk.Length >= 3) double.TryParse(tk[2], out stMax);
+        if (tk.Length >= 4) double.TryParse(tk[3], out qMin);
+        var lim = new Data.ComplianceLimits(UseClean: false, AshOn: true, AshMax: adMax, SulfurOn: true, SulfurMax: stMax,
+            CalorificOn: true, CalorificMin: qMin, Calorific: Data.CalorificKind.Qgr, VdafOn: false, VdafMin: 0, VdafMax: 0);
+        var r = Data.CoalAnalytics.Evaluate(samples, lim);
+        var seamParts = new List<string>();
+        foreach (var s in r.BySeam) seamParts.Add($"{s.SeamCode}({s.Pass}/{s.Evaluated}·{s.PassPct:0.#}%)");
+        StatusMsg.Text = $"商品煤符合性（原煤 Ad≤{adMax:0.#}%·St≤{stMax:0.##}%·Qgr≥{qMin:0.#}MJ/kg）：达标 {r.Pass}/{r.Evaluated}（{r.PassPct:0.#}%）· 数据不足 {r.Insufficient} · 分煤层 " + string.Join(" ", seamParts);
+    }
+
     private void ShiftOutputCmd()
     {
         var db = EnsureGeoDb(); if (db == null) return;
@@ -6034,7 +6054,7 @@ public partial class MainWindow : Window
         "设备台账","生产数据","产能分析","故障分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构",
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","数据看板","煤种分类",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
-        "产能分类对比","故障类型分布","分工序验收合格率","数据导出","达成度评价","产量预测","时序预测","编组优化","智能编组优化",
+        "产能分类对比","故障类型分布","分工序验收合格率","数据导出","达成度评价","产量预测","时序预测","编组优化","智能编组优化","商品煤符合性","煤质达标",
         // TaskLib 自足计算
         "生产量核算","物料换算","采剥平衡","排土场按量推进","配煤核算","工序进度跟踪","编组产能","环节降效",
     };
