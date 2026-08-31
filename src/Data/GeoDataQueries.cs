@@ -714,6 +714,40 @@ public static class GeoDataQueries
         return new ImportOutcome(ins, upd, skip, err);
     }
 
+    /// <summary>月度计划 CSV 入库：按 year+month upsert。列: year,month[,plan_strip_wan_m3,plan_coal_wan_t,plan_outsource_strip_wan_m3,ratio_strip_coal,avg_distance_km,avg_height_m]。
+    /// 种子 monthly_plan 大半空(煤量/剥采比缺)，导入填充后 月度计划/达成度评价 才有意义。</summary>
+    public static ImportOutcome ImportMonthlyPlans(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
+    {
+        int ins = 0, upd = 0, skip = 0, err = 0;
+        var cols = new[] { "plan_strip_wan_m3", "plan_coal_wan_t", "plan_outsource_strip_wan_m3", "ratio_strip_coal", "avg_distance_km", "avg_height_m" };
+        foreach (var row in rows)
+        {
+            string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
+            if (!int.TryParse(Get("year"), out int yr) || !int.TryParse(Get("month"), out int mo)) { err++; continue; }
+            double D(string k) { double.TryParse(Get(k), out double v); return v; }
+            bool exists;
+            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM monthly_plan WHERE year=@y AND month=@m"; q.Parameters.AddWithValue("@y", yr); q.Parameters.AddWithValue("@m", mo); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
+            using var cmd = conn.CreateCommand();
+            if (exists)
+            {
+                if (!overwrite) { skip++; continue; }
+                var set = new System.Text.StringBuilder();
+                foreach (var col in cols) set.Append($"{col}=@{col},");
+                cmd.CommandText = $"UPDATE monthly_plan SET {set.ToString().TrimEnd(',')} WHERE year=@y AND month=@m";
+                upd++;
+            }
+            else
+            {
+                cmd.CommandText = $"INSERT INTO monthly_plan (year, month, {string.Join(", ", cols)}) VALUES (@y, @m, {string.Join(", ", System.Array.ConvertAll(cols, c => "@" + c))})";
+                ins++;
+            }
+            cmd.Parameters.AddWithValue("@y", yr); cmd.Parameters.AddWithValue("@m", mo);
+            foreach (var col in cols) cmd.Parameters.AddWithValue("@" + col, D(col));
+            try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
+        }
+        return new ImportOutcome(ins, upd, skip, err);
+    }
+
     public sealed record HorizonPoint(string SeamCode, bool IsRoof, double X, double Y, double Z);
 
     /// <summary>层位展点（忠实 HorizonPointBuilder）：borehole_seam_result join 孔位 → 分煤层 底板(floor_elevation)/顶板(底+采用厚度) 高程点。</summary>

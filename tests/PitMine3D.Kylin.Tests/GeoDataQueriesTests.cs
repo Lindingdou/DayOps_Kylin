@@ -164,6 +164,29 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Import_monthly_plan_fills_empty_fields()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        // 导入未来月计划(填 煤量/剥采比, 种子这些字段空) → 插入
+        var o1 = GeoDataQueries.ImportMonthlyPlans(db.Connection, new[]
+        { (IReadOnlyDictionary<string,string>)new Dictionary<string,string>{["year"]="2099",["month"]="7",["plan_coal_wan_t"]="120",["ratio_strip_coal"]="5.5",["plan_strip_wan_m3"]="660"} }, true);
+        Assert.Equal(1, o1.Inserted);
+        // 经 GetMonthlyPlans 读回, 煤量/剥采比非空(种子做不到)
+        var plans = GeoDataQueries.GetMonthlyPlans(db.Connection);
+        var p = plans.First(x => x.Year == 2099 && x.Month == 7);
+        Assert.Equal(120.0, p.PlanCoalWanT, 3);
+        Assert.Equal(5.5, p.StripRatio, 3);
+        // 同键 overwrite → 更新
+        var o2 = GeoDataQueries.ImportMonthlyPlans(db.Connection, new[]
+        { (IReadOnlyDictionary<string,string>)new Dictionary<string,string>{["year"]="2099",["month"]="7",["plan_coal_wan_t"]="200"} }, true);
+        Assert.Equal(1, o2.Updated);
+        // 缺 year → 错误
+        var o3 = GeoDataQueries.ImportMonthlyPlans(db.Connection, new[]
+        { (IReadOnlyDictionary<string,string>)new Dictionary<string,string>{["month"]="1"} }, true);
+        Assert.Equal(1, o3.Errors);
+    }
+
+    [Fact]
     public void Import_observation_points_from_csv()
     {
         using var db = GeoDatabase.OpenSeeded();
