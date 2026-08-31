@@ -114,6 +114,25 @@ public class OrdinaryKrigingTests
         Assert.True(uk.Value.variance >= 0);
     }
 
+    // ── 简单克里金 SK（已知均值, 稀疏区归均值）──
+    [Fact]
+    public void Simple_kriging_exact_at_control_and_reverts_to_mean_far_away()
+    {
+        var pts = new List<CP>
+        {
+            new(0, 0, 0, 10), new(10, 0, 0, 20), new(0, 10, 0, 30), new(10, 10, 0, 40),
+        };
+        double mean = 25;   // 样本均值 (10+20+30+40)/4
+        // 控制点上精确
+        var atCp = OrdinaryKriging.EstimateSimpleAt(pts, 0, 0, 0, mean, radius: 100);
+        Assert.NotNull(atCp);
+        Assert.Equal(10.0, atCp!.Value.est, 4);
+        // 远离数据(但在半径内): SK 权重→0, 估计→均值 25。取一个较远点。
+        var far = OrdinaryKriging.EstimateSimpleAt(pts, 500, 500, 0, mean, radius: 2000);
+        Assert.NotNull(far);
+        Assert.True(System.Math.Abs(far!.Value.est - mean) < 5, $"SK 远处应≈均值 {mean}, 实 {far.Value.est:0.##}");
+    }
+
     [Fact]
     public void Universal_kriging_out_of_radius_null_and_few_points_fallback()
     {

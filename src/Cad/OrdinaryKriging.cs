@@ -46,6 +46,48 @@ public static class OrdinaryKriging
     }
 
     /// <summary>
+    /// 简单克里金 SK（已知均值 mean, 无 Σw=1 约束）在 (x,y,z) 估值。忠实原 CoalQualityEstimator 的 SK 核。
+    /// 区别于 OK：**数据稀疏区回归全局均值 mean**(OK 保持局部)。mean 默认样本均值。半径外 null。
+    /// </summary>
+    public static (double est, double variance)? EstimateSimpleAt(
+        IReadOnlyList<ControlPoint> points, double x, double y, double z, double? mean = null, int k = 12, double radius = 0, Variogram? vg = null)
+    {
+        if (points.Count == 0) return null;
+        if (radius <= 0) radius = AutoRadius(points);
+        vg ??= FitVariogram(points);
+        double m = mean ?? points.Average(q => q.V);
+        var neigh = new List<(double d, ControlPoint pt)>(points.Count);
+        foreach (var pt in points)
+        {
+            double dx = pt.X - x, dy = pt.Y - y, dz = pt.Z - z;
+            neigh.Add((Math.Sqrt(dx * dx + dy * dy + dz * dz), pt));
+        }
+        neigh.Sort((a, b) => a.d.CompareTo(b.d));
+        if (neigh[0].d > radius) return null;
+        if (neigh[0].d < 1e-6) return (neigh[0].pt.V, 0);
+        var top = neigh.GetRange(0, Math.Min(Math.Max(1, k), neigh.Count));
+        return KrigeSimple(top, vg, m);
+    }
+
+    // 简单克里金：Γw=γ0(n×n, 无约束); est=m+Σw(v−m); var=sill−Σw·γ0。
+    private static (double est, double variance) KrigeSimple(List<(double d, ControlPoint pt)> nb, Variogram vg, double m)
+    {
+        int n = nb.Count;
+        var A = new double[n, n];
+        var rhs = new double[n];
+        for (int i = 0; i < n; i++)
+        {
+            for (int j = 0; j < n; j++) A[i, j] = vg.Gamma(Dist(nb[i].pt, nb[j].pt));
+            rhs[i] = vg.Gamma(nb[i].d);
+        }
+        var w = Solve(A, rhs, n);
+        if (w == null) { double sw = 0, s = 0; foreach (var (d, pt) in nb) { double ww = 1.0 / (d * d); sw += ww; s += ww * pt.V; } return (s / sw, vg.Sill); }
+        double est = m, varr = vg.Sill;
+        for (int i = 0; i < n; i++) { est += w[i] * (nb[i].pt.V - m); varr -= w[i] * rhs[i]; }
+        return (est, Math.Max(0, varr));
+    }
+
+    /// <summary>
     /// 泛克里金 UK（带线性趋势 f=[1,x,y]）在 (x,y,z) 估值。忠实原 CoalQualityEstimator 的 UK 核。
     /// 区别于 OK：显式建模一次趋势面, 对**有区域趋势**的数据(如煤层品位沿走向渐变)更准——
     /// 对线性趋势数据**处处精确**(OK 只在控制点精确)。邻点 &lt;3 回落 OK。半径外返回 null。
