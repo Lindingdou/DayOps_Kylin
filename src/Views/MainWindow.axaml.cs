@@ -870,6 +870,9 @@ public partial class MainWindow : Window
             if (cmd == "快速建模" || cmd == "一键建模" || cmd == "顶底成体") { await QuickModelAsync(); return; }
             if (cmd == "连续多层建模" || cmd == "多层建模" || cmd == "逐层成体" || cmd == "层位建模") { await MultiLayerModelAsync(); return; }
             if (cmd == "网格简化" || cmd == "三角网简化" || cmd == "减面" || cmd.StartsWith("网格简化 ") || cmd.StartsWith("三角网简化 ")) { await MeshSimplifyAsync(cmd); return; }
+            if (cmd == "导出OBJ" || cmd == "导出网格OBJ" || cmd == "网格导出OBJ") { await ExportMeshAsync("obj"); return; }
+            if (cmd == "导出PLY" || cmd == "导出网格PLY" || cmd == "网格导出PLY") { await ExportMeshAsync("ply"); return; }
+            if (cmd == "导出STL" || cmd == "导出网格STL" || cmd == "网格导出STL") { await ExportMeshAsync("stl"); return; }
             if (cmd == "中心线管理" || cmd == "边状态" || cmd == "路网拓扑" || cmd == "中线管理") { RoadNetworkReportCmd(); return; }
             if (cmd == "排土场容量校核" || cmd == "容量校核" || cmd == "排土容量") { await DumpCapacityAsync(); return; }
             if (cmd == "生产量核算" || cmd == "任务量汇总" || cmd == "分账合计" || cmd == "生产任务量") { await ProductionQuantityAsync(); return; }
@@ -1799,6 +1802,24 @@ public partial class MainWindow : Window
         try { System.IO.File.WriteAllText(outPath, MeshWeld.ToOff(wv, wt)); }
         catch (System.Exception ex) { StatusMsg.Text = $"快速建模：写出失败 {ex.Message}"; return; }
         StatusMsg.Text = $"快速建模：顶+底+侧壁 焊成 {wt.Count} 三角 · {(watertight ? "水密(闭合地质体)" : $"非水密(开放边 {d.BoundaryEdges})")} → {System.IO.Path.GetFileName(outPath)}";
+    }
+
+    // 导出网格到 OBJ/PLY/STL：选源 OFF → 转格式 → 写同名同目录 .obj/.ply/.stl
+    private async Task ExportMeshAsync(string fmt)
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = $"导出网格 {fmt.ToUpperInvariant()}：选源 OFF",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } } }
+        });
+        if (files.Count == 0) return;
+        var (v, t) = MeshMetrics.ParseOff(System.IO.File.ReadAllText(files[0].Path.LocalPath));
+        if (t.Count == 0) { StatusMsg.Text = "导出网格：源无三角网"; return; }
+        string outPath = System.IO.Path.ChangeExtension(files[0].Path.LocalPath, fmt);
+        try { System.IO.File.WriteAllText(outPath, MeshExport.ByExtension(fmt, v, t)); }
+        catch (System.Exception ex) { StatusMsg.Text = $"导出网格：写出失败 {ex.Message}"; return; }
+        StatusMsg.Text = $"导出网格 {fmt.ToUpperInvariant()}：{v.Count} 顶点 · {t.Count} 三角 → {System.IO.Path.GetFileName(outPath)}";
     }
 
     // 网格简化(顶点聚类)：选 OFF → 按容差(包围盒对角×比例, 默认1%)并顶点、丢塌陷三角 → 写 simplified.off
