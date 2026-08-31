@@ -1655,3 +1655,13 @@ diff 修改类命令时初判 Kylin 缺 圆角/倒角/阵列/拉伸(通用 AutoC
 - **多行文字完整闭环**: 创建(多行文字命令)+ 渲染(Tessellate 多行)+ DXF 导出(MText)+ 导入(MText→单一多行实体)+ .pmx 往返。
 
 **本会话累计补 71 真功能 + 4 潜伏 bug 修 + 多处忠实性/深度证伪, 989 测。**
+
+## 一三三、点样式 DXF 往返 —— $PDMODE/$PDSIZE（#66 follow-on 保真）
+
+follow-on 保真续查: 点样式(§一二三 #66)此前只 .pmx 往返, DXF 导出丢。DXF 点显示为**文档级**($PDMODE/$PDSIZE, 非逐实体), 补:
+- [x] **导出**(`SceneExport`): 取场景点的**众数样式** + **中位尺寸** → `doc.Header.PointDisplayMode`/`PointDisplaySize`。
+- [x] **导入**(`DxfImport` Point case): 点样式/尺寸 = 文档 `$PDMODE`/`$PDSIZE`(逐实体 DXF 无, 应用文档级)。
+- [x] round-trip 测: 两点样式 3/尺寸 1.5 → $PDMODE=3/$PDSIZE=1.5 → 导入点样式 3。990 测。
+- **DXF 模型限制记录**: DXF 点显示文档级(全图一样式), Kylin 逐实体样式导 DXF 时收敛为众数; 逐实体变化仅 .pmx 保。忠实 DXF 模型。
+
+**本会话累计补 72 真功能/保真 + 4 潜伏 bug 修 + 多处忠实性/深度证伪, 990 测。**

@@ -41,6 +41,21 @@ public class PointStyleTests
     }
 
     [Fact]
+    public void Point_style_exports_to_dxf_pdmode_and_roundtrips()
+    {
+        var scene = new Scene();
+        scene.Add(new PointEntity { X = 0, Y = 0, Style = 3, Size = 1.5 });
+        scene.Add(new PointEntity { X = 5, Y = 0, Style = 3, Size = 1.5 });   // 众数样式 3
+        var doc = PitMine3D.Kylin.Cad.SceneExportService.BuildDocument(scene);
+        Assert.Equal(3, doc.Header.PointDisplayMode);                          // $PDMODE = 众数样式
+        Assert.Equal(1.5, doc.Header.PointDisplaySize, 6);                     // $PDSIZE = 中位尺寸
+        var res = PitMine3D.Kylin.Cad.DxfImportService.MapDocument(doc);
+        var pt = System.Linq.Enumerable.First(System.Linq.Enumerable.OfType<PointEntity>(res.Entities));
+        Assert.Equal(3, pt.Style);                                            // 导入点应用文档样式
+        Assert.Equal(1.5, pt.Size, 6);
+    }
+
+    [Fact]
     public void Panel_edits_point_size_and_style()
     {
         var p = new PointEntity { X = 0, Y = 0, Size = 0.5, Style = 2 };

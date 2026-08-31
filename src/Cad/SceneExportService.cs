@@ -91,6 +91,18 @@ public static class SceneExportService
                 doc.Entities.Add(ent);
             }
         }
+
+        // 点样式 → 文档级 $PDMODE/$PDSIZE(DXF 点显示为文档级; 取场景点的众数样式 + 中位尺寸)
+        var ptStyleCount = new Dictionary<int, int>(); var ptSizes = new List<double>();
+        foreach (var e in scene.Entities) if (e is PointEntity p) { ptStyleCount[p.Style] = ptStyleCount.GetValueOrDefault(p.Style) + 1; ptSizes.Add(p.Size); }
+        if (ptStyleCount.Count > 0)
+        {
+            int domStyle = 2, domCount = -1;
+            foreach (var kv in ptStyleCount) if (kv.Value > domCount) { domCount = kv.Value; domStyle = kv.Key; }
+            doc.Header.PointDisplayMode = (short)domStyle;
+            ptSizes.Sort();
+            doc.Header.PointDisplaySize = ptSizes[ptSizes.Count / 2];
+        }
         return doc;
     }
 

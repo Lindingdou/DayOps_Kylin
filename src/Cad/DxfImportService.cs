@@ -539,7 +539,7 @@ public static class DxfImportService
                     Finalize(new CircleEntity { Cx = ci.Center.X, Cy = ci.Center.Y, Radius = ci.Radius }, xf, col, layer);
                     break;
                 case Point pt:
-                    Finalize(new PointEntity { X = pt.Location.X, Y = pt.Location.Y }, xf, col, layer);
+                    Finalize(new PointEntity { X = pt.Location.X, Y = pt.Location.Y, Style = (int)doc.Header.PointDisplayMode, Size = doc.Header.PointDisplaySize > 1e-9 ? doc.Header.PointDisplaySize : 0.5 }, xf, col, layer);   // 点样式/尺寸 = 文档 $PDMODE/$PDSIZE
                     break;
                 case Ellipse ell:
                 {
