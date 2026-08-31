@@ -82,4 +82,34 @@ public static class DimTools
         list.Add(new TextEntity { X = ex + ux * H * 0.3, Y = ey + uy * H * 0.3, Height = H, Text = s, Cr = col.r, Cg = col.g, Cb = col.b });
         return list;
     }
+
+    /// <summary>
+    /// 坐标标注(COORD)：点 → 小十字标记 + 引线 + "X=… Y=…"(可含 Z) 文字。
+    /// 忠实原 CAD 工具栏「坐标标注」意图(测量/矿业标准注记)。leaderDx/Dy = 引线到文字锚点的相对位移。纯逻辑、可单测。
+    /// </summary>
+    public static List<SceneEntity> BuildCoordLabel(double px, double py, double leaderDx, double leaderDy,
+        double h, DimStyle? style = null, double? z = null)
+    {
+        style ??= DimStyle.Default;
+        double H = style.TextHeight > 0 ? style.TextHeight : h;
+        var list = new List<SceneEntity>();
+        (float r, float g, float b) col = (0.95f, 0.85f, 0.30f);
+        SceneEntity L(double a, double b, double c, double d) => new LineEntity { X0 = a, Y0 = b, X1 = c, Y1 = d, Cr = col.r, Cg = col.g, Cb = col.b };
+
+        double m = H * 0.4;                                 // 点标记(小十字)
+        list.Add(L(px - m, py, px + m, py));
+        list.Add(L(px, py - m, px, py + m));
+        double ax = px + leaderDx, ay = py + leaderDy;      // 文字锚点
+        list.Add(L(px, py, ax, ay));                        // 引线
+
+        var inv = CultureInfo.InvariantCulture;
+        string fmt = style.NumberFormat;
+        string s = z.HasValue
+            ? $"X={px.ToString(fmt, inv)} Y={py.ToString(fmt, inv)} Z={z.Value.ToString(fmt, inv)}"
+            : $"X={px.ToString(fmt, inv)} Y={py.ToString(fmt, inv)}";
+        double tw = s.Length * H * 0.8;                     // 粗略文字宽
+        double textX = leaderDx >= 0 ? ax + H * 0.3 : ax - H * 0.3 - tw;   // 引线朝左则文字右对齐
+        list.Add(new TextEntity { X = textX, Y = ay, Height = H, Text = s, Cr = col.r, Cg = col.g, Cb = col.b });
+        return list;
+    }
 }

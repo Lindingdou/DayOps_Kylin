@@ -207,6 +207,23 @@ public partial class MainWindow : Window
                 return;
             }
 
+            // 坐标标注：点击任意点 → 小十字 + 引线 + "X=… Y=…"（连续，ESC 退出）
+            if (_coordLabelActive && props.IsLeftButtonPressed)
+            {
+                _nav = NavMode.None;
+                var wp = PickWorld();
+                if (wp != null)
+                {
+                    double h = System.Math.Max(SnapTolWorld(_lastPointer) * 2.5, 1e-3);
+                    var lab = DimTools.BuildCoordLabel(wp.Value.x, wp.Value.y, h * 6, h * 6, h, _dimStyle);
+                    BeginChange();
+                    foreach (var de in lab) { de.LayerName = _layers.Current.Name; _scene.Add(de); }
+                    RefreshScene();
+                    StatusMsg.Text = $"坐标标注 X={wp.Value.x:0.##} Y={wp.Value.y:0.##}（继续点选, ESC 退出）";
+                }
+                return;
+            }
+
             // 高程查询：点击任意点 → IDW 报高程 + 标记（连续，ESC 退出）
             if (_spotActive && props.IsLeftButtonPressed && _spotTerrain != null)
             {
@@ -565,6 +582,7 @@ public partial class MainWindow : Window
                 _textActive = false;
                 _dimActive = false; _dimP1 = null;
                 _dimRadActive = false; _dimRadCircle = null;
+                _coordLabelActive = false;
                 _gripIndex = -1;
                 _selBoxActive = false;
                 _ttrActive = false; _ttrAwaitRadius = false; _ttrRef1 = null; _ttrRef2 = null;
@@ -660,6 +678,7 @@ public partial class MainWindow : Window
     private bool _dimActive;                          // 线性标注：取两点
     private (double x, double y)? _dimP1;
     private bool _dimRadActive;                        // 半径标注：选圆/弧后指定方向
+    private bool _coordLabelActive;                    // 坐标标注：点击点报 X/Y(连续)
     private (double cx, double cy, double r)? _dimRadCircle;
     private (double x, double y)? _lastDimP2;           // 上一条线性标注的第二点(连续标注基准)
     private readonly Cad.Draw.DimStyle _dimStyle = new();   // 标注样式(DIM 变量：字高/小数位/箭头比)，影响新建标注
@@ -906,6 +925,7 @@ public partial class MainWindow : Window
             if (cmd == "文字" || cmd == "单行文字") { ArmText(); return; }
             if (cmd == "标注" || cmd == "线性标注" || cmd == "对齐标注" || cmd == "尺寸标注" || cmd == "标注台阶标高") { StartDim(); return; }
             if (cmd == "半径标注" || cmd == "半径") { StartDimRadial(); return; }
+            if (cmd == "坐标标注" || cmd == "标注坐标" || cmd == "点坐标标注") { StartCoordLabel(); return; }
             if (cmd == "连续标注" || cmd == "连续") { StartDimContinue(); return; }
             if (cmd == "标注样式" || cmd == "标注设置" || cmd.StartsWith("标注样式 ") || cmd.StartsWith("标注设置 ")) { DimStyleCmd(cmd); return; }
             if (cmd == "裁剪" || cmd == "多边形裁剪" || cmd == "区运算" || cmd == "范围裁剪") { ClipPolygon(); return; }
@@ -3673,6 +3693,15 @@ public partial class MainWindow : Window
         _dimRadCircle = c; _dimRadActive = true;
         _tool = null; _measure = null; _editMode = EditMode.None;
         StatusMsg.Text = "半径标注：指定标注方向";
+    }
+
+    // 坐标标注：进入连续点选模式，每点生成 十字+引线+"X=… Y=…" 注记
+    private void StartCoordLabel()
+    {
+        _coordLabelActive = true;
+        _tool = null; _measure = null; _editMode = EditMode.None;
+        _dimActive = false; _dimRadActive = false;
+        StatusMsg.Text = "坐标标注：点选要标注坐标的点（连续, ESC 退出）";
     }
 
     // 连续标注(DIMCONTINUE)：以上一条线性标注的第二点为起点链式接续
