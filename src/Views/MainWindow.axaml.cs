@@ -671,6 +671,7 @@ public partial class MainWindow : Window
             if (cmd == "地面点滤波" || cmd == "地面滤波") { await GroundFilterAsync(); return; }
             if (cmd == "C2C" || cmd == "点云比对") { await CloudCompareAsync(); return; }
             if (cmd == "境界圈定" || cmd == "凸包" || cmd == "确定境界" || cmd == "采场圈定" || cmd == "采场/排土场圈定") { await BoundaryHullAsync(); return; }
+            if (cmd == "采区划分" || cmd == "采区" || cmd == "储量均衡划分") { PanelSplitCmd(); return; }
             if (cmd == "剖面分析" || cmd == "剖面" || cmd == "点云剖面") { await SectionProfileAsync(); return; }
             if (cmd == "粗糙度" || cmd == "地表粗糙度") { await RoughnessAsync(); return; }
             if (cmd == "曲率" || cmd == "地表曲率") { await CurvatureAsync(); return; }
@@ -2757,6 +2758,36 @@ public partial class MainWindow : Window
         double cut = cutoff ?? gsum / _lastBlocks.Count;   // 默认=平均品位
         var (ore, waste, strip, avg, metal, tonnage) = BlockModel.Resource(_lastBlocks, cut, 2.7);
         StatusMsg.Text = $"资源量(cutoff {cut:0.##})：矿量 {ore:0.#} 吨位 {tonnage:0.#} · 废 {waste:0.#} · 剥采比 {strip:0.##} · 平均品位 {avg:0.###} · 金属 {metal:0.#}";
+    }
+
+    // 采区划分：最近块体 → 剥采比场(品位阈值聚合) → 沿推进轴等煤量切 N 采区 → 采区矩形入场景 + 报表
+    private void PanelSplitCmd()
+    {
+        if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "采区划分：请先导入/生成块体（块体模型 / 实体转块体）"; return; }
+        double gsum = 0; foreach (var b in _lastBlocks) gsum += b.Grade;
+        double cutoff = gsum / _lastBlocks.Count;   // 默认阈值=平均品位(煤/岩判别)
+        var blocks = _lastBlocks.Select(b => (b.X, b.Y, b.Z, b.Size, b.Grade)).ToList();
+        var field = StripRatioField.FromBlocks(blocks, cutoff, 1.35);   // 煤密度 1.35 t/m³
+        if (field == null) { StatusMsg.Text = "采区划分：剥采比场构建失败"; return; }
+        var plan = new MiningPlanParams();   // 默认: ByLife·4采区·400万t/a·30年·内排·台阶12m·方位0
+        var panels = PanelSplitter.Split(plan, field);
+        if (panels.Count == 0) { StatusMsg.Text = "采区划分：未切出采区（检查块体范围/品位）"; return; }
+        BeginChange();
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        int k = 0;
+        foreach (var p in panels)
+        {
+            float t = panels.Count > 1 ? (float)k / (panels.Count - 1) : 0f;
+            var rect = new RectEntity { X0 = p.MinX, Y0 = p.MinY, X1 = p.MaxX, Y1 = p.MaxY, Cr = t, Cg = 0.55f, Cb = 1f - t };
+            _scene.Add(rect);
+            if (p.MinX < minX) minX = p.MinX; if (p.MinY < minY) minY = p.MinY; if (p.MaxX > maxX) maxX = p.MaxX; if (p.MaxY > maxY) maxY = p.MaxY;
+            k++;
+        }
+        RefreshScene();
+        if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
+        double totCoal = panels.Sum(p => p.CoalWanT);
+        var first = panels.OrderBy(p => p.Order).First();
+        StatusMsg.Text = $"采区划分：{panels.Count} 采区(等煤量) · 总煤 {totCoal:0} 万t · 首采区剥采比 {first.StripRatio:0.##} · 服务 {first.ServiceLifeYears:0.#}a(蓝→红=开采序)";
     }
 
     // 组合工作线：合并选中的多段线（端点相接连成一条）
