@@ -78,4 +78,51 @@ public class StatisticsTests
         Assert.Empty(s.Histogram);
         Assert.Equal("bucket,low,high,count\n", Statistics.HistogramCsv(s));
     }
+
+    // ── 分位数 / 箱线(忠实原「均值/std/分位数...箱线」) ──
+    [Fact]
+    public void Quartiles_on_odd_series()
+    {
+        var s = Statistics.Describe(new List<double> { 1, 2, 3, 4, 5 });
+        Assert.Equal(2, s.Q1, 6);        // 25th: rank=0.25·4=1 → sorted[1]=2
+        Assert.Equal(3, s.Median, 6);
+        Assert.Equal(4, s.Q3, 6);        // 75th: rank=0.75·4=3 → sorted[3]=4
+    }
+
+    [Fact]
+    public void Percentile_linear_interpolation_between_order_stats()
+    {
+        var data = new List<double> { 10, 20, 30, 40 };   // 已升序
+        Assert.Equal(17.5, Statistics.Percentile(data, 25), 6);   // rank=0.75 → 10+10·0.75
+        Assert.Equal(32.5, Statistics.Percentile(data, 75), 6);   // rank=2.25 → 30+10·0.25
+        Assert.Equal(10, Statistics.Percentile(data, 0), 6);      // 端点夹取
+        Assert.Equal(40, Statistics.Percentile(data, 100), 6);
+    }
+
+    [Fact]
+    public void Quartiles_on_uniform_0_to_100()
+    {
+        var data = Enumerable.Range(0, 101).Select(i => (double)i).ToList();
+        var s = Statistics.Describe(data);
+        Assert.Equal(25, s.Q1, 6);
+        Assert.Equal(50, s.Median, 6);
+        Assert.Equal(75, s.Q3, 6);
+    }
+
+    [Fact]
+    public void Boxplot_csv_is_five_number_summary()
+    {
+        var s = Statistics.Describe(new List<double> { 1, 2, 3, 4, 5 });
+        var lines = Statistics.BoxplotCsv(s).TrimEnd('\n').Split('\n');
+        Assert.Equal("min,q1,median,q3,max", lines[0]);
+        Assert.Equal("1,2,3,4,5", lines[1]);
+    }
+
+    [Fact]
+    public void Q1_le_median_le_Q3_invariant()
+    {
+        var s = Statistics.Describe(new List<double> { 5, 1, 9, 3, 7, 2, 8 });
+        Assert.True(s.Q1 <= s.Median && s.Median <= s.Q3, "Q1≤中位≤Q3");
+        Assert.True(s.Min <= s.Q1 && s.Q3 <= s.Max);
+    }
 }
