@@ -898,6 +898,7 @@ public partial class MainWindow : Window
             if (cmd == "加载点云" || cmd == "展点" || cmd == "导入点云" || cmd == "加载点") { await LoadPointCloudAsync(); return; }
             if (cmd == "导入LAS" || cmd == "加载LAS" || cmd == "LAS导入" || cmd == "导入激光点云") { await LoadLasAsync("导入LAS"); return; }
             if (cmd == "LAS真彩色" || cmd == "点云真实色" || cmd == "真实色导入LAS" || cmd == "LAS真实色") { await LoadLasAsync("LAS真彩色"); return; }
+            if (cmd == "LAS强度色" || cmd == "点云强度着色" || cmd == "强度着色导入LAS" || cmd == "LAS强度着色") { await LoadLasAsync("LAS强度色"); return; }
             if (cmd == "正射着色" || cmd == "真实色" || cmd == "影像着色" || cmd == "正射影像着色") { await OrthoColorAsync(); return; }
             if (cmd == "逐点坡度/坡向" || cmd == "逐点坡度坡向" || cmd == "法向估计" || cmd == "点云法向") { await PointNormalsAsync(); return; }
             if (cmd == "高程截断" || cmd == "高程裁剪" || cmd == "Z截断") { await ElevationClipAsync(); return; }
@@ -3057,22 +3058,32 @@ public partial class MainWindow : Window
         if (!r.Success) { StatusMsg.Text = $"导入 LAS：{r.Error}"; return; }
         if (r.Points.Count == 0) { StatusMsg.Text = "导入 LAS：头有效但无点"; return; }
         bool wantRgb = cmd.Contains("真");                 // "LAS真彩色/点云真实色" → 用捕获的 RGB 着色
+        bool wantIntensity = cmd.Contains("强度");         // "LAS强度色" → 按回波强度灰阶
         bool useRgb = wantRgb && r.Colors != null && r.Colors.Count == r.Points.Count;
+        float iMin = float.MaxValue, iMax = float.MinValue;   // 强度归一化(用实际值域拉满对比)
+        if (wantIntensity) foreach (var iv in r.Intensity) { if (iv < iMin) iMin = iv; if (iv > iMax) iMax = iv; }
+        float iRange = iMax > iMin ? iMax - iMin : 1;
+        bool useIntensity = wantIntensity && r.Intensity.Count == r.Points.Count && iMax > iMin;
         BeginChange();
         for (int i = 0; i < r.Points.Count; i++)
         {
             var p = r.Points[i];
             var pe = new PointEntity { X = p.x, Y = p.y };
-            if (useRgb) { var c = r.Colors![i]; pe.Cr = c.r; pe.Cg = c.g; pe.Cb = c.b; }
-            else { pe.Cr = 0.75f; pe.Cg = 0.78f; pe.Cb = 0.82f; }
+            (float cr, float cg, float cb) Col()
+            {
+                if (useRgb) { var c = r.Colors![i]; return (c.r, c.g, c.b); }
+                if (useIntensity) { float g = (r.Intensity[i] - iMin) / iRange; return (g, g, g); }
+                return (0.75f, 0.78f, 0.82f);
+            }
+            var (cr0, cg0, cb0) = Col(); pe.Cr = cr0; pe.Cg = cg0; pe.Cb = cb0;
             AssignLayer(pe);
-            if (useRgb) { var c = r.Colors![i]; pe.Cr = c.r; pe.Cg = c.g; pe.Cb = c.b; }   // AssignLayer 可能改色, 真彩色后置回
+            if (useRgb || useIntensity) { var (cr, cg, cb) = Col(); pe.Cr = cr; pe.Cg = cg; pe.Cb = cb; }   // AssignLayer 可能改色, 置回
             _scene.Add(pe);
         }
         RefreshScene();
         Viewport.FitBounds(new[] { r.MinX, r.MinY, r.MaxX, r.MaxY });
         var inv = System.Globalization.CultureInfo.InvariantCulture;
-        string colorNote = useRgb ? "真实色(RGB)" : (wantRgb ? $"无RGB(点格式{r.PointFormat}), 灰显" : "灰显");
+        string colorNote = useRgb ? "真实色(RGB)" : useIntensity ? $"强度灰阶[{iMin:0}~{iMax:0}]" : (wantRgb ? $"无RGB(点格式{r.PointFormat}), 灰显" : wantIntensity ? "强度无变化, 灰显" : "灰显");
         StatusMsg.Text = $"导入 LAS(v{r.VersionMajor}.{r.VersionMinor})：{r.PointCount} 点"
             + (r.Points.Count < r.PointCount ? $"(抽稀显示 {r.Points.Count})" : "")
             + $" · {colorNote} · 范围 X[{r.MinX.ToString("0.#", inv)}~{r.MaxX.ToString("0.#", inv)}] Z[{r.MinZ.ToString("0.#", inv)}~{r.MaxZ.ToString("0.#", inv)}]";

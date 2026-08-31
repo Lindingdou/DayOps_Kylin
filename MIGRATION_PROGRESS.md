@@ -1250,3 +1250,12 @@ pc_tin_color「**真实色**/高程/坡度/坡向/等高线」+ pc_colorize「�
 - 判据: 又一"公开规范可逆向 → 不依赖 native 内核"(同 LAS XYZ / GeoTIFF)。合成样本可验, 故实现非记录。
 
 **本会话累计补 41 真功能 + 1 并发修复 + 1 潜伏字形 bug 修 + 1 latent 攻克 + GWN 硬化, 932 测。** 子特性纠正连补: 倒刺剔除/补洞面积阈值/裁剪圈外/LAS真实色——皆"命令已有但子特性/选项缺"型。
+
+## 九十四、LAS 回波强度(intensity) + 强度着色
+
+pc_quality 含「点数/密度/包围盒/高程分布/**强度分类**」, 点云常按强度分析/着色。所有 LAS 点格式偏移12 均有 intensity(uint16), Kylin 此前未读:
+- [x] **intensity 读取**(`LasImportService.Intensity` 列): 紧接 XYZ(偏移12)读 uint16 原值, 与 Points 同长, 无需额外 seek。测(合成 LAS intensity=5000 读回正确)。
+- [x] **强度着色**("LAS强度色/点云强度着色"命令): 按强度实际值域拉满灰阶(iMin~iMax→0~1)着点, 无变化则灰显。补 pc_quality 强度部分 + 强度可视化。
+- LAS 属性读取渐全: XYZ(§七十) + RGB真实色(§九十三) + intensity(本节), 皆 ASPRS 公开规范逐字段偏移, 合成样本可验。
+
+**本会话累计补 42 真功能 + 1 并发修复 + 1 潜伏字形 bug 修 + 1 latent 攻克 + GWN 硬化, 932 测。**

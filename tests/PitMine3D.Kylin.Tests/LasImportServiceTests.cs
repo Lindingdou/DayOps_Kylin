@@ -129,7 +129,8 @@ public class LasImportServiceTests
             bw.Write((int)Math.Round((p.x - ox) / sx));
             bw.Write((int)Math.Round((p.y - oy) / sy));
             bw.Write((int)Math.Round((p.z - oz) / sz));
-            bw.Write(new byte[8]);                                 // intensity..pointsource (偏移 12..19)
+            bw.Write((ushort)5000);                                // intensity (偏移 12)
+            bw.Write(new byte[6]);                                 // flags..pointsource (偏移 14..19)
             bw.Write(p.r); bw.Write(p.g); bw.Write(p.b);           // RGB 在偏移 20
         }
         return ms.ToArray();
@@ -148,6 +149,9 @@ public class LasImportServiceTests
         Assert.Equal(2, r.Colors!.Count);                          // Colors 与 Points 同长
         Assert.Equal(1f, r.Colors[0].r, 3); Assert.Equal(0f, r.Colors[0].g, 3);   // 全红 → r=1
         Assert.Equal(1f, r.Colors[1].g, 3); Assert.Equal(0f, r.Colors[1].r, 3);   // 全绿 → g=1
+        // 强度(偏移12)也读到, 与 Points 同长
+        Assert.Equal(2, r.Intensity.Count);
+        Assert.Equal(5000f, r.Intensity[0], 1);
     }
 
     [Fact]

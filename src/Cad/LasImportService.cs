@@ -18,6 +18,7 @@ public static class LasImportService
         public long PointCount;                                   // 头声明的总点数
         public List<(double x, double y, double z)> Points = new();  // 抽稀后实际读入
         public List<(float r, float g, float b)>? Colors;        // 含 RGB 的点格式(2/3/5/7/8)才非 null; 与 Points 同长
+        public List<float> Intensity = new();                    // 回波强度(所有点格式偏移12均有, uint16 原值); 与 Points 同长
         public double MinX, MaxX, MinY, MaxY, MinZ, MaxZ;         // 头里的包围盒
     }
 
@@ -68,6 +69,7 @@ public static class LasImportService
             s.Seek(off, SeekOrigin.Begin);
             int xi = br.ReadInt32(), yi = br.ReadInt32(), zi = br.ReadInt32();
             r.Points.Add((xi * sx + ox, yi * sy + oy, zi * sz + oz));
+            r.Intensity.Add(off + 14 <= s.Length ? br.ReadUInt16() : 0);   // 强度: 偏移12(紧接XYZ), 原值
             if (rgbOff >= 0)                      // 真实色(RGB uint16 归一化); 保 Colors 与 Points 同长
             {
                 r.Colors ??= new List<(float, float, float)>();
