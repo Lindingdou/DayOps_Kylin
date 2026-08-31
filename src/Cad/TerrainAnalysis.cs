@@ -159,6 +159,76 @@ public static class TerrainAnalysis
     }
     private static double Dz(double[,] g1, double[,] g2, int ix, int iy) => g2[ix, iy] - g1[ix, iy];
 
+    public readonly record struct CutFillBand(double ZLow, double ZHigh, double Cut, double Fill);
+
+    /// <summary>
+    /// 两期算量分标高带（忠实原 PointCloudLib VolumeReportGenerator「按标高带」聚合）——
+    /// 各格变化柱 [min(g1,g2), max(g1,g2)] 按 bandHeight 切到各高程带, 逐带累计挖/填。
+    /// 挖/填判据与 <see cref="TwoEpochVolume"/> 一致(m2&gt;m1=填); 各带挖和==整体挖(守恒)。
+    /// bandHeight≤0 → 变化区间十等分。纯逻辑、可单测。
+    /// </summary>
+    public static List<CutFillBand> TwoEpochVolumeByElevation(
+        IReadOnlyList<(double x, double y, double z)> a, IReadOnlyList<(double x, double y, double z)> b,
+        int n, double bandHeight)
+    {
+        var res = new List<CutFillBand>();
+        if (a.Count == 0 || b.Count == 0 || n < 2) return res;
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        void Ext(IReadOnlyList<(double x, double y, double z)> pts) { foreach (var p in pts) { if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y; if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y; } }
+        Ext(a); Ext(b);
+        double dx = maxX > minX ? (maxX - minX) / (n - 1) : 1;
+        double dy = maxY > minY ? (maxY - minY) / (n - 1) : 1;
+        var g1 = Contour.GridInto(a, n, n, minX, minY, dx, dy);
+        var g2 = Contour.GridInto(b, n, n, minX, minY, dx, dy);
+        double cellArea = dx * dy;
+
+        // 各格变化柱 [lo,hi] + 挖/填标志; 同时求全局 z 范围
+        double zMin = double.MaxValue, zMax = double.MinValue;
+        var cells = new List<(double lo, double hi, bool fill)>();
+        for (int ix = 0; ix + 1 < n; ix++)
+        for (int iy = 0; iy + 1 < n; iy++)
+        {
+            double m1 = (g1[ix, iy] + g1[ix + 1, iy] + g1[ix + 1, iy + 1] + g1[ix, iy + 1]) / 4.0;
+            double m2 = (g2[ix, iy] + g2[ix + 1, iy] + g2[ix + 1, iy + 1] + g2[ix, iy + 1]) / 4.0;
+            double lo = System.Math.Min(m1, m2), hi = System.Math.Max(m1, m2);
+            if (hi - lo < 1e-12) continue;                 // 无变化格不计
+            cells.Add((lo, hi, m2 > m1));
+            if (lo < zMin) zMin = lo; if (hi > zMax) zMax = hi;
+        }
+        if (cells.Count == 0) return res;
+        if (bandHeight <= 1e-9) bandHeight = (zMax - zMin) / 10.0;
+        if (bandHeight <= 1e-9) bandHeight = 1.0;
+        int nb = System.Math.Max(1, (int)System.Math.Ceiling((zMax - zMin + 1e-9) / bandHeight));
+        var cut = new double[nb]; var fill = new double[nb];
+        foreach (var c in cells)
+            for (int k = 0; k < nb; k++)
+            {
+                double zb = zMin + k * bandHeight, zt = zb + bandHeight;
+                double ov = System.Math.Min(c.hi, zt) - System.Math.Max(c.lo, zb);   // 柱与带重叠高
+                if (ov <= 0) continue;
+                double v = ov * cellArea;
+                if (c.fill) fill[k] += v; else cut[k] += v;
+            }
+        for (int k = 0; k < nb; k++)
+        {
+            double zb = zMin + k * bandHeight, zt = System.Math.Min(zMax, zb + bandHeight);
+            res.Add(new CutFillBand(zb, zt, cut[k], fill[k]));
+        }
+        return res;
+    }
+
+    /// <summary>两期分标高填挖 → CSV(z_low,z_high,cut,fill,net)。</summary>
+    public static string TwoEpochByElevationCsv(IReadOnlyList<CutFillBand> bands)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var sb = new System.Text.StringBuilder("z_low,z_high,cut,fill,net\n");
+        foreach (var b in bands)
+            sb.Append(b.ZLow.ToString("R", inv)).Append(',').Append(b.ZHigh.ToString("R", inv)).Append(',')
+              .Append(b.Cut.ToString("R", inv)).Append(',').Append(b.Fill.ToString("R", inv)).Append(',')
+              .Append((b.Fill - b.Cut).ToString("R", inv)).Append('\n');
+        return sb.ToString();
+    }
+
     private static List<SceneEntity> BuildShaded(
         IReadOnlyList<(double x, double y, double z)> pts, List<(int a, int b, int c)> tris,
         Func<(double x, double y, double z), (double x, double y, double z), (double x, double y, double z), (float r, float g, float b)> color)

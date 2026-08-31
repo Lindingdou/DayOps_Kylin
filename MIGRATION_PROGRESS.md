@@ -1147,3 +1147,11 @@ grade-only 数据模型无法持多属性(架构限, 记录), 但可**部分缓�
 - [x] **JPEG IDCT 余弦表竞态修复**(`JpegDecoder._cos`)：全套测试并发跑时 `Jpeg_geotiff_decodes_and_samples` 偶发 maxDiff>5(孤立跑必过)。查为惰性 `if(_cos==null){_cos=new;填充}` 非线程安全 —— B 线程见 `_cos` 已非 null(刚赋值)但仍零填充中 → IDCT 读零 → 错。改 `static readonly _cos = BuildCosTable()`(CLR 类型初始化锁保证建毕才可读)。全套连跑 3× 883 绿。**真并发 bug(app 并发解瓦片同样受影响), 非仅测试抖动。**
 
 **本会话累计补 27 真功能 + 1 并发修复, 883 测。** 块体多属性体验：导入选属性 + 免重导切换活动属性 + 连续/分类着色 + **全属性统计报告** —— 贴近原「多属性显示切换 + 每属性统计表」。**仍受 grade-only 架构限的是: 同屏并列多属性渲染 / 逐属性联合分析(散点交会 —— 但原亦无此)**, 记录。
+
+## 八十二、报表生成器透镜 —— 两期算量分标高带(整体+分X 缺口)
+
+系统扫原全模块 `*Report*/*Analytics*` 生成器, 逐一核对 Kylin 是否只做了"整体"半:
+- [x] **两期算量分标高带**(`TerrainAnalysis.TwoEpochVolumeByElevation` + CSV)：原 PointCloudLib `VolumeReportGenerator` 出"按标高带/按连通块/按区域"多分区表; Kylin `TwoEpochVolume` 仅返 `(cut,fill,net)` 整体三元。补分标高带——各格变化柱 `[min(g1,g2),max(g1,g2)]` 按 bandHeight 切到各高程带逐带累计挖/填, 挖/填判据与整体一致。**守恒: 各带挖和==整体挖(强不变量单测)**。接入 两期算量 命令(算完落 `twoepoch_by_elevation.csv`)。4 测(守恒/纯升柱落变化区间/CSV表头/空安全)。
+- 其余报表生成器核对结论: `BlockReportGenerator`(每属性统计)已补(§八十一); `VolumeByLevelReport`(体素分标高)数据已由 `VoxelBands.ByElevation` 覆盖(占比/合计为派生格式); MeshEditLib 各 Report(Boolean/CutMesh/Repair/SplitBySurface)= 内核 mesh 布尔/切分绑定(记录受阻); MineAssLib(CutMeshByRamp/InsertRamp/ExpandBench)= 境界 ramp 内核(记录); TaskReportWindow = TaskLib 引擎(记录)。
+
+**又两条新系统透镜(点云原命令 diff · 报表生成器 diff)**: 点云域 12+ 算子全覆盖(含补洞/坐标变换通用移动旋转), 报表域仅两期分标高一处真缺口(已补), 余为已记录内核/引擎边界。**本会话累计补 28 真功能 + 1 并发修复, 887 测。**

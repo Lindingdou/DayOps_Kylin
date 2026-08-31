@@ -4665,7 +4665,11 @@ public partial class MainWindow : Window
         var r2 = PointDataImportService.Load(f2[0].Path.LocalPath);
         if (!r1.Success || !r2.Success) { StatusMsg.Text = "两期算量：点导入失败"; return; }
         var (cut, fill, net) = TerrainAnalysis.TwoEpochVolume(r1.Points, r2.Points, 64);
-        StatusMsg.Text = $"两期算量：挖方(下降) {cut:0.##} · 填方(上升) {fill:0.##} · 净 {net:0.##}";
+        // 分标高带明细(原 VolumeReportGenerator「按标高带」)：各带挖/填之和==整体(守恒), 供分台阶报量
+        var bands = TerrainAnalysis.TwoEpochVolumeByElevation(r1.Points, r2.Points, 64, bandHeight: 0);
+        var name = await SaveCsvAsync("导出两期分标高填挖", "twoepoch_by_elevation.csv", TerrainAnalysis.TwoEpochByElevationCsv(bands));
+        StatusMsg.Text = $"两期算量：挖方(下降) {cut:0.##} · 填方(上升) {fill:0.##} · 净 {net:0.##} · {bands.Count} 标高带"
+            + (name != null ? $" → {name}" : "");
     }
 
     // 三角网着色通用流程：散点 CSV → 三角网 → builder 生成着色边入场景

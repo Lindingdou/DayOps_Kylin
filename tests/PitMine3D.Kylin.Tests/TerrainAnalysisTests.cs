@@ -141,4 +141,64 @@ public class TerrainAnalysisTests
         Assert.Equal(5, fill, 3);
         Assert.Equal(5, net, 3);
     }
+
+    // ── 两期算量分标高带(原 VolumeReportGenerator「按标高带」) ──
+    [Fact]
+    public void TwoEpoch_by_elevation_conserves_total()
+    {
+        // 混合升降: 左半升(填) 右半降(挖), 分带后各带挖/填之和须==整体挖/填(守恒)
+        var e1 = new List<(double x, double y, double z)> { (0, 0, 10), (10, 0, 10), (10, 10, 10), (0, 10, 10), (5, 5, 10) };
+        var e2 = new List<(double x, double y, double z)>
+        {
+            (0, 0, 16), (10, 0, 4), (10, 10, 4), (0, 10, 16), (5, 5, 10),   // 左 +6, 右 −6
+        };
+        int n = 24;
+        var (cut, fill, _) = TerrainAnalysis.TwoEpochVolume(e1, e2, n);
+        var bands = TerrainAnalysis.TwoEpochVolumeByElevation(e1, e2, n, bandHeight: 1);
+        Assert.NotEmpty(bands);
+        double bcut = 0, bfill = 0;
+        foreach (var b in bands) { bcut += b.Cut; bfill += b.Fill; Assert.True(b.ZHigh >= b.ZLow); }
+        Assert.Equal(cut, bcut, 2);      // 分带挖和 == 整体挖(守恒)
+        Assert.Equal(fill, bfill, 2);    // 分带填和 == 整体填
+    }
+
+    [Fact]
+    public void TwoEpoch_by_elevation_uniform_rise_bands_span_change_range()
+    {
+        // z=0 → z=5 均匀升: 全填, 变化柱 [0,5], bandHeight=1 → 5 带全在 [0,5], 挖=0
+        var e1 = new List<(double x, double y, double z)> { (0, 0, 0), (10, 0, 0), (10, 10, 0), (0, 10, 0) };
+        var e2 = new List<(double x, double y, double z)> { (0, 0, 5), (10, 0, 5), (10, 10, 5), (0, 10, 5) };
+        int n = 20;
+        var (_, fillTot, _) = TerrainAnalysis.TwoEpochVolume(e1, e2, n);
+        var bands = TerrainAnalysis.TwoEpochVolumeByElevation(e1, e2, n, bandHeight: 1);
+        double bfill = 0, bcut = 0;
+        foreach (var b in bands)
+        {
+            bfill += b.Fill; bcut += b.Cut;
+            Assert.InRange(b.ZLow, -1e-6, 5 + 1e-6);       // 所有带落在变化区间 [0,5]
+            Assert.InRange(b.ZHigh, -1e-6, 5 + 1e-6);
+        }
+        Assert.Equal(0, bcut, 3);                          // 纯填无挖
+        Assert.Equal(fillTot, bfill, 2);                   // 守恒
+    }
+
+    [Fact]
+    public void TwoEpoch_by_elevation_csv_header_and_conservation()
+    {
+        var e1 = new List<(double x, double y, double z)> { (0, 0, 0), (10, 0, 0), (10, 10, 0), (0, 10, 0) };
+        var e2 = new List<(double x, double y, double z)> { (0, 0, 4), (10, 0, 4), (10, 10, 4), (0, 10, 4) };
+        var bands = TerrainAnalysis.TwoEpochVolumeByElevation(e1, e2, 16, bandHeight: 2);
+        var csv = TerrainAnalysis.TwoEpochByElevationCsv(bands);
+        var lines = csv.TrimEnd('\n').Split('\n');
+        Assert.Equal("z_low,z_high,cut,fill,net", lines[0]);
+        Assert.Equal(bands.Count + 1, lines.Length);
+    }
+
+    [Fact]
+    public void TwoEpoch_by_elevation_empty_safe()
+    {
+        var empty = new List<(double x, double y, double z)>();
+        Assert.Empty(TerrainAnalysis.TwoEpochVolumeByElevation(empty, empty, 8, 1));
+        Assert.Equal("z_low,z_high,cut,fill,net\n", TerrainAnalysis.TwoEpochByElevationCsv(new List<TerrainAnalysis.CutFillBand>()));
+    }
 }
