@@ -112,11 +112,10 @@ public static class KdfImportService
                         var m = ParseMText(data, bodyStart, gbk, out nextEntity);
                         var (cr, cg, cb) = Rgb(m.col.r, m.col.g, m.col.b);
                         double lh = m.lineHeight > 0 ? m.lineHeight : 2.0;
-                        for (int li = 0; li < m.lines.Length; li++)
+                        string joined = string.Join("\n", m.lines);   // 合成单一多行 TextEntity(Tessellate 逐行下落, 与源 MText 一一对应)
+                        if (joined.Trim().Length > 0)
                         {
-                            string line = m.lines[li];
-                            if (string.IsNullOrEmpty(line)) continue;
-                            result.Entities.Add(new TextEntity { X = m.pos.x, Y = m.pos.y - li * lh * 1.4, Height = lh, Text = line, LayerName = string.IsNullOrEmpty(m.layer) ? "0" : m.layer, Cr = cr, Cg = cg, Cb = cb });
+                            result.Entities.Add(new TextEntity { X = m.pos.x, Y = m.pos.y, Height = lh, Text = joined, LayerName = string.IsNullOrEmpty(m.layer) ? "0" : m.layer, Cr = cr, Cg = cg, Cb = cb });
                             nText++;
                         }
                         EnsureLayer(string.IsNullOrEmpty(m.layer) ? "0" : m.layer, cr, cg, cb);

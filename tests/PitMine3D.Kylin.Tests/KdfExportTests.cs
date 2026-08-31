@@ -49,6 +49,18 @@ public class KdfExportTests
     }
 
     [Fact]
+    public void Export_multiline_text_roundtrips_as_mtext()
+    {
+        var scene = new Scene();
+        scene.Add(new TextEntity { X = 1, Y = 2, Height = 3, Text = "甲\n乙\n丙" });   // 多行 → AcDbMText
+        var (bytes, n) = KdfExportService.BuildBytes(scene);
+        Assert.Equal(1, n);
+        var res = KdfImportService.LoadBytes(bytes);
+        var txt = res.Entities.OfType<TextEntity>().Single();
+        Assert.Equal("甲\n乙\n丙", txt.Text);   // 多行合成单一实体, GBK 往返
+    }
+
+    [Fact]
     public void Export_circle_becomes_polyline_with_correct_extent()
     {
         var scene = new Scene();

@@ -1665,3 +1665,13 @@ follow-on 保真续查: 点样式(§一二三 #66)此前只 .pmx 往返, DXF 导
 - **DXF 模型限制记录**: DXF 点显示文档级(全图一样式), Kylin 逐实体样式导 DXF 时收敛为众数; 逐实体变化仅 .pmx 保。忠实 DXF 模型。
 
 **本会话累计补 72 真功能/保真 + 4 潜伏 bug 修 + 多处忠实性/深度证伪, 990 测。**
+
+## 一三四、KDF 多行文字 AcDbMText —— 跨格式多行保真闭环
+
+follow-on 续: KDF 导出(#59)+多行文字(#70)交叉——KDF 导出多行文字原为 AcDbText+\n(过 Kylin 往返但非 WeCAD 忠实)。补:
+- [x] **KDF 导出 `WriteMText`**(忠实原 KdfWriter): 多行文字 → AcDbMText(EntityCommon 14 字段 + tag04 位 + 双 tag05 + tag02 行高 + tag01 + tag03 内容 \r\n 连接 + 字体)。`BuildBytes` 按 `Contains('\n')` 分派 MText/Text。
+- [x] **KDF 导入 AcDbMText**: 原逐行造 N 实体 → 改合成单一多行 TextEntity(与 DXF 一致, 与源 MText 一一对应)。
+- [x] round-trip 测: "甲\n乙\n丙" → AcDbMText → 单一多行实体, GBK 往返。991 测。
+- **多行文字跨格式保真闭环**: 创建 + 渲染 + **DXF(MText)** + **KDF(AcDbMText)** + .pmx(JSON \n) 全往返, 导入均归单一多行实体。
+
+**本会话累计补 73 真功能/保真 + 4 潜伏 bug 修 + 多处忠实性/深度证伪, 991 测。**

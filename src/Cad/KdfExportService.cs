@@ -65,7 +65,8 @@ public static class KdfExportService
             if (e is TextEntity t)
             {
                 if (string.IsNullOrEmpty(t.Text)) continue;
-                WriteText(w, gbk, e.LayerName, br, bg, bb, t);
+                if (t.Text.Contains('\n')) WriteMText(w, gbk, e.LayerName, br, bg, bb, t);   // 多行→AcDbMText(忠实原 KdfWriter)
+                else WriteText(w, gbk, e.LayerName, br, bg, bb, t);
                 n++;
             }
             else
@@ -201,6 +202,21 @@ public static class KdfExportService
             w.Write((byte)0);                        // 1B strlen=0
         }
         w.Write((byte)0x00);                         // 1B end-of-entity
+    }
+
+    private static void WriteMText(BinaryWriter w, Encoding gbk, string layer, byte br, byte bg, byte bb, TextEntity t)
+    {
+        ClassName(w, "AcDbMText");
+        EntityCommon(w, gbk, 14, layer, br, bg, bb);
+        w.Write((byte)0x04); w.Write(t.X); w.Write(t.Y); w.Write(0.0);       // tag04 pos
+        w.Write((byte)0x05); w.Write(0.0); w.Write(0.0); w.Write(1.0);       // tag05 normal
+        w.Write((byte)0x05); w.Write(0.0); w.Write(0.0); w.Write(0.0);       // tag05 第二(变换向量)
+        w.Write((byte)0x02); w.Write(t.Height > 0 ? t.Height : 5.0);         // 行高
+        w.Write((byte)0x02); w.Write(1.0);
+        w.Write((byte)0x01); w.Write((uint)0);                              // 可选 tag01
+        w.Write((byte)0x03); Lp(w, gbk, t.Text.Replace("\n", "\r\n"));       // tag03 内容 \r\n 连接
+        w.Write(new byte[] { 0x01, 0x00, 0x00, 0x00, 0x00 }); w.Write((uint)0);
+        w.Write((byte)0x03); Lp(w, Encoding.ASCII, "MAPGIS_SimSun ");        // tag03 字体名
     }
 
     private static void WriteText(BinaryWriter w, Encoding gbk, string layer, byte br, byte bg, byte bb, TextEntity t)
