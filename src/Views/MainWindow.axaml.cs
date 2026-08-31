@@ -2744,10 +2744,19 @@ public partial class MainWindow : Window
 
         var segs = Cad.MeshIntersect.IntersectionSegments(v1, t1, v2, t2);
         if (segs.Count == 0) { StatusMsg.Text = "网格交线：两网无交线（不相交/共面）"; return; }
-        // 交段 2D 投影入场景(琥珀色)
+        // 交段连成折线 2D 投影入场景(琥珀色, 单一可选实体)
         BeginChange();
-        foreach (var s in segs)
-            _scene.Add(new LineEntity { X0 = s.A.x, Y0 = s.A.y, X1 = s.B.x, Y1 = s.B.y, Cr = 0.95f, Cg = 0.7f, Cb = 0.2f, LayerName = "网格交线" });
+        var xy = new List<(double, double, double, double)>(segs.Count);
+        double sMinX = double.MaxValue, sMaxX = double.MinValue;
+        foreach (var s in segs) { xy.Add((s.A.x, s.A.y, s.B.x, s.B.y)); sMinX = System.Math.Min(sMinX, System.Math.Min(s.A.x, s.B.x)); sMaxX = System.Math.Max(sMaxX, System.Math.Max(s.A.x, s.B.x)); }
+        double ext = System.Math.Max(1e-6, (sMaxX - sMinX) * 1e-5);   // 交线端点匹配容差(尺度相对)
+        foreach (var poly in Contour.LinkSegments(xy, ext))
+        {
+            if (poly.Count < 2) continue;
+            var pl = new PolylineEntity { Cr = 0.95f, Cg = 0.7f, Cb = 0.2f, LayerName = "网格交线" };
+            foreach (var p in poly) pl.Points.Add((p.x, p.y));
+            _scene.Add(pl);
+        }
         RefreshScene();
         // 导出 3D 交点 CSV(x,y,z)
         var inv = System.Globalization.CultureInfo.InvariantCulture;
