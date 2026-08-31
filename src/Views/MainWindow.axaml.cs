@@ -719,7 +719,7 @@ public partial class MainWindow : Window
             if (cmd == "导入边坡" || cmd == "边坡导入" || cmd == "导入边坡设计") { await ImportCsvToDbAsync("导入边坡设计", "side_name,side_type(working/final/transition)[,working_slope_angle_deg,final_slope_angle_deg,max_depth_m,safety_factor]", rs => Data.GeoDataQueries.ImportSlopeDesigns(EnsureGeoDb()!.Connection, rs)); return; }
             if (cmd == "展绘钻孔" || cmd == "钻孔柱状图" || cmd == "导入钻孔数据" || cmd == "原始钻孔柱状图") { await ImportBoreholesAsync(); return; }
             if (cmd == "煤厚分析" || cmd == "煤层厚度分析" || cmd == "煤厚") { await CoalThicknessAsync(); return; }
-            if (cmd == "等高线" || cmd == "等高线生产" || cmd == "等值线") { await ContourFromCsvAsync(); return; }
+            if (cmd == "等高线" || cmd == "等高线生产" || cmd == "等值线" || cmd.StartsWith("等高线 ") || cmd.StartsWith("等值线 ")) { await ContourFromCsvAsync(cmd); return; }
             if (cmd == "创建三角网" || cmd == "三角网" || cmd == "2.5D TIN" || cmd == "2.5DTIN") { await CreateTinAsync(); return; }
             if (cmd == "约束三角网" || cmd == "约束Delaunay" || cmd == "约束剖分" || cmd == "breakline三角网") { await CreateConstrainedTinAsync(); return; }
             if (cmd == "裁剪三角网" || cmd == "三角网裁剪" || cmd == "边界三角网") { await CreateClippedTinAsync(); return; }
@@ -1404,7 +1404,8 @@ public partial class MainWindow : Window
     }
 
     // 等高线：高程点 CSV(x,y,z) → IDW 网格 → 多层 Marching Squares → 彩色等值折线
-    private async Task ContourFromCsvAsync()
+    // "等高线 <等高距>"：指定等高距→取整数倍高程处布线(如 5→...100/105/110); 缺省 auto 10 层。
+    private async Task ContourFromCsvAsync(string cmd = "等高线")
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
@@ -1420,15 +1421,19 @@ public partial class MainWindow : Window
         foreach (var p in r.Points) { if (p.z < zmin) zmin = p.z; if (p.z > zmax) zmax = p.z; }
         if (zmax - zmin < 1e-6) { StatusMsg.Text = "等高线：z 无起伏（CSV 需带高程列）"; return; }
 
-        int n = 64, levels = 10;
+        // 等高距: 显式则取整数倍高程处布线(round 高程); 缺省 auto 10 层
+        double interval = 0;
+        int sp = cmd.IndexOf(' ');
+        if (sp >= 0) double.TryParse(cmd.Substring(sp + 1).Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out interval);
+        var contourLevels = Contour.Levels(zmin, zmax, interval);
+
+        int n = 64;
         var grid = Contour.GridFromPoints(r.Points, n, n, out double gx0, out double gy0, out double gdx, out double gdy);
-        double step = (zmax - zmin) / (levels + 1);
         double labelH = System.Math.Max((r.Bounds[2] - r.Bounds[0]) / 60.0, 1e-3);   // 标注字高
         BeginChange();
         int segCount = 0;
-        for (int k = 1; k <= levels; k++)
+        foreach (double L in contourLevels)
         {
-            double L = zmin + step * k;
             float t = (float)((L - zmin) / (zmax - zmin));
             var segs = Contour.MarchingSquares(grid, gx0, gy0, gdx, gdy, L);
             foreach (var s in segs)
@@ -1444,7 +1449,8 @@ public partial class MainWindow : Window
         }
         RefreshScene();
         Viewport.FitBounds(r.Bounds);
-        StatusMsg.Text = $"等高线：{r.Points.Count} 点 → {levels} 层 · {segCount} 段 + 高程标注（z {zmin:0.#}~{zmax:0.#}）";
+        string how = interval > 1e-9 ? $"等高距 {interval:0.##}" : "auto";
+        StatusMsg.Text = $"等高线：{r.Points.Count} 点 → {contourLevels.Count} 层({how}) · {segCount} 段 + 高程标注（z {zmin:0.#}~{zmax:0.#}）";
     }
 
     // 剥采比均衡(VP曲线)：分期物料量 CSV → 累计 V-P 曲线 → DP 分段均衡 → 曲线/折线/比值上屏 + 报表

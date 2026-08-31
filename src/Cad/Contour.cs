@@ -30,6 +30,28 @@ public static class Contour
         new int[]{},           // 15
     };
 
+    /// <summary>
+    /// 等高线高程层表：interval&gt;0 → 取 [ceil(zmin/interval)·interval, …, &lt;zmax] 的整数倍高程(round 高程,
+    /// 如间距 5 → 100/105/110); 否则 autoCount 等分(zmin+step·k, k=1..autoCount)。
+    /// maxLevels 防间距过小导致层数爆炸。纯逻辑、可单测。
+    /// </summary>
+    public static List<double> Levels(double zmin, double zmax, double interval, int autoCount = 10, int maxLevels = 500)
+    {
+        var res = new List<double>();
+        if (zmax - zmin < 1e-9) return res;
+        if (interval > 1e-9)
+        {
+            double first = System.Math.Ceiling(zmin / interval) * interval;
+            for (double L = first; L < zmax && res.Count < maxLevels; L += interval) res.Add(L);
+        }
+        else
+        {
+            double step = (zmax - zmin) / (autoCount + 1);
+            for (int k = 1; k <= autoCount; k++) res.Add(zmin + step * k);
+        }
+        return res;
+    }
+
     public static List<(double x0, double y0, double x1, double y1)> MarchingSquares(
         double[,] grid, double x0, double y0, double dx, double dy, double level)
     {

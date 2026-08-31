@@ -94,4 +94,37 @@ public class ContourTests
         var g2 = Contour.GridMovingAverage(pts, 1, 1, 50, 0, 1, 1, radius: 5);
         Assert.Equal(20.0, g2[0, 0], 6);      // (50,0) 最近是 (2,0)=20
     }
+
+    // ── 等高线高程层表(等高距 vs auto) ──
+    [Fact]
+    public void Levels_interval_gives_round_elevations()
+    {
+        // z∈[2,23], 等高距 5 → 整数倍处 5/10/15/20 (23 不含, <zmax)
+        var lv = Contour.Levels(2, 23, interval: 5);
+        Assert.Equal(new[] { 5.0, 10, 15, 20 }, lv);
+    }
+
+    [Fact]
+    public void Levels_interval_first_at_or_above_zmin()
+    {
+        // z∈[100,118], 等高距 5 → 100/105/110/115 (100 恰整数倍, 含)
+        var lv = Contour.Levels(100, 118, interval: 5);
+        Assert.Equal(new[] { 100.0, 105, 110, 115 }, lv);
+    }
+
+    [Fact]
+    public void Levels_auto_ten_when_no_interval()
+    {
+        var lv = Contour.Levels(0, 11, interval: 0);   // auto → 10 层, zmin+step·k
+        Assert.Equal(10, lv.Count);
+        Assert.All(lv, v => Assert.InRange(v, 0, 11));
+        for (int i = 1; i < lv.Count; i++) Assert.True(lv[i] > lv[i - 1]);   // 升序
+    }
+
+    [Fact]
+    public void Levels_caps_and_degenerate_safe()
+    {
+        Assert.Empty(Contour.Levels(5, 5, 1));                    // 无起伏 → 空
+        Assert.True(Contour.Levels(0, 1e6, interval: 0.001, maxLevels: 300).Count <= 300);   // 间距过小被封顶
+    }
 }

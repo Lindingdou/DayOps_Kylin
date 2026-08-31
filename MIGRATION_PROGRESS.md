@@ -1164,3 +1164,10 @@ grade-only 数据模型无法持多属性(架构限, 记录), 但可**部分缓�
 - **块体三着色模式补齐**: 连续渐变(GradeColor 蓝→红) + 分级区间(BuildCellsClassed) + 分类离散(HueColor) —— 全对齐原 ColoringDialog。
 
 **本会话累计补 30 真功能 + 1 并发修复, 892 测。** 三条新系统透镜(点云命令/报表生成器/着色对话框)均 diff 到收敛: 点云域全覆盖, 报表两处缺口已补, 着色三模式齐。
+
+## 八十四、参数对话框透镜 —— 等高线等高距(参数子特性)
+
+原命令多带参数对话框, 核 Kylin 是否只做了固定/缺省参数版:
+- [x] **等高线等高距**(`Contour.Levels` + "等高线 <等高距>")：Kylin 原固定 10 层(`zmin+step·k` 任意高程); 原 `ContourDialog` 参数对话框核心参数即等高距。补 `Contour.Levels(zmin,zmax,interval)`——interval>0 取整数倍高程处布线(`ceil(zmin/interval)·interval` 起, 如间距5→100/105/110, round 高程), 缺省 auto 10 层; maxLevels 防间距过小爆炸。测量用整高程等高线(非任意 zmin+step·k)。4 测(整数倍/首层≥zmin/auto10升序/封顶+退化)。原等高线生成走 native PMCT, 但等值线=marching squares 标准算法, Kylin 托管版补参数化等高距忠实对话框。
+
+**本会话累计补 31 真功能 + 1 并发修复, 896 测。** 四条新系统透镜(点云命令/报表生成器/着色对话框/参数对话框)diff 收敛。
