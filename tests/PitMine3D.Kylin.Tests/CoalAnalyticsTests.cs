@@ -132,4 +132,58 @@ public class CoalAnalyticsTests
         var r = CoalAnalytics.DetectOutliers(rows, "ad", useClean: false);
         Assert.Empty(r.Outliers);
     }
+
+    // 带原煤+浮煤对(洗选用): ad_raw, ad_clean, std_raw, std_clean, yield
+    private static CoalSample W(long id, string seam, double adRaw, double adClean, double stRaw, double stClean, double yield)
+        => new(id, "H" + id, seam, 0, 0, 0, adRaw, adClean, stRaw, stClean, null, null, null, null,
+               null, null, yield, null, null, null);
+
+    [Fact]
+    public void Washing_deash_desulfur_recovery()
+    {
+        var rows = new List<CoalSample>
+        {
+            W(1, "5", 30, 12, 1.5, 0.9, 75),   // 降灰(30→12)=60%, 脱硫(1.5→0.9)=40%
+            W(2, "5", 30, 12, 1.5, 0.9, 75),
+        };
+        var r = CoalAnalytics.WashingBySeam(rows, withOverall: false);
+        var s5 = r[0];
+        Assert.Equal(2, s5.PairedAsh);
+        Assert.Equal(60.0, s5.DeAshPct!.Value, 3);     // (30-12)/30×100
+        Assert.Equal(40.0, s5.DeSulfurPct!.Value, 3);  // (1.5-0.9)/1.5×100
+        Assert.Equal(75.0, s5.YieldMean!.Value, 3);
+    }
+
+    [Fact]
+    public void SteamVerdict_grades_by_ash_sulfur_calorific()
+    {
+        // 低灰(≤16)+低硫(≤1)+高发热(Qgr≥26) → 全满分 → 优
+        var (grade, _) = CoalAnalytics.SteamVerdict(12, 0.6, 28, CalorificKind.Qgr);
+        Assert.Equal("优", grade);
+        // 高灰+高硫+低发热 → 差
+        var (bad, _) = CoalAnalytics.SteamVerdict(35, 2.5, 15, CalorificKind.Qgr);
+        Assert.Equal("差", bad);
+        // 全缺 → 数据不足
+        Assert.Equal("—", CoalAnalytics.SteamVerdict(null, null, null, CalorificKind.Qgr).grade);
+    }
+
+    [Fact]
+    public void CokingVerdict_by_caking_index()
+    {
+        Assert.Contains("强粘结", CoalAnalytics.CokingVerdict(20, 80, null, null).note);   // G≥65
+        Assert.Contains("不粘结", CoalAnalytics.CokingVerdict(35, 2, null, null).note);    // G<5
+        Assert.Equal("1/3焦煤", CoalAnalytics.CokingVerdict(30, 70, null, "1/3焦煤").type); // 存的煤类名优先
+    }
+
+    [Fact]
+    public void Utilization_from_seed_runs()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var s = GeoDataQueries.GetCoalSamples(db.Connection);
+        var util = CoalAnalytics.UtilizationBySeam(s);
+        Assert.NotEmpty(util);
+        Assert.All(util, u => Assert.False(string.IsNullOrEmpty(u.SteamGrade)));
+        var wash = CoalAnalytics.WashingBySeam(s);
+        Assert.NotEmpty(wash);
+    }
 }

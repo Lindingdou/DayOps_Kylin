@@ -724,6 +724,8 @@ public partial class MainWindow : Window
             if (cmd == "品位储量曲线" || cmd == "品位-储量曲线" || cmd == "灰分储量曲线" || cmd.StartsWith("品位储量曲线 ")) { GradeTonnageCmd(cmd); return; }
             if (cmd == "分标高煤质" || cmd == "标高煤质" || cmd.StartsWith("分标高煤质 ")) { CoalByElevationCmd(cmd); return; }
             if (cmd == "煤质离群" || cmd == "离群质检" || cmd == "煤质异常" || cmd.StartsWith("煤质离群 ")) { CoalOutlierCmd(cmd); return; }
+            if (cmd == "洗选提质" || cmd == "洗选分析" || cmd == "降灰脱硫") { CoalWashingCmd(); return; }
+            if (cmd == "用途适宜性" || cmd == "煤炭用途" || cmd == "动力炼焦评价") { CoalUtilizationCmd(); return; }
             if (cmd == "煤层管理" || cmd == "煤层定义" || cmd == "煤层列表") { CoalSeamsCmd(); return; }
             if (cmd == "见煤统计" || cmd == "煤层对比" || cmd == "见煤对比" || cmd == "钻孔见煤") { SeamIntersectionsCmd(); return; }
             if (cmd == "分煤层煤质" || cmd == "煤层煤质" || cmd == "分层煤质") { CoalQualityBySeamCmd(); return; }
@@ -5633,6 +5635,33 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"煤质离群 QC（{ind}·Tukey 1.5×IQR）：{r.N}样 中位{r.Median:0.##} Q1{r.Q1:0.##}/Q3{r.Q3:0.##} 栅栏[{r.Lower:0.##},{r.Upper:0.##}] → 离群 {r.Outliers.Count} 段" + (top.Count > 0 ? "：" + string.Join(" · ", top) : "");
     }
 
+    // 洗选提质：成对原煤↔浮煤 → 降灰率/脱硫率/回收率
+    private void CoalWashingCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var s = Data.GeoDataQueries.GetCoalSamples(db.Connection);
+        if (s.Count == 0) { StatusMsg.Text = "洗选提质：无煤样"; return; }
+        var rows = Data.CoalAnalytics.WashingBySeam(s);
+        if (rows.Count == 0) { StatusMsg.Text = "洗选提质：无数据"; return; }
+        var parts = new List<string>();
+        foreach (var w in rows)
+            parts.Add($"{w.SeamCode}(降灰{(w.DeAshPct.HasValue ? w.DeAshPct.Value.ToString("0.#") + "%" : "—")}/脱硫{(w.DeSulfurPct.HasValue ? w.DeSulfurPct.Value.ToString("0.#") + "%" : "—")}/回收{(w.YieldMean.HasValue ? w.YieldMean.Value.ToString("0.#") + "%" : "—")})");
+        StatusMsg.Text = $"洗选提质（原煤↔浮煤成对）：" + string.Join(" · ", parts);
+    }
+
+    // 用途适宜性：动力煤评价(灰/硫/热) + 炼焦评价(G 粘结)
+    private void CoalUtilizationCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var s = Data.GeoDataQueries.GetCoalSamples(db.Connection);
+        if (s.Count == 0) { StatusMsg.Text = "用途适宜性：无煤样"; return; }
+        var rows = Data.CoalAnalytics.UtilizationBySeam(s);
+        if (rows.Count == 0) { StatusMsg.Text = "用途适宜性：无数据"; return; }
+        var parts = new List<string>();
+        foreach (var u in rows) parts.Add($"{u.SeamCode}(动力{u.SteamGrade}[{u.SteamNote}]·炼焦{u.CokingType})");
+        StatusMsg.Text = $"用途适宜性（动力煤+炼焦）：" + string.Join(" · ", parts);
+    }
+
     private void ShiftOutputCmd()
     {
         var db = EnsureGeoDb(); if (db == null) return;
@@ -6105,7 +6134,7 @@ public partial class MainWindow : Window
         "设备台账","生产数据","产能分析","故障分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构",
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","数据看板","煤种分类",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
-        "产能分类对比","故障类型分布","分工序验收合格率","数据导出","达成度评价","产量预测","时序预测","编组优化","智能编组优化","商品煤符合性","煤质达标","品位储量曲线","分标高煤质","煤质离群",
+        "产能分类对比","故障类型分布","分工序验收合格率","数据导出","达成度评价","产量预测","时序预测","编组优化","智能编组优化","商品煤符合性","煤质达标","品位储量曲线","分标高煤质","煤质离群","洗选提质","用途适宜性",
         // TaskLib 自足计算
         "生产量核算","物料换算","采剥平衡","排土场按量推进","配煤核算","工序进度跟踪","编组产能","环节降效",
     };

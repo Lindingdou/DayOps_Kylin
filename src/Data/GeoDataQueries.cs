@@ -517,13 +517,14 @@ public static class GeoDataQueries
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"SELECT cs.id, COALESCE(b.hole_id,''), cs.seam_code, COALESCE(b.x,0), COALESCE(b.y,0), cs.z_sample,
                                    cs.ad_raw, cs.ad_clean, cs.std_raw, cs.std_clean, cs.qgr_d, cs.qnet_ad, cs.vdaf_raw, cs.vdaf_clean,
-                                   cs.sample_thickness, cs.apparent_density
+                                   cs.sample_thickness, cs.apparent_density, cs.clean_coal_yield, cs.caking_g, cs.plastic_y_mm, cs.coal_type
                             FROM coal_sample cs LEFT JOIN borehole b ON b.id = cs.borehole_id";
         using var rd = cmd.ExecuteReader();
         double? D(int i) => rd.IsDBNull(i) ? (double?)null : rd.GetDouble(i);
         while (rd.Read())
             rows.Add(new CoalSample(rd.GetInt64(0), rd.GetString(1), rd.GetString(2), rd.GetDouble(3), rd.GetDouble(4), D(5),
-                D(6), D(7), D(8), D(9), D(10), D(11), D(12), D(13), D(14), D(15)));
+                D(6), D(7), D(8), D(9), D(10), D(11), D(12), D(13), D(14), D(15),
+                D(16), D(17), D(18), rd.IsDBNull(19) ? null : rd.GetString(19)));
         return rows;
     }
 
