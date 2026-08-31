@@ -361,6 +361,59 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Import_haul_roads_from_csv()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        long before = db.ScalarLong("SELECT COUNT(*) FROM haul_road");
+        // 新路 → 插入
+        var o1 = GeoDataQueries.ImportHaulRoads(db.Connection, new[]
+        { (IReadOnlyDictionary<string,string>)new Dictionary<string,string>{["road_id"]="RDZZ1",["name"]="测试主运道",["road_type"]="main",["length_m"]="1200",["max_slope_pct"]="8",["road_width_m"]="24"} }, true);
+        Assert.True(o1.Inserted == 1, $"道路插入: ins={o1.Inserted} err={o1.Errors}");
+        Assert.Equal(before + 1, db.ScalarLong("SELECT COUNT(*) FROM haul_road"));
+        // 同键 overwrite → 更新
+        var o2 = GeoDataQueries.ImportHaulRoads(db.Connection, new[]
+        { (IReadOnlyDictionary<string,string>)new Dictionary<string,string>{["road_id"]="RDZZ1",["name"]="改名",["road_type"]="branch",["length_m"]="900"} }, true);
+        Assert.Equal(1, o2.Updated);
+        string rt; using (var c = db.Connection.CreateCommand()) { c.CommandText = "SELECT road_type FROM haul_road WHERE road_id='RDZZ1'"; rt = (string)c.ExecuteScalar(); }
+        Assert.Equal("branch", rt);
+        // overwrite=false 同键 → 跳过
+        var o3 = GeoDataQueries.ImportHaulRoads(db.Connection, new[]
+        { (IReadOnlyDictionary<string,string>)new Dictionary<string,string>{["road_id"]="RDZZ1",["name"]="x",["road_type"]="main",["length_m"]="1"} }, false);
+        Assert.Equal(1, o3.Skipped);
+        // 缺 length_m → 错误
+        var o4 = GeoDataQueries.ImportHaulRoads(db.Connection, new[]
+        { (IReadOnlyDictionary<string,string>)new Dictionary<string,string>{["road_id"]="R2",["name"]="无长度",["road_type"]="main"} }, true);
+        Assert.Equal(1, o4.Errors);
+        // 非法 road_type(违反 CHECK) → 错误
+        var o5 = GeoDataQueries.ImportHaulRoads(db.Connection, new[]
+        { (IReadOnlyDictionary<string,string>)new Dictionary<string,string>{["road_id"]="R3",["name"]="非法类型",["road_type"]="highway",["length_m"]="100"} }, true);
+        Assert.Equal(1, o5.Errors);
+    }
+
+    [Fact]
+    public void Import_slope_designs_from_csv()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        long before = db.ScalarLong("SELECT COUNT(*) FROM slope_design");
+        // 插入型 → 每行新增
+        var o1 = GeoDataQueries.ImportSlopeDesigns(db.Connection, new[]
+        {
+            (IReadOnlyDictionary<string,string>)new Dictionary<string,string>{["side_name"]="东帮ZZ",["side_type"]="working",["working_slope_angle_deg"]="32",["final_slope_angle_deg"]="45",["max_depth_m"]="300",["safety_factor"]="1.3"},
+            (IReadOnlyDictionary<string,string>)new Dictionary<string,string>{["side_name"]="西帮ZZ",["side_type"]="final",["final_slope_angle_deg"]="42"},
+        });
+        Assert.True(o1.Inserted == 2, $"边坡插入: ins={o1.Inserted} err={o1.Errors}");
+        Assert.Equal(before + 2, db.ScalarLong("SELECT COUNT(*) FROM slope_design"));
+        // 缺 side_type → 错误
+        var o2 = GeoDataQueries.ImportSlopeDesigns(db.Connection, new[]
+        { (IReadOnlyDictionary<string,string>)new Dictionary<string,string>{["side_name"]="缺类型"} });
+        Assert.Equal(1, o2.Errors);
+        // 非法 side_type(违反 CHECK) → 错误
+        var o3 = GeoDataQueries.ImportSlopeDesigns(db.Connection, new[]
+        { (IReadOnlyDictionary<string,string>)new Dictionary<string,string>{["side_name"]="非法",["side_type"]="slanted"} });
+        Assert.Equal(1, o3.Errors);
+    }
+
+    [Fact]
     public void Horizon_points_floor_and_roof_from_seed()
     {
         using var db = GeoDatabase.OpenSeeded();

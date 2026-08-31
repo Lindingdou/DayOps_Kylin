@@ -562,6 +562,8 @@ public static class GeoDataQueries
         "观测点" => "point_id,seam_code,x,y,seam_thickness,floor_elevation\nOBS-01,4-1,4512300,37680500,3.4,975\n",
         "月度计划" => "year,month,plan_strip_wan_m3,plan_coal_wan_t,plan_outsource_strip_wan_m3,ratio_strip_coal,avg_distance_km,avg_height_m\n2025,1,1050,120,0,5.5,3.2,180\n",
         "见煤成果" => "hole_id,seam_code,floor_elevation,adopted_thickness,drill_seam_thickness,status\n1610,4-1,975.5,3.4,3.2,正常\n",
+        "运输道路" => "road_id,name,road_type,length_m,max_slope_pct,avg_slope_pct,road_width_m,start_location,end_location\nRD-01,主运输道,main,1200,8,6,24,采区,排土场\n",
+        "边坡设计" => "side_name,side_type,working_slope_angle_deg,final_slope_angle_deg,max_depth_m,safety_factor,cohesion_kpa,friction_angle_deg,rock_type\n东帮,working,32,45,300,1.3,50,28,砂岩\n",
         _ => null,
     };
 
@@ -825,6 +827,51 @@ public static class GeoDataQueries
             try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
         }
         return new ImportOutcome(ins, upd, skip, err);
+    }
+
+    /// <summary>运输道路 CSV 入库：按 road_id upsert。列: road_id,name,road_type(main/branch/dump/temp),length_m[,max_slope_pct,avg_slope_pct,road_width_m,start_location,end_location]。</summary>
+    public static ImportOutcome ImportHaulRoads(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
+    {
+        int ins = 0, upd = 0, skip = 0, err = 0;
+        foreach (var row in rows)
+        {
+            string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
+            string id = Get("road_id"), name = Get("name"), type = Get("road_type");
+            if (id.Length == 0 || name.Length == 0 || type.Length == 0 || !double.TryParse(Get("length_m"), out double len)) { err++; continue; }
+            object Num(string k) => double.TryParse(Get(k), out double v) ? v : (object)System.DBNull.Value;
+            object Txt(string k) => Get(k) is { Length: > 0 } s ? s : (object)System.DBNull.Value;
+            bool exists;
+            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM haul_road WHERE road_id=@i"; q.Parameters.AddWithValue("@i", id); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
+            using var cmd = conn.CreateCommand();
+            if (exists) { if (!overwrite) { skip++; continue; } cmd.CommandText = "UPDATE haul_road SET name=@n, road_type=@t, length_m=@l, max_slope_pct=@ms, avg_slope_pct=@as, road_width_m=@w, start_location=@sl, end_location=@el WHERE road_id=@i"; upd++; }
+            else { cmd.CommandText = "INSERT INTO haul_road (road_id, name, road_type, length_m, max_slope_pct, avg_slope_pct, road_width_m, start_location, end_location) VALUES (@i,@n,@t,@l,@ms,@as,@w,@sl,@el)"; ins++; }
+            cmd.Parameters.AddWithValue("@i", id); cmd.Parameters.AddWithValue("@n", name); cmd.Parameters.AddWithValue("@t", type); cmd.Parameters.AddWithValue("@l", len);
+            cmd.Parameters.AddWithValue("@ms", Num("max_slope_pct")); cmd.Parameters.AddWithValue("@as", Num("avg_slope_pct")); cmd.Parameters.AddWithValue("@w", Num("road_width_m"));
+            cmd.Parameters.AddWithValue("@sl", Txt("start_location")); cmd.Parameters.AddWithValue("@el", Txt("end_location"));
+            try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
+        }
+        return new ImportOutcome(ins, upd, skip, err);
+    }
+
+    /// <summary>边坡设计 CSV 入库（插入型，无自然键）：列: side_name,side_type(working/final/transition)[,working_slope_angle_deg,final_slope_angle_deg,max_depth_m,safety_factor,cohesion_kpa,friction_angle_deg,rock_type]。</summary>
+    public static ImportOutcome ImportSlopeDesigns(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows)
+    {
+        int ins = 0, err = 0;
+        foreach (var row in rows)
+        {
+            string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
+            string side = Get("side_name"), type = Get("side_type");
+            if (side.Length == 0 || type.Length == 0) { err++; continue; }
+            object Num(string k) => double.TryParse(Get(k), out double v) ? v : (object)System.DBNull.Value;
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "INSERT INTO slope_design (side_name, side_type, working_slope_angle_deg, final_slope_angle_deg, max_depth_m, safety_factor, cohesion_kpa, friction_angle_deg, rock_type) VALUES (@s,@t,@w,@f,@d,@sf,@c,@fr,@r)";
+            cmd.Parameters.AddWithValue("@s", side); cmd.Parameters.AddWithValue("@t", type);
+            cmd.Parameters.AddWithValue("@w", Num("working_slope_angle_deg")); cmd.Parameters.AddWithValue("@f", Num("final_slope_angle_deg")); cmd.Parameters.AddWithValue("@d", Num("max_depth_m"));
+            cmd.Parameters.AddWithValue("@sf", Num("safety_factor")); cmd.Parameters.AddWithValue("@c", Num("cohesion_kpa")); cmd.Parameters.AddWithValue("@fr", Num("friction_angle_deg"));
+            cmd.Parameters.AddWithValue("@r", Get("rock_type") is { Length: > 0 } rk ? rk : (object)System.DBNull.Value);
+            try { cmd.ExecuteNonQuery(); ins++; } catch { err++; }
+        }
+        return new ImportOutcome(ins, 0, 0, err);
     }
 
     public sealed record HorizonPoint(string SeamCode, bool IsRoof, double X, double Y, double Z);

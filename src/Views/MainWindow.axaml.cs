@@ -691,6 +691,8 @@ public partial class MainWindow : Window
             if (cmd == "导入观测点" || cmd == "观测点导入" || cmd == "导入见煤点") { await ImportCsvToDbAsync("导入见煤观测点", "point_id,seam_code,x,y[,seam_thickness,floor_elevation]", rs => Data.GeoDataQueries.ImportObservationPoints(EnsureGeoDb()!.Connection, rs, true)); return; }
             if (cmd == "导入月度计划" || cmd == "月度计划导入" || cmd == "导入月计划") { await ImportCsvToDbAsync("导入月度计划", "year,month[,plan_strip_wan_m3,plan_coal_wan_t,ratio_strip_coal,avg_distance_km,avg_height_m]", rs => Data.GeoDataQueries.ImportMonthlyPlans(EnsureGeoDb()!.Connection, rs, true)); return; }
             if (cmd == "导入见煤成果" || cmd == "见煤成果导入" || cmd == "导入见煤") { await ImportCsvToDbAsync("导入见煤成果", "hole_id,seam_code[,floor_elevation,adopted_thickness,drill_seam_thickness,status]", rs => Data.GeoDataQueries.ImportSeamResults(EnsureGeoDb()!.Connection, rs, true)); return; }
+            if (cmd == "导入路况" || cmd == "路况导入" || cmd == "导入运输道路") { await ImportCsvToDbAsync("导入运输道路", "road_id,name,road_type(main/branch/dump/temp),length_m[,max_slope_pct,avg_slope_pct,road_width_m]", rs => Data.GeoDataQueries.ImportHaulRoads(EnsureGeoDb()!.Connection, rs, true)); return; }
+            if (cmd == "导入边坡" || cmd == "边坡导入" || cmd == "导入边坡设计") { await ImportCsvToDbAsync("导入边坡设计", "side_name,side_type(working/final/transition)[,working_slope_angle_deg,final_slope_angle_deg,max_depth_m,safety_factor]", rs => Data.GeoDataQueries.ImportSlopeDesigns(EnsureGeoDb()!.Connection, rs)); return; }
             if (cmd == "展绘钻孔" || cmd == "钻孔柱状图" || cmd == "导入钻孔数据" || cmd == "原始钻孔柱状图") { await ImportBoreholesAsync(); return; }
             if (cmd == "煤厚分析" || cmd == "煤层厚度分析" || cmd == "煤厚") { await CoalThicknessAsync(); return; }
             if (cmd == "等高线" || cmd == "等高线生产" || cmd == "等值线") { await ContourFromCsvAsync(); return; }
@@ -5665,7 +5667,7 @@ public partial class MainWindow : Window
         string? tpl = Data.GeoDataQueries.ImportTemplate(key);
         if (tpl == null)
         {
-            StatusMsg.Text = "导入模板：类型须为 生产记录/月度产能/故障记录/月度KPI/设备台账/煤质化验/观测点/月度计划/见煤成果（如「导入模板 煤质化验」）";
+            StatusMsg.Text = "导入模板：类型须为 生产记录/月度产能/故障记录/月度KPI/设备台账/煤质化验/观测点/月度计划/见煤成果/运输道路/边坡设计（如「导入模板 煤质化验」）";
             return;
         }
         var name = await SaveCsvAsync($"导入模板 · {key}", $"template_{key}.csv", tpl);
@@ -6409,7 +6411,7 @@ public partial class MainWindow : Window
         // 生产计划/投影
         "境界圈定","剥采比均衡","方案综合对比","开采程序确定","平盘宽度识别","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
-        "设备台账","生产数据","产能分析","故障分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","导入生产记录","导入月度产能","导入故障记录","导入月度KPI","导入设备台账","导入煤质","导入观测点","导入月度计划","导入见煤成果","导入模板","导出分析",
+        "设备台账","生产数据","产能分析","故障分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","导入生产记录","导入月度产能","导入故障记录","导入月度KPI","导入设备台账","导入煤质","导入观测点","导入月度计划","导入见煤成果","导入路况","导入边坡","导入模板","导出分析",
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","数据看板","煤种分类",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
         "产能分类对比","故障类型分布","分工序验收合格率","数据导出","达成度评价","产量预测","时序预测","编组优化","智能编组优化","导出编组","导出预测",
