@@ -929,3 +929,11 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 
 - [x] **层位求交 TinSampler**(`本次`)：`TinSampler.SampleZ(点集, 三角, qx, qy)` 竖直线与 TIN 求交——命中含点三角→**重心插值 Z**，落网外→null。忠实原竖直求交核(原吃内核存库 TIN，此吃层位点集+Delaunay)。命令 `层位求交 <x> <y>`：对各煤层顶/底板 HorizonPoints 建 TIN，在 (x,y) 采高→报各煤层 顶/底板高程 + 厚度 + 插标记点。+5 单测(倾斜平面 z=x+2y 精确采高/顶点边命中/网外 null/点太少 null/显式三角重心)。713 tests。
   - **验证强度**：平面 TIN 采高解析可验(z=x+2y 在任意内点精确)，重心插值数学锁定。
+
+## 五十七、约束 Delaunay(breakline 嵌入)——9 插件交叉核对后唯一算法缺口
+
+**复审角度**：交叉核对**全部 9 个模块插件**功能清单(BlockModel/GeoDataBase/MineAss/PointCloud/Road/MeshEdit/Plan/Task/Sql)vs Kylin。绝大多数已覆盖或属记录边界(native/保留3D网格/交互持久化/大子系统)。**唯一干净的算法缺口 = 约束 Delaunay**(原 MeshEditLib「多段线作约束嵌入三角网」，Kylin 仅无约束 Delaunay)。
+
+- [x] **约束 Delaunay**(`本次`)：`Delaunay.TriangulateConstrained(点, 约束边)` —— 无约束网基础上，对每条不在网中的约束边：**穿过顶点则共线分段成链**(breakline 常穿网点)；否则删被穿三角→孔洞→按约束边分两侧伪多边形→各自**耳切重剖**(约束边成两侧共享边)。命令 `约束三角网`：点 CSV + 选中多段线作 breakline(相邻段成约束边，闭合线补合口段)。
+  - **★强验证**：+4 单测——约束边直接出现 + **总三角面积 == 凸包面积**(无缝隙/重叠，覆盖凸包)/穿共线点分段成链 0-4-2/斜 breakline 嵌入网格且面积守恒/已是边则 noop。**面积守恒不变量强锁「有效三角剖分」正确性**(即使非处处 Delaunay 最优，约束嵌入的 feature 正确性完全被 约束present+面积守恒 钉死)。717 tests。
+  - **交叉核对总结**：9 插件全核完，共补 层位求交(§五十六) + 约束 Delaunay 两个真功能；余为 native 无源(LAS/倾斜摄影/剔面/mesh布尔)、保留 3D 网格(clip/drape/mesh交线)、交互持久化(路网快照/工作线设计)、大子系统(TaskLib/BlockModelLib)——均记录。**插件功能面已达托管重实现忠实上界**。

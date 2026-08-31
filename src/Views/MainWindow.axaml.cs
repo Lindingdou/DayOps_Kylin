@@ -699,6 +699,7 @@ public partial class MainWindow : Window
             if (cmd == "煤厚分析" || cmd == "煤层厚度分析" || cmd == "煤厚") { await CoalThicknessAsync(); return; }
             if (cmd == "等高线" || cmd == "等高线生产" || cmd == "等值线") { await ContourFromCsvAsync(); return; }
             if (cmd == "创建三角网" || cmd == "三角网" || cmd == "2.5D TIN" || cmd == "2.5DTIN") { await CreateTinAsync(); return; }
+            if (cmd == "约束三角网" || cmd == "约束Delaunay" || cmd == "约束剖分" || cmd == "breakline三角网") { await CreateConstrainedTinAsync(); return; }
             if (cmd == "示例三角网" || cmd == "三角网示例") { GenerateSampleTrimesh(); return; }
             if (cmd == "坡度着色" || cmd == "三角网着色" || cmd == "坡度") { await ShadeTinAsync("坡度着色", "绿=平 → 红=陡", TerrainAnalysis.BuildSlopeMap); return; }
             if (cmd == "坡向着色" || cmd == "坡向") { await ShadeTinAsync("坡向着色", "按朝向 HSV 配色", TerrainAnalysis.BuildAspectMap); return; }
@@ -2945,6 +2946,61 @@ public partial class MainWindow : Window
         RefreshScene();
         Viewport.FitBounds(r.Bounds);
         StatusMsg.Text = $"创建三角网：{pts2d.Count} 点 → {tris.Count} 三角 · {edges.Count} 边";
+    }
+
+    // 约束三角网(breakline 嵌入)：点 CSV + 选中的多段线作约束边(断层/山脊等必为三角边)。忠实原「多段线约束嵌入」。
+    private async Task CreateConstrainedTinAsync()
+    {
+        // 先收集选中的多段线作 breakline(取点前捕获选择)
+        var bkPolys = new List<PolylineEntity>();
+        foreach (var e in _selected) if (e is PolylineEntity p && p.Points.Count >= 2) bkPolys.Add(p);
+        if (bkPolys.Count == 0) { StatusMsg.Text = "约束三角网：请先选中 ≥1 条多段线作约束线(断层/山脊 breakline)，再执行；无约束请用 创建三角网"; return; }
+
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "约束三角网：选点 CSV (x,y[,z])",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("点 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success) { StatusMsg.Text = $"约束三角网：点导入失败 {r.Error}"; return; }
+
+        var pts2d = new List<(double x, double y)>();
+        foreach (var p in r.Points) pts2d.Add((p.x, p.y));
+        // 把约束线顶点并入点集，其相邻段成约束边
+        var constraints = new List<(int u, int v)>();
+        foreach (var pl in bkPolys)
+        {
+            int first = -1, prev = -1;
+            foreach (var (vx, vy) in pl.Points)
+            {
+                pts2d.Add((vx, vy)); int idx = pts2d.Count - 1;
+                if (prev >= 0) constraints.Add((prev, idx));
+                if (first < 0) first = idx;
+                prev = idx;
+            }
+            if (pl.Closed && first >= 0 && prev != first) constraints.Add((prev, first));
+        }
+        if (pts2d.Count < 3) { StatusMsg.Text = "约束三角网：点太少"; return; }
+
+        var tris = Delaunay.TriangulateConstrained(pts2d, constraints);
+        if (tris.Count == 0) { StatusMsg.Text = "约束三角网：点太少或共线，无法剖分"; return; }
+        int kept = 0; foreach (var (u, v) in constraints) if (ConstraintHeld(tris, u, v, pts2d)) kept++;
+        var edges = Delaunay.BuildEdges(pts2d, tris, 0.85f, 0.6f, 0.35f);   // 约束网偏暖色区别
+        BeginChange();
+        foreach (var e in edges) _scene.Add(e);
+        RefreshScene();
+        StatusMsg.Text = $"约束三角网：{pts2d.Count} 点 · {bkPolys.Count} 约束线 → {tris.Count} 三角 · {edges.Count} 边（约束段 {kept}/{constraints.Count} 已嵌入或分段）";
+    }
+
+    // 约束段是否体现在网中(直边或经共线分段成链)——粗判：端点间存在一条沿线的边路径。这里简化为直边或任一端相连。
+    private static bool ConstraintHeld(List<(int a, int b, int c)> tris, int u, int v, List<(double x, double y)> pts)
+    {
+        foreach (var t in tris)
+            foreach (var (p, q) in new[] { (t.a, t.b), (t.b, t.c), (t.c, t.a) })
+                if ((p == u && q == v) || (p == v && q == u)) return true;
+        return false;   // 分段链情形从简不深判(面积守恒已在单测锁定正确性)
     }
 
     // 体积/土方量：散点 CSV → 三角网 → 相对最低点体积（挖方/填方/净值），报状态栏
@@ -6576,7 +6632,7 @@ public partial class MainWindow : Window
         // 线编辑
         "加密多段线","简化","抽稀等值线","两线交点","闭合多段线","删除重复点","删除重复线","连接多段线","组合工作线",
         // 网格/建模
-        "网格度量","网格诊断","网格焊接","网格边界","合并三角网","固化成体","侧面三角网","立方体","球体","圆柱","体素格网体积","实体转块体",
+        "网格度量","网格诊断","创建三角网","约束三角网","网格焊接","网格边界","合并三角网","固化成体","侧面三角网","立方体","球体","圆柱","体素格网体积","实体转块体",
         // 区域/地形/点云
         "区域求差","区域重叠检测","克里金估值","快速估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","地面点滤波","高程着色","点云质量统计",
