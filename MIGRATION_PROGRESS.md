@@ -826,3 +826,9 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 - [x] **用途适宜性 UtilizationBySeam**：动力煤评价(灰/硫/热分级综合→优良中差) + 炼焦评价(粘结指数 G→炼焦价值)。煤类名用样本存的 GB/T5751 `coal_type` 替代原 `_ref.ResolveCoalType`(参考服务)——**忠实适配**(用已存分类而非重推)。命令 用途适宜性。
 - CoalSample 加 回收率/G/胶质Y/煤类(可选默认)，GetCoalSamples 补 4 列。+4 单测。
 - **★CoalQualityAnalytics(647行) 全 6 分析补齐**：商品煤符合性/品位-储量曲线/分标高煤质/离群QC/洗选提质/用途适宜性。**实现忠实度轴累计 9 真实算法**。659 测试。
+
+**实现忠实度轴续（commit `b2e3323`）——GeoDataBase 算法 sweep 收官**：
+- [x] **展绘层位数据 名实不符修复**：原映射到 DrawBoreholesCmd(画钻孔开孔)，而原 `HorizonPointBuilder`(136行) 是分煤层提取顶/底板高程点(底=floor_elevation, 顶=底+采用厚度, 按煤层×顶/底分层)。补 `GetHorizonPoints` + HorizonPointsCmd，与展绘钻孔拆分。+1 单测。**实现忠实度轴累计 10 真实算法**。
+- **记录 VirtualDrillEngine(964行) 为边界**：多煤层顶/底板 TIN 竖直采样合成钻孔柱，依赖地质模型的煤层面 TIN 基建——Kylin 只有 §四/§八 见煤数据、无煤层面 TIN(建面属地质建模管线，未建)。我的 虚拟钻孔=单面高程点查询(简化占位)。→ 依赖 Kylin 缺失基建，记录。
+- 核实 **矿床识别=DepositAutoDetector 已忠实移植**(PCA 倾角/走向 + Z 层煤层数)。
+- **★GeoDataBase 可见算法 sweep 收官**：CoalQualityAnalytics(6)/ForecastModels/FleetOptimizer/HorizonPointBuilder/DepositAutoDetector 全移；VirtualDrillEngine 记录(缺地质建模基建)。→ 该模块(§四/§八 approximation 集中地)实现忠实度已收口。660 测试。
