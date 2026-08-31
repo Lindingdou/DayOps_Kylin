@@ -644,3 +644,11 @@
 - Dispatch(779, 派车/任务实例/派工/实绩 数据结构) + full ProductionTask(474) + ExploderConfig/FaceInput(561) —— 引擎共享域, **纯基础无独立功能**(违"只考虑功能"), 但为 生产任务编制/派工/台账(~22 死按钮)的必经路。
 - 引擎: TaskExploder(971 面→5工序)/HaulDumpDeriver(448)/FlowAssigner(1032)/DispatchEngine(987)/MonthlyShiftDecomposer(658, 需 BlockModelLib 空间) —— 各 500-1000+ 行, 用共享域。
 → 引擎类 TaskLib 功能需先移 ~1000 行纯基础 + 引擎(多 tick 无 feature), 是大工程。自足域已尽。
+
+## 三十四、TaskLib 增量 6：工序进度跟踪（安全独立切片，复活死按钮）
+
+- [x] **工序进度跟踪**(commit `2c674fe`)：忠实移植 DrillQuantity(穿孔孔数/延米 + 达成率延米优先) + ProcessProgress(按工序聚合 计划vs实绩 达成率)。命令 **工序进度跟踪**(复活死按钮): 读任务 计划/实绩 CSV → 各工序 条数/平均达成率/达标数。**安全**(独立文件, 不动已工作的 5 功能)。+3 测。
+
+**★可持续模式确立**：移独立 TaskLib 域片(不 refactor 已工作代码) + CSV 喂的核算 → 每 tick 安全交付 1 TaskLib feature。已 6 增量: 生产量核算/物料换算/采剥平衡/排土场按量推进/配煤核算/**工序进度跟踪**。597 测试, 死按钮 60。
+
+**引擎类余项**(生产任务编制/派工/派车单/任务下达/采排配对/动态模拟/编制…) 仍需引擎链(TaskExploder 等 + full ProductionTask/ExploderConfig 共享基础, refactor 风险 + 保真难验), 记录待专项/上机。自足+可 CSV 喂的 TaskLib 核算功能持续提取中。
