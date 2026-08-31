@@ -191,4 +191,14 @@ public class GeoDataQueriesTests
         Assert.All(obs, p => Assert.NotEqual(0.0, p.x + p.y));
         Assert.NotEmpty(GeoDataQueries.GetMineLocations(db.Connection));           // 种子 10
     }
+
+    [Fact]
+    public void Efficiency_forecast_from_seed()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var f = GeoDataQueries.GetEfficiencyForecast(db.Connection);
+        Assert.True(f.BaselineMonthlyWanM3 > 0, "基线月产");
+        Assert.InRange(f.AvgAvailabilityPct, 0, 100);
+        Assert.True(f.ProjectedAnnualWanM3 > f.BaselineMonthlyWanM3, "投影年产 > 单台月产");
+    }
 }

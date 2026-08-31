@@ -95,6 +95,30 @@ public static class GeoDataQueries
         return new KpiStats(n, avPct, utPct, rd.GetInt32(3), rd.GetInt32(4));
     }
 
+    public sealed record EfficiencyForecast(int ActiveEquipment, double BaselineMonthlyWanM3, double AvgAvailabilityPct, double AvgRunRatePct, double ProjectedAnnualWanM3);
+
+    /// <summary>
+    /// 设备效能预测（基线 + 投影）——忠实原 EquipmentForecastWindow 基线口径:
+    /// 基线月产量 = 近期产能均值(万m³); 可用率/作业率取 KPI 均值; 投影年产 = 基线月产 × 12 × 台数。
+    /// (原窗口在此基线上以滑块做交互 what-if 情景; 交互部分需 UI, 此出基线+投影。)
+    /// </summary>
+    public static EfficiencyForecast GetEfficiencyForecast(SqliteConnection conn)
+    {
+        double baseMonthly = ScalarDouble(conn, "SELECT COALESCE(AVG(output_m3),0)/10000.0 FROM capacity_monthly WHERE output_m3 > 0");
+        int active = (int)Scalar(conn, "SELECT COUNT(*) FROM equipment WHERE status IS NULL OR status IN ('在役','运行','正常','服役')");
+        double av, rr;
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT COALESCE(AVG(availability),0), COALESCE(AVG(actual_run_rate),0) FROM equipment_kpi_monthly";
+            using var rd = cmd.ExecuteReader(); rd.Read();
+            av = rd.GetDouble(0); rr = rd.GetDouble(1);
+        }
+        double avPct = av <= 1.0 ? av * 100 : av;
+        double rrPct = rr <= 1.0 ? rr * 100 : rr;
+        double projAnnual = baseMonthly * 12 * (active > 0 ? active : 1);
+        return new EfficiencyForecast(active, baseMonthly, avPct, rrPct, projAnnual);
+    }
+
     public sealed record BoreholeStats(int Holes, double TotalDepthM, double AvgDepthM, int SeamResults, IReadOnlyList<CategoryCount> ByCategory);
 
     /// <summary>钻孔管理概览：孔数 / 总孔深 / 均深 / 见煤结果数 / 按类别。</summary>
