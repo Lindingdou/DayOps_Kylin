@@ -1471,15 +1471,15 @@ public partial class MainWindow : Window
 
         double maxDepth = 0; foreach (var h in r.Boreholes) if (h.TotalDepth > maxDepth) maxDepth = h.TotalDepth;
         double scale = 1.0, width = 2.0;
-        var cols = BoreholeRender.BuildColumns(r.Boreholes, scale, width);
+        double lblH = System.Math.Max((r.Bounds[2] - r.Bounds[0]) / 50.0, width);
+        var cols = BoreholeRender.BuildColumns(r.Boreholes, scale, width, lblH * 0.7);   // 含深度刻度
         BeginChange();
         foreach (var e in cols) _scene.Add(e);   // 保留岩性色，不覆盖图层色
-        double lblH = System.Math.Max((r.Bounds[2] - r.Bounds[0]) / 50.0, width);
         foreach (var h in r.Boreholes)           // 孔号标注(孔口上方)
             _scene.Add(new TextEntity { X = h.X, Y = h.Y + lblH * 0.4, Height = lblH, Text = h.Name, Cr = 0.95f, Cg = 0.95f, Cb = 0.4f });
         RefreshScene();
         Viewport.FitBounds(new[] { r.Bounds[0], r.Bounds[1] - maxDepth * scale, r.Bounds[2] + width, r.Bounds[3] });
-        StatusMsg.Text = $"已展绘 {r.Boreholes.Count} 个钻孔 · 柱状图+孔号标注（岩性配色）";
+        StatusMsg.Text = $"已展绘 {r.Boreholes.Count} 个钻孔 · 柱状图+深度刻度+孔号标注（岩性配色）";
     }
 
     // 煤厚分析：导入钻孔 CSV → 逐孔累计煤层(岩性含「煤」)厚度 → 按厚配色标记(点)入场景 + 统计报表

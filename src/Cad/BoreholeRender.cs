@@ -33,8 +33,8 @@ public static class BoreholeRender
         return pal[(rock == null || rock.Length == 0) ? 0 : h % pal.Length];
     }
 
-    /// <summary>生成柱状图几何。depthScale=深度→世界单位比例；width=柱宽（世界单位）。</summary>
-    public static List<SceneEntity> BuildColumns(IEnumerable<BoreholeImportService.Borehole> holes, double depthScale, double width)
+    /// <summary>生成柱状图几何。depthScale=深度→世界单位比例；width=柱宽（世界单位）；labelH&gt;0 则加深度刻度+标签(左侧)。忠实原版"柱状图+深度刻度"。</summary>
+    public static List<SceneEntity> BuildColumns(IEnumerable<BoreholeImportService.Borehole> holes, double depthScale, double width, double labelH = 0)
     {
         var list = new List<SceneEntity>();
         foreach (var h in holes)
@@ -50,6 +50,16 @@ public static class BoreholeRender
                     X1 = h.X + width, Y1 = h.Y - iv.To * depthScale,
                     Cr = r, Cg = g, Cb = b
                 });
+            }
+            if (labelH > 0)   // 深度刻度(左侧短横)+深度值标签, 间隔取整
+            {
+                double step = MapDecor.NiceLength(depth / 5); if (step <= 0) step = depth;
+                for (double d = 0; d <= depth + 1e-9; d += step)
+                {
+                    double yy = h.Y - d * depthScale;
+                    list.Add(new LineEntity { X0 = h.X - width * 0.35, Y0 = yy, X1 = h.X, Y1 = yy, Cr = 0.7f, Cg = 0.7f, Cb = 0.72f });   // 刻度
+                    list.Add(new TextEntity { X = h.X - width * 0.35 - labelH * 2.5, Y = yy - labelH * 0.4, Height = labelH, Text = d.ToString("0", System.Globalization.CultureInfo.InvariantCulture), Cr = 0.7f, Cg = 0.7f, Cb = 0.72f });   // 深度值
+                }
             }
         }
         return list;

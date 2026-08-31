@@ -64,6 +64,18 @@ public class BoreholeImportTests
     }
 
     [Fact]
+    public void Render_with_labelH_adds_depth_scale_ticks_and_labels()
+    {
+        var r = BoreholeImportService.Parse("ZK1,0,0,10,0,5,粘土\nZK1,0,0,10,5,12,煤\n");   // 总深 12
+        var geo = BoreholeRender.BuildColumns(r.Boreholes, 1.0, 2.0, 1.0);   // labelH=1 → 深度刻度
+        var texts = System.Linq.Enumerable.ToList(System.Linq.Enumerable.OfType<PitMine3D.Kylin.Cad.Draw.TextEntity>(geo));
+        Assert.NotEmpty(texts);                                              // 深度值标签
+        Assert.Contains(texts, t => t.Text == "0");                          // 孔口深度 0
+        Assert.Contains(texts, t => int.TryParse(t.Text, out int d) && d > 0);   // 递增深度值
+        Assert.True(geo.Count > 3);                                          // 比无刻度(3)多
+    }
+
+    [Fact]
     public void Litho_color_coal_is_dark_and_stable()
     {
         var coal = BoreholeRender.LithoColor("煤");
