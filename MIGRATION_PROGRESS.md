@@ -1037,3 +1037,12 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 
 - [x] **分位数 Q1/Q3 + 百分位 + 箱线**(`41e8ac6`)：原煤质统计「均值/std/**分位数**...**箱线**」, Kylin Statistics 只到 median。补 `Statistics.Percentile`(线性插值序统计) + Q1/Q3 入 Summary + `BoxplotCsv`(min/q1/median/q3/max)。SummaryLine 增 Q1/median/Q3。5 测(奇序四分位/线性插值/均匀0-100/箱线CSV/**Q1≤中位≤Q3 不变量**)。**781 tests**。
 - **记录(presentation, 非功能缺口)**：原煤质仪表盘的 散点/箱线/直方图 是 WPF/SVG **图表控件**(dashboard/report), Kylin 出**数据**(Summary + Histogram/Boxplot CSV)。数据侧完整; 在 CAD 场景内画柱状/箱线图属呈现方式差异(原本就不画进图纸), 非功能漏项。若需图表面板是独立 UI 件, 记录。
+
+## 七十一、MeshEditLib 点线/建模深核 —— 线裁剪 + 连续多层建模
+
+**MeshEditLib 逐命令核实**（"内核模块"但含可移植子算）：约束Delaunay/焊接/放样/顶底成体/primitives/去重(点线)/加密/闭合/**Douglas-Peucker简化**(PolylineSimplify) 均已有; OSGB 倾斜摄影=native 阻。补 2 真缺口：
+
+- [x] **线对象裁剪 POLYCLIP**(`9f5b137`)：原「用闭合多段线裁剪其它线对象」, Kylin ClipPolygon 仅多边形∩凸包。补 `LineClip.ByPolygon`(逐段插边界交点→连续走增广点序按中点内外判, 断成同侧段; 吃开放线、**非凸边界**、保内/保外) + 线裁剪/线外裁剪命令。7 测(穿线保内/保外两段/全内/全外/折线/**非凸边界**/退化)。
+- [x] **连续多层自动建模**(`ad78190`)：原「N 层位面→N-1 夹层体」, Kylin 仅顶底成体(2面)。抽取 QuickModelAsync 核为 `LayerSolid.FromSurfaces`(边界环放样+焊接, QuickModelAsync 改用之去重), 加 `MultiLayer`(N 面按均高降序逐对成体) + 命令。5 测(水密/12三角/包围盒/N→N-1/退化)。**793 tests**。
+- **记录(2D 场景架构阻)**：**点/节点 Z 编辑**(统一Z/POINTSETZ/Z=aX+bY+c 平面赋Z/POLYUNIFYZ)——场景实体 2D 无 Z(PointEntity 仅 X,Y; PolylineEntity.Points 是 `(x,y)`), 无 Z 可设, 属线段渲染架构边界。
+- **latent 记录(非本轮引入)**：loft+weld(QuickModelAsync/LayerSolid)产**边流形水密但定向不一致**网格 → MeshMetrics 散度体积对定向敏感(随 z 位置变); 但实际取体积走**体素/缠绕数**路径(WindingNumberTester, 定向无关 robust), 工作流不受影响。
