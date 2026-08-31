@@ -54,6 +54,28 @@ public class DimToolsTests
     }
 
     [Fact]
+    public void BuildLinearAxis_slanted_measures_x_component_when_offset_vertical()
+    {
+        // 斜线 (0,0)-(10,5), 偏移点 (5,8) 偏竖直 → 水平尺寸线, 量 |Δx|=10(非真距 11.18)
+        var dim = DimTools.BuildLinearAxis(0, 0, 10, 5, 5, 8, 1);
+        var txt = System.Linq.Enumerable.Single(System.Linq.Enumerable.OfType<TextEntity>(dim));
+        Assert.Equal("10", txt.Text);              // X 分量, 非真距
+        var lines = System.Linq.Enumerable.ToList(System.Linq.Enumerable.OfType<LineEntity>(dim));
+        Assert.Contains(lines, l => System.Math.Abs(l.Y0 - 8) < 1e-6 && System.Math.Abs(l.Y1 - 8) < 1e-6);   // 水平尺寸线 y=8
+    }
+
+    [Fact]
+    public void BuildLinearAxis_measures_y_component_when_offset_horizontal()
+    {
+        // 斜线 (0,0)-(10,5), 偏移点 (13,2) 偏水平 → 竖直尺寸线, 量 |Δy|=5
+        var dim = DimTools.BuildLinearAxis(0, 0, 10, 5, 13, 2, 1);
+        var txt = System.Linq.Enumerable.Single(System.Linq.Enumerable.OfType<TextEntity>(dim));
+        Assert.Equal("5", txt.Text);               // Y 分量
+        var lines = System.Linq.Enumerable.ToList(System.Linq.Enumerable.OfType<LineEntity>(dim));
+        Assert.Contains(lines, l => System.Math.Abs(l.X0 - 13) < 1e-6 && System.Math.Abs(l.X1 - 13) < 1e-6);   // 竖直尺寸线 x=13
+    }
+
+    [Fact]
     public void BuildLinear_vertical_measure_offset_sideways()
     {
         var dim = DimTools.BuildLinear(0, 0, 0, 10, 3, 5, 1);   // 竖直测(0,0)-(0,10), 偏移过(3,5)→ x=3

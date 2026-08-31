@@ -102,6 +102,57 @@ public static class DimTools
         return list;
     }
 
+    /// <summary>
+    /// 线性标注(标准 DIMLINEAR, 轴对齐)：测两点的 X 或 Y 分量(非真距)。尺寸线水平或竖直, 由偏移点主方向定:
+    /// 偏移点离中点 Y 位移 ≥ X 位移 → 水平尺寸线(量 |Δx|); 否则竖直尺寸线(量 |Δy|)。区别于 <see cref="BuildLinear"/>(对齐/真距)。
+    /// </summary>
+    public static List<SceneEntity> BuildLinearAxis(double x1, double y1, double x2, double y2, double offX, double offY, double h, DimStyle? style = null)
+    {
+        style ??= DimStyle.Default;
+        double H = style.TextHeight > 0 ? style.TextHeight : h;
+        double mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+        bool horizontal = Math.Abs(offY - my) >= Math.Abs(offX - mx);   // 偏移偏竖直→水平尺寸线
+        // 水平: 尺寸线 y=offY, 量 |Δx|, 延伸线竖直; 竖直: 尺寸线 x=offX, 量 |Δy|, 延伸线水平。
+        // 复用 BuildLinear 的偏移+延伸逻辑：把"测点对"投到轴向——水平时测点取 (x1,offY 基准),
+        // 但更简单直接构造：
+        var list = new List<SceneEntity>();
+        (float r, float g, float b) col = (0.95f, 0.85f, 0.30f);
+        SceneEntity L(double a, double b, double c, double d) => new LineEntity { X0 = a, Y0 = b, X1 = c, Y1 = d, Cr = col.r, Cg = col.g, Cb = col.b };
+        double gap = H * style.ExtLineOffsetRatio, ext = H * style.ExtLineExtensionRatio;
+        double ah = H * style.ArrowRatio, aw = H * style.ArrowWidthRatio;
+        double val; double d1x, d1y, d2x, d2y;
+        if (horizontal)
+        {
+            double dy1 = offY - y1, dy2 = offY - y2;                     // 各测点到尺寸线的竖直距(带符号)
+            d1x = x1; d1y = offY; d2x = x2; d2y = offY;
+            val = Math.Abs(x2 - x1);
+            list.Add(L(x1, y1 + Math.Sign(dy1) * gap, x1, offY + Math.Sign(dy1) * ext));   // 延伸线1(竖直)
+            list.Add(L(x2, y2 + Math.Sign(dy2) * gap, x2, offY + Math.Sign(dy2) * ext));   // 延伸线2
+            list.Add(L(d1x, d1y, d2x, d2y));                            // 水平尺寸线
+            double ax = x2 >= x1 ? 1 : -1;
+            list.Add(L(d1x, d1y, d1x + ax * ah, d1y + aw)); list.Add(L(d1x, d1y, d1x + ax * ah, d1y - aw));
+            list.Add(L(d2x, d2y, d2x - ax * ah, d2y + aw)); list.Add(L(d2x, d2y, d2x - ax * ah, d2y - aw));
+        }
+        else
+        {
+            double dx1 = offX - x1, dx2 = offX - x2;
+            d1x = offX; d1y = y1; d2x = offX; d2y = y2;
+            val = Math.Abs(y2 - y1);
+            list.Add(L(x1 + Math.Sign(dx1) * gap, y1, offX + Math.Sign(dx1) * ext, y1));   // 延伸线1(水平)
+            list.Add(L(x2 + Math.Sign(dx2) * gap, y2, offX + Math.Sign(dx2) * ext, y2));
+            list.Add(L(d1x, d1y, d2x, d2y));                            // 竖直尺寸线
+            double ay = y2 >= y1 ? 1 : -1;
+            list.Add(L(d1x, d1y, d1x + aw, d1y + ay * ah)); list.Add(L(d1x, d1y, d1x - aw, d1y + ay * ah));
+            list.Add(L(d2x, d2y, d2x + aw, d2y - ay * ah)); list.Add(L(d2x, d2y, d2x - aw, d2y - ay * ah));
+        }
+        string s = val.ToString(style.NumberFormat, CultureInfo.InvariantCulture);
+        double tw = s.Length * H * 0.8;
+        double tcx = (d1x + d2x) / 2, tcy = (d1y + d2y) / 2;
+        double toy = horizontal ? H * style.TextOffsetRatio : 0, tox = horizontal ? 0 : H * style.TextOffsetRatio;
+        list.Add(new TextEntity { X = tcx + tox - tw / 2, Y = tcy + toy, Height = H, Text = s, Cr = col.r, Cg = col.g, Cb = col.b });
+        return list;
+    }
+
     /// <summary>半径标注(DIMRADIAL)：圆心→(dirx,diry) 方向的圆周点，径向线 + 箭头 + "R值"文字。</summary>
     public static List<SceneEntity> BuildRadial(double cx, double cy, double radius, double dirx, double diry, double h, DimStyle? style = null)
     {

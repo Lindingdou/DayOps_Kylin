@@ -181,7 +181,9 @@ public partial class MainWindow : Window
                         double x1, y1, x2, y2, ox, oy;
                         if (_dimContinue) { x1 = _dimP1.Value.x; y1 = _dimP1.Value.y; x2 = wp.Value.x; y2 = wp.Value.y; ox = _lastDimOffsetPt?.x ?? wp.Value.x; oy = _lastDimOffsetPt?.y ?? wp.Value.y; }
                         else { x1 = _dimP1.Value.x; y1 = _dimP1.Value.y; x2 = _dimP2!.Value.x; y2 = _dimP2.Value.y; ox = wp.Value.x; oy = wp.Value.y; }
-                        var dim = DimTools.BuildLinear(x1, y1, x2, y2, ox, oy, h, _dimStyle);
+                        var dim = _dimAligned
+                            ? DimTools.BuildLinear(x1, y1, x2, y2, ox, oy, h, _dimStyle)          // 对齐: 平行真距
+                            : DimTools.BuildLinearAxis(x1, y1, x2, y2, ox, oy, h, _dimStyle);      // 线性: 轴对齐 X/Y
                         BeginChange();
                         foreach (var de in dim) { de.LayerName = _layers.Current.Name; _scene.Add(de); }
                         RefreshScene();
@@ -720,6 +722,7 @@ public partial class MainWindow : Window
     private (double x, double y)? _dimP2;               // 线性标注第二点(3 点工作流: 点1→点2→尺寸线位置)
     private (double x, double y)? _lastDimOffsetPt;     // 上一条标注的尺寸线偏移点(连续标注沿用同尺寸线级)
     private bool _dimContinue;                          // 连续标注模式(2 点: 续点, 尺寸线级沿用)
+    private bool _dimAligned;                           // true=对齐标注(尺寸线平行测线,真距); false=线性标注(轴对齐,量 X/Y 分量)
     private readonly Cad.Draw.DimStyle _dimStyle = new();   // 标注样式(DIM 变量：字高/小数位/箭头比/延伸线)，影响新建标注
     private bool _selBoxActive;                     // 窗口框选拖拽中
     private Avalonia.Point _selBoxStart;            // 框选起点(屏幕)
@@ -991,7 +994,8 @@ public partial class MainWindow : Window
             if (cmd == "方案综合对比" || cmd == "方案比选" || cmd == "方案对比") { await ProgramCompareAsync(); return; }
             if (cmd == "高程查询" || cmd == "虚拟钻孔" || cmd == "查询高程") { await StartSpotQueryAsync(); return; }
             if (cmd == "文字" || cmd == "单行文字") { ArmText(); return; }
-            if (cmd == "标注" || cmd == "线性标注" || cmd == "对齐标注" || cmd == "尺寸标注" || cmd == "标注台阶标高") { StartDim(); return; }
+            if (cmd == "对齐标注") { StartDim(true); return; }                                        // 对齐: 平行测线,真距
+            if (cmd == "标注" || cmd == "线性标注" || cmd == "尺寸标注" || cmd == "标注台阶标高") { StartDim(false); return; }   // 线性: 轴对齐,量 X/Y
             if (cmd == "半径标注" || cmd == "半径") { StartDimRadial(); return; }
             if (cmd == "直径标注" || cmd == "直径") { StartDimDiameter(); return; }
             if (cmd == "角度标注" || cmd == "角度" || cmd == "测角标注") { StartDimAngular(); return; }
@@ -4377,11 +4381,11 @@ public partial class MainWindow : Window
     }
 
     // 线性标注：取两点
-    private void StartDim()
+    private void StartDim(bool aligned = false)
     {
-        _dimActive = true; _dimP1 = null; _dimP2 = null; _dimContinue = false;
+        _dimActive = true; _dimP1 = null; _dimP2 = null; _dimContinue = false; _dimAligned = aligned;
         _tool = null; _measure = null; _editMode = EditMode.None;
-        StatusMsg.Text = "线性标注：指定第一点（点1→点2→尺寸线位置）";
+        StatusMsg.Text = $"{(aligned ? "对齐" : "线性")}标注：指定第一点（点1→点2→尺寸线位置）";
     }
 
     // 半径标注(DIMRADIAL)：需先选一个圆或弧
