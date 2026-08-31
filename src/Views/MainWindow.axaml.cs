@@ -775,6 +775,7 @@ public partial class MainWindow : Window
             if (cmd == "补洞(三角网)" || cmd == "补洞" || cmd == "网格补洞" || cmd == "填洞") { await MeshHoleFillAsync(); return; }
             if (cmd == "分割三角网" || cmd == "沿线分割三角网" || cmd == "网格分割" || cmd == "切分三角网") { await MeshSplitAsync(); return; }
             if (cmd == "快速建模" || cmd == "一键建模" || cmd == "顶底成体") { await QuickModelAsync(); return; }
+            if (cmd == "中心线管理" || cmd == "边状态" || cmd == "路网拓扑" || cmd == "中线管理") { RoadNetworkReportCmd(); return; }
             if (cmd == "固化成体" || cmd == "固化实体") { await SolidifyAsync(); return; }
             if (cmd == "体素格网体积" || cmd == "体素体积" || cmd == "体素算量") { await VoxelVolumeAsync(); return; }
             if (cmd == "实体转块体" || cmd == "网格转块体" || cmd == "体转块") { await EntityToBlocksAsync(); return; }
@@ -1328,6 +1329,27 @@ public partial class MainWindow : Window
         RefreshScene();
         if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
         StatusMsg.Text = $"网格边界：{loops.Count} 环 · {totPts} 点(投影 XY 作闭合折线入场景)";
+    }
+
+    // 中心线管理 / 边状态：从场景折线(道路中线)建路网 → 拓扑报表(中线/节点/边/总长/断头/交叉)。
+    // 原为管理·状态对话框; 此出只读拓扑视图(增删边/改状态需交互 UI, 记录)。
+    private void RoadNetworkReportCmd()
+    {
+        var polys = new List<System.Collections.Generic.IReadOnlyList<(double x, double y)>>();
+        foreach (var e in _scene.Entities)
+            if (e is PolylineEntity pl && pl.Points.Count >= 2) polys.Add(pl.Points);
+        if (polys.Count == 0) { StatusMsg.Text = "中心线管理：场景无中线（多段线）"; return; }
+        double tol = System.Math.Max(1e-6, SnapTolWorld(_lastPointer) * 0.5);
+        var (nodes, adj) = Cad.RoadNetwork.Build(polys, tol);
+        int edges = 0, deadEnds = 0, junctions = 0, isolated = 0;
+        double totLen = 0;
+        for (int u = 0; u < adj.Count; u++)
+        {
+            int deg = adj[u].Count;
+            if (deg == 0) isolated++; else if (deg == 1) deadEnds++; else if (deg >= 3) junctions++;
+            foreach (var (v, w) in adj[u]) if (v > u) { edges++; totLen += w; }
+        }
+        StatusMsg.Text = $"中心线管理/边状态：{polys.Count} 中线 · 节点 {nodes.Count} · 边 {edges}(总长 {totLen:0.#}) · 断头 {deadEnds} · 交叉 {junctions} · 孤立 {isolated}（增删边/改状态需交互 UI）";
     }
 
     // 快速建模：选顶面 + 底面 OFF → 各提最大边界环 → 侧壁放样(SideSurface.Loft) → 顶+底+侧 焊成闭合体。
