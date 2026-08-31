@@ -798,6 +798,7 @@ public partial class MainWindow : Window
             if (cmd == "边坡设计" || cmd == "边坡参数" || cmd == "帮坡角设计") { SlopeDesignsCmd(); return; }
             if (cmd == "展绘钻孔" || cmd == "开孔坐标管理" || cmd == "钻孔展绘" || cmd == "开孔坐标") { DrawBoreholesCmd(); return; }
             if (cmd == "展绘层位数据" || cmd == "层位展点" || cmd == "展绘层位") { HorizonPointsCmd(); return; }
+            if (cmd.StartsWith("虚拟钻孔 ") || cmd.StartsWith("虚拟钻探 ") || cmd.StartsWith("模拟钻孔 ")) { await VirtualDrillAsync(cmd); return; }
             if (cmd == "层位求交" || cmd == "顶底板求交" || cmd == "煤层高程" || cmd.StartsWith("层位求交 ") || cmd.StartsWith("顶底板求交 ") || cmd.StartsWith("煤层高程 ")) { SeamIntersectCmd(cmd); return; }
             if (cmd == "机群总览" || cmd == "设备总览" || cmd == "机群") { FleetOverviewCmd(); return; }
             if (cmd == "数据看板" || cmd == "看板" || cmd == "调度态势看板" || cmd == "态势看板") { DataBoardCmd(); return; }
@@ -6877,6 +6878,26 @@ public partial class MainWindow : Window
         if (maxX > minX && maxY > minY)
             Viewport.FitBounds(new double[] { minX, minY, maxX, maxY });
         StatusMsg.Text = $"展绘钻孔：{pts.Count} 孔位入场景（图层「钻孔」）· 范围 X[{minX:0}~{maxX:0}] Y[{minY:0}~{maxY:0}]";
+    }
+
+    // 虚拟钻孔：层位点建各煤层顶/底板面 → 在 (x,y) 竖直求交合成钻孔柱 → 导出 CSV
+    private async Task VirtualDrillAsync(string cmd)
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        if (tk.Length < 3 || !double.TryParse(tk[1], out double qx) || !double.TryParse(tk[2], out double qy))
+        { StatusMsg.Text = "虚拟钻孔：用法「虚拟钻孔 <x> <y>」"; return; }
+        var hp = Data.GeoDataQueries.GetHorizonPoints(db.Connection);
+        if (hp.Count == 0) { StatusMsg.Text = "虚拟钻孔：库中无层位点(先展绘层位数据)"; return; }
+        var seams = VirtualBorehole.SeamsFromHorizonPoints(
+            System.Linq.Enumerable.Select(hp, p => (p.SeamCode, p.IsRoof, p.X, p.Y, p.Z)));
+        var hits = VirtualBorehole.Drill(qx, qy, seams);
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        if (hits.Count == 0) { StatusMsg.Text = $"虚拟钻孔({qx.ToString("0.#", inv)},{qy.ToString("0.#", inv)})：未见煤(位置在煤层面覆盖外)"; return; }
+        var name = await SaveCsvAsync("导出虚拟钻孔", "virtual_borehole.csv", VirtualBorehole.ToCsv(hits));
+        var top = hits[0];
+        StatusMsg.Text = $"虚拟钻孔({qx.ToString("0.#", inv)},{qy.ToString("0.#", inv)})：见 {hits.Count} 层 · 顶层 {top.SeamCode}(顶{top.RoofZ.ToString("0.#", inv)}/底{top.FloorZ.ToString("0.#", inv)}/厚{top.Thickness.ToString("0.##", inv)})"
+            + (name != null ? $" → {name}" : "");
     }
 
     // 展绘层位数据(HorizonPointBuilder)：分煤层 底板(floor_elevation)/顶板(底+采用厚度) 高程点入场景, 按 煤层×顶/底 分层
