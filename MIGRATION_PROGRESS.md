@@ -513,3 +513,7 @@
 - **结论**：TaskLib 忠实移植是**独立大工程**(多 tick/多会话级), 非本 loop 单步。仓促部分移植会因未移部分而失真, 违「原不可见/不完整者不臆测」。**记录为"托管可移·大域·待专项"**, 区别于真内核阻(mesh/点云/倾斜摄影)。已达成度评价/产量统计等 CSV 可做项早已落地。
 
 **受阻清单再校准**：真内核阻(C++ EngineInterop 无托管源)=mesh 布尔/修复·点云内核·倾斜摄影·地质模型更新·PitDesign 台阶/坑线; 托管可移但大域/受持久化=TaskLib 排程链; DM8 阻=§四/§八 持久化; 对话框阻=渲染配置/约束设置等; Skia 阻=实心填充; 引擎图案库=命名 hatch。
+
+**TaskExploder 输入复杂度定论**：`ExploderConfig.FaceInput` 字段极富(Zone/工程位ID/单元ID/可采储量/推进方位/采宽/源XYZ/物料码/物料构成 Mix/目的地 Sink/运距/等效运距/Splits/日目标/煤质/设备编组/铲型偏好/工序… + DrillInput + ShiftWindow + MaterialMix + CoalQuality + EquipmentGroup)——**非最小 plan 可移**(§七技巧因求解器只读少数标量才成立), 需 DM8 域数据填充。故 TaskExploder(生产任务编制/分解) 确定**非 tick 尺度可做**, 记录待专项。可移的核心算法(车铲匹配 MatchFactor/ErlangC)早已落地。
+
+**穷尽性定论(本会话终)**：多维走查(交互/绘制/面板/导入/导出/存载) + 复核受阻分类(AI 面板真解锁、TaskLib/Mesh/PointCloud 逐一核实)后——**tick 尺度内 clear + 忠实可见 + 可验证** 的功能集已穷尽。余项二分: ①**大域专项**(TaskLib 排产链, 托管但 20k 行 + 需 DM8 数据 + 对话框, 多会话级); ②**确凿受阻**(C++ 内核 mesh 修复·分割/点云 native PMTB/倾斜摄影/地质模型/PitDesign, DM8 持久化, 对话框基建, Skia 实心填充, 引擎命名图案库)。均已记录, 按忠实性不臆测。
