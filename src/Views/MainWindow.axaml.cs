@@ -950,6 +950,7 @@ public partial class MainWindow : Window
             if (cmd == "侧面三角网" || cmd == "侧面放样" || cmd == "放样侧面") { await SideSurfaceAsync(); return; }
             if (cmd == "道路横断面" || cmd == "路面加宽超高" || cmd == "弯道加宽") { RoadCrossSectionCmd(); return; }
             if (cmd == "路面生成" || cmd == "生成路面" || cmd == "中线外扩" || cmd.StartsWith("路面生成 ") || cmd.StartsWith("生成路面 ")) { RoadSurfaceCmd(cmd); return; }
+            if (cmd == "纵坡分析" || cmd == "纵坡" || cmd == "坡度分档" || cmd == "限坡校核" || cmd.StartsWith("纵坡分析 ") || cmd.StartsWith("限坡校核 ")) { await GradeProfileAsync(cmd); return; }
             if (cmd == "平行推进" || cmd == "开采程序确定" || cmd == "工作线推进") { AdvanceCmd(AdvanceMode.Parallel, "平行推进"); return; }
             if (cmd == "定点回转" || cmd == "定点回转推进") { AdvanceCmd(AdvanceMode.FixedPivot, "定点回转"); return; }
             if (cmd == "动点回转" || cmd == "动点回转推进") { AdvanceCmd(AdvanceMode.MovingPivot, "动点回转"); return; }
@@ -5265,6 +5266,35 @@ public partial class MainWindow : Window
     }
 
     // 道路横断面：选一条中线折线 → 按曲率算弯道加宽/超高 → 左右加宽路缘线入场景 + 报表
+    // 纵坡分析：3D 折线 CSV(x,y,z 有序) → 逐段纵坡% → 按坡度分档着色(绿平→红陡) + 超限汇总。忠实原「中线按纵坡分档着色」。
+    private async Task GradeProfileAsync(string cmd)
+    {
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        double maxPct = 8.0;   // 露天矿运输道路典型限坡 8%
+        if (tk.Length >= 2 && double.TryParse(tk[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double mp) && mp > 0) maxPct = mp;
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        { Title = "纵坡分析：选 3D 中线 CSV (x,y,z 有序; 可用 线落到面上 drape 得)", AllowMultiple = false, FileTypeFilter = new[] { new FilePickerFileType("3D 线 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } } });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success || r.Points.Count < 2) { StatusMsg.Text = "纵坡分析：需 ≥2 个有序 3D 点(x,y,z)"; return; }
+        var line = new List<(double x, double y, double z)>(); foreach (var p in r.Points) line.Add((p.x, p.y, p.z));
+        var segs = Cad.GradeProfile.Compute(line);
+        if (segs.Count == 0) { StatusMsg.Text = "纵坡分析：无有效段"; return; }
+        var (maxAbs, over, avg) = Cad.GradeProfile.Summary(segs, maxPct);
+        BeginChange();
+        foreach (var s in segs)
+        {
+            double g = System.Math.Abs(s.GradePct);
+            double f = System.Math.Min(1, g / System.Math.Max(1e-6, maxPct * 1.5));   // 归一到 1.5×限坡
+            float cr = (float)f, cg = (float)(1 - f) * 0.85f, cb = 0.2f;                // 绿(平)→红(陡)
+            if (g > maxPct) { cr = 1f; cg = 0.1f; cb = 0.1f; }                          // 超限=纯红
+            _scene.Add(new LineEntity { X0 = s.X0, Y0 = s.Y0, X1 = s.X1, Y1 = s.Y1, Cr = cr, Cg = cg, Cb = cb, LayerName = "纵坡分析" });
+        }
+        RefreshScene();
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        StatusMsg.Text = $"纵坡分析：{segs.Count} 段 · 最大纵坡 {maxAbs.ToString("0.##", inv)}% · 加权均 {avg.ToString("0.##", inv)}% · 超限({maxPct:0.#}%) {over} 段（红=超限；绿平→红陡）";
+    }
+
     // 路面生成：中线多段线 + 路宽 → 等宽双侧外扩成闭合路带多边形。忠实原「中心线按路宽外扩生成路面」。
     private void RoadSurfaceCmd(string cmd)
     {
@@ -6790,7 +6820,7 @@ public partial class MainWindow : Window
         "区域求差","区域重叠检测","克里金估值","泛克里金","快速估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","地面点滤波","高程着色","点云质量统计","点云裁剪",
         // 块体/运输/路网
-        "块体模型","资源量","道路横断面","路面生成","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","演化对比","螺旋斜坡道","折返斜坡道",
+        "块体模型","资源量","道路横断面","路面生成","纵坡分析","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","演化对比","螺旋斜坡道","折返斜坡道",
         // 生产计划/投影
         "境界圈定","剥采比均衡","方案综合对比","开采程序确定","平盘宽度识别","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
