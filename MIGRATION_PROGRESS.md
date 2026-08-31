@@ -1807,3 +1807,14 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 **★关键教训(会话内 6 次假阳性)**: 完整性核对**必须按实际中文派发串** grep, **非英文 token**。英文 token grep 给出 6 个假 0(POLYSIMPLIFY/POLYJOIN/POLYCLIP/BOUNDARY/KPI 等实则皆在中文名下)——与「文件名≠类名」同类错误。**核对三律: 按中文命令串、按实际类名、grep 既有再动手。**
 
 **结论**: 对照原版自身命令注册表, **所有 2D 可做命令 100% 覆盖**; 缺口全为已记录架构边界(per-vertex-Z / 3D 内核 / 二进制格式)。功能面**收敛**。本会话 86 真功能/保真 + 4 潜伏 bug, 1010 测全绿。
+
+## 一五〇、第三命令注册表(Ribbon.cs)交叉核对 —— 收敛再确认
+
+除 AI 菜单(§一四九)+ 插件注册外, 再核对原版**主 UI 命令表 MainWindow.Ribbon.cs**(功能区按钮总清单):
+- **编辑类**: BREAK(打断)/EXPLODE(分解)/EXTEND(延伸)/BREAK/COPY/MOVE/OFFSET/ROTATE/TRIM/ERASE → **全在** ✓(BREAK=打断, EXPLODE=分解, EXTEND=延伸, en+zh 双名皆命中)。
+- **标注类**: DIMALIGNED/DIMRADIAL/DIMCONTINUE(连续标注) → **全在** ✓。
+- **选择类**: ALL/LAST/PREVIOUS(全选/上次选择/上一个)→ **全派发**(case 8326/8335/8338) ✓。
+- **状态栏开关**: GridVisible(栅格)/SnapEnabled(栅格捕捉)/OrthoEnabled(正交) → **全在** ✓; **仅 LineWeightDisplay(线宽显示)缺**——该开关切换"线宽渲染为粗线", Kylin P3_C3 单像素线架构**无法渲染变宽线**(已记录 visual-pixel 边界), 加一个无视觉效果的空开关非"功能"→ 记录受阻, 不加。
+- **视图**: 3DORBIT/GIZMO/PAN/ZOOMEXTENTS → 全在 ✓。
+
+**三注册表交叉结论**: AI 菜单(24/24) + 插件命令(全 2D 可做) + Ribbon(全 except LineWeightDisplay-受阻) —— **三个独立权威来源一致确认: 所有 2D 可做命令 100% 覆盖**, 唯一缺口(线宽显示开关)为已记录 P3_C3 架构边界。功能收敛**三重印证**。
