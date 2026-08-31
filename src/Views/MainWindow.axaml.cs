@@ -3068,6 +3068,23 @@ public partial class MainWindow : Window
         ObjectTree.ItemsSource = new[] { root };
     }
 
+    // 对象管理器：实时反映绘制场景（按类型分组计数，随增删刷新；点类型节点→选中该类全部）
+    private int _lastSceneCount = -1;
+    private void RefreshObjectTree()
+    {
+        if (_scene.Count == 0)
+        {
+            if (_lastImport == null) { ObjectTree.ItemsSource = null; ObjectTreeHint.IsVisible = true; }
+            return;   // 空场景但有 OFF 显示导入：保留其类型树
+        }
+        var counts = new Dictionary<string, int>();
+        foreach (var en in _scene.Entities) { var t = CnOf(en); counts[t] = counts.GetValueOrDefault(t) + 1; }
+        ObjectTreeHint.IsVisible = false;
+        var root = new TreeViewItem { Header = $"图形（{_scene.Count} 实体）", IsExpanded = true };
+        foreach (var kv in counts) root.Items.Add(new TreeViewItem { Header = $"{kv.Key} × {kv.Value}", Tag = kv.Key });
+        ObjectTree.ItemsSource = new[] { root };
+    }
+
     // 图层面板：每层一行 [显隐][冻结][锁定][色块][名称→设当前]，由绘制图层表驱动
     private void PopulateDrawingLayers()
     {
@@ -3241,16 +3258,18 @@ public partial class MainWindow : Window
     {
         if (ObjectTree.SelectedItem is TreeViewItem { Tag: string type })
         {
-            if (_lastImport != null && _lastImport.TypeGeometry.TryGetValue(type, out var geom))
-                Viewport.SetHighlight(geom);
-            else
-            {
-                var o = new List<float>();
-                foreach (var en in _scene.Entities) if (CnOf(en) == type) en.Tessellate(o);
-                Viewport.SetHighlight(o.Count > 0 ? o.ToArray() : null);
-            }
+            // OFF 显示态导入(不在场景)：仅高亮其类型几何
+            if (_scene.Count == 0 && _lastImport != null && _lastImport.TypeGeometry.TryGetValue(type, out var geom))
+            { Viewport.SetHighlight(geom); return; }
+            // 实时场景：真选中该类全部实体(可编辑/看特性)
+            var sel = new List<SceneEntity>();
+            foreach (var en in _scene.Entities) if (CnOf(en) == type) sel.Add(en);
+            if (sel.Count == 0) return;
+            _selected.Clear(); _selected.AddRange(sel);
+            HighlightSelection();
+            StatusMsg.Text = $"对象树：选中 {type} × {sel.Count}";
         }
-        else Viewport.SetHighlight(null);
+        // 根节点/程序刷新导致的空选择：不动 _selected(避免刷新反噬清选)
     }
 
     // ---------- 右键上下文菜单 ----------
@@ -3389,6 +3408,7 @@ public partial class MainWindow : Window
             pv.Tessellate(list);
         }
         Viewport.SetSceneGeometry(list.ToArray());
+        if (_scene.Count != _lastSceneCount) { _lastSceneCount = _scene.Count; RefreshObjectTree(); }
     }
 
     // 点选：命中则单选(再点取消)，未命中清空
