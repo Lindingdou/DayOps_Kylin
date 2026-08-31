@@ -749,6 +749,7 @@ public partial class MainWindow : Window
             if (cmd == "输出报告" || cmd == "资源量报告" || cmd == "块体报告") { await ExportResourceReportAsync(); return; }
             if (cmd == "属性统计" || cmd == "品位统计" || cmd == "直方图" || cmd == "统计报告") { await GradeStatsAsync(); return; }
             if (cmd == "块体着色" || cmd == "块体配色") { ColorBlocksCmd(); return; }
+            if (cmd == "块体分类着色" || cmd == "块体离散着色" || cmd == "分类着色" || cmd == "块体分类配色") { ColorBlocksCategoricalCmd(); return; }
             if (cmd == "筛选块体" || cmd == "块体筛选") { FilterBlocksCmd(); return; }
             if (cmd.StartsWith("表达式筛选块 ") || cmd.StartsWith("表达式筛选 ") || cmd.StartsWith("块体表达式 ") || cmd.StartsWith("按表达式筛选 ")) { BlockExpressionFilterCmd(cmd); return; }
             if (cmd == "约束块体" || cmd == "块体约束") { ConstrainBlocksCmd(); return; }
@@ -3805,6 +3806,21 @@ public partial class MainWindow : Window
         if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "块体着色：请先导入/生成块体"; return; }
         BeginChange(); RenderBlocks(_lastBlocks); RefreshScene();
         StatusMsg.Text = $"块体着色：{_lastBlocks.Count} 块按品位配色（蓝低→红高）";
+    }
+
+    // 块体分类离散着色(原「分类离散色」)：按不同品位(属性)值各异色, 适合类别属性(岩性/矿岩类型)
+    private void ColorBlocksCategoricalCmd()
+    {
+        if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "块体分类着色：请先导入/生成块体"; return; }
+        var catId = new System.Collections.Generic.Dictionary<double, int>();
+        foreach (var b in _lastBlocks) if (!catId.ContainsKey(b.Grade)) catId[b.Grade] = catId.Count;
+        foreach (var e in _blockCellEntities) _scene.Remove(e);
+        _blockCellEntities.Clear();
+        var cells = BlockModel.BuildCellsColored(_lastBlocks, b => HueColor(catId[b.Grade]));
+        BeginChange();
+        foreach (var c in cells) { _scene.Add(c); _blockCellEntities.Add(c); }
+        RefreshScene();
+        StatusMsg.Text = $"块体分类着色：{catId.Count} 类别(按属性值离散配色，各类异色) · {_lastBlocks.Count} 块（块体着色 恢复连续品位色）";
     }
 
     // 筛选块体：只显示品位 ≥ 平均品位 的块(矿块)

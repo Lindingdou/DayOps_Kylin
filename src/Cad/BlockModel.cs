@@ -132,12 +132,16 @@ public static class BlockModel
 
     /// <summary>块体 → 品位配色方块(RectEntity, 平面投影)。</summary>
     public static List<SceneEntity> BuildCells(IReadOnlyList<Block> blocks, double gmin, double gmax)
+        => BuildCellsColored(blocks, b => GradeColor(b.Grade, gmin, gmax));
+
+    /// <summary>块体 → 方块, 逐块取色函数(供连续/分类离散配色)。</summary>
+    public static List<SceneEntity> BuildCellsColored(IReadOnlyList<Block> blocks, Func<Block, (float r, float g, float b)> color)
     {
         var list = new List<SceneEntity>();
         foreach (var b in blocks)
         {
             double h = b.Size / 2;
-            var (cr, cg, cb) = GradeColor(b.Grade, gmin, gmax);
+            var (cr, cg, cb) = color(b);
             list.Add(new RectEntity { X0 = b.X - h, Y0 = b.Y - h, X1 = b.X + h, Y1 = b.Y + h, Cr = cr, Cg = cg, Cb = cb });
         }
         return list;
