@@ -762,43 +762,4 @@ public class DrawToolsTests
         Assert.Equal(1f, s.Entities[0].Cr, 4);          // A 层变红
         Assert.Equal(0.86f, s.Entities[2].Cr, 4);       // B 层保持默认色
     }
-
-    // ── 正交约束(ORTHO) ──
-    [Fact]
-    public void OrthoSnap_picks_horizontal_when_dx_larger()
-    {
-        // 参考(0,0), 光标(5,2): |dx|>|dy| → 水平 → (5,0)
-        var (x, y) = DrawTool.OrthoSnap(0, 0, 5, 2);
-        Assert.Equal(5, x, 6); Assert.Equal(0, y, 6);
-    }
-
-    [Fact]
-    public void OrthoSnap_picks_vertical_when_dy_larger()
-    {
-        // 参考(0,0), 光标(2,5): |dy|>|dx| → 竖直 → (0,5)
-        var (x, y) = DrawTool.OrthoSnap(0, 0, 2, 5);
-        Assert.Equal(0, x, 6); Assert.Equal(5, y, 6);
-    }
-
-    [Fact]
-    public void OrthoSnap_relative_to_base_point()
-    {
-        // 参考(10,20), 光标(13,22): dx=3>dy=2 → 水平 → (13,20)
-        var (x, y) = DrawTool.OrthoSnap(10, 20, 13, 22);
-        Assert.Equal(13, x, 6); Assert.Equal(20, y, 6);
-    }
-
-    [Fact]
-    public void Anchor_tracks_line_and_polyline_reference_point()
-    {
-        var lt = new LineTool();
-        Assert.Null(lt.Anchor);                 // 起点前无参考
-        lt.AddPoint(3, 4);
-        Assert.Equal((3.0, 4.0), lt.Anchor);    // 定起点后=起点
-
-        var pl = new PolylineTool();
-        Assert.Null(pl.Anchor);
-        pl.AddPoint(1, 1); pl.AddPoint(2, 2);
-        Assert.Equal((2.0, 2.0), pl.Anchor);    // =最后一点
-    }
 }

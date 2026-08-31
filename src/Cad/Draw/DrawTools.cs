@@ -23,13 +23,6 @@ public abstract class DrawTool
     /// <summary>追加进行中的预览（橡皮筋）：已点的点 + 当前光标。cursor 为 null 时只画已确定部分。</summary>
     public virtual void AppendPreview(List<float> o, (double x, double y)? cursor) { }
 
-    /// <summary>正交参考点（上一已确定点）；null=尚无参考(不做正交约束)。多点工具重写为其上一点。</summary>
-    public virtual (double x, double y)? Anchor => null;
-
-    /// <summary>正交约束(ORTHO)：把光标 (cx,cy) 相对参考点 (bx,by) 夹到水平或竖直(取偏移较大的轴)。纯逻辑、可单测。</summary>
-    public static (double x, double y) OrthoSnap(double bx, double by, double cx, double cy)
-        => Math.Abs(cx - bx) >= Math.Abs(cy - by) ? (cx, by) : (bx, cy);
-
     /// <summary>预览色（灰蓝）。</summary>
     protected const float PR = 0.55f, PG = 0.62f, PB = 0.70f;
 
@@ -41,7 +34,6 @@ public sealed class LineTool : DrawTool
 {
     private (double x, double y)? _p0;
     public override string Prompt => _p0 == null ? "直线：指定起点" : "直线：指定终点";
-    public override (double x, double y)? Anchor => _p0;
     public override SceneEntity? AddPoint(double x, double y)
     {
         if (_p0 == null) { _p0 = (x, y); return null; }
@@ -236,7 +228,6 @@ public sealed class PolylineTool : DrawTool
     private readonly List<(double x, double y)> _pts = new();
     public override bool IsMultiPoint => true;
     public override string Prompt => _pts.Count == 0 ? "多段线：指定起点" : $"多段线：下一点（双击结束，已 {_pts.Count} 点）";
-    public override (double x, double y)? Anchor => _pts.Count > 0 ? _pts[^1] : null;
     public override SceneEntity? AddPoint(double x, double y) { _pts.Add((x, y)); return null; }
     public override SceneEntity? Finish()
     {

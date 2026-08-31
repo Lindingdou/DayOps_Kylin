@@ -1191,10 +1191,3 @@ grade-only 数据模型无法持多属性(架构限, 记录), 但可**部分缓�
 - [x] **字体补字形**(`StrokeFont`)：加 `Ø`(直径,六边≈圆+斜杠)、`°`(度,顶部小圈)、`=`(等号,顺带补——原坐标标注 "X=" 的等号一直缺字形不显)。1 测(三字形非空)。
 
 **本会话累计补 34 真功能 + 1 并发修复, 907 测。** 六条新系统透镜(点云/报表/着色/参数/GeoDataBase 窗口/标注型别)diff; 标注型别现齐(线性·对齐/半径/直径/角度/坐标/连续 + 样式)。
-
-## 八十七、绘图辅助透镜 —— 正交模式(ORTHO)
-
-核原绘图辅助 vs Kylin。DXF 实体导入 Kylin 已全覆盖原型别(Line/LwPolyline/Polyline2D3D/Circle/Arc/Ellipse/Spline/Hatch/Text/MText/Point/Insert/XLine/Ray/Solid/Face3D)且超集(+Leader/MLine/MultiLeader/Dimension), 无缺。绘图辅助缺**正交**:
-- [x] **正交模式(ORTHO)**(`DrawTool.OrthoSnap` + `Anchor` + "正交"命令)：原经 `PitMine_SetOrthoEnabled` 走 native, 但正交夹取是平凡标准算法(取偏移较大轴→水平/竖直), 托管重实现。`DrawTool.Anchor`(上一确定点, LineTool/PolylineTool 重写)+ `OrthoSnap(bx,by,cx,cy)`。接线：FeedPoint 落点前 + RefreshScene 橡皮筋预览 均按 Anchor 夹取(单 chokepoint 各一处, 低风险)。"正交" 切换。4 测(dx大→水平/dy大→竖直/相对参考点/Anchor 跟踪 Line 起点·Polyline 末点)。**又一 native 标准算法托管重实现**(同剔面/坡顶底线/kriging)。
-
-**本会话累计补 35 真功能 + 1 并发修复, 911 测。** 七条新系统透镜(…/绘图辅助)diff; DXF 实体导入超集覆盖, 正交补齐。
