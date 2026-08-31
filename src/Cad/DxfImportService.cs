@@ -258,6 +258,16 @@ public static class DxfImportService
                     for (int i = 0; i + 1 < mc; i++) Seg(vs[i].Position.X, vs[i].Position.Y, vs[i].Position.Z, vs[i + 1].Position.X, vs[i + 1].Position.Y, vs[i + 1].Position.Z);
                     break;
                 }
+                case MultiLeader mld when mld.ContextData?.LeaderRoots != null:   // 多重引线：各引线线段
+                {
+                    foreach (var root in mld.ContextData.LeaderRoots)
+                        foreach (var line in root.Lines)
+                        {
+                            var ps = line.Points;
+                            for (int i = 0; i + 1 < ps.Count; i++) Seg(ps[i].X, ps[i].Y, ps[i].Z, ps[i + 1].X, ps[i + 1].Y, ps[i + 1].Z);
+                        }
+                    break;
+                }
 
                 default:
                     result.Warnings.Add($"跳过未支持实体：{ent.GetType().Name}");
@@ -601,6 +611,17 @@ public static class DxfImportService
                     if (pl.Points.Count >= 2) Finalize(pl, xf, col, layer);
                     break;
                 }
+                case MultiLeader mld when mld.ContextData?.LeaderRoots != null:   // 多重引线：取各引线线段折线（文字/块内容随文档另出）
+                {
+                    foreach (var root in mld.ContextData.LeaderRoots)
+                        foreach (var line in root.Lines)
+                        {
+                            var pl = new PolylineEntity();
+                            foreach (var p in line.Points) pl.Points.Add((p.X, p.Y));
+                            if (pl.Points.Count >= 2) Finalize(pl, xf, col, layer);
+                        }
+                    break;
+                }
                 default:
                     result.Warnings.Add($"跳过未支持实体：{ent.GetType().Name}");
                     break;
@@ -766,6 +787,7 @@ public static class DxfImportService
         Spline => "样条",
         Leader => "引线",
         MLine => "多线",
+        MultiLeader => "多重引线",
         _ => null
     };
 
