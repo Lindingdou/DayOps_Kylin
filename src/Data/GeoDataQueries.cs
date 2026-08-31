@@ -649,6 +649,48 @@ public static class GeoDataQueries
         return new ImportOutcome(ins, upd, skip, err);
     }
 
+    /// <summary>煤质化验 CSV 入库（忠实 CoalQualityExcelIo，CSV 替 Excel）：hole_id→borehole.id 查找，按 孔+煤层+起深 upsert。
+    /// 列: hole_id,seam_code,depth_from[,depth_to,sample_thickness,z_sample,apparent_density,ad_raw,ad_clean,std_raw,std_clean,qgr_d,qnet_ad,vdaf_raw,vdaf_clean,caking_g,plastic_y_mm,clean_coal_yield,coal_type]。</summary>
+    public static ImportOutcome ImportCoalSamples(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
+    {
+        int ins = 0, upd = 0, skip = 0, err = 0;
+        foreach (var row in rows)
+        {
+            string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
+            string hole = Get("hole_id"), seam = Get("seam_code");
+            if (hole.Length == 0 || seam.Length == 0 || !double.TryParse(Get("depth_from"), out double df)) { err++; continue; }
+            long bhId;
+            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT id FROM borehole WHERE hole_id=@h"; q.Parameters.AddWithValue("@h", hole); var o = q.ExecuteScalar(); if (o == null || o is System.DBNull) { err++; continue; } bhId = System.Convert.ToInt64(o); }
+            object Num(string k) => double.TryParse(Get(k), out double v) ? v : (object)System.DBNull.Value;
+            object Txt(string k) => Get(k) is { Length: > 0 } s ? s : (object)System.DBNull.Value;
+            bool exists;
+            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM coal_sample WHERE borehole_id=@b AND seam_code=@s AND depth_from=@d"; q.Parameters.AddWithValue("@b", bhId); q.Parameters.AddWithValue("@s", seam); q.Parameters.AddWithValue("@d", df); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
+            var cols = new[] { "depth_to", "sample_thickness", "z_sample", "apparent_density", "ad_raw", "ad_clean", "std_raw", "std_clean", "qgr_d", "qnet_ad", "vdaf_raw", "vdaf_clean", "caking_g", "plastic_y_mm", "clean_coal_yield" };
+            using var cmd = conn.CreateCommand();
+            if (exists)
+            {
+                if (!overwrite) { skip++; continue; }
+                var set = new System.Text.StringBuilder();
+                foreach (var col in cols) set.Append($"{col}=@{col},");
+                set.Append("coal_type=@coal_type");
+                cmd.CommandText = $"UPDATE coal_sample SET {set} WHERE borehole_id=@b AND seam_code=@s AND depth_from=@d";
+                upd++;
+            }
+            else
+            {
+                var names = "borehole_id, seam_code, depth_from, " + string.Join(", ", cols) + ", coal_type";
+                var vals = "@b, @s, @d, " + string.Join(", ", System.Array.ConvertAll(cols, c => "@" + c)) + ", @coal_type";
+                cmd.CommandText = $"INSERT INTO coal_sample ({names}) VALUES ({vals})";
+                ins++;
+            }
+            cmd.Parameters.AddWithValue("@b", bhId); cmd.Parameters.AddWithValue("@s", seam); cmd.Parameters.AddWithValue("@d", df);
+            foreach (var col in cols) cmd.Parameters.AddWithValue("@" + col, Num(col));
+            cmd.Parameters.AddWithValue("@coal_type", Txt("coal_type"));
+            try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
+        }
+        return new ImportOutcome(ins, upd, skip, err);
+    }
+
     public sealed record HorizonPoint(string SeamCode, bool IsRoof, double X, double Y, double Z);
 
     /// <summary>层位展点（忠实 HorizonPointBuilder）：borehole_seam_result join 孔位 → 分煤层 底板(floor_elevation)/顶板(底+采用厚度) 高程点。</summary>

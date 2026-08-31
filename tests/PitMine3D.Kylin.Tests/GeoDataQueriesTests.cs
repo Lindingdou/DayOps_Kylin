@@ -164,6 +164,29 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Import_coal_samples_from_csv_with_hole_lookup()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        string hole; string seam;
+        using (var c = db.Connection.CreateCommand()) { c.CommandText = "SELECT hole_id FROM borehole LIMIT 1"; hole = (string)c.ExecuteScalar(); }
+        using (var c = db.Connection.CreateCommand()) { c.CommandText = "SELECT code FROM coal_seam_def LIMIT 1"; seam = (string)c.ExecuteScalar(); }
+        long before = db.ScalarLong("SELECT COUNT(*) FROM coal_sample");
+        // 新样(depth_from=9999 避免撞既有) → 插入
+        var o1 = GeoDataQueries.ImportCoalSamples(db.Connection, new[]
+        { (IReadOnlyDictionary<string,string>)new Dictionary<string,string>{["hole_id"]=hole,["seam_code"]=seam,["depth_from"]="9999",["ad_raw"]="22.5",["std_raw"]="0.8",["qgr_d"]="24",["sample_thickness"]="3"} }, true);
+        Assert.True(o1.Inserted == 1, $"煤质插入: ins={o1.Inserted} err={o1.Errors}");
+        Assert.Equal(before + 1, db.ScalarLong("SELECT COUNT(*) FROM coal_sample"));
+        // 同键 overwrite → 更新
+        var o2 = GeoDataQueries.ImportCoalSamples(db.Connection, new[]
+        { (IReadOnlyDictionary<string,string>)new Dictionary<string,string>{["hole_id"]=hole,["seam_code"]=seam,["depth_from"]="9999",["ad_raw"]="30"} }, true);
+        Assert.Equal(1, o2.Updated);
+        // 不存在的孔号 → 错误(FK/查找失败)
+        var o3 = GeoDataQueries.ImportCoalSamples(db.Connection, new[]
+        { (IReadOnlyDictionary<string,string>)new Dictionary<string,string>{["hole_id"]="NOSUCHHOLE",["seam_code"]=seam,["depth_from"]="1"} }, true);
+        Assert.Equal(1, o3.Errors);
+    }
+
+    [Fact]
     public void Import_kpi_and_equipment_ledger_from_csv()
     {
         using var db = GeoDatabase.OpenSeeded();
