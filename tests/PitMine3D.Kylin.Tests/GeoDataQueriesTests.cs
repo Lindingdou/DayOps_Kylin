@@ -103,6 +103,16 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Coal_quality_by_seam_from_seed()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var rows = GeoDataQueries.GetCoalQualityBySeam(db.Connection);
+        Assert.NotEmpty(rows);
+        Assert.All(rows, r => Assert.True(r.Samples > 0));
+        Assert.All(rows, r => Assert.InRange(r.AvgAshPct, 0, 100));   // 灰分合理
+    }
+
+    [Fact]
     public void Dispatch_rules_sorted_by_score()
     {
         using var db = GeoDatabase.OpenSeeded();

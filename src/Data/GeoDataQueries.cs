@@ -388,6 +388,21 @@ public static class GeoDataQueries
         return "\"" + v.Replace("\"", "\"\"") + "\"";
     }
 
+    public sealed record SeamQualityRow(string SeamCode, int Samples, double AvgAshPct, double AvgVolatilePct, double AvgCalorificMJ);
+
+    /// <summary>分煤层煤质：各煤层 煤样数 / 平均 灰分Ad / 挥发分Vdaf / 发热量Qnet（coal_sample 按 seam_code 分组）。</summary>
+    public static List<SeamQualityRow> GetCoalQualityBySeam(SqliteConnection conn)
+    {
+        var rows = new List<SeamQualityRow>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"SELECT seam_code, COUNT(*), COALESCE(AVG(ad_raw),0), COALESCE(AVG(vdaf_raw),0), COALESCE(AVG(qnet_ad),0)
+                            FROM coal_sample WHERE seam_code IS NOT NULL AND ad_raw IS NOT NULL
+                            GROUP BY seam_code ORDER BY seam_code";
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read()) rows.Add(new SeamQualityRow(rd.GetString(0), rd.GetInt32(1), rd.GetDouble(2), rd.GetDouble(3), rd.GetDouble(4)));
+        return rows;
+    }
+
     public sealed record SeamIntersectRow(string SeamCode, int Holes, double AvgThicknessM, int PinchCount);
 
     /// <summary>见煤统计 / 煤层对比：各煤层 见煤钻孔数 / 平均采用厚度 / 尖灭孔数（borehole_seam_result 778 行）。</summary>
