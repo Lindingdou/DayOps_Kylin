@@ -1054,5 +1054,15 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 - [x] **只读 SQL 查询执行**(`ef2b754`)：`GeoDataQueries.RunSelectCsv`(跑 SELECT/PRAGMA/WITH/EXPLAIN→结果表头+行 CSV) + `IsReadOnlySql`(拒 INSERT/UPDATE/DELETE/DROP **保护数据**, 含前导注释判定) + SQL查询命令(取首空格后为语句→只读执行→导出 CSV)。9 测(表头+行/聚合/PRAGMA/**4 写入语句拒绝**/只读判定/坏SQL返错不抛)。**807 tests**。**教训**: 记录为"交互 UI 阻"的项也要拆核——SQL Console 的**查询执行核**是可做可验的只读命令, 只有 grid/持久化 console UI 属交互(记录)。同 [[unlock-blocked-insights]] #11 拆层。
 
 **★9 插件域全部深核完毕**(BlockModel/GeoDataBase/PointCloud/Road/MeshEdit/Plan/Task/Sql + 跨域 导出/编辑/注记)。本会话累计补 **9 真功能**, 807 测。
+
+## 七十三、PointCloudLib 32 命令逐条 diff + 重审 3 记录项 —— 剔面纠正
+
+**PointCloudLib 全 32 按钮逐条 diff**: 29 已覆盖(加载/管理/着色/滤波/SOR·ROR/补洞/抽稀/高程截断/坐标转换/坡度坡向/剖面/C2C/法向/统计/2.5D TIN/两期算量/圈算量/三角网着色/分割/等高线/剖面分析/工艺参数/坡度·坡向·曲率着色…)。3 记录项**逐一重审判据**(有可见标准算法? vs 仅 native 二进制解析):
+
+- [x] **三角网剔面**(`a407566`)：**又一过度记录纠正**——原「剔面(三角网): 按**离地高/坡度**丢弃三角面」曾误记 native 障碍, 实为**阈值式三角滤除**(有可见标准算法)。补 `MeshFaceCull.BySlope`(删坡度>阈值陡面=空洞桥接假地面/障碍竖壁, 坡度=面法向与竖直夹角) + `ByHeight`(删离基准高出的) + 剔面命令。5 测(坡度0/45/90精确/阈值/退化)。**812 tests**。
+- **坡顶底线提取** — **正确记录(native)**: `SlopeLinesResult` 仅解析 **native PMTB 二进制**('PMTB' magic), 无可见断棱线检测算法(栅格化+break-line 提取在内核)。
+- **分割点云 PMSG** — **正确记录(native)**: `CropResult` 仅解析 **native PMSG 二进制**('PMSG' magic), 无可见分割算法(变体聚类在内核)。
+
+**判据固化(insight #13 精化)**: **有可见标准算法描述(如"按坡度丢弃")→ 可做移植; 仅 PMxx native 二进制解析、无托管算法源 → 记录(不可验)**。剔面属前者(误记已纠), 坡顶底线/分割点云属后者(正确记录)。本会话累计补 **10 真功能**, 812 测。
 - **记录(2D 场景架构阻)**：**点/节点 Z 编辑**(统一Z/POINTSETZ/Z=aX+bY+c 平面赋Z/POLYUNIFYZ)——场景实体 2D 无 Z(PointEntity 仅 X,Y; PolylineEntity.Points 是 `(x,y)`), 无 Z 可设, 属线段渲染架构边界。
 - **latent 记录(非本轮引入)**：loft+weld(QuickModelAsync/LayerSolid)产**边流形水密但定向不一致**网格 → MeshMetrics 散度体积对定向敏感(随 z 位置变); 但实际取体积走**体素/缠绕数**路径(WindingNumberTester, 定向无关 robust), 工作流不受影响。
