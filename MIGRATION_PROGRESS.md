@@ -624,3 +624,11 @@
 - [x] **第 1 增量：量核算 TaskQuantity**(commit `5abe56b`)：忠实逐字移植 `TaskLib.Domain.TaskQuantity`(单据侧量呈现: OD1 按工序取自己那本账[穿孔控制方量/采装原位实方/运输承运吨/排土占容]、OD2 无出处写「—」不写 0、OD3 分账合计不给总数) + **最小域**(ProcessType/ProductionTask/DrillInfo, 照 §七最小 plan 法, 仅含量核算读到的 ~11 字段, 不移全 474 行 ProductionTask 的调度/状态/时序)。命令 **生产量核算**: 读任务记录 CSV → 分账合计(穿孔/采装/运输[含运输功·加权运距]/排土)。+7 单测。此层是 生产任务书/任务下达/派车单 三窗的量呈现基础, 以 CSV 喂不依赖调度引擎。
 
 **TaskLib 港路线图**: 量核算✓ → [下] 物料规格(MaterialSpec)/汇节点(SinkNode) → 分解器输入(FaceInput 从 DB working_face/seam_bench_param 构建) → TaskExploder/ShiftDecomposer 引擎 → 排产功能(生产任务编制/派工/台账)。TaskLib 死按钮(~22)在全链通后成批复活; 量核算是增量 1(基础层, 本身不直接映射死按钮, 但为其奠基 + 出独立 生产量核算 功能)。575 测试。
+
+## 三十二、TaskLib 专项增量 2-3（物料规格 + 物料流/采剥平衡）
+
+自足域逐字移植，每增量带 单测 + 独立分析功能：
+- [x] **增量 2 物料规格 MaterialSpec**(commit `e142600`)：物料目录(6 类默认规格 ρ/Ks/Kr) + 混采 MaterialMix(份额拆吨量/占容 + 煤占比) + MaterialCatalog(CodeFromText c4/rh→码) + SinkKind。命令 **物料换算**。+6 测。
+- [x] **增量 3 物料流/采剥平衡 MaterialFlow**(commit `3b77f1d`)：MaterialFlow(六元组→吨量/占容/运输功) + PeriodBalance(**采出/剥离/剥采比/排弃/内排率/总运输功/吨量加权运距**)。命令 **采剥平衡**(读物料流 CSV → 全指标报表)。+5 测。忠实: 未错配到 量驱动采剥接续(排产接续)。
+
+**TaskLib 已交付 3 增量，均自足 + 可测 + 出独立功能**(生产量核算/物料换算/采剥平衡——真露天矿生产分析)。域基础 TaskQuantity/MaterialSpec/MaterialFlow 通。**下**: SinkNode(汇容量) → 面输入 FaceInput/EquipmentGroup/ExploderConfig(富域, 无独立功能=纯基础) → TaskExploder 引擎(生产任务编制) → DB 输入 + 排产功能。586 测试。
