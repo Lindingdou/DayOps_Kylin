@@ -763,6 +763,7 @@ public partial class MainWindow : Window
             if (cmd == "OD运距矩阵" || cmd == "OD矩阵" || cmd == "运距矩阵") { await OdMatrixAsync(); return; }
             if (cmd == "新建图层") { var l = _layers.New(); PopulateDrawingLayers(); StatusMsg.Text = $"新建图层「{l.Name}」并置为当前"; return; }
             if (cmd == "图层特性管理器") { var l = _layers.CycleCurrent(); StatusMsg.Text = $"当前图层「{l.Name}」 显示{( l.Shown?"开":"关")}/{(l.Locked?"锁":"解锁")}（再点循环切换）"; return; }
+            if (cmd == "全开" || cmd == "全部打开" || cmd == "图层全开") { _layers.AllOn(); PopulateDrawingLayers(); AfterLayerStateChange(); StatusMsg.Text = "已打开全部图层"; return; }
             if (cmd == "冻结") { FreezeCurrentLayer(true); return; }
             if (cmd == "解冻") { FreezeCurrentLayer(false); return; }
             if (cmd == "锁定") { LockCurrentLayer(true); return; }
@@ -778,7 +779,7 @@ public partial class MainWindow : Window
             if (cmd == "剪切") { CutClip(); return; }
             if (cmd == "粘贴" || cmd == "原坐标粘贴") { PasteClip(); return; }
             if (cmd == "基点粘贴") { StartPasteBase(); return; }
-            if (cmd == "删除全部" || cmd == "全部删除" || cmd == "清空实体") { EraseAll(); return; }
+            if (cmd == "删除全部" || cmd == "全部删除" || cmd == "清空实体" || cmd == "清除全部" || cmd == "清除点云") { EraseAll(); return; }
             if (cmd == "创建选择集" || cmd == "选择集") { CreateSelSet(); return; }
             if (cmd == "调用选择集") { RecallSelSet(); return; }
             if (cmd == "刷新") { Regen(); return; }
