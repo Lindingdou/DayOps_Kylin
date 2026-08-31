@@ -773,6 +773,7 @@ public partial class MainWindow : Window
             if (cmd == "网格焊接" || cmd == "合并顶点" || cmd == "顶点焊接") { await MeshWeldAsync(); return; }
             if (cmd == "合并三角网" || cmd == "网格合并" || cmd == "合并网格") { await MeshMergeAsync(); return; }
             if (cmd == "补洞(三角网)" || cmd == "补洞" || cmd == "网格补洞" || cmd == "填洞") { await MeshHoleFillAsync(); return; }
+            if (cmd == "分割三角网" || cmd == "沿线分割三角网" || cmd == "网格分割" || cmd == "切分三角网") { await MeshSplitAsync(); return; }
             if (cmd == "固化成体" || cmd == "固化实体") { await SolidifyAsync(); return; }
             if (cmd == "体素格网体积" || cmd == "体素体积" || cmd == "体素算量") { await VoxelVolumeAsync(); return; }
             if (cmd == "实体转块体" || cmd == "网格转块体" || cmd == "体转块") { await EntityToBlocksAsync(); return; }
@@ -1326,6 +1327,38 @@ public partial class MainWindow : Window
         RefreshScene();
         if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
         StatusMsg.Text = $"网格边界：{loops.Count} 环 · {totPts} 点(投影 XY 作闭合折线入场景)";
+    }
+
+    // 分割三角网：选中折线定切割线(首→末点所在竖直面) + 选 OFF → 三角形-平面裁剪切两片 → 落 .left/.right.off。
+    private async Task MeshSplitAsync()
+    {
+        (double x, double y)? p0 = null, p1 = null;
+        foreach (var e in _selected)
+            if (e is PolylineEntity pl && pl.Points.Count >= 2) { p0 = pl.Points[0]; p1 = pl.Points[pl.Points.Count - 1]; break; }
+        if (p0 == null || p1 == null) { StatusMsg.Text = "分割三角网：请先选中一条折线作切割线（用其首→末点定竖直切面）"; return; }
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "分割三角网：选 OFF 网格",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } } }
+        });
+        if (files.Count == 0) return;
+        string text;
+        try { text = System.IO.File.ReadAllText(files[0].Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"分割三角网：读取失败 {ex.Message}"; return; }
+        var (verts, tris) = MeshMetrics.ParseOff(text);
+        if (tris.Count == 0) { StatusMsg.Text = "分割三角网：未解析到三角网格"; return; }
+        var (l, r) = MeshPlaneSplit.Split(verts, tris, p0.Value.x, p0.Value.y, p1.Value.x, p1.Value.y);
+        if (l.t.Count == 0 || r.t.Count == 0) { StatusMsg.Text = "分割三角网：切面未穿过网格（一侧为空），未切分"; return; }
+        string dir = System.IO.Path.GetDirectoryName(files[0].Path.LocalPath) ?? ".";
+        string lp = System.IO.Path.Combine(dir, "split_left.off"), rp = System.IO.Path.Combine(dir, "split_right.off");
+        try
+        {
+            System.IO.File.WriteAllText(lp, MeshWeld.ToOff(l.v, l.t));
+            System.IO.File.WriteAllText(rp, MeshWeld.ToOff(r.v, r.t));
+        }
+        catch (System.Exception ex) { StatusMsg.Text = $"分割三角网：写出失败 {ex.Message}"; return; }
+        StatusMsg.Text = $"分割三角网：切两片 · 左 {l.t.Count} 三角 / 右 {r.t.Count} 三角 → split_left/right.off（切线取折线首末点弦，曲折线为弦近似）";
     }
 
     // 补洞(三角网)：选 OFF → 提边界洞 → 扇形填充 → 落 .filled.off + 前后开放边报表。
