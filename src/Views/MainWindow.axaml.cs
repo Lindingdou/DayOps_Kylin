@@ -2800,10 +2800,13 @@ public partial class MainWindow : Window
         double baseX = a.Value.x, baseY = a.Value.y;
         var curve = new PolylineEntity { Cr = 0.3f, Cg = 0.85f, Cb = 0.95f, LayerName = "网格剖面" };
         foreach (var (dist, z) in prof) curve.Points.Add((baseX + dist, baseY + (z - zmin)));
-        BeginChange(); _scene.Add(curve); RefreshScene();
         var inv = System.Globalization.CultureInfo.InvariantCulture;
         double zmax = double.MinValue; foreach (var (_, z) in prof) if (z > zmax) zmax = z;
-        StatusMsg.Text = $"网格剖面：{prof.Count} 断面点 · 长 {prof[^1].dist.ToString("0.#", inv)} · 高程 {zmin.ToString("0.#", inv)}~{zmax.ToString("0.#", inv)}（剖面曲线入场景）";
+        BeginChange(); _scene.Add(curve);
+        double gLen = prof[^1].dist, gTextH = System.Math.Max((zmax - zmin) * 0.06, gLen * 0.02);   // 剖面图框架(里程/标高轴)
+        foreach (var fe in ProfilePlot.Frame(baseX, baseY, gLen, zmin, zmax, System.Math.Max(gTextH, 1e-3))) { fe.LayerName = "网格剖面"; _scene.Add(fe); }
+        RefreshScene();
+        StatusMsg.Text = $"网格剖面：{prof.Count} 断面点 · 长 {gLen.ToString("0.#", inv)} · 高程 {zmin.ToString("0.#", inv)}~{zmax.ToString("0.#", inv)}（带里程/标高轴）";
     }
 
     private async Task ProjectPointsToMeshAsync()
