@@ -363,3 +363,15 @@
 - [x] **特性(PROPERTIES) 读出**：`EntityProperties.Describe`(忠实对应原 `EntityPropertyBag` 属性模型——常规 类型/图层/颜色 + 各类型几何: 线 起点/终点/长度、圆 圆心/半径、弧 圆心/半径/起端点、矩形 角点/宽高、正多边形 圆心/半径/边数、点 坐标、多段线 闭合/顶点数、文字 位置/字高/内容/旋转)。命令 特性/属性/PROPERTIES/PR：单选实体→状态栏读出全属性。+4 单测(圆常规+几何/线长度/多段线闭合+顶点/文字内容+旋转)，313 tests。commit `efde22b`。**记录**：完整**可编辑属性面板**(原为 WPF PropertyGrid/ICustomTypeDescriptor)需 Avalonia 属性网格 UI, 属大 UI 增强, 待上机；此为纯数据读出版(脱 WPF)。
 - [x] **流程调整（用户 2026-08-30）**：不再每 tick `dotnet run` 弹窗；每 tick 仅 `dotnet test`(headless)，功能整体做完集中跑 app。见记忆 batch-app-testing。
 - [记录·受阻] **KDF(WeCAD) 导入/导出**：原 `KdfReader`(811行)/`KdfWriter`(417行) 是自足二进制编解码器(magic `wecad_bin_version_2021`, 逆向自单一样例), 依赖 System+CSMath(本项目 ACadSharp 已带), GBK 用 `CodePagesEncodingProvider` 原码已处理 → **可移植**。但**验证受阻**：无真 .kdf 样例, 逐字转写逆向格式仅靠 writer↔reader 往返对称是弱验证(原作者亦标 WeCAD 兼容"未验证")。给一个样例 .kdf 即可移植并按真实字节验证。原 .las/.blk/.osgb/.3dm/.3ds 同理需样例/大依赖。
+## 十二、Shell 完整度补全（用户 2026-08-30 纠偏：视图空间/面板/命令行 半成品）
+
+用户指出算法核虽全, 但**运行界面**(视图空间/面板/命令行)是半成品。经 AskUserQuestion 确认四方向全要, 逐一补全(每项独立提交, 477 tests 全绿, Debug+Release 双 0 错)：
+
+- [x] **Home 开始选项卡 UI 补全** commit `79baef9`：多数功能有命令处理器但未上 ribbon 按钮/未接中文命令。补 命令别名(距离测量/对齐标注/原坐标粘贴) + ribbon 按钮(修改组撤销/重做; 新增 注释/测量/剪贴板 组)。
+- [x] **右侧特性面板 + 可调分隔条** commit `3e5d15f`：右侧「特性」面板随选择实时显 `EntityProperties.Describe`(类型/图层/颜色/坐标/长度面积); 左右 GridSplitter 可拖拽调宽(此前左面板固定 220px)。经 HighlightSelection 驱动。
+- [x] **标准视图预设** commit `da4742b`：`Camera.SetOrientation`+`CadGlViewport.SetView`——俯/仰/主/后/左/右 + 西南/东南/东北/西北等轴测, 视图组下拉。(视口本已有 网格/XYZ轴/朝向罗盘/轨道·缩放·平移/2D3D/范围缩放)
+- [x] **对象管理器实时化 + 点选真选中** commit `fd8f13a`：`RefreshObjectTree` 从实时 `_scene` 按类型计数, `RefreshScene` 计数守卫增删刷新; 点类型节点→真选中该类全部实体(可编辑/看特性), 非仅高亮。图层面板经核已全交互。
+- [x] **命令行 ↑↓ 历史 + 命令框转派中文命令** commit `3b72276`：↑/↓ 回溯历史; 命令框未识别→`DispatchRibbon` 转派整条中文命令链(修复命令框中文不可达真缺口——此前中文仅能点 ribbon)。
+- [x] **命令输出/历史回显面板** commit `1ec5e36`：命令栏改 DockPanel, 上方可滚动命令日志(▸ 逐条回显, 上限100, `_suppressCmdLog` 防转派重复)。
+
+**记录·待办**：基点粘贴(需拾取基点交互)、标注样式(需标注样式系统)、图案填充/编辑填充(需 Skia)、线宽/线型、渲染模式(线框→着色/实体, 需 GL 三角填充; 当前 2D 线框场景不适用)、AI 助手面板、多视图切换窗口。**UI 观感需用户跑 `dotnet run` 目视确认**(此环境看不到 Avalonia 桌面窗口)。
