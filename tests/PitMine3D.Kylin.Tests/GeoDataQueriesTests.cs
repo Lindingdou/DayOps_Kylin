@@ -181,6 +181,29 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Import_templates_headers_and_roundtrip()
+    {
+        // 9 类模板非空 + 未知返 null
+        foreach (var k in new[] { "生产记录", "月度产能", "故障记录", "月度KPI", "设备台账", "煤质化验", "观测点", "月度计划", "见煤成果" })
+            Assert.False(string.IsNullOrEmpty(GeoDataQueries.ImportTemplate(k)), k);
+        Assert.Null(GeoDataQueries.ImportTemplate("不存在"));
+        // 模板表头含键列
+        Assert.Contains("equipment_id,date,shift", GeoDataQueries.ImportTemplate("生产记录"));
+        Assert.Contains("hole_id,seam_code,depth_from", GeoDataQueries.ImportTemplate("煤质化验"));
+        // 往返: 月度计划模板(无 FK) 示例行 → 解析 → 导入成功(1 行数据)
+        var tpl = GeoDataQueries.ImportTemplate("月度计划")!;
+        var lines = tpl.TrimEnd('\n').Split('\n');
+        var headers = lines[0].Split(',');
+        var vals = lines[1].Split(',');
+        var row = new Dictionary<string, string>();
+        for (int i = 0; i < headers.Length && i < vals.Length; i++) row[headers[i]] = vals[i];
+        using var db = GeoDatabase.OpenSeeded();
+        var o = GeoDataQueries.ImportMonthlyPlans(db.Connection, new[] { (IReadOnlyDictionary<string, string>)row }, overwrite: true);
+        Assert.Equal(0, o.Errors);                       // 模板示例行可被导入(表头/类型自洽)
+        Assert.Equal(1, o.Inserted + o.Updated);
+    }
+
+    [Fact]
     public void Import_monthly_plan_fills_empty_fields()
     {
         using var db = GeoDatabase.OpenSeeded();

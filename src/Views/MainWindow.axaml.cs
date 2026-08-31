@@ -680,6 +680,7 @@ public partial class MainWindow : Window
             if (cmd == "重做") { DoRedo(); return; }
             if (cmd == "导入") { await ImportDxfAsync(); return; }
             if (cmd == "导入点") { await ImportPointsAsync(); return; }
+            if (cmd == "导入模板" || cmd.StartsWith("导入模板 ") || cmd == "下载模板") { await ExportImportTemplateAsync(cmd); return; }
             if (cmd == "导入生产记录" || cmd == "生产记录导入" || cmd == "导入生产数据") { await ImportProductionRecordsAsync(); return; }
             if (cmd == "导入月度产能" || cmd == "月度产能导入" || cmd == "导入产能") { await ImportCsvToDbAsync("导入月度产能", "equipment_id,year,month,output_m3", rs => Data.GeoDataQueries.ImportCapacityMonthly(EnsureGeoDb()!.Connection, rs, true)); return; }
             if (cmd == "导入故障记录" || cmd == "故障记录导入" || cmd == "导入故障") { await ImportCsvToDbAsync("导入故障记录", "equipment_id,date,fault_type[,shift,duration_hours,description,is_resolved,repair_team]", rs => Data.GeoDataQueries.ImportFaultEvents(EnsureGeoDb()!.Connection, rs)); return; }
@@ -5627,6 +5628,21 @@ public partial class MainWindow : Window
         return outRows;
     }
 
+    // 导出导入模板：生成带表头+示例行的空 CSV, 供用户按格式填写后导入。可 "导入模板 <类型>"。
+    private async Task ExportImportTemplateAsync(string cmd)
+    {
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        string key = tk.Length >= 2 ? tk[1] : "生产记录";
+        string? tpl = Data.GeoDataQueries.ImportTemplate(key);
+        if (tpl == null)
+        {
+            StatusMsg.Text = "导入模板：类型须为 生产记录/月度产能/故障记录/月度KPI/设备台账/煤质化验/观测点/月度计划/见煤成果（如「导入模板 煤质化验」）";
+            return;
+        }
+        var name = await SaveCsvAsync($"导入模板 · {key}", $"template_{key}.csv", tpl);
+        if (name != null) StatusMsg.Text = $"导入模板（{key}）：表头 + 示例行已导出 → {name}（填入数据后用 导入{key} 入库）";
+    }
+
     // 通用 CSV → 库导入：文件选择 → ParseCsvRows → importFn，报 新增/更新/跳过/错误。
     private async Task ImportCsvToDbAsync(string title, string colsHint, System.Func<List<System.Collections.Generic.IReadOnlyDictionary<string, string>>, Data.GeoDataQueries.ImportOutcome> importFn)
     {
@@ -6364,7 +6380,7 @@ public partial class MainWindow : Window
         // 生产计划/投影
         "境界圈定","剥采比均衡","方案综合对比","开采程序确定","平盘宽度识别","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
-        "设备台账","生产数据","产能分析","故障分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","导入生产记录","导入月度产能","导入故障记录","导入月度KPI","导入设备台账","导入煤质","导入观测点","导入月度计划","导入见煤成果",
+        "设备台账","生产数据","产能分析","故障分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","导入生产记录","导入月度产能","导入故障记录","导入月度KPI","导入设备台账","导入煤质","导入观测点","导入月度计划","导入见煤成果","导入模板",
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","数据看板","煤种分类",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
         "产能分类对比","故障类型分布","分工序验收合格率","数据导出","达成度评价","产量预测","时序预测","编组优化","智能编组优化","导出编组","导出预测",

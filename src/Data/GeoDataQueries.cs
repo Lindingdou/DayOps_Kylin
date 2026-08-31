@@ -512,6 +512,21 @@ public static class GeoDataQueries
 
     public sealed record ImportOutcome(int Inserted, int Updated, int Skipped, int Errors);
 
+    /// <summary>导入模板（表头 + 一行示例）。key ∈ 生产记录/月度产能/故障记录/月度KPI/设备台账/煤质化验/观测点/月度计划/见煤成果。未知返 null。</summary>
+    public static string? ImportTemplate(string key) => key switch
+    {
+        "生产记录" => "equipment_id,date,shift,output_m3,work_hours,fault_hours,fault_reason\nEX-01,2025-01-15,A,8500,8,0,\n",
+        "月度产能" => "equipment_id,year,month,output_m3\nEX-01,2025,1,255000\n",
+        "故障记录" => "equipment_id,date,fault_type,shift,duration_hours,description,is_resolved,repair_team\nEX-01,2025-01-15,机械故障,A,3.5,液压管破裂,1,机修二组\n",
+        "月度KPI" => "equipment_id,year,month,plan_hours,work_hours,fault_hours,availability,actual_run_rate,utilization_rate\nEX-01,2025,1,720,610,30,0.90,0.85,0.82\n",
+        "设备台账" => "equipment_id,category,model,manufacturer,origin,status\nEX-01,Shovel,WK-35,太重,国产,在用\n",
+        "煤质化验" => "hole_id,seam_code,depth_from,depth_to,sample_thickness,z_sample,apparent_density,ad_raw,ad_clean,std_raw,std_clean,qgr_d,qnet_ad,vdaf_raw,vdaf_clean,caking_g,plastic_y_mm,clean_coal_yield,coal_type\n1610,4-1,120.5,123.7,3.2,980,1.42,22.5,12.1,0.8,0.5,24.0,20.5,38.0,40.0,45,12,72,1/3焦煤\n",
+        "观测点" => "point_id,seam_code,x,y,seam_thickness,floor_elevation\nOBS-01,4-1,4512300,37680500,3.4,975\n",
+        "月度计划" => "year,month,plan_strip_wan_m3,plan_coal_wan_t,plan_outsource_strip_wan_m3,ratio_strip_coal,avg_distance_km,avg_height_m\n2025,1,1050,120,0,5.5,3.2,180\n",
+        "见煤成果" => "hole_id,seam_code,floor_elevation,adopted_thickness,drill_seam_thickness,status\n1610,4-1,975.5,3.4,3.2,正常\n",
+        _ => null,
+    };
+
     /// <summary>生产班次记录 CSV 入库（忠实 DataImportCenter.ProductionRecordSpec）：按 设备+日期+班次 键 upsert。
     /// rows=逐行列名→值(表头大小写不敏感)。overwrite=true 覆盖既有, false 跳过。列: equipment_id,date,shift,output_m3,work_hours,fault_hours[,fault_reason]。</summary>
     public static ImportOutcome ImportProductionRecords(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
