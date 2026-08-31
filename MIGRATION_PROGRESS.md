@@ -922,3 +922,10 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 
 - [x] **实体特性编辑命令**(`9a2a8a9`)：`EntityProperties.WithEdited`(改 图层/颜色/几何：颜色#RRGGBB/半径/终点/字高/内容/旋转/边数…逐类型)有完整 `EntityPropertyEditTests` 但只有**只读**"特性"命令暴露，编辑能力未接线。补 `特性 <标签> <值>` 命令(WithEdited→`_scene.Replace`)，无参仍显示(现列可编辑标签)。**覆盖 渲染配置 逐对象色子层**(逐实体改色)。708 tests(逻辑已测，本次接线)。
 - **系统交叉核查结论**：遍历 src/Cad/*.cs + src/Cad/Draw/*.cs 全部能力类，找 MainWindow 零引用但有 `XxxTests` 的——仅 `RasterMorphology`(被 平盘宽度识别 内部用) + `BulgeArc`(被 DXF 导入内部用)两个，**均为已接线功能的内部辅助，非未接线独立能力**。→ **确认无功能滞留：每个能力类要么有命令暴露，要么被已接线功能内部调用**。
+
+## 五十六、层位求交(顶底板竖直求交算高程)——交叉核对 GeoDataBase 插件功能补缺
+
+**复审角度**：交叉核对原 `GeoDataBasePlugin` 全功能清单 vs Kylin。多数已覆盖(钻孔展绘/开孔坐标/煤质统计/层位展点/工艺架构/设备域…)，抓到 **「煤层顶底板三角网竖直求交算高程」** Kylin 全缺(顶底板求交/竖直求交/煤层高程 全无)。
+
+- [x] **层位求交 TinSampler**(`本次`)：`TinSampler.SampleZ(点集, 三角, qx, qy)` 竖直线与 TIN 求交——命中含点三角→**重心插值 Z**，落网外→null。忠实原竖直求交核(原吃内核存库 TIN，此吃层位点集+Delaunay)。命令 `层位求交 <x> <y>`：对各煤层顶/底板 HorizonPoints 建 TIN，在 (x,y) 采高→报各煤层 顶/底板高程 + 厚度 + 插标记点。+5 单测(倾斜平面 z=x+2y 精确采高/顶点边命中/网外 null/点太少 null/显式三角重心)。713 tests。
+  - **验证强度**：平面 TIN 采高解析可验(z=x+2y 在任意内点精确)，重心插值数学锁定。

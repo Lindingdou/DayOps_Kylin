@@ -770,6 +770,7 @@ public partial class MainWindow : Window
             if (cmd == "边坡设计" || cmd == "边坡参数" || cmd == "帮坡角设计") { SlopeDesignsCmd(); return; }
             if (cmd == "展绘钻孔" || cmd == "开孔坐标管理" || cmd == "钻孔展绘" || cmd == "开孔坐标") { DrawBoreholesCmd(); return; }
             if (cmd == "展绘层位数据" || cmd == "层位展点" || cmd == "展绘层位") { HorizonPointsCmd(); return; }
+            if (cmd == "层位求交" || cmd == "顶底板求交" || cmd == "煤层高程" || cmd.StartsWith("层位求交 ") || cmd.StartsWith("顶底板求交 ") || cmd.StartsWith("煤层高程 ")) { SeamIntersectCmd(cmd); return; }
             if (cmd == "机群总览" || cmd == "设备总览" || cmd == "机群") { FleetOverviewCmd(); return; }
             if (cmd == "数据看板" || cmd == "看板" || cmd == "调度态势看板" || cmd == "态势看板") { DataBoardCmd(); return; }
             if (cmd == "煤种分类" || cmd == "煤类分类" || cmd == "煤炭分类") { CoalClassificationCmd(); return; }
@@ -6429,6 +6430,38 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"展绘层位数据：{seams} 煤层 · 顶板 {roof} + 底板 {floor} = {pts.Count} 点入场景（图层 层位_煤层_顶/底板）";
     }
 
+    // 层位求交(顶底板竖直求交算高程)：对各煤层顶/底板层位点建 TIN，在 (x,y) 竖直采高 → 报各煤层顶/底板高程 + 厚度。
+    // 忠实原 GeoDataBase「煤层顶底板三角网竖直求交」核(TinSampler)，层位点替内核存库 TIN。
+    private void SeamIntersectCmd(string cmd)
+    {
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        var inv = System.Globalization.CultureInfo.InvariantCulture; var fl = System.Globalization.NumberStyles.Float;
+        if (tk.Length < 3 || !double.TryParse(tk[1], fl, inv, out double qx) || !double.TryParse(tk[2], fl, inv, out double qy))
+        { StatusMsg.Text = "层位求交：用法「层位求交 <x> <y>」——在该点竖直求交各煤层顶/底板 TIN 算高程"; return; }
+        var db = EnsureGeoDb(); if (db == null) return;
+        var pts = Data.GeoDataQueries.GetHorizonPoints(db.Connection);
+        if (pts.Count == 0) { StatusMsg.Text = "层位求交：库中无见煤成果(缺底板高程)"; return; }
+
+        var report = new List<string>();
+        foreach (var g in pts.GroupBy(p => p.SeamCode).OrderBy(g => g.Key))
+        {
+            var roofP = g.Where(p => p.IsRoof).Select(p => (p.X, p.Y, p.Z)).ToList();
+            var floorP = g.Where(p => !p.IsRoof).Select(p => (p.X, p.Y, p.Z)).ToList();
+            double? rz = TinSampler.SampleZ(roofP, qx, qy);
+            double? fz = TinSampler.SampleZ(floorP, qx, qy);
+            if (rz == null && fz == null) continue;   // 该点在此煤层层位范围外
+            string seg = $"{g.Key}: 顶{(rz.HasValue ? rz.Value.ToString("0.#", inv) : "—")} 底{(fz.HasValue ? fz.Value.ToString("0.#", inv) : "—")}";
+            if (rz.HasValue && fz.HasValue) seg += $" 厚{(rz.Value - fz.Value).ToString("0.##", inv)}";
+            report.Add(seg);
+        }
+        if (report.Count == 0) { StatusMsg.Text = $"层位求交 ({qx:0.#},{qy:0.#})：该点落在所有煤层层位 TIN 范围外（无覆盖）"; return; }
+        // 在查询点插一个标记点，便于定位
+        BeginChange();
+        _scene.Add(new PointEntity { X = qx, Y = qy, Size = 2.2, Cr = 0.95f, Cg = 0.3f, Cb = 0.2f, LayerName = "层位求交" });
+        RefreshScene();
+        StatusMsg.Text = $"层位求交 ({qx:0.#},{qy:0.#})：" + string.Join(" | ", report);
+    }
+
     // ---------- 智能助手面板（菜单引导，点选即执行命令）----------
     private void RenderAssistant(AssistantEngine.Reply r)
     {
@@ -6552,7 +6585,7 @@ public partial class MainWindow : Window
         // 生产计划/投影
         "境界圈定","剥采比均衡","方案综合对比","开采程序确定","平盘宽度识别","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
-        "设备台账","生产数据","产能分析","故障分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","导入生产记录","导入月度产能","导入故障记录","导入月度KPI","导入设备台账","导入煤质","导入观测点","导入月度计划","导入见煤成果","导入路况","导入边坡","导入模板","导出分析",
+        "设备台账","生产数据","产能分析","故障分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","层位求交","导入生产记录","导入月度产能","导入故障记录","导入月度KPI","导入设备台账","导入煤质","导入观测点","导入月度计划","导入见煤成果","导入路况","导入边坡","导入模板","导出分析",
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","数据看板","煤种分类",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
         "产能分类对比","故障类型分布","分工序验收合格率","数据导出","达成度评价","产量预测","时序预测","编组优化","智能编组优化","导出编组","导出预测",
