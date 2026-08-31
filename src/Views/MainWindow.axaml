@@ -105,6 +105,9 @@
                                             <Button Classes="ribbon-btn small" Tag="文字" Click="OnRibbonCommand">
                                                 <StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_text}" /><TextBlock Text="文字" /></StackPanel>
                                             </Button>
+                                            <Button Classes="ribbon-btn small" Tag="图案填充" Click="OnRibbonCommand" ToolTip.Tip="选闭合边界→按角度/间距生成剖面线(用户定义线填充)">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_hatch}" /><TextBlock Text="填充" /></StackPanel>
+                                            </Button>
                                         </WrapPanel>
                                     </StackPanel>
                                 </DockPanel>

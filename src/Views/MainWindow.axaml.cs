@@ -847,6 +847,17 @@ public partial class MainWindow : Window
             if (cmd == "垂足捕捉" || cmd == "垂直捕捉") { ToggleSnapExtra(ObjectSnap.Mode.Perpendicular, "垂足"); return; }
             if (cmd == "捕捉全模式" || cmd == "全部对象捕捉") { _snapExtraMask = ObjectSnap.MaskOf(ObjectSnap.Mode.Intersection, ObjectSnap.Mode.Nearest, ObjectSnap.Mode.Perpendicular); SnapToggle.IsChecked = true; StatusMsg.Text = "对象捕捉: 交点+最近+垂足 全开(端点/中点/圆心/象限恒开)"; return; }
             if (cmd == "滑动多段线") { StartSlide(); return; }
+            if (cmd == "填充十字" || cmd == "交叉填充" || cmd == "十字填充") { _hatchCross = !_hatchCross; StatusMsg.Text = $"图案填充: 十字交叉 {(_hatchCross ? "开" : "关")}（再执行 图案填充）"; return; }
+            if (cmd == "图案填充" || cmd == "填充" || cmd == "HATCH" || cmd == "剖面线"
+                || cmd.StartsWith("图案填充 ") || cmd.StartsWith("填充 ") || cmd.StartsWith("HATCH ") || cmd.StartsWith("剖面线 "))
+            {
+                double ang = 45, sp = 0;   // 缺省 45°、自动间距; 可 "图案填充 <角度> [间距]"
+                var tok = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+                if (tok.Length >= 2) double.TryParse(tok[1], out ang);
+                if (tok.Length >= 3) double.TryParse(tok[2], out sp);
+                HatchBoundaryCmd(ang, sp);
+                return;
+            }
             if (ActivateDrawTool(cmd)) return;
             StatusMsg.Text = $"命令: {cmd}";
             CommandInput.Text = cmd;
@@ -3888,6 +3899,47 @@ public partial class MainWindow : Window
     private static double Dist2((double x, double y) a, (double x, double y) b)
     { double dx = a.x - b.x, dy = a.y - b.y; return dx * dx + dy * dy; }
 
+    private bool _hatchCross;   // 图案填充: 是否十字交叉
+
+    // 图案填充(用户定义线剖面): 选中闭合边界(闭合多段线/矩形/正多边形) → 按角度+间距生成剖面线入场景。
+    // 原「填充」走引擎命名图案库(不可见, 记录); 此为标准可见的用户定义线填充, 亦本 2D 线渲染器唯一可行形式。
+    private void HatchBoundaryCmd(double angleDeg, double spacing)
+    {
+        List<(double x, double y)>? bnd = null;
+        foreach (var e in _selected)
+        {
+            if (e is PolylineEntity p && p.Closed && p.Points.Count >= 3) { bnd = new List<(double, double)>(p.Points); break; }
+            if (e is RectEntity r) { bnd = new List<(double, double)> { (r.X0, r.Y0), (r.X1, r.Y0), (r.X1, r.Y1), (r.X0, r.Y1) }; break; }
+            if (e is PolygonEntity pg && pg.Sides >= 3)
+            {
+                bnd = new List<(double, double)>();
+                for (int i = 0; i < pg.Sides; i++)
+                { double a = pg.Rotation + 2 * System.Math.PI * i / pg.Sides; bnd.Add((pg.Cx + pg.Radius * System.Math.Cos(a), pg.Cy + pg.Radius * System.Math.Sin(a))); }
+                break;
+            }
+        }
+        if (bnd == null) { StatusMsg.Text = "图案填充：请先选中一条闭合多段线/矩形/正多边形作边界"; return; }
+
+        // 间距缺省 = 边界包围盒对角线的 1/24（约 20~30 条线）
+        if (spacing <= 0)
+        {
+            double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+            foreach (var v in bnd) { if (v.x < minX) minX = v.x; if (v.x > maxX) maxX = v.x; if (v.y < minY) minY = v.y; if (v.y > maxY) maxY = v.y; }
+            double diag = System.Math.Sqrt((maxX - minX) * (maxX - minX) + (maxY - minY) * (maxY - minY));
+            spacing = System.Math.Max(diag / 24.0, 1e-6);
+        }
+        var lines = HatchPattern.Generate(bnd, angleDeg, spacing, _hatchCross);
+        if (lines.Count == 0) { StatusMsg.Text = "图案填充：未生成剖面线（边界过小或间距过大）"; return; }
+        BeginChange();
+        foreach (var (x1, y1, x2, y2) in lines)
+        {
+            var le = new LineEntity { X0 = x1, Y0 = y1, X1 = x2, Y1 = y2, Cr = 0.40f, Cg = 0.70f, Cb = 0.85f };
+            AssignLayer(le); _scene.Add(le);
+        }
+        RefreshScene();
+        StatusMsg.Text = $"图案填充：{lines.Count} 条剖面线（角度 {angleDeg:0.#}° 间距 {spacing:0.##}{(_hatchCross ? " 十字" : "")}）";
+    }
+
     // 切换某扩展捕捉模式(交点/最近/垂足)位; 顺带确保主对象捕捉开。
     private void ToggleSnapExtra(ObjectSnap.Mode m, string name)
     {
@@ -4892,8 +4944,10 @@ public partial class MainWindow : Window
     {
         // 文件/绘制/修改
         "新建","打开","保存","另存为","导入","选项",
-        "点","直线","多段线","滑动多段线","圆","矩形","正多边形","文字","圆弧",
+        "点","直线","多段线","滑动多段线","圆","矩形","正多边形","文字","圆弧","图案填充","填充十字",
         "复制","移动","旋转","偏移","修剪","延伸","打断","分解","删除","撤销","重做",
+        // 对象捕捉
+        "对象捕捉","交点捕捉","最近捕捉","垂足捕捉","捕捉全模式",
         // 图层/视图
         "新建图层","图层特性管理器","冻结","锁定","全开",
         "2D","3D","俯视","仰视","主视","后视","左视","右视","西南等轴测","东南等轴测","东北等轴测","西北等轴测","缩放","清空视图","清理标记",
