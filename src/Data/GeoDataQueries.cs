@@ -510,6 +510,49 @@ public static class GeoDataQueries
         return rows;
     }
 
+    public sealed record ImportOutcome(int Inserted, int Updated, int Skipped, int Errors);
+
+    /// <summary>生产班次记录 CSV 入库（忠实 DataImportCenter.ProductionRecordSpec）：按 设备+日期+班次 键 upsert。
+    /// rows=逐行列名→值(表头大小写不敏感)。overwrite=true 覆盖既有, false 跳过。列: equipment_id,date,shift,output_m3,work_hours,fault_hours[,fault_reason]。</summary>
+    public static ImportOutcome ImportProductionRecords(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
+    {
+        int ins = 0, upd = 0, skip = 0, err = 0;
+        foreach (var row in rows)
+        {
+            string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
+            string eq = Get("equipment_id"), date = Get("date"), shift = Get("shift");
+            if (eq.Length == 0 || date.Length == 0 || shift.Length == 0) { err++; continue; }
+            double.TryParse(Get("output_m3"), out double outp);
+            double.TryParse(Get("work_hours"), out double wh);
+            double.TryParse(Get("fault_hours"), out double fh);
+            string reason = Get("fault_reason");
+            bool exists;
+            using (var q = conn.CreateCommand())
+            {
+                q.CommandText = "SELECT COUNT(*) FROM production_record WHERE equipment_id=@e AND date=@d AND shift=@s";
+                q.Parameters.AddWithValue("@e", eq); q.Parameters.AddWithValue("@d", date); q.Parameters.AddWithValue("@s", shift);
+                exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0;
+            }
+            using var cmd = conn.CreateCommand();
+            if (exists)
+            {
+                if (!overwrite) { skip++; continue; }
+                cmd.CommandText = "UPDATE production_record SET output_m3=@o, work_hours=@w, fault_hours=@f, fault_reason=@r WHERE equipment_id=@e AND date=@d AND shift=@s";
+                upd++;
+            }
+            else
+            {
+                cmd.CommandText = "INSERT INTO production_record (equipment_id, date, shift, output_m3, work_hours, fault_hours, fault_reason) VALUES (@e,@d,@s,@o,@w,@f,@r)";
+                ins++;
+            }
+            cmd.Parameters.AddWithValue("@e", eq); cmd.Parameters.AddWithValue("@d", date); cmd.Parameters.AddWithValue("@s", shift);
+            cmd.Parameters.AddWithValue("@o", outp); cmd.Parameters.AddWithValue("@w", wh); cmd.Parameters.AddWithValue("@f", fh);
+            cmd.Parameters.AddWithValue("@r", reason.Length == 0 ? (object)System.DBNull.Value : reason);
+            try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
+        }
+        return new ImportOutcome(ins, upd, skip, err);
+    }
+
     public sealed record HorizonPoint(string SeamCode, bool IsRoof, double X, double Y, double Z);
 
     /// <summary>层位展点（忠实 HorizonPointBuilder）：borehole_seam_result join 孔位 → 分煤层 底板(floor_elevation)/顶板(底+采用厚度) 高程点。</summary>

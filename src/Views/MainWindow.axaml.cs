@@ -680,6 +680,7 @@ public partial class MainWindow : Window
             if (cmd == "重做") { DoRedo(); return; }
             if (cmd == "导入") { await ImportDxfAsync(); return; }
             if (cmd == "导入点") { await ImportPointsAsync(); return; }
+            if (cmd == "导入生产记录" || cmd == "生产记录导入" || cmd == "导入生产数据") { await ImportProductionRecordsAsync(); return; }
             if (cmd == "展绘钻孔" || cmd == "钻孔柱状图" || cmd == "导入钻孔数据" || cmd == "原始钻孔柱状图") { await ImportBoreholesAsync(); return; }
             if (cmd == "煤厚分析" || cmd == "煤层厚度分析" || cmd == "煤厚") { await CoalThicknessAsync(); return; }
             if (cmd == "等高线" || cmd == "等高线生产" || cmd == "等值线") { await ContourFromCsvAsync(); return; }
@@ -5599,6 +5600,44 @@ public partial class MainWindow : Window
     private static string CoalIndicator(string[] tk, int idx, string def)
         => tk.Length > idx && (tk[idx] is "ad" or "std" or "vdaf" or "qgr" or "qnet") ? tk[idx] : def;
 
+    // 解析 CSV：首行=表头，逗号/制表分隔，返回逐行(列名→值)。简单实现(不处理引号内逗号)。
+    private static List<System.Collections.Generic.IReadOnlyDictionary<string, string>> ParseCsvRows(string text)
+    {
+        var outRows = new List<System.Collections.Generic.IReadOnlyDictionary<string, string>>();
+        var lines = text.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
+        int hi = -1; string[]? headers = null;
+        for (int i = 0; i < lines.Length; i++)
+        {
+            var ln = lines[i].Trim();
+            if (ln.Length == 0 || ln.StartsWith("#")) continue;
+            var cells = ln.Split(new[] { ',', '\t' }, System.StringSplitOptions.None);
+            if (hi < 0) { hi = i; headers = System.Array.ConvertAll(cells, s => s.Trim().TrimStart('﻿', '*')); continue; }
+            var d = new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase);
+            for (int c = 0; c < headers!.Length && c < cells.Length; c++) d[headers[c]] = cells[c].Trim();
+            outRows.Add(d);
+        }
+        return outRows;
+    }
+
+    // 导入生产班次记录(CSV → production_record, 按 设备+年+月+班次 upsert)
+    private async Task ImportProductionRecordsAsync()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "导入生产记录：选 CSV (equipment_id,date,shift,output_m3,work_hours,fault_hours)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("生产记录 (CSV/TXT)") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (files.Count == 0) return;
+        List<System.Collections.Generic.IReadOnlyDictionary<string, string>> rows;
+        try { rows = ParseCsvRows(System.IO.File.ReadAllText(files[0].Path.LocalPath)); }
+        catch (System.Exception ex) { StatusMsg.Text = $"导入生产记录：读取失败 {ex.Message}"; return; }
+        if (rows.Count == 0) { StatusMsg.Text = "导入生产记录：无数据行(需表头 + 数据)"; return; }
+        var o = Data.GeoDataQueries.ImportProductionRecords(db.Connection, rows, overwrite: true);
+        StatusMsg.Text = $"导入生产记录：新增 {o.Inserted} · 更新 {o.Updated} · 跳过 {o.Skipped} · 错误 {o.Errors}（共 {rows.Count} 行）";
+    }
+
     // 通用 CSV 保存：SaveFilePicker → WriteAllText；成功返回文件名，取消/失败返回 null(状态自报)。
     private async Task<string?> SaveCsvAsync(string title, string suggestedName, string content)
     {
@@ -6299,7 +6338,7 @@ public partial class MainWindow : Window
         // 生产计划/投影
         "境界圈定","剥采比均衡","方案综合对比","开采程序确定","平盘宽度识别","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
-        "设备台账","生产数据","产能分析","故障分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据",
+        "设备台账","生产数据","产能分析","故障分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","导入生产记录",
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","数据看板","煤种分类",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
         "产能分类对比","故障类型分布","分工序验收合格率","数据导出","达成度评价","产量预测","时序预测","编组优化","智能编组优化","导出编组","导出预测",

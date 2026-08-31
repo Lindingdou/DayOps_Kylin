@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using PitMine3D.Kylin.Data;
 using Xunit;
@@ -133,6 +134,33 @@ public class GeoDataQueriesTests
         for (int i = 1; i < rows.Count; i++) Assert.True(rows[i - 1].TotalOutputM3 >= rows[i].TotalOutputM3);   // 按产量降序
         Assert.Equal(100.0, rows.Sum(r => r.SharePct), 3);                                                      // 占比之和=100
         Assert.All(rows, r => Assert.True(r.Units > 0));
+    }
+
+    [Fact]
+    public void Import_production_records_insert_update_skip()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        long before = db.ScalarLong("SELECT COUNT(*) FROM production_record");
+        string eq;
+        using (var c = db.Connection.CreateCommand()) { c.CommandText = "SELECT equipment_id FROM equipment LIMIT 1"; eq = (string)c.ExecuteScalar(); }  // 既有设备(过 FK)
+        IReadOnlyDictionary<string, string> Row(string date, string sh, double o)
+            => new Dictionary<string, string> { ["equipment_id"] = eq, ["date"] = date, ["shift"] = sh, ["output_m3"] = o.ToString(), ["work_hours"] = "8", ["fault_hours"] = "0" };
+        // 新键(未来日期) → 插入
+        var o1 = GeoDataQueries.ImportProductionRecords(db.Connection, new[] { Row("2099-01-01", "A", 1234) }, overwrite: true);
+        Assert.Equal(1, o1.Inserted);
+        Assert.Equal(before + 1, db.ScalarLong("SELECT COUNT(*) FROM production_record"));
+        double OutOf() { using var c = db.Connection.CreateCommand(); c.CommandText = $"SELECT output_m3 FROM production_record WHERE equipment_id='{eq}' AND date='2099-01-01' AND shift='A'"; return System.Convert.ToDouble(c.ExecuteScalar()); }
+        Assert.Equal(1234.0, OutOf(), 3);
+        // 同键 overwrite=true → 更新
+        var o2 = GeoDataQueries.ImportProductionRecords(db.Connection, new[] { Row("2099-01-01", "A", 5678) }, overwrite: true);
+        Assert.Equal(1, o2.Updated); Assert.Equal(0, o2.Inserted);
+        Assert.Equal(5678.0, OutOf(), 3);          // 值已覆盖
+        // 同键 overwrite=false → 跳过
+        var o3 = GeoDataQueries.ImportProductionRecords(db.Connection, new[] { Row("2099-01-01", "A", 999) }, overwrite: false);
+        Assert.Equal(1, o3.Skipped);
+        // 坏行(缺 date) → 错误
+        var o4 = GeoDataQueries.ImportProductionRecords(db.Connection, new[] { (IReadOnlyDictionary<string, string>)new Dictionary<string, string> { ["equipment_id"] = "X", ["shift"] = "A" } }, overwrite: true);
+        Assert.Equal(1, o4.Errors);
     }
 
     [Fact]
