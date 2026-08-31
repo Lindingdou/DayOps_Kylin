@@ -5634,11 +5634,20 @@ public partial class MainWindow : Window
             "班次产量" => Wrap(Data.GeoDataQueries.GetProductionByShift(c), "production_by_shift"),
             "月度计划" => Wrap(Data.GeoDataQueries.GetMonthlyPlans(c), "monthly_plans"),
             "作业面" => Wrap(Data.GeoDataQueries.GetWorkingFaces(c), "working_faces"),
+            "分工序验收" => Wrap(Data.GeoDataQueries.GetAcceptanceByPhase(c), "acceptance_by_phase"),
+            "边坡设计" => Wrap(Data.GeoDataQueries.GetSlopeDesigns(c), "slope_designs"),
+            "路况" => Wrap(Data.GeoDataQueries.GetHaulRoads(c), "haul_roads"),
+            "煤种分类" => Wrap(Data.GeoDataQueries.GetCoalClassification(c), "coal_classification"),
+            "分级规则" => Wrap(Data.GeoDataQueries.GetCoalGradeRules(c), "coal_grade_rules"),
+            "台阶参数" => Wrap(Data.GeoDataQueries.GetSeamBenchParams(c), "seam_bench_params"),
+            "煤层" => Wrap(Data.GeoDataQueries.GetCoalSeams(c), "coal_seams"),
+            "矿区位置" => Wrap(Data.GeoDataQueries.GetMineLocations(c), "mine_locations"),
+            "层位点" => Wrap(Data.GeoDataQueries.GetHorizonPoints(c), "horizon_points"),
             _ => null,
         };
         if (R == null)
         {
-            StatusMsg.Text = "导出分析：类型须为 产能排名/故障排名/见煤统计/分层煤质/年度产量/KPI趋势/产能分类/故障类型/班次产量/月度计划/作业面（如「导出分析 产能排名」）";
+            StatusMsg.Text = "导出分析：类型须为 产能排名/故障排名/见煤统计/分层煤质/年度产量/KPI趋势/产能分类/故障类型/班次产量/月度计划/作业面/分工序验收/边坡设计/路况/煤种分类/分级规则/台阶参数/煤层/矿区位置/层位点（如「导出分析 产能排名」）";
             return;
         }
         var fname = await SaveCsvAsync($"导出分析 · {key}", R.Value.name + ".csv", R.Value.csv);
