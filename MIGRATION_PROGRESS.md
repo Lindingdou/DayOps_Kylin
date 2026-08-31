@@ -1113,4 +1113,14 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 
 **格式全景闭环**(本会话累计): **导入** DWG/DXF/OFF/3DMine(TDM)/MapGIS(WL/WT/WP)/KDF/**LAS/GeoTIFF(全压缩)/PMB/BLK**/pmx/CSV; **导出** OBJ/PLY/STL/DXF/DWG/CSV/OFF。**.octree = 点云八叉树缓存(原 LAS→.bin→.octree mmap 快路径), 非导入格式**(直接导 LAS)。**仍记录**: OSGB(native+3D) · PMxx(native 计算结果) · JPEG 渐进(rare) · office(.xls/.docx=表/文档非几何)。
 
-**本会话累计补 21 真功能, 864 测。格式贬(公开规范/可见源+样本/参照)彻底榨尽**。剩余真边界: native 计算结果(PMxx)/native capability(OSGB)/鲁棒(mesh布尔)/不可验引擎(TaskLib/PlanLib)/架构(面填充·3D·per-entity Z·多属性块)。
+**本会话累计补 21 真功能, 864 测。格式贬(公开规范/可见源+样本/参照)彻底榨尽**。
+
+## 七十八、重审 native 计算记录项 —— 标准算法为 native 特性托管重实现
+
+**insight #13 曾把 坡顶底线 PMTB/分割点云 PMSG 记为 TRUE blocked(native/变体敏感)。剔面纠正后再审: 若特性有标准算法, 可托管重实现(同 kriging/contour/剔面)**——即使原走 native:
+
+- [x] **坡顶底线提取**(`c49f70e`)：原 native PMTB(栅格化断棱线)。补标准坡度断棱线检测 `CrestToe.Extract`(三角分平/陡, 平-陡相邻三角公共边=断棱线; 平三角更高→坡顶线, 更低→坡底线) + 命令。4 测(合成台阶坡: crest 在顶/toe 在底)。
+- [x] **点云欧氏聚类分割**(`a0b10eb`)：原 native PMSG(变体敏感)。补标准默认变体 Euclidean 聚类 `PointCluster.Euclidean`(距离<radius 并查集连通, 网格哈希) + 分割点云命令(按簇 hue 着色)。5 测(分离簇/radius控连通/minSize滤/大簇id0)。**873 tests**。
+- **判据(insight #13 再精化)**: **特性有标准公开算法(crest/toe 坡度断棱、Euclidean 聚类)→ 托管重实现可做可验(合成不变量)**, 即使原走 native、结果与 native 具体变体可能不同(记录此差异)。**仍真 blocked**: mesh 布尔/刀切(**鲁棒**——非鲁棒实现在真实退化数据出错不可验) · OSGB(**3D 纹理显示**——2D 线段场景无法显示纹理 3D 瓦片) · TaskLib/PlanLib 引擎(**不可验**——无原输出比对)。
+
+**本会话累计补 23 真功能, 873 测。过度记录纠正累计 12 处**(drape/mesh光顺交线/剔面/虚拟钻孔/LAS/GeoTIFF/JPEG/PMB/BLK/**坡顶底线/点云分割**)。剩余真边界: 鲁棒(mesh布尔)/3D纹理显示(OSGB)/不可验引擎(TaskLib/PlanLib)/架构(面填充·3D·per-entity Z·多属性块)/rare(JPEG渐进)。
