@@ -527,6 +527,11 @@ public sealed class PolygonEntity : SceneEntity
         double dx = nx - Cx, dy = ny - Cy;   // 首顶点 → 定半径+朝向
         return Colored(new PolygonEntity { Cx = Cx, Cy = Cy, Radius = Math.Sqrt(dx * dx + dy * dy), Sides = Sides, Rotation = Math.Atan2(dy, dx) });
     }
+    public override SceneEntity? Offset(double px, double py)   // 同心多边形：过点偏移(新半径=心到点距，保边数/朝向)
+    {
+        double r = Math.Sqrt((px - Cx) * (px - Cx) + (py - Cy) * (py - Cy));
+        return r < 1e-6 ? null : Colored(new PolygonEntity { Cx = Cx, Cy = Cy, Radius = r, Sides = Sides, Rotation = Rotation });
+    }
 }
 
 /// <summary>圆弧几何辅助（三点外接圆），供 ArcEntity/ArcTool，可单测。</summary>

@@ -457,6 +457,18 @@ public class DrawToolsTests
     }
 
     [Fact]
+    public void PolygonEntity_offset_concentric_keeps_sides_rotation()
+    {
+        var poly = new PolygonEntity { Cx = 0, Cy = 0, Radius = 5, Sides = 6, Rotation = 0.3 };
+        var off = (PolygonEntity)poly.Offset(0, 10)!;        // 过 (0,10) → 新半径 10
+        Assert.Equal(10, off.Radius, 4);
+        Assert.Equal(6, off.Sides);                          // 边数不变
+        Assert.Equal(0.3, off.Rotation, 6);                  // 朝向不变
+        Assert.Equal(0, off.Cx, 6); Assert.Equal(0, off.Cy, 6);   // 同心
+        Assert.Null(poly.Offset(0, 0));                      // 心上一点 → 半径0, 无效
+    }
+
+    [Fact]
     public void CircleEntity_break_coincident_points_returns_null()
     {
         var circle = new CircleEntity { Cx = 0, Cy = 0, Radius = 1 };
