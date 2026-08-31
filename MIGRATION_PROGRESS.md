@@ -410,3 +410,6 @@
 - 方案综合对比(ProgramComparer)已于早前会话移植(§十一)。
 
 **记录**：确定开采程序(BoxcutAdvanceOption 打分, 需 BoxcutWeights.Recompute)可续；中长远/短期/月度 计划编制·刀量切割·进度出图 仍需 TaskLib 排产/内核几何。**采区划分参数(采区数/方位/产能/内排)本环境取默认, 无参数对话框**；剥采比场煤岩判别以品位阈值替代原属性分类器(块体仅品位)。
+- [x] **确定境界·经济最优坑深** commit `debf7b2`：`ResourceProfileLite.FromBlocks`(块体→逐 Z 层煤/岩剖面) + `SectionSolver.SolveDepth`(**逐字**, 从顶向下逐层累加净值最大定坑底, 等价境界剥采比法 n经=(d−a)/b)。命令 确定境界/境界优化/最优坑深/经济境界(从原凸包别名重指到此)。+5 单测。
+
+**§七 求解核抽尽小结**：优化开采设计(境界圈定 凸包/确定境界 经济坑深/采区划分/开采程序确定 AdvancePlanner/剥采比均衡 VpBalance) + 中长远(规划计算/派生方案/方案对比 ProgramComparer) 均落地。**余项受阻**：刀量切割(BlockModel 内核+对话框)、最终并段(BenchTemplateBuilder 300+行多调参, 内核邻接)、中长远·短期·月度 计划编制正流程·进度出图·动态模拟(TaskLib 排产/甘特/域实体)。
