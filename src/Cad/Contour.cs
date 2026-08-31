@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace PitMine3D.Kylin.Cad;
@@ -35,6 +36,52 @@ public static class Contour
     /// 如间距 5 → 100/105/110); 否则 autoCount 等分(zmin+step·k, k=1..autoCount)。
     /// maxLevels 防间距过小导致层数爆炸。纯逻辑、可单测。
     /// </summary>
+    /// <summary>
+    /// 把 Marching Squares 的散段连成折线(共端点串联)——供等值线输出为可选/可编辑/可平滑的多段线(非散段)。
+    /// 端点按 tol 量化匹配; 闭合环首尾相接。纯逻辑、可单测。
+    /// </summary>
+    public static List<List<(double x, double y)>> LinkSegments(
+        IReadOnlyList<(double x0, double y0, double x1, double y1)> segs, double tol = 1e-6)
+    {
+        var result = new List<List<(double x, double y)>>();
+        if (segs == null || segs.Count == 0) return result;
+        if (tol <= 0) tol = 1e-9;
+        (long, long) Key(double x, double y) => ((long)Math.Round(x / tol), (long)Math.Round(y / tol));
+        bool Near((double x, double y) a, double bx, double by) => Math.Abs(a.x - bx) <= tol * 1.5 && Math.Abs(a.y - by) <= tol * 1.5;
+        var adj = new Dictionary<(long, long), List<int>>();
+        void AddK((long, long) k, int i) { if (!adj.TryGetValue(k, out var l)) { l = new List<int>(); adj[k] = l; } l.Add(i); }
+        for (int i = 0; i < segs.Count; i++) { AddK(Key(segs[i].x0, segs[i].y0), i); AddK(Key(segs[i].x1, segs[i].y1), i); }
+
+        var used = new bool[segs.Count];
+        void Extend(LinkedList<(double x, double y)> poly, bool atEnd)
+        {
+            while (true)
+            {
+                var pt = atEnd ? poly.Last.Value : poly.First.Value;
+                if (!adj.TryGetValue(Key(pt.x, pt.y), out var cand)) break;
+                int next = -1;
+                foreach (var i in cand) if (!used[i]) { next = i; break; }
+                if (next < 0) break;
+                used[next] = true;
+                var s = segs[next];
+                (double x, double y) other = Near(pt, s.x0, s.y0) ? (s.x1, s.y1) : (s.x0, s.y0);
+                if (atEnd) poly.AddLast(other); else poly.AddFirst(other);
+            }
+        }
+        for (int start = 0; start < segs.Count; start++)
+        {
+            if (used[start]) continue;
+            used[start] = true;
+            var s = segs[start];
+            var poly = new LinkedList<(double x, double y)>();
+            poly.AddLast((s.x0, s.y0)); poly.AddLast((s.x1, s.y1));
+            Extend(poly, atEnd: true);
+            Extend(poly, atEnd: false);
+            result.Add(new List<(double x, double y)>(poly));
+        }
+        return result;
+    }
+
     public static List<double> Levels(double zmin, double zmax, double interval, int autoCount = 10, int maxLevels = 500)
     {
         var res = new List<double>();

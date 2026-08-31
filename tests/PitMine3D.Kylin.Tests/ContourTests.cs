@@ -8,6 +8,36 @@ namespace PitMine3D.Kylin.Tests;
 public class ContourTests
 {
     [Fact]
+    public void LinkSegments_chains_shared_endpoints_into_polyline()
+    {
+        // 三段首尾相接: (0,0)-(1,0)-(2,0)-(3,0) → 一条 4 点折线
+        var segs = new List<(double, double, double, double)>
+        {
+            (1, 0, 2, 0), (0, 0, 1, 0), (2, 0, 3, 0),   // 乱序
+        };
+        var polys = Contour.LinkSegments(segs, 1e-6);
+        Assert.Single(polys);
+        Assert.Equal(4, polys[0].Count);                 // 4 顶点连成一条
+        Assert.Equal(0, polys[0][0].x, 6);
+        Assert.Equal(3, polys[0][^1].x, 6);
+    }
+
+    [Fact]
+    public void LinkSegments_separate_chains_stay_separate()
+    {
+        var segs = new List<(double, double, double, double)>
+        {
+            (0, 0, 1, 0), (1, 0, 2, 0),      // 链 A
+            (5, 5, 6, 5),                    // 链 B(分离)
+        };
+        var polys = Contour.LinkSegments(segs, 1e-6);
+        Assert.Equal(2, polys.Count);
+    }
+}
+
+public class ContourTests_Legacy
+{
+    [Fact]
     public void Tilted_plane_gives_vertical_contour()
     {
         // z = x（grid[ix,iy]=ix），level=1.5 → 等值线是过 x=1.5 的竖直段

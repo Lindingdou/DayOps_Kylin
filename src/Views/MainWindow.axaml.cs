@@ -1553,15 +1553,19 @@ public partial class MainWindow : Window
         {
             float t = (float)((L - zmin) / (zmax - zmin));
             var segs = Contour.MarchingSquares(grid, gx0, gy0, gdx, gdy, L);
-            foreach (var s in segs)
+            var polys = Contour.LinkSegments(segs, System.Math.Max(gdx, gdy) * 1e-3);   // 散段连成折线(可选/可编辑/可平滑)
+            foreach (var poly in polys)
             {
-                _scene.Add(new LineEntity { X0 = s.x0, Y0 = s.y0, X1 = s.x1, Y1 = s.y1, Cr = t, Cg = 0.45f, Cb = 1 - t });
-                segCount++;
+                if (poly.Count < 2) continue;
+                var pl = new PolylineEntity { Cr = t, Cg = 0.45f, Cb = 1 - t };
+                foreach (var p in poly) pl.Points.Add((p.x, p.y));
+                _scene.Add(pl);
+                segCount += poly.Count - 1;
             }
-            if (segs.Count > 0)   // 每层一个高程数字标注(取中间那段)
+            if (polys.Count > 0 && polys[0].Count > 0)   // 每层一个高程数字标注(首条折线中点)
             {
-                var mid = segs[segs.Count / 2];
-                _scene.Add(new TextEntity { X = mid.x0, Y = mid.y0, Height = labelH, Text = L.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture), Cr = t, Cg = 0.45f, Cb = 1 - t });
+                var lp = polys[0]; var mid = lp[lp.Count / 2];
+                _scene.Add(new TextEntity { X = mid.x, Y = mid.y, Height = labelH, Text = L.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture), Cr = t, Cg = 0.45f, Cb = 1 - t });
             }
         }
         RefreshScene();
