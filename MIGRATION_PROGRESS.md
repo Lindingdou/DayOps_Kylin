@@ -1064,5 +1064,15 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 - **分割点云 PMSG** — **正确记录(native)**: `CropResult` 仅解析 **native PMSG 二进制**('PMSG' magic), 无可见分割算法(变体聚类在内核)。
 
 **判据固化(insight #13 精化)**: **有可见标准算法描述(如"按坡度丢弃")→ 可做移植; 仅 PMxx native 二进制解析、无托管算法源 → 记录(不可验)**。剔面属前者(误记已纠), 坡顶底线/分割点云属后者(正确记录)。本会话累计补 **10 真功能**, 812 测。
+
+## 七十四、GeoDataBase/RoadLib/PlanLib 全按钮 diff —— 虚拟钻孔纠正(第4处过度记录)
+
+**剩余插件全按钮 diff**: GeoDataBase(24)覆盖除**虚拟钻孔**; RoadLib(19)覆盖除交互持久化(快照/演化/增删边); PlanLib(24)覆盖(剥采比均衡/境界/程序/对比/采区/规划计算/采场识别)除大规划子系统(中长远/短期排产/派生/采排配对/量驱动接续)。
+
+- [x] **虚拟钻孔**(`b914dce`)：**第 4 处过度记录纠正**(前: drape/mesh光顺交线/剔面)——原曾误记"缺块模型/地质基建", 实则核心是**竖直求交煤层顶/底板 TIN**(VirtualDrillEngine.Drill/TinZSampler = 我的 TinSampler), 只需煤层面(层位展点可建)已具备。补 `VirtualBorehole.Drill`(逐煤层顶/底板竖直求交, 两者命中才见煤, 自顶向下排) + `SeamsFromHorizonPoints`(层位点配对) + 虚拟钻孔命令。6 测(双层精确高程/域外不见/顶底都定义才见煤/配对/CSV/空)。**818 tests**。
+- **刀量切割** — **正确记录**: PlanLib LongTerm 排产引擎(BM1/BM2/BM10 块模型 + LongTermScheduler), 大子系统。
+- **采矿模型/属性赋值** — 记录: 采矿模型=4 模式 3D 体构建(kernel 面 + 复杂); 块属性赋值=数据模型(Kylin 块仅品位)。
+
+**教训**: 即使"comprehensive"域(GeoDataBase 曾判全覆盖)也可能藏过度记录——**凡描述含"求交/采样/竖直/按X"的 native 记录项, 必回原实现核可见算法**。虚拟钻孔证明 4 次: native 标签 ≠ 不可做。本会话累计补 **11 真功能**, 818 测。
 - **记录(2D 场景架构阻)**：**点/节点 Z 编辑**(统一Z/POINTSETZ/Z=aX+bY+c 平面赋Z/POLYUNIFYZ)——场景实体 2D 无 Z(PointEntity 仅 X,Y; PolylineEntity.Points 是 `(x,y)`), 无 Z 可设, 属线段渲染架构边界。
 - **latent 记录(非本轮引入)**：loft+weld(QuickModelAsync/LayerSolid)产**边流形水密但定向不一致**网格 → MeshMetrics 散度体积对定向敏感(随 z 位置变); 但实际取体积走**体素/缠绕数**路径(WindingNumberTester, 定向无关 robust), 工作流不受影响。
