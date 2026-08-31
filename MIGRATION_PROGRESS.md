@@ -1303,3 +1303,11 @@ pc_quality「点数/密度/包围盒/高程分布/**强度分类**」的强度/�
 - 与 §九十八 文字对齐、§九十七 线型 同属 CAD 属性/文字保真透镜。
 
 **本会话累计补 47 真功能 + 1 并发修复 + 1 潜伏字形 bug 修 + 1 latent 攻克 + GWN 硬化, 946 测。**
+
+## 一〇〇、线型导入保真 —— DXF 虚线线型解析(ByLayer)
+
+§九十七 线型只做了绘制侧(记录导入为扩展)。现补导入保真:
+- [x] **DXF 线型解析**(`DxfImportService.ResolveDash` + Emit 顶置 emitDash → Finalize 赋 `se.Dash`): 读 ACadSharp `ent.LineType?.Name`, **ByLayer 时取 `ent.Layer?.LineType?.Name`**(显式实体线型优先); 映射到 `DashPattern.ByName`。导入的虚线/点划线(显式或 ByLayer)正确显虚线。3 测(显式优先/ByLayer 解析图层线型/未知名实线)。
+- 至此线型闭环: 绘制(§九十七 命令+_currentDash)+ 导入(本节 ByLayer 解析)。自定义 LTYPE 精确 dash 长(vs 按名近似)记录为扩展。
+
+**本会话累计补 48 真功能 + 1 并发修复 + 1 潜伏字形 bug 修 + 1 latent 攻克 + GWN 硬化, 949 测。** CAD 属性/文字保真透镜产出: 线型(绘制+导入)/文字对齐(含导入)/多行 MText。

@@ -388,10 +388,11 @@ public static class DxfImportService
     {
         var result = into ?? new EntityImportResult();
         double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        double[]? emitDash = null;   // 当前实体线型(Emit 顶置, Finalize 读)
 
         void Finalize(SceneEntity se, Affine2? xf, (float r, float g, float b) col, string layer)
         {
-            se.Cr = col.r; se.Cg = col.g; se.Cb = col.b;
+            se.Cr = col.r; se.Cg = col.g; se.Cb = col.b; se.Dash = emitDash;
             if (xf != null) se = se.Apply(xf.Value);   // 变换保留颜色(Colored)，但不拷层名
             se.LayerName = layer;
             result.Entities.Add(se);
@@ -454,6 +455,7 @@ public static class DxfImportService
 
         void Emit(Entity ent, Affine2? xf, (float r, float g, float b) col, string layer, int depth)
         {
+            emitDash = ResolveDash(ent.LineType?.Name, ent.Layer?.LineType?.Name);   // 线型(ByLayer 解析)
             switch (ent)
             {
                 case Line ln:
@@ -788,6 +790,14 @@ public static class DxfImportService
             sb.Append(ch);
         }
         return sb.ToString();
+    }
+
+    /// <summary>解析实体线型 → 虚线样式：ByLayer(或空)时取图层线型名, 否则取实体线型名, 映射到 <see cref="Draw.DashPattern"/>。</summary>
+    internal static double[]? ResolveDash(string? entLineType, string? layerLineType)
+    {
+        bool byLayer = string.IsNullOrEmpty(entLineType) || entLineType == "ByLayer" || entLineType == "BYLAYER" || entLineType == "Bylayer";
+        string name = byLayer ? (layerLineType ?? "") : entLineType!;
+        return PitMine3D.Kylin.Cad.Draw.DashPattern.ByName(name);
     }
 
     /// <summary>MText 按段落换行 \P 拆成多行, 各行剥格式码。空/无 \P → 单行。供多行文字导入逐行渲染。</summary>
