@@ -785,6 +785,15 @@ public class DrawToolsTests
     }
 
     [Fact]
+    public void Text_width_factor_stretches_horizontally()
+    {
+        double MaxX(TextEntity t) { var o = new List<float>(); t.Tessellate(o); double m = double.MinValue; for (int i = 0; i + 1 < o.Count; i += 6) if (o[i] > m) m = o[i]; return m; }
+        var normal = new TextEntity { X = 0, Y = 0, Height = 1, Text = "AB", WidthFactor = 1 };
+        var wide = new TextEntity { X = 0, Y = 0, Height = 1, Text = "AB", WidthFactor = 2 };
+        Assert.Equal(MaxX(normal) * 2, MaxX(wide), 4);   // 字宽系数2 → 水平尺寸加倍
+    }
+
+    [Fact]
     public void Text_valign_shifts_down_and_default_is_backward_compatible()
     {
         var baseline = new TextEntity { X = 0, Y = 0, Height = 1, Text = "A", VAlign = 0 };
