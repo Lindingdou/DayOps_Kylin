@@ -970,3 +970,10 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 - **★drape(点落到面上/线落到面上)早已实现**(`MeshProjector.Drape`)：选 OFF 网格 + 点/线 CSV → 逐点采面高程 z → 导 .draped.csv。**我之前记"2D 场景阻 drape"是错的**——z-**计算**类(算 z 导出 CSV/OFF, 不存 2D 场景)完全可做, 只有 3D **可视化**受 2D 场景阻。同理 **OFF 写出**(固化成体落 .solid.off)、**两期填挖方**(两期算量)均早已实现。
 - [x] **两网交线**(`本次`)：`MeshIntersect.IntersectionSegments`(逐三角对 tri-tri 相交：各三角与对方平面求弦→两弦同在平面交线取区间重叠段, AABB 预筛)。**标准几何非变体敏感**(insight #5: 原 MeshEditLib 虽声明内核模块, 但 tri-tri 相交是标准可托管几何, 同 ObjectSnap)。命令 网格交线：选 2 OFF → 交段 2D 投影入场景 + 3D 交点导 .intersect.csv。典型：现状面∩煤层顶/底板 = 煤层露头线。+3 单测(两交叉面→交线 y=5,z=0 解析可验/分离网格无交/共面跳过不崩)。729 tests。
 - **修正判据**：**「file-based 网格/点 (v,t)/z 计算 + 导出 CSV/OFF」→ 可做**(Kylin 有 ReadConcatOff/MeshProjector/OFF 写出基建, drape/交线/体积/焊接/固化/两期算量全走此路)；**只有「3D 场景可视化」与「场景内选中网格编辑」→ 受 2D 场景阻**。→ 之前部分"2D 场景阻"记录需按此修正(z 计算可做, 仅可视化阻)。
+
+## 六十一、泛克里金 UK(带趋势) —— MeshEdit「SK/OK/UK」补 UK
+
+**复审**：估值方法原提供 SK/OK/UK 克里金, Kylin 有 OK+IDW+NN/MA。**UK(泛克里金)是 distinct 能力**(显式建模趋势面, OK 处理不了区域趋势), 值得补(SK 需已知均值罕用, 从简)。
+
+- [x] **泛克里金 UK**(`本次`)：`OrdinaryKriging.EstimateUniversalAt` + `KrigeUniversal` —— 一次趋势基 f=[1,x,y], 系统 (n+3) 阶(OK 的 (n+1) 加 x,y 无偏约束)。邻点<3 回落 OK。命令 泛克里金/UK估值(EstimateGradeAsync universal 分支, BuildKrigingGrid 逐格 EstimateUniversalAt)。
+  - **★强验证**：+3 单测——**UK 对线性趋势 V=10+2x+3y 处处精确**(非控制点 (23,17)→107 解析精确, OK 做不到)/控制点精确/远点 null + <3 点回落。**"趋势可复现"不变量强锁 UK 正确性**。732 tests。

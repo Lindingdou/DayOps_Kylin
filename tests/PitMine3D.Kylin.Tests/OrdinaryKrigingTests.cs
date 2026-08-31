@@ -82,4 +82,45 @@ public class OrdinaryKrigingTests
     {
         Assert.Null(OrdinaryKriging.EstimateAt(new List<CP>(), 0, 0, 0));
     }
+
+    // ── 泛克里金 UK（带线性趋势）──
+    private static List<CP> LinearTrendGrid()
+    {
+        // 6×6 网格, V = 10 + 2x + 3y（严格线性趋势面）
+        var pts = new List<CP>();
+        for (int i = 0; i <= 5; i++)
+            for (int j = 0; j <= 5; j++)
+                pts.Add(new CP(i * 10, j * 10, 0, 10 + 2 * (i * 10) + 3 * (j * 10)));
+        return pts;
+    }
+
+    [Fact]
+    public void Universal_kriging_reproduces_linear_trend_exactly()
+    {
+        var pts = LinearTrendGrid();
+        // 内部非控制点 (23,17)：真值 = 10 + 2·23 + 3·17 = 107
+        var uk = OrdinaryKriging.EstimateUniversalAt(pts, 23, 17, 0, k: 16);
+        Assert.NotNull(uk);
+        Assert.Equal(107.0, uk!.Value.est, 4);        // UK 对线性趋势处处精确
+    }
+
+    [Fact]
+    public void Universal_kriging_exact_at_control_point()
+    {
+        var pts = LinearTrendGrid();
+        var uk = OrdinaryKriging.EstimateUniversalAt(pts, 20, 30, 0, k: 16);   // 控制点 (20,30): 10+40+90=140
+        Assert.NotNull(uk);
+        Assert.Equal(140.0, uk!.Value.est, 4);
+        Assert.True(uk.Value.variance >= 0);
+    }
+
+    [Fact]
+    public void Universal_kriging_out_of_radius_null_and_few_points_fallback()
+    {
+        var pts = LinearTrendGrid();
+        Assert.Null(OrdinaryKriging.EstimateUniversalAt(pts, 10000, 10000, 0, radius: 5));   // 远离 → null
+        // 仅 2 点(<3 趋势基) → 回落 OK, 不崩
+        var two = new List<CP> { new(0, 0, 0, 5), new(10, 0, 0, 9) };
+        Assert.NotNull(OrdinaryKriging.EstimateUniversalAt(two, 5, 0, 0, radius: 100));
+    }
 }

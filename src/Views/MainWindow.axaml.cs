@@ -730,6 +730,7 @@ public partial class MainWindow : Window
             if (cmd == "切面剖切" || cmd == "块体剖切" || cmd == "切面") { SectionBlocksCmd(); return; }
             if (cmd == "克里金估值" || cmd == "OK估值" || cmd == "克里金") { await EstimateGradeAsync(kriging: true); return; }
             if (cmd == "快速估值" || cmd == "品位估值" || cmd == "IDW估值" || cmd == "空间分布") { await EstimateGradeAsync(kriging: false); return; }
+            if (cmd == "泛克里金" || cmd == "UK估值" || cmd == "泛克里金估值" || cmd == "趋势克里金") { await EstimateGradeAsync(kriging: true, universal: true); return; }
             if (cmd == "设备信息管理" || cmd == "设备台账" || cmd == "设备台账管理" || cmd == "设备信息") { EquipmentRosterCmd(); return; }
             if (cmd == "设备生产数据" || cmd == "生产数据" || cmd == "设备数据分析") { ProductionStatsCmd(); return; }
             if (cmd == "产能分析" || cmd == "设备能力" || cmd == "能力分析" || cmd == "产能") { CapacityRankingCmd(); return; }
@@ -3675,23 +3676,24 @@ public partial class MainWindow : Window
     }
 
     // 快速估值：品位样本 CSV(x,y,品位) → IDW/克里金 网格 → 品位配色估值面
-    private async Task EstimateGradeAsync(bool kriging = false)
+    private async Task EstimateGradeAsync(bool kriging = false, bool universal = false)
     {
+        string mode = universal ? "泛克里金" : kriging ? "克里金估值" : "快速估值";
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = (kriging ? "克里金估值" : "快速估值") + "：选品位样本 CSV (x,y,品位)",
+            Title = mode + "：选品位样本 CSV (x,y,品位)",
             AllowMultiple = false,
             FileTypeFilter = new[] { new FilePickerFileType("样本 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
         });
         if (files.Count == 0) return;
         var r = PointDataImportService.Load(files[0].Path.LocalPath);
-        if (!r.Success) { StatusMsg.Text = $"{(kriging ? "克里金估值" : "快速估值")}：样本导入失败 {r.Error}"; return; }
+        if (!r.Success) { StatusMsg.Text = $"{mode}：样本导入失败 {r.Error}"; return; }
         int n = 48;
         double[,] grid; double gx0, gy0, gdx, gdy; double avgVar = 0; string extra = "";
-        if (kriging)
+        if (kriging || universal)
         {
-            grid = BuildKrigingGrid(r.Points, n, n, out gx0, out gy0, out gdx, out gdy, out avgVar);
-            extra = $" · OK克里金 avg克里金方差 {avgVar:0.###}";
+            grid = BuildKrigingGrid(r.Points, n, n, out gx0, out gy0, out gdx, out gdy, out avgVar, universal);
+            extra = $" · {(universal ? "UK泛" : "OK普通")}克里金 avg克里金方差 {avgVar:0.###}";
         }
         else
         {
@@ -3703,12 +3705,12 @@ public partial class MainWindow : Window
         foreach (var e in cells) _scene.Add(e);
         RefreshScene();
         Viewport.FitBounds(r.Bounds);
-        StatusMsg.Text = $"{(kriging ? "克里金估值" : "快速估值")}：{r.Points.Count} 样本 → {n}² 网格 · 品位 {min:0.###}~{max:0.###}{extra}";
+        StatusMsg.Text = $"{mode}：{r.Points.Count} 样本 → {n}² 网格 · 品位 {min:0.###}~{max:0.###}{extra}";
     }
 
-    // OK 克里金网格：逐格用 OrdinaryKriging.EstimateAt 估值；半径外(null)回落 IDW 值免留洞；出平均克里金方差
+    // 克里金网格：逐格 EstimateAt(OK)/EstimateUniversalAt(UK) 估值；半径外(null)回落 IDW 免留洞；出平均克里金方差
     private static double[,] BuildKrigingGrid(IReadOnlyList<(double x, double y, double z)> pts, int nx, int ny,
-        out double x0, out double y0, out double dx, out double dy, out double avgVar)
+        out double x0, out double y0, out double dx, out double dy, out double avgVar, bool universal = false)
     {
         var idw = Contour.GridFromPoints(pts, nx, ny, out x0, out y0, out dx, out dy);   // 布局 + 半径外回落
         nx = idw.GetLength(0); ny = idw.GetLength(1);
@@ -3719,7 +3721,9 @@ public partial class MainWindow : Window
         for (int i = 0; i < nx; i++)
             for (int j = 0; j < ny; j++)
             {
-                var e = OrdinaryKriging.EstimateAt(cps, x0 + i * dx, y0 + j * dy, 0, 12, 0, vg);
+                double gxp = x0 + i * dx, gyp = y0 + j * dy;
+                var e = universal ? OrdinaryKriging.EstimateUniversalAt(cps, gxp, gyp, 0, 12, 0, vg)
+                                  : OrdinaryKriging.EstimateAt(cps, gxp, gyp, 0, 12, 0, vg);
                 if (e != null) { idw[i, j] = e.Value.est; varSum += e.Value.variance; varCnt++; }
             }
         avgVar = varCnt > 0 ? varSum / varCnt : 0;
@@ -6754,7 +6758,7 @@ public partial class MainWindow : Window
         // 网格/建模
         "网格度量","网格诊断","创建三角网","约束三角网","裁剪三角网","网格焊接","网格边界","网格交线","合并三角网","固化成体","侧面三角网","立方体","球体","圆柱","体素格网体积","实体转块体",
         // 区域/地形/点云
-        "区域求差","区域重叠检测","克里金估值","快速估值",
+        "区域求差","区域重叠检测","克里金估值","泛克里金","快速估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","地面点滤波","高程着色","点云质量统计","点云裁剪",
         // 块体/运输/路网
         "块体模型","资源量","道路横断面","路面生成","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","演化对比","螺旋斜坡道","折返斜坡道",

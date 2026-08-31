@@ -45,6 +45,53 @@ public static class OrdinaryKriging
         return Krige(top, vg);
     }
 
+    /// <summary>
+    /// 泛克里金 UK（带线性趋势 f=[1,x,y]）在 (x,y,z) 估值。忠实原 CoalQualityEstimator 的 UK 核。
+    /// 区别于 OK：显式建模一次趋势面, 对**有区域趋势**的数据(如煤层品位沿走向渐变)更准——
+    /// 对线性趋势数据**处处精确**(OK 只在控制点精确)。邻点 &lt;3 回落 OK。半径外返回 null。
+    /// </summary>
+    public static (double est, double variance)? EstimateUniversalAt(
+        IReadOnlyList<ControlPoint> points, double x, double y, double z, int k = 12, double radius = 0, Variogram? vg = null)
+    {
+        if (points.Count == 0) return null;
+        if (radius <= 0) radius = AutoRadius(points);
+        vg ??= FitVariogram(points);
+        var neigh = new List<(double d, ControlPoint pt)>(points.Count);
+        foreach (var pt in points)
+        {
+            double dx = pt.X - x, dy = pt.Y - y, dz = pt.Z - z;
+            neigh.Add((Math.Sqrt(dx * dx + dy * dy + dz * dz), pt));
+        }
+        neigh.Sort((a, b) => a.d.CompareTo(b.d));
+        if (neigh[0].d > radius) return null;
+        if (neigh[0].d < 1e-6) return (neigh[0].pt.V, 0);
+        var top = neigh.GetRange(0, Math.Min(Math.Max(1, k), neigh.Count));
+        if (top.Count < 3) return Krige(top, vg);                 // 趋势基需 ≥3 点, 否则回落 OK
+        return KrigeUniversal(top, vg, x, y);
+    }
+
+    // 泛克里金：约束 Σw=1 + Σw·x=x0 + Σw·y=y0（一次趋势无偏），系统 (n+3) 阶。
+    private static (double est, double variance) KrigeUniversal(List<(double d, ControlPoint pt)> nb, Variogram vg, double tx, double ty)
+    {
+        int n = nb.Count, p = 3, m = n + p;
+        var A = new double[m, m];
+        var rhs = new double[m];
+        for (int i = 0; i < n; i++)
+        {
+            for (int j = 0; j < n; j++) A[i, j] = vg.Gamma(Dist(nb[i].pt, nb[j].pt));
+            // 趋势基 F 及其转置：f=[1, x, y]
+            A[i, n] = 1; A[i, n + 1] = nb[i].pt.X; A[i, n + 2] = nb[i].pt.Y;
+            A[n, i] = 1; A[n + 1, i] = nb[i].pt.X; A[n + 2, i] = nb[i].pt.Y;
+            rhs[i] = vg.Gamma(nb[i].d);
+        }
+        rhs[n] = 1; rhs[n + 1] = tx; rhs[n + 2] = ty;              // f0=[1,x0,y0]
+        var w = Solve(A, rhs, m);
+        if (w == null) return Krige(nb, vg);                       // 病态 → 回落 OK
+        double est = 0, varr = w[n] + w[n + 1] * tx + w[n + 2] * ty;
+        for (int i = 0; i < n; i++) { est += w[i] * nb[i].pt.V; varr += w[i] * rhs[i]; }
+        return (est, Math.Max(0, varr));
+    }
+
     /// <summary>自动拟合球状变差函数：sill=样本方差；range=实验变差首达 95% sill 的滞后；nugget 由首箱估计。</summary>
     public static Variogram FitVariogram(IReadOnlyList<ControlPoint> pts)
     {
