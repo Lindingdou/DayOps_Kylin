@@ -1091,6 +1091,8 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 - [x] **网格导出 OBJ/PLY/STL**(`6df904b`)：原 MeshExportViewModel 导出 OBJ/PLY/STL/glTF, Kylin 只导 OFF。补 `MeshExport`(ToObj 1基/ToPly 0基+头/ToStlAscii 右手法向/ByExtension) + 导出OBJ/PLY/STL 命令。glTF(JSON+二进制)复杂记录。6 测。**837 tests**。
 - **非缺口核实**: OBJ/PLY/STL **导入**原仅 HelixToolkit **设备 3D 模型**(3D viz 架构阻), 非 CAD 网格导入(CAD=OFF/3DMine 已有); Shapefile/KML/GPX 原不导入(勿发明); GeoTIFF/PNG=栅格(2D 场景显示阻); PMB=专有; JSON 块=描述未实现(aspirational)。
 
-**本会话累计补 15 真功能, 837 测。过度记录纠正累计 6 处**(drape/mesh光顺交线/剔面/虚拟钻孔/**LAS**), 印证: **native/受阻标签必回核——公开格式+样本、可见算法、可拆子集者皆可做**。
+- [x] **正射着色(真实色)**(`f4268f9`)：**第 7 处过度记录纠正**——原「真实色(正射影像着色)」曾记 raster 显示阻, 但**正射着色核 = 采样正射像素给点上色(点可显)**, 且 GeoTIFF 公开 + 无压缩样本(dlt05.tif 6609×4656 RGB)。补 `GeoTransform`(像素↔世界, ModelPixelScale 33550+Tiepoint 33922) + `GeoTiffSampler`(读 TIFF IFD 无压缩 chunky RGB 逐点采色; 压缩/planar 返错记录) + 正射着色命令。6 测: 配准往返/合成 2×2 已知像素/界外 null/包围盒/非TIFF拒 + **真实 dlt05.tif(92MB)验证**。**843 tests**。
+
+**本会话累计补 16 真功能, 843 测。过度记录纠正累计 7 处**(drape/mesh光顺交线/剔面/虚拟钻孔/**LAS/GeoTIFF**), 印证: **native/受阻标签必回核——公开格式+样本、可见算法、可拆子集者皆可做**。格式判据: **公开规范 + 有样本 + (无压缩/定长简单) → 可做**(LAS✓ 定长; GeoTIFF✓ 无压缩样本; OSGB✗ 复杂+3D纹理; PMB/PMxx✗ 专有)。
 - **记录(2D 场景架构阻)**：**点/节点 Z 编辑**(统一Z/POINTSETZ/Z=aX+bY+c 平面赋Z/POLYUNIFYZ)——场景实体 2D 无 Z(PointEntity 仅 X,Y; PolylineEntity.Points 是 `(x,y)`), 无 Z 可设, 属线段渲染架构边界。
 - **latent 记录(非本轮引入)**：loft+weld(QuickModelAsync/LayerSolid)产**边流形水密但定向不一致**网格 → MeshMetrics 散度体积对定向敏感(随 z 位置变); 但实际取体积走**体素/缠绕数**路径(WindingNumberTester, 定向无关 robust), 工作流不受影响。
