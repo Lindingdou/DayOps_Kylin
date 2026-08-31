@@ -823,6 +823,7 @@ public partial class MainWindow : Window
             if (cmd == "加载点云" || cmd == "展点" || cmd == "导入点云" || cmd == "加载点") { await LoadPointCloudAsync(); return; }
             if (cmd == "逐点坡度/坡向" || cmd == "逐点坡度坡向" || cmd == "法向估计" || cmd == "点云法向") { await PointNormalsAsync(); return; }
             if (cmd == "高程截断" || cmd == "高程裁剪" || cmd == "Z截断") { await ElevationClipAsync(); return; }
+            if (cmd == "点云裁剪" || cmd == "边界裁剪点云" || cmd == "裁剪点云") { await CropCloudByBoundaryAsync(); return; }
             if (cmd == "网格度量" || cmd == "网格面积体积" || cmd == "网格体积") { await MeshMetricsAsync(); return; }
             if (cmd == "网格诊断" || cmd == "网格检查" || cmd == "网格拓扑") { await MeshDiagnoseAsync(); return; }
             if (cmd == "网格焊接" || cmd == "合并顶点" || cmd == "顶点焊接") { await MeshWeldAsync(); return; }
@@ -2545,6 +2546,34 @@ public partial class MainWindow : Window
         Viewport.FitBounds(r.Bounds);
         var inv = System.Globalization.CultureInfo.InvariantCulture;
         StatusMsg.Text = $"高程截断：保留 {kept.Count}/{pts.Count} 点(剔除 {removed} 异常程) · Z 波段 [{zLo.ToString("0.#", inv)}, {zHi.ToString("0.#", inv)}]（地形色带）";
+    }
+
+    // 点云边界裁剪：选中闭合多段线作边界 → 导入点 CSV → 保留界内点入场景。忠实原「闭合多段线裁剪点云」。
+    private async Task CropCloudByBoundaryAsync()
+    {
+        PolylineEntity? bnd = null;
+        foreach (var e in _selected) if (e is PolylineEntity p && p.Closed && p.Points.Count >= 3) { bnd = p; break; }
+        if (bnd == null) { StatusMsg.Text = "点云裁剪：请先选中一条闭合多段线作裁剪边界"; return; }
+        var boundary = new List<(double x, double y)>(bnd.Points);
+
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "点云裁剪：选点 CSV (x,y[,z])",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("点云 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success) { StatusMsg.Text = $"点云裁剪：导入失败 {r.Error}"; return; }
+        if (r.Points.Count == 0) { StatusMsg.Text = "点云裁剪：无点"; return; }
+        var pts = new List<(double x, double y, double z)>(); foreach (var p in r.Points) pts.Add((p.x, p.y, p.z));
+        var kept = PointCloudCrop.ByPolygon(pts, boundary, keepInside: true);
+        if (kept.Count == 0) { StatusMsg.Text = $"点云裁剪：边界内无点（共 {pts.Count} 点全在界外）"; return; }
+        BeginChange();
+        foreach (var p in kept)
+            _scene.Add(new PointEntity { X = p.x, Y = p.y, Cr = 0.35f, Cg = 0.8f, Cb = 0.5f, LayerName = "点云裁剪" });
+        RefreshScene();
+        StatusMsg.Text = $"点云裁剪：保留边界内 {kept.Count}/{pts.Count} 点入场景（图层 点云裁剪）";
     }
 
     // 加载点云/展点：点 CSV(x,y[,z]) → 灰点入场景 + 范围缩放
@@ -6635,7 +6664,7 @@ public partial class MainWindow : Window
         "网格度量","网格诊断","创建三角网","约束三角网","网格焊接","网格边界","合并三角网","固化成体","侧面三角网","立方体","球体","圆柱","体素格网体积","实体转块体",
         // 区域/地形/点云
         "区域求差","区域重叠检测","克里金估值","快速估值",
-        "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","地面点滤波","高程着色","点云质量统计",
+        "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","地面点滤波","高程着色","点云质量统计","点云裁剪",
         // 块体/运输/路网
         "块体模型","资源量","道路横断面","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","演化对比","螺旋斜坡道","折返斜坡道",
         // 生产计划/投影
