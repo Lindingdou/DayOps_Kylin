@@ -180,6 +180,23 @@ public sealed class CircleEntity : SceneEntity
         double r = Math.Sqrt((nx - Cx) * (nx - Cx) + (ny - Cy) * (ny - Cy));   // 象限 → 改半径
         return Colored(new CircleEntity { Cx = Cx, Cy = Cy, Radius = r, Segments = Segments });
     }
+    public override List<SceneEntity>? Break(double x1, double y1, double x2, double y2)   // 圆→弧：移除 CCW 第一点→第二点段，保留补段
+    {
+        if (Radius < 1e-9) return null;
+        double a1 = Math.Atan2(y1 - Cy, x1 - Cx), a2 = Math.Atan2(y2 - Cy, x2 - Cx);
+        double sweep = a1 - a2;                                    // 保留段 = CCW 第二点→第一点
+        while (sweep <= 0) sweep += 2 * Math.PI;
+        while (sweep >= 2 * Math.PI) sweep -= 2 * Math.PI;
+        if (sweep < 1e-6 || sweep > 2 * Math.PI - 1e-6) return null;   // 两点重合，无法打断
+        double sa = a2, ma = a2 + sweep / 2, ea = a1;              // 起/中/端角(中点必在保留段上)
+        var arc = new ArcEntity
+        {
+            X1 = Cx + Radius * Math.Cos(sa), Y1 = Cy + Radius * Math.Sin(sa),
+            X2 = Cx + Radius * Math.Cos(ma), Y2 = Cy + Radius * Math.Sin(ma),
+            X3 = Cx + Radius * Math.Cos(ea), Y3 = Cy + Radius * Math.Sin(ea), Segments = Segments,
+        };
+        return new List<SceneEntity> { Colored(arc) };
+    }
 }
 
 public sealed class RectEntity : SceneEntity

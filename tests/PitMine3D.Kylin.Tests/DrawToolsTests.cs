@@ -440,6 +440,30 @@ public class DrawToolsTests
     }
 
     [Fact]
+    public void CircleEntity_break_into_single_arc()
+    {
+        var circle = new CircleEntity { Cx = 0, Cy = 0, Radius = 1 };
+        var parts = circle.Break(1, 0, 0, 1)!;              // 在 0°/90° 打断：移除 CCW 第一象限，留 270° 大弧
+        Assert.Single(parts);
+        var arc = Assert.IsType<ArcEntity>(parts[0]);
+        // 保留段 = CCW 第二点(90°)→第一点(0°)：起点(0,1) 端点(1,0)
+        Assert.Equal(0, arc.X1, 4); Assert.Equal(1, arc.Y1, 4);
+        Assert.Equal(1, arc.X3, 4); Assert.Equal(0, arc.Y3, 4);
+        // 中点在第三象限(225°)——证明保留的是大弧、移除的是第一象限
+        Assert.True(arc.X2 < 0 && arc.Y2 < 0, $"中点应在第三象限, 实为({arc.X2:0.###},{arc.Y2:0.###})");
+        // 三点均在圆上(半径 1)
+        foreach (var (px, py) in new[] { (arc.X1, arc.Y1), (arc.X2, arc.Y2), (arc.X3, arc.Y3) })
+            Assert.Equal(1.0, System.Math.Sqrt(px * px + py * py), 4);
+    }
+
+    [Fact]
+    public void CircleEntity_break_coincident_points_returns_null()
+    {
+        var circle = new CircleEntity { Cx = 0, Cy = 0, Radius = 1 };
+        Assert.Null(circle.Break(1, 0, 1, 0));             // 两点重合 → 无法打断
+    }
+
+    [Fact]
     public void SegmentsIntersect_detects_crossing()
     {
         Assert.True(LineMath.SegmentsIntersect(0, 0, 10, 0, 5, -5, 5, 5));    // 十字相交
