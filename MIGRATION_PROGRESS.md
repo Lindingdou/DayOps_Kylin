@@ -652,3 +652,13 @@
 **★可持续模式确立**：移独立 TaskLib 域片(不 refactor 已工作代码) + CSV 喂的核算 → 每 tick 安全交付 1 TaskLib feature。已 6 增量: 生产量核算/物料换算/采剥平衡/排土场按量推进/配煤核算/**工序进度跟踪**。597 测试, 死按钮 60。
 
 **引擎类余项**(生产任务编制/派工/派车单/任务下达/采排配对/动态模拟/编制…) 仍需引擎链(TaskExploder 等 + full ProductionTask/ExploderConfig 共享基础, refactor 风险 + 保真难验), 记录待专项/上机。自足+可 CSV 喂的 TaskLib 核算功能持续提取中。
+
+## 三十五、TaskLib 增量 7-8 + 自足计算提取完成（8 功能）
+
+- [x] **增量 7 车铲循环产能 FleetCycle**(commit `aea701b`)：忠实 FleetMatcher §3-5(斗数→节拍→循环 T_c[复用 HaulMetrics]→最优车数 n*→匹配系数 MF→铲装/车队能力→编组产能 q=min/ρ实·η)。命令 编组产能。+4 测。
+- [x] **增量 8 按环节降效 LinkDerate**(commit `f2fbf1c`)：忠实 WeatherFactorFor(采装面用周期分解还原铲装/车队两侧分别降,**运输降效对铲瓶颈面不生效**)。命令 环节降效。+5 测。
+- [x] **配煤达标**(commit `c9daddf`)：BlendStandard(灰≤12.8/热≥21.5/硫≤0.7) + MeetsTarget → 配煤核算加达标判定。
+
+**★TaskLib 自足计算/公式提取完成——8 个功能**(生产量核算/物料换算/采剥平衡/排土场按量推进/配煤核算[+达标]/工序进度跟踪/车铲循环产能/按环节降效)，全在 `src/Cad/Tasks/`，忠实逐字/公式移植 + 全单测(~45 测) + 复用已移基元(HaulMetrics/FleetMatch)，均安全不 destabilize。607 测试, 死按钮 60。
+
+**TaskLib 余下 = 引擎管线(无自足切片)**：数据结构(ViolationCodes/PlanViolation/Dispatch/TaskInstance/full ProductionTask 474/ExploderConfig 561, 纯基础) + 引擎(TaskExploder 971/HaulDumpDeriver 448/FlowAssigner 1032/DispatchEngine 987/MonthlyShiftDecomposer 658)。引擎类死按钮(生产任务编制/派工/派车/台账/动态模拟 ~20)需先移 ~1000 行共享基础(feature-less, 且 refactor 已工作代码有风险) + 复杂引擎(971 行管线本机无法比对原输出→保真难验)。→ 触"不满足验证条件先跳过、无法验证先记录"：**引擎管线记录为大工程边界, 自足计算已尽**。
