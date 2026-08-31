@@ -844,3 +844,11 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 - **全模块 sweep 结论**：GeoDataBase(10 移)/RoadLib(全覆盖)/MineAssLib(RoadCrossSection·SlopeEstimator·DepositAutoDetector 已移, 余在境界/地质/TaskLib 记录边界)/BlockModelLib(MeshVolume 分级·DepositAutoDetector 已移, DumpAdvanceByVolume/VirtualDrill 记录)/TaskLib(自足计算 8 已移, 引擎记录)。**实现忠实度轴全模块收口**。
 - **多维种子输出审计(两轮皆干净)**：本会话新功能 8 项(编组优化/煤质分析×5/层位/预测) + 旧 §四/§八 查询 12 项，在真实种子上眼验量级/异常——全部合理，无恒0/空/量级错(验收合格率 67.3% 确认早前 bug 修复)。
 - **★六维交叉验证完成**：① 按钮/命令(全模块 diff) ② 输出正确性(修 3 bug + 两轮种子审计) ③ 实现忠实度(11 算法全模块 sweep) ④ .pmx 往返(类型+LayerName+颜色+图层表, 已测) ⑤ shell 冒烟 ⑥ 撤销/图层/选择/视图/DXF 导入导出。→ **doable+可验证+忠实(含实现是原真算法)的功能集系统性完成**；余项均已记录边界。662 测试。
+
+## 五十、分析结果导出能力（补真实能力缺口，664 测试）
+
+发现真实能力缺口：我移的煤质分析只在状态栏显**截断摘要**，而原程序能**导出结果供现场定位处置**（超标段/离群段带坐标）。补两个 actionable 结果导出（CSV 序列化可测 + 标准 SaveFilePicker）：
+
+- [x] **商品煤符合性导出**(`9a368e5`)：`CoalAnalytics.ComplianceToCsv`（逐化验段: 孔号/煤层/坐标/各指标/判定/超标原因）+ 导出符合性 命令。+1 测。
+- [x] **煤质离群 QC 导出**(`fca2b23`)：`OutliersToCsv`（离群段: 孔号/煤层/值/标高/方向/严重度IQR + 元信息行）+ 导出离群 命令。+1 测。
+- → 两个可"定位处置"的煤质分析结果(超标段/离群段)均可导出带坐标 CSV。导出模式(ToCsv 纯函数可测 + 异步 SaveFilePicker)已建，余分析(品位-储量曲线/分标高)如需可循此补。664 测试。
