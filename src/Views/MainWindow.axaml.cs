@@ -946,6 +946,7 @@ public partial class MainWindow : Window
             if (cmd == "点落到面上" || cmd == "点落面" || cmd == "点投影到面") { await ProjectPointsToMeshAsync(); return; }
             if (cmd == "网格交线" || cmd == "两网交线" || cmd == "面交线" || cmd == "求交线") { await MeshIntersectionAsync(); return; }
             if (cmd == "网格剖面" || cmd == "三角网剖面" || cmd == "面剖面" || cmd == "曲面剖面") { await MeshSectionAsync(); return; }
+            if (cmd == "网格光顺" || cmd == "网格平滑" || cmd == "曲面光顺" || cmd.StartsWith("网格光顺 ") || cmd.StartsWith("网格平滑 ")) { await MeshSmoothAsync(cmd); return; }
             if (cmd == "线落到面上" || cmd == "线落面" || cmd == "线投影到面") { await ProjectPolylinesToMeshAsync(); return; }
             if (cmd == "侧面三角网" || cmd == "侧面放样" || cmd == "放样侧面") { await SideSurfaceAsync(); return; }
             if (cmd == "道路横断面" || cmd == "路面加宽超高" || cmd == "弯道加宽") { RoadCrossSectionCmd(); return; }
@@ -2320,6 +2321,30 @@ public partial class MainWindow : Window
         { sb.Append($"{s.A.x.ToString("R", inv)},{s.A.y.ToString("R", inv)},{s.A.z.ToString("R", inv)}\n"); sb.Append($"{s.B.x.ToString("R", inv)},{s.B.y.ToString("R", inv)},{s.B.z.ToString("R", inv)}\n"); }
         try { string outPath = System.IO.Path.ChangeExtension(m1[0].Path.LocalPath, ".intersect.csv"); System.IO.File.WriteAllText(outPath, sb.ToString(), new System.Text.UTF8Encoding(true)); StatusMsg.Text = $"网格交线：{segs.Count} 段交线入场景 + 3D 交点 → {System.IO.Path.GetFileName(outPath)}"; }
         catch { StatusMsg.Text = $"网格交线：{segs.Count} 段交线入场景（图层 网格交线；CSV 写出失败）"; }
+    }
+
+    // 网格光顺：选 OFF → Laplacian 光顺(固定边界) → 落 .smoothed.off + 边线框入场景。忠实原网格光顺(标准算法)。
+    private async Task MeshSmoothAsync(string cmd)
+    {
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        int iters = 3;
+        if (tk.Length >= 2 && int.TryParse(tk[1], out int it) && it >= 1 && it <= 50) iters = it;
+        var mf = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        { Title = $"网格光顺（迭代 {iters}）：选网格 OFF", AllowMultiple = false, FileTypeFilter = new[] { new FilePickerFileType("OFF") { Patterns = new[] { "*.off" } } } });
+        if (mf.Count == 0) return;
+        var (v, t) = ReadConcatOff(new[] { mf[0].Path.LocalPath });
+        if (t.Count == 0) { StatusMsg.Text = "网格光顺：网格无三角"; return; }
+        var sm = Cad.MeshSmooth.Laplacian(v, t, iters, 0.5, fixBoundary: true);
+        // 落 .smoothed.off
+        string outPath = System.IO.Path.ChangeExtension(mf[0].Path.LocalPath, ".smoothed.off");
+        try { System.IO.File.WriteAllText(outPath, Cad.MeshWeld.ToOff(sm, new List<(int a, int b, int c)>(t))); }
+        catch (System.Exception ex) { StatusMsg.Text = $"网格光顺：写出失败 {ex.Message}"; return; }
+        // 边线框入场景(去重边)
+        BeginChange();
+        var edges = Delaunay.BuildEdges(new List<(double x, double y)>(sm.ConvertAll(p => (p.x, p.y))), new List<(int a, int b, int c)>(t), 0.6f, 0.8f, 0.85f);
+        foreach (var e in edges) { e.LayerName = "网格光顺"; _scene.Add(e); }
+        RefreshScene();
+        StatusMsg.Text = $"网格光顺：{v.Count} 顶点 · {t.Count} 三角 · 迭代 {iters} → {System.IO.Path.GetFileName(outPath)}（边线框入场景）";
     }
 
     // 网格剖面：选剖面线(选中多段线/两点) + OFF 网格 → 网格∩竖直面 精确断面 → 剖面曲线(沿线距→高程)入场景。
@@ -6815,7 +6840,7 @@ public partial class MainWindow : Window
         // 线编辑
         "加密多段线","简化","抽稀等值线","两线交点","闭合多段线","删除重复点","删除重复线","连接多段线","组合工作线",
         // 网格/建模
-        "网格度量","网格诊断","创建三角网","约束三角网","裁剪三角网","网格焊接","网格边界","网格交线","网格剖面","合并三角网","固化成体","侧面三角网","立方体","球体","圆柱","体素格网体积","实体转块体",
+        "网格度量","网格诊断","创建三角网","约束三角网","裁剪三角网","网格焊接","网格边界","网格交线","网格剖面","网格光顺","合并三角网","固化成体","侧面三角网","立方体","球体","圆柱","体素格网体积","实体转块体",
         // 区域/地形/点云
         "区域求差","区域重叠检测","克里金估值","泛克里金","快速估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","地面点滤波","高程着色","点云质量统计","点云裁剪",
