@@ -26,15 +26,18 @@ public static class BlkImportService
         public bool Success; public string Error = "";
         public List<BlockModel.Block> Blocks = new();
         public int BlockCount;
+        public List<string> AttrNames = new();   // 全属性名(供选取哪个作品位)
+        public string UsedAttr = "";              // 实际取作品位的属性名
     }
 
-    public static Result Load(string path)
+    public static Result Load(string path, string? selectAttr = null)
     {
-        try { return Parse(File.ReadAllBytes(path)); }
+        try { return Parse(File.ReadAllBytes(path), selectAttr); }
         catch (Exception ex) { return new Result { Error = ex.Message }; }
     }
 
-    public static Result Parse(byte[] b)
+    /// <summary>selectAttr 非空则取该名属性作品位(找不到回落首数值属性)。</summary>
+    public static Result Parse(byte[] b, string? selectAttr = null)
     {
         var r = new Result();
         if (b == null || b.Length < 64) { r.Error = "BLK 过小"; return r; }
@@ -50,14 +53,18 @@ public static class BlkImportService
         int attrCount = I(b, ref p);
         if (attrCount < 0 || attrCount > 4096) { r.Error = $"BLK 属性数异常 {attrCount}"; return r; }
         var attrType = new int[attrCount];
-        int firstNumeric = -1;
+        int firstNumeric = -1, selectIdx = -1;
         for (int a = 0; a < attrCount; a++)
         {
-            ReadStr(b, ref p);                                  // name(忽略)
+            string name = ReadStr(b, ref p);
+            r.AttrNames.Add(name);
             attrType[a] = I(b, ref p);
-            if (firstNumeric < 0 && attrType[a] == 2) firstNumeric = a;   // 首 float 属性作品位
+            if (firstNumeric < 0 && attrType[a] == 2) firstNumeric = a;   // 首 float 属性
+            if (selectAttr != null && string.Equals(name, selectAttr, StringComparison.OrdinalIgnoreCase)) selectIdx = a;
         }
-        if (firstNumeric < 0 && attrCount > 0) firstNumeric = 0;
+        int gradeAttr = selectIdx >= 0 ? selectIdx : firstNumeric;        // 选中优先, 否则首数值
+        if (gradeAttr < 0 && attrCount > 0) gradeAttr = 0;
+        r.UsedAttr = gradeAttr >= 0 && gradeAttr < r.AttrNames.Count ? r.AttrNames[gradeAttr] : "";
 
         int blockCount = I(b, ref p);
         if (blockCount < 0) { r.Error = $"BLK 块数异常 {blockCount}"; return r; }
@@ -88,10 +95,10 @@ public static class BlkImportService
             long yf = (long)((loc >> 24) & 0x7FFFF) << sh;
             long zf = (long)((loc >> 5) & 0x7FFFF) << sh;
             double grade = 0;
-            if (firstNumeric >= 0)
+            if (gradeAttr >= 0)
             {
-                int vp = q + 8 + firstNumeric * 4;
-                grade = attrType[firstNumeric] == 4
+                int vp = q + 8 + gradeAttr * 4;
+                grade = attrType[gradeAttr] == 4
                     ? (b[vp] | b[vp + 1] << 8 | b[vp + 2] << 16 | b[vp + 3] << 24)
                     : BitConverter.ToSingle(b, vp);
             }

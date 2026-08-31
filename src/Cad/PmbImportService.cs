@@ -12,22 +12,25 @@ public static class PmbImportService
 {
     public const uint MagicStart = 0x31424D50;   // 'P','M','B','1'
     public const int HeaderSize = 32, SectionEntrySize = 24, FooterSize = 16;
-    public const uint SectionGridSpec = 10, SectionBlocks = 12;
+    public const uint SectionStrings = 1, SectionGridSpec = 10, SectionBlocks = 12;
 
     public sealed class Result
     {
         public bool Success; public string Error = "";
         public List<BlockModel.Block> Blocks = new();
         public int Nx, Ny, Nz;
+        public List<string> AttrNames = new();
+        public string UsedAttr = "";
     }
 
-    public static Result Load(string path)
+    public static Result Load(string path, string? selectAttr = null)
     {
-        try { return Parse(File.ReadAllBytes(path)); }
+        try { return Parse(File.ReadAllBytes(path), selectAttr); }
         catch (System.Exception ex) { return new Result { Error = ex.Message }; }
     }
 
-    public static Result Parse(byte[] bytes)
+    /// <summary>selectAttr 非空则取该名属性作品位(找不到回落首属性)。</summary>
+    public static Result Parse(byte[] bytes, string? selectAttr = null)
     {
         var r = new Result();
         if (bytes == null || bytes.Length < HeaderSize + FooterSize) { r.Error = "PMB 过小"; return r; }
@@ -41,7 +44,7 @@ public static class PmbImportService
         uint sectionCount = br.ReadUInt32();
         if (stOff != HeaderSize || sectionCount > 64) { r.Error = "PMB 头非法"; return r; }
 
-        long gridOff = -1, blocksOff = -1;
+        long gridOff = -1, blocksOff = -1, stringsOff = -1;
         ms.Position = stOff;
         for (int i = 0; i < sectionCount; i++)
         {
@@ -49,8 +52,24 @@ public static class PmbImportService
             long off = br.ReadInt64(); br.ReadInt64();    // offset, size
             if (id == SectionGridSpec) gridOff = off;
             else if (id == SectionBlocks) blocksOff = off;
+            else if (id == SectionStrings) stringsOff = off;
         }
         if (gridOff < 0) { r.Error = "PMB 缺 GridSpec 段"; return r; }
+
+        // ── Strings(属性名池) ──
+        var strings = new List<string>();
+        if (stringsOff >= 0)
+        {
+            ms.Position = stringsOff;
+            uint sc = br.ReadUInt32();
+            for (int i = 0; i < sc && i < 1_000_000; i++)
+            {
+                ushort len16 = br.ReadUInt16();
+                int len = len16 == 0xFFFF ? br.ReadInt32() : len16;
+                if (len < 0 || ms.Position + len > bytes.Length) break;
+                strings.Add(System.Text.Encoding.UTF8.GetString(br.ReadBytes(len)));
+            }
+        }
 
         // ── GridSpec ──
         ms.Position = gridOff;
@@ -62,21 +81,35 @@ public static class PmbImportService
         long blockCount = (long)nx * ny * nz;
         if (nx <= 0 || ny <= 0 || nz <= 0 || blockCount > 50_000_000) { r.Error = "PMB 网格维度非法"; return r; }
 
-        // ── Blocks 首属性作品位(可无) ──
+        // ── Blocks: 一遍扫全属性(名+值偏移), 再取选定(或首)作品位 ──
         double[]? grade = null;
         if (blocksOff >= 0)
         {
             ms.Position = blocksOff;
             byte storageMode = br.ReadByte(); br.ReadBytes(3);   // reserved
             long bc = br.ReadInt64(); uint attrCount = br.ReadUInt32();
-            if (storageMode == 0 && bc == blockCount && attrCount > 0)   // Dense
+            if (storageMode == 0 && bc == blockCount && attrCount > 0 && attrCount <= 4096)   // Dense
             {
-                br.ReadInt32(); br.ReadByte(); br.ReadBytes(3);          // nameIdx, dataType, reserved(首属性)
-                uint valueCount = br.ReadUInt32();
-                if (valueCount == blockCount)
+                var attrValueOff = new List<long>();
+                for (int a = 0; a < attrCount; a++)
                 {
+                    int nameIdx = br.ReadInt32(); br.ReadByte(); br.ReadBytes(3);   // nameIdx, dataType, reserved
+                    uint valueCount = br.ReadUInt32();
+                    string name = (nameIdx >= 0 && nameIdx < strings.Count) ? strings[nameIdx] : $"attr{a}";
+                    r.AttrNames.Add(name);
+                    attrValueOff.Add(ms.Position);
+                    if (valueCount != blockCount) break;                            // 布局异常, 止
+                    ms.Position += (long)valueCount * 8;                            // 跳到下一属性
+                }
+                int selIdx = 0;
+                if (selectAttr != null)
+                { int f = r.AttrNames.FindIndex(nm => string.Equals(nm, selectAttr, System.StringComparison.OrdinalIgnoreCase)); if (f >= 0) selIdx = f; }
+                if (selIdx < attrValueOff.Count)
+                {
+                    ms.Position = attrValueOff[selIdx];
                     grade = new double[blockCount];
                     for (long i = 0; i < blockCount; i++) grade[i] = br.ReadDouble();
+                    r.UsedAttr = r.AttrNames[selIdx];
                 }
             }
         }

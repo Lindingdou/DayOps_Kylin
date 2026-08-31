@@ -66,6 +66,53 @@ public class BlkImportServiceTests
         Assert.False(BlkImportService.Parse(new byte[10]).Success);
     }
 
+    // 双属性 .blk(密度,品位 均 float), 单块 loc 同上
+    private static byte[] MakeBlk2(float density, float grade)
+    {
+        var ms = new MemoryStream(); var w = new BinaryWriter(ms);
+        WriteStr(w, "Block_Model_2.0");
+        w.Write(10); w.Write(11);
+        w.Write(1000.0); w.Write(2000.0); w.Write(100.0);
+        w.Write(2048.0); w.Write(2048.0); w.Write(2048.0);
+        w.Write(2048.0); w.Write(2048.0); w.Write(2048.0);
+        w.Write(0.0); w.Write((byte)0);
+        w.Write(2);                                       // attrCount=2
+        WriteStr(w, "density"); w.Write(2);
+        WriteStr(w, "grade_v"); w.Write(2);
+        w.Write(1);
+        ulong loc = 10UL | (2UL << 5) | (3UL << 24) | (5UL << 43);
+        w.Write(loc);
+        w.Write(density); w.Write(grade);                 // attr0=密度, attr1=品位
+        return ms.ToArray();
+    }
+
+    [Fact]
+    public void Attribute_names_listed_and_first_used_by_default()
+    {
+        var r = BlkImportService.Parse(MakeBlk2(2.7f, 55.0f));
+        Assert.True(r.Success, r.Error);
+        Assert.Equal(new[] { "density", "grade_v" }, r.AttrNames);
+        Assert.Equal("density", r.UsedAttr);                  // 默认首数值属性
+        Assert.Equal(2.7, r.Blocks[0].Grade, 4);
+    }
+
+    [Fact]
+    public void Select_attribute_by_name()
+    {
+        var r = BlkImportService.Parse(MakeBlk2(2.7f, 55.0f), selectAttr: "grade_v");
+        Assert.True(r.Success, r.Error);
+        Assert.Equal("grade_v", r.UsedAttr);
+        Assert.Equal(55.0, r.Blocks[0].Grade, 4);          // 选中品位
+    }
+
+    [Fact]
+    public void Unknown_select_falls_back_to_first()
+    {
+        var r = BlkImportService.Parse(MakeBlk2(2.7f, 55.0f), selectAttr: "不存在");
+        Assert.Equal("density", r.UsedAttr);                  // 找不到 → 回落首个
+        Assert.Equal(2.7, r.Blocks[0].Grade, 4);
+    }
+
     [Fact]
     public void Real_blk_sample_parses()
     {

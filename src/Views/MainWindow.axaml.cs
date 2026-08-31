@@ -742,8 +742,8 @@ public partial class MainWindow : Window
             if (cmd == "分帮扩帮" || cmd == "批量台阶扩帮" || cmd == "批量扩坑") { StartBench(); return; }
             if (cmd == "组合工作线" || cmd == "合并多段线" || cmd == "连接台阶线" || cmd == "连接多段线") { JoinPolylines(); return; }
             if (cmd == "块体模型" || cmd == "导入块体" || cmd == "地质体建模") { await ImportBlockModelAsync(); return; }
-            if (cmd == "导入PMB" || cmd == "加载PMB" || cmd == "PMB导入" || cmd == "导入块体模型文件") { await LoadPmbAsync(); return; }
-            if (cmd == "导入BLK" || cmd == "加载BLK" || cmd == "BLK导入" || cmd == "导入八叉树块体") { await LoadBlkAsync(); return; }
+            if (cmd == "导入PMB" || cmd == "加载PMB" || cmd == "PMB导入" || cmd == "导入块体模型文件" || cmd.StartsWith("导入PMB ")) { await LoadPmbAsync(cmd); return; }
+            if (cmd == "导入BLK" || cmd == "加载BLK" || cmd == "BLK导入" || cmd == "导入八叉树块体" || cmd.StartsWith("导入BLK ")) { await LoadBlkAsync(cmd); return; }
             if (cmd == "资源量估算" || cmd == "剥采比" || cmd == "资源量") { ResourceReport(null); return; }
             if (cmd == "导出块体" || cmd == "块体导出") { await ExportBlocksAsync(); return; }
             if (cmd == "输出报告" || cmd == "资源量报告" || cmd == "块体报告") { await ExportResourceReportAsync(); return; }
@@ -3475,9 +3475,12 @@ public partial class MainWindow : Window
     }
 
     // 块体模型：CSV(x,y,z[,尺寸,品位]) → 品位配色方块平面显示 + 统计
-    // 导入 BLK(Block_Model_2.0 八叉树块体, 平朔/3DMine 外部格式)：解析叶块几何+首数值属性→grade-only 块入场景
-    private async Task LoadBlkAsync()
+    // 导入 BLK(Block_Model_2.0 八叉树块体, 平朔/3DMine 外部格式)：解析叶块几何+选定属性→grade-only 块入场景
+    // "导入BLK <属性名>" 选取哪个属性作品位; 缺省首数值属性并列出全属性名供再选
+    private async Task LoadBlkAsync(string cmd)
     {
+        int sp = cmd.IndexOf(' ');
+        string? selectAttr = sp >= 0 ? cmd.Substring(sp + 1).Trim() : null;
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = "导入 BLK 块体模型 (Block_Model_2.0)",
@@ -3485,7 +3488,7 @@ public partial class MainWindow : Window
             FileTypeFilter = new[] { new FilePickerFileType("八叉树块体 (BLK)") { Patterns = new[] { "*.blk" } } }
         });
         if (files.Count == 0) return;
-        var r = BlkImportService.Load(files[0].Path.LocalPath);
+        var r = BlkImportService.Load(files[0].Path.LocalPath, selectAttr);
         if (!r.Success) { StatusMsg.Text = $"导入 BLK：{r.Error}"; return; }
         if (r.Blocks.Count == 0) { StatusMsg.Text = "导入 BLK：无块"; return; }
         _lastBlocks = r.Blocks;
@@ -3495,12 +3498,15 @@ public partial class MainWindow : Window
         RenderBlocks(r.Blocks);
         RefreshScene();
         if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
-        StatusMsg.Text = $"导入 BLK：{r.BlockCount} 叶块（八叉树，几何+首数值属性作品位；多属性受 grade-only 数据模型限）";
+        string attrs = r.AttrNames.Count > 0 ? string.Join("/", r.AttrNames) : "无";
+        StatusMsg.Text = $"导入 BLK：{r.BlockCount} 叶块 · 品位取「{r.UsedAttr}」 · 全属性[{attrs}]（改属性：导入BLK <属性名>）";
     }
 
-    // 导入 PMB(PitMine 块体模型 v1, 公开格式)：解析网格几何+首属性→grade-only 块入场景
-    private async Task LoadPmbAsync()
+    // 导入 PMB(PitMine 块体模型 v1, 公开格式)：解析网格几何+选定属性→grade-only 块入场景
+    private async Task LoadPmbAsync(string cmd)
     {
+        int sp = cmd.IndexOf(' ');
+        string? selectAttr = sp >= 0 ? cmd.Substring(sp + 1).Trim() : null;
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = "导入 PMB 块体模型",
@@ -3508,7 +3514,7 @@ public partial class MainWindow : Window
             FileTypeFilter = new[] { new FilePickerFileType("PitMine 块体 (PMB)") { Patterns = new[] { "*.pmb" } } }
         });
         if (files.Count == 0) return;
-        var r = PmbImportService.Load(files[0].Path.LocalPath);
+        var r = PmbImportService.Load(files[0].Path.LocalPath, selectAttr);
         if (!r.Success) { StatusMsg.Text = $"导入 PMB：{r.Error}"; return; }
         if (r.Blocks.Count == 0) { StatusMsg.Text = "导入 PMB：无块"; return; }
         _lastBlocks = r.Blocks;
@@ -3518,7 +3524,8 @@ public partial class MainWindow : Window
         RenderBlocks(r.Blocks);
         RefreshScene();
         if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
-        StatusMsg.Text = $"导入 PMB：{r.Nx}×{r.Ny}×{r.Nz} 网格 · {r.Blocks.Count} 块（几何+首属性作品位；多属性受 grade-only 数据模型限）";
+        string attrs = r.AttrNames.Count > 0 ? string.Join("/", r.AttrNames) : "无";
+        StatusMsg.Text = $"导入 PMB：{r.Nx}×{r.Ny}×{r.Nz} 网格 · {r.Blocks.Count} 块 · 品位取「{r.UsedAttr}」 · 全属性[{attrs}]（改属性：导入PMB <属性名>）";
     }
 
     private async Task ImportBlockModelAsync()

@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text;
 using PitMine3D.Kylin.Cad;
 using Xunit;
 
@@ -7,6 +8,52 @@ namespace PitMine3D.Kylin.Tests;
 /// <summary>PMB 块体导入(PmbImportService)回归 —— 按原 PmbmFormat/PmbmReader 文档字节布局构造 PMB 自验(规格符合性)。</summary>
 public class PmbImportServiceTests
 {
+    // 含 Strings 段的 PMB: 2×1×1 网格(2 cell) + 2 命名属性(density, grade_v). 验属性名+选择
+    private static byte[] MakePmb2()
+    {
+        var ms = new MemoryStream(); var w = new BinaryWriter(ms);
+        void PmbStr(string s) { var b = Encoding.UTF8.GetBytes(s); w.Write((ushort)b.Length); w.Write(b); }   // PMB 串: u16 长 + UTF8
+        const int stringsOff = 104, gridOff = 126, blocksOff = 218;
+        // Header(32)
+        w.Write((uint)0x31424D50); w.Write((uint)1); w.Write((uint)0);
+        w.Write((long)306); w.Write((long)32); w.Write((uint)3);   // fileSize, stOff, sectionCount=3
+        // SectionTable(3×24)
+        w.Write((uint)1); w.Write((uint)0); w.Write((long)stringsOff); w.Write((long)22);   // Strings
+        w.Write((uint)10); w.Write((uint)0); w.Write((long)gridOff); w.Write((long)92);      // GridSpec
+        w.Write((uint)12); w.Write((uint)0); w.Write((long)blocksOff); w.Write((long)72);    // Blocks
+        // Strings @104: count + "density" + "grade_v"
+        w.Write((uint)2); PmbStr("density"); PmbStr("grade_v");
+        // GridSpec @126 (92): 2×1×1
+        w.Write(-1); w.Write(-1);
+        w.Write(10.0); w.Write(20.0); w.Write(0.0);
+        w.Write(2.0); w.Write(2.0); w.Write(2.0);
+        w.Write(2); w.Write(1); w.Write(1);
+        w.Write(0.0); w.Write((byte)0); w.Write((byte)0);
+        w.Write(0f); w.Write(0f); w.Write(0f); w.Write((ushort)0);
+        // Blocks @218 (72): storageMode+reserved+blockCount+attrCount, 2 attr × {nameIdx,dataType,reserved,valueCount, 2 doubles}
+        w.Write((byte)0); w.Write(new byte[3]); w.Write((long)2); w.Write((uint)2);
+        w.Write(0); w.Write((byte)0); w.Write(new byte[3]); w.Write((uint)2); w.Write(2.7); w.Write(2.8);   // density(nameIdx 0)
+        w.Write(1); w.Write((byte)0); w.Write(new byte[3]); w.Write((uint)2); w.Write(50.0); w.Write(60.0); // grade_v(nameIdx 1)
+        // Footer(16)
+        w.Write((long)2); w.Write((uint)0); w.Write((uint)0x504D4231);
+        return ms.ToArray();
+    }
+
+    [Fact]
+    public void Strings_attribute_names_and_selection()
+    {
+        var def = PmbImportService.Parse(MakePmb2());
+        Assert.True(def.Success, def.Error);
+        Assert.Equal(new[] { "density", "grade_v" }, def.AttrNames);
+        Assert.Equal("density", def.UsedAttr);            // 缺省首属性
+        Assert.Equal(2.7, def.Blocks[0].Grade, 4);
+        // 选 grade_v
+        var sel = PmbImportService.Parse(MakePmb2(), selectAttr: "grade_v");
+        Assert.Equal("grade_v", sel.UsedAttr);
+        Assert.Equal(50.0, sel.Blocks[0].Grade, 4);
+        Assert.Equal(60.0, sel.Blocks[1].Grade, 4);
+    }
+
     // 构造最小 PMB v1: 2×2×1 网格(4 cell) + 1 属性(品位). origin(10,20,0) blockSize(2,2,2) grades[5,10,15,20]
     private static byte[] MakePmb(double[] grades)
     {
