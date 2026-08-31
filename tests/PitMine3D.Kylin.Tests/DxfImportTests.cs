@@ -615,4 +615,21 @@ public class DxfImportTests
         Assert.NotNull(line);
         Assert.Equal(25, line!.LineWeight);               // 线宽值往返(DXF LineWeightType)
     }
+
+    [Fact]
+    public void Layer_state_survives_export_import_roundtrip()
+    {
+        var layers = new LayerTable();
+        var lyr = layers.EnsureImported("测试层", 1, 0, 0);
+        lyr.Visible = false; lyr.Frozen = true; lyr.Locked = true;   // 关闭+冻结+锁定
+        var scene = new Scene();
+        scene.Add(new LineEntity { X0 = 0, Y0 = 0, X1 = 1, Y1 = 0, LayerName = "测试层" });
+        var doc = SceneExportService.BuildDocument(scene, layers);
+        var res = DxfImportService.MapDocument(doc);
+        Assert.True(res.LayerStates.ContainsKey("测试层"));
+        var st = res.LayerStates["测试层"];
+        Assert.False(st.on);       // 开关往返
+        Assert.True(st.frozen);    // 冻结往返
+        Assert.True(st.locked);    // 锁定往返
+    }
 }

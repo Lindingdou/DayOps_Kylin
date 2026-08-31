@@ -1354,3 +1354,14 @@ pc_quality「点数/密度/包围盒/高程分布/**强度分类**」的强度/�
 - **CAD 属性往返闭环**: 图层/颜色/线型/文字五属性/线宽 —— 全部导入导出 round-trip 保真。余变宽线渲染(GL 四边形管线)记录, 数据不丢。
 
 **本会话累计补 53 真功能 + 1 并发修复 + 1 潜伏字形 bug 修 + 1 latent 攻克 + GWN 硬化, 954 测。** CAD 保真透镜彻底收官(绘制+导入+导出+全属性往返)。
+
+## 一〇六、图层状态 round-trip —— 开/冻结/锁定往返
+
+图层**状态**(开关/冻结/锁定)此前导入导出均丢(层仅存名+色)。补:
+- [x] **导出**(`SceneExport` LayerFor): 从 `LayerTable` 层写 ACadSharp `Layer.IsOn`(Visible) + `Flags`(Frozen/Locked 位)。
+- [x] **导入**(`DxfImport` MapDocument 遍历 `doc.Layers`): 读 `IsOn`+`Flags` → `EntityImportResult.LayerStates`(名→开/冻结/锁定)。
+- [x] **应用**(`ApplyEntityImport`): 导入后 `_layers.Get(名)` 恢复 Visible/Frozen/Locked(与 `.pmx` 持久化状态同源)。
+- [x] **round-trip 验证**: 关闭+冻结+锁定层 export→import 三态保留。1 测。
+- **CAD round-trip 全属性**: 实体(图层/色/线型/文字五属/线宽)+ 图层(色/开/冻结/锁定)全往返。
+
+**本会话累计补 54 真功能 + 1 并发修复 + 1 潜伏字形 bug 修 + 1 latent 攻克 + GWN 硬化, 955 测。**

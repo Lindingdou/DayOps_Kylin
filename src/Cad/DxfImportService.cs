@@ -359,6 +359,8 @@ public static class DxfImportService
         public double[] Bounds { get; set; } = { 0, 0, 0, 0 };
         /// <summary>图层名 → 代表色（供图层面板色块）。</summary>
         public Dictionary<string, (float r, float g, float b)> LayerColors { get; } = new();
+        /// <summary>图层名 → 状态(开/冻结/锁定)，来自 DXF 图层表；供导入后恢复图层开关（round-trip 保真）。</summary>
+        public Dictionary<string, (bool on, bool frozen, bool locked)> LayerStates { get; } = new();
         public List<string> LayerOrder { get; } = new();
         public Dictionary<string, int> TypeCounts { get; } = new();
         public List<string> Warnings { get; } = new();
@@ -699,6 +701,12 @@ public static class DxfImportService
                 var cn = CnTypeName(e);
                 if (cn != null) result.TypeCounts[cn] = result.TypeCounts.GetValueOrDefault(cn) + 1;
                 Emit(e, null, ColorOf(e), layer, 0);
+            }
+            foreach (var ly in doc.Layers)   // 图层表状态(开/冻结/锁定) → round-trip 保真
+            {
+                bool frozen = (ly.Flags & ACadSharp.Tables.LayerFlags.Frozen) != 0;
+                bool locked = (ly.Flags & ACadSharp.Tables.LayerFlags.Locked) != 0;
+                result.LayerStates[ly.Name] = (ly.IsOn, frozen, locked);
             }
         }
         catch (Exception ex) { result.Error = $"映射实体失败：{ex.Message}"; return result; }

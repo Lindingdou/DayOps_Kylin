@@ -1339,6 +1339,11 @@ public partial class MainWindow : Window
         {
             var c = er.LayerColors[ln];
             _layers.EnsureImported(ln, c.r, c.g, c.b);
+            if (er.LayerStates.TryGetValue(ln, out var st))    // 图层状态 round-trip: 恢复开/冻结/锁定
+            {
+                var lyr = _layers.Get(ln);
+                if (lyr != null) { lyr.Visible = st.on; lyr.Frozen = st.frozen; lyr.Locked = st.locked; }
+            }
         }
         foreach (var en in er.Entities) _scene.Add(en);
         _lastImport = null;                    // 捕捉改用场景几何

@@ -42,10 +42,17 @@ public static class SceneExportService
             else { l = new AcLayer(name); doc.Layers.Add(l); }
             var src = layers?.Get(name);                            // 场景图层色 → DXF 图层表(真彩色)
             if (src != null)
+            {
                 l.Color = new Color(
                     (byte)Math.Clamp(src.Cr * 255f, 0, 255),
                     (byte)Math.Clamp(src.Cg * 255f, 0, 255),
                     (byte)Math.Clamp(src.Cb * 255f, 0, 255));
+                l.IsOn = src.Visible;                                // 图层状态 round-trip: 开/冻结/锁定
+                var f = ACadSharp.Tables.LayerFlags.None;
+                if (src.Frozen) f |= ACadSharp.Tables.LayerFlags.Frozen;
+                if (src.Locked) f |= ACadSharp.Tables.LayerFlags.Locked;
+                l.Flags = f;
+            }
             cache[name] = l;
             return l;
         }
