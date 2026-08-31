@@ -945,6 +945,7 @@ public partial class MainWindow : Window
             if (cmd == "线落到面上" || cmd == "线落面" || cmd == "线投影到面") { await ProjectPolylinesToMeshAsync(); return; }
             if (cmd == "侧面三角网" || cmd == "侧面放样" || cmd == "放样侧面") { await SideSurfaceAsync(); return; }
             if (cmd == "道路横断面" || cmd == "路面加宽超高" || cmd == "弯道加宽") { RoadCrossSectionCmd(); return; }
+            if (cmd == "路面生成" || cmd == "生成路面" || cmd == "中线外扩" || cmd.StartsWith("路面生成 ") || cmd.StartsWith("生成路面 ")) { RoadSurfaceCmd(cmd); return; }
             if (cmd == "平行推进" || cmd == "开采程序确定" || cmd == "工作线推进") { AdvanceCmd(AdvanceMode.Parallel, "平行推进"); return; }
             if (cmd == "定点回转" || cmd == "定点回转推进") { AdvanceCmd(AdvanceMode.FixedPivot, "定点回转"); return; }
             if (cmd == "动点回转" || cmd == "动点回转推进") { AdvanceCmd(AdvanceMode.MovingPivot, "动点回转"); return; }
@@ -5199,6 +5200,24 @@ public partial class MainWindow : Window
     }
 
     // 道路横断面：选一条中线折线 → 按曲率算弯道加宽/超高 → 左右加宽路缘线入场景 + 报表
+    // 路面生成：中线多段线 + 路宽 → 等宽双侧外扩成闭合路带多边形。忠实原「中心线按路宽外扩生成路面」。
+    private void RoadSurfaceCmd(string cmd)
+    {
+        PolylineEntity? center = null;
+        foreach (var e in _selected) if (e is PolylineEntity p && p.Points.Count >= 2) { center = p; break; }
+        if (center == null) { StatusMsg.Text = "路面生成：请先选中一条道路中线多段线(≥2 点)，再执行「路面生成 [路宽]」"; return; }
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        double width = 15.0;   // 默认露天矿运输道路宽
+        if (tk.Length >= 2 && double.TryParse(tk[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double w) && w > 0) width = w;
+        var strip = RoadSurface.Strip(center.Points, width);
+        if (strip.Count < 3) { StatusMsg.Text = "路面生成：中线退化，无法成面"; return; }
+        var pl = new PolylineEntity { Closed = true, Cr = 0.52f, Cg = 0.52f, Cb = 0.56f };
+        foreach (var p in strip) pl.Points.Add(p);
+        AssignLayer(pl);
+        BeginChange(); _scene.Add(pl); RefreshScene();
+        StatusMsg.Text = $"路面生成：中线 {center.Points.Count} 点 → 路带闭合多边形 {strip.Count} 顶点（路宽 {width:0.##}）";
+    }
+
     private void RoadCrossSectionCmd()
     {
         PolylineEntity? center = null;
@@ -6695,7 +6714,7 @@ public partial class MainWindow : Window
         "区域求差","区域重叠检测","克里金估值","快速估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","地面点滤波","高程着色","点云质量统计","点云裁剪",
         // 块体/运输/路网
-        "块体模型","资源量","道路横断面","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","演化对比","螺旋斜坡道","折返斜坡道",
+        "块体模型","资源量","道路横断面","路面生成","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","演化对比","螺旋斜坡道","折返斜坡道",
         // 生产计划/投影
         "境界圈定","剥采比均衡","方案综合对比","开采程序确定","平盘宽度识别","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
