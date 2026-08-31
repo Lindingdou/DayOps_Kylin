@@ -774,6 +774,7 @@ public partial class MainWindow : Window
             if (cmd == "合并三角网" || cmd == "网格合并" || cmd == "合并网格") { await MeshMergeAsync(); return; }
             if (cmd == "补洞(三角网)" || cmd == "补洞" || cmd == "网格补洞" || cmd == "填洞") { await MeshHoleFillAsync(); return; }
             if (cmd == "分割三角网" || cmd == "沿线分割三角网" || cmd == "网格分割" || cmd == "切分三角网") { await MeshSplitAsync(); return; }
+            if (cmd == "快速建模" || cmd == "一键建模" || cmd == "顶底成体") { await QuickModelAsync(); return; }
             if (cmd == "固化成体" || cmd == "固化实体") { await SolidifyAsync(); return; }
             if (cmd == "体素格网体积" || cmd == "体素体积" || cmd == "体素算量") { await VoxelVolumeAsync(); return; }
             if (cmd == "实体转块体" || cmd == "网格转块体" || cmd == "体转块") { await EntityToBlocksAsync(); return; }
@@ -1327,6 +1328,45 @@ public partial class MainWindow : Window
         RefreshScene();
         if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
         StatusMsg.Text = $"网格边界：{loops.Count} 环 · {totPts} 点(投影 XY 作闭合折线入场景)";
+    }
+
+    // 快速建模：选顶面 + 底面 OFF → 各提最大边界环 → 侧壁放样(SideSurface.Loft) → 顶+底+侧 焊成闭合体。
+    // 复用已验证 primitives(MeshBoundaryLoops + SideSurface.Loft + MeshWeld), 免移原 1000 行 QuickModelBuilder。
+    private async Task QuickModelAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "快速建模：选顶面 + 底面 OFF（2 份）",
+            AllowMultiple = true,
+            FileTypeFilter = new[] { new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } } }
+        });
+        if (files.Count < 2) { StatusMsg.Text = "快速建模：请选 2 份 OFF（顶面、底面）"; return; }
+        var (v0, t0) = MeshMetrics.ParseOff(System.IO.File.ReadAllText(files[0].Path.LocalPath));
+        var (v1, t1) = MeshMetrics.ParseOff(System.IO.File.ReadAllText(files[1].Path.LocalPath));
+        if (t0.Count == 0 || t1.Count == 0) { StatusMsg.Text = "快速建模：某面未解析到三角网"; return; }
+        var loop0 = LargestLoop(MeshBoundaryLoops.Extract(v0, t0));
+        var loop1 = LargestLoop(MeshBoundaryLoops.Extract(v1, t1));
+        if (loop0 == null || loop1 == null) { StatusMsg.Text = "快速建模：顶/底面需为有开边的开放面（取其边界环放样侧壁）"; return; }
+        var (sv, st) = SideSurface.Loft(loop0, loop1, closed: true, flip: false);
+        if (st.Count == 0) { StatusMsg.Text = "快速建模：侧壁放样失败（边界环过短）"; return; }
+        var (verts, tris) = MeshWeld.Concat(new List<(IReadOnlyList<(double x, double y, double z)>, IReadOnlyList<(int a, int b, int c)>)>
+            { (v0, t0), (v1, t1), (sv, st) });
+        var m = MeshMetrics.Compute(verts, tris);
+        double diag = System.Math.Sqrt((m.MaxX - m.MinX) * (m.MaxX - m.MinX) + (m.MaxY - m.MinY) * (m.MaxY - m.MinY) + (m.MaxZ - m.MinZ) * (m.MaxZ - m.MinZ));
+        var w = MeshWeld.Weld(verts, tris, diag > 0 ? diag * 1e-4 : 1e-6, dropDuplicateTris: true);
+        var d = MeshDiagnose.Analyze(w.Verts, w.Tris);
+        bool watertight = d.BoundaryEdges == 0 && d.NonManifoldEdges == 0;
+        string outPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(files[0].Path.LocalPath) ?? ".", "quickmodel.off");
+        try { System.IO.File.WriteAllText(outPath, MeshWeld.ToOff(w.Verts, w.Tris)); }
+        catch (System.Exception ex) { StatusMsg.Text = $"快速建模：写出失败 {ex.Message}"; return; }
+        StatusMsg.Text = $"快速建模：顶+底+侧壁 焊成 {w.OutputTris} 三角 · {(watertight ? "水密(闭合地质体)" : $"非水密(开放边 {d.BoundaryEdges})")} → {System.IO.Path.GetFileName(outPath)}";
+    }
+
+    private static List<(double x, double y, double z)>? LargestLoop(List<List<(double x, double y, double z)>> loops)
+    {
+        List<(double x, double y, double z)>? best = null;
+        foreach (var l in loops) if (best == null || l.Count > best.Count) best = l;
+        return best;
     }
 
     // 分割三角网：选中折线定切割线(首→末点所在竖直面) + 选 OFF → 三角形-平面裁剪切两片 → 落 .left/.right.off。
