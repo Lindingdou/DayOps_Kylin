@@ -779,6 +779,7 @@ public partial class MainWindow : Window
             if (cmd == "排土场容量校核" || cmd == "容量校核" || cmd == "排土容量") { await DumpCapacityAsync(); return; }
             if (cmd == "生产量核算" || cmd == "任务量汇总" || cmd == "分账合计" || cmd == "生产任务量") { await ProductionQuantityAsync(); return; }
             if (cmd == "采剥平衡" || cmd == "采剥平衡分析" || cmd == "剥采平衡" || cmd == "物料平衡") { await StripBalanceAsync(); return; }
+            if (cmd == "配煤核算" || cmd == "配煤" || cmd == "煤质混合" || cmd == "配煤计算") { await CoalBlendAsync(); return; }
             if (cmd == "排土场按量推进" || cmd == "排土按量推进" || cmd.StartsWith("排土场按量推进 ") || cmd.StartsWith("排土按量推进 "))
             {
                 var tok = cmd.Split(new[] { ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
@@ -1350,6 +1351,38 @@ public partial class MainWindow : Window
         RefreshScene();
         if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
         StatusMsg.Text = $"网格边界：{loops.Count} 环 · {totPts} 点(投影 XY 作闭合折线入场景)";
+    }
+
+    // 配煤核算（TaskLib 煤质切片）：读配煤 CSV(吨,灰%,热MJ,硫%) → 按吨量加权混合煤质。
+    private async Task CoalBlendAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "配煤核算：选配煤 CSV(吨,灰分%,热值MJ/kg,硫分%)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("配煤 (CSV/TXT)") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (files.Count == 0) return;
+        string[] rows;
+        try { rows = System.IO.File.ReadAllLines(files[0].Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"配煤核算：读取失败 {ex.Message}"; return; }
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var src = new List<(double, Cad.Tasks.CoalQuality)>();
+        double totT = 0;
+        foreach (var raw in rows)
+        {
+            var s = raw.Trim();
+            if (s.Length == 0 || s.StartsWith("#")) continue;
+            var c = s.Split(new[] { ',', '\t', ';' }, System.StringSplitOptions.RemoveEmptyEntries);
+            if (c.Length < 2) continue;
+            if (!double.TryParse(c[0].Trim(), System.Globalization.NumberStyles.Float, inv, out double t)) continue;
+            double D(int i) => c.Length > i && double.TryParse(c[i].Trim(), System.Globalization.NumberStyles.Float, inv, out var v) ? v : 0;
+            src.Add((t, new Cad.Tasks.CoalQuality { AshPct = D(1), CalorificMJkg = D(2), SulfurPct = D(3) }));
+            totT += t;
+        }
+        if (src.Count == 0) { StatusMsg.Text = "配煤核算：未解析到配煤记录(需 吨,灰%,热MJ,硫%)"; return; }
+        var b = Cad.Tasks.CoalQuality.Blend(src);
+        StatusMsg.Text = $"配煤核算：{src.Count} 路 · 总 {totT / 1e4:0.##}万t → 混合煤质 {b.Caption}";
     }
 
     // 排土场按量推进（TaskLib 汇切片）：按排弃占容方反算推进距离 d = V容 / (工作线长 × 台阶高)。
