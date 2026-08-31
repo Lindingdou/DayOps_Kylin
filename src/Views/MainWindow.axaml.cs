@@ -863,6 +863,7 @@ public partial class MainWindow : Window
             if (cmd == "补洞(三角网)" || cmd == "补洞" || cmd == "网格补洞" || cmd == "填洞") { await MeshHoleFillAsync(); return; }
             if (cmd == "分割三角网" || cmd == "沿线分割三角网" || cmd == "网格分割" || cmd == "切分三角网") { await MeshSplitAsync(); return; }
             if (cmd == "快速建模" || cmd == "一键建模" || cmd == "顶底成体") { await QuickModelAsync(); return; }
+            if (cmd == "连续多层建模" || cmd == "多层建模" || cmd == "逐层成体" || cmd == "层位建模") { await MultiLayerModelAsync(); return; }
             if (cmd == "中心线管理" || cmd == "边状态" || cmd == "路网拓扑" || cmd == "中线管理") { RoadNetworkReportCmd(); return; }
             if (cmd == "排土场容量校核" || cmd == "容量校核" || cmd == "排土容量") { await DumpCapacityAsync(); return; }
             if (cmd == "生产量核算" || cmd == "任务量汇总" || cmd == "分账合计" || cmd == "生产任务量") { await ProductionQuantityAsync(); return; }
@@ -1783,29 +1784,47 @@ public partial class MainWindow : Window
         var (v0, t0) = MeshMetrics.ParseOff(System.IO.File.ReadAllText(files[0].Path.LocalPath));
         var (v1, t1) = MeshMetrics.ParseOff(System.IO.File.ReadAllText(files[1].Path.LocalPath));
         if (t0.Count == 0 || t1.Count == 0) { StatusMsg.Text = "快速建模：某面未解析到三角网"; return; }
-        var loop0 = LargestLoop(MeshBoundaryLoops.Extract(v0, t0));
-        var loop1 = LargestLoop(MeshBoundaryLoops.Extract(v1, t1));
-        if (loop0 == null || loop1 == null) { StatusMsg.Text = "快速建模：顶/底面需为有开边的开放面（取其边界环放样侧壁）"; return; }
-        var (sv, st) = SideSurface.Loft(loop0, loop1, closed: true, flip: false);
-        if (st.Count == 0) { StatusMsg.Text = "快速建模：侧壁放样失败（边界环过短）"; return; }
-        var (verts, tris) = MeshWeld.Concat(new List<(IReadOnlyList<(double x, double y, double z)>, IReadOnlyList<(int a, int b, int c)>)>
-            { (v0, t0), (v1, t1), (sv, st) });
-        var m = MeshMetrics.Compute(verts, tris);
-        double diag = System.Math.Sqrt((m.MaxX - m.MinX) * (m.MaxX - m.MinX) + (m.MaxY - m.MinY) * (m.MaxY - m.MinY) + (m.MaxZ - m.MinZ) * (m.MaxZ - m.MinZ));
-        var w = MeshWeld.Weld(verts, tris, diag > 0 ? diag * 1e-4 : 1e-6, dropDuplicateTris: true);
-        var d = MeshDiagnose.Analyze(w.Verts, w.Tris);
+        var solid = LayerSolid.FromSurfaces(v0, t0, v1, t1);
+        if (solid == null) { StatusMsg.Text = "快速建模：顶/底面需为有开边的开放面（取其边界环放样侧壁）"; return; }
+        var (wv, wt) = solid.Value;
+        var d = MeshDiagnose.Analyze(wv, wt);
         bool watertight = d.BoundaryEdges == 0 && d.NonManifoldEdges == 0;
         string outPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(files[0].Path.LocalPath) ?? ".", "quickmodel.off");
-        try { System.IO.File.WriteAllText(outPath, MeshWeld.ToOff(w.Verts, w.Tris)); }
+        try { System.IO.File.WriteAllText(outPath, MeshWeld.ToOff(wv, wt)); }
         catch (System.Exception ex) { StatusMsg.Text = $"快速建模：写出失败 {ex.Message}"; return; }
-        StatusMsg.Text = $"快速建模：顶+底+侧壁 焊成 {w.OutputTris} 三角 · {(watertight ? "水密(闭合地质体)" : $"非水密(开放边 {d.BoundaryEdges})")} → {System.IO.Path.GetFileName(outPath)}";
+        StatusMsg.Text = $"快速建模：顶+底+侧壁 焊成 {wt.Count} 三角 · {(watertight ? "水密(闭合地质体)" : $"非水密(开放边 {d.BoundaryEdges})")} → {System.IO.Path.GetFileName(outPath)}";
     }
 
-    private static List<(double x, double y, double z)>? LargestLoop(List<List<(double x, double y, double z)>> loops)
+    // 连续多层自动建模：选 N 份 OFF 层位面 → 按均高降序排 → 逐相邻对成体 → 各夹层体写 layerN.off
+    private async Task MultiLayerModelAsync()
     {
-        List<(double x, double y, double z)>? best = null;
-        foreach (var l in loops) if (best == null || l.Count > best.Count) best = l;
-        return best;
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "连续多层建模：选 N 份层位面 OFF（≥2）",
+            AllowMultiple = true,
+            FileTypeFilter = new[] { new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } } }
+        });
+        if (files.Count < 2) { StatusMsg.Text = "连续多层建模：请选 ≥2 份层位面 OFF"; return; }
+        var surfaces = new List<(IReadOnlyList<(double x, double y, double z)> v, IReadOnlyList<(int a, int b, int c)> t)>();
+        foreach (var f in files)
+        {
+            var (v, t) = MeshMetrics.ParseOff(System.IO.File.ReadAllText(f.Path.LocalPath));
+            if (t.Count > 0) surfaces.Add((v, t));
+        }
+        if (surfaces.Count < 2) { StatusMsg.Text = "连续多层建模：有效层位面不足 2"; return; }
+        var solids = LayerSolid.MultiLayer(surfaces);
+        string dir = System.IO.Path.GetDirectoryName(files[0].Path.LocalPath) ?? ".";
+        int made = 0, watertightN = 0;
+        for (int i = 0; i < solids.Count; i++)
+        {
+            if (solids[i] == null) continue;
+            var (wv, wt) = solids[i]!.Value;
+            var d = MeshDiagnose.Analyze(wv, wt);
+            if (d.BoundaryEdges == 0 && d.NonManifoldEdges == 0) watertightN++;
+            try { System.IO.File.WriteAllText(System.IO.Path.Combine(dir, $"layer{i + 1}.off"), MeshWeld.ToOff(wv, wt)); made++; }
+            catch (System.Exception ex) { StatusMsg.Text = $"连续多层建模：写出失败 {ex.Message}"; return; }
+        }
+        StatusMsg.Text = $"连续多层建模：{surfaces.Count} 层位面 → {made} 夹层体（{watertightN} 水密）→ layer1..{made}.off";
     }
 
     // 分割三角网：选中折线定切割线(首→末点所在竖直面) + 选 OFF → 三角形-平面裁剪切两片 → 落 .left/.right.off。
