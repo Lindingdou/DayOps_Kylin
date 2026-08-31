@@ -1011,3 +1011,15 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 ## 六十七、感知均匀色带(Viridis/Turbo/Magma/Plasma) —— 色带族补齐
 
 - [x] **4 感知均匀色带 + 色带切换**(`本次`)：原 TinColormap 7 色带, Kylin 仅 3(Terrain/Jet/Grayscale), 补 **Viridis/Turbo/Magma/Plasma**(感知均匀、色盲友好, 科学可视化优于 Jet)。`Colormap.ByName`(名→色带) + `_colormap` 当前色带 + 命令 `色带 <名>`(切换, 高程/属性着色读之)。+2 单测(4 色带端点色/ByName 大小写不敏感+未知→Terrain)。752 tests。
+
+## 六十八、"整体+分X"分级报量 + 统计直方图 —— 子命令级缺口补齐
+
+**新透镜**：命令存在≠子功能齐。原多处"**整体+分标高**"只做了整体；原块体报告有"min/max/mean/std+直方图"Kylin 无。逐一补：
+
+- [x] **分标高体素体积**(`02b259c`)：原「体素化算整体+分标高体积」(BlockModelLib ElevationBinner 按标高对 cell 中心 Z 分桶)只做了整体。补 `VoxelBands.ByElevation`(取 isInside 谓词与网格解耦, 各高程带累计占用体积) → VoxelVolumeAsync 报总量+分标高+导出 CSV。5 测(盒谓词: 均匀柱各带等积/分带和≈总体积/半填上带少/CSV/退化)。
+- [x] **分标高储量**(`23c75a5`)：原「整体+分台阶报量」只做了整体。补 `BlockModel.ResourceByElevation`(块体按 benchHeight 分带, 各带独立算矿/废/剥采比/品位/金属) → 附加到资源量报告。**守恒**: 各带矿量/废/金属/吨位之和 == 整体。6 测。
+- [x] **属性统计+直方图**(`ea2600b`)：原 BlockReportGenerator「每属性 min/max/mean/std/count + 20 桶直方图」Kylin 无。补 `Statistics.Describe`(min/max/mean/std/median + 等宽桶) + 命令 `属性统计/直方图`(块体品位分布上屏+导出 CSV)。7 测(矩/中位/频数和==N/均匀平坦/全等塌首桶/末值不越界/CSV边界)。**770 tests**。
+
+**近失纠正(纪律)**：两面 cut-fill 填挖方 —— 本欲新建 `CutFill`, 但**查 Kylin dispatch 表**发现 `TerrainAnalysis.TwoEpochVolume`(接"两期点云算量"命令)**已实现**(grid 采两面 4 角均 dz×面积)→ **冗余, 删除未提交代码**。**教训**: 实现前必查 (a)原程序有无 **且** (b)Kylin dispatch 是否已有(可能别名)。
+
+**非缺口核实(本轮)**：山体阴影(原无)、断面法体积(原无)、组合样(原"Composite"是复合方案非钻孔样)、坡向(PointNormals 逐点 dip+aspect 已有)、境界优化(BoundaryHullAsync+PitDepthCmd 已有)、测量族(测距/面积/角度/周长已有)、块体剖切/导出/约束(已有)、DXF 实体导入(Face3D/Solid/Polyline3D 全覆盖)、坐标转换(4参相似)。**288 命令处理器全实现, 无桩/TODO/未实现**。
