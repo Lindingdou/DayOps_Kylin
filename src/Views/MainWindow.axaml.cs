@@ -776,6 +776,7 @@ public partial class MainWindow : Window
             if (cmd == "分割三角网" || cmd == "沿线分割三角网" || cmd == "网格分割" || cmd == "切分三角网") { await MeshSplitAsync(); return; }
             if (cmd == "快速建模" || cmd == "一键建模" || cmd == "顶底成体") { await QuickModelAsync(); return; }
             if (cmd == "中心线管理" || cmd == "边状态" || cmd == "路网拓扑" || cmd == "中线管理") { RoadNetworkReportCmd(); return; }
+            if (cmd == "排土场容量校核" || cmd == "容量校核" || cmd == "排土容量") { await DumpCapacityAsync(); return; }
             if (cmd == "固化成体" || cmd == "固化实体") { await SolidifyAsync(); return; }
             if (cmd == "体素格网体积" || cmd == "体素体积" || cmd == "体素算量") { await VoxelVolumeAsync(); return; }
             if (cmd == "实体转块体" || cmd == "网格转块体" || cmd == "体转块") { await EntityToBlocksAsync(); return; }
@@ -1329,6 +1330,25 @@ public partial class MainWindow : Window
         RefreshScene();
         if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
         StatusMsg.Text = $"网格边界：{loops.Count} 环 · {totPts} 点(投影 XY 作闭合折线入场景)";
+    }
+
+    // 排土场容量校核：排土设计面 vs 现状面 的填方体积 = 设计形态总容积(原义)。复用 TerrainAnalysis.TwoEpochVolume。
+    private async Task DumpCapacityAsync()
+    {
+        var opt = new System.Func<string, FilePickerOpenOptions>(t => new FilePickerOpenOptions
+        {
+            Title = t, AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("高程点 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        var f1 = await StorageProvider.OpenFilePickerAsync(opt("容量校核：选【现状面】高程点 CSV"));
+        if (f1.Count == 0) return;
+        var f2 = await StorageProvider.OpenFilePickerAsync(opt("容量校核：选【排土设计面】高程点 CSV"));
+        if (f2.Count == 0) return;
+        var r1 = PointDataImportService.Load(f1[0].Path.LocalPath);
+        var r2 = PointDataImportService.Load(f2[0].Path.LocalPath);
+        if (!r1.Success || !r2.Success) { StatusMsg.Text = "容量校核：点导入失败"; return; }
+        var (cut, fill, net) = TerrainAnalysis.TwoEpochVolume(r1.Points, r2.Points, 64);
+        StatusMsg.Text = $"排土场容量校核：设计容积(填方) {fill:0.##} m³{(cut > 1e-6 ? $" · 设计面低于现状处(挖) {cut:0.##}" : "")} · 净 {net:0.##}（对比需排量判够不够）";
     }
 
     // 中心线管理 / 边状态：从场景折线(道路中线)建路网 → 拓扑报表(中线/节点/边/总长/断头/交叉)。
