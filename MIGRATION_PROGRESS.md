@@ -727,3 +727,11 @@
 - **导出覆盖(完整)**：SceneExportService.Map 覆盖全部 8 种场景实体(Line/Circle/Arc/Point/Text/Rect→闭合折线/Polygon→闭合折线/Polyline)，Arc 带 CCW 判向——scene→DXF→scene 往返不丢类型。
 
 → DXF 导入/导出轴亦已尽(匹配并超越原实体集)。**注**：原 Mesh/PolyfaceMesh 走 3D TriangleMesh 内核渲染，本移植为 2D 折线线框(与 Face3D 现状一致)——3D 网格渲染属块体模型子系统，若需保真 3D 需桥接该子系统(记录)。
+
+## 四十一、第 6 审计轴：撤销覆盖 + 图层操作覆盖（补 删除图层，626 测试）
+
+- **撤销/重做覆盖(核实健全)**：awk 扫全部 `_scene.Add/Remove/Replace/Clear`(96 处) vs `BeginChange`(88 处)，逐个核对——所有用户编辑命令均在变更前 `BeginChange()`(含循环前置)；例外仅 ① 文件加载/新建(用 `_undo.Clear()` 正确) ② 块体配色方块 `RenderBlocks`(可视化叠加，自管 `_blockCellEntities` 重渲，非编辑，不可撤销可辩护)。UndoManagerTests 已覆盖机制。**无明确缺口**。
+- [x] **删除图层**(`c5951ed`)：对照原 `LayerManagerWindow.OnDeleteClick`——Kylin 有 新建/特性管理器(循环切当前)/冻结/锁定/全开/改色(L4035)/置当前(面板点击 L4013)/可见性切换，但 `LayerTable.Remove` 存在却**无命令调用**。补 删除图层 命令：忠实原语义(默认层0不可删 · 该层实体移到0层不丢 · 当前切至0 · 可撤销)。新增可测 `Scene.ReassignLayer`。+3 单测。
+- **标注类型(核实完整)**：Kylin 线性/对齐/半径/连续标注 与原程序**完全一致**——原亦无 角度/直径/基线/坐标标注，不臆造(保真)。
+
+→ 图层操作 + 标注类型轴亦已尽。第 6 轴仅得 删除图层 1 缺口。
