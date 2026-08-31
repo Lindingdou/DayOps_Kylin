@@ -704,7 +704,7 @@ public partial class MainWindow : Window
             if (cmd == "面积" || cmd == "面积测量" || cmd == "周长") { MeasureArea(); return; }
             if (cmd == "距离" || cmd == "测量距离" || cmd == "测距") { _measure = new MeasureState(); _tool = null; StatusMsg.Text = "测距：点第一点"; return; }
             if (cmd == "角度" || cmd == "测量角度" || cmd == "三点测角") { _angle = new AngleState(); _tool = null; _measure = null; StatusMsg.Text = "测角：点顶点"; return; }
-            if (cmd == "等效运距" || cmd == "运输指标" || cmd == "驱动距离") { await HaulMetricsAsync(); return; }
+            if (cmd == "等效运距" || cmd == "运输指标" || cmd == "运输指标报表" || cmd == "驱动距离") { await HaulMetricsAsync(); return; }
             if (cmd == "批量台阶扩帮" || cmd == "台阶线生成" || cmd == "台阶扩帮") { GenerateBenchLines(); return; }
             if (cmd == "剥采比均衡" || cmd == "VP曲线" || cmd == "剥采比") { await StrippingBalanceAsync(); return; }
             if (cmd == "工作面线拟合" || cmd == "工作面线" || cmd == "拟合工作面线") { await WorkingFaceLineAsync(); return; }

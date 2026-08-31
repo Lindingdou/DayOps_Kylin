@@ -542,6 +542,43 @@
                                     </StackPanel>
                                 </DockPanel>
                             </Border>
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="块体模型" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="导入块体" Click="OnRibbonCommand" ToolTip.Tip="从 CSV 导入块体模型">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mb_prim_box}" /><TextBlock Text="导入块体" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="实体转块体" Click="OnRibbonCommand" ToolTip.Tip="选封闭三角网体→体素化成块体">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource te_voxel_volume}" /><TextBlock Text="实体转块体" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="约束块体" Click="OnRibbonCommand" ToolTip.Tip="选闭合多段线→仅保留范围内块体">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource me_clip_loop}" /><TextBlock Text="约束块体" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="块体着色" Click="OnRibbonCommand" ToolTip.Tip="按品位色带着色全部块体">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource stat_kriging}" /><TextBlock Text="块体着色" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="筛选块体" Click="OnRibbonCommand" ToolTip.Tip="按品位阈值筛选块体">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource te_quality}" /><TextBlock Text="筛选块体" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="切面剖切" Click="OnRibbonCommand" ToolTip.Tip="选线→取沿线一格宽剖面块体">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource me_section}" /><TextBlock Text="切面剖切" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="体素格网体积" Click="OnRibbonCommand" ToolTip.Tip="选封闭体→体素化算总体积/分标高体积">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource te_volume_diff}" /><TextBlock Text="体素体积" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="删除块体" Click="OnRibbonCommand" ToolTip.Tip="清除全部块体单元">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource te_delete_tri}" /><TextBlock Text="删除块体" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="导出块体" Click="OnRibbonCommand" ToolTip.Tip="导出块体模型为 CSV">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mb_geomodel}" /><TextBlock Text="导出块体" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="输出报告" Click="OnRibbonCommand" ToolTip.Tip="输出资源量报告 CSV">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource stat_quick}" /><TextBlock Text="输出报告" /></StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
                         </StackPanel>
                     </ScrollViewer>
                 </Border>
