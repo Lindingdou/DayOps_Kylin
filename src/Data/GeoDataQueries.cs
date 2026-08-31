@@ -269,6 +269,41 @@ public static class GeoDataQueries
         return rows;
     }
 
+    public sealed record FleetOverview(int Total, IReadOnlyList<CategoryCount> ByStatus, IReadOnlyList<CategoryCount> ByModel);
+
+    /// <summary>机群总览：设备总数 + 按状态 + 按型号(Top)。</summary>
+    public static FleetOverview GetFleetOverview(SqliteConnection conn)
+    {
+        int total = (int)Scalar(conn, "SELECT COUNT(*) FROM equipment");
+        var byStatus = GroupCount(conn, "SELECT COALESCE(status,'(未填)'), COUNT(*) c FROM equipment GROUP BY status ORDER BY c DESC");
+        var byModel = GroupCount(conn, "SELECT COALESCE(model,'(未填)'), COUNT(*) c FROM equipment GROUP BY model ORDER BY c DESC LIMIT 8");
+        return new FleetOverview(total, byStatus, byModel);
+    }
+
+    public sealed record CoalClassRow(string Code, string NameCn, double VdafMin, double VdafMax);
+
+    /// <summary>煤种分类：各煤种 代码/名称/挥发分区间(Vdaf)。</summary>
+    public static List<CoalClassRow> GetCoalClassification(SqliteConnection conn)
+    {
+        var rows = new List<CoalClassRow>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"SELECT COALESCE(code,''), COALESCE(name_cn,''), COALESCE(vdaf_min,0), COALESCE(vdaf_max,0)
+                            FROM coal_classification ORDER BY COALESCE(sort_order,0), code";
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read()) rows.Add(new CoalClassRow(rd.GetString(0), rd.GetString(1), rd.GetDouble(2), rd.GetDouble(3)));
+        return rows;
+    }
+
+    private static List<CategoryCount> GroupCount(SqliteConnection conn, string sql)
+    {
+        var list = new List<CategoryCount>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql;
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read()) list.Add(new CategoryCount(rd.IsDBNull(0) ? "(无)" : rd.GetString(0), rd.GetInt32(1)));
+        return list;
+    }
+
     /// <summary>开孔坐标：读所有有平面坐标的钻孔 (hole_id, x, y, z_collar)。供展绘点位。</summary>
     public static List<(string holeId, double x, double y, double z)> GetBoreholeCoords(SqliteConnection conn)
     {

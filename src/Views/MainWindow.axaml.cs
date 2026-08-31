@@ -729,6 +729,9 @@ public partial class MainWindow : Window
             if (cmd == "路况显示" || cmd == "运输道路" || cmd == "道路台账") { HaulRoadsCmd(); return; }
             if (cmd == "边坡设计" || cmd == "边坡参数" || cmd == "帮坡角设计") { SlopeDesignsCmd(); return; }
             if (cmd == "展绘钻孔" || cmd == "开孔坐标管理" || cmd == "展绘层位数据" || cmd == "钻孔展绘" || cmd == "开孔坐标") { DrawBoreholesCmd(); return; }
+            if (cmd == "机群总览" || cmd == "设备总览" || cmd == "机群") { FleetOverviewCmd(); return; }
+            if (cmd == "数据看板" || cmd == "看板" || cmd == "调度态势看板" || cmd == "态势看板") { DataBoardCmd(); return; }
+            if (cmd == "煤种分类" || cmd == "煤类分类" || cmd == "煤炭分类") { CoalClassificationCmd(); return; }
             if (cmd == "点云抽稀" || cmd == "抽稀" || cmd == "点云精简") { await ThinPointsAsync(); return; }
             if (cmd == "地面点滤波" || cmd == "地面滤波") { await GroundFilterAsync(); return; }
             if (cmd == "C2C" || cmd == "点云比对" || cmd == "位移监测 C2C" || cmd == "位移监测") { await CloudCompareAsync(); return; }
@@ -5156,6 +5159,35 @@ public partial class MainWindow : Window
         var parts = new List<string>();
         foreach (var s in slopes) parts.Add($"{s.Side}(工作帮{s.WorkingAngle:0.#}°/最终帮{s.FinalAngle:0.#}°/深{s.MaxDepth:0.#}m/安全系数{s.SafetyFactor:0.##})");
         StatusMsg.Text = $"边坡设计（{slopes.Count} 帮）：" + string.Join(" · ", parts);
+    }
+
+    private void FleetOverviewCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var f = Data.GeoDataQueries.GetFleetOverview(db.Connection);
+        var st = new List<string>(); foreach (var c in f.ByStatus) st.Add($"{c.Category} {c.Count}");
+        var md = new List<string>(); foreach (var c in f.ByModel) md.Add($"{c.Category} {c.Count}");
+        StatusMsg.Text = $"机群总览：共 {f.Total} 台 · 状态[{string.Join(" / ", st)}] · 型号[{string.Join(" / ", md)}]";
+    }
+
+    private void DataBoardCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var eq = Data.GeoDataQueries.GetEquipmentRoster(db.Connection);
+        var pr = Data.GeoDataQueries.GetProductionStats(db.Connection);
+        var ft = Data.GeoDataQueries.GetFaultStats(db.Connection);
+        var kp = Data.GeoDataQueries.GetKpiStats(db.Connection);
+        StatusMsg.Text = $"数据看板（文本汇总）：设备 {eq.Total} 台（在役 {eq.InService}）· 产量 {pr.OutputM3:0.#}m³/{pr.Records}记录 · 作业率 {pr.UtilizationPct:0.#}% · 故障 {ft.Events}起停机{ft.DowntimeHours:0.#}h · KPI 可用率 {kp.AvgAvailabilityPct:0.#}%";
+    }
+
+    private void CoalClassificationCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var cls = Data.GeoDataQueries.GetCoalClassification(db.Connection);
+        if (cls.Count == 0) { StatusMsg.Text = "煤种分类：无分类数据"; return; }
+        var parts = new List<string>();
+        foreach (var c in cls) parts.Add($"{c.Code} {c.NameCn}(Vdaf {c.VdafMin:0.#}~{c.VdafMax:0.#}%)");
+        StatusMsg.Text = $"煤种分类（{cls.Count} 种）：" + string.Join(" · ", parts);
     }
 
     // 展绘钻孔 / 开孔坐标管理：读库钻孔平面坐标 → 点位入场景(可见几何) + 缩放到范围。

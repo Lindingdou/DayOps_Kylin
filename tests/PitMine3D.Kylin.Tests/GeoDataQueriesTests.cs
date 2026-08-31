@@ -162,4 +162,14 @@ public class GeoDataQueriesTests
         Assert.True(pts.Count > 100, $"带坐标钻孔 {pts.Count}");   // 种子 241
         Assert.All(pts, p => Assert.NotEqual(0.0, p.x + p.y));    // 坐标非全零
     }
+
+    [Fact]
+    public void Fleet_overview_and_coal_class_from_seed()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var f = GeoDataQueries.GetFleetOverview(db.Connection);
+        Assert.True(f.Total >= 5);
+        Assert.NotEmpty(f.ByStatus);
+        Assert.NotEmpty(GeoDataQueries.GetCoalClassification(db.Connection));   // 种子 16
+    }
 }
