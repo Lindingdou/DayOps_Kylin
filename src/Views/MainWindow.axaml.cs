@@ -1028,6 +1028,7 @@ public partial class MainWindow : Window
             if (cmd == "最后") { SelectLast(); return; }
             if (cmd == "上次") { SelectPrevious(); return; }
             if (cmd == "取消选择" || cmd == "全部取消选择" || cmd == "清除选择") { DeselectAll(); return; }
+            if (cmd == "反选" || cmd == "反向选择" || cmd == "反转选择") { InvertSelection(); return; }
             if (cmd == "分解") { ExplodeSelected(); return; }
             if (cmd == "加密多段线" || cmd == "加密") { DensifySelectedPolylines(); return; }
             if (cmd == "两线交点" || cmd == "求交点" || cmd == "线交点") { IntersectSelectedPolylines(); return; }
@@ -5927,6 +5928,17 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"全选 {_selected.Count} 个";
     }
 
+    // 反选：新选择集 = 当前未选中的全部实体（忠实原版"反选"）
+    private void InvertSelection()
+    {
+        SaveSel();
+        var cur = new HashSet<SceneEntity>(_selected);
+        _selected.Clear();
+        foreach (var e in _scene.Entities) if (!cur.Contains(e)) _selected.Add(e);
+        HighlightSelection();
+        StatusMsg.Text = $"反选：现选 {_selected.Count} 个";
+    }
+
     private void SelectLast()
     {
         if (_scene.Count == 0) { StatusMsg.Text = "无实体"; return; }
@@ -7755,7 +7767,7 @@ public partial class MainWindow : Window
         "线性标注","对齐标注","半径标注","连续标注","标注样式",
         "距离","面积","角度",
         "剪切","复制到剪贴板","粘贴","基点粘贴","原坐标粘贴",
-        "快速选择","全部选择","取消选择","创建选择集","特性",
+        "快速选择","全部选择","反选","取消选择","创建选择集","特性",
         // 线编辑
         "加密多段线","简化","平滑","样条平滑","抽稀等值线","两线交点","闭合多段线","删除重复点","删除重复线","连接多段线","组合工作线",
         // 网格/建模
