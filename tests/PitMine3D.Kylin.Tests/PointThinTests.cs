@@ -60,6 +60,17 @@ public class PointThinTests
     }
 
     [Fact]
+    public void Random_keeps_approximate_fraction_deterministically()
+    {
+        var pts = new List<(double x, double y, double z)>();
+        for (int i = 0; i < 1000; i++) pts.Add((i, 0, 0));
+        var kept = PointThin.ThinRandom(pts, 0.3, new System.Random(42));
+        Assert.InRange(kept.Count, 250, 350);        // ≈30%(种子确定, 容差)
+        Assert.Empty(PointThin.ThinRandom(pts, 0, new System.Random(1)));       // 0 → 空
+        Assert.Equal(1000, PointThin.ThinRandom(pts, 1, new System.Random(1)).Count);  // ≥1 → 全留
+    }
+
+    [Fact]
     public void Uniform_guarantees_min_spacing()
     {
         // 密集网格(间距 1), 均匀抽稀 minDist=3 → 任两保留点间距 ≥ 3

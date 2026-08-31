@@ -792,6 +792,7 @@ public partial class MainWindow : Window
             if (cmd == "点云抽稀" || cmd == "抽稀" || cmd == "点云精简") { await ThinPointsAsync(); return; }
             if (cmd == "自适应抽稀" || cmd == "保特征抽稀" || cmd == "特征抽稀") { await ThinPointsAsync("adaptive"); return; }
             if (cmd == "均匀抽稀" || cmd == "距离抽稀" || cmd == "等距抽稀") { await ThinPointsAsync("uniform"); return; }
+            if (cmd == "随机抽稀" || cmd == "随机采样" || cmd == "随机精简") { await ThinPointsAsync("random"); return; }
             if (cmd == "地面点滤波" || cmd == "地面滤波") { await GroundFilterAsync(); return; }
             if (cmd == "C2C" || cmd == "点云比对" || cmd == "位移监测 C2C" || cmd == "位移监测") { await CloudCompareAsync(); return; }
             if (cmd == "画道路中线" || cmd == "手动标定线路" || cmd == "道路中线绘制") { ActivateDrawTool("多段线"); StatusMsg.Text = "画道路中线：绘制折线作道路中线（供路网/寻径/演化对比）"; return; }
@@ -3319,7 +3320,7 @@ public partial class MainWindow : Window
     // 点云抽稀：XYZ CSV → 体素抽稀 → 抽稀后点入场景 + 报压缩比
     private async Task ThinPointsAsync(string thinMode = "voxel")
     {
-        string mode = thinMode switch { "adaptive" => "自适应保特征抽稀", "uniform" => "均匀抽稀", _ => "点云抽稀(体素)" };
+        string mode = thinMode switch { "adaptive" => "自适应保特征抽稀", "uniform" => "均匀抽稀", "random" => "随机抽稀", _ => "点云抽稀(体素)" };
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = mode + "：选点 CSV (x,y,z)",
@@ -3335,9 +3336,10 @@ public partial class MainWindow : Window
         {
             "adaptive" => PointThin.ThinAdaptive(r.Points, cell),
             "uniform" => PointThin.ThinUniform(r.Points, cell),
+            "random" => PointThin.ThinRandom(r.Points, r.Points.Count > 0 ? System.Math.Min(1.0, (double)PointThin.Thin(r.Points, cell).Count / r.Points.Count) : 1.0, new System.Random()),
             _ => PointThin.Thin(r.Points, cell)
         };
-        string note = thinMode == "adaptive" ? "；脊/棱密留、平坦疏化" : thinMode == "uniform" ? "；保证最小间距" : "";
+        string note = thinMode == "adaptive" ? "；脊/棱密留、平坦疏化" : thinMode == "uniform" ? "；保证最小间距" : thinMode == "random" ? "；随机子集(快速)" : "";
         BeginChange();
         foreach (var (x, y, _) in thinned) { var pt = new PointEntity { X = x, Y = y }; AssignLayer(pt); _scene.Add(pt); }
         RefreshScene();
@@ -6862,7 +6864,7 @@ public partial class MainWindow : Window
         "网格度量","网格诊断","创建三角网","约束三角网","裁剪三角网","网格焊接","网格边界","网格交线","网格剖面","网格光顺","合并三角网","固化成体","侧面三角网","立方体","球体","圆柱","体素格网体积","实体转块体",
         // 区域/地形/点云
         "区域求差","区域重叠检测","克里金估值","泛克里金","快速估值","最近邻估值","移动平均估值",
-        "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","地面点滤波","高程着色","点云质量统计","点云裁剪",
+        "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","点云质量统计","点云裁剪",
         // 块体/运输/路网
         "块体模型","资源量","道路横断面","路面生成","纵坡分析","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","演化对比","螺旋斜坡道","折返斜坡道",
         // 生产计划/投影

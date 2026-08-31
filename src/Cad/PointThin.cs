@@ -23,6 +23,17 @@ public static class PointThin
         return res;
     }
 
+    /// <summary>随机抽稀（原「随机抽稀」模式）：按 keepFraction(0..1) 随机保留子集(快速粗采样)。rng 供确定性测试。</summary>
+    public static List<(double x, double y, double z)> ThinRandom(
+        IReadOnlyList<(double x, double y, double z)> pts, double keepFraction, Random rng)
+    {
+        var res = new List<(double x, double y, double z)>();
+        if (keepFraction >= 1) { res.AddRange(pts); return res; }
+        if (keepFraction <= 0) return res;
+        foreach (var p in pts) if (rng.NextDouble() < keepFraction) res.Add(p);
+        return res;
+    }
+
     /// <summary>
     /// 均匀(距离)抽稀（原「距离抽稀」模式）：贪心保留、任两保留点间距 ≥ minDist(保证最小间距,
     /// 比体素更均匀无网格偏差)。网格哈希加速。纯逻辑、可单测。

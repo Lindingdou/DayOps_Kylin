@@ -997,3 +997,13 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 
 - [x] **自适应保特征抽稀**(`本次`)：`PointThin.ThinAdaptive` —— 曲率度量=|z−3×3×3 邻域均z|(平面≈0/脊棱高), 按曲率降序贪心, 排斥半径 cell·(1..maxThin) 随平坦度增大(高曲率密留/平坦疏化), 网格哈希加速。命令 自适应抽稀。+2 单测(**脊特征保留率>平坦保留率**/全平退回体素/退化)。743 tests。
 - **判据**：抽稀模式里 体素(已有)/自适应(本次) 是**结果材料级不同**(均匀 vs 保特征)→ distinct 补; 随机/距离与体素结果近似→ refinement 略。同理 kriging 里 IDW/OK/UK distinct(补齐), NN/MA/SK 近似→略。
+
+## 六十六、抽稀/估值模式补齐 —— 重审"refinement"后逐一完成 listed 模式
+
+**教训**：把 listed 模式一概判"refinement 略"过草率(如 drape 曾被误记)。逐一按"行为材料级不同?"补：
+
+- [x] **自适应保特征抽稀**(`3b601e4`)：曲率|z−邻均z|降序贪心, 高曲率密留/平坦疏化。distinct(保特征 vs 均匀)。
+- [x] **NN/MA 估值**(`a0c3e49`)：`Contour.GridNearest`(最近邻块状) + `GridMovingAverage`(半径均值)。distinct(块状/均匀 vs IDW 加权)。补齐 NN/MA/IDW 快速估值族 + OK/UK 克里金。
+- [x] **均匀(距离)抽稀**(`ddaadf6`)：`ThinUniform` 贪心保证最小间距(比体素均匀无网格偏差)。
+- [x] **随机抽稀**(`本次`)：`ThinRandom(keepFraction, rng)` 随机子集(快速粗采样)。+1 单测(种子确定 ≈30%/0 空/1 全留)。
+- **判据**：**行为材料级不同的模式→补**(体素/随机/均匀/自适应 4 抽稀; NN/MA/IDW/OK/UK 5 估值); **冗余的→略**(SK 克里金当 mean=样本均值 ≡ OK, 无外部已知均值时无增益)。→ **抽稀 4 模式全齐, 估值 5/6 法(SK 冗余)**。747 tests。
