@@ -989,8 +989,8 @@ public partial class MainWindow : Window
             if (cmd == "球体" || cmd == "球" || cmd.StartsWith("球体 ") || cmd.StartsWith("球 ")) { await SpherePrimitiveAsync(cmd); return; }                  // 球体 [半径]
             if (cmd == "圆柱" || cmd == "圆柱体" || cmd.StartsWith("圆柱 ") || cmd.StartsWith("圆柱体 ")) { await CylinderPrimitiveAsync(cmd); return; }        // 圆柱 [半径 [高]]
             if (cmd == "网格边界" || cmd == "边界环提取" || cmd == "提取边界") { await MeshBoundaryAsync(); return; }
-            if (cmd == "SOR去噪" || cmd == "统计去噪" || cmd == "SOR") { await DenoiseAsync(false); return; }
-            if (cmd == "ROR去噪" || cmd == "半径去噪" || cmd == "ROR") { await DenoiseAsync(true); return; }
+            if (cmd == "SOR去噪" || cmd == "统计去噪" || cmd == "SOR" || cmd.StartsWith("SOR去噪 ") || cmd.StartsWith("SOR ")) { await DenoiseAsync(false, cmd); return; }   // SOR [k σ]
+            if (cmd == "ROR去噪" || cmd == "半径去噪" || cmd == "ROR" || cmd.StartsWith("ROR去噪 ") || cmd.StartsWith("ROR ")) { await DenoiseAsync(true, cmd); return; }     // ROR [半径 下限]
             if (cmd == "矿床识别" || cmd == "自动识别" || cmd == "矿床类型识别") { await DepositDetectAsync(); return; }
             if (cmd == "方案综合对比" || cmd == "方案比选" || cmd == "方案对比") { await ProgramCompareAsync(); return; }
             if (cmd == "高程查询" || cmd == "虚拟钻孔" || cmd == "查询高程") { await StartSpotQueryAsync(); return; }
@@ -3252,7 +3252,7 @@ public partial class MainWindow : Window
     }
 
     // 点云去噪 SOR/ROR：点 CSV(x,y,z) → 去噪 → 保留点入场景(黄) + 报表
-    private async Task DenoiseAsync(bool ror)
+    private async Task DenoiseAsync(bool ror, string cmd = "")
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
@@ -3267,11 +3267,12 @@ public partial class MainWindow : Window
 
         var pts = new List<(double x, double y, double z)>(r.Points.Count);
         foreach (var p in r.Points) pts.Add((p.x, p.y, p.z));
-        // 默认参数（原去噪对话框默认口径）：SOR k=8 σ=1.0；ROR 半径=包围盒对角/50、下限=4
+        // 参数：命令可给（SOR「k σ」/ROR「半径 下限」），缺省=原去噪对话框默认口径(SOR k=8 σ=1.0；ROR 半径=对角/50、下限=4)
         double diag = System.Math.Sqrt(System.Math.Pow(r.Bounds[2] - r.Bounds[0], 2) + System.Math.Pow(r.Bounds[3] - r.Bounds[1], 2));
+        var a = PrimitiveNums(cmd);
         var kept = ror
-            ? PointDenoise.Ror(pts, System.Math.Max(diag / 50.0, 1e-6), 4)
-            : PointDenoise.Sor(pts, 8, 1.0);
+            ? PointDenoise.Ror(pts, a.Length >= 1 && a[0] > 0 ? a[0] : System.Math.Max(diag / 50.0, 1e-6), a.Length >= 2 && a[1] >= 1 ? (int)a[1] : 4)
+            : PointDenoise.Sor(pts, a.Length >= 1 && a[0] >= 1 ? (int)a[0] : 8, a.Length >= 2 && a[1] > 0 ? a[1] : 1.0);
         if (kept.Count == 0) { StatusMsg.Text = "去噪：全部被剔除（参数过严）"; return; }
 
         BeginChange();

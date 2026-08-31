@@ -1691,3 +1691,11 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - 验证: `PrimitiveBodies.Box/Sphere/Cylinder` 尺寸几何已单测(Box 2×3×4→体积24/表面52); 命令解析 UI glue, build+smoke 验。992 测。
 
 **本会话累计补 75 真功能/保真 + 4 潜伏 bug 修 + 多处忠实性/深度证伪, 992 测。** 节点参数 diff 透镜连补 多边形内接 + 3D图元参数化。
+
+## 一三七、点云去噪参数化 —— SOR/ROR 可调参
+
+参数化透镜续: 原版 SOR/ROR 去噪对话框可调参(kNeighbors/stdDevFactor / 半径/下限), Kylin `DenoiseAsync` 用**固定默认**(SOR k8σ1 / ROR 对角/50 下限4)。补:
+- [x] **命令参数化**: 「SOR去噪 <k> [σ]」/「ROR去噪 <半径> [下限]」; 复用 `PrimitiveNums` 解析, 缺省回退原对话框默认口径。
+- 验证: `PointDenoise.Sor/Ror` 纯逻辑已单测; 命令参 build+smoke。992 测。
+
+**本会话累计补 76 真功能/保真 + 4 潜伏 bug 修 + 多处忠实性/深度证伪, 992 测。** present-but-shallow 参数化透镜连补 多边形内接 + 3D图元尺寸 + 去噪参数(命令硬编码/固定值→可调)。
