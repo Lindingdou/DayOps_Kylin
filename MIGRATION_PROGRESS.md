@@ -1074,5 +1074,13 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 - **采矿模型/属性赋值** — 记录: 采矿模型=4 模式 3D 体构建(kernel 面 + 复杂); 块属性赋值=数据模型(Kylin 块仅品位)。
 
 **教训**: 即使"comprehensive"域(GeoDataBase 曾判全覆盖)也可能藏过度记录——**凡描述含"求交/采样/竖直/按X"的 native 记录项, 必回原实现核可见算法**。虚拟钻孔证明 4 次: native 标签 ≠ 不可做。本会话累计补 **11 真功能**, 818 测。
+
+## 七十五、托管算法文件全交叉核对 + ExpressionEngine 表达式选块子集
+
+**最系统一层核对**: 扫原程序全部 `*Engine/Solver/Sampler/Builder/Analyzer/Estimator/Generator.cs`(~80 文件)逐一核 Kylin。**可见托管几何/统计算法已全移植**(TinSampler/VoxelVolumeBuilder=VoxelBands/VpBalanceSolver/CoalQualityEstimator=OK/ContourEngine/ColormapSampler/HorizonPointBuilder/MeshZSampler/SolidifyBuilder/VirtualDrillEngine/MeshFaceCull/BlockReportGenerator=Statistics)。余 `*Engine` 一律 TaskLib 引擎管线(不可验)/3D 几何(架构阻)/多属性数据模型/native。
+
+- [x] **表达式筛选块**(`b8608f6`)：原 `ExpressionEngine`「删单元·表达式范围」用途在 X/Y/Z/Grade/Size 上可做(公式赋值需多属性块=数据模型阻, 记录)。补 `BlockExpression.Compile`(统一值语法递归下降: OR&lt;AND&lt;NOT&lt;比较&lt;+−&lt;×÷&lt;一元−&lt;原子, 比较/布尔产 0/1 避括号歧义, 属性含中文别名) + 表达式筛选块命令(非破坏)。8 测(比较/AND-OR 优先级/NOT-括号/算术/各比较符/别名/语法错误)。**826 tests**。
+
+**"记录项→可做子集"本会话 5 处**: 剔面 · 虚拟钻孔 · SQL 查询(UI 阻拆查询核) · C2C 直方图 · 表达式筛选(数据模型阻拆筛选子集)。**教训固化: 记录项(native/UI/大子系统/数据模型)都要问"有无可见算法可做子集"**——多数有。本会话累计补 **13 真功能**, 826 测。
 - **记录(2D 场景架构阻)**：**点/节点 Z 编辑**(统一Z/POINTSETZ/Z=aX+bY+c 平面赋Z/POLYUNIFYZ)——场景实体 2D 无 Z(PointEntity 仅 X,Y; PolylineEntity.Points 是 `(x,y)`), 无 Z 可设, 属线段渲染架构边界。
 - **latent 记录(非本轮引入)**：loft+weld(QuickModelAsync/LayerSolid)产**边流形水密但定向不一致**网格 → MeshMetrics 散度体积对定向敏感(随 z 位置变); 但实际取体积走**体素/缠绕数**路径(WindingNumberTester, 定向无关 robust), 工作流不受影响。
