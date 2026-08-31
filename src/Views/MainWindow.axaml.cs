@@ -699,6 +699,7 @@ public partial class MainWindow : Window
             if (cmd == "点云高程着色" || cmd == "高程着色" || cmd == "点云着色") { await ElevationColorAsync(); return; }
             if (cmd == "加载点云" || cmd == "展点" || cmd == "导入点云" || cmd == "加载点") { await LoadPointCloudAsync(); return; }
             if (cmd == "逐点坡度/坡向" || cmd == "逐点坡度坡向" || cmd == "法向估计" || cmd == "点云法向") { await PointNormalsAsync(); return; }
+            if (cmd == "高程截断" || cmd == "高程裁剪" || cmd == "Z截断") { await ElevationClipAsync(); return; }
             if (cmd == "网格度量" || cmd == "网格面积体积" || cmd == "网格体积") { await MeshMetricsAsync(); return; }
             if (cmd == "网格诊断" || cmd == "网格检查" || cmd == "网格拓扑") { await MeshDiagnoseAsync(); return; }
             if (cmd == "网格焊接" || cmd == "合并顶点" || cmd == "顶点焊接") { await MeshWeldAsync(); return; }
@@ -1932,6 +1933,37 @@ public partial class MainWindow : Window
         Viewport.FitBounds(r.Bounds);
         var inv = System.Globalization.CultureInfo.InvariantCulture;
         StatusMsg.Text = $"逐点坡度坡向(k=12 PCA)：{pts.Count} 点 · 坡度 {smin.ToString("0.#", inv)}~{smax.ToString("0.#", inv)}° · 均 {(ssum / attrs.Count).ToString("0.#", inv)}°（绿平→红陡）";
+    }
+
+    // 高程截断：点 CSV(x,y,z) → 剔除 Z 异常高/低程点(保留 [p2,p98] 波段) → 保留点入场景 + 报表
+    private async Task ElevationClipAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "高程截断：选点 CSV (x,y,z)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("点云 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success) { StatusMsg.Text = $"高程截断：导入失败 {r.Error}"; return; }
+        if (r.Points.Count == 0) { StatusMsg.Text = "高程截断：无点"; return; }
+        var pts = new List<(double x, double y, double z)>(); foreach (var p in r.Points) pts.Add((p.x, p.y, p.z));
+        var (kept, zLo, zHi, removed) = PointZClip.Clip(pts, 0.02, 0.98);   // 剔除极端 2% 高/低程
+        double zmin = double.MaxValue, zmax = double.MinValue;
+        foreach (var p in kept) { if (p.z < zmin) zmin = p.z; if (p.z > zmax) zmax = p.z; }
+        double range = zmax - zmin;
+        BeginChange();
+        foreach (var p in kept)
+        {
+            double t = range > 1e-9 ? (p.z - zmin) / range : 0.5;
+            var (cr, cg, cb) = Colormap.Sample(Colormap.Terrain, t);
+            _scene.Add(new PointEntity { X = p.x, Y = p.y, Cr = cr / 255f, Cg = cg / 255f, Cb = cb / 255f });
+        }
+        RefreshScene();
+        Viewport.FitBounds(r.Bounds);
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        StatusMsg.Text = $"高程截断：保留 {kept.Count}/{pts.Count} 点(剔除 {removed} 异常程) · Z 波段 [{zLo.ToString("0.#", inv)}, {zHi.ToString("0.#", inv)}]（地形色带）";
     }
 
     // 加载点云/展点：点 CSV(x,y[,z]) → 灰点入场景 + 范围缩放
