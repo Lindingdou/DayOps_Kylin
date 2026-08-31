@@ -388,6 +388,23 @@ public static class GeoDataQueries
         return "\"" + v.Replace("\"", "\"\"") + "\"";
     }
 
+    public sealed record SeamIntersectRow(string SeamCode, int Holes, double AvgThicknessM, int PinchCount);
+
+    /// <summary>见煤统计 / 煤层对比：各煤层 见煤钻孔数 / 平均采用厚度 / 尖灭孔数（borehole_seam_result 778 行）。</summary>
+    public static List<SeamIntersectRow> GetSeamIntersections(SqliteConnection conn)
+    {
+        var rows = new List<SeamIntersectRow>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"SELECT seam_code, COUNT(*),
+                            COALESCE(AVG(NULLIF(adopted_thickness,0)),0),
+                            SUM(CASE WHEN status LIKE '%尖灭%' THEN 1 ELSE 0 END)
+                            FROM borehole_seam_result WHERE seam_code IS NOT NULL
+                            GROUP BY seam_code ORDER BY seam_code";
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read()) rows.Add(new SeamIntersectRow(rd.GetString(0), rd.GetInt32(1), rd.GetDouble(2), rd.GetInt32(3)));
+        return rows;
+    }
+
     private static List<CategoryCount> GroupCount(SqliteConnection conn, string sql)
     {
         var list = new List<CategoryCount>();

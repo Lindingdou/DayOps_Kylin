@@ -720,6 +720,7 @@ public partial class MainWindow : Window
             if (cmd == "钻孔管理" || cmd == "钻孔统计" || cmd == "钻孔信息") { BoreholeStatsCmd(); return; }
             if (cmd == "煤质统计" || cmd == "煤质数据管理" || cmd == "煤质分析" || cmd == "质量·配煤分析" || cmd == "配煤分析") { CoalQualityStatsCmd(); return; }
             if (cmd == "煤层管理" || cmd == "煤层定义" || cmd == "煤层列表") { CoalSeamsCmd(); return; }
+            if (cmd == "见煤统计" || cmd == "煤层对比" || cmd == "见煤对比" || cmd == "钻孔见煤") { SeamIntersectionsCmd(); return; }
             if (cmd == "设备智能编组" || cmd == "调度规则" || cmd == "配车规则" || cmd == "铲车配比") { DispatchRulesCmd(); return; }
             if (cmd == "工艺架构定义" || cmd == "工艺架构" || cmd == "平盘工艺地图" || cmd == "工艺系统") { ProcessArchitectureCmd(); return; }
             if (cmd == "现场验收录入" || cmd == "现场验收" || cmd == "参数验收") { AcceptanceStatsCmd(); return; }
@@ -5471,6 +5472,16 @@ public partial class MainWindow : Window
         var q = Data.GeoDataQueries.GetCoalQualityStats(db.Connection);
         if (q.Samples == 0) { StatusMsg.Text = "煤质统计：无煤样数据"; return; }
         StatusMsg.Text = $"煤质统计：{q.Samples} 样 / {q.Seams} 煤层 · 平均 灰分Ad {q.AvgAshPct:0.##}% · 挥发分Vdaf {q.AvgVolatilePct:0.##}% · 发热量Qnet {q.AvgCalorificMJ:0.##}MJ/kg · 全硫St {q.AvgSulfurPct:0.###}%";
+    }
+
+    private void SeamIntersectionsCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var rows = Data.GeoDataQueries.GetSeamIntersections(db.Connection);
+        if (rows.Count == 0) { StatusMsg.Text = "见煤统计：无见煤记录"; return; }
+        var parts = new List<string>();
+        foreach (var r in rows) parts.Add($"{r.SeamCode}({r.Holes}孔/均厚{r.AvgThicknessM:0.##}m{(r.PinchCount > 0 ? $"/尖灭{r.PinchCount}" : "")})");
+        StatusMsg.Text = $"见煤统计（{rows.Count} 煤层）：" + string.Join(" · ", parts);
     }
 
     private void CoalSeamsCmd()

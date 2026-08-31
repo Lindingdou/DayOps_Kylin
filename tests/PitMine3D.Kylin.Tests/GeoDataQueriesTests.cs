@@ -1,3 +1,4 @@
+using System.Linq;
 using PitMine3D.Kylin.Data;
 using Xunit;
 
@@ -89,6 +90,16 @@ public class GeoDataQueriesTests
         using var db = GeoDatabase.OpenSeeded();
         var seams = GeoDataQueries.GetCoalSeams(db.Connection);
         Assert.NotEmpty(seams);                                // 种子 7 煤层
+    }
+
+    [Fact]
+    public void Seam_intersections_from_seed()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var rows = GeoDataQueries.GetSeamIntersections(db.Connection);
+        Assert.NotEmpty(rows);                                 // borehole_seam_result 778 行
+        Assert.All(rows, r => Assert.True(r.Holes > 0));
+        Assert.Equal(rows.Sum(r => r.Holes), (int)db.ScalarLong("SELECT COUNT(*) FROM borehole_seam_result WHERE seam_code IS NOT NULL"));
     }
 
     [Fact]
