@@ -809,3 +809,7 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 **实现忠实度轴续（commit `f11f18a`）——普通克里金 OK（名实不符修复）**：
 - [x] **克里金估值实为 IDW → 移植真 OK 克里金**：命令名"克里金估值"却做 IDW(`Estimation.cs` 注"IDW 插值")，而原 `CoalQualityEstimator.cs`(336行)有真**普通克里金 OK**——球状变差函数自动拟合(sill=样本方差/range=95%sill滞后/nugget首箱) + 解 (k+1) 阶克里金方程组 + **克里金方差**。逐字移植 OK 核 `src/Cad/OrdinaryKriging.cs`(Variogram 球状 γ(h)/FitVariogram/Krige 方程组/高斯消元 Solve) + 克里金估值命令改用真 OK(逐格 EstimateAt·半径外回落 IDW 免留洞·出平均克里金方差)；IDW 保留为 快速估值。+7 单测(控制点精确内插方差0·球状变差 γ(0)=0/γ(≥range)=sill·方差非负·半径外 null·线性场贴近·单点·空)。
 - **★实现忠实度轴累计 4 真实算法**：ForecastModels(时序回归)/FleetOptimizer(编组优化 DP)/BenchLines(台阶距 W+H/tanα)/OrdinaryKriging(OK 克里金)——皆原**可见托管算法**被我用粗略近似(baseline×12/只读表/短边/10/IDV替克里金)代替，现逐字补齐 + 不变量验证。→ 下候选：CoalQualityAnalytics(647行·洗选/商品煤符合性/用途/品位-储量/分标高/离群QC)。
+
+**实现忠实度轴续（commit `6f89014`）——商品煤符合性（CoalQualityAnalytics 首个分析）**：
+- [x] **商品煤符合性 Evaluate**：原 `CoalQualityAnalytics.cs`(647行) 有 6 大煤质深度分析(洗选/商品煤符合性/用途/品位-储量/分标高/离群QC)，我的煤质功能只有描述统计(均值)。逐字移植首个高价值+易验的**商品煤符合性**为自足 `src/Data/CoalAnalytics.cs`(逐化验段判 Ad≤/St≤/Q≥/Vdaf∈区间 → 达标率 + 按煤层 + 超标清单带坐标, 数据不足显式跳过不臆造) + `GetCoalSamples`(coal_sample join borehole 坐标) + 商品煤符合性命令(可传限值, 缺省 Ad≤30/St≤1/Qgr≥21)。+4 单测。
+- **实现忠实度轴累计 5 真实算法**(ForecastModels/FleetOptimizer/BenchLines/OrdinaryKriging/CoalCompliance)。→ CoalQualityAnalytics 余 5 分析(品位-储量曲线/分标高煤质/离群QC/洗选提质/用途适宜性)可续移(数据 coal_sample 齐)。651 测试。
