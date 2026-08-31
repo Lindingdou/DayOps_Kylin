@@ -908,6 +908,7 @@ public partial class MainWindow : Window
             if (cmd == "补洞(三角网)" || cmd == "补洞" || cmd == "网格补洞" || cmd == "填洞") { await MeshHoleFillAsync(); return; }
             if (cmd == "剔面(三角网)" || cmd == "剔面" || cmd == "网格剔面" || cmd == "删陡面" || cmd.StartsWith("剔面 ")) { await MeshFaceCullAsync(cmd); return; }
             if (cmd == "分割三角网" || cmd == "沿线分割三角网" || cmd == "网格分割" || cmd == "切分三角网") { await MeshSplitAsync(); return; }
+            if (cmd == "边界分割三角网" || cmd == "内外分割" || cmd == "闭合边界分割" || cmd == "网格内外分片") { await MeshBoundarySplitAsync(); return; }
             if (cmd == "快速建模" || cmd == "一键建模" || cmd == "顶底成体") { await QuickModelAsync(); return; }
             if (cmd == "连续多层建模" || cmd == "多层建模" || cmd == "逐层成体" || cmd == "层位建模") { await MultiLayerModelAsync(); return; }
             if (cmd == "网格简化" || cmd == "三角网简化" || cmd == "减面" || cmd.StartsWith("网格简化 ") || cmd.StartsWith("三角网简化 ")) { await MeshSimplifyAsync(cmd); return; }
@@ -2015,6 +2016,38 @@ public partial class MainWindow : Window
         }
         catch (System.Exception ex) { StatusMsg.Text = $"分割三角网：写出失败 {ex.Message}"; return; }
         StatusMsg.Text = $"分割三角网：切两片 · 左 {l.t.Count} 三角 / 右 {r.t.Count} 三角 → split_left/right.off（切线取折线首末点弦，曲折线为弦近似）";
+    }
+
+    // 按闭合边界分割三角网(原 pc_tin_split「沿多段线切分为内/外两片」)：选中闭合折线作边界 + 选 OFF
+    // → 三角质心判内/外(与 裁剪三角网 同质心约定)分两片, 各写 OFF。区别于 分割三角网(单线左右, 逐边精确)。
+    private async Task MeshBoundarySplitAsync()
+    {
+        IReadOnlyList<(double x, double y)>? boundary = null;
+        foreach (var e in _selected)
+            if (e is PolylineEntity pl && pl.Points.Count >= 3) { boundary = pl.Points; break; }
+        if (boundary == null) { StatusMsg.Text = "边界分割三角网：请先选中一条闭合折线(≥3 点)作内外边界"; return; }
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "边界分割三角网：选 OFF 网格", AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } } }
+        });
+        if (files.Count == 0) return;
+        string text;
+        try { text = System.IO.File.ReadAllText(files[0].Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"边界分割三角网：读取失败 {ex.Message}"; return; }
+        var (verts, tris) = MeshMetrics.ParseOff(text);
+        if (tris.Count == 0) { StatusMsg.Text = "边界分割三角网：未解析到三角网格"; return; }
+        var (inside, outside) = MeshBoundarySplit.ByPolygon(verts, tris, boundary);
+        if (inside.Tris.Count == 0 || outside.Tris.Count == 0) { StatusMsg.Text = $"边界分割三角网：一侧为空(内 {inside.Tris.Count}/外 {outside.Tris.Count})，边界可能未覆盖或全含网格，未分片"; return; }
+        string dir = System.IO.Path.GetDirectoryName(files[0].Path.LocalPath) ?? ".";
+        string ip = System.IO.Path.Combine(dir, "split_inside.off"), op = System.IO.Path.Combine(dir, "split_outside.off");
+        try
+        {
+            System.IO.File.WriteAllText(ip, MeshWeld.ToOff(inside.Verts, inside.Tris));
+            System.IO.File.WriteAllText(op, MeshWeld.ToOff(outside.Verts, outside.Tris));
+        }
+        catch (System.Exception ex) { StatusMsg.Text = $"边界分割三角网：写出失败 {ex.Message}"; return; }
+        StatusMsg.Text = $"边界分割三角网：内 {inside.Tris.Count} 三角 / 外 {outside.Tris.Count} 三角 → split_inside/outside.off（质心判别，三角粒度）";
     }
 
     // 补洞(三角网)：选 OFF → 提边界洞 → 扇形填充 → 落 .filled.off + 前后开放边报表。
