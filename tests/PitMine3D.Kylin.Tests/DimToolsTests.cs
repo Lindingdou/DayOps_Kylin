@@ -97,4 +97,74 @@ public class DimToolsTests
         Assert.Equal("2.5", ((TextEntity)DimTools.Build(0, 0, 2.5, 0, 1)[^1]).Text);
         Assert.Equal("10", ((TextEntity)DimTools.Build(0, 0, 10, 0, 1)[^1]).Text);
     }
+
+    // ── 直径标注(DIMDIAMETER) ──
+    [Fact]
+    public void Diameter_line_through_center_with_diameter_text()
+    {
+        var dim = DimTools.BuildDiameter(0, 0, 5, 1, 0, 1);   // 半径5, +x 方向
+        var line = Assert.IsType<LineEntity>(dim[0]);
+        // 直径线过圆心: 端点 (5,0)↔(-5,0), 长=2r=10
+        Assert.Equal(5, line.X0, 6); Assert.Equal(-5, line.X1, 6);
+        double len = System.Math.Sqrt(System.Math.Pow(line.X1 - line.X0, 2) + System.Math.Pow(line.Y1 - line.Y0, 2));
+        Assert.Equal(10, len, 6);
+        var tx = Assert.IsType<TextEntity>(dim[^1]);
+        Assert.Equal("Ø10", tx.Text);                          // 直径值=2r, 带 Ø
+    }
+
+    [Fact]
+    public void Diameter_has_arrowheads_both_ends()
+    {
+        var dim = DimTools.BuildDiameter(0, 0, 3, 0, 1, 1);
+        // 直径线(1) + 两端各 2 箭头段(4) + 文字(1) = 6
+        Assert.Equal(6, dim.Count);
+        Assert.Equal("Ø6", ((TextEntity)dim[^1]).Text);
+    }
+
+    // ── 角度标注(DIMANGULAR) ──
+    [Fact]
+    public void Angular_right_angle_is_90_degrees()
+    {
+        // 顶点(0,0), 射线 +x 与 +y → 90°
+        var dim = DimTools.BuildAngular(0, 0, 10, 0, 0, 10, arcR: 3, h: 1);
+        var tx = Assert.IsType<TextEntity>(dim[^1]);
+        Assert.Equal("90°", tx.Text);
+    }
+
+    [Fact]
+    public void Angular_takes_minor_arc_le_180()
+    {
+        // 射线夹角 270° 的两方向应取劣弧 90°(而非 270°)
+        var dim = DimTools.BuildAngular(0, 0, 1, 0, 0, -1, arcR: 2, h: 1);   // +x 与 -y: 顺/劣弧 90°
+        Assert.Equal("90°", ((TextEntity)dim[^1]).Text);
+        // 反向对射 → 180°
+        var flat = DimTools.BuildAngular(0, 0, 1, 0, -1, 0, arcR: 2, h: 1);
+        Assert.Equal("180°", ((TextEntity)flat[^1]).Text);
+    }
+
+    [Fact]
+    public void Angular_arc_points_lie_on_radius()
+    {
+        // 弧折线各端点应距顶点 = arcR
+        double arcR = 4;
+        var dim = DimTools.BuildAngular(0, 0, 10, 0, 0, 10, arcR, 1);
+        // 前两条是延长线, 之后是弧段; 取一条弧段验证端点在半径上
+        foreach (var e in dim)
+            if (e is LineEntity le)
+            {
+                double d1 = System.Math.Sqrt(le.X1 * le.X1 + le.Y1 * le.Y1);
+                // 弧段端点(非顶点、非延长线远端 4.4)应≈arcR
+                if (System.Math.Abs(d1 - arcR) < 1e-6) { Assert.Equal(arcR, d1, 6); return; }
+            }
+        Assert.True(false, "未找到半径上的弧点");
+    }
+
+    // ── 字体新字形: Ø / ° / = 有笔画 ──
+    [Fact]
+    public void Font_has_diameter_degree_equals_glyphs()
+    {
+        Assert.NotEmpty(StrokeFont.Strokes('Ø'));
+        Assert.NotEmpty(StrokeFont.Strokes('°'));
+        Assert.NotEmpty(StrokeFont.Strokes('='));   // 顺带补的等号(供坐标标注)
+    }
 }

@@ -197,12 +197,38 @@ public partial class MainWindow : Window
                 {
                     var c = _dimRadCircle.Value;
                     double h = System.Math.Max(SnapTolWorld(_lastPointer) * 2.5, 1e-3);
-                    var dim = DimTools.BuildRadial(c.cx, c.cy, c.r, wp.Value.x - c.cx, wp.Value.y - c.cy, h, _dimStyle);
+                    var dim = _dimDiameter
+                        ? DimTools.BuildDiameter(c.cx, c.cy, c.r, wp.Value.x - c.cx, wp.Value.y - c.cy, h, _dimStyle)
+                        : DimTools.BuildRadial(c.cx, c.cy, c.r, wp.Value.x - c.cx, wp.Value.y - c.cy, h, _dimStyle);
                     BeginChange();
                     foreach (var de in dim) { de.LayerName = _layers.Current.Name; _scene.Add(de); }
                     RefreshScene();
-                    StatusMsg.Text = $"已标注 R{c.r:0.##}";
-                    _dimRadActive = false; _dimRadCircle = null;
+                    StatusMsg.Text = _dimDiameter ? $"已标注 Ø{2 * c.r:0.##}" : $"已标注 R{c.r:0.##}";
+                    _dimRadActive = false; _dimRadCircle = null; _dimDiameter = false;
+                }
+                return;
+            }
+            if (_dimAngActive && props.IsLeftButtonPressed)
+            {
+                _nav = NavMode.None;
+                var wp = PickWorld();
+                if (wp != null)
+                {
+                    if (_angVertex == null) { _angVertex = (wp.Value.x, wp.Value.y); StatusMsg.Text = "角度标注：指定第一条边上一点"; }
+                    else if (_angP1 == null) { _angP1 = (wp.Value.x, wp.Value.y); StatusMsg.Text = "角度标注：指定第二条边上一点"; }
+                    else
+                    {
+                        var v = _angVertex.Value; var p1 = _angP1.Value;
+                        double h = System.Math.Max(SnapTolWorld(_lastPointer) * 2.5, 1e-3);
+                        double arcR = System.Math.Max(System.Math.Sqrt((p1.x - v.x) * (p1.x - v.x) + (p1.y - v.y) * (p1.y - v.y)) * 0.5, h * 3);
+                        var dim = DimTools.BuildAngular(v.x, v.y, p1.x, p1.y, wp.Value.x, wp.Value.y, arcR, h, _dimStyle);
+                        BeginChange();
+                        foreach (var de in dim) { de.LayerName = _layers.Current.Name; _scene.Add(de); }
+                        RefreshScene();
+                        var txt = dim[^1] as TextEntity;
+                        StatusMsg.Text = $"已标注角度 {txt?.Text}";
+                        _dimAngActive = false; _angVertex = null; _angP1 = null;
+                    }
                 }
                 return;
             }
@@ -581,7 +607,8 @@ public partial class MainWindow : Window
                 _spotActive = false;
                 _textActive = false;
                 _dimActive = false; _dimP1 = null;
-                _dimRadActive = false; _dimRadCircle = null;
+                _dimRadActive = false; _dimRadCircle = null; _dimDiameter = false;
+                _dimAngActive = false; _angVertex = null; _angP1 = null;
                 _coordLabelActive = false;
                 _gripIndex = -1;
                 _selBoxActive = false;
@@ -679,6 +706,9 @@ public partial class MainWindow : Window
     private bool _dimActive;                          // 线性标注：取两点
     private (double x, double y)? _dimP1;
     private bool _dimRadActive;                        // 半径标注：选圆/弧后指定方向
+    private bool _dimDiameter;                          // 与 _dimRadActive 联用：true=直径标注
+    private bool _dimAngActive;                         // 角度标注：三点(顶点+两射线点)
+    private (double x, double y)? _angVertex, _angP1;
     private bool _coordLabelActive;                    // 坐标标注：点击点报 X/Y(连续)
     private (double cx, double cy, double r)? _dimRadCircle;
     private (double x, double y)? _lastDimP2;           // 上一条线性标注的第二点(连续标注基准)
@@ -946,6 +976,8 @@ public partial class MainWindow : Window
             if (cmd == "文字" || cmd == "单行文字") { ArmText(); return; }
             if (cmd == "标注" || cmd == "线性标注" || cmd == "对齐标注" || cmd == "尺寸标注" || cmd == "标注台阶标高") { StartDim(); return; }
             if (cmd == "半径标注" || cmd == "半径") { StartDimRadial(); return; }
+            if (cmd == "直径标注" || cmd == "直径") { StartDimDiameter(); return; }
+            if (cmd == "角度标注" || cmd == "角度" || cmd == "测角标注") { StartDimAngular(); return; }
             if (cmd == "坐标标注" || cmd == "标注坐标" || cmd == "点坐标标注") { StartCoordLabel(); return; }
             if (cmd == "连续标注" || cmd == "连续") { StartDimContinue(); return; }
             if (cmd == "标注样式" || cmd == "标注设置" || cmd.StartsWith("标注样式 ") || cmd.StartsWith("标注设置 ")) { DimStyleCmd(cmd); return; }
@@ -4155,9 +4187,33 @@ public partial class MainWindow : Window
             _ => null
         } : null;
         if (c == null) { StatusMsg.Text = "半径标注：请先选中一个圆或弧"; return; }
-        _dimRadCircle = c; _dimRadActive = true;
+        _dimRadCircle = c; _dimRadActive = true; _dimDiameter = false;
         _tool = null; _measure = null; _editMode = EditMode.None;
         StatusMsg.Text = "半径标注：指定标注方向";
+    }
+
+    // 直径标注(DIMDIAMETER)：需先选一个圆或弧，复用半径流程 + _dimDiameter 标志
+    private void StartDimDiameter()
+    {
+        (double cx, double cy, double r)? c = _selected.Count == 1 ? _selected[0] switch
+        {
+            CircleEntity ce => (ce.Cx, ce.Cy, ce.Radius),
+            ArcEntity ae => ArcMath.Circumcircle(ae.X1, ae.Y1, ae.X2, ae.Y2, ae.X3, ae.Y3) is { } v ? (v.Item1, v.Item2, v.Item3) : ((double, double, double)?)null,
+            _ => null
+        } : null;
+        if (c == null) { StatusMsg.Text = "直径标注：请先选中一个圆或弧"; return; }
+        _dimRadCircle = c; _dimRadActive = true; _dimDiameter = true;
+        _tool = null; _measure = null; _editMode = EditMode.None;
+        StatusMsg.Text = "直径标注：指定标注方向";
+    }
+
+    // 角度标注(DIMANGULAR)：三点 —— 角顶点 + 两条边上各一点
+    private void StartDimAngular()
+    {
+        _dimAngActive = true; _angVertex = null; _angP1 = null;
+        _tool = null; _measure = null; _editMode = EditMode.None;
+        _dimActive = false; _dimRadActive = false;
+        StatusMsg.Text = "角度标注：指定角顶点";
     }
 
     // 坐标标注：进入连续点选模式，每点生成 十字+引线+"X=… Y=…" 注记
@@ -6502,7 +6558,7 @@ public partial class MainWindow : Window
     private bool CommandIdle() =>
         _tool == null && _measure == null && _angle == null && _editMode == EditMode.None
         && !_textActive && !_ttrActive && !_serActive && !_offsetActive && !_trimActive
-        && !_breakActive && !_slideActive && !_dimActive && !_dimRadActive;
+        && !_breakActive && !_slideActive && !_dimActive && !_dimRadActive && !_dimAngActive;
 
     /// <summary>空命令行 → 上次命令；否则用输入。纯逻辑，可单测。</summary>
     internal static string? RepeatCommand(string typed, string? last)

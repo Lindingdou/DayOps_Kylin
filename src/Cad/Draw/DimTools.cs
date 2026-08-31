@@ -83,6 +83,75 @@ public static class DimTools
         return list;
     }
 
+    /// <summary>直径标注(DIMDIAMETER)：过圆心的直径线(两端圆周点)+ 两端箭头 + "Ø值"(值=2·半径)文字。</summary>
+    public static List<SceneEntity> BuildDiameter(double cx, double cy, double radius, double dirx, double diry, double h, DimStyle? style = null)
+    {
+        style ??= DimStyle.Default;
+        double H = style.TextHeight > 0 ? style.TextHeight : h;
+        var list = new List<SceneEntity>();
+        (float r, float g, float b) col = (0.95f, 0.85f, 0.30f);
+        SceneEntity L(double a, double b, double c, double d) => new LineEntity { X0 = a, Y0 = b, X1 = c, Y1 = d, Cr = col.r, Cg = col.g, Cb = col.b };
+
+        double dl = Math.Sqrt(dirx * dirx + diry * diry);
+        double ux = dl < 1e-9 ? 1 : dirx / dl, uy = dl < 1e-9 ? 0 : diry / dl;
+        double e1x = cx + ux * radius, e1y = cy + uy * radius;   // 一端圆周点
+        double e2x = cx - ux * radius, e2y = cy - uy * radius;   // 对端(过圆心)
+        list.Add(L(e1x, e1y, e2x, e2y));                         // 直径线
+
+        double ah = H * style.ArrowRatio, aw = H * style.ArrowWidthRatio;
+        double px = -uy, py = ux;
+        double b1x = e1x - ux * ah, b1y = e1y - uy * ah;          // 端1箭头(指外 +u)
+        list.Add(L(e1x, e1y, b1x + px * aw, b1y + py * aw)); list.Add(L(e1x, e1y, b1x - px * aw, b1y - py * aw));
+        double b2x = e2x + ux * ah, b2y = e2y + uy * ah;          // 端2箭头(指外 -u)
+        list.Add(L(e2x, e2y, b2x + px * aw, b2y + py * aw)); list.Add(L(e2x, e2y, b2x - px * aw, b2y - py * aw));
+
+        string s = "Ø" + (2 * radius).ToString(style.NumberFormat, CultureInfo.InvariantCulture);
+        list.Add(new TextEntity { X = e1x + ux * H * 0.3, Y = e1y + uy * H * 0.3, Height = H, Text = s, Cr = col.r, Cg = col.g, Cb = col.b });
+        return list;
+    }
+
+    /// <summary>
+    /// 角度标注(DIMANGULAR)：顶点 V + 两射线到 P1/P2 → 劣弧(≤180°) + 度数"n°"文字 + 两延长线。
+    /// arcR≤0 用 h×3。纯逻辑、可单测。
+    /// </summary>
+    public static List<SceneEntity> BuildAngular(double vx, double vy, double p1x, double p1y, double p2x, double p2y,
+        double arcR, double h, DimStyle? style = null)
+    {
+        style ??= DimStyle.Default;
+        double H = style.TextHeight > 0 ? style.TextHeight : h;
+        var list = new List<SceneEntity>();
+        (float r, float g, float b) col = (0.95f, 0.85f, 0.30f);
+        SceneEntity L(double a, double b, double c, double d) => new LineEntity { X0 = a, Y0 = b, X1 = c, Y1 = d, Cr = col.r, Cg = col.g, Cb = col.b };
+
+        double a1 = Math.Atan2(p1y - vy, p1x - vx);
+        double a2 = Math.Atan2(p2y - vy, p2x - vx);
+        double diff = a2 - a1;
+        while (diff <= -Math.PI) diff += 2 * Math.PI;
+        while (diff > Math.PI) diff -= 2 * Math.PI;               // (-π,π] 取劣弧
+        double deg = Math.Abs(diff) * 180.0 / Math.PI;
+        if (arcR <= 1e-9) arcR = H * 3;
+
+        double ext = arcR * 1.1;                                  // 两延长线沿射线
+        list.Add(L(vx, vy, vx + Math.Cos(a1) * ext, vy + Math.Sin(a1) * ext));
+        list.Add(L(vx, vy, vx + Math.Cos(a2) * ext, vy + Math.Sin(a2) * ext));
+
+        int steps = Math.Max(2, (int)(Math.Abs(diff) / (Math.PI / 18)));   // ~10°/段
+        double ppx = vx + Math.Cos(a1) * arcR, ppy = vy + Math.Sin(a1) * arcR;
+        for (int i = 1; i <= steps; i++)
+        {
+            double ang = a1 + diff * i / steps;
+            double npx = vx + Math.Cos(ang) * arcR, npy = vy + Math.Sin(ang) * arcR;
+            list.Add(L(ppx, ppy, npx, npy));                     // 弧折线段
+            ppx = npx; ppy = npy;
+        }
+
+        double am = a1 + diff / 2;                                // 中角外侧放度数
+        double tx = vx + Math.Cos(am) * (arcR + H * 0.5), ty = vy + Math.Sin(am) * (arcR + H * 0.5);
+        string s = deg.ToString(style.NumberFormat, CultureInfo.InvariantCulture) + "°";
+        list.Add(new TextEntity { X = tx, Y = ty, Height = H, Text = s, Cr = col.r, Cg = col.g, Cb = col.b });
+        return list;
+    }
+
     /// <summary>
     /// 坐标标注(COORD)：点 → 小十字标记 + 引线 + "X=… Y=…"(可含 Z) 文字。
     /// 忠实原 CAD 工具栏「坐标标注」意图(测量/矿业标准注记)。leaderDx/Dy = 引线到文字锚点的相对位移。纯逻辑、可单测。
