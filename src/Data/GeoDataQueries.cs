@@ -388,6 +388,24 @@ public static class GeoDataQueries
         return "\"" + v.Replace("\"", "\"\"") + "\"";
     }
 
+    public sealed record KpiTrendRow(int Year, double AvgAvailabilityPct, double AvgUtilizationPct);
+
+    /// <summary>KPI 趋势：equipment_kpi_monthly 按年平均 可用率/利用率（比率自适应 0..1 或 0..100）。</summary>
+    public static List<KpiTrendRow> GetKpiTrend(SqliteConnection conn)
+    {
+        var rows = new List<KpiTrendRow>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"SELECT year, COALESCE(AVG(availability),0), COALESCE(AVG(utilization_rate),0)
+                            FROM equipment_kpi_monthly GROUP BY year ORDER BY year";
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+        {
+            double av = rd.GetDouble(1), ut = rd.GetDouble(2);
+            rows.Add(new KpiTrendRow(rd.GetInt32(0), av <= 1.0 ? av * 100 : av, ut <= 1.0 ? ut * 100 : ut));
+        }
+        return rows;
+    }
+
     public sealed record ShiftOutputRow(string Shift, int Records, double OutputM3, double WorkHours, double UtilizationPct);
 
     /// <summary>班次产量对比：各班次 记录数/产量/工时/作业率（production_record 按 shift 分组）。</summary>

@@ -123,6 +123,17 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Kpi_trend_by_year_ratios_normalized()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var rows = GeoDataQueries.GetKpiTrend(db.Connection);
+        Assert.NotEmpty(rows);
+        Assert.All(rows, r => Assert.InRange(r.AvgAvailabilityPct, 0, 100));   // 比率归一到百分比
+        Assert.All(rows, r => Assert.InRange(r.AvgUtilizationPct, 0, 100));
+        for (int i = 1; i < rows.Count; i++) Assert.True(rows[i - 1].Year < rows[i].Year);   // 按年升序
+    }
+
+    [Fact]
     public void Fault_by_equipment_ranked_by_downtime()
     {
         using var db = GeoDatabase.OpenSeeded();
