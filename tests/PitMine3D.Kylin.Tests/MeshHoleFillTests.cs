@@ -70,4 +70,26 @@ public class MeshHoleFillTests
         Assert.Equal(0, holes);
         Assert.Empty(nt);
     }
+
+    // 环形网: 外方 [0,10]²(边界环面积100) + 内方洞 [4,6]²(面积4), 环带 8 三角
+    private static (List<(double x, double y, double z)> v, List<(int a, int b, int c)> t) Annulus()
+    {
+        var v = new List<(double x, double y, double z)>
+        { (0,0,0),(10,0,0),(10,10,0),(0,10,0), (4,4,0),(6,4,0),(6,6,0),(4,6,0) };
+        var t = new List<(int a, int b, int c)>
+        { (0,1,5),(0,5,4),(1,2,6),(1,6,5),(2,3,7),(2,7,6),(3,0,4),(3,4,7) };
+        return (v, t);
+    }
+
+    [Fact]
+    public void Area_threshold_skips_large_outer_boundary_fills_small_hole()
+    {
+        var (v, t) = Annulus();
+        // 缺省: 外轮廓(100) + 内洞(4) 都补 → 2 洞
+        Assert.Equal(2, MeshHoleFill.Fill(v, t).holes);
+        // 阈值 10: 只补内洞(面积4≤10), 外轮廓(100>10)跳过 → 1 洞(忠实 pc_fill_hole 避免填矿坑大空洞)
+        Assert.Equal(1, MeshHoleFill.Fill(v, t, maxLoopArea: 10).holes);
+        // 阈值极小: 两洞都跳过 → 0
+        Assert.Equal(0, MeshHoleFill.Fill(v, t, maxLoopArea: 1).holes);
+    }
 }

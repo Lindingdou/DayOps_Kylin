@@ -9,9 +9,14 @@ namespace PitMine3D.Kylin.Cad;
 /// </summary>
 public static class MeshHoleFill
 {
-    /// <summary>填充所有边界洞。返回新网格(原顶点 + 每洞一个质心顶点 + 扇形三角)与补洞数。</summary>
+    /// <summary>
+    /// 填充边界洞。返回新网格(原顶点 + 每洞一个质心顶点 + 扇形三角)与补洞数。
+    /// maxLoopArea：只补 XY 投影面积 ≤ 此值的洞(忠实原 pc_fill_hole「带面积阈值，避免填满矿坑大空洞/外轮廓」)；
+    /// 缺省 MaxValue = 补全部(含外轮廓, 供 MeshRepair 封闭网格)。
+    /// </summary>
     public static (List<(double x, double y, double z)> verts, List<(int a, int b, int c)> tris, int holes) Fill(
-        IReadOnlyList<(double x, double y, double z)> verts, IReadOnlyList<(int a, int b, int c)> tris)
+        IReadOnlyList<(double x, double y, double z)> verts, IReadOnlyList<(int a, int b, int c)> tris,
+        double maxLoopArea = double.MaxValue)
     {
         var outV = new List<(double x, double y, double z)>(verts);
         var outT = new List<(int a, int b, int c)>(tris);
@@ -44,6 +49,18 @@ public static class MeshHoleFill
                 if (cur == start) break;
             }
             if (loop.Count < 3) continue;
+
+            // 面积阈值：XY 投影面积超阈的洞(如外轮廓/矿坑大空洞)不补。
+            if (maxLoopArea < double.MaxValue)
+            {
+                double area2 = 0;
+                for (int i = 0; i < loop.Count; i++)
+                {
+                    var p = outV[loop[i]]; var q = outV[loop[(i + 1) % loop.Count]];
+                    area2 += p.x * q.y - q.x * p.y;
+                }
+                if (System.Math.Abs(area2) * 0.5 > maxLoopArea) continue;
+            }
 
             // 质心顶点 + 扇形三角(沿有向边界边 u→w 生成 (u,w,质心), 绕向与边界一致→法向与邻接三角协调)。
             double cx = 0, cy = 0, cz = 0;

@@ -905,7 +905,7 @@ public partial class MainWindow : Window
             if (cmd == "网格诊断" || cmd == "网格检查" || cmd == "网格拓扑") { await MeshDiagnoseAsync(); return; }
             if (cmd == "网格焊接" || cmd == "合并顶点" || cmd == "顶点焊接") { await MeshWeldAsync(); return; }
             if (cmd == "合并三角网" || cmd == "网格合并" || cmd == "合并网格") { await MeshMergeAsync(); return; }
-            if (cmd == "补洞(三角网)" || cmd == "补洞" || cmd == "网格补洞" || cmd == "填洞") { await MeshHoleFillAsync(); return; }
+            if (cmd == "补洞(三角网)" || cmd == "补洞" || cmd == "网格补洞" || cmd == "填洞" || cmd.StartsWith("补洞 ") || cmd.StartsWith("网格补洞 ")) { await MeshHoleFillAsync(cmd); return; }
             if (cmd == "网格修复" || cmd == "修复拓扑" || cmd == "修复拓扑关系" || cmd == "拓扑修复" || cmd == "一键修复") { await MeshRepairAsync(); return; }
             if (cmd == "剔面(三角网)" || cmd == "剔面" || cmd == "网格剔面" || cmd == "删陡面" || cmd.StartsWith("剔面 ")) { await MeshFaceCullAsync(cmd); return; }
             if (cmd == "剔倒刺" || cmd == "去尖刺" || cmd == "剔除障碍" || cmd == "剔高Z倒刺" || cmd.StartsWith("剔倒刺 ")) { await MeshSpikeCullAsync(cmd); return; }
@@ -2128,7 +2128,7 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"剔倒刺(高于最高邻居>{tol.ToString("0.#", inv)})：删 {removed} 含倒刺三角 · 留 {kept.Count}/{tris.Count}（坡度无关，坡上局部隆起亦剔）→ {System.IO.Path.GetFileName(outPath)}";
     }
 
-    private async Task MeshHoleFillAsync()
+    private async Task MeshHoleFillAsync(string cmd = "补洞")
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
@@ -2144,7 +2144,11 @@ public partial class MainWindow : Window
         if (tris.Count == 0) { StatusMsg.Text = "补洞：未解析到三角网格"; return; }
         int beforeB = MeshDiagnose.Analyze(verts, tris).BoundaryEdges;
         if (beforeB == 0) { StatusMsg.Text = "补洞：网格已水密(无开放边), 无洞可补"; return; }
-        var (nv, nt, holes) = MeshHoleFill.Fill(verts, tris);
+        // 可选 "补洞 <最大洞面积>"：只补 XY 面积 ≤ 此值的洞(避免填外轮廓/矿坑大空洞); 缺省补全部
+        double maxArea = double.MaxValue;
+        int sp = cmd.IndexOf(' ');
+        if (sp >= 0 && double.TryParse(cmd.Substring(sp + 1).Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double ma) && ma > 0) maxArea = ma;
+        var (nv, nt, holes) = MeshHoleFill.Fill(verts, tris, maxArea);
         int afterB = MeshDiagnose.Analyze(nv, nt).BoundaryEdges;
         string outPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(files[0].Path.LocalPath) ?? ".", "filled.off");
         try { System.IO.File.WriteAllText(outPath, MeshWeld.ToOff(nv, nt)); }
