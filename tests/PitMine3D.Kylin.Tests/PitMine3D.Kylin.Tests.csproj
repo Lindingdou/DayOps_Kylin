@@ -21,4 +21,11 @@
     <ProjectReference Include="..\..\src\PitMine3D.Kylin.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- MapGIS 二进制格式无法内联生成, 用真实小样本作解析夹具 -->
+    <None Include="TestData\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

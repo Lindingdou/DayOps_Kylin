@@ -1009,13 +1009,14 @@ public partial class MainWindow : Window
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "导入图形（DXF/DWG/OFF）",
+            Title = "导入图形（DXF/DWG/OFF/MapGIS WL·WT）",
             AllowMultiple = false,
             FileTypeFilter = new[]
             {
-                new FilePickerFileType("支持的格式 (DXF/DWG/OFF)") { Patterns = new[] { "*.dxf", "*.dwg", "*.off" } },
+                new FilePickerFileType("支持的格式 (DXF/DWG/OFF/WL/WT)") { Patterns = new[] { "*.dxf", "*.dwg", "*.off", "*.wl", "*.wt" } },
                 new FilePickerFileType("CAD 图纸 (DXF/DWG)") { Patterns = new[] { "*.dxf", "*.dwg" } },
-                new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } }
+                new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } },
+                new FilePickerFileType("MapGIS 6.x (WL 线/WT 注记)") { Patterns = new[] { "*.wl", "*.wt" } }
             }
         });
         if (files.Count == 0) return;
@@ -1164,6 +1165,7 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"正在导入 {Path.GetFileName(path)} …";
         string ext = Path.GetExtension(path).ToLowerInvariant();
         if (ext == ".dxf" || ext == ".dwg") { ImportCadEditable(path); return; }
+        if (ext == ".wl" || ext == ".wt") { ImportMapGisEditable(path); return; }
 
         var r = OffImportService.Load(path);
         if (!r.Success) { StatusMsg.Text = $"导入失败：{r.Error}"; return; }
@@ -1179,6 +1181,22 @@ public partial class MainWindow : Window
     {
         var er = DxfImportService.LoadEntities(path);
         if (!er.Success) { StatusMsg.Text = $"导入失败：{er.Error}"; return; }
+        string warn = er.Warnings.Count > 0 ? $" · 跳过 {er.Warnings.Count} 类未支持" : "";
+        ApplyEntityImport(er, Path.GetFileName(path), warn);
+    }
+
+    // MapGIS 6.x .WL(线/等高线) / .WT(点注记) 导入为可编辑实体（忠实移植 MapGisWlReader/MapGisWtReader）
+    private void ImportMapGisEditable(string path)
+    {
+        var er = Cad.MapGisImportService.Load(path);
+        if (!er.Success) { StatusMsg.Text = $"导入失败：{er.Error}"; return; }
+        string warn = er.Warnings.Count > 0 ? $" · {string.Join("；", er.Warnings)}" : "";
+        ApplyEntityImport(er, Path.GetFileName(path), warn);
+    }
+
+    // 共享：把可编辑导入结果并入场景 + 图层表 + 对象树（DXF/DWG/MapGIS 通用）
+    private void ApplyEntityImport(DxfImportService.EntityImportResult er, string fileName, string warn)
+    {
         BeginChange();
         foreach (var ln in er.LayerOrder)
         {
@@ -1190,10 +1208,9 @@ public partial class MainWindow : Window
         Viewport.ClearImported();               // 不再用显示态网格
         RefreshScene();
         Viewport.FitBounds(er.Bounds);
-        PopulateObjectTreeCounts(er.TypeCounts, Path.GetFileName(path), er.Entities.Count);
+        PopulateObjectTreeCounts(er.TypeCounts, fileName, er.Entities.Count);
         PopulateDrawingLayers();
-        string warn = er.Warnings.Count > 0 ? $" · 跳过 {er.Warnings.Count} 类未支持" : "";
-        StatusMsg.Text = $"已导入 {Path.GetFileName(path)} · {er.Entities.Count} 可编辑实体 · {er.LayerOrder.Count} 图层（可选中/编辑/删除）{warn}";
+        StatusMsg.Text = $"已导入 {fileName} · {er.Entities.Count} 可编辑实体 · {er.LayerOrder.Count} 图层（可选中/编辑/删除）{warn}";
     }
 
     // 点数据导入：CSV/TXT/XYZ/PTS → 可编辑的点实体（进入绘制场景，可选中/编辑/删除）
