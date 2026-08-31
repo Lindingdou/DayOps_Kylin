@@ -1462,3 +1462,20 @@ CopyStyleFrom 审计续查 `.LayerName = 源.LayerName` 模式, 又揪 3 处纯�
 - **验证边界记录**: 往返经 Kylin 自家 reader(忠实移植原 KdfReader)证内部一致; 无 WeCAD/原版运行时不能证其读取, 但字节布局已逐字段对齐原 KdfWriter。
 
 **本会话累计补 59 真功能 + 1 并发修复 + 4 潜伏 bug 修 + 9 样式保真点统一 + 1 latent 攻克, 967 测。**
+
+## 一一六、导入导出对称性审计 —— KDF 补齐, 余项记录
+
+系统列原版 export/writer 类 vs Kylin, 判每项:
+| 原版导出 | Kylin 状态 | 判定 |
+|---|---|---|
+| KdfExportService/KdfWriter | **已补(§一一五)** | ✓ 干净不对称(仅导入无导出), 契合, 往返可验 |
+| DwgDxf(双向) | DxfExport/SceneExport ✓ | 已对称 |
+| MeshExportViewModel | MeshExport(OBJ/PLY/STL) ✓ | 已对称 |
+| PmbmWriter/PmbiWriter(PMB 块体) | 块体导出 CSV ✓(功能在) | **记录**: Kylin 块体=稀疏点(X,Y,Z,Size,Grade), PMB=密集网格(GridSpec+多属性数组), 表示不匹配; 且 CSV 功能等价已在。非缺功能, 强行 PMB 往返不净。 |
+| PmxWriter(原生 PMX 二进制) | 自有 JSON .pmx(SceneIO) ✓ | **记录(不可验)**: Kylin 无 PMX-二进制 reader → 无往返验证路径; JSON .pmx 功能等价。 |
+| DrillPlanWriter/MinePlanExport/MiningPlanExporter | — | **记录(引擎受阻)**: 属 TaskLib/PlanLib 计划引擎域(不可验)。 |
+| BinaryPayloadWriter/OutcropDebugExporter | — | 内部/调试, 非用户功能。 |
+
+**结论**: 用户级绘图/网格交换格式导出已对称(DXF/DWG/KDF/OBJ/PLY/STL)。余 PMB/PMX-二进制为原版原生格式互操作(Kylin 有 CSV/JSON 功能等价), 因表示不匹配/无 reader 不可净验, 记录。计划类导出属受阻引擎域。
+
+**导出符合性审计收官。本会话累计补 59 真功能 + 1 并发修复 + 4 潜伏 bug 修 + 9 样式保真点统一 + 1 latent 攻克, 967 测。**
