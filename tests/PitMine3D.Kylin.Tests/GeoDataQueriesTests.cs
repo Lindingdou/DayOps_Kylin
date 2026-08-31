@@ -1,0 +1,43 @@
+using PitMine3D.Kylin.Data;
+using Xunit;
+
+namespace PitMine3D.Kylin.Tests;
+
+/// <summary>§四/§八 查询分析回归（对 SQLite 种子库）。</summary>
+public class GeoDataQueriesTests
+{
+    [Fact]
+    public void Equipment_roster_from_seed()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var r = GeoDataQueries.GetEquipmentRoster(db.Connection);
+        Assert.True(r.Total >= 5, $"设备总数 {r.Total}");
+        Assert.NotEmpty(r.ByCategory);
+        Assert.Equal(r.Total, Sum(r));               // 分类计数之和 = 总数
+    }
+
+    private static int Sum(GeoDataQueries.EquipmentRoster r)
+    {
+        int s = 0; foreach (var c in r.ByCategory) s += c.Count; return s;
+    }
+
+    [Fact]
+    public void Production_stats_from_seed()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var s = GeoDataQueries.GetProductionStats(db.Connection);
+        Assert.True(s.Records > 0, "生产记录数");
+        Assert.True(s.OutputM3 > 0, "总产量");
+        Assert.InRange(s.UtilizationPct, 0, 100);    // 作业率百分比合理
+    }
+
+    [Fact]
+    public void Capacity_ranking_sorted_desc()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var rows = GeoDataQueries.GetCapacityRanking(db.Connection, 5);
+        Assert.NotEmpty(rows);
+        for (int i = 1; i < rows.Count; i++)
+            Assert.True(rows[i - 1].TotalOutputM3 >= rows[i].TotalOutputM3, "按产量降序");
+    }
+}

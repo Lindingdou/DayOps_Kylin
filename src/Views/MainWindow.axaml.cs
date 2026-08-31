@@ -621,6 +621,7 @@ public partial class MainWindow : Window
     private readonly Cad.Draw.CadClipboard _clip = new();    // 实体剪贴板（COPYCLIP/CUTCLIP/PASTECLIP）
     private readonly Cad.Draw.NamedSelections _selSets = new(); // 命名选择集（创建/调用选择集）
     private readonly AssistantEngine _assistant = new();         // 智能助手（菜单引导，点选即执行命令）
+    private Data.GeoDatabase? _geoDb;                            // §四/§八 SQLite 数据基座（懒开，会话内复用）
     private int _selSetCycle = -1;                            // 调用选择集轮转序号
     private Avalonia.Point _pressPos;             // 按下位置（区分点击/拖拽）
     private enum EditMode { None, Move, Copy, Mirror, Rotate, Scale }
@@ -711,6 +712,9 @@ public partial class MainWindow : Window
             if (cmd == "删除块体" || cmd == "清除块体") { DeleteBlocksCmd(); return; }
             if (cmd == "切面剖切" || cmd == "块体剖切" || cmd == "切面") { SectionBlocksCmd(); return; }
             if (cmd == "快速估值" || cmd == "品位估值" || cmd == "克里金估值" || cmd == "空间分布") { await EstimateGradeAsync(); return; }
+            if (cmd == "设备信息管理" || cmd == "设备台账" || cmd == "设备台账管理" || cmd == "设备信息") { EquipmentRosterCmd(); return; }
+            if (cmd == "设备生产数据" || cmd == "生产数据" || cmd == "设备数据分析") { ProductionStatsCmd(); return; }
+            if (cmd == "产能分析" || cmd == "设备能力" || cmd == "能力分析" || cmd == "产能") { CapacityRankingCmd(); return; }
             if (cmd == "点云抽稀" || cmd == "抽稀" || cmd == "点云精简") { await ThinPointsAsync(); return; }
             if (cmd == "地面点滤波" || cmd == "地面滤波") { await GroundFilterAsync(); return; }
             if (cmd == "C2C" || cmd == "点云比对" || cmd == "位移监测 C2C" || cmd == "位移监测") { await CloudCompareAsync(); return; }
@@ -4984,6 +4988,45 @@ public partial class MainWindow : Window
     // 命令框未识别 → 合成 Tag 转派整条中文命令链(复用 OnRibbonCommand，命令框亦可打中文命令)
     private bool _suppressCmdLog;   // DispatchRibbon 转派时抑制 OnRibbonCommand 重复回显(命令框侧已回显)
     private void DispatchRibbon(string cmd) { _suppressCmdLog = true; OnRibbonCommand(new Button { Tag = cmd }, new RoutedEventArgs()); }
+
+    // ---------- §四/§八 地质/生产数据库（SQLite 数据基座，本机自带真实种子数据）----------
+    private Data.GeoDatabase? EnsureGeoDb()
+    {
+        if (_geoDb != null) return _geoDb;
+        try
+        {
+            string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "pmkylin_geo.db");
+            _geoDb = Data.GeoDatabase.OpenSeeded(path);   // 文件库：会话间持久, 已应用迁移跳过
+            return _geoDb;
+        }
+        catch (System.Exception ex) { StatusMsg.Text = $"数据库打开失败：{ex.Message}"; return null; }
+    }
+
+    private void EquipmentRosterCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var r = Data.GeoDataQueries.GetEquipmentRoster(db.Connection);
+        var parts = new List<string>();
+        foreach (var c in r.ByCategory) parts.Add($"{c.Category} {c.Count}");
+        StatusMsg.Text = $"设备台账：共 {r.Total} 台（在役 {r.InService}）· 分类: " + string.Join(" / ", parts);
+    }
+
+    private void ProductionStatsCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var s = Data.GeoDataQueries.GetProductionStats(db.Connection);
+        StatusMsg.Text = $"设备生产数据：{s.Records} 条记录 · 总产量 {s.OutputM3:0.#} m³ · 工时 {s.WorkHours:0.#}h · 故障 {s.FaultHours:0.#}h · 作业率 {s.UtilizationPct:0.#}%";
+    }
+
+    private void CapacityRankingCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var rows = Data.GeoDataQueries.GetCapacityRanking(db.Connection, 8);
+        if (rows.Count == 0) { StatusMsg.Text = "产能分析：无产能数据"; return; }
+        var top = new List<string>();
+        foreach (var r in rows) top.Add($"{r.EquipmentId}{(string.IsNullOrEmpty(r.Model) ? "" : "(" + r.Model + ")")} {r.TotalOutputM3:0.#}");
+        StatusMsg.Text = $"产能分析（累计产量 Top{rows.Count}）：" + string.Join(" · ", top);
+    }
 
     // ---------- 智能助手面板（菜单引导，点选即执行命令）----------
     private void RenderAssistant(AssistantEngine.Reply r)
