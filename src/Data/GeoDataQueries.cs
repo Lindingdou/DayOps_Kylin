@@ -144,6 +144,75 @@ public static class GeoDataQueries
         return rows;
     }
 
+    public sealed record DispatchRuleRow(string Shovel, string Truck, double Loads, int Trucks, double CycleMin, double Score);
+    public sealed record DispatchSummary(int Active, IReadOnlyList<DispatchRuleRow> Top);
+
+    /// <summary>设备智能编组 / 调度规则：铲-车配比(装载次数/建议车数/循环时间/评分), 取评分高的在役规则。</summary>
+    public static DispatchSummary GetDispatchRules(SqliteConnection conn, int topN = 8)
+    {
+        int active = (int)Scalar(conn, "SELECT COUNT(*) FROM dispatch_rule WHERE is_active = 1");
+        var top = new List<DispatchRuleRow>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"SELECT COALESCE(shovel_model,''), COALESCE(truck_model,''), COALESCE(bucket_loads_per_truck,0),
+                            COALESCE(recommended_truck_count,0), COALESCE(cycle_time_min,0), COALESCE(efficiency_score,0)
+                            FROM dispatch_rule WHERE is_active = 1 ORDER BY efficiency_score DESC LIMIT @n";
+        cmd.Parameters.AddWithValue("@n", topN);
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read()) top.Add(new DispatchRuleRow(rd.GetString(0), rd.GetString(1), rd.GetDouble(2), (int)rd.GetDouble(3), rd.GetDouble(4), rd.GetDouble(5)));
+        return new DispatchSummary(active, top);
+    }
+
+    public sealed record ProcessArchitecture(int Systems, int Phases, int Templates, IReadOnlyList<string> SystemNames);
+
+    /// <summary>工艺架构：系统数 / 工序数 / 模板数 + 系统名。</summary>
+    public static ProcessArchitecture GetProcessArchitecture(SqliteConnection conn)
+    {
+        int sys = (int)Scalar(conn, "SELECT COUNT(*) FROM process_system");
+        int ph = (int)Scalar(conn, "SELECT COUNT(*) FROM process_phase");
+        int tpl = (int)Scalar(conn, "SELECT COUNT(*) FROM process_template");
+        var names = new List<string>();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT name FROM process_system ORDER BY COALESCE(display_order,0), name";
+            using var rd = cmd.ExecuteReader();
+            while (rd.Read()) if (!rd.IsDBNull(0)) names.Add(rd.GetString(0));
+        }
+        return new ProcessArchitecture(sys, ph, tpl, names);
+    }
+
+    public sealed record AcceptanceStats(int Records, double PassPct, double AvgAbsDeviationPct, IReadOnlyList<CategoryCount> ByStatus);
+
+    /// <summary>现场验收 / 参数验收：记录数 / 合格率 / 平均绝对偏差 / 按状态。</summary>
+    public static AcceptanceStats GetAcceptanceStats(SqliteConnection conn)
+    {
+        int n = (int)Scalar(conn, "SELECT COUNT(*) FROM parameter_acceptance");
+        int pass = (int)Scalar(conn, "SELECT COUNT(*) FROM parameter_acceptance WHERE status IN ('合格','通过','达标','正常')");
+        double avgDev = ScalarDouble(conn, "SELECT COALESCE(AVG(ABS(deviation_pct)),0) FROM parameter_acceptance WHERE deviation_pct IS NOT NULL");
+        var byStatus = new List<CategoryCount>();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT COALESCE(status,'(无)'), COUNT(*) c FROM parameter_acceptance GROUP BY status ORDER BY c DESC";
+            using var rd = cmd.ExecuteReader();
+            while (rd.Read()) byStatus.Add(new CategoryCount(rd.GetString(0), rd.GetInt32(1)));
+        }
+        return new AcceptanceStats(n, n > 0 ? pass * 100.0 / n : 0, avgDev, byStatus);
+    }
+
+    public sealed record WorkingFaceRow(string FaceCode, double BenchHeight, double SlopeAngle, double MiningWidth, double AdvanceRate);
+
+    /// <summary>作业面台账：各工作面台阶/坡角/采宽/推进度。</summary>
+    public static List<WorkingFaceRow> GetWorkingFaces(SqliteConnection conn)
+    {
+        var rows = new List<WorkingFaceRow>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"SELECT COALESCE(face_code,''), COALESCE(bench_height_m,0), COALESCE(bench_slope_angle_deg,0),
+                            COALESCE(mining_width_m,0), COALESCE(advance_rate_m_per_month,0)
+                            FROM working_face ORDER BY face_code";
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read()) rows.Add(new WorkingFaceRow(rd.GetString(0), rd.GetDouble(1), rd.GetDouble(2), rd.GetDouble(3), rd.GetDouble(4)));
+        return rows;
+    }
+
     private static double ScalarDouble(SqliteConnection conn, string sql)
     {
         using var cmd = conn.CreateCommand();

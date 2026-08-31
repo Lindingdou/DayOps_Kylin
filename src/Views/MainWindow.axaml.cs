@@ -720,6 +720,10 @@ public partial class MainWindow : Window
             if (cmd == "钻孔管理" || cmd == "钻孔统计" || cmd == "钻孔信息") { BoreholeStatsCmd(); return; }
             if (cmd == "煤质统计" || cmd == "煤质数据管理" || cmd == "煤质分析" || cmd == "质量·配煤分析" || cmd == "配煤分析") { CoalQualityStatsCmd(); return; }
             if (cmd == "煤层管理" || cmd == "煤层定义" || cmd == "煤层列表") { CoalSeamsCmd(); return; }
+            if (cmd == "设备智能编组" || cmd == "调度规则" || cmd == "配车规则" || cmd == "铲车配比") { DispatchRulesCmd(); return; }
+            if (cmd == "工艺架构定义" || cmd == "工艺架构" || cmd == "平盘工艺地图" || cmd == "工艺系统") { ProcessArchitectureCmd(); return; }
+            if (cmd == "现场验收录入" || cmd == "现场验收" || cmd == "参数验收") { AcceptanceStatsCmd(); return; }
+            if (cmd == "作业面台账" || cmd == "作业面" || cmd == "工作面台账" || cmd == "采场参数") { WorkingFacesCmd(); return; }
             if (cmd == "点云抽稀" || cmd == "抽稀" || cmd == "点云精简") { await ThinPointsAsync(); return; }
             if (cmd == "地面点滤波" || cmd == "地面滤波") { await GroundFilterAsync(); return; }
             if (cmd == "C2C" || cmd == "点云比对" || cmd == "位移监测 C2C" || cmd == "位移监测") { await CloudCompareAsync(); return; }
@@ -5073,6 +5077,43 @@ public partial class MainWindow : Window
         var parts = new List<string>();
         foreach (var s in seams) parts.Add($"{s.SeamCode}({s.SampleCount}样)");
         StatusMsg.Text = $"煤层管理：{seams.Count} 煤层 · " + string.Join(" / ", parts);
+    }
+
+    private void DispatchRulesCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var d = Data.GeoDataQueries.GetDispatchRules(db.Connection, 6);
+        if (d.Top.Count == 0) { StatusMsg.Text = "设备编组：无在役调度规则"; return; }
+        var parts = new List<string>();
+        foreach (var r in d.Top) parts.Add($"{r.Shovel}→{r.Truck}×{r.Trucks}(装{r.Loads:0.#}/循环{r.CycleMin:0.#}min/评{r.Score:0.#})");
+        StatusMsg.Text = $"设备智能编组（在役 {d.Active} 规则，按评分）：" + string.Join(" · ", parts);
+    }
+
+    private void ProcessArchitectureCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var p = Data.GeoDataQueries.GetProcessArchitecture(db.Connection);
+        StatusMsg.Text = $"工艺架构：{p.Systems} 系统 / {p.Phases} 工序 / {p.Templates} 模板 · 系统: " + string.Join(" / ", p.SystemNames);
+    }
+
+    private void AcceptanceStatsCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var a = Data.GeoDataQueries.GetAcceptanceStats(db.Connection);
+        if (a.Records == 0) { StatusMsg.Text = "现场验收：无验收记录"; return; }
+        var st = new List<string>();
+        foreach (var c in a.ByStatus) st.Add($"{c.Category} {c.Count}");
+        StatusMsg.Text = $"现场验收：{a.Records} 条 · 合格率 {a.PassPct:0.#}% · 平均偏差 {a.AvgAbsDeviationPct:0.#}% · " + string.Join(" / ", st);
+    }
+
+    private void WorkingFacesCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var faces = Data.GeoDataQueries.GetWorkingFaces(db.Connection);
+        if (faces.Count == 0) { StatusMsg.Text = "作业面台账：无工作面"; return; }
+        var parts = new List<string>();
+        foreach (var f in faces) parts.Add($"{f.FaceCode}(台阶{f.BenchHeight:0.#}m/坡{f.SlopeAngle:0.#}°/采宽{f.MiningWidth:0.#}m/推进{f.AdvanceRate:0.#}m·月)");
+        StatusMsg.Text = $"作业面台账：{faces.Count} 面 · " + string.Join(" · ", parts);
     }
 
     // ---------- 智能助手面板（菜单引导，点选即执行命令）----------

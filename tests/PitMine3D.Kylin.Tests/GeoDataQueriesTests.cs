@@ -90,4 +90,40 @@ public class GeoDataQueriesTests
         var seams = GeoDataQueries.GetCoalSeams(db.Connection);
         Assert.NotEmpty(seams);                                // 种子 7 煤层
     }
+
+    [Fact]
+    public void Dispatch_rules_sorted_by_score()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var d = GeoDataQueries.GetDispatchRules(db.Connection, 6);
+        Assert.True(d.Active > 0, "在役规则");
+        for (int i = 1; i < d.Top.Count; i++)
+            Assert.True(d.Top[i - 1].Score >= d.Top[i].Score, "按评分降序");
+    }
+
+    [Fact]
+    public void Process_architecture_from_seed()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var p = GeoDataQueries.GetProcessArchitecture(db.Connection);
+        Assert.True(p.Systems > 0, "工艺系统");
+        Assert.True(p.Phases > 0, "工序");
+    }
+
+    [Fact]
+    public void Acceptance_stats_from_seed()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var a = GeoDataQueries.GetAcceptanceStats(db.Connection);
+        Assert.True(a.Records > 0, "验收记录");                 // 种子 156
+        Assert.InRange(a.PassPct, 0, 100);
+    }
+
+    [Fact]
+    public void Working_faces_from_seed()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var f = GeoDataQueries.GetWorkingFaces(db.Connection);
+        Assert.NotEmpty(f);                                    // 种子 5 面
+    }
 }
