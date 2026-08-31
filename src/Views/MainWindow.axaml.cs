@@ -672,6 +672,7 @@ public partial class MainWindow : Window
     private List<SceneEntity> _prevSelected = new();         // 上次选择集
     private readonly HashSet<string> _hiddenLayers = new();  // 隐藏同一图层对象 记录的层名，结束隐藏一并恢复
     private (byte r, byte g, byte b)[] _colormap = Cad.Colormap.Terrain;   // 当前色带(高程/属性着色用)，色带 <名> 切换
+    private double _legendVmin = 0, _legendVmax = 100;                       // 最近一次着色的值域(供图例)
     private string _colormapName = "Terrain";
     private readonly Cad.Draw.CadClipboard _clip = new();    // 实体剪贴板（COPYCLIP/CUTCLIP/PASTECLIP）
     private readonly Cad.Draw.NamedSelections _selSets = new(); // 命名选择集（创建/调用选择集）
@@ -907,6 +908,7 @@ public partial class MainWindow : Window
             if (cmd == "分割点云" || cmd == "点云分割" || cmd == "欧氏聚类" || cmd == "点云聚类" || cmd.StartsWith("分割点云 ")) { await SegmentCloudAsync(cmd); return; }
             if (cmd == "点云高程着色" || cmd == "高程着色" || cmd == "点云着色") { await ElevationColorAsync(); return; }
             if (cmd == "色带" || cmd == "配色方案" || cmd.StartsWith("色带 ") || cmd.StartsWith("配色方案 ")) { SetColormapCmd(cmd); return; }
+            if (cmd == "图例" || cmd == "色带图例" || cmd.StartsWith("图例 ")) { PlaceLegend(cmd); return; }   // 图例 [min max]
             if (cmd == "加载点云" || cmd == "展点" || cmd == "导入点云" || cmd == "加载点") { await LoadPointCloudAsync(); return; }
             if (cmd == "导入LAS" || cmd == "加载LAS" || cmd == "LAS导入" || cmd == "导入激光点云") { await LoadLasAsync("导入LAS"); return; }
             if (cmd == "LAS真彩色" || cmd == "点云真实色" || cmd == "真实色导入LAS" || cmd == "LAS真实色") { await LoadLasAsync("LAS真彩色"); return; }
@@ -2971,6 +2973,26 @@ public partial class MainWindow : Window
     }
 
     // 色带切换：「色带 <名>」设当前色带(Terrain/Jet/Grayscale/Viridis/Turbo/Magma/Plasma), 影响后续高程/属性着色。
+    // 色带图例：色条(当前色带渐变)+值标签 入场景左下(世界坐标)。忠实原版"图例"。值域=命令给或最近着色
+    private void PlaceLegend(string cmd)
+    {
+        var a = PrimitiveNums(cmd);
+        double vmin = a.Length >= 1 ? a[0] : _legendVmin, vmax = a.Length >= 2 ? a[1] : _legendVmax;
+        if (vmax <= vmin) { vmin = 0; vmax = 100; }
+        double w = ViewportHost.Bounds.Width, h = ViewportHost.Bounds.Height;
+        var p0 = Viewport.ScreenToWorld(w * 0.06, h * 0.88) ?? (0.0, 0.0);      // 色条底(左下)
+        var p1 = Viewport.ScreenToWorld(w * 0.06, h * 0.45) ?? (0.0, 100.0);    // 色条顶
+        double height = System.Math.Abs(p1.y - p0.y);
+        if (height < 1e-6) height = 100;
+        double textH = System.Math.Max(height * 0.05, 1e-3);
+        var leg = Legend.Build(_colormap, vmin, vmax, p0.x, System.Math.Min(p0.y, p1.y), textH * 2, height, textH);
+        if (leg.Count == 0) { StatusMsg.Text = "图例：无色带"; return; }
+        BeginChange();
+        foreach (var e in leg) { e.LayerName = _layers.Current.Name; _scene.Add(e); }
+        RefreshScene();
+        StatusMsg.Text = $"图例：色带 {_colormapName}，值域 [{vmin:0.#}, {vmax:0.#}]（入场景，可移动/删除）";
+    }
+
     private void SetColormapCmd(string cmd)
     {
         var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
@@ -3019,8 +3041,9 @@ public partial class MainWindow : Window
         }
         RefreshScene();
         Viewport.FitBounds(r.Bounds);
+        _legendVmin = zmin; _legendVmax = zmax;                 // 记值域供「图例」
         var inv = System.Globalization.CultureInfo.InvariantCulture;
-        StatusMsg.Text = $"高程着色：{r.Points.Count} 点 · z {zmin.ToString("0.#", inv)}~{zmax.ToString("0.#", inv)}（地形色带）";
+        StatusMsg.Text = $"高程着色：{r.Points.Count} 点 · z {zmin.ToString("0.#", inv)}~{zmax.ToString("0.#", inv)}（地形色带；「图例」可加色带图例）";
     }
 
     // 逐点坡度坡向 / 法向估计：点 CSV(x,y,z) → k 近邻 PCA 逐点法向 → 坡度配色点(绿平→红陡)入场景 + 报表
@@ -7870,7 +7893,7 @@ public partial class MainWindow : Window
         "网格度量","网格诊断","创建三角网","约束三角网","裁剪三角网","网格焊接","网格边界","网格交线","网格剖面","网格光顺","合并三角网","固化成体","侧面三角网","立方体","球体","圆柱","体素格网体积","实体转块体",
         // 区域/地形/点云
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
-        "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","点云质量统计","点云裁剪",
+        "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","点云质量统计","点云裁剪",
         // 块体/运输/路网
         "块体模型","资源量","道路横断面","路面生成","纵坡分析","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","演化对比","螺旋斜坡道","折返斜坡道",
         // 生产计划/投影
