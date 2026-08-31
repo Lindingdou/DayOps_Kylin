@@ -704,3 +704,15 @@
 - **C. PitDesign 境界 / MineAssLib 内核 + 对话框（17）**：坑线落地/直线坑线/撤销坑线/增量增删边/创建工作线(IPitDesignCapability.SetWorkLineAdvanceMode+WorkLineDialog)/创建工程位置(EngineeringPositionWindow+端帮对接)/编辑台阶/局部台阶/最终并段/延拓触发设置/约束条件设置/确定开采程序/排土场放坡/排土模板/破碎站位置设置/平盘联络道/结构路面。→ 全程 IPitDesignCapability(内核)+ WPF 对话框，非简单画线(工作线带前进方式/扇形回转语义)，忠实移植需内核。
 
 **结论**：death=60 全部 = A(引擎)+B(内核)+C(境界)，与三大边界一一对应。本 loop 内 doable+可验证+忠实的功能确已补全；这 60 个继续做必然触碰"发明原程序没有的逻辑"或"本机不可验"，命中用户"先跳过/先记录"红线。
+
+## 三十九、第 4 审计轴：活命令实体操作覆盖矩阵（补 4 缺口，621 测试）
+
+死按钮查"无处理器"，但**有处理器 ≠ 全实体类型支持**。审计多态操作 × 实体类型矩阵(`grep "override <Op>"` 列覆盖)，发现活命令的真实覆盖缺口并补全：
+
+- [x] **打断+圆→弧**(`9b1b90b`)：CircleEntity.Break，移除 CCW 第一点→第二点段、保留补段(AutoCAD 圆打断约定)。原打断仅支持 直线/多段线/圆弧。+2 测。
+- [x] **偏移+正多边形**(`cb84048`)：PolygonEntity.Offset 同心(新半径=心到点距，保边数/朝向，同 CircleEntity)。原偏移缺 Polygon。+1 测。
+- [x] **打断+矩形/多边形→开口多段线**(`dc79fb5`)：新基类 `BreakClosedLoop`(投两点到全部边**含闭合边**，移除 [p1..p2] 保留补段)。附带修复既有 `PolylineEntity.Break` 闭合分支不含末→首边的老限制。+2 测。
+
+**覆盖矩阵现状(完整)**：Offset=Line/Circle/Rect/Arc/Polyline/Polygon(全几何形)；Break=Line/Polyline/Arc/Circle/Rect/Polygon(点/文字不可断，符合语义)；Explode=Rect/Polyline/Polygon(复合形)；Grips/MoveGrip=全 8 类；.pmx SceneIO 写读对称覆盖 8 类(无数据丢失)。→ 此轴亦已尽。教训见 memory [[shell-completeness-priority]] 第4审计轴。
+
+**★会话进展**：LIVE 命令实体覆盖是继 死按钮/缺按钮/交互维度 之后又一被"已尽"结论漏掉的轴——提示"完成"结论应对**每一条正交完整度轴**逐一验证，而非笼统宣称。
