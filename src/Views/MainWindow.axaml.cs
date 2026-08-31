@@ -728,6 +728,7 @@ public partial class MainWindow : Window
             if (cmd == "月度计划" || cmd == "月计划" || cmd == "月度计划查看") { MonthlyPlansCmd(); return; }   // 只读展示(编制/授权工作流走 TaskLib, 受阻)
             if (cmd == "路况显示" || cmd == "运输道路" || cmd == "道路台账") { HaulRoadsCmd(); return; }
             if (cmd == "边坡设计" || cmd == "边坡参数" || cmd == "帮坡角设计") { SlopeDesignsCmd(); return; }
+            if (cmd == "展绘钻孔" || cmd == "开孔坐标管理" || cmd == "展绘层位数据" || cmd == "钻孔展绘" || cmd == "开孔坐标") { DrawBoreholesCmd(); return; }
             if (cmd == "点云抽稀" || cmd == "抽稀" || cmd == "点云精简") { await ThinPointsAsync(); return; }
             if (cmd == "地面点滤波" || cmd == "地面滤波") { await GroundFilterAsync(); return; }
             if (cmd == "C2C" || cmd == "点云比对" || cmd == "位移监测 C2C" || cmd == "位移监测") { await CloudCompareAsync(); return; }
@@ -5155,6 +5156,26 @@ public partial class MainWindow : Window
         var parts = new List<string>();
         foreach (var s in slopes) parts.Add($"{s.Side}(工作帮{s.WorkingAngle:0.#}°/最终帮{s.FinalAngle:0.#}°/深{s.MaxDepth:0.#}m/安全系数{s.SafetyFactor:0.##})");
         StatusMsg.Text = $"边坡设计（{slopes.Count} 帮）：" + string.Join(" · ", parts);
+    }
+
+    // 展绘钻孔 / 开孔坐标管理：读库钻孔平面坐标 → 点位入场景(可见几何) + 缩放到范围。
+    private void DrawBoreholesCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var pts = Data.GeoDataQueries.GetBoreholeCoords(db.Connection);
+        if (pts.Count == 0) { StatusMsg.Text = "展绘钻孔：库中无带坐标的钻孔"; return; }
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        BeginChange();
+        foreach (var (holeId, x, y, _) in pts)
+        {
+            var pe = new PointEntity { X = x, Y = y, Size = 2.0, Cr = 0.30f, Cg = 0.75f, Cb = 0.95f, LayerName = "钻孔" };
+            _scene.Add(pe);
+            if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y;
+        }
+        RefreshScene();
+        if (maxX > minX && maxY > minY)
+            Viewport.FitBounds(new double[] { minX, minY, maxX, maxY });
+        StatusMsg.Text = $"展绘钻孔：{pts.Count} 孔位入场景（图层「钻孔」）· 范围 X[{minX:0}~{maxX:0}] Y[{minY:0}~{maxY:0}]";
     }
 
     // ---------- 智能助手面板（菜单引导，点选即执行命令）----------

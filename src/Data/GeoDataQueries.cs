@@ -269,6 +269,18 @@ public static class GeoDataQueries
         return rows;
     }
 
+    /// <summary>开孔坐标：读所有有平面坐标的钻孔 (hole_id, x, y, z_collar)。供展绘点位。</summary>
+    public static List<(string holeId, double x, double y, double z)> GetBoreholeCoords(SqliteConnection conn)
+    {
+        var rows = new List<(string, double, double, double)>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"SELECT hole_id, x, y, COALESCE(z_collar,0) FROM borehole
+                            WHERE x IS NOT NULL AND y IS NOT NULL ORDER BY hole_id";
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read()) rows.Add((rd.GetString(0), rd.GetDouble(1), rd.GetDouble(2), rd.GetDouble(3)));
+        return rows;
+    }
+
     private static double ScalarDouble(SqliteConnection conn, string sql)
     {
         using var cmd = conn.CreateCommand();

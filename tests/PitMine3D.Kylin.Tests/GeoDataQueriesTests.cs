@@ -153,4 +153,13 @@ public class GeoDataQueriesTests
         Assert.NotEmpty(GeoDataQueries.GetHaulRoads(db.Connection));      // 种子 6
         Assert.NotEmpty(GeoDataQueries.GetSlopeDesigns(db.Connection));   // 种子 4
     }
+
+    [Fact]
+    public void Borehole_coords_all_have_xy()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var pts = GeoDataQueries.GetBoreholeCoords(db.Connection);
+        Assert.True(pts.Count > 100, $"带坐标钻孔 {pts.Count}");   // 种子 241
+        Assert.All(pts, p => Assert.NotEqual(0.0, p.x + p.y));    // 坐标非全零
+    }
 }
