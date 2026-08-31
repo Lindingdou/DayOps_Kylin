@@ -60,6 +60,22 @@ public class PointThinTests
     }
 
     [Fact]
+    public void Uniform_guarantees_min_spacing()
+    {
+        // 密集网格(间距 1), 均匀抽稀 minDist=3 → 任两保留点间距 ≥ 3
+        var pts = new List<(double x, double y, double z)>();
+        for (int i = 0; i < 15; i++) for (int j = 0; j < 15; j++) pts.Add((i * 1.0, j * 1.0, 0));
+        var kept = PointThin.ThinUniform(pts, 3.0);
+        Assert.True(kept.Count < pts.Count, "应抽稀");
+        for (int a = 0; a < kept.Count; a++)
+            for (int b = a + 1; b < kept.Count; b++)
+            {
+                double dx = kept[a].x - kept[b].x, dy = kept[a].y - kept[b].y, dz = kept[a].z - kept[b].z;
+                Assert.True(dx * dx + dy * dy + dz * dz >= 9 - 1e-9, "任两保留点间距应 ≥ minDist");
+            }
+    }
+
+    [Fact]
     public void Adaptive_flat_falls_back_to_voxel_and_degenerate()
     {
         // 全平 → 退回体素(等价 Thin 计数)

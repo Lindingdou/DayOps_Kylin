@@ -24,6 +24,42 @@ public static class PointThin
     }
 
     /// <summary>
+    /// 均匀(距离)抽稀（原「距离抽稀」模式）：贪心保留、任两保留点间距 ≥ minDist(保证最小间距,
+    /// 比体素更均匀无网格偏差)。网格哈希加速。纯逻辑、可单测。
+    /// </summary>
+    public static List<(double x, double y, double z)> ThinUniform(
+        IReadOnlyList<(double x, double y, double z)> pts, double minDist)
+    {
+        var res = new List<(double x, double y, double z)>();
+        if (minDist <= 1e-9) { res.AddRange(pts); return res; }
+        double r2 = minDist * minDist;
+        (long, long, long) Key(double x, double y, double z) => ((long)Math.Floor(x / minDist), (long)Math.Floor(y / minDist), (long)Math.Floor(z / minDist));
+        var kept = new Dictionary<(long, long, long), List<int>>();
+        foreach (var p in pts)
+        {
+            var (kx, ky, kz) = Key(p.x, p.y, p.z);
+            bool blocked = false;
+            for (long dx = -1; dx <= 1 && !blocked; dx++)
+                for (long dy = -1; dy <= 1 && !blocked; dy++)
+                    for (long dz = -1; dz <= 1 && !blocked; dz++)
+                        if (kept.TryGetValue((kx + dx, ky + dy, kz + dz), out var lst))
+                            foreach (int j in lst)
+                            {
+                                var q = res[j];
+                                double ex = q.x - p.x, ey = q.y - p.y, ez = q.z - p.z;
+                                if (ex * ex + ey * ey + ez * ez < r2) { blocked = true; break; }
+                            }
+            if (!blocked)
+            {
+                int idx = res.Count; res.Add(p);
+                if (!kept.TryGetValue((kx, ky, kz), out var kl)) kept[(kx, ky, kz)] = kl = new List<int>();
+                kl.Add(idx);
+            }
+        }
+        return res;
+    }
+
+    /// <summary>
     /// 自适应保特征抽稀（原「自适应保特征抽稀」模式）：高曲率点(脊/棱/坎)密留、平坦区疏化。
     /// 曲率度量 = |z − 邻域均 z|(平面≈0)；按曲率降序贪心, 排斥半径 = cell·(1..maxThin) 随平坦度增大。
     /// 网格哈希加速。纯逻辑、可单测。
