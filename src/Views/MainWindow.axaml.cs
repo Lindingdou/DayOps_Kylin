@@ -4030,7 +4030,7 @@ public partial class MainWindow : Window
             Viewport.SetLayerVisible(layer, cb.IsChecked == true);
     }
 
-    // 文件管理器：选文件夹 → 列出该目录 .dxf
+    // 文件管理器：选文件夹 → 列出该目录所有可导入图形（DXF/DWG/OFF/MapGIS/KDF/3DMine）
     private async void OnOpenFolder(object? sender, RoutedEventArgs e)
     {
         var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
@@ -4042,11 +4042,11 @@ public partial class MainWindow : Window
 
         string dir = folders[0].Path.LocalPath;
         FileFolderLabel.Text = dir;
-        var items = CadFileBrowser.ListDxf(dir);
+        var items = CadFileBrowser.ListImportable(dir);
         FileList.ItemsSource = items
             .Select(x => new ListBoxItem { Content = x.Name, Tag = x.Path })
             .ToList();
-        StatusMsg.Text = items.Count == 0 ? "该文件夹无 .dxf 文件" : $"{items.Count} 个 .dxf（双击打开）";
+        StatusMsg.Text = items.Count == 0 ? "该文件夹无可导入图形（DXF/DWG/OFF/MapGIS/KDF/3DMine）" : $"{items.Count} 个图形文件（双击打开）";
     }
 
     // 双击文件列表项 → 导入该图纸

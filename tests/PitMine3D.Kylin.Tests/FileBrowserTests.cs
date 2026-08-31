@@ -31,4 +31,30 @@ public class FileBrowserTests
         var list = CadFileBrowser.ListDxf(Path.Combine(Path.GetTempPath(), "pm_no_such_dir_xyz"));
         Assert.Empty(list);
     }
+
+    [Fact]
+    public void ListImportable_lists_all_import_formats()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "pm_filebrowser_importable_" + System.Guid.NewGuid().ToString("N").Substring(0, 6));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            // 各可导入格式 + 一个非导入格式
+            foreach (var name in new[] { "a.dxf", "b.dwg", "c.off", "d.wl", "e.wt", "f.wp", "g.mpj", "h.kdf", "i.3dm", "skip.txt", "skip.pdf" })
+                File.WriteAllText(Path.Combine(dir, name), "");
+
+            var list = CadFileBrowser.ListImportable(dir);
+
+            Assert.Equal(9, list.Count);                                   // 9 种可导入格式全列, .txt/.pdf 忽略
+            Assert.Contains(list, x => x.Name == "d.wl");                  // MapGIS
+            Assert.Contains(list, x => x.Name == "h.kdf");                 // KDF
+            Assert.Contains(list, x => x.Name == "i.3dm");                 // 3DMine
+            Assert.DoesNotContain(list, x => x.Name == "skip.txt");
+            Assert.DoesNotContain(list, x => x.Name == "skip.pdf");
+            // 大小写不敏感
+            File.WriteAllText(Path.Combine(dir, "J.KDF"), "");
+            Assert.Contains(CadFileBrowser.ListImportable(dir), x => x.Name == "J.KDF");
+        }
+        finally { try { Directory.Delete(dir, true); } catch { } }
+    }
 }
