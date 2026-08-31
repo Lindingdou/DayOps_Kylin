@@ -931,6 +931,7 @@ public partial class MainWindow : Window
             if (cmd == "打断") { StartBreak(); return; }
             if (cmd == "夹点开关" || cmd == "夹点") { ToggleGizmo(); return; }
             if (cmd == "正交" || cmd == "正交开关") { _orthoOn = !_orthoOn; SyncDraftToggles(); StatusMsg.Text = _orthoOn ? "正交: 开" : "正交: 关"; return; }
+            if (cmd == "栅格" || cmd == "栅格显示" || cmd == "显示栅格" || cmd == "GRID") { SetGrid(!_gridOn); StatusMsg.Text = _gridOn ? "栅格: 开" : "栅格: 关"; return; }
             if (cmd == "栅格捕捉" || cmd == "捕捉开关") { _snapOn = !_snapOn; SyncDraftToggles(); StatusMsg.Text = _snapOn ? $"栅格捕捉: 开（步长 {_snapStep:0.##}）" : "栅格捕捉: 关"; return; }
             if (cmd == "对象捕捉" || cmd == "对象捕捉开关" || cmd == "OSNAP") { SnapToggle.IsChecked = !(SnapToggle.IsChecked == true); StatusMsg.Text = $"对象捕捉: {(SnapToggle.IsChecked == true ? "开" : "关")}"; return; }
             if (cmd == "交点捕捉") { ToggleSnapExtra(ObjectSnap.Mode.Intersection, "交点"); return; }
@@ -5923,6 +5924,8 @@ public partial class MainWindow : Window
         "复制","移动","旋转","偏移","修剪","延伸","打断","分解","删除","撤销","重做",
         // 对象捕捉
         "对象捕捉","交点捕捉","最近捕捉","垂足捕捉","捕捉全模式",
+        // 草图辅助
+        "正交","栅格","栅格捕捉",
         // 图层/视图
         "新建图层","删除图层","图层特性管理器","冻结","锁定","全开",
         "2D","3D","俯视","仰视","主视","后视","左视","右视","西南等轴测","东南等轴测","东北等轴测","西北等轴测","缩放","清空视图","清理标记",
