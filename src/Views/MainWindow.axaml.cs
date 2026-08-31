@@ -772,6 +772,7 @@ public partial class MainWindow : Window
             if (cmd == "网格诊断" || cmd == "网格检查" || cmd == "网格拓扑") { await MeshDiagnoseAsync(); return; }
             if (cmd == "网格焊接" || cmd == "合并顶点" || cmd == "顶点焊接") { await MeshWeldAsync(); return; }
             if (cmd == "合并三角网" || cmd == "网格合并" || cmd == "合并网格") { await MeshMergeAsync(); return; }
+            if (cmd == "补洞(三角网)" || cmd == "补洞" || cmd == "网格补洞" || cmd == "填洞") { await MeshHoleFillAsync(); return; }
             if (cmd == "固化成体" || cmd == "固化实体") { await SolidifyAsync(); return; }
             if (cmd == "体素格网体积" || cmd == "体素体积" || cmd == "体素算量") { await VoxelVolumeAsync(); return; }
             if (cmd == "实体转块体" || cmd == "网格转块体" || cmd == "体转块") { await EntityToBlocksAsync(); return; }
@@ -1325,6 +1326,31 @@ public partial class MainWindow : Window
         RefreshScene();
         if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
         StatusMsg.Text = $"网格边界：{loops.Count} 环 · {totPts} 点(投影 XY 作闭合折线入场景)";
+    }
+
+    // 补洞(三角网)：选 OFF → 提边界洞 → 扇形填充 → 落 .filled.off + 前后开放边报表。
+    private async Task MeshHoleFillAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "补洞：选 OFF 网格",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } } }
+        });
+        if (files.Count == 0) return;
+        string text;
+        try { text = System.IO.File.ReadAllText(files[0].Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"补洞：读取失败 {ex.Message}"; return; }
+        var (verts, tris) = MeshMetrics.ParseOff(text);
+        if (tris.Count == 0) { StatusMsg.Text = "补洞：未解析到三角网格"; return; }
+        int beforeB = MeshDiagnose.Analyze(verts, tris).BoundaryEdges;
+        if (beforeB == 0) { StatusMsg.Text = "补洞：网格已水密(无开放边), 无洞可补"; return; }
+        var (nv, nt, holes) = MeshHoleFill.Fill(verts, tris);
+        int afterB = MeshDiagnose.Analyze(nv, nt).BoundaryEdges;
+        string outPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(files[0].Path.LocalPath) ?? ".", "filled.off");
+        try { System.IO.File.WriteAllText(outPath, MeshWeld.ToOff(nv, nt)); }
+        catch (System.Exception ex) { StatusMsg.Text = $"补洞：写出失败 {ex.Message}"; return; }
+        StatusMsg.Text = $"补洞：补 {holes} 洞 · 三角 {tris.Count}→{nt.Count} · 开放边 {beforeB}→{afterB}{(afterB == 0 ? "(已水密)" : "")} → {System.IO.Path.GetFileName(outPath)}";
     }
 
     // 读多份 OFF 并拼接为一份 (verts, tris)(索引偏移)；失败的文件跳过
