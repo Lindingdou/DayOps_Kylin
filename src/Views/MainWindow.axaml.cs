@@ -176,7 +176,7 @@ public partial class MainWindow : Window
                     else
                     {
                         double h = System.Math.Max(SnapTolWorld(_lastPointer) * 2.5, 1e-3);
-                        var dim = DimTools.Build(_dimP1.Value.x, _dimP1.Value.y, wp.Value.x, wp.Value.y, h);
+                        var dim = DimTools.Build(_dimP1.Value.x, _dimP1.Value.y, wp.Value.x, wp.Value.y, h, _dimStyle);
                         BeginChange();
                         foreach (var de in dim) { de.LayerName = _layers.Current.Name; _scene.Add(de); }
                         RefreshScene();
@@ -197,7 +197,7 @@ public partial class MainWindow : Window
                 {
                     var c = _dimRadCircle.Value;
                     double h = System.Math.Max(SnapTolWorld(_lastPointer) * 2.5, 1e-3);
-                    var dim = DimTools.BuildRadial(c.cx, c.cy, c.r, wp.Value.x - c.cx, wp.Value.y - c.cy, h);
+                    var dim = DimTools.BuildRadial(c.cx, c.cy, c.r, wp.Value.x - c.cx, wp.Value.y - c.cy, h, _dimStyle);
                     BeginChange();
                     foreach (var de in dim) { de.LayerName = _layers.Current.Name; _scene.Add(de); }
                     RefreshScene();
@@ -660,6 +660,7 @@ public partial class MainWindow : Window
     private bool _dimRadActive;                        // 半径标注：选圆/弧后指定方向
     private (double cx, double cy, double r)? _dimRadCircle;
     private (double x, double y)? _lastDimP2;           // 上一条线性标注的第二点(连续标注基准)
+    private readonly Cad.Draw.DimStyle _dimStyle = new();   // 标注样式(DIM 变量：字高/小数位/箭头比)，影响新建标注
     private bool _selBoxActive;                     // 窗口框选拖拽中
     private Avalonia.Point _selBoxStart;            // 框选起点(屏幕)
     private bool _ttrActive, _ttrAwaitRadius;       // 圆 TTR：选两相切参照(线/圆) → 输半径
@@ -890,6 +891,7 @@ public partial class MainWindow : Window
             if (cmd == "标注" || cmd == "线性标注" || cmd == "对齐标注" || cmd == "尺寸标注" || cmd == "标注台阶标高") { StartDim(); return; }
             if (cmd == "半径标注" || cmd == "半径") { StartDimRadial(); return; }
             if (cmd == "连续标注" || cmd == "连续") { StartDimContinue(); return; }
+            if (cmd == "标注样式" || cmd == "标注设置" || cmd.StartsWith("标注样式 ") || cmd.StartsWith("标注设置 ")) { DimStyleCmd(cmd); return; }
             if (cmd == "裁剪" || cmd == "多边形裁剪" || cmd == "区运算" || cmd == "范围裁剪") { ClipPolygon(); return; }
             if (cmd == "平滑" || cmd == "光滑" || cmd == "曲线平滑" || cmd == "光滑曲线") { SmoothPolyline(); return; }
             if (cmd == "简化" || cmd == "多段线简化" || cmd == "抽稀线" || cmd == "抽稀等值线") { SimplifyPolyline(); return; }
@@ -3422,6 +3424,22 @@ public partial class MainWindow : Window
         _dimActive = true; _dimP1 = _lastDimP2;
         _tool = null; _measure = null; _editMode = EditMode.None;
         StatusMsg.Text = "连续标注：指定下一点";
+    }
+
+    // 标注样式(DIM 变量)：无参显示当前值；「标注样式 <文字高> [小数位] [箭头比]」设置。文字高 0=自动(随缩放)。
+    private void DimStyleCmd(string cmd)
+    {
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        if (tk.Length <= 1)
+        {
+            StatusMsg.Text = $"标注样式：文字高 {(_dimStyle.TextHeight > 0 ? _dimStyle.TextHeight.ToString("0.##") : "自动")} · 小数位 {_dimStyle.DecimalPlaces} · 箭头比 {_dimStyle.ArrowRatio:0.##}（设置：标注样式 <文字高> [小数位] [箭头比]，文字高 0=自动）";
+            return;
+        }
+        var inv = System.Globalization.CultureInfo.InvariantCulture; var fl = System.Globalization.NumberStyles.Float;
+        if (double.TryParse(tk[1], fl, inv, out double h) && h >= 0) _dimStyle.TextHeight = h;
+        if (tk.Length >= 3 && int.TryParse(tk[2], out int dec) && dec >= 0 && dec <= 8) _dimStyle.DecimalPlaces = dec;
+        if (tk.Length >= 4 && double.TryParse(tk[3], fl, inv, out double ar) && ar > 0 && ar < 5) _dimStyle.ArrowRatio = ar;
+        StatusMsg.Text = $"标注样式已设：文字高 {(_dimStyle.TextHeight > 0 ? _dimStyle.TextHeight.ToString("0.##") : "自动")} · 小数位 {_dimStyle.DecimalPlaces} · 箭头比 {_dimStyle.ArrowRatio:0.##}（影响新建标注）";
     }
 
     // 文字：进入模式，下一条命令行输入即文字内容
@@ -6490,7 +6508,7 @@ public partial class MainWindow : Window
         "隐藏对象","隐藏同一图层对象","结束隐藏",
         "2D","3D","俯视","仰视","主视","后视","左视","右视","西南等轴测","东南等轴测","东北等轴测","西北等轴测","缩放","清空视图","清理标记",
         // 注释/测量/剪贴板/选择
-        "线性标注","对齐标注","半径标注","连续标注",
+        "线性标注","对齐标注","半径标注","连续标注","标注样式",
         "距离","面积","角度",
         "剪切","复制到剪贴板","粘贴","基点粘贴","原坐标粘贴",
         "快速选择","全部选择","取消选择","创建选择集",

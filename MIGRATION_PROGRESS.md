@@ -883,7 +883,7 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 - **⛔ 本轮 5 个记录边界(逐一回原始核实非疏漏)**——根因同源：**托管场景在创建/导入时即把复合体炸开为图元、把网格化为边线、且线段渲染**；原始这些命令均走 **native 引擎**保留态(句柄/逐面)，托管重实现刻意不建该架构：
   1. **编辑填充(HATCHEDIT)**——**原始自身即桩**：`OnHatchEditClick` 仅 `AppendToHistory("编辑填充（待引擎实现 HATCHEDIT 命令）")`。原程序未实现→按忠实原则不发明。**并非疏漏，是原始留白**。
   2. **保存选择集**——实为"导出选中三角网→OFF 文件"(非命名集；命名集是 创建/调用选择集，已有)。Kylin 的 OFF 导入被解析为**边线段**(非保留三角网)，场景无可选网格实体→无导出源。需一等 MeshEntity + 面表(原绑 native AcDbIds)。
-  3. **标注样式(DIMSTYLE)**——原 `DimensionStyleWindow` 经 native `PitMine_SetDimensionProperty(handle,arrowSize/textHeight/...)` 编辑**选中标注实体**。Kylin 标注创建时即炸为 线+文字(`DimTools.Build`→List)，无保留复合标注实体可编辑；且经不可见 native 属性模型。create-time 全局样式≠原(编辑既有选中)，属发明→不做。
+  3. **标注样式(DIMSTYLE)**——**部分解锁**(见 §五十四)：原 `DimensionStyleWindow` 有两层——①**文档级 DIM 变量**(文字高/小数位/箭头比等，影响新建标注) ②编辑**选中既有标注**实体属性(经 native `PitMine_SetDimensionProperty(handle)`)。**①是核心且可做**：全局 DimStyle 影响新建标注=忠实 DIM 变量，已补(§五十四)。**②仍受阻**：Kylin 标注创建即炸为 线+文字，无保留复合标注实体可编辑既有——记录。
   4. **采剥演示**——`BlockModelLib.Simulation.MiningSimController` 加载 .blk 逐条带推演，坐落于**整个 32,107 行 BlockModelLib 子系统**(块体浏览器/创建/导入/煤质属性/体素体积/仿真)。**整模块级，超"补单命令"范围**。
   5. **渲染配置**——非模态对话框设**全局着色模式(线框/实体)** + native 逐面色覆盖。Kylin 托管场景为**线段渲染**，无实体面着色管线可切换；走原生网格着色。**渲染器架构边界**。
 - **结论**：Ribbon 逐命令差集探查**收敛**——可做+可验证+忠实者(隐藏/隔离)已补；余 5 项均**回原始核实**为 原始留白(1) / 托管架构刻意边界(2-3,5) / 整子系统级(4)，非命令级疏漏。**命令面覆盖到此为托管重实现的忠实上界**。681 测试。
@@ -908,3 +908,10 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 - [x] **3DMine Solid 文本格式(.3dm)导入**(`本次`)：测试目录 6 个变体 .3dm 是 **3DMine Solid File 文本**(file_version=3DMine_2009, 6.5MB 实体煤层模型)。`TdmImportService` 加 `ReadSolidTextMeshes` 忠实移植 TdmSolidReader: 顶点块(X,Y,Z 含小数)→solids 尾标(名+归一化 RGB)→面块(整数三元组)→重复→End; **面块中出现浮点行=下一实体顶点块起始**。`Parse` 自动分派 二进制/Solid 文本/报错(同原 TdmImportService)。+1 单测(真样本 `9煤底.3dm`)。
   - **发现**：该 solid 为**三角汤**(顶点不按索引共享)→ 去重边=恰 3×三角(vs 二进制 index-shared 网格边<3×三角), 两种拓扑均正确, 测试断言相应放宽为 ≤3×。
   - **记录**：TdmStringReader(3DMine 字符串/线)暂缓——测试目录无对应样本; 源可见有样本可移。
+
+## 五十四、标注样式(DIM 变量文档级设置)——重审"保留复合体"边界后部分解锁
+
+**重审**：§五十二 曾整体记 标注样式 为"需保留复合标注实体"边界。但**拆解原 `DimensionStyleWindow` 发现两层**：①**文档级 DIM 变量**(DIMTXT 文字高 / DIMDEC 小数位 / DIMASZ 箭头 …，AutoCAD/原程序里是文档设置，影响新建标注) ②编辑**选中既有标注**属性。**①无需保留实体即可做**(就是新建标注时读样式)，只有②需保留 DimEntity。前判"create-time≠原"过严——DIM 变量本就是 create-time 文档设置。
+
+- [x] **标注样式 文档级 DIM 变量**(`本次`)：`DimStyle` 类(TextHeight/DecimalPlaces/TickRatio/ArrowRatio/TextOffsetRatio，DIM 变量语义) + `DimTools.Build/BuildRadial` 接受 DimStyle(文字高 0=自动随缩放/>0 固定；小数位控距离文字格式；箭头/刻度比)。MainWindow `_dimStyle` 影响新建 线性/半径 标注。命令 `标注样式 <文字高> [小数位] [箭头比]`(无参显示当前)。+4 单测(小数位控格式/固定字高覆盖/箭头比缩放/**默认保留旧行为**)。→ **标注样式核心(DIM 变量)落地，影响新建标注**。708 tests。
+  - **仍记录**：编辑**选中既有标注**实体属性(原②)需保留复合 DimEntity(标注创建即炸为线+文字)，属 §五十二 边界#3 的②层，待保留复合体架构。
