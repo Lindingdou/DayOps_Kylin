@@ -747,6 +747,7 @@ public partial class MainWindow : Window
             if (cmd == "属性统计" || cmd == "品位统计" || cmd == "直方图" || cmd == "统计报告") { await GradeStatsAsync(); return; }
             if (cmd == "块体着色" || cmd == "块体配色") { ColorBlocksCmd(); return; }
             if (cmd == "筛选块体" || cmd == "块体筛选") { FilterBlocksCmd(); return; }
+            if (cmd.StartsWith("表达式筛选块 ") || cmd.StartsWith("表达式筛选 ") || cmd.StartsWith("块体表达式 ") || cmd.StartsWith("按表达式筛选 ")) { BlockExpressionFilterCmd(cmd); return; }
             if (cmd == "约束块体" || cmd == "块体约束") { ConstrainBlocksCmd(); return; }
             if (cmd == "删除块体" || cmd == "清除块体") { DeleteBlocksCmd(); return; }
             if (cmd == "切面剖切" || cmd == "块体剖切" || cmd == "切面") { SectionBlocksCmd(); return; }
@@ -3624,6 +3625,21 @@ public partial class MainWindow : Window
         var sub = _lastBlocks.Where(b => b.Grade >= cutoff).ToList();
         BeginChange(); RenderBlocks(sub); RefreshScene();
         StatusMsg.Text = $"筛选块体：品位≥{cutoff:0.###} → 显示 {sub.Count}/{_lastBlocks.Count} 块（块体着色 恢复全显）";
+    }
+
+    // 表达式筛选块(原 ExpressionEngine「表达式删单元」用途)：按 "Grade>5 AND Z<100" 只显匹配块(非破坏, 块体着色恢复)
+    private void BlockExpressionFilterCmd(string cmd)
+    {
+        if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "表达式筛选：请先导入/生成块体"; return; }
+        int sp = cmd.IndexOf(' ');
+        string expr = sp >= 0 ? cmd.Substring(sp + 1).Trim() : "";
+        if (string.IsNullOrWhiteSpace(expr)) { StatusMsg.Text = "表达式筛选：用法「表达式筛选块 Grade>5 AND Z<100」(属性 X/Y/Z/Grade/Size)"; return; }
+        System.Func<BlockModel.Block, bool> pred;
+        try { pred = BlockExpression.Compile(expr); }
+        catch (System.Exception ex) { StatusMsg.Text = $"表达式错误：{ex.Message}"; return; }
+        var sub = _lastBlocks.Where(pred).ToList();
+        BeginChange(); RenderBlocks(sub); RefreshScene();
+        StatusMsg.Text = $"表达式筛选「{expr}」：显示 {sub.Count}/{_lastBlocks.Count} 块（块体着色 恢复全显）";
     }
 
     // 约束块体：只保留(显示)落在选中闭合多段线内的块
