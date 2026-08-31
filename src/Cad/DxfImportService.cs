@@ -246,6 +246,19 @@ public static class DxfImportService
                     SplineSegs(sp);
                     break;
 
+                case Leader ld:   // 引线：顶点折线
+                {
+                    var vs = ld.Vertices; var lst = new List<CSMath.XYZ>(vs);
+                    for (int i = 0; i + 1 < lst.Count; i++) Seg(lst[i].X, lst[i].Y, lst[i].Z, lst[i + 1].X, lst[i + 1].Y, lst[i + 1].Z);
+                    break;
+                }
+                case MLine ml:   // 多线：中心线顶点折线
+                {
+                    var vs = ml.Vertices; int mc = vs.Count;
+                    for (int i = 0; i + 1 < mc; i++) Seg(vs[i].Position.X, vs[i].Position.Y, vs[i].Position.Z, vs[i + 1].Position.X, vs[i + 1].Position.Y, vs[i + 1].Position.Z);
+                    break;
+                }
+
                 default:
                     result.Warnings.Add($"跳过未支持实体：{ent.GetType().Name}");
                     break;
@@ -574,6 +587,20 @@ public static class DxfImportService
                         Emit(be, childXf, ColorOf(be), layer, depth + 1);   // 块内实体归插入所在层
                     break;
                 }
+                case Leader ld:   // 引线：顶点折线（箭头/注释块另随文档实体, 此还原引线本体）
+                {
+                    var pl = new PolylineEntity();
+                    foreach (var v in ld.Vertices) pl.Points.Add((v.X, v.Y));
+                    if (pl.Points.Count >= 2) Finalize(pl, xf, col, layer);
+                    break;
+                }
+                case MLine ml:   // 多线：以中心线顶点折线还原（平行偏移线族需 MLineStyle, 记录）
+                {
+                    var pl = new PolylineEntity();
+                    foreach (var v in ml.Vertices) pl.Points.Add((v.Position.X, v.Position.Y));
+                    if (pl.Points.Count >= 2) Finalize(pl, xf, col, layer);
+                    break;
+                }
                 default:
                     result.Warnings.Add($"跳过未支持实体：{ent.GetType().Name}");
                     break;
@@ -737,6 +764,8 @@ public static class DxfImportService
         Ellipse => "椭圆",
         Insert => "块引用",
         Spline => "样条",
+        Leader => "引线",
+        MLine => "多线",
         _ => null
     };
 

@@ -505,4 +505,24 @@ public class DxfImportTests
 
         try { File.Delete(src); File.Delete(outp); } catch { /* 清理失败无碍 */ }
     }
+
+    [Fact]
+    public void Loads_leader_as_polyline()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "pm_dxf_leader_test.dxf");
+        var doc = new CadDocument();
+        var ld = new Leader();
+        ld.Vertices.Add(new XYZ(0, 0, 0));
+        ld.Vertices.Add(new XYZ(5, 2, 0));
+        ld.Vertices.Add(new XYZ(9, 2, 0));
+        doc.Entities.Add(ld);
+        using (var writer = new DxfWriter(path, doc, false)) writer.Write();
+
+        var r = DxfImportService.Load(path);
+        Assert.True(r.Success, r.Error);
+        Assert.True(r.SegmentCount >= 2, $"segments={r.SegmentCount}");   // 3 顶点 → 2 段
+        Assert.True(r.Bounds[2] >= 8.99, $"maxX={r.Bounds[2]}");          // 含末点 x=9
+        Assert.Equal(1, r.TypeCounts["引线"]);
+        try { File.Delete(path); } catch { /* 清理失败无碍 */ }
+    }
 }
