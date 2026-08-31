@@ -1082,5 +1082,15 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 - [x] **表达式筛选块**(`b8608f6`)：原 `ExpressionEngine`「删单元·表达式范围」用途在 X/Y/Z/Grade/Size 上可做(公式赋值需多属性块=数据模型阻, 记录)。补 `BlockExpression.Compile`(统一值语法递归下降: OR&lt;AND&lt;NOT&lt;比较&lt;+−&lt;×÷&lt;一元−&lt;原子, 比较/布尔产 0/1 避括号歧义, 属性含中文别名) + 表达式筛选块命令(非破坏)。8 测(比较/AND-OR 优先级/NOT-括号/算术/各比较符/别名/语法错误)。**826 tests**。
 
 **"记录项→可做子集"本会话 5 处**: 剔面 · 虚拟钻孔 · SQL 查询(UI 阻拆查询核) · C2C 直方图 · 表达式筛选(数据模型阻拆筛选子集)。**教训固化: 记录项(native/UI/大子系统/数据模型)都要问"有无可见算法可做子集"**——多数有。本会话累计补 **13 真功能**, 826 测。
+
+## 七十六、格式全景重扫 —— LAS 导入(第6处过度记录) + 网格导出 OBJ/PLY/STL
+
+**枚举原程序全部文件格式 pattern** 交叉核对: 导入侧 DXF/DWG/OFF/3DMine/MapGIS/KDF/CSV 已覆盖; 导出侧只有 OFF。两个公开格式缺口:
+
+- [x] **LAS 点云导入**(`14d4912`)：**第 6 处过度记录纠正**——LAS 曾记"native LasLib 无源"受阻, 实则 **LAS 是公开 ASPRS 规范**(非依赖原源, 同 KDF/TDM 逆向) **且样本存在**(dlt_test.las 103MB)。补 `LasImportService`(读头 scale/offset/点数/记录长 + 逐点 X/Y/Z int32→世界坐标, 大文件直接 seek 抽稀 O(maxPoints)) + 导入LAS 命令。5 测: 合成 LAS 1.2 精确解码/抽稀/非LAS拒/过小拒 + **真实 dlt_test.las skip-if-absent 验证**(版本/点数/坐标落头包围盒内)。**判据: native 格式若 (a)格式公开可逆向 ∧ (b)有样本 → 可做**(LAS✓; OSGB=3D纹理+复杂✗记录; PMB/PMxx=专有✗记录)。
+- [x] **网格导出 OBJ/PLY/STL**(`6df904b`)：原 MeshExportViewModel 导出 OBJ/PLY/STL/glTF, Kylin 只导 OFF。补 `MeshExport`(ToObj 1基/ToPly 0基+头/ToStlAscii 右手法向/ByExtension) + 导出OBJ/PLY/STL 命令。glTF(JSON+二进制)复杂记录。6 测。**837 tests**。
+- **非缺口核实**: OBJ/PLY/STL **导入**原仅 HelixToolkit **设备 3D 模型**(3D viz 架构阻), 非 CAD 网格导入(CAD=OFF/3DMine 已有); Shapefile/KML/GPX 原不导入(勿发明); GeoTIFF/PNG=栅格(2D 场景显示阻); PMB=专有; JSON 块=描述未实现(aspirational)。
+
+**本会话累计补 15 真功能, 837 测。过度记录纠正累计 6 处**(drape/mesh光顺交线/剔面/虚拟钻孔/**LAS**), 印证: **native/受阻标签必回核——公开格式+样本、可见算法、可拆子集者皆可做**。
 - **记录(2D 场景架构阻)**：**点/节点 Z 编辑**(统一Z/POINTSETZ/Z=aX+bY+c 平面赋Z/POLYUNIFYZ)——场景实体 2D 无 Z(PointEntity 仅 X,Y; PolylineEntity.Points 是 `(x,y)`), 无 Z 可设, 属线段渲染架构边界。
 - **latent 记录(非本轮引入)**：loft+weld(QuickModelAsync/LayerSolid)产**边流形水密但定向不一致**网格 → MeshMetrics 散度体积对定向敏感(随 z 位置变); 但实际取体积走**体素/缠绕数**路径(WindingNumberTester, 定向无关 robust), 工作流不受影响。
