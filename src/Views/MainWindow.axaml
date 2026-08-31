@@ -446,20 +446,62 @@
                                 <DockPanel>
                                     <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="编辑" />
                                     <StackPanel Orientation="Horizontal">
-                                        <Button Classes="ribbon-btn large" Tag="点编辑" Click="OnRibbonCommand" ToolTip.Tip="点编辑">
-                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource edit_point}" /><TextBlock Text="点编辑" /></StackPanel>
+                                        <Button Classes="ribbon-btn large" ToolTip.Tip="点编辑">
+                                            <Button.Flyout>
+                                                <MenuFlyout>
+                                                    <MenuItem Header="删除重复点" Tag="删除重复点" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="点落到面上" Tag="点落到面上" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="顶点焊接" Tag="顶点焊接" Click="OnRibbonCommand" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource edit_point}" /><TextBlock Text="点编辑 ▾" /></StackPanel>
                                         </Button>
-                                        <Button Classes="ribbon-btn large" Tag="线编辑" Click="OnRibbonCommand" ToolTip.Tip="线编辑">
-                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource edit_line}" /><TextBlock Text="线编辑" /></StackPanel>
+                                        <Button Classes="ribbon-btn large" ToolTip.Tip="线编辑">
+                                            <Button.Flyout>
+                                                <MenuFlyout>
+                                                    <MenuItem Header="加密多段线" Tag="加密多段线" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="抽稀/简化" Tag="简化" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="两线交点" Tag="两线交点" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="闭合多段线" Tag="闭合多段线" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="删除重复线" Tag="删除重复线" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="连接多段线" Tag="连接多段线" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="线落到面上" Tag="线落到面上" Click="OnRibbonCommand" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource edit_line}" /><TextBlock Text="线编辑 ▾" /></StackPanel>
                                         </Button>
-                                        <Button Classes="ribbon-btn large" Tag="面编辑" Click="OnRibbonCommand" ToolTip.Tip="面编辑">
-                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource edit_face}" /><TextBlock Text="面编辑" /></StackPanel>
+                                        <Button Classes="ribbon-btn large" ToolTip.Tip="面编辑">
+                                            <Button.Flyout>
+                                                <MenuFlyout>
+                                                    <MenuItem Header="网格度量" Tag="网格度量" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="格网质量检测(诊断)" Tag="网格诊断" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="生成三角网边界" Tag="网格边界" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="合并三角网" Tag="合并三角网" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="侧面三角网" Tag="侧面三角网" Click="OnRibbonCommand" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource edit_face}" /><TextBlock Text="面编辑 ▾" /></StackPanel>
                                         </Button>
-                                        <Button Classes="ribbon-btn large" Tag="体编辑" Click="OnRibbonCommand" ToolTip.Tip="体编辑">
-                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource edit_body}" /><TextBlock Text="体编辑" /></StackPanel>
+                                        <Button Classes="ribbon-btn large" ToolTip.Tip="体编辑">
+                                            <Button.Flyout>
+                                                <MenuFlyout>
+                                                    <MenuItem Header="固化成体" Tag="固化成体" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="顶点焊接" Tag="网格焊接" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="体素格网体积" Tag="体素格网体积" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="实体转块体" Tag="实体转块体" Click="OnRibbonCommand" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource edit_body}" /><TextBlock Text="体编辑 ▾" /></StackPanel>
                                         </Button>
-                                        <Button Classes="ribbon-btn large" Tag="工具" Click="OnRibbonCommand" ToolTip.Tip="工具">
-                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource me_contour}" /><TextBlock Text="工具" /></StackPanel>
+                                        <Button Classes="ribbon-btn large" ToolTip.Tip="工具">
+                                            <Button.Flyout>
+                                                <MenuFlyout>
+                                                    <MenuItem Header="距离测量" Tag="距离" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="面积测量" Tag="面积" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="角度测量" Tag="角度" Click="OnRibbonCommand" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource me_contour}" /><TextBlock Text="工具 ▾" /></StackPanel>
                                         </Button>
                                     </StackPanel>
                                 </DockPanel>
