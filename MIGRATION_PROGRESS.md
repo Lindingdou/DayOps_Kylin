@@ -1007,3 +1007,7 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 - [x] **均匀(距离)抽稀**(`ddaadf6`)：`ThinUniform` 贪心保证最小间距(比体素均匀无网格偏差)。
 - [x] **随机抽稀**(`本次`)：`ThinRandom(keepFraction, rng)` 随机子集(快速粗采样)。+1 单测(种子确定 ≈30%/0 空/1 全留)。
 - **判据**：**行为材料级不同的模式→补**(体素/随机/均匀/自适应 4 抽稀; NN/MA/IDW/OK/UK 5 估值); **冗余的→略**(SK 克里金当 mean=样本均值 ≡ OK, 无外部已知均值时无增益)。→ **抽稀 4 模式全齐, 估值 5/6 法(SK 冗余)**。747 tests。
+
+## 六十七、感知均匀色带(Viridis/Turbo/Magma/Plasma) —— 色带族补齐
+
+- [x] **4 感知均匀色带 + 色带切换**(`本次`)：原 TinColormap 7 色带, Kylin 仅 3(Terrain/Jet/Grayscale), 补 **Viridis/Turbo/Magma/Plasma**(感知均匀、色盲友好, 科学可视化优于 Jet)。`Colormap.ByName`(名→色带) + `_colormap` 当前色带 + 命令 `色带 <名>`(切换, 高程/属性着色读之)。+2 单测(4 色带端点色/ByName 大小写不敏感+未知→Terrain)。752 tests。

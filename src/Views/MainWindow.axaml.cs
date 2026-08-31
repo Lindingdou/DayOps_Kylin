@@ -619,6 +619,8 @@ public partial class MainWindow : Window
     private readonly List<SceneEntity> _selected = new();   // 选择集
     private List<SceneEntity> _prevSelected = new();         // 上次选择集
     private readonly HashSet<string> _hiddenLayers = new();  // 隐藏同一图层对象 记录的层名，结束隐藏一并恢复
+    private (byte r, byte g, byte b)[] _colormap = Cad.Colormap.Terrain;   // 当前色带(高程/属性着色用)，色带 <名> 切换
+    private string _colormapName = "Terrain";
     private readonly Cad.Draw.CadClipboard _clip = new();    // 实体剪贴板（COPYCLIP/CUTCLIP/PASTECLIP）
     private readonly Cad.Draw.NamedSelections _selSets = new(); // 命名选择集（创建/调用选择集）
     private readonly AssistantEngine _assistant = new();         // 智能助手（菜单引导，点选即执行命令）
@@ -829,6 +831,7 @@ public partial class MainWindow : Window
             if (cmd == "车铲匹配" || cmd == "配车匹配" || cmd == "车铲配比") { await FleetMatchAsync(); return; }
             if (cmd == "点云质量统计" || cmd == "点云统计" || cmd == "点云质量") { await PointCloudStatsAsync(); return; }
             if (cmd == "点云高程着色" || cmd == "高程着色" || cmd == "点云着色") { await ElevationColorAsync(); return; }
+            if (cmd == "色带" || cmd == "配色方案" || cmd.StartsWith("色带 ") || cmd.StartsWith("配色方案 ")) { SetColormapCmd(cmd); return; }
             if (cmd == "加载点云" || cmd == "展点" || cmd == "导入点云" || cmd == "加载点") { await LoadPointCloudAsync(); return; }
             if (cmd == "逐点坡度/坡向" || cmd == "逐点坡度坡向" || cmd == "法向估计" || cmd == "点云法向") { await PointNormalsAsync(); return; }
             if (cmd == "高程截断" || cmd == "高程裁剪" || cmd == "Z截断") { await ElevationClipAsync(); return; }
@@ -2551,7 +2554,27 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"网格度量：{m.VertexCount} 顶点 · {m.TriangleCount} 三角 · 表面积 {m.SurfaceArea.ToString("0.##", inv)} · 体积 {m.Volume.ToString("0.##", inv)} · 范围 X[{m.MinX.ToString("0.#", inv)},{m.MaxX.ToString("0.#", inv)}] Z[{m.MinZ.ToString("0.#", inv)},{m.MaxZ.ToString("0.#", inv)}]";
     }
 
-    // 点云高程着色：点 CSV(x,y,z) → 按 z 用地形色带着色 → 彩色点入场景
+    // 色带切换：「色带 <名>」设当前色带(Terrain/Jet/Grayscale/Viridis/Turbo/Magma/Plasma), 影响后续高程/属性着色。
+    private void SetColormapCmd(string cmd)
+    {
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        if (tk.Length < 2)
+        {
+            StatusMsg.Text = $"当前色带：{_colormapName}（可选 Terrain/Jet/Grayscale/Viridis/Turbo/Magma/Plasma；用「色带 Viridis」切换）";
+            return;
+        }
+        string name = tk[1];
+        _colormap = Cad.Colormap.ByName(name);
+        // 规范化显示名
+        _colormapName = name.Trim().ToLowerInvariant() switch
+        {
+            "jet" => "Jet", "grayscale" or "gray" or "灰度" => "Grayscale", "viridis" => "Viridis",
+            "turbo" => "Turbo", "magma" => "Magma", "plasma" => "Plasma", _ => "Terrain"
+        };
+        StatusMsg.Text = $"色带已设：{_colormapName}（影响后续 高程着色 等；感知均匀色带 Viridis/Turbo 优于 Jet）";
+    }
+
+    // 点云高程着色：点 CSV(x,y,z) → 按 z 用当前色带着色 → 彩色点入场景
     private async Task ElevationColorAsync()
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
@@ -2572,7 +2595,7 @@ public partial class MainWindow : Window
         foreach (var p in r.Points)
         {
             double t = range > 1e-9 ? (p.z - zmin) / range : 0.5;
-            var (cr, cg, cb) = Colormap.Sample(Colormap.Terrain, t);
+            var (cr, cg, cb) = Colormap.Sample(_colormap, t);
             var pe = new PointEntity { X = p.x, Y = p.y };
             AssignLayer(pe);
             pe.Cr = cr / 255f; pe.Cg = cg / 255f; pe.Cb = cb / 255f;
@@ -2636,7 +2659,7 @@ public partial class MainWindow : Window
         foreach (var p in kept)
         {
             double t = range > 1e-9 ? (p.z - zmin) / range : 0.5;
-            var (cr, cg, cb) = Colormap.Sample(Colormap.Terrain, t);
+            var (cr, cg, cb) = Colormap.Sample(_colormap, t);
             _scene.Add(new PointEntity { X = p.x, Y = p.y, Cr = cr / 255f, Cg = cg / 255f, Cb = cb / 255f });
         }
         RefreshScene();
@@ -6871,7 +6894,7 @@ public partial class MainWindow : Window
         "网格度量","网格诊断","创建三角网","约束三角网","裁剪三角网","网格焊接","网格边界","网格交线","网格剖面","网格光顺","合并三角网","固化成体","侧面三角网","立方体","球体","圆柱","体素格网体积","实体转块体",
         // 区域/地形/点云
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
-        "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","点云质量统计","点云裁剪",
+        "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","点云质量统计","点云裁剪",
         // 块体/运输/路网
         "块体模型","资源量","道路横断面","路面生成","纵坡分析","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","演化对比","螺旋斜坡道","折返斜坡道",
         // 生产计划/投影

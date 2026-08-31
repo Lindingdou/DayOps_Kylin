@@ -36,4 +36,25 @@ public class ColormapTests
     {
         Assert.Equal(((byte)255, (byte)255, (byte)255), Colormap.Sample(new (byte, byte, byte)[0], 0.5));
     }
+
+    // ── 感知均匀色带 + ByName ──
+    [Fact]
+    public void Perceptual_colormaps_endpoints_correct()
+    {
+        Assert.Equal(((byte)68, (byte)1, (byte)84), Colormap.Sample(Colormap.Viridis, 0));    // Viridis 起=深紫
+        Assert.Equal(((byte)253, (byte)231, (byte)37), Colormap.Sample(Colormap.Viridis, 1)); // 终=黄
+        Assert.Equal(((byte)0, (byte)0, (byte)4), Colormap.Sample(Colormap.Magma, 0));         // Magma 起≈黑
+        Assert.Equal(((byte)240, (byte)249, (byte)33), Colormap.Sample(Colormap.Plasma, 1));   // Plasma 终=黄
+        Assert.True(Colormap.Turbo.Length >= 4);
+    }
+
+    [Fact]
+    public void ByName_dispatches_and_defaults()
+    {
+        Assert.Same(Colormap.Viridis, Colormap.ByName("viridis"));
+        Assert.Same(Colormap.Viridis, Colormap.ByName("VIRIDIS"));   // 大小写不敏感
+        Assert.Same(Colormap.Turbo, Colormap.ByName("Turbo"));
+        Assert.Same(Colormap.Jet, Colormap.ByName("jet"));
+        Assert.Same(Colormap.Terrain, Colormap.ByName("unknown"));   // 未知→Terrain
+    }
 }

@@ -16,6 +16,30 @@ public static class Colormap
         { (0, 0, 131), (0, 100, 255), (0, 255, 255), (255, 255, 0), (255, 0, 0), (128, 0, 0) };
     /// <summary>灰度。</summary>
     public static readonly (byte r, byte g, byte b)[] Grayscale = { (0, 0, 0), (255, 255, 255) };
+    /// <summary>Viridis（感知均匀, 色盲友好, 现代数据可视化标准）。</summary>
+    public static readonly (byte r, byte g, byte b)[] Viridis =
+        { (68, 1, 84), (59, 82, 139), (33, 145, 140), (94, 201, 98), (253, 231, 37) };
+    /// <summary>Turbo（改进彩虹, 感知均匀）。</summary>
+    public static readonly (byte r, byte g, byte b)[] Turbo =
+        { (48, 18, 59), (65, 69, 217), (26, 183, 225), (122, 209, 81), (251, 155, 6), (122, 4, 3) };
+    /// <summary>Magma（感知均匀, 黑→紫→粉→白）。</summary>
+    public static readonly (byte r, byte g, byte b)[] Magma =
+        { (0, 0, 4), (81, 18, 124), (183, 55, 121), (252, 137, 97), (252, 253, 191) };
+    /// <summary>Plasma（感知均匀, 蓝→紫→橙→黄）。</summary>
+    public static readonly (byte r, byte g, byte b)[] Plasma =
+        { (13, 8, 135), (126, 3, 168), (204, 71, 120), (248, 149, 64), (240, 249, 33) };
+
+    /// <summary>按名取色带（不区分大小写）；未知返回 Terrain。</summary>
+    public static (byte r, byte g, byte b)[] ByName(string name) => (name ?? "").Trim().ToLowerInvariant() switch
+    {
+        "jet" => Jet,
+        "grayscale" or "gray" or "灰度" => Grayscale,
+        "viridis" => Viridis,
+        "turbo" => Turbo,
+        "magma" => Magma,
+        "plasma" => Plasma,
+        _ => Terrain,
+    };
 
     /// <summary>t∈[0,1] 在锚点色间线性插值（等距锚点）；越界夹到端点。</summary>
     public static (byte r, byte g, byte b) Sample((byte r, byte g, byte b)[] stops, double t)
