@@ -1644,3 +1644,14 @@ diff 修改类命令时初判 Kylin 缺 圆角/倒角/阵列/拉伸(通用 AutoC
 **结论**: present-but-shallow 透镜系统收敛——浅实现缺口(标注/文字)已补, 20 参数化命令 + 分析工具深度全核为 covered/受阻。本轮无新功能缺口。
 
 **本会话累计 70 真功能 + 4 潜伏 bug 修 + 多处忠实性/深度证伪, 988 测。**
+
+## 一三二、多行文字 round-trip 补全 —— MText ↔ 单一多行实体
+
+§一三〇 补多行文字创建/渲染后, 跟进保真: 导出侧多行 TextEntity(含 \n)若导为单行 DXF Text, \n 存不下。补齐往返:
+- [x] **导出**(`SceneExport`): `t.Text.Contains('\n')` → 导为 **MText**(`\n`→`\P` 段落码), 否则单行 Text。
+- [x] **导入**(`DxfImport` MText case): 原逐行造 N 个独立 TextEntity → 改**合成一个多行 TextEntity**(`\n` 连接, Tessellate 逐行下落), 单一可选实体, 与源 MText 一一对应。
+- [x] **.pmx**: 文字 S 字段本就存 `\n`(JSON 字符串支持), 自动往返, 无需改。
+- [x] round-trip 测: "第一行\n第二行\n第三行" export(MText)→import → 单一多行 TextEntity 文本原样。989 测。
+- **多行文字完整闭环**: 创建(多行文字命令)+ 渲染(Tessellate 多行)+ DXF 导出(MText)+ 导入(MText→单一多行实体)+ .pmx 往返。
+
+**本会话累计补 71 真功能 + 4 潜伏 bug 修 + 多处忠实性/深度证伪, 989 测。**

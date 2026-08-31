@@ -568,18 +568,9 @@ public static class DxfImportService
                 {
                     var lines = MTextLines(mt.Value ?? "");
                     double mh = mt.Height > 0 ? mt.Height : 1;
-                    double step = mh * 1.4;                    // 行距
-                    double mc = System.Math.Cos(mt.Rotation), ms = System.Math.Sin(mt.Rotation);
-                    double dnx = ms, dny = -mc;                // 行向下(垂直文字方向)
-                    for (int li = 0; li < lines.Length; li++)
-                    {
-                        if (lines[li].Length == 0) continue;
-                        Finalize(new DrawText
-                        {
-                            X = mt.InsertPoint.X + li * step * dnx, Y = mt.InsertPoint.Y + li * step * dny,
-                            Height = mh, Rotation = mt.Rotation, Text = lines[li]
-                        }, xf, col, layer);
-                    }
+                    string joined = string.Join("\n", lines);   // 多行合成一个多行 TextEntity(Tessellate 逐行下落, 单一可选实体)
+                    if (joined.Trim().Length > 0)
+                        Finalize(new DrawText { X = mt.InsertPoint.X, Y = mt.InsertPoint.Y, Height = mh, Rotation = mt.Rotation, Text = joined }, xf, col, layer);
                     break;
                 }
                 case Solid so:

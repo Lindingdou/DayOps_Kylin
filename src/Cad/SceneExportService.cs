@@ -110,6 +110,15 @@ public static class SceneExportService
             case PointEntity p:
                 yield return new Point { Location = new XYZ(p.X, p.Y, 0) };
                 break;
+            case DrawText t when t.Text.Contains('\n'):   // 多行文字 → MText(段落 \P), 单行 Text 存不下换行
+            {
+                yield return new ACadSharp.Entities.MText
+                {
+                    InsertPoint = new XYZ(t.X, t.Y, 0), Height = t.Height,
+                    Value = t.Text.Replace("\n", "\\P"),
+                };
+                break;
+            }
             case DrawText t:
             {
                 var te = new ACadSharp.Entities.TextEntity

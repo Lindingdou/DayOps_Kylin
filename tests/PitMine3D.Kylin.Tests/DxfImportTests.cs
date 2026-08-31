@@ -617,6 +617,18 @@ public class DxfImportTests
     }
 
     [Fact]
+    public void Multiline_text_survives_export_import_roundtrip_as_mtext()
+    {
+        var scene = new Scene();
+        scene.Add(new PitMine3D.Kylin.Cad.Draw.TextEntity { X = 1, Y = 2, Height = 2, Text = "第一行\n第二行\n第三行" });
+        var doc = SceneExportService.BuildDocument(scene);      // 多行 → MText(\P)
+        var res = DxfImportService.MapDocument(doc);
+        var txt = System.Linq.Enumerable.FirstOrDefault(System.Linq.Enumerable.OfType<PitMine3D.Kylin.Cad.Draw.TextEntity>(res.Entities));
+        Assert.NotNull(txt);
+        Assert.Equal("第一行\n第二行\n第三行", txt!.Text);    // 多行往返为单一多行实体
+    }
+
+    [Fact]
     public void Transparency_survives_export_import_roundtrip()
     {
         var scene = new Scene();
