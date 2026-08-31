@@ -2147,6 +2147,7 @@ public partial class MainWindow : Window
         catch (System.Exception ex) { StatusMsg.Text = $"体素格网体积：读取失败 {ex.Message}"; return; }
         var (mv, mt) = MeshMetrics.ParseOff(text);
         if (mt.Count == 0) { StatusMsg.Text = "体素格网体积：无三角"; return; }
+        mt = MeshOrient.MakeConsistent(mv, mt);   // 统一朝向，保 GWN 内外判定可靠(容忍朝向不一致的导入网格)
         var fv = new double[mv.Count * 3];
         for (int i = 0; i < mv.Count; i++) { fv[i * 3] = mv[i].x; fv[i * 3 + 1] = mv[i].y; fv[i * 3 + 2] = mv[i].z; }
         var ft = new int[mt.Count * 3];
@@ -2189,6 +2190,7 @@ public partial class MainWindow : Window
         catch (System.Exception ex) { StatusMsg.Text = $"实体转块体：读取失败 {ex.Message}"; return; }
         var (mv, mt) = MeshMetrics.ParseOff(text);
         if (mt.Count == 0) { StatusMsg.Text = "实体转块体：无三角"; return; }
+        mt = MeshOrient.MakeConsistent(mv, mt);   // 统一朝向，保 GWN 内外判定可靠(容忍朝向不一致的导入网格)
         var fv = new double[mv.Count * 3];
         for (int i = 0; i < mv.Count; i++) { fv[i * 3] = mv[i].x; fv[i * 3 + 1] = mv[i].y; fv[i * 3 + 2] = mv[i].z; }
         var ft = new int[mt.Count * 3];
