@@ -1612,19 +1612,28 @@ public partial class MainWindow : Window
         double tmin = res.Stats.Min, trange = System.Math.Max(res.Stats.Max - res.Stats.Min, 1e-9);
         double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
         BeginChange();
-        foreach (var s in res.Lines)
-        {
-            float t = (float)((s.Level - tmin) / trange);
-            _scene.Add(new LineEntity { X0 = s.X0, Y0 = s.Y0, X1 = s.X1, Y1 = s.Y1, Cr = t, Cg = 0.5f, Cb = 1 - t });
-            if (s.X0 < minX) minX = s.X0; if (s.Y0 < minY) minY = s.Y0; if (s.X0 > maxX) maxX = s.X0; if (s.Y0 > maxY) maxY = s.Y0;
-        }
+        foreach (var s in res.Lines) { if (s.X0 < minX) minX = s.X0; if (s.Y0 < minY) minY = s.Y0; if (s.X0 > maxX) maxX = s.X0; if (s.Y0 > maxY) maxY = s.Y0; }
         double labelH = System.Math.Max((maxX - minX) / 60.0, 1e-3);
-        foreach (double L in res.Levels)   // 每层一个厚度标注(取该层首段)
+        double iext = System.Math.Max(1e-9, (maxX - minX) * 1e-4);
+        foreach (double L in res.Levels)   // 每层: 散段连成折线(单一可选实体) + 首折线中点厚度标注
         {
-            var seg = res.Lines.FirstOrDefault(x => x.Level == L);
-            if (seg.X1 == 0 && seg.Y1 == 0 && seg.X0 == 0 && seg.Y0 == 0) continue;
             float t = (float)((L - tmin) / trange);
-            _scene.Add(new TextEntity { X = seg.X0, Y = seg.Y0, Height = labelH, Text = L.ToString("0.##", inv), Cr = t, Cg = 0.5f, Cb = 1 - t });
+            var xy = new List<(double, double, double, double)>();
+            foreach (var s in res.Lines) if (s.Level == L) xy.Add((s.X0, s.Y0, s.X1, s.Y1));
+            if (xy.Count == 0) continue;
+            var polys = Contour.LinkSegments(xy, iext);
+            foreach (var poly in polys)
+            {
+                if (poly.Count < 2) continue;
+                var pl = new PolylineEntity { Cr = t, Cg = 0.5f, Cb = 1 - t };
+                foreach (var p in poly) pl.Points.Add((p.x, p.y));
+                _scene.Add(pl);
+            }
+            if (polys.Count > 0 && polys[0].Count > 0)
+            {
+                var lp = polys[0]; var mid = lp[lp.Count / 2];
+                _scene.Add(new TextEntity { X = mid.x, Y = mid.y, Height = labelH, Text = L.ToString("0.##", inv), Cr = t, Cg = 0.5f, Cb = 1 - t });
+            }
         }
         RefreshScene();
         if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
