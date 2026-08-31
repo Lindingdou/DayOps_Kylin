@@ -725,6 +725,7 @@ public partial class MainWindow : Window
             if (cmd == "资源量估算" || cmd == "剥采比" || cmd == "资源量") { ResourceReport(null); return; }
             if (cmd == "导出块体" || cmd == "块体导出") { await ExportBlocksAsync(); return; }
             if (cmd == "输出报告" || cmd == "资源量报告" || cmd == "块体报告") { await ExportResourceReportAsync(); return; }
+            if (cmd == "属性统计" || cmd == "品位统计" || cmd == "直方图" || cmd == "统计报告") { await GradeStatsAsync(); return; }
             if (cmd == "块体着色" || cmd == "块体配色") { ColorBlocksCmd(); return; }
             if (cmd == "筛选块体" || cmd == "块体筛选") { FilterBlocksCmd(); return; }
             if (cmd == "约束块体" || cmd == "块体约束") { ConstrainBlocksCmd(); return; }
@@ -3494,6 +3495,16 @@ public partial class MainWindow : Window
         try { System.IO.File.WriteAllText(file.Path.LocalPath, txt); }
         catch (System.Exception ex) { StatusMsg.Text = $"输出报告：写出失败 {ex.Message}"; return; }
         StatusMsg.Text = $"输出报告：资源量报告已保存({benches.Count} 台阶带) → {System.IO.Path.GetFileName(file.Path.LocalPath)}";
+    }
+
+    // 属性统计：块体品位 min/max/mean/std/median + 20 桶直方图 → 上屏 + 导出 CSV
+    private async Task GradeStatsAsync()
+    {
+        if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "属性统计：请先导入/生成块体"; return; }
+        var grades = _lastBlocks.Select(b => b.Grade).ToList();
+        var s = Statistics.Describe(grades, 20);
+        var name = await SaveCsvAsync("导出品位直方图", "grade_histogram.csv", Statistics.HistogramCsv(s));
+        StatusMsg.Text = $"属性统计(品位)：{Statistics.SummaryLine(s)} · 20 桶直方图" + (name != null ? $" → {name}" : "");
     }
 
     // 块体着色：按品位配色重渲全部块体(恢复全显)
