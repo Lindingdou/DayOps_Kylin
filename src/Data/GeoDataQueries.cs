@@ -748,6 +748,32 @@ public static class GeoDataQueries
         return new ImportOutcome(ins, upd, skip, err);
     }
 
+    /// <summary>钻孔见煤成果 CSV 入库：hole_id→borehole.id 查找，按 孔+煤层 upsert。列: hole_id,seam_code[,floor_elevation,adopted_thickness,drill_seam_thickness,status]。
+    /// feeds 见煤统计/层位展点/确定可采区域。</summary>
+    public static ImportOutcome ImportSeamResults(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
+    {
+        int ins = 0, upd = 0, skip = 0, err = 0;
+        foreach (var row in rows)
+        {
+            string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
+            string hole = Get("hole_id"), seam = Get("seam_code");
+            if (hole.Length == 0 || seam.Length == 0) { err++; continue; }
+            long bhId;
+            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT id FROM borehole WHERE hole_id=@h"; q.Parameters.AddWithValue("@h", hole); var o = q.ExecuteScalar(); if (o == null || o is System.DBNull) { err++; continue; } bhId = System.Convert.ToInt64(o); }
+            object Num(string k) => double.TryParse(Get(k), out double v) ? v : (object)System.DBNull.Value;
+            string status = Get("status") is { Length: > 0 } st ? st : "正常";
+            bool exists;
+            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM borehole_seam_result WHERE borehole_id=@b AND seam_code=@s"; q.Parameters.AddWithValue("@b", bhId); q.Parameters.AddWithValue("@s", seam); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
+            using var cmd = conn.CreateCommand();
+            if (exists) { if (!overwrite) { skip++; continue; } cmd.CommandText = "UPDATE borehole_seam_result SET floor_elevation=@f, adopted_thickness=@a, drill_seam_thickness=@d, status=@st WHERE borehole_id=@b AND seam_code=@s"; upd++; }
+            else { cmd.CommandText = "INSERT INTO borehole_seam_result (borehole_id, seam_code, floor_elevation, adopted_thickness, drill_seam_thickness, status) VALUES (@b,@s,@f,@a,@d,@st)"; ins++; }
+            cmd.Parameters.AddWithValue("@b", bhId); cmd.Parameters.AddWithValue("@s", seam);
+            cmd.Parameters.AddWithValue("@f", Num("floor_elevation")); cmd.Parameters.AddWithValue("@a", Num("adopted_thickness")); cmd.Parameters.AddWithValue("@d", Num("drill_seam_thickness")); cmd.Parameters.AddWithValue("@st", status);
+            try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
+        }
+        return new ImportOutcome(ins, upd, skip, err);
+    }
+
     public sealed record HorizonPoint(string SeamCode, bool IsRoof, double X, double Y, double Z);
 
     /// <summary>层位展点（忠实 HorizonPointBuilder）：borehole_seam_result join 孔位 → 分煤层 底板(floor_elevation)/顶板(底+采用厚度) 高程点。</summary>

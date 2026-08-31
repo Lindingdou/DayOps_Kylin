@@ -164,6 +164,23 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Import_seam_results_from_csv()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        string hole, seam;
+        using (var c = db.Connection.CreateCommand()) { c.CommandText = "SELECT hole_id FROM borehole LIMIT 1"; hole = (string)c.ExecuteScalar(); }
+        using (var c = db.Connection.CreateCommand()) { c.CommandText = "SELECT code FROM coal_seam_def ORDER BY code DESC LIMIT 1"; seam = (string)c.ExecuteScalar(); }
+        // 该孔可能已有该层结果 → 用 overwrite 保证可判(插入或更新其一为1)
+        var o1 = GeoDataQueries.ImportSeamResults(db.Connection, new[]
+        { (IReadOnlyDictionary<string,string>)new Dictionary<string,string>{["hole_id"]=hole,["seam_code"]=seam,["floor_elevation"]="850",["adopted_thickness"]="4.2"} }, true);
+        Assert.True(o1.Inserted + o1.Updated == 1 && o1.Errors == 0, $"见煤导入: ins={o1.Inserted} upd={o1.Updated} err={o1.Errors}");
+        // 无效孔号 → 错误
+        var o2 = GeoDataQueries.ImportSeamResults(db.Connection, new[]
+        { (IReadOnlyDictionary<string,string>)new Dictionary<string,string>{["hole_id"]="NOSUCH",["seam_code"]=seam} }, true);
+        Assert.Equal(1, o2.Errors);
+    }
+
+    [Fact]
     public void Import_monthly_plan_fills_empty_fields()
     {
         using var db = GeoDatabase.OpenSeeded();
