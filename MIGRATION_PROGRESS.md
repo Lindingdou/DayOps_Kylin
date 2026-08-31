@@ -780,3 +780,12 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 - **A/B/C 已记录边界**：TaskLib 排产引擎(生产任务编制/派工/派车/台账/进度…) + C++ 内核几何(分割点云/剔面/坡顶底线/倾斜摄影/煤层面) + PitDesign·MineAssLib 对话框(坑线/工作线/台阶/排土/工程位置/破碎站/road-edit 窗口)。
 
 **★结论(definitive)**：Kylin 已实现原程序**全部 doable+可托管+可验证**的功能(含异名等价)；余下缺失项**无一例外**是 ① 内核模块算子(MeshEditLib/点云 native/PitDesign) ② TaskLib 引擎管线 ③ GUI 对话框——即用户"不满足验证条件先跳过、无法验证先记录"的三类。**10 条正交轴 + 全模块 diff 交叉验证：loop 内 doable 功能已穷尽补齐**。见 memory [[faithfulness-only-original-commands]]。
+
+## 四十七、TaskExploder 引擎边界的精化依据——「验证置信度」分界（实读 ProductionTask 复评）
+
+再按「先读源再判」实读全 `ProductionTask.cs`(474 行) 复评引擎可移植性，得更准结论：
+
+- **可移植性比预想高**：ProductionTask.cs 是**多类型文件**，含**已移植**的 `CoalQuality`(灰/热/硫/MeetsTarget)、`DrillQuantity`(穿孔量/达成)、`EquipmentGroup`(=FleetCycle 域：斗数/节拍/循环/匹配系数/HasCycleBreakdown)。故扩 minimal ProductionTask→full 主要是**加字段**(EngineeringPositionId/DestinationId/Splits/Mix/MaterialCode/QualityTarget…)，低风险；destabilize 担忧被高估。
+- **★真正分界=验证置信度**：8 个自足计算(量核算/物料换算/采剥平衡/配煤/工序进度/编组产能/环节降效/排土推进)是**简单算术**，不变量**完全 pin 死行为**→逐字移+不变量测=**完全可验**，已做。TaskExploder 是**多约束交互装箱**(配煤重分配×采排守恒×班次时窗装箱×设备双占校核)，不变量(量守恒)只能**部分 pin**——子错误(错班次分配/错重分配)可通过量守恒却排程错，且本机无法比对原 WPF 输出→**仅部分可验**。
+- **按用户规则的判定**：简单计算满足验证条件(完全可验)→已补；引擎**仅部分可验**=命中"不满足验证条件先跳过/无法验证先记录"。子算法(DeriveDumpTargets 采排守恒/ApplyBlendConstraint 配煤重分配)虽较简单，但**非原程序独立命令**(内嵌 Explode)，独立暴露=违"只做原程序有的命令"。
+- → TaskExploder 保持记录为边界是**一致且正确**的判断，依据从"规模"精化为"**验证置信度 + 无独立命令切片**"。若上机可比对原输出(满足验证条件)，则逐字移植可行(基座类型已备大半)。
