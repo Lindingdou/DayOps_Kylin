@@ -906,6 +906,7 @@ public partial class MainWindow : Window
             if (cmd == "网格焊接" || cmd == "合并顶点" || cmd == "顶点焊接") { await MeshWeldAsync(); return; }
             if (cmd == "合并三角网" || cmd == "网格合并" || cmd == "合并网格") { await MeshMergeAsync(); return; }
             if (cmd == "补洞(三角网)" || cmd == "补洞" || cmd == "网格补洞" || cmd == "填洞") { await MeshHoleFillAsync(); return; }
+            if (cmd == "网格修复" || cmd == "修复拓扑" || cmd == "修复拓扑关系" || cmd == "拓扑修复" || cmd == "一键修复") { await MeshRepairAsync(); return; }
             if (cmd == "剔面(三角网)" || cmd == "剔面" || cmd == "网格剔面" || cmd == "删陡面" || cmd.StartsWith("剔面 ")) { await MeshFaceCullAsync(cmd); return; }
             if (cmd == "分割三角网" || cmd == "沿线分割三角网" || cmd == "网格分割" || cmd == "切分三角网") { await MeshSplitAsync(); return; }
             if (cmd == "边界分割三角网" || cmd == "内外分割" || cmd == "闭合边界分割" || cmd == "网格内外分片") { await MeshBoundarySplitAsync(); return; }
@@ -2048,6 +2049,28 @@ public partial class MainWindow : Window
         }
         catch (System.Exception ex) { StatusMsg.Text = $"边界分割三角网：写出失败 {ex.Message}"; return; }
         StatusMsg.Text = $"边界分割三角网：内 {inside.Tris.Count} 三角 / 外 {outside.Tris.Count} 三角 → split_inside/outside.off（质心判别，三角粒度）";
+    }
+
+    // 网格修复(原「修复拓扑关系」常见修复): 选 OFF → 焊接→朝向一致→补洞 流水线 → 写 repaired.off + 前后诊断
+    private async Task MeshRepairAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "网格修复：选 OFF 网格", AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } } }
+        });
+        if (files.Count == 0) return;
+        string text;
+        try { text = System.IO.File.ReadAllText(files[0].Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"网格修复：读取失败 {ex.Message}"; return; }
+        var (verts, tris) = MeshMetrics.ParseOff(text);
+        if (tris.Count == 0) { StatusMsg.Text = "网格修复：未解析到三角网格"; return; }
+        var r = MeshRepair.Repair(verts, tris);
+        string dir = System.IO.Path.GetDirectoryName(files[0].Path.LocalPath) ?? ".";
+        string op = System.IO.Path.Combine(dir, "repaired.off");
+        try { System.IO.File.WriteAllText(op, MeshWeld.ToOff(r.Verts, r.Tris)); }
+        catch (System.Exception ex) { StatusMsg.Text = $"网格修复：写出失败 {ex.Message}"; return; }
+        StatusMsg.Text = $"网格修复：顶点 {r.VertsBefore}→{r.VertsAfter}(焊接) · 补 {r.FilledHoles} 洞 · 开放边 {r.BoundaryBefore}→{r.BoundaryAfter}{(r.BoundaryAfter == 0 ? "(水密)" : "")} · 朝向已统一 → {System.IO.Path.GetFileName(op)}";
     }
 
     // 补洞(三角网)：选 OFF → 提边界洞 → 扇形填充 → 落 .filled.off + 前后开放边报表。
