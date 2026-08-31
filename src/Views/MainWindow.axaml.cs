@@ -4220,6 +4220,35 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"调用「{s.Value.name}」（{_selected.Count} 实体，再点循环下一组）";
     }
 
+    // 按序号调用指定命名选择集（右键子菜单用）。
+    private void RecallSelSetByIndex(int idx)
+    {
+        var s = _selSets.At(idx);
+        if (s == null) return;
+        _selected.Clear();
+        foreach (var e in s.Value.ents) if (_scene.Entities.Contains(e)) _selected.Add(e);
+        HighlightSelection(); UpdatePropertyPanel();
+        StatusMsg.Text = $"调用「{s.Value.name}」（{_selected.Count} 实体）";
+    }
+
+    // 右键菜单打开 → 动态重建「调用选择集」子菜单（忠实原上下文菜单的选择集入口）。
+    private void OnCtxMenuOpening(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (CtxSelSets == null) return;
+        CtxSelSets.Items.Clear();
+        CtxSelSets.IsEnabled = _selSets.Count > 0;
+        if (_selSets.Count == 0) { CtxSelSets.Items.Add(new MenuItem { Header = "（暂无，先用 创建选择集）", IsEnabled = false }); return; }
+        for (int i = 0; i < _selSets.Count; i++)
+        {
+            var s = _selSets.At(i);
+            if (s == null) continue;
+            int idx = i;
+            var mi = new MenuItem { Header = $"{s.Value.name}  ({s.Value.ents.Count} 项)" };
+            mi.Click += (_, _) => RecallSelSetByIndex(idx);
+            CtxSelSets.Items.Add(mi);
+        }
+    }
+
     // 特性 / PROPERTIES：读出选中实体的属性（常规+几何）到状态栏（完整属性面板为后续 UI 增强）
     private void ShowProperties()
     {

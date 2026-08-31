@@ -1229,11 +1229,13 @@
         <GridSplitter Grid.Column="1" Width="4" Background="#DCDFE4" ResizeDirection="Columns" HorizontalAlignment="Center" />
         <Panel Grid.Column="2" x:Name="ViewportHost" Background="Transparent">
             <Panel.ContextMenu>
-                <ContextMenu>
+                <ContextMenu Opening="OnCtxMenuOpening">
                     <MenuItem Header="范围缩放" Click="OnCtxZoomExtents" />
                     <Separator />
                     <MenuItem Header="2D 平面视图" Click="OnCtx2D" />
                     <MenuItem Header="3D 轨道视图" Click="OnCtx3D" />
+                    <Separator />
+                    <MenuItem x:Name="CtxSelSets" Header="调用选择集" />
                     <Separator />
                     <MenuItem Header="网格 / 轴 开关" Click="OnCtxGrid" />
                     <MenuItem Header="清除高亮" Click="OnCtxClearHighlight" />
