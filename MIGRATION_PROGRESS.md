@@ -1179,4 +1179,6 @@ grade-only 数据模型无法持多属性(架构限, 记录), 但可**部分缓�
 枚举 GeoDataBase 全窗口逐一核, `ThicknessAnalysisDialog`/`ThicknessSurfaceBuilder`「煤厚分析：见煤点 (底板标高,煤厚) 做 2.5D 插值成煤厚面」——Kylin 有逐孔累计煤厚(`CoalThicknessAnalyzer`)、逐点合成钻孔(`VirtualBorehole`), **但无煤厚插值面/等厚线**:
 - [x] **煤厚等厚线(isopach)**(`ThicknessSurface.Isopach` + "煤厚等值线"命令)：观测/见煤点 (x,y,煤厚) → IDW 插值网格 → 逐厚度层 Marching Squares 抽等厚线 + 煤厚分布统计(min/max/mean/std/分位)。复用 `Contour`(网格+MS+层表) 与 `Statistics`; 蓝薄→红厚配色 + 层厚标注。2D 线段架构下呈平面等厚线图(非 3D 定位面, 记录)。命令读 CSV 每行前 3 数值列作 (x,y,煤厚)(跳过 point_id/seam_code 非数值); "煤厚等值线 <等厚距>" 整数倍厚度。5 测(统计对/等厚距层/**层厚随梯度**[厚层线在更大 x 处]/均匀无线/点不足安全)。**煤厚面复用等值线基元, 是新用户可见地质成果(煤厚图)——组合既有已测基元成新忠实分析, 同 CrestToe/VirtualBorehole 类。**
 
-**本会话累计补 32 真功能 + 1 并发修复, 901 测。** 五条新系统透镜(点云/报表/着色/参数/GeoDataBase 窗口)diff。
+- GeoDataBase 其余窗口核对: `CoalQualitySpatialWindow`(煤质空间分布)=**同一标量场等厚线机制**(ThicknessSurface.Isopach 泛型 (x,y,值), 质量指标同理), 但原走 3D 网格场渲染(viewport3D 架构阻)+ 需样本↔钻孔 x/y 关联(数据管线); 机制已交付, 不加近重复命令。`EquipmentStageAnalysisWindow`(工序分期)=21 班次工作模式+爆破频次排产+物料流箭头, TaskLib 引擎邻域(记录阻)+viz; 分期物料量侧 Kylin 剥采比均衡 VP 曲线已覆盖。`钻孔柱状图`=BoreholeRender 已有。
+
+**本会话累计补 32 真功能 + 1 并发修复, 901 测。** 五条新系统透镜(点云/报表/着色/参数/GeoDataBase 窗口)diff; 各镜找到缺口都在分析/可视化子特性簇, 补后余覆盖/内核/3D/引擎。**煤厚等厚线 ThicknessSurface 是泛型标量场机制**(厚度/质量同理), 交付即覆盖煤质空间分布的 2D 子集。
