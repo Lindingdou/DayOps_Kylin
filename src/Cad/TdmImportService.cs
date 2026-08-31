@@ -1,8 +1,10 @@
 using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Text;
+using PitMine3D.Kylin.Cad.Draw;
 
 namespace PitMine3D.Kylin.Cad;
 
@@ -27,6 +29,108 @@ public static class TdmImportService
     public static bool IsBinary3dm(byte[] data) =>
         data.Length >= MagicHeaderSize && data[0] == ExpectedMagic.Length &&
         Encoding.ASCII.GetString(data, 1, ExpectedMagic.Length) == ExpectedMagic;
+
+    public const string StringMarker = "3DMine String File";
+
+    /// <summary>是否为 3DMine String File(.3ds 文本, 首行含标记)。</summary>
+    public static bool LooksLikeStringFile(byte[] data)
+    {
+        int n = 0; while (n < data.Length && n < 512 && data[n] != (byte)'\n' && data[n] != (byte)'\r') n++;
+        return Encoding.Latin1.GetString(data, 0, n).IndexOf(StringMarker, StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    /// <summary>
+    /// 3DMine String File(.3ds 文本, GBK)导入为可编辑折线 —— 忠实移植原 TdmStringReader。
+    /// 顶点行(code,X,Y,Z)累积成一条折线; "0,…" 边界行末 3 浮点=下条折线 RGB(0..1, 负=默认); DbSText 计数跳过。
+    /// </summary>
+    public static DxfImportService.EntityImportResult LoadStrings(string path)
+    {
+        var result = new DxfImportService.EntityImportResult();
+        string[] lines;
+        try { lines = File.ReadAllLines(path, Gbk()); }
+        catch (Exception ex) { result.Error = $"读取失败：{ex.Message}"; return result; }
+        try { ParseStrings(lines, result); }
+        catch (Exception ex) { result.Error = $"3DMine String 解析失败：{ex.Message}"; }
+        return result;
+    }
+
+    /// <summary>可单测入口: 直接传入行数组解析。</summary>
+    public static void ParseStrings(string[] lines, DxfImportService.EntityImportResult result)
+    {
+        if (lines.Length < 2 || lines[0].IndexOf(StringMarker, StringComparison.OrdinalIgnoreCase) < 0)
+            throw new InvalidDataException("不是 3DMine String File(.3ds 文本)");
+        const string layer = "3DMine线";
+        PolylineEntity? cur = null;
+        bool nextHasColor = false; byte nr = 0, ng = 0, nb = 0;
+        int nPoly = 0, nText = 0;
+
+        void Flush()
+        {
+            if (cur != null && cur.Points.Count >= 2)
+            {
+                var a = cur.Points[0]; var z = cur.Points[cur.Points.Count - 1];
+                cur.Closed = cur.Points.Count >= 3 && Math.Abs(a.x - z.x) < 1e-6 && Math.Abs(a.y - z.y) < 1e-6;
+                cur.LayerName = layer;
+                result.Entities.Add(cur); nPoly++;
+            }
+            cur = null;
+        }
+
+        for (int i = 2; i < lines.Length; i++)
+        {
+            string line = lines[i];
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            string[] f = line.Split(',');
+            if (TryCoord(f, out double x, out double y))
+            {
+                if (cur == null)
+                {
+                    cur = new PolylineEntity();
+                    if (nextHasColor) { cur.Cr = nr / 255f; cur.Cg = ng / 255f; cur.Cb = nb / 255f; }
+                }
+                cur.Points.Add((x, y));   // 2D 投影(z 丢, 与其他 2D 导入一致)
+                continue;
+            }
+            Flush();
+            if (f.Length > 0 && f[0] == "0") nextHasColor = TryRgb(f, out nr, out ng, out nb);
+            else { nextHasColor = false; if (line.IndexOf("DbSText", StringComparison.OrdinalIgnoreCase) >= 0) nText++; }
+        }
+        Flush();
+
+        if (nPoly > 0 && !result.LayerColors.ContainsKey(layer)) { result.LayerColors[layer] = (0.86f, 0.9f, 0.6f); result.LayerOrder.Add(layer); }
+        result.TypeCounts["折线"] = result.TypeCounts.GetValueOrDefault("折线") + nPoly;
+        if (nText > 0) result.Warnings.Add($"跳过 {nText} 个文字注记(DbSText)");
+    }
+
+    // 顶点行: 去尾随空字段后恰 4 段, 首段整数 code, 后 3 段浮点 → (X,Y)(Z 丢)。
+    private static bool TryCoord(string[] f, out double x, out double y)
+    {
+        x = y = 0;
+        int n = f.Length;
+        while (n > 0 && f[n - 1].Length == 0) n--;
+        if (n != 4) return false;
+        if (!int.TryParse(f[0].Trim(), out _)) return false;
+        if (!double.TryParse(f[1], NumberStyles.Float, CultureInfo.InvariantCulture, out x)) return false;
+        if (!double.TryParse(f[2], NumberStyles.Float, CultureInfo.InvariantCulture, out y)) return false;
+        if (!double.TryParse(f[3], NumberStyles.Float, CultureInfo.InvariantCulture, out _)) return false;
+        return true;
+    }
+
+    // 折线头末 3 浮点 = R,G,B(0..1); 负值(−1)=默认色返 false。
+    private static bool TryRgb(string[] f, out byte r, out byte g, out byte b)
+    {
+        r = g = b = 0;
+        int n = f.Length;
+        while (n > 0 && f[n - 1].Length == 0) n--;
+        if (n < 3) return false;
+        if (!double.TryParse(f[n - 3], NumberStyles.Float, CultureInfo.InvariantCulture, out double rr)) return false;
+        if (!double.TryParse(f[n - 2], NumberStyles.Float, CultureInfo.InvariantCulture, out double gg)) return false;
+        if (!double.TryParse(f[n - 1], NumberStyles.Float, CultureInfo.InvariantCulture, out double bb)) return false;
+        if (rr < 0 || gg < 0 || bb < 0) return false;
+        if (rr > 1.001 || gg > 1.001 || bb > 1.001) return false;
+        r = (byte)Math.Round(rr * 255); g = (byte)Math.Round(gg * 255); b = (byte)Math.Round(bb * 255);
+        return true;
+    }
 
     private sealed class Mesh
     {

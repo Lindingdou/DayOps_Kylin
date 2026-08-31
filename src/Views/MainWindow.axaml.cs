@@ -1122,7 +1122,7 @@ public partial class MainWindow : Window
             AllowMultiple = false,
             FileTypeFilter = new[]
             {
-                new FilePickerFileType("支持的格式 (DXF/DWG/OFF/WL/WT/WP/MPJ/KDF/3DM)") { Patterns = new[] { "*.dxf", "*.dwg", "*.off", "*.wl", "*.wt", "*.wp", "*.mpj", "*.kdf", "*.3dm" } },
+                new FilePickerFileType("支持的格式 (DXF/DWG/OFF/WL/WT/WP/MPJ/KDF/3DM/3DS)") { Patterns = new[] { "*.dxf", "*.dwg", "*.off", "*.wl", "*.wt", "*.wp", "*.mpj", "*.kdf", "*.3dm", "*.3ds" } },
                 new FilePickerFileType("CAD 图纸 (DXF/DWG)") { Patterns = new[] { "*.dxf", "*.dwg" } },
                 new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } },
                 new FilePickerFileType("MapGIS 6.x (WL 线/WT 注记/WP 区/MPJ 工程)") { Patterns = new[] { "*.wl", "*.wt", "*.wp", "*.mpj" } },
@@ -1280,6 +1280,7 @@ public partial class MainWindow : Window
         if (ext == ".dxf" || ext == ".dwg") { ImportCadEditable(path); return; }
         if (ext == ".wl" || ext == ".wt" || ext == ".wp" || ext == ".mpj") { ImportMapGisEditable(path); return; }
         if (ext == ".kdf") { ImportKdfEditable(path); return; }
+        if (ext == ".3ds") { ImportTdmStringEditable(path); return; }
 
         // OFF 网格 / 3DMine .3dm 三角网 → 显示态线框
         var r = ext == ".3dm" ? Cad.TdmImportService.Load(path) : OffImportService.Load(path);
@@ -1328,6 +1329,15 @@ public partial class MainWindow : Window
     private void ImportKdfEditable(string path)
     {
         var er = Cad.KdfImportService.Load(path);
+        if (!er.Success) { StatusMsg.Text = $"导入失败：{er.Error}"; return; }
+        string warn = er.Warnings.Count > 0 ? $" · {string.Join("；", er.Warnings)}" : "";
+        ApplyEntityImport(er, Path.GetFileName(path), warn);
+    }
+
+    // 3DMine String File(.3ds 文本折线) 导入为可编辑实体（忠实移植 TdmStringReader）
+    private void ImportTdmStringEditable(string path)
+    {
+        var er = Cad.TdmImportService.LoadStrings(path);
         if (!er.Success) { StatusMsg.Text = $"导入失败：{er.Error}"; return; }
         string warn = er.Warnings.Count > 0 ? $" · {string.Join("；", er.Warnings)}" : "";
         ApplyEntityImport(er, Path.GetFileName(path), warn);

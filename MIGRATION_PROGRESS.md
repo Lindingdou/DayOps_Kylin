@@ -1479,3 +1479,13 @@ CopyStyleFrom 审计续查 `.LayerName = 源.LayerName` 模式, 又揪 3 处纯�
 **结论**: 用户级绘图/网格交换格式导出已对称(DXF/DWG/KDF/OBJ/PLY/STL)。余 PMB/PMX-二进制为原版原生格式互操作(Kylin 有 CSV/JSON 功能等价), 因表示不匹配/无 reader 不可净验, 记录。计划类导出属受阻引擎域。
 
 **导出符合性审计收官。本会话累计补 59 真功能 + 1 并发修复 + 4 潜伏 bug 修 + 9 样式保真点统一 + 1 latent 攻克, 967 测。**
+
+## 一一七、3DMine String File(.3ds)导入 —— 导入符号性补缺
+
+导入侧对称审计: 原版有 TdmReader/**TdmSolidReader**/**TdmStringReader** 三变体, Kylin 的 TdmImportService 原覆盖 二进制(3DMine_2011_Bin)+ Solid 文本, **缺 String File(.3ds 文本折线)**。补(忠实移植 TdmStringReader):
+- [x] **`TdmImportService.LoadStrings`/`ParseStrings`**: GBK 文本, 跳首两行 header; 顶点行(code,X,Y,Z 去尾空恰4段) 累积成折线; "0,…" 边界行末3浮点=下条折线 RGB(0..1, 负=默认); DbSText 文字注记计数跳过; 首尾重合→Closed。产可编辑 PolylineEntity(EntityImportResult)。
+- [x] 接入: `.3ds` → `ImportTdmStringEditable` → `ApplyEntityImport`(可选中/编辑); 文件选择器加 .3ds。
+- [x] 3 测(合成 .3ds 按文档格式): 双彩色折线(红/绿 RGB)+ 非法拒绝 + 首尾重合闭合。970 测。
+- **导入对称完整**: DXF/DWG · KDF · MapGIS(WL/WT/WP/MPJ工程) · OFF · 3DMine(二进制/Solid/**String**) · BLK · PMB · LAS · 点数据 全覆盖。余 PMX-二进制(无 reader 不可验)记录。
+
+**本会话累计补 60 真功能 + 1 并发修复 + 4 潜伏 bug 修 + 9 样式保真点统一 + 1 latent 攻克, 970 测。** 导入导出双向符号性审计收官。
