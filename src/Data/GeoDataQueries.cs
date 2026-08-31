@@ -471,6 +471,57 @@ public static class GeoDataQueries
         return sb.ToString();
     }
 
+    /// <summary>SQL 语句是否只读（SELECT/PRAGMA/WITH/EXPLAIN 开头）——查询控制台仅允许只读, 拒写入。</summary>
+    public static bool IsReadOnlySql(string sql)
+    {
+        string s = (sql ?? "").TrimStart();
+        // 去掉前导 SQL 行注释
+        while (s.StartsWith("--"))
+        {
+            int nl = s.IndexOf('\n');
+            if (nl < 0) return false;
+            s = s.Substring(nl + 1).TrimStart();
+        }
+        return s.StartsWith("SELECT", System.StringComparison.OrdinalIgnoreCase)
+            || s.StartsWith("PRAGMA", System.StringComparison.OrdinalIgnoreCase)
+            || s.StartsWith("WITH", System.StringComparison.OrdinalIgnoreCase)
+            || s.StartsWith("EXPLAIN", System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// 只读 SQL 查询执行（原 SqlLib「SQL Console」的查询侧）：跑 SELECT/PRAGMA/WITH → 结果表头+行 CSV。
+    /// 非只读语句拒绝(保护数据)。返回 (ok, csv 或错误信息, 行数)。maxRows 截断超大结果。
+    /// </summary>
+    public static (bool ok, string text, int rows) RunSelectCsv(SqliteConnection conn, string sql, int maxRows = 10000)
+    {
+        if (conn == null) return (false, "无数据库连接", 0);
+        if (string.IsNullOrWhiteSpace(sql)) return (false, "空查询", 0);
+        if (!IsReadOnlySql(sql)) return (false, "仅允许只读查询（SELECT / PRAGMA / WITH / EXPLAIN）", 0);
+        try
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = sql;
+            using var rd = cmd.ExecuteReader();
+            var sb = new System.Text.StringBuilder();
+            int nc = rd.FieldCount;
+            for (int i = 0; i < nc; i++) { if (i > 0) sb.Append(','); sb.Append(CsvCell(rd.GetName(i))); }
+            sb.Append('\n');
+            int rows = 0;
+            while (rd.Read() && rows < maxRows)
+            {
+                for (int i = 0; i < nc; i++)
+                {
+                    if (i > 0) sb.Append(',');
+                    sb.Append(CsvCell(rd.IsDBNull(i) ? "" : rd.GetValue(i)?.ToString() ?? ""));
+                }
+                sb.Append('\n');
+                rows++;
+            }
+            return (true, sb.ToString(), rows);
+        }
+        catch (System.Exception ex) { return (false, ex.Message, 0); }
+    }
+
     public sealed record KpiTrendRow(int Year, double AvgAvailabilityPct, double AvgUtilizationPct);
 
     /// <summary>KPI 趋势：equipment_kpi_monthly 按年平均 可用率/利用率（比率自适应 0..1 或 0..100）。</summary>

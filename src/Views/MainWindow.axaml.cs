@@ -812,6 +812,7 @@ public partial class MainWindow : Window
             if (cmd == "Holt预测" || cmd == "产量预测Holt") { OutputForecastCmd(true); return; }
             if (cmd == "数据导入导出" || cmd == "数据导出" || cmd == "导出数据库" || cmd == "地质数据导出") { await ExportGeoDataAsync(); return; }
             if (cmd == "数据字典" || cmd == "导出数据字典" || cmd == "表结构" || cmd == "库结构") { await ExportDataDictionaryAsync(); return; }
+            if (cmd.StartsWith("SQL查询 ") || cmd.StartsWith("运行SQL ") || cmd.StartsWith("执行SQL ") || cmd.StartsWith("SQL ")) { await RunSqlQueryAsync(cmd); return; }
             if (cmd == "点云抽稀" || cmd == "抽稀" || cmd == "点云精简") { await ThinPointsAsync(); return; }
             if (cmd == "自适应抽稀" || cmd == "保特征抽稀" || cmd == "特征抽稀") { await ThinPointsAsync("adaptive"); return; }
             if (cmd == "均匀抽稀" || cmd == "距离抽稀" || cmd == "等距抽稀") { await ThinPointsAsync("uniform"); return; }
@@ -6557,6 +6558,19 @@ public partial class MainWindow : Window
         var parts = new List<string>();
         foreach (var r in rows) parts.Add($"{r.SeamCode}({r.Samples}样·灰{r.AvgAshPct:0.#}/挥{r.AvgVolatilePct:0.#}/热{r.AvgCalorificMJ:0.#})");
         StatusMsg.Text = $"分煤层煤质（{rows.Count} 层）：" + string.Join(" · ", parts);
+    }
+
+    // SQL 查询（原 SqlLib SQL Console 查询侧）：SQL查询 <SELECT…> → 只读执行 → 结果 CSV 导出
+    private async Task RunSqlQueryAsync(string cmd)
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        int sp = cmd.IndexOf(' ');
+        string sql = sp >= 0 ? cmd.Substring(sp + 1).Trim() : "";
+        if (string.IsNullOrWhiteSpace(sql)) { StatusMsg.Text = "SQL查询：用法「SQL查询 <SELECT 语句>」(仅只读)"; return; }
+        var (ok, text, rows) = Data.GeoDataQueries.RunSelectCsv(db.Connection, sql);
+        if (!ok) { StatusMsg.Text = $"SQL查询失败：{text}"; return; }
+        var name = await SaveCsvAsync("导出SQL结果", "sql_result.csv", text);
+        StatusMsg.Text = $"SQL查询：{rows} 行结果" + (name != null ? $" → {name}" : "（未保存）");
     }
 
     private void SeamIntersectionsCmd()
