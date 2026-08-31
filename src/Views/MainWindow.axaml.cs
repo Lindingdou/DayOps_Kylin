@@ -745,7 +745,8 @@ public partial class MainWindow : Window
             if (cmd == "月度计划" || cmd == "月计划" || cmd == "月度计划查看") { MonthlyPlansCmd(); return; }   // 只读展示(编制/授权工作流走 TaskLib, 受阻)
             if (cmd == "路况显示" || cmd == "运输道路" || cmd == "道路台账") { HaulRoadsCmd(); return; }
             if (cmd == "边坡设计" || cmd == "边坡参数" || cmd == "帮坡角设计") { SlopeDesignsCmd(); return; }
-            if (cmd == "展绘钻孔" || cmd == "开孔坐标管理" || cmd == "展绘层位数据" || cmd == "钻孔展绘" || cmd == "开孔坐标") { DrawBoreholesCmd(); return; }
+            if (cmd == "展绘钻孔" || cmd == "开孔坐标管理" || cmd == "钻孔展绘" || cmd == "开孔坐标") { DrawBoreholesCmd(); return; }
+            if (cmd == "展绘层位数据" || cmd == "层位展点" || cmd == "展绘层位") { HorizonPointsCmd(); return; }
             if (cmd == "机群总览" || cmd == "设备总览" || cmd == "机群") { FleetOverviewCmd(); return; }
             if (cmd == "数据看板" || cmd == "看板" || cmd == "调度态势看板" || cmd == "态势看板") { DataBoardCmd(); return; }
             if (cmd == "煤种分类" || cmd == "煤类分类" || cmd == "煤炭分类") { CoalClassificationCmd(); return; }
@@ -6008,6 +6009,34 @@ public partial class MainWindow : Window
         if (maxX > minX && maxY > minY)
             Viewport.FitBounds(new double[] { minX, minY, maxX, maxY });
         StatusMsg.Text = $"展绘钻孔：{pts.Count} 孔位入场景（图层「钻孔」）· 范围 X[{minX:0}~{maxX:0}] Y[{minY:0}~{maxY:0}]";
+    }
+
+    // 展绘层位数据(HorizonPointBuilder)：分煤层 底板(floor_elevation)/顶板(底+采用厚度) 高程点入场景, 按 煤层×顶/底 分层
+    private void HorizonPointsCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var pts = Data.GeoDataQueries.GetHorizonPoints(db.Connection);
+        if (pts.Count == 0) { StatusMsg.Text = "展绘层位数据：库中无见煤成果(缺底板高程)"; return; }
+        BeginChange();
+        int roof = 0, floor = 0;
+        foreach (var p in pts)
+        {
+            // 按煤层 hash 稳定配色, 顶板偏暖/底板偏冷
+            int h = System.Math.Abs(p.SeamCode.GetHashCode());
+            float baseHue = (h % 7) / 7.0f;
+            var pe = new PointEntity
+            {
+                X = p.X, Y = p.Y, Size = 1.6,
+                Cr = p.IsRoof ? 0.5f + 0.5f * baseHue : 0.2f * baseHue,
+                Cg = 0.4f + 0.4f * baseHue, Cb = p.IsRoof ? 0.3f : 0.7f,
+                LayerName = $"层位_{p.SeamCode}_{(p.IsRoof ? "顶板" : "底板")}",
+            };
+            _scene.Add(pe);
+            if (p.IsRoof) roof++; else floor++;
+        }
+        RefreshScene();
+        int seams = pts.Select(p => p.SeamCode).Distinct().Count();
+        StatusMsg.Text = $"展绘层位数据：{seams} 煤层 · 顶板 {roof} + 底板 {floor} = {pts.Count} 点入场景（图层 层位_煤层_顶/底板）";
     }
 
     // ---------- 智能助手面板（菜单引导，点选即执行命令）----------

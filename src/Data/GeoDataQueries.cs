@@ -510,6 +510,28 @@ public static class GeoDataQueries
         return rows;
     }
 
+    public sealed record HorizonPoint(string SeamCode, bool IsRoof, double X, double Y, double Z);
+
+    /// <summary>层位展点（忠实 HorizonPointBuilder）：borehole_seam_result join 孔位 → 分煤层 底板(floor_elevation)/顶板(底+采用厚度) 高程点。</summary>
+    public static List<HorizonPoint> GetHorizonPoints(SqliteConnection conn, bool includeRoof = true, bool includeFloor = true)
+    {
+        var pts = new List<HorizonPoint>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"SELECT sr.seam_code, b.x, b.y, sr.floor_elevation, sr.adopted_thickness
+                            FROM borehole_seam_result sr JOIN borehole b ON b.id = sr.borehole_id
+                            WHERE sr.seam_code IS NOT NULL AND sr.floor_elevation IS NOT NULL";
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+        {
+            string seam = rd.GetString(0);
+            double x = rd.GetDouble(1), y = rd.GetDouble(2), floor = rd.GetDouble(3);
+            double? thick = rd.IsDBNull(4) ? (double?)null : rd.GetDouble(4);
+            if (includeFloor) pts.Add(new HorizonPoint(seam, false, x, y, floor));
+            if (includeRoof && thick is > 0) pts.Add(new HorizonPoint(seam, true, x, y, floor + thick.Value));
+        }
+        return pts;
+    }
+
     /// <summary>煤质化验段（join borehole 取坐标/孔号）——供 CoalAnalytics 商品煤符合性等分析。</summary>
     public static List<CoalSample> GetCoalSamples(SqliteConnection conn)
     {

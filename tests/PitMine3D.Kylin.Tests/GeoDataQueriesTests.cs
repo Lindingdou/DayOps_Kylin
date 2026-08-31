@@ -136,6 +136,23 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Horizon_points_floor_and_roof_from_seed()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var pts = GeoDataQueries.GetHorizonPoints(db.Connection);
+        Assert.NotEmpty(pts);
+        Assert.Contains(pts, p => !p.IsRoof);                 // 有底板点
+        Assert.Contains(pts, p => p.IsRoof);                  // 有顶板点
+        Assert.All(pts, p => Assert.False(string.IsNullOrEmpty(p.SeamCode)));
+        // 顶板恒在同孔同煤层底板之上(顶=底+采用厚度>底)
+        var floorOnly = GeoDataQueries.GetHorizonPoints(db.Connection, includeRoof: false, includeFloor: true);
+        var roofOnly = GeoDataQueries.GetHorizonPoints(db.Connection, includeRoof: true, includeFloor: false);
+        Assert.All(floorOnly, p => Assert.False(p.IsRoof));
+        Assert.All(roofOnly, p => Assert.True(p.IsRoof));
+        Assert.True(floorOnly.Count >= roofOnly.Count);       // 顶板需采用厚度>0, 故 ≤ 底板数
+    }
+
+    [Fact]
     public void Kpi_trend_by_year_ratios_normalized()
     {
         using var db = GeoDatabase.OpenSeeded();
