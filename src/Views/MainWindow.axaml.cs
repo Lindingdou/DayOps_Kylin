@@ -717,6 +717,9 @@ public partial class MainWindow : Window
             if (cmd == "产能分析" || cmd == "设备能力" || cmd == "能力分析" || cmd == "产能") { CapacityRankingCmd(); return; }
             if (cmd == "故障分析" || cmd == "设备状态·故障报修" || cmd == "故障报修" || cmd == "设备状态") { FaultStatsCmd(); return; }
             if (cmd == "KPI分析" || cmd == "KPI" || cmd == "设备KPI") { KpiStatsCmd(); return; }
+            if (cmd == "钻孔管理" || cmd == "钻孔统计" || cmd == "钻孔信息") { BoreholeStatsCmd(); return; }
+            if (cmd == "煤质统计" || cmd == "煤质数据管理" || cmd == "煤质分析" || cmd == "质量·配煤分析" || cmd == "配煤分析") { CoalQualityStatsCmd(); return; }
+            if (cmd == "煤层管理" || cmd == "煤层定义" || cmd == "煤层列表") { CoalSeamsCmd(); return; }
             if (cmd == "点云抽稀" || cmd == "抽稀" || cmd == "点云精简") { await ThinPointsAsync(); return; }
             if (cmd == "地面点滤波" || cmd == "地面滤波") { await GroundFilterAsync(); return; }
             if (cmd == "C2C" || cmd == "点云比对" || cmd == "位移监测 C2C" || cmd == "位移监测") { await CloudCompareAsync(); return; }
@@ -736,7 +739,7 @@ public partial class MainWindow : Window
             if (cmd == "批量台阶扩帮" || cmd == "台阶线生成" || cmd == "台阶扩帮") { GenerateBenchLines(); return; }
             if (cmd == "剥采比均衡" || cmd == "VP曲线" || cmd == "剥采比") { await StrippingBalanceAsync(); return; }
             if (cmd == "工作面线拟合" || cmd == "工作面线" || cmd == "拟合工作面线") { await WorkingFaceLineAsync(); return; }
-            if (cmd == "煤质统计" || cmd == "质量统计" || cmd == "煤质分析" || cmd == "统计分析" || cmd == "质量·配煤分析" || cmd == "配煤分析") { await QualityStatsAsync(); return; }
+            if (cmd == "质量统计" || cmd == "统计分析" || cmd == "煤质CSV统计" || cmd == "样本统计") { await QualityStatsAsync(); return; }   // 用户 CSV 统计(区别于 §四 库煤质统计)
             if (cmd == "坡角估算" || cmd == "工作帮坡角" || cmd == "坡角") { await SlopeEstimateAsync(); return; }
             if (cmd == "台阶参数分析" || cmd == "台阶分析" || cmd == "台阶参数" || cmd == "工艺参数分析") { await BenchAnalyzeAsync(); return; }
             if (cmd == "达成分析" || cmd == "产量达成" || cmd == "达成率" || cmd == "达成度评价" || cmd == "产量统计") { await AttainmentAsync(); return; }
@@ -5043,6 +5046,33 @@ public partial class MainWindow : Window
         var k = Data.GeoDataQueries.GetKpiStats(db.Connection);
         if (k.Records == 0) { StatusMsg.Text = "KPI 分析：无 KPI 数据"; return; }
         StatusMsg.Text = $"KPI 分析：{k.Records} 条 · 平均可用率 {k.AvgAvailabilityPct:0.#}% · 平均利用率 {k.AvgUtilizationPct:0.#}% · 最新 {k.LatestYear}-{k.LatestMonth:00}";
+    }
+
+    private void BoreholeStatsCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var b = Data.GeoDataQueries.GetBoreholeStats(db.Connection);
+        var cats = new List<string>();
+        foreach (var c in b.ByCategory) cats.Add($"{c.Category} {c.Count}");
+        StatusMsg.Text = $"钻孔管理：{b.Holes} 孔 · 总进尺 {b.TotalDepthM:0.#}m（均 {b.AvgDepthM:0.#}m）· 见煤结果 {b.SeamResults} · 类别: " + string.Join(" / ", cats);
+    }
+
+    private void CoalQualityStatsCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var q = Data.GeoDataQueries.GetCoalQualityStats(db.Connection);
+        if (q.Samples == 0) { StatusMsg.Text = "煤质统计：无煤样数据"; return; }
+        StatusMsg.Text = $"煤质统计：{q.Samples} 样 / {q.Seams} 煤层 · 平均 灰分Ad {q.AvgAshPct:0.##}% · 挥发分Vdaf {q.AvgVolatilePct:0.##}% · 发热量Qnet {q.AvgCalorificMJ:0.##}MJ/kg · 全硫St {q.AvgSulfurPct:0.###}%";
+    }
+
+    private void CoalSeamsCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var seams = Data.GeoDataQueries.GetCoalSeams(db.Connection);
+        if (seams.Count == 0) { StatusMsg.Text = "煤层管理：无煤层定义"; return; }
+        var parts = new List<string>();
+        foreach (var s in seams) parts.Add($"{s.SeamCode}({s.SampleCount}样)");
+        StatusMsg.Text = $"煤层管理：{seams.Count} 煤层 · " + string.Join(" / ", parts);
     }
 
     // ---------- 智能助手面板（菜单引导，点选即执行命令）----------

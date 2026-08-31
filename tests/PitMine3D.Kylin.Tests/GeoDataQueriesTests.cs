@@ -60,4 +60,34 @@ public class GeoDataQueriesTests
         Assert.InRange(k.AvgAvailabilityPct, 0, 100);
         Assert.InRange(k.AvgUtilizationPct, 0, 100);
     }
+
+    [Fact]
+    public void Borehole_stats_from_seed()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var b = GeoDataQueries.GetBoreholeStats(db.Connection);
+        Assert.True(b.Holes > 100, $"钻孔数 {b.Holes}");     // 种子 241 孔
+        Assert.True(b.TotalDepthM > 0);
+        Assert.True(b.SeamResults > 0, "见煤结果");
+        Assert.NotEmpty(b.ByCategory);
+    }
+
+    [Fact]
+    public void Coal_quality_stats_from_seed()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var q = GeoDataQueries.GetCoalQualityStats(db.Connection);
+        Assert.True(q.Samples > 100, $"煤样数 {q.Samples}");   // 种子 257 样
+        Assert.True(q.Seams > 0, "煤层数");
+        Assert.InRange(q.AvgAshPct, 0, 100);                   // 灰分百分比合理
+        Assert.True(q.AvgCalorificMJ > 0, "发热量");
+    }
+
+    [Fact]
+    public void Coal_seams_from_seed()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var seams = GeoDataQueries.GetCoalSeams(db.Connection);
+        Assert.NotEmpty(seams);                                // 种子 7 煤层
+    }
 }

@@ -95,6 +95,55 @@ public static class GeoDataQueries
         return new KpiStats(n, avPct, utPct, rd.GetInt32(3), rd.GetInt32(4));
     }
 
+    public sealed record BoreholeStats(int Holes, double TotalDepthM, double AvgDepthM, int SeamResults, IReadOnlyList<CategoryCount> ByCategory);
+
+    /// <summary>钻孔管理概览：孔数 / 总孔深 / 均深 / 见煤结果数 / 按类别。</summary>
+    public static BoreholeStats GetBoreholeStats(SqliteConnection conn)
+    {
+        int holes = (int)Scalar(conn, "SELECT COUNT(*) FROM borehole");
+        double totDepth = ScalarDouble(conn, "SELECT COALESCE(SUM(depth_total),0) FROM borehole");
+        int seamRes = (int)Scalar(conn, "SELECT COUNT(*) FROM borehole_seam_result");
+        var byCat = new List<CategoryCount>();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT COALESCE(category,'(未分类)'), COUNT(*) c FROM borehole GROUP BY category ORDER BY c DESC";
+            using var rd = cmd.ExecuteReader();
+            while (rd.Read()) byCat.Add(new CategoryCount(rd.GetString(0), rd.GetInt32(1)));
+        }
+        return new BoreholeStats(holes, totDepth, holes > 0 ? totDepth / holes : 0, seamRes, byCat);
+    }
+
+    public sealed record CoalQualityStats(int Samples, int Seams, double AvgAshPct, double AvgVolatilePct, double AvgCalorificMJ, double AvgSulfurPct);
+
+    /// <summary>煤质统计：样本数 / 煤层数 / 平均 灰分Ad / 挥发分Vdaf / 发热量Qnet / 全硫St。</summary>
+    public static CoalQualityStats GetCoalQualityStats(SqliteConnection conn)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"SELECT COUNT(*), COUNT(DISTINCT seam_code),
+                            COALESCE(AVG(ad_raw),0), COALESCE(AVG(vdaf_raw),0),
+                            COALESCE(AVG(qnet_ad),0), COALESCE(AVG(std_raw),0)
+                            FROM coal_sample WHERE ad_raw IS NOT NULL";
+        using var rd = cmd.ExecuteReader();
+        rd.Read();
+        return new CoalQualityStats(rd.GetInt32(0), rd.GetInt32(1), rd.GetDouble(2), rd.GetDouble(3), rd.GetDouble(4), rd.GetDouble(5));
+    }
+
+    public sealed record SeamRow(string SeamCode, string Name, int SampleCount);
+
+    /// <summary>煤层管理：各煤层定义 + 煤样计数。</summary>
+    public static List<SeamRow> GetCoalSeams(SqliteConnection conn)
+    {
+        var rows = new List<SeamRow>();
+        using var cmd = conn.CreateCommand();
+        // coal_seam_def.code ↔ coal_sample.seam_code；名称在 coal_seam_def.name。
+        cmd.CommandText = @"SELECT d.code, d.name,
+                            (SELECT COUNT(*) FROM coal_sample s WHERE s.seam_code = d.code)
+                            FROM coal_seam_def d ORDER BY d.sort_order, d.code";
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read()) rows.Add(new SeamRow(rd.GetString(0), rd.IsDBNull(1) ? "" : rd.GetString(1), rd.GetInt32(2)));
+        return rows;
+    }
+
     private static double ScalarDouble(SqliteConnection conn, string sql)
     {
         using var cmd = conn.CreateCommand();
