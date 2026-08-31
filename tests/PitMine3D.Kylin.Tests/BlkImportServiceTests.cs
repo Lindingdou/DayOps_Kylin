@@ -114,6 +114,18 @@ public class BlkImportServiceTests
     }
 
     [Fact]
+    public void All_attrs_held_per_block_for_switching()
+    {
+        // 无论选哪个作品位, AllAttrs 持全属性逐块值 —— 供「切换属性」免重导重取 grade
+        var r = BlkImportService.Parse(MakeBlk2(2.7f, 55.0f), selectAttr: "density");
+        Assert.True(r.Success, r.Error);
+        Assert.Equal(new[] { "density", "grade_v" }, r.AllAttrs.Keys.OrderBy(k => k).ToArray());
+        Assert.Equal(2.7, r.AllAttrs["density"][0], 4);
+        Assert.Equal(55.0, r.AllAttrs["grade_v"][0], 4);       // 未选中的属性一样被持有
+        Assert.Equal(r.Blocks.Count, r.AllAttrs["grade_v"].Length);   // 长度==块数(切换按索引回写)
+    }
+
+    [Fact]
     public void Real_blk_sample_parses()
     {
         string[] cands =

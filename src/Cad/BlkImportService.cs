@@ -28,6 +28,7 @@ public static class BlkImportService
         public int BlockCount;
         public List<string> AttrNames = new();   // 全属性名(供选取哪个作品位)
         public string UsedAttr = "";              // 实际取作品位的属性名
+        public Dictionary<string, double[]> AllAttrs = new();   // 全属性逐块值(供无重导切换活动属性)
     }
 
     public static Result Load(string path, string? selectAttr = null)
@@ -84,7 +85,9 @@ public static class BlkImportService
         double by = rootY > 0 ? rootY / div : (ey > 0 ? ey / 4096 : 25.0);
         double bz = rootZ > 0 ? rootZ / div : (ez > 0 ? ez / 4096 : 0.5);
 
-        // pass 1: 叶块中心 + 首数值属性
+        // pass 1: 叶块中心 + 全属性逐块值(供切换)
+        var attrArrays = new double[attrCount][];
+        for (int a = 0; a < attrCount; a++) attrArrays[a] = new double[blockCount];
         for (int rr = 0, q = (int)recStart; rr < blockCount; rr++, q += recBytes)
         {
             ulong loc = (uint)(b[q] | b[q + 1] << 8 | b[q + 2] << 16 | b[q + 3] << 24)
@@ -94,11 +97,10 @@ public static class BlkImportService
             long xf = (long)(loc >> 43) << sh;
             long yf = (long)((loc >> 24) & 0x7FFFF) << sh;
             long zf = (long)((loc >> 5) & 0x7FFFF) << sh;
-            double grade = 0;
-            if (gradeAttr >= 0)
+            for (int a = 0; a < attrCount; a++)
             {
-                int vp = q + 8 + gradeAttr * 4;
-                grade = attrType[gradeAttr] == 4
+                int vp = q + 8 + a * 4;
+                attrArrays[a][rr] = attrType[a] == 4
                     ? (b[vp] | b[vp + 1] << 8 | b[vp + 2] << 16 | b[vp + 3] << 24)
                     : BitConverter.ToSingle(b, vp);
             }
@@ -108,9 +110,10 @@ public static class BlkImportService
                 Y = oy + (yf + s / 2.0) * by,
                 Z = oz + (zf + s / 2.0) * bz,
                 Size = s * bx,
-                Grade = grade,
+                Grade = gradeAttr >= 0 ? attrArrays[gradeAttr][rr] : 0,
             });
         }
+        for (int a = 0; a < attrCount; a++) r.AllAttrs[r.AttrNames[a]] = attrArrays[a];
         r.Success = true;
         return r;
     }

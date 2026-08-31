@@ -663,6 +663,7 @@ public partial class MainWindow : Window
     private System.Collections.Generic.List<BlockModel.Block>? _lastBlocks;   // 最近导入的块体(资源量用)
     private readonly List<SceneEntity> _blockCellEntities = new();            // 块体配色方块(供筛选/约束/删除 重渲)
     private double _blockGmin, _blockGmax = 1;                                // 块体品位范围(重渲配色一致)
+    private System.Collections.Generic.Dictionary<string, double[]>? _blockAttrs;  // 最近 BLK/PMB 全属性逐块值(供无重导切换活动属性)
 
     // 渲染一组块体为品位配色方块：清旧块方块 → 按 _lastBlocks 全域品位范围配色 → 入场景并追踪
     private void RenderBlocks(IReadOnlyList<BlockModel.Block> toShow)
@@ -750,6 +751,7 @@ public partial class MainWindow : Window
             if (cmd == "属性统计" || cmd == "品位统计" || cmd == "直方图" || cmd == "统计报告") { await GradeStatsAsync(); return; }
             if (cmd == "块体着色" || cmd == "块体配色") { ColorBlocksCmd(); return; }
             if (cmd == "块体分类着色" || cmd == "块体离散着色" || cmd == "分类着色" || cmd == "块体分类配色") { ColorBlocksCategoricalCmd(); return; }
+            if (cmd == "切换属性" || cmd.StartsWith("切换属性 ") || cmd == "切换品位属性" || cmd.StartsWith("切换品位属性 ") || cmd == "切换活动属性" || cmd.StartsWith("切换活动属性 ")) { SwitchGradeAttrCmd(cmd); return; }
             if (cmd == "筛选块体" || cmd == "块体筛选") { FilterBlocksCmd(); return; }
             if (cmd.StartsWith("表达式筛选块 ") || cmd.StartsWith("表达式筛选 ") || cmd.StartsWith("块体表达式 ") || cmd.StartsWith("按表达式筛选 ")) { BlockExpressionFilterCmd(cmd); return; }
             if (cmd == "约束块体" || cmd == "块体约束") { ConstrainBlocksCmd(); return; }
@@ -2108,7 +2110,7 @@ public partial class MainWindow : Window
                 for (double x = wn.MinX + cell * 0.5; x <= wn.MaxX; x += cell)
                     if (wn.IsInsideClosed(x, y, z)) blocks.Add(new BlockModel.Block { X = x, Y = y, Z = z, Size = cell, Grade = 0 });
         if (blocks.Count == 0) { StatusMsg.Text = "实体转块体：无占用块体(网格可能非闭合/朝向不一致)"; return; }
-        _lastBlocks = blocks;   // 供资源量/剥采比等复用
+        _lastBlocks = blocks; _blockAttrs = null;   // 供资源量/剥采比等复用
         _blockGmin = 0; _blockGmax = 1;   // 体素化块体品位置 0(几何)
         BeginChange();
         RenderBlocks(blocks);
@@ -3493,6 +3495,7 @@ public partial class MainWindow : Window
         if (!r.Success) { StatusMsg.Text = $"导入 BLK：{r.Error}"; return; }
         if (r.Blocks.Count == 0) { StatusMsg.Text = "导入 BLK：无块"; return; }
         _lastBlocks = r.Blocks;
+        _blockAttrs = r.AllAttrs.Count > 0 ? r.AllAttrs : null;   // 持全属性供无重导切换
         double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
         foreach (var b in r.Blocks) { if (b.X < minX) minX = b.X; if (b.Y < minY) minY = b.Y; if (b.X > maxX) maxX = b.X; if (b.Y > maxY) maxY = b.Y; }
         BeginChange();
@@ -3500,7 +3503,7 @@ public partial class MainWindow : Window
         RefreshScene();
         if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
         string attrs = r.AttrNames.Count > 0 ? string.Join("/", r.AttrNames) : "无";
-        StatusMsg.Text = $"导入 BLK：{r.BlockCount} 叶块 · 品位取「{r.UsedAttr}」 · 全属性[{attrs}]（改属性：导入BLK <属性名>）";
+        StatusMsg.Text = $"导入 BLK：{r.BlockCount} 叶块 · 品位取「{r.UsedAttr}」 · 全属性[{attrs}]（切换免重导：切换属性 <属性名>）";
     }
 
     // 导入 PMB(PitMine 块体模型 v1, 公开格式)：解析网格几何+选定属性→grade-only 块入场景
@@ -3518,7 +3521,7 @@ public partial class MainWindow : Window
         var r = PmbImportService.Load(files[0].Path.LocalPath, selectAttr);
         if (!r.Success) { StatusMsg.Text = $"导入 PMB：{r.Error}"; return; }
         if (r.Blocks.Count == 0) { StatusMsg.Text = "导入 PMB：无块"; return; }
-        _lastBlocks = r.Blocks;
+        _lastBlocks = r.Blocks; _blockAttrs = null;   // PMB 暂未持全属性
         double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
         foreach (var b in r.Blocks) { if (b.X < minX) minX = b.X; if (b.Y < minY) minY = b.Y; if (b.X > maxX) maxX = b.X; if (b.Y > maxY) maxY = b.Y; }
         BeginChange();
@@ -3540,7 +3543,7 @@ public partial class MainWindow : Window
         if (files.Count == 0) return;
         var r = BlockModel.Load(files[0].Path.LocalPath);
         if (!r.Success) { StatusMsg.Text = $"块体导入失败：{r.Error}"; return; }
-        _lastBlocks = r.Blocks;   // 供资源量估算
+        _lastBlocks = r.Blocks; _blockAttrs = null;   // 供资源量估算
         _blockGmin = r.GradeMin; _blockGmax = r.GradeMax;
         BeginChange();
         RenderBlocks(r.Blocks);
@@ -3823,6 +3826,27 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"块体分类着色：{catId.Count} 类别(按属性值离散配色，各类异色) · {_lastBlocks.Count} 块（块体着色 恢复连续品位色）";
     }
 
+    // 切换活动品位属性(免重导, 原「多属性显示切换」)：从持有的全属性数组重取 grade → 重渲配色。
+    // 仅 BLK 导入持全属性(AllAttrs); 长度须与块数一致。
+    private void SwitchGradeAttrCmd(string cmd)
+    {
+        if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "切换属性：请先导入 BLK 块体"; return; }
+        if (_blockAttrs == null || _blockAttrs.Count == 0) { StatusMsg.Text = "切换属性：当前块体未持多属性(仅 BLK 导入持全属性; 重新 导入BLK)"; return; }
+        int sp = cmd.IndexOf(' ');
+        string name = sp >= 0 ? cmd.Substring(sp + 1).Trim() : "";
+        if (name.Length == 0) { StatusMsg.Text = $"切换属性：可选 [{string.Join("/", _blockAttrs.Keys)}]（用法：切换属性 <属性名>）"; return; }
+        if (!_blockAttrs.TryGetValue(name, out var vals)) { StatusMsg.Text = $"切换属性：无「{name}」 · 可选 [{string.Join("/", _blockAttrs.Keys)}]"; return; }
+        if (vals.Length != _lastBlocks.Count) { StatusMsg.Text = $"切换属性：属性长度 {vals.Length} ≠ 块数 {_lastBlocks.Count}"; return; }
+        double gmin = double.MaxValue, gmax = double.MinValue, gsum = 0;
+        for (int i = 0; i < _lastBlocks.Count; i++)
+        {
+            var b = _lastBlocks[i]; b.Grade = vals[i]; _lastBlocks[i] = b;   // Block 为 struct，需回写
+            if (vals[i] < gmin) gmin = vals[i]; if (vals[i] > gmax) gmax = vals[i]; gsum += vals[i];
+        }
+        BeginChange(); RenderBlocks(_lastBlocks); RefreshScene();
+        StatusMsg.Text = $"切换属性→「{name}」：{_lastBlocks.Count} 块重配色 · 值域[{gmin:0.###},{gmax:0.###}] 均{gsum / _lastBlocks.Count:0.###}";
+    }
+
     // 筛选块体：只显示品位 ≥ 平均品位 的块(矿块)
     private void FilterBlocksCmd()
     {
@@ -3867,7 +3891,7 @@ public partial class MainWindow : Window
         if (_blockCellEntities.Count == 0 && (_lastBlocks == null || _lastBlocks.Count == 0)) { StatusMsg.Text = "删除块体：无块体"; return; }
         BeginChange();
         foreach (var e in _blockCellEntities) _scene.Remove(e);
-        _blockCellEntities.Clear(); _lastBlocks = null;
+        _blockCellEntities.Clear(); _lastBlocks = null; _blockAttrs = null;
         RefreshScene();
         StatusMsg.Text = "已删除全部块体";
     }
