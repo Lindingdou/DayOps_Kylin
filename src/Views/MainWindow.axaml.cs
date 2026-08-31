@@ -1009,14 +1009,15 @@ public partial class MainWindow : Window
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "导入图形（DXF/DWG/OFF/MapGIS WL·WT·WP·MPJ）",
+            Title = "导入图形（DXF/DWG/OFF/MapGIS/KDF）",
             AllowMultiple = false,
             FileTypeFilter = new[]
             {
-                new FilePickerFileType("支持的格式 (DXF/DWG/OFF/WL/WT/WP/MPJ)") { Patterns = new[] { "*.dxf", "*.dwg", "*.off", "*.wl", "*.wt", "*.wp", "*.mpj" } },
+                new FilePickerFileType("支持的格式 (DXF/DWG/OFF/WL/WT/WP/MPJ/KDF)") { Patterns = new[] { "*.dxf", "*.dwg", "*.off", "*.wl", "*.wt", "*.wp", "*.mpj", "*.kdf" } },
                 new FilePickerFileType("CAD 图纸 (DXF/DWG)") { Patterns = new[] { "*.dxf", "*.dwg" } },
                 new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } },
-                new FilePickerFileType("MapGIS 6.x (WL 线/WT 注记/WP 区/MPJ 工程)") { Patterns = new[] { "*.wl", "*.wt", "*.wp", "*.mpj" } }
+                new FilePickerFileType("MapGIS 6.x (WL 线/WT 注记/WP 区/MPJ 工程)") { Patterns = new[] { "*.wl", "*.wt", "*.wp", "*.mpj" } },
+                new FilePickerFileType("WeCAD 地质地形图 (KDF)") { Patterns = new[] { "*.kdf" } }
             }
         });
         if (files.Count == 0) return;
@@ -1166,6 +1167,7 @@ public partial class MainWindow : Window
         string ext = Path.GetExtension(path).ToLowerInvariant();
         if (ext == ".dxf" || ext == ".dwg") { ImportCadEditable(path); return; }
         if (ext == ".wl" || ext == ".wt" || ext == ".wp" || ext == ".mpj") { ImportMapGisEditable(path); return; }
+        if (ext == ".kdf") { ImportKdfEditable(path); return; }
 
         var r = OffImportService.Load(path);
         if (!r.Success) { StatusMsg.Text = $"导入失败：{r.Error}"; return; }
@@ -1189,6 +1191,15 @@ public partial class MainWindow : Window
     private void ImportMapGisEditable(string path)
     {
         var er = Cad.MapGisImportService.Load(path);
+        if (!er.Success) { StatusMsg.Text = $"导入失败：{er.Error}"; return; }
+        string warn = er.Warnings.Count > 0 ? $" · {string.Join("；", er.Warnings)}" : "";
+        ApplyEntityImport(er, Path.GetFileName(path), warn);
+    }
+
+    // WeCAD .KDF 地质地形图 导入为可编辑实体（忠实移植 KdfReader 二进制解析）
+    private void ImportKdfEditable(string path)
+    {
+        var er = Cad.KdfImportService.Load(path);
         if (!er.Success) { StatusMsg.Text = $"导入失败：{er.Error}"; return; }
         string warn = er.Warnings.Count > 0 ? $" · {string.Join("；", er.Warnings)}" : "";
         ApplyEntityImport(er, Path.GetFileName(path), warn);
