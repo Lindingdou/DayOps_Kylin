@@ -13,6 +13,7 @@ public abstract class SceneEntity
     public string LayerName = "0";                    // 所属图层
     public bool Visible = true;                        // 逐实体隐藏(隐藏对象/结束隐藏)；false=不上屏且不可拾取
     public double[]? Dash;                             // 线型虚线样式(画/空,世界单位); null=实线
+    public short LineWeight = -1;                      // 线宽(DXF LineWeightType 值: -1=ByLayer, -3=Default, 0..211=0.01mm); 当前不渲染变宽线, 但 round-trip 保值供下游绘图
 
     /// <summary>把自身镶嵌为线段（交错 P3_C3）追加到 o。</summary>
     public abstract void Tessellate(List<float> o);
@@ -74,7 +75,7 @@ public abstract class SceneEntity
     public virtual SceneEntity? MoveGrip(int i, double nx, double ny) => null;
 
     /// <summary>把本实体颜色复制给 e 并返回（变换保留颜色）。</summary>
-    protected T Colored<T>(T e) where T : SceneEntity { e.Cr = Cr; e.Cg = Cg; e.Cb = Cb; e.Dash = Dash; return e; }
+    protected T Colored<T>(T e) where T : SceneEntity { e.Cr = Cr; e.Cg = Cg; e.Cb = Cb; e.Dash = Dash; e.LineWeight = LineWeight; return e; }
 
     /// <summary>闭环(矩形/正多边形)打断：投两点到全部边(含闭合边)，移除两点间一段，返回绕另一侧的开口多段线；两点重合返 null。</summary>
     protected static PolylineEntity? BreakClosedLoop(IReadOnlyList<(double x, double y)> vs, double x1, double y1, double x2, double y2)

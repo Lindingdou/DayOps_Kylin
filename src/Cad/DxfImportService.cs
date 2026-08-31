@@ -389,10 +389,11 @@ public static class DxfImportService
         var result = into ?? new EntityImportResult();
         double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
         double[]? emitDash = null;   // 当前实体线型(Emit 顶置, Finalize 读)
+        short emitLW = -1;           // 当前实体线宽(同上; 存实体自身值, round-trip 保真, 不解析 ByLayer)
 
         void Finalize(SceneEntity se, Affine2? xf, (float r, float g, float b) col, string layer)
         {
-            se.Cr = col.r; se.Cg = col.g; se.Cb = col.b; se.Dash = emitDash;
+            se.Cr = col.r; se.Cg = col.g; se.Cb = col.b; se.Dash = emitDash; se.LineWeight = emitLW;
             if (xf != null) se = se.Apply(xf.Value);   // 变换保留颜色(Colored)，但不拷层名
             se.LayerName = layer;
             result.Entities.Add(se);
@@ -456,6 +457,7 @@ public static class DxfImportService
         void Emit(Entity ent, Affine2? xf, (float r, float g, float b) col, string layer, int depth)
         {
             emitDash = ResolveDash(ent.LineType?.Name, ent.Layer?.LineType?.Name);   // 线型(ByLayer 解析)
+            emitLW = (short)ent.LineWeight;                                          // 线宽(存实体自身值, round-trip 保真)
             switch (ent)
             {
                 case Line ln:

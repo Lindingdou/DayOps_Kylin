@@ -603,4 +603,16 @@ public class DxfImportTests
         Assert.NotNull(line!.Dash);                       // 虚线保留(非实线)
         Assert.Equal(new[] { 6.0, 3.0 }, line.Dash!);     // 样式往返(名 DASHED→ByName)
     }
+
+    [Fact]
+    public void Lineweight_survives_export_import_roundtrip()
+    {
+        var scene = new Scene();
+        scene.Add(new LineEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 0, LineWeight = 25 });   // W25 = 0.25mm
+        var doc = SceneExportService.BuildDocument(scene);
+        var res = DxfImportService.MapDocument(doc);
+        var line = System.Linq.Enumerable.FirstOrDefault(System.Linq.Enumerable.OfType<LineEntity>(res.Entities));
+        Assert.NotNull(line);
+        Assert.Equal(25, line!.LineWeight);               // 线宽值往返(DXF LineWeightType)
+    }
 }

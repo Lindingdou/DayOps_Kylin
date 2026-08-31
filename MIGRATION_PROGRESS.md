@@ -1343,3 +1343,14 @@ pc_quality「点数/密度/包围盒/高程分布/**强度分类**」的强度/�
 - **CAD 保真 round-trip 完整**: 文字五属性(§一〇三)+ 线型(本节)导入导出双向齐。
 
 **本会话累计补 52 真功能 + 1 并发修复 + 1 潜伏字形 bug 修 + 1 latent 攻克 + GWN 硬化, 953 测。** CAD 属性/文字保真透镜彻底收敛(导入+导出+绘制全齐), 余线宽渲染(需 GL 管线改)记录。
+
+## 一〇五、线宽数据 round-trip —— CAD 全属性往返闭环
+
+变宽线**渲染**需改 GL 管线(变宽线=四边形三角化, 复杂)仍记录; 但线宽**数据** round-trip 可做且补齐往返全属性:
+- [x] **线宽存值**(`SceneEntity.LineWeight` short, 默认 -1=ByLayer; `Colored` 拷贝): DXF `LineWeightType`(Int16: 0..211=0.01mm, -1=ByLayer, -3=Default)。
+- [x] **导入**(`DxfImport` emitLW): 读 `ent.LineWeight` 存实体自身值(不解析 ByLayer, round-trip 保真)。
+- [x] **导出**(`SceneExport`): `ent.LineWeight = (LineWeightType)e.LineWeight`。
+- [x] **round-trip 验证**: W25(0.25mm)线 export→import 线宽值 25 保留。1 测。
+- **CAD 属性往返闭环**: 图层/颜色/线型/文字五属性/线宽 —— 全部导入导出 round-trip 保真。余变宽线渲染(GL 四边形管线)记录, 数据不丢。
+
+**本会话累计补 53 真功能 + 1 并发修复 + 1 潜伏字形 bug 修 + 1 latent 攻克 + GWN 硬化, 954 测。** CAD 保真透镜彻底收官(绘制+导入+导出+全属性往返)。
