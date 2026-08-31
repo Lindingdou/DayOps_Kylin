@@ -29,7 +29,9 @@ public static class LayerSolid
                                 (m.MaxY - m.MinY) * (m.MaxY - m.MinY) +
                                 (m.MaxZ - m.MinZ) * (m.MaxZ - m.MinZ));
         var w = MeshWeld.Weld(verts, tris, diag > 0 ? diag * 1e-4 : 1e-6, dropDuplicateTris: true);
-        return (w.Verts, w.Tris);
+        // 顶/底/侧壁各自朝向 loft/输入不一致 → BFS 传播统一为外向, 使体积(散度/缠绕)可靠
+        var oriented = MeshOrient.MakeConsistent(w.Verts, w.Tris);
+        return (w.Verts, oriented);
     }
 
     /// <summary>面平均 Z（供多层按标高排序）。</summary>

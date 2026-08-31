@@ -28,10 +28,9 @@ public class LayerSolidTests
     }
 
     [Fact]
-    public void Box_structure_bbox_and_tricount()
+    public void Box_structure_bbox_tricount_and_exact_volume()
     {
         // 顶+底各 2 三角 + 4 侧壁×2 = 12 三角; 包围盒 = [0,10]²×[0,5]
-        // (散度体积对 loft 定向敏感→不作精确断言; 体积走体素/缠绕数路径 robust, 见 VoxelBands)
         var solid = LayerSolid.FromSurfaces(Quad(5).v, Quad(5).t, Quad(0).v, Quad(0).t);
         Assert.NotNull(solid);
         var (v, t) = solid!.Value;
@@ -40,6 +39,9 @@ public class LayerSolidTests
         Assert.Equal(0, m.MinZ, 6); Assert.Equal(5, m.MaxZ, 6);
         Assert.Equal(0, m.MinX, 6); Assert.Equal(10, m.MaxX, 6);
         Assert.Equal(0, m.MinY, 6); Assert.Equal(10, m.MaxY, 6);
+        // MeshOrient 修朝向后, 散度体积可靠: 10×10×5=500 → 6× 带符号体积=3000(外向正)
+        Assert.True(MeshOrient.IsConsistent(t), "成体后朝向应一致");
+        Assert.Equal(3000.0, MeshOrient.SignedVolume6(v, t), 3);
     }
 
     [Fact]

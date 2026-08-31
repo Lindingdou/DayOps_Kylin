@@ -1197,3 +1197,12 @@ grade-only 数据模型无法持多属性(架构限, 记录), 但可**部分缓�
 - **DXF 实体导入**: Kylin `DxfImportService` 已**超集覆盖**原全型别(Line/LwPolyline/Polyline2D3D/Circle/Arc/Ellipse/Spline/Hatch/Text/MText/Point/Insert/XLine/Ray/Solid/Face3D)且多 Leader/MLine/MultiLeader/Dimension。无缺。
 - **绘图辅助全已有**: 正交(`_orthoOn` + `DraftAids.Ortho`, 命令"正交/正交开关", FeedPoint 落点 6551 应用)、栅格捕捉(`_snapOn` + `DraftAids.Snap`, 命令"栅格捕捉")、对象捕捉(六模式)全在。极轴追踪原本就无(非缺口)。
 - **★冗余提交纠正(硬教训)**: 误判"Kylin 无正交"→实现并提交了并行冗余正交系统(`DrawTool.OrthoSnap`/`Anchor` + `_ortho` + 双重应用 + 死"正交"别名, commit 0f13673)→查栅格捕捉时撞见既有 `_orthoOn`/DraftAids→`git revert`(ab10fbf)全撤, 回 907 测。**根因: 实现前 grep "正交|ortho" 返回了无关行(ViewportHost)却据此断"无", 未核对确切标识符 `_orthoOn`/`DraftAids`/命令字面量。教训见 [[unlock-blocked-insights]]。**
+
+## 八十八、质量硬化透镜 —— 修 LayerSolid 朝向不一致(记录 latent 项攻克)
+
+不再找新命令(命令表已全覆盖), 转攻**有记录的 latent 未完成算法**:
+- [x] **三角网朝向一致化 `MeshOrient.MakeConsistent`**(新算子): 原 LayerSolid(顶+底+侧壁 loft+weld)产「水密但朝向不一致」网格, 记忆记为 latent(体积 833≠500, 只能测拓扑不变量绕过)。补面邻接 BFS 传播——相邻两面公共边须反向遍历, 同向翻转邻面; 再按带符号体积规范外向。**接入 `LayerSolid.FromSurfaces` weld 后**, 使多层建模体朝向一致、散度体积可靠。`WindingNumberTester` 本就注明「前提: 朝向一致」, 此前不满足。
+- 验证: MeshOrient 4 测(混乱朝向单位立方体→一致+外向体积6/翻一面纠正/幂等/空安全) + LayerSolidTests 加**精确体积断言**(10×10×5=500 → 6×带符号体积=3000, 此前因朝向不敢断言, 现绿)。917 测。
+- **教训: 记忆里"记录为 latent/绕过"的项也要回头攻**——朝向一致是标准 BFS 算法, 非鲁棒难题, 早该做。区别于真鲁棒受阻(mesh 布尔/刀切 SolidKnife 已证伪)。
+
+**本会话累计补 35 真功能 + 1 并发修复 + 1 潜伏字形 bug 修 + 1 latent 攻克, 917 测。**
