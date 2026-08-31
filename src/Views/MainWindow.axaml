@@ -1186,9 +1186,12 @@
                     <TextBlock Grid.Column="0" Text="命令:" Foreground="#9DA3AD" VerticalAlignment="Center" Margin="2,0,8,0" FontFamily="Consolas,monospace" />
                     <TextBox Grid.Column="1" x:Name="CommandInput"
                              Background="Transparent" BorderThickness="0" Foreground="#E6E6E6"
-                             FontFamily="Consolas,monospace" Watermark="命令别名/中文命令后回车（LINE / 距离 / 俯视 …），↑↓ 回溯历史"
-                             KeyDown="OnCommandKeyDown" />
+                             FontFamily="Consolas,monospace" Watermark="命令别名/中文命令后回车（LINE / 距离 / 俯视 …），↑↓ 回溯历史，Tab 补全"
+                             KeyDown="OnCommandKeyDown" TextChanged="OnCommandInputChanged" />
                 </Grid>
+                <!-- 命令自动补全候选 -->
+                <TextBlock x:Name="CmdSuggest" DockPanel.Dock="Bottom" Foreground="#C7A96B" FontSize="11"
+                           FontFamily="Consolas,monospace" Margin="40,0,0,2" Text="" IsVisible="False" />
                 <!-- 命令历史/输出回显 -->
                 <ScrollViewer x:Name="CmdLogScroll" DockPanel.Dock="Top" MaxHeight="60" Margin="0,0,0,3"
                               HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">

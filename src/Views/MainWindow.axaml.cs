@@ -4384,6 +4384,60 @@ public partial class MainWindow : Window
         CmdLogScroll?.ScrollToEnd();
     }
 
+    // 命令目录（供命令行自动补全候选；主要功能命令，覆盖 Home + 各模块）
+    private static readonly string[] CommandCatalog =
+    {
+        // 文件/绘制/修改
+        "新建","打开","保存","另存为","导入","选项",
+        "点","直线","多段线","滑动多段线","圆","矩形","正多边形","文字","圆弧",
+        "复制","移动","旋转","偏移","修剪","延伸","打断","分解","删除","撤销","重做",
+        // 图层/视图
+        "新建图层","图层特性管理器","冻结","锁定","全开",
+        "2D","3D","俯视","仰视","主视","后视","左视","右视","西南等轴测","东南等轴测","东北等轴测","西北等轴测","缩放","清空视图","清理标记",
+        // 注释/测量/剪贴板/选择
+        "线性标注","对齐标注","半径标注","连续标注",
+        "距离","面积","角度",
+        "剪切","复制到剪贴板","粘贴","基点粘贴","原坐标粘贴",
+        "快速选择","全部选择","创建选择集",
+        // 线编辑
+        "加密多段线","简化","抽稀等值线","两线交点","闭合多段线","删除重复点","删除重复线","连接多段线","组合工作线",
+        // 网格/建模
+        "网格度量","网格诊断","网格焊接","网格边界","合并三角网","固化成体","侧面三角网","立方体","球体","圆柱","体素格网体积","实体转块体",
+        // 区域/地形/点云
+        "区域求差","区域重叠检测",
+        "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","地面点滤波","高程着色","点云质量统计",
+        // 块体/运输/路网
+        "块体模型","资源量","道路横断面","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","演化对比","螺旋斜坡道","折返斜坡道",
+        // 生产计划/投影
+        "境界圈定","剥采比均衡","方案综合对比","开采程序确定","平盘宽度识别","确定可采区域","点落到面上","线落到面上",
+    };
+
+    // 命令框输入变化 → 候选补全提示（子串匹配, 取前 8）
+    private void OnCommandInputChanged(object? sender, TextChangedEventArgs e)
+    {
+        if (CmdSuggest == null || CommandInput == null) return;
+        string t = CommandInput.Text?.Trim() ?? "";
+        if (t.Length == 0) { CmdSuggest.IsVisible = false; return; }
+        var hits = new List<string>();
+        foreach (var c in CommandCatalog)
+        {
+            if (c.Contains(t, System.StringComparison.OrdinalIgnoreCase)) hits.Add(c);
+            if (hits.Count >= 8) break;
+        }
+        if (hits.Count == 0) { CmdSuggest.IsVisible = false; return; }
+        CmdSuggest.Text = "候选(Tab 补全): " + string.Join("  ·  ", hits);
+        CmdSuggest.IsVisible = true;
+    }
+
+    // Tab 补全：取第一个候选填入命令框
+    private void CompleteCommand(TextBox tb)
+    {
+        string t = tb.Text?.Trim() ?? "";
+        if (t.Length == 0) return;
+        foreach (var c in CommandCatalog)
+            if (c.Contains(t, System.StringComparison.OrdinalIgnoreCase)) { tb.Text = c; tb.CaretIndex = c.Length; return; }
+    }
+
     // 命令历史（供命令行 ↑/↓ 回溯）
     private readonly List<string> _cmdHistory = new();
     private int _cmdHistoryIdx = -1;   // -1/末尾 = 停在当前输入(空)
@@ -4410,7 +4464,9 @@ public partial class MainWindow : Window
         if (sender is not TextBox tb) return;
         if (e.Key == Key.Up) { RecallHistory(tb, -1); e.Handled = true; return; }     // ↑ 回溯较早命令
         if (e.Key == Key.Down) { RecallHistory(tb, +1); e.Handled = true; return; }   // ↓ 回溯较新命令
+        if (e.Key == Key.Tab) { CompleteCommand(tb); e.Handled = true; return; }      // Tab 补全首个候选
         if (e.Key != Key.Enter) return;
+        if (CmdSuggest != null) CmdSuggest.IsVisible = false;                          // 执行时收起候选
 
         string cmd = tb.Text.Trim();
         if (cmd.Length == 0)   // 空命令行 + Enter = 重复上次命令（AutoCAD 行为；仅空闲态，不干预进行中的交互）
