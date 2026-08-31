@@ -798,3 +798,10 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 - [x] **★补漏的真实功能 ForecastModels**(`2d8eebf`)：查原 `EquipmentForecastWindow` 发现其预测内核是 `ForecastModels.cs` **时间序列回归**(LSQ趋势+EWMA融合/Holt双指数 + σ_k²越远越宽区间 + 残差>2σ异常)——**纯自足、可托管、完全可验**，我原却用"基线×12×台数"**粗略近似**替代。逐字移植 `src/Data/ForecastModels.cs` + `GetMonthlyOutputSeries` + 产量预测/Holt预测 命令。+7 单测(斜率/R²还原·异常识别·区间张开·Holt·样本不足·空)。
 
 **★新审计轴——实现忠实度(非仅"有处理器")**：处理器存在 ≠ 实现忠实。有的功能是**原真实算法的粗略近似**(效能预测用 baseline×12 代替回归)。核查法：dump 实际输出眼验量级/异常 + 对可疑者查原实现是否有更完整的**可见托管算法**被我近似掉。→ 下轴：续查其它"简化/近似"实现是否漏了原可托管算法。见 memory [[verify-seed-enum-values-before-filter]](输出审计) [[unlock-blocked-insights]](先读源)。
+
+**实现忠实度轴续（commit `56cc298`/`8a072c5`）——再补 2 真实算法 + 记录 1 native**：
+- [x] **台阶扩帮真实台阶距**(`56cc298`)：`BenchLines` 源注"真实台阶距=W+H/tanα, 此处定距近似"——原用境界短边/10。补 `BenchLines.BenchDistance`(平盘宽+台阶高/tan坡面角) + 命令 "台阶扩帮 帮宽 台阶高 坡面角" 用真实距(缺省回落几何默认)。+1测。
+- [x] **★FleetOptimizer 智能编组优化**(`8a072c5`)：我的 设备智能编组 只**读**预计算 dispatch_rule 表，而原 `FleetOptimizer.cs`(211行**可见托管**)是**真优化**——物理产能子模型(M/M/c 排队论内生匹配系数 MF=n·T_load/T_cyc, 取 min(铲装,车运)瓶颈侧) + **无界 DP 最小卡车数达标** + Erlang-C 排队概率 + 在籍台数修复。逐字移植 `src/Data/FleetOptimizer.cs`(复用已移 FleetCycle 物理) + `GetFleetDispatchRules`(join equipment_model 载重/斗容) + 编组优化 命令。+6测(Erlang-C边界/单调·优化达标·在籍约束·空规则·种子跑通)。
+- **PMF 地面滤波(记录 native)**：原 地面点滤波 用 **渐进形态学 PMF**(button 描述明示)，但经 `IPointCloudCapability.GroundFilterComputeAsync`(参数 CellSize/MaxWindowM/TerrainSlopeDeg/InitElevThresh)——**算法在 native capability 不可见**。PMF 虽 published 但原变体不可见+变体敏感(不同 PMF→不同地面分类→下游 DEM/体积)。按忠实规则"原算法不可见→不臆测替代"(区别 ForecastModels/FleetOptimizer 源码可见→逐字移；ObjectSnap 平凡无歧义→可移)记录为 native 边界；现最小高程滤波是可用简单托管占位。
+
+**★实现忠实度轴产出丰**：ForecastModels(回归)+FleetOptimizer(编组优化)+BenchLines(台阶距) 三个原**可见托管真实算法**被我用粗略近似/只读表代替，现已逐字补齐。→ 下轴续：CoalQualityEstimator/Analytics 等 GeoDataBase 可见算法服务是否也被近似。
