@@ -703,6 +703,7 @@ public partial class MainWindow : Window
     private bool _spotActive;                       // 高程查询：点击报高程
     private System.Collections.Generic.List<(double x, double y, double z)>? _spotTerrain;
     private bool _textActive;                        // 文字：等待命令行输入内容
+    private bool _ortho;                              // 正交模式(ORTHO)：绘制时光标夹到水平/竖直
     private bool _dimActive;                          // 线性标注：取两点
     private (double x, double y)? _dimP1;
     private bool _dimRadActive;                        // 半径标注：选圆/弧后指定方向
@@ -1086,6 +1087,7 @@ public partial class MainWindow : Window
             if (cmd == "滑动多段线") { StartSlide(); return; }
             if (cmd == "平移" || cmd == "PAN") { StatusMsg.Text = "平移：按住鼠标中键拖拽视图（滚轮朝光标缩放）"; return; }
             if (cmd == "填充十字" || cmd == "交叉填充" || cmd == "十字填充") { _hatchCross = !_hatchCross; StatusMsg.Text = $"图案填充: 十字交叉 {(_hatchCross ? "开" : "关")}（再执行 图案填充）"; return; }
+            if (cmd == "正交" || cmd == "正交模式" || cmd == "ORTHO" || cmd == "orthomode") { _ortho = !_ortho; StatusMsg.Text = $"正交模式 {(_ortho ? "开" : "关")}（画直线/多段线时光标夹到水平或竖直）"; return; }
             if (cmd == "图案填充" || cmd == "填充" || cmd == "HATCH" || cmd == "剖面线"
                 || cmd.StartsWith("图案填充 ") || cmd.StartsWith("填充 ") || cmd.StartsWith("HATCH ") || cmd.StartsWith("剖面线 "))
             {
@@ -5403,7 +5405,10 @@ public partial class MainWindow : Window
         var baseGeom = _scene.BuildGeometry(_layers.IsShown);
         _snapVerts = _scene.SnapCandidates(_layers.IsShown);   // 语义 osnap 点(端点/中点/圆心/象限)
         var list = new List<float>(baseGeom);
-        _tool?.AppendPreview(list, _cursorWorld);
+        var previewCursor = _cursorWorld;
+        if (_ortho && _tool?.Anchor is { } pan && previewCursor is { } cw)   // 正交预览：橡皮筋也夹到水平/竖直
+            previewCursor = Cad.Draw.DrawTool.OrthoSnap(pan.x, pan.y, cw.x, cw.y);
+        _tool?.AppendPreview(list, previewCursor);
         if (_slideDragging && _slidePts.Count > 1)     // 滑动多段线拖动预览
         {
             var pv = new PolylineEntity { Points = _slidePts, Cr = 0.55f, Cg = 0.62f, Cb = 0.70f };
@@ -6421,6 +6426,7 @@ public partial class MainWindow : Window
         }
         if (_tool != null)
         {
+            if (_ortho && _tool.Anchor is { } an) { var (sx, sy) = Cad.Draw.DrawTool.OrthoSnap(an.x, an.y, x, y); x = sx; y = sy; }   // 正交约束
             var ent = _tool.AddPoint(x, y);
             if (ent != null) { BeginChange(); AssignLayer(ent); _scene.Add(ent); }
             RefreshScene();
