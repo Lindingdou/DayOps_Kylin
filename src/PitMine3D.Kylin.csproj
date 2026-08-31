@@ -23,9 +23,17 @@
     <PackageReference Include="Avalonia.Fonts.Inter" Version="11.2.1" />
     <!-- DXF/DWG 读取(纯托管, 跨平台) —— 与 Windows 版同版本 -->
     <PackageReference Include="ACadSharp" Version="3.5.7" />
+    <!-- 地质/生产数据库(§四/§八): SQLite 嵌入式, 跨平台可移(非 DM8) + Dapper POCO 映射 —— 与原 SqlLib 同版本 -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.10" />
+    <PackageReference Include="Dapper" Version="2.1.35" />
     <PackageReference Include="Avalonia.Diagnostics" Version="11.2.1">
       <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
     </PackageReference>
+  </ItemGroup>
+
+  <!-- §四/§八 数据库迁移(建表 + 真实种子数据)作嵌入资源, 运行时建库自足, 无需外部 DB -->
+  <ItemGroup>
+    <EmbeddedResource Include="Data\Migrations\*.sql" />
   </ItemGroup>
 
   <ItemGroup>
