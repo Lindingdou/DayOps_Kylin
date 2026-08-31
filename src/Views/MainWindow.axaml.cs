@@ -794,7 +794,6 @@ public partial class MainWindow : Window
             if (cmd == "属性统计" || cmd == "品位统计" || cmd == "直方图" || cmd == "统计报告") { await GradeStatsAsync(); return; }
             if (cmd == "属性报告" || cmd == "块体属性报告" || cmd == "多属性统计" || cmd == "多属性报告") { await BlockAttrReportAsync(); return; }
             if (cmd == "块体着色" || cmd == "块体配色") { ColorBlocksCmd(); return; }
-            if (cmd == "采区划分" || cmd == "作业区划分" || cmd == "划分采区" || cmd.StartsWith("采区划分 ")) { PanelSplitCmd(cmd); return; }   // [采区数]
             if (cmd == "块体分类着色" || cmd == "块体离散着色" || cmd == "分类着色" || cmd == "块体分类配色") { ColorBlocksCategoricalCmd(); return; }
             if (cmd == "块体分级着色" || cmd.StartsWith("块体分级着色 ") || cmd == "分级着色" || cmd == "块体分级配色" || cmd == "区间着色") { ColorBlocksClassedCmd(cmd); return; }
             if (cmd == "切换属性" || cmd.StartsWith("切换属性 ") || cmd == "切换品位属性" || cmd.StartsWith("切换品位属性 ") || cmd == "切换活动属性" || cmd.StartsWith("切换活动属性 ")) { SwitchGradeAttrCmd(cmd); return; }
@@ -4257,37 +4256,6 @@ public partial class MainWindow : Window
     }
 
     // 块体着色：按品位配色重渲全部块体(恢复全显)
-    // 采区划分：块体→剥采比场→划采区(按开采序配色矩形+煤量/剥采比标注)+ 开采程序评价(NPV/服务年限/峰值剥采比)。
-    // 忠实原 MiningProgramPlan(PanelSplitter+ProgramEvaluator), 托管从稀疏块体聚合。此前实现+单测但未接线, 本次接命令。
-    private void PanelSplitCmd(string cmd)
-    {
-        if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "采区划分：请先导入/生成块体"; return; }
-        var a = PrimitiveNums(cmd);
-        var plan = new MiningPlanParams();
-        if (a.Length >= 1 && a[0] >= 1) plan.PanelCount = (int)a[0];
-        var blocks = new System.Collections.Generic.List<(double, double, double, double, double)>(_lastBlocks.Count);
-        var grades = new System.Collections.Generic.List<double>(_lastBlocks.Count);
-        foreach (var b in _lastBlocks) { blocks.Add((b.X, b.Y, b.Z, b.Size, b.Grade)); grades.Add(b.Grade); }
-        grades.Sort();
-        double cutoff = grades[grades.Count / 2];   // 品位中位数判煤/岩
-        var field = StripRatioField.FromBlocks(blocks, cutoff, 1.4);
-        if (field == null) { StatusMsg.Text = "采区划分：块体无法建剥采比场"; return; }
-        var panels = PanelSplitter.Split(plan, field);
-        if (panels.Count == 0) { StatusMsg.Text = "采区划分：未划出采区"; return; }
-        var prog = ProgramEvaluator.Evaluate(plan, panels);
-        var pal = new[] { (0.9f, 0.35f, 0.35f), (0.35f, 0.8f, 0.4f), (0.35f, 0.55f, 0.9f), (0.9f, 0.8f, 0.35f), (0.8f, 0.45f, 0.9f), (0.4f, 0.85f, 0.85f) };
-        double lblH = System.Math.Max((field.Nx * field.Dx) / 40.0, 1e-3);
-        BeginChange();
-        foreach (var p in panels)
-        {
-            var c = pal[(System.Math.Max(1, p.Order) - 1) % pal.Length];   // 按开采序配色
-            _scene.Add(new RectEntity { X0 = p.MinX, Y0 = p.MinY, X1 = p.MaxX, Y1 = p.MaxY, Cr = c.Item1, Cg = c.Item2, Cb = c.Item3, LayerName = "采区划分" });
-            _scene.Add(new TextEntity { X = (p.MinX + p.MaxX) / 2, Y = (p.MinY + p.MaxY) / 2, Height = lblH, Text = $"{p.Name}(序{p.Order}) 煤{p.CoalWanT:0}万t 剥采比{p.StripRatio:0.##}", Cr = c.Item1, Cg = c.Item2, Cb = c.Item3, LayerName = "采区划分" });
-        }
-        RefreshScene();
-        StatusMsg.Text = $"采区划分：{panels.Count} 采区（按开采序配色）· 服务年限 {prog.ServiceLifeYears:0.#}a · 峰值剥采比 {prog.ProductionRatioPeak:0.##} · 内排率 {prog.InnerDumpPct:0.#}% · NPV {prog.Npv:0}万元";
-    }
-
     private void ColorBlocksCmd()
     {
         if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "块体着色：请先导入/生成块体"; return; }

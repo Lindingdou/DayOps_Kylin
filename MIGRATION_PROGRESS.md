@@ -1785,13 +1785,3 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - [x] 2 测: 乱序 3 段连成 4 点折线 + 分离链保持分离。1010 测。
 
 **本会话累计补 85 真功能/保真 + 4 潜伏 bug 修 + 多处忠实性/深度证伪, 1010 测。**
-
-## 一四七、采区划分接线 —— tested-but-unwired 能力补接
-
-系统 tested-but-unwired 审计(遍历 *Tests.cs 对应 src 类, 查 MainWindow 零引用): 揪出 **PanelSplit**(采区划分 PanelSplitter + 开采程序评价 ProgramEvaluator)**已实现+单测但无命令**(记忆 §unlock #1 曾述"落地", 实为落地未接线)。补:
-- [x] **命令「采区划分 [采区数]」**: `_lastBlocks` → 元组 → `StripRatioField.FromBlocks`(cutoff=品位中位数, 密度1.4) → `PanelSplitter.Split(plan, field)` → 采区; `ProgramEvaluator.Evaluate` → 程序指标。
-- [x] **显示**: 各采区外接矩形(按开采序 6 色轮转)+ 标注(采区名/序/煤量/剥采比); 状态栏报 服务年限/峰值剥采比/内排率/NPV。
-- 验证: PanelSplit 能力已单测(PanelSplitTests); 接线 UI build+smoke。1010 测。
-- **同批 tested-but-unwired 候选**: PitDepthSolver(逐 Z 资源剖面)/RoadEvolutionModel(道路演化)待接; DrawTools(空/工具类)、BulgeArc/JpegDecoder/RasterMorphology/TiffLzw(内部 helper 被其他 src 用)非 unwired。
-
-**本会话累计补 87 真功能/保真 + 4 潜伏 bug 修 + 多处忠实性/深度证伪, 1010 测。** 新透镜「tested-but-unwired 系统审计」(遍历测试类查 MainWindow 零引用)高产。
