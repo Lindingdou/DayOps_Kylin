@@ -632,4 +632,16 @@ public class DxfImportTests
         Assert.True(st.frozen);    // 冻结往返
         Assert.True(st.locked);    // 锁定往返
     }
+
+    [Fact]
+    public void Entity_hidden_state_survives_export_import_roundtrip()
+    {
+        var scene = new Scene();
+        scene.Add(new LineEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 0, Visible = false });   // 逐实体隐藏
+        var doc = SceneExportService.BuildDocument(scene);
+        var res = DxfImportService.MapDocument(doc);
+        var line = System.Linq.Enumerable.FirstOrDefault(System.Linq.Enumerable.OfType<LineEntity>(res.Entities));
+        Assert.NotNull(line);
+        Assert.False(line!.Visible);   // 隐藏状态往返(DXF IsInvisible)
+    }
 }
