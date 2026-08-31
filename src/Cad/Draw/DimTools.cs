@@ -21,6 +21,10 @@ public sealed class DimStyle
     public double ArrowWidthRatio = 0.25;
     /// <summary>文字偏移 = 高 × 比(DIMGAP 相对)。</summary>
     public double TextOffsetRatio = 0.6;
+    /// <summary>延伸线起点偏移 = 高 × 比(DIMEXO 相对): 测点与延伸线起点的间隙。</summary>
+    public double ExtLineOffsetRatio = 0.2;
+    /// <summary>延伸线超出量 = 高 × 比(DIMEXE 相对): 延伸线越过尺寸线的长度。</summary>
+    public double ExtLineExtensionRatio = 0.4;
 
     public static readonly DimStyle Default = new();
 
@@ -54,6 +58,47 @@ public static class DimTools
         double ox = nx * H * style.TextOffsetRatio, oy = ny * H * style.TextOffsetRatio;   // 文字偏到尺寸线上方
         double tw = s.Length * H * 0.8;                     // 粗略文字宽 → 居中
         list.Add(new TextEntity { X = mx + ox - tw / 2, Y = my + oy, Height = H, Text = s, Cr = col.r, Cg = col.g, Cb = col.b });
+        return list;
+    }
+
+    /// <summary>
+    /// 线性标注(标准 DIMLINEAR, 3 点)：测两点 (x1,y1)-(x2,y2), 尺寸线偏移过点 (offX,offY)。
+    /// 画 延伸线(从测点经 DIMEXO 间隙到尺寸线+DIMEXE 超出) + 偏移尺寸线 + 两端箭头 + 距离文字。忠实原版偏移标注。纯逻辑可单测。
+    /// </summary>
+    public static List<SceneEntity> BuildLinear(double x1, double y1, double x2, double y2, double offX, double offY, double h, DimStyle? style = null)
+    {
+        style ??= DimStyle.Default;
+        double H = style.TextHeight > 0 ? style.TextHeight : h;
+        var list = new List<SceneEntity>();
+        (float r, float g, float b) col = (0.95f, 0.85f, 0.30f);
+        SceneEntity L(double a, double b, double c, double d) => new LineEntity { X0 = a, Y0 = b, X1 = c, Y1 = d, Cr = col.r, Cg = col.g, Cb = col.b };
+
+        double dx = x2 - x1, dy = y2 - y1, len = Math.Sqrt(dx * dx + dy * dy);
+        if (len < 1e-9) { list.Add(L(x1, y1, x2, y2)); return list; }
+        double ux = dx / len, uy = dy / len;                    // 测量方向
+        double nx = -uy, ny = ux;                               // 单位法线
+        double proj = (offX - x1) * nx + (offY - y1) * ny;      // 偏移点到测量线的带符号垂距 = 尺寸线偏移
+        double sgn = proj >= 0 ? 1 : -1;
+        double gap = H * style.ExtLineOffsetRatio, ext = H * style.ExtLineExtensionRatio;
+
+        double d1x = x1 + nx * proj, d1y = y1 + ny * proj;      // 尺寸线端点(测点投到偏移处)
+        double d2x = x2 + nx * proj, d2y = y2 + ny * proj;
+        // 延伸线: 从测点+间隙 到 尺寸线+超出
+        list.Add(L(x1 + nx * sgn * gap, y1 + ny * sgn * gap, d1x + nx * sgn * ext, d1y + ny * sgn * ext));
+        list.Add(L(x2 + nx * sgn * gap, y2 + ny * sgn * gap, d2x + nx * sgn * ext, d2y + ny * sgn * ext));
+        list.Add(L(d1x, d1y, d2x, d2y));                        // 偏移尺寸线
+
+        double ah = H * style.ArrowRatio, aw = H * style.ArrowWidthRatio;   // 两端箭头(指向外)
+        list.Add(L(d1x, d1y, d1x + ux * ah + nx * aw, d1y + uy * ah + ny * aw));
+        list.Add(L(d1x, d1y, d1x + ux * ah - nx * aw, d1y + uy * ah - ny * aw));
+        list.Add(L(d2x, d2y, d2x - ux * ah + nx * aw, d2y - uy * ah + ny * aw));
+        list.Add(L(d2x, d2y, d2x - ux * ah - nx * aw, d2y - uy * ah - ny * aw));
+
+        string s = len.ToString(style.NumberFormat, CultureInfo.InvariantCulture);
+        double mx = (d1x + d2x) / 2, my = (d1y + d2y) / 2;
+        double tox = nx * sgn * H * style.TextOffsetRatio, toy = ny * sgn * H * style.TextOffsetRatio;
+        double tw = s.Length * H * 0.8;
+        list.Add(new TextEntity { X = mx + tox - tw / 2, Y = my + toy, Height = H, Text = s, Cr = col.r, Cg = col.g, Cb = col.b });
         return list;
     }
 

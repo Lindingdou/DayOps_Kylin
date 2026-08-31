@@ -32,6 +32,38 @@ public class DimToolsTests
     }
 
     [Fact]
+    public void BuildLinear_offset_has_extension_lines_and_offset_dimline()
+    {
+        var dim = DimTools.BuildLinear(0, 0, 10, 0, 5, 3, 1);   // 测(0,0)-(10,0), 尺寸线偏移过(5,3)→ y=3
+        var lines = System.Linq.Enumerable.ToList(System.Linq.Enumerable.OfType<LineEntity>(dim));
+        var txt = System.Linq.Enumerable.Single(System.Linq.Enumerable.OfType<TextEntity>(dim));
+        Assert.Equal("10", txt.Text);
+        // 尺寸线在偏移处 y=3, 长度=10
+        Assert.Contains(lines, l => System.Math.Abs(l.Y0 - 3) < 1e-6 && System.Math.Abs(l.Y1 - 3) < 1e-6 && System.Math.Abs(System.Math.Abs(l.X1 - l.X0) - 10) < 1e-6);
+        // 延伸线从测点(y≈0)跨到尺寸线+超出(y>3)
+        Assert.Contains(lines, l => System.Math.Min(l.Y0, l.Y1) < 1 && System.Math.Max(l.Y0, l.Y1) > 3);
+        Assert.True(txt.Y > 3);                    // 文字在偏移侧
+    }
+
+    [Fact]
+    public void BuildLinear_negative_offset_flips_side()
+    {
+        var dim = DimTools.BuildLinear(0, 0, 10, 0, 5, -3, 1);   // 偏移到 y=-3
+        var lines = System.Linq.Enumerable.ToList(System.Linq.Enumerable.OfType<LineEntity>(dim));
+        Assert.Contains(lines, l => System.Math.Abs(l.Y0 + 3) < 1e-6 && System.Math.Abs(l.Y1 + 3) < 1e-6);   // 尺寸线 y=-3
+    }
+
+    [Fact]
+    public void BuildLinear_vertical_measure_offset_sideways()
+    {
+        var dim = DimTools.BuildLinear(0, 0, 0, 10, 3, 5, 1);   // 竖直测(0,0)-(0,10), 偏移过(3,5)→ x=3
+        var lines = System.Linq.Enumerable.ToList(System.Linq.Enumerable.OfType<LineEntity>(dim));
+        var txt = System.Linq.Enumerable.Single(System.Linq.Enumerable.OfType<TextEntity>(dim));
+        Assert.Equal("10", txt.Text);
+        Assert.Contains(lines, l => System.Math.Abs(l.X0 - 3) < 1e-6 && System.Math.Abs(l.X1 - 3) < 1e-6 && System.Math.Abs(System.Math.Abs(l.Y1 - l.Y0) - 10) < 1e-6);   // 尺寸线 x=3
+    }
+
+    [Fact]
     public void Radial_line_reaches_circumference_with_R_text()
     {
         // 圆心(0,0) 半径5，方向 +X → 径向线终点在 (5,0)，文字 "R5"

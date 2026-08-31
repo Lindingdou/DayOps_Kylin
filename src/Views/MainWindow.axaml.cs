@@ -173,16 +173,21 @@ public partial class MainWindow : Window
                 if (wp != null)
                 {
                     if (_dimP1 == null) { _dimP1 = (wp.Value.x, wp.Value.y); StatusMsg.Text = "标注：指定第二点"; }
+                    else if (!_dimContinue && _dimP2 == null) { _dimP2 = (wp.Value.x, wp.Value.y); StatusMsg.Text = "标注：指定尺寸线位置"; }
                     else
                     {
                         double h = System.Math.Max(SnapTolWorld(_lastPointer) * 2.5, 1e-3);
-                        var dim = DimTools.Build(_dimP1.Value.x, _dimP1.Value.y, wp.Value.x, wp.Value.y, h, _dimStyle);
+                        // 普通: (P1,P2)测点 + wp 偏移; 连续: (上P2,wp)测点 + 沿用上尺寸线偏移点
+                        double x1, y1, x2, y2, ox, oy;
+                        if (_dimContinue) { x1 = _dimP1.Value.x; y1 = _dimP1.Value.y; x2 = wp.Value.x; y2 = wp.Value.y; ox = _lastDimOffsetPt?.x ?? wp.Value.x; oy = _lastDimOffsetPt?.y ?? wp.Value.y; }
+                        else { x1 = _dimP1.Value.x; y1 = _dimP1.Value.y; x2 = _dimP2!.Value.x; y2 = _dimP2.Value.y; ox = wp.Value.x; oy = wp.Value.y; }
+                        var dim = DimTools.BuildLinear(x1, y1, x2, y2, ox, oy, h, _dimStyle);
                         BeginChange();
                         foreach (var de in dim) { de.LayerName = _layers.Current.Name; _scene.Add(de); }
                         RefreshScene();
                         StatusMsg.Text = "已标注";
-                        _lastDimP2 = (wp.Value.x, wp.Value.y);   // 供连续标注接续
-                        _dimActive = false; _dimP1 = null;
+                        _lastDimP2 = (x2, y2); _lastDimOffsetPt = (ox, oy);   // 供连续标注接续(同尺寸线级)
+                        _dimActive = false; _dimP1 = null; _dimP2 = null; _dimContinue = false;
                     }
                 }
                 return;
@@ -606,7 +611,7 @@ public partial class MainWindow : Window
                 _benchActive = false; _benchEntity = null;
                 _spotActive = false;
                 _textActive = false;
-                _dimActive = false; _dimP1 = null;
+                _dimActive = false; _dimP1 = null; _dimP2 = null; _dimContinue = false;
                 _dimRadActive = false; _dimRadCircle = null; _dimDiameter = false;
                 _dimAngActive = false; _angVertex = null; _angP1 = null;
                 _coordLabelActive = false;
@@ -712,7 +717,10 @@ public partial class MainWindow : Window
     private bool _coordLabelActive;                    // 坐标标注：点击点报 X/Y(连续)
     private (double cx, double cy, double r)? _dimRadCircle;
     private (double x, double y)? _lastDimP2;           // 上一条线性标注的第二点(连续标注基准)
-    private readonly Cad.Draw.DimStyle _dimStyle = new();   // 标注样式(DIM 变量：字高/小数位/箭头比)，影响新建标注
+    private (double x, double y)? _dimP2;               // 线性标注第二点(3 点工作流: 点1→点2→尺寸线位置)
+    private (double x, double y)? _lastDimOffsetPt;     // 上一条标注的尺寸线偏移点(连续标注沿用同尺寸线级)
+    private bool _dimContinue;                          // 连续标注模式(2 点: 续点, 尺寸线级沿用)
+    private readonly Cad.Draw.DimStyle _dimStyle = new();   // 标注样式(DIM 变量：字高/小数位/箭头比/延伸线)，影响新建标注
     private bool _selBoxActive;                     // 窗口框选拖拽中
     private Avalonia.Point _selBoxStart;            // 框选起点(屏幕)
     private bool _ttrActive, _ttrAwaitRadius;       // 圆 TTR：选两相切参照(线/圆) → 输半径
@@ -4371,9 +4379,9 @@ public partial class MainWindow : Window
     // 线性标注：取两点
     private void StartDim()
     {
-        _dimActive = true; _dimP1 = null;
+        _dimActive = true; _dimP1 = null; _dimP2 = null; _dimContinue = false;
         _tool = null; _measure = null; _editMode = EditMode.None;
-        StatusMsg.Text = "线性标注：指定第一点";
+        StatusMsg.Text = "线性标注：指定第一点（点1→点2→尺寸线位置）";
     }
 
     // 半径标注(DIMRADIAL)：需先选一个圆或弧
@@ -4428,7 +4436,7 @@ public partial class MainWindow : Window
     private void StartDimContinue()
     {
         if (_lastDimP2 == null) { StatusMsg.Text = "连续标注：请先做一条线性标注"; return; }
-        _dimActive = true; _dimP1 = _lastDimP2;
+        _dimActive = true; _dimP1 = _lastDimP2; _dimP2 = null; _dimContinue = true;   // 续标: 2 点, 尺寸线级沿用上条
         _tool = null; _measure = null; _editMode = EditMode.None;
         StatusMsg.Text = "连续标注：指定下一点";
     }
