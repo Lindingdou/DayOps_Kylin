@@ -864,6 +864,7 @@ public partial class MainWindow : Window
             if (cmd == "分割三角网" || cmd == "沿线分割三角网" || cmd == "网格分割" || cmd == "切分三角网") { await MeshSplitAsync(); return; }
             if (cmd == "快速建模" || cmd == "一键建模" || cmd == "顶底成体") { await QuickModelAsync(); return; }
             if (cmd == "连续多层建模" || cmd == "多层建模" || cmd == "逐层成体" || cmd == "层位建模") { await MultiLayerModelAsync(); return; }
+            if (cmd == "网格简化" || cmd == "三角网简化" || cmd == "减面" || cmd.StartsWith("网格简化 ") || cmd.StartsWith("三角网简化 ")) { await MeshSimplifyAsync(cmd); return; }
             if (cmd == "中心线管理" || cmd == "边状态" || cmd == "路网拓扑" || cmd == "中线管理") { RoadNetworkReportCmd(); return; }
             if (cmd == "排土场容量校核" || cmd == "容量校核" || cmd == "排土容量") { await DumpCapacityAsync(); return; }
             if (cmd == "生产量核算" || cmd == "任务量汇总" || cmd == "分账合计" || cmd == "生产任务量") { await ProductionQuantityAsync(); return; }
@@ -1793,6 +1794,31 @@ public partial class MainWindow : Window
         try { System.IO.File.WriteAllText(outPath, MeshWeld.ToOff(wv, wt)); }
         catch (System.Exception ex) { StatusMsg.Text = $"快速建模：写出失败 {ex.Message}"; return; }
         StatusMsg.Text = $"快速建模：顶+底+侧壁 焊成 {wt.Count} 三角 · {(watertight ? "水密(闭合地质体)" : $"非水密(开放边 {d.BoundaryEdges})")} → {System.IO.Path.GetFileName(outPath)}";
+    }
+
+    // 网格简化(顶点聚类)：选 OFF → 按容差(包围盒对角×比例, 默认1%)并顶点、丢塌陷三角 → 写 simplified.off
+    private async Task MeshSimplifyAsync(string cmd)
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "网格简化：选 OFF 网格",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } } }
+        });
+        if (files.Count == 0) return;
+        var (v, t) = MeshMetrics.ParseOff(System.IO.File.ReadAllText(files[0].Path.LocalPath));
+        if (t.Count == 0) { StatusMsg.Text = "网格简化：无三角网"; return; }
+        double ratio = 0.01;   // 可选 "网格简化 <比例%>"
+        var tk = cmd.Split(new[] { ' ', '%' }, System.StringSplitOptions.RemoveEmptyEntries);
+        if (tk.Length >= 2 && double.TryParse(tk[1], out double pct)) ratio = pct / 100.0;
+        var r = MeshSimplify.ByClustering(v, t, ratio);
+        string outPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(files[0].Path.LocalPath) ?? ".", "simplified.off");
+        try { System.IO.File.WriteAllText(outPath, MeshWeld.ToOff(r.Verts, r.Tris)); }
+        catch (System.Exception ex) { StatusMsg.Text = $"网格简化：写出失败 {ex.Message}"; return; }
+        double redV = r.InputVerts > 0 ? 100.0 * (r.InputVerts - r.OutputVerts) / r.InputVerts : 0;
+        double redT = r.InputTris > 0 ? 100.0 * (r.InputTris - r.OutputTris) / r.InputTris : 0;
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        StatusMsg.Text = $"网格简化(容差 {(ratio * 100).ToString("0.##", inv)}%)：顶点 {r.InputVerts}→{r.OutputVerts}(-{redV.ToString("0.#", inv)}%) · 三角 {r.InputTris}→{r.OutputTris}(-{redT.ToString("0.#", inv)}%) → {System.IO.Path.GetFileName(outPath)}";
     }
 
     // 连续多层自动建模：选 N 份 OFF 层位面 → 按均高降序排 → 逐相邻对成体 → 各夹层体写 layerN.off
