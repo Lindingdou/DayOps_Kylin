@@ -27,6 +27,32 @@ public static class DashPattern
         return q;
     }
 
+    /// <summary>样式 → 中文线型名(供特性面板显示/编辑; 与 ByName 接受的名一致, 可回填)。</summary>
+    public static string DisplayName(double[]? dash)
+    {
+        if (dash == null || dash.Length == 0) return "实线";
+        bool Eq(double[] a, double[] b)
+        {
+            if (a.Length != b.Length) return false;
+            for (int i = 0; i < a.Length; i++) if (System.Math.Abs(a[i] - b[i]) > 1e-6) return false;
+            return true;
+        }
+        if (Eq(dash, new[] { 6.0, 3.0 })) return "虚线";
+        if (Eq(dash, new[] { 0.3, 3.0 })) return "点线";
+        if (Eq(dash, new[] { 9.0, 3.0, 0.3, 3.0 })) return "点划线";
+        if (Eq(dash, new[] { 9.0, 3.0, 0.3, 3.0, 0.3, 3.0 })) return "双点划线";
+        return "虚线";   // 自定义样式统一显示为虚线
+    }
+
+    /// <summary>线型名是否被 ByName 识别(实线/连续 或标准虚线名)。供特性面板校验编辑输入。</summary>
+    public static bool IsKnownName(string name)
+    {
+        string n = name.Trim();
+        return n is "实线" or "连续" or "CONTINUOUS" or "虚线" or "DASHED" or "破折线"
+            or "点线" or "DOTTED" or "点划线" or "DASHDOT" or "中心线" or "CENTER"
+            or "双点划线" or "DIVIDE";
+    }
+
     /// <summary>样式 → 标准线型名(ByName 的逆, 供导出用能被再导入识别的名)。未匹配标准样式 → "DASHED"(保虚线性)。</summary>
     public static string NameOf(double[]? dash)
     {

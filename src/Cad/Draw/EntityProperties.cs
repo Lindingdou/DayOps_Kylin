@@ -21,6 +21,8 @@ public static class EntityProperties
             ("常规", "类型", EntityTypeName.Of(e)),
             ("常规", "图层", string.IsNullOrEmpty(e.LayerName) ? "0" : e.LayerName),
             ("常规", "颜色", $"#{(int)Math.Round(e.Cr * 255):X2}{(int)Math.Round(e.Cg * 255):X2}{(int)Math.Round(e.Cb * 255):X2}"),
+            ("常规", "线型", DashPattern.DisplayName(e.Dash)),
+            ("常规", "线宽", LineWeightUtil.Display(e.LineWeight)),
         };
         switch (e)
         {
@@ -70,7 +72,7 @@ public static class EntityProperties
     /// <summary>该实体在特性面板中可编辑的行标签集合(其余只读, 如长度/宽/高等派生量)。</summary>
     public static HashSet<string> EditableLabels(SceneEntity e)
     {
-        var s = new HashSet<string> { "图层", "颜色" };   // 常规: 图层 + 颜色 恒可编辑
+        var s = new HashSet<string> { "图层", "颜色", "线型", "线宽" };   // 常规: 图层/颜色/线型/线宽 恒可编辑
         switch (e)
         {
             case LineEntity: s.Add("起点"); s.Add("终点"); break;
@@ -95,6 +97,16 @@ public static class EntityProperties
         {
             if (!TryColor(text, out float cr, out float cg, out float cb)) return null;
             var c = CloneShallow(e); if (c == null) return null; c.Cr = cr; c.Cg = cg; c.Cb = cb; return c;
+        }
+        if (label == "线型")
+        {
+            if (!DashPattern.IsKnownName(text)) return null;             // 未知线型名拒绝
+            var c = CloneShallow(e); if (c == null) return null; c.Dash = DashPattern.ByName(text.Trim()); return c;
+        }
+        if (label == "线宽")
+        {
+            if (!LineWeightUtil.TryParse(text, out short lw)) return null;
+            var c = CloneShallow(e); if (c == null) return null; c.LineWeight = lw; return c;
         }
         // 几何: 按类型 + 标签
         switch (e)

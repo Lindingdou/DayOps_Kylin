@@ -62,6 +62,47 @@ public class EntityPropertyEditTests
     }
 
     [Fact]
+    public void Describe_shows_linetype_and_lineweight()
+    {
+        var l = new LineEntity { X0 = 0, Y0 = 0, X1 = 1, Y1 = 0, Dash = DashPattern.ByName("虚线"), LineWeight = 25 };
+        var rows = EntityProperties.Describe(l);
+        Assert.Contains(rows, r => r.label == "线型" && r.value == "虚线");
+        Assert.Contains(rows, r => r.label == "线宽" && r.value == "0.25 mm");
+        var solid = EntityProperties.Describe(new CircleEntity { Cx = 0, Cy = 0, Radius = 1 });
+        Assert.Contains(solid, r => r.label == "线型" && r.value == "实线");
+        Assert.Contains(solid, r => r.label == "线宽" && r.value == "随层");   // 默认 -1
+    }
+
+    [Fact]
+    public void LineWeightUtil_display_parse_snap()
+    {
+        Assert.Equal("随层", LineWeightUtil.Display(-1));
+        Assert.Equal("默认", LineWeightUtil.Display(-3));
+        Assert.Equal("0.25 mm", LineWeightUtil.Display(25));
+        Assert.True(LineWeightUtil.TryParse("0.30", out short a) && a == 30);
+        Assert.True(LineWeightUtil.TryParse("0.35 mm", out short b) && b == 35);
+        Assert.True(LineWeightUtil.TryParse("随层", out short c) && c == -1);
+        Assert.Equal(25, LineWeightUtil.Snap(26));         // 26 → 最近标准档 25
+        Assert.Equal(211, LineWeightUtil.Snap(500));       // 越界钳到 211
+        Assert.False(LineWeightUtil.TryParse("abc", out _));
+    }
+
+    [Fact]
+    public void Edit_linetype_and_lineweight()
+    {
+        var l = new LineEntity { X0 = 0, Y0 = 0, X1 = 1, Y1 = 0 };
+        var e1 = EntityProperties.WithEdited(l, "线型", "点划线") as LineEntity;
+        Assert.NotNull(e1);
+        Assert.Equal(new[] { 9.0, 3.0, 0.3, 3.0 }, e1!.Dash!);
+        var e2 = EntityProperties.WithEdited(l, "线宽", "0.5") as LineEntity;
+        Assert.NotNull(e2);
+        Assert.Equal(50, e2!.LineWeight);                 // 0.5mm → 50
+        Assert.Null(EntityProperties.WithEdited(l, "线型", "波浪线"));   // 未知名拒绝
+        var e3 = EntityProperties.WithEdited(l, "线型", "实线") as LineEntity;
+        Assert.Null(e3!.Dash);                            // 实线 → null
+    }
+
+    [Fact]
     public void Edit_text_content_preserves_alignment_and_shape()
     {
         var t = new TextEntity { X = 0, Y = 0, Height = 2, Text = "旧", Rotation = 0.5,

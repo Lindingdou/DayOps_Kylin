@@ -1431,3 +1431,13 @@ CopyStyleFrom 审计续查 `.LayerName = 源.LayerName` 模式, 又揪 3 处纯�
 **枢纽统一收束点**: `Colored`(变换) + 手工构造(简化/平滑/裁剪/合并/加密/闭合/**修剪/属性编辑**)共 9 处 → 全走 `CopyStyleFrom`。样式属性集单点维护。
 
 **本会话累计补 56 真功能 + 1 并发修复 + 4 潜伏 bug 修(字形/撤销/变换丢层/属性编辑丢样式) + 9 样式保真点统一 + 1 latent 攻克, 961 测。**
+
+## 一一三、特性面板 线型/线宽 显示+编辑 —— 数据已通但未surfaced
+
+子特性完整度: 线型/线宽 已能绘制/导入/导出/存盘/往返, 但**特性面板只显示 类型/图层/颜色/几何, 不显示线型线宽**, 用户看不到也改不了。核原版 `EntityPropertyBag.cs`(线宽=常规类可编辑 float; 线型 564 处), 确认原版特性面板就有 → 补(忠实, 非发明):
+- [x] **显示**(`Describe` 常规加两行): 线型经 `DashPattern.DisplayName`(实线/虚线/点线/点划线/双点划线); 线宽经 `LineWeightUtil.Display`(随层/默认/0.25 mm)。
+- [x] **可编辑**(`EditableLabels`+`WithEdited`): 线型 `DashPattern.IsKnownName` 校验→`ByName`; 线宽 `LineWeightUtil.TryParse`(mm→规整最近标准档)。经 `CloneShallow`(已走 CopyStyleFrom 保余样式)。
+- [x] **新纯逻辑 `LineWeightUtil`**(DXF short↔mm, Snap 24 标准档, 随层/默认/随块): 3 直测。
+- [x] 3 测: Describe 显示线型线宽 + 编辑线型线宽(点划线/0.5mm→50/未知名拒绝/实线→null) + LineWeightUtil。964 测。
+
+**本会话累计补 57 真功能 + 1 并发修复 + 4 潜伏 bug 修 + 9 样式保真点统一 + 1 latent 攻克, 964 测。**
