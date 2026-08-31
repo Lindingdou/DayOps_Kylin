@@ -1030,3 +1030,10 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 - **编辑操作已全**(核实非缺口)：移动/复制/旋转/镜像/缩放/偏移/修剪/延伸/打断/删除 全有; 原 Ribbon 编辑按钮=前 9 项, **拉伸/阵列/圆角/倒角原程序无**(拉伸匹配全是"竖向拉伸"描述/WPF 布局/超高系数)。
 - [x] **坐标标注**(`10c7538`)：原 CAD 工具栏有 `M14_坐标标注`(图标级/native), Kylin 缺。补 `DimTools.BuildCoordLabel`(点→小十字+引线+"X=… Y=…"文字, 可选 Z, 小数位随 DimStyle, 引线朝向决定文字左右对齐) + 坐标标注命令(连续点选 ESC 退出)。同 ObjectSnap 先例(native 但标准无歧义几何可托管, insight #5)。6 测。**776 tests**。
 - **M 系列图标 aspirational 甄别**: `Icons.xaml` 的 M01-M25 **全是坐标系抽象**(世界/用户坐标系·坐标系原点/旋转/平移/对齐/镜像/阵列·极/柱/球坐标·UCS 保存/恢复/列表/删除/重命名)。**核实原程序模块无任何 UCS 实现** → M 系列是设计了图标未实现的 aspirational 集, 属 AutoCAD 级抽象矿业 CAD 不做(同"圆角/倒角/阵列/极轴 原无")。仅 M13 坐标转换(已有 4 参相似) + M14 坐标标注(本轮补)是具体标准操作。**其余 M 系列非缺口**(不因图标存在就臆造 UCS 子系统)。
+
+## 七十、GeoDataBase 地质域深核 + 分位数/箱线补齐
+
+**GeoDataBase 逐命令核实（本会话核实最少的域）**——地质/煤质域**综合完整**：钻孔导入(ImportBoreholesAsync)、煤厚分析(CoalThicknessAnalyzer)、煤层管理(CoalSeamsCmd)、见煤统计(SeamIntersectionsCmd)、**分煤层煤质**(CoalQualityBySeamCmd)、**层位展点**(HorizonPointsCmd=原「分煤层提取顶/底板高程点」, `GeoDataQueries.HorizonPoint` 忠实 HorizonPointBuilder: borehole_seam_result join 孔位→分煤层底板/顶板高程点, 已接线)、层位求交(TinSampler)、煤层台阶参数、露头观测点。均已有。
+
+- [x] **分位数 Q1/Q3 + 百分位 + 箱线**(`41e8ac6`)：原煤质统计「均值/std/**分位数**...**箱线**」, Kylin Statistics 只到 median。补 `Statistics.Percentile`(线性插值序统计) + Q1/Q3 入 Summary + `BoxplotCsv`(min/q1/median/q3/max)。SummaryLine 增 Q1/median/Q3。5 测(奇序四分位/线性插值/均匀0-100/箱线CSV/**Q1≤中位≤Q3 不变量**)。**781 tests**。
+- **记录(presentation, 非功能缺口)**：原煤质仪表盘的 散点/箱线/直方图 是 WPF/SVG **图表控件**(dashboard/report), Kylin 出**数据**(Summary + Histogram/Boxplot CSV)。数据侧完整; 在 CAD 场景内画柱状/箱线图属呈现方式差异(原本就不画进图纸), 非功能漏项。若需图表面板是独立 UI 件, 记录。
