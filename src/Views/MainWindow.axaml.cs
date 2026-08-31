@@ -780,6 +780,7 @@ public partial class MainWindow : Window
             if (cmd == "生产量核算" || cmd == "任务量汇总" || cmd == "分账合计" || cmd == "生产任务量") { await ProductionQuantityAsync(); return; }
             if (cmd == "采剥平衡" || cmd == "采剥平衡分析" || cmd == "剥采平衡" || cmd == "物料平衡") { await StripBalanceAsync(); return; }
             if (cmd == "配煤核算" || cmd == "配煤" || cmd == "煤质混合" || cmd == "配煤计算") { await CoalBlendAsync(); return; }
+            if (cmd == "工序进度跟踪" || cmd == "工序进度" || cmd == "进度跟踪") { await ProcessProgressAsync(); return; }
             if (cmd == "排土场按量推进" || cmd == "排土按量推进" || cmd.StartsWith("排土场按量推进 ") || cmd.StartsWith("排土按量推进 "))
             {
                 var tok = cmd.Split(new[] { ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
@@ -1351,6 +1352,41 @@ public partial class MainWindow : Window
         RefreshScene();
         if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
         StatusMsg.Text = $"网格边界：{loops.Count} 环 · {totPts} 点(投影 XY 作闭合折线入场景)";
+    }
+
+    // 工序进度跟踪（TaskLib 进度切片）：读任务 计划/实绩 CSV(工序,计划量,实绩量[,计划延米,实绩延米]) → 按工序聚合达成率。
+    private async Task ProcessProgressAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "工序进度跟踪：选任务 CSV(工序,计划量,实绩量[,计划延米,实绩延米])",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("任务进度 (CSV/TXT)") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (files.Count == 0) return;
+        string[] rows;
+        try { rows = System.IO.File.ReadAllLines(files[0].Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"工序进度：读取失败 {ex.Message}"; return; }
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var recs = new List<Cad.Tasks.ProcessProgress.Row>();
+        foreach (var raw in rows)
+        {
+            var s = raw.Trim();
+            if (s.Length == 0 || s.StartsWith("#")) continue;
+            var c = s.Split(new[] { ',', '\t', ';' }, System.StringSplitOptions.RemoveEmptyEntries);
+            if (c.Length < 3) continue;
+            var proc = ParseProcess(c[0].Trim());
+            if (proc == null) continue;
+            double D(int i) => c.Length > i && double.TryParse(c[i].Trim(), System.Globalization.NumberStyles.Float, inv, out var v) ? v : 0;
+            Cad.Tasks.DrillQuantity? drill = null;
+            if (proc == Cad.Tasks.ProcessType.Drill && c.Length >= 5)
+                drill = new Cad.Tasks.DrillQuantity { PlanMeters = D(3), ActualMeters = D(4) };
+            recs.Add(new Cad.Tasks.ProcessProgress.Row(proc.Value, D(1), D(2), drill));
+        }
+        if (recs.Count == 0) { StatusMsg.Text = "工序进度：未解析到任务(需 工序,计划量,实绩量)"; return; }
+        var sum = Cad.Tasks.ProcessProgress.Summarize(recs);
+        var parts = sum.Select(p => $"{Cad.Tasks.ProcessProgress.Label(p.Process)} {p.Count}项(达成{p.AvgAttainmentPct:0.#}%·达标{p.DoneCount})");
+        StatusMsg.Text = "工序进度跟踪：" + string.Join(" · ", parts);
     }
 
     // 配煤核算（TaskLib 煤质切片）：读配煤 CSV(吨,灰%,热MJ,硫%) → 按吨量加权混合煤质。
