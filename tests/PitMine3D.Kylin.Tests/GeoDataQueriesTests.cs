@@ -123,6 +123,17 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Capacity_by_category_shares_sum_to_100()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var rows = GeoDataQueries.GetCapacityByCategory(db.Connection);
+        Assert.NotEmpty(rows);
+        for (int i = 1; i < rows.Count; i++) Assert.True(rows[i - 1].TotalOutputM3 >= rows[i].TotalOutputM3);   // 按产量降序
+        Assert.Equal(100.0, rows.Sum(r => r.SharePct), 3);                                                      // 占比之和=100
+        Assert.All(rows, r => Assert.True(r.Units > 0));
+    }
+
+    [Fact]
     public void Kpi_trend_by_year_ratios_normalized()
     {
         using var db = GeoDatabase.OpenSeeded();

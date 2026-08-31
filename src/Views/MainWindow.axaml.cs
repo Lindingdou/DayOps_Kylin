@@ -726,6 +726,7 @@ public partial class MainWindow : Window
             if (cmd == "设备故障排名" || cmd == "故障排名" || cmd == "检修排名") { FaultRankCmd(); return; }
             if (cmd == "班次产量对比" || cmd == "班次产量" || cmd == "班产对比") { ShiftOutputCmd(); return; }
             if (cmd == "KPI趋势" || cmd == "设备KPI趋势" || cmd == "kpi趋势") { KpiTrendCmd(); return; }
+            if (cmd == "产能分类对比" || cmd == "产能分类" || cmd == "分类产能") { CapacityByCategoryCmd(); return; }
             if (cmd == "设备智能编组" || cmd == "调度规则" || cmd == "配车规则" || cmd == "铲车配比") { DispatchRulesCmd(); return; }
             if (cmd == "工艺架构定义" || cmd == "工艺架构" || cmd == "平盘工艺地图" || cmd == "工艺系统") { ProcessArchitectureCmd(); return; }
             if (cmd == "现场验收录入" || cmd == "现场验收" || cmd == "参数验收") { AcceptanceStatsCmd(); return; }
@@ -5497,6 +5498,16 @@ public partial class MainWindow : Window
         var parts = new List<string>();
         foreach (var r in rows) parts.Add($"{r.Year}(可用{r.AvgAvailabilityPct:0.#}%·利用{r.AvgUtilizationPct:0.#}%)");
         StatusMsg.Text = $"设备KPI趋势：" + string.Join(" · ", parts);
+    }
+
+    private void CapacityByCategoryCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var rows = Data.GeoDataQueries.GetCapacityByCategory(db.Connection);
+        if (rows.Count == 0) { StatusMsg.Text = "产能分类对比：无产能数据"; return; }
+        var parts = new List<string>();
+        foreach (var r in rows) parts.Add($"{r.Category}({r.Units}台·{r.TotalOutputM3 / 1e4:0.#}万m³·{r.SharePct:0.#}%)");
+        StatusMsg.Text = $"产能分类对比：" + string.Join(" · ", parts);
     }
 
     private void FaultRankCmd()

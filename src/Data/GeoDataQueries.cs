@@ -59,6 +59,26 @@ public static class GeoDataQueries
         return rows;
     }
 
+    public sealed record CapacityCategoryRow(string Category, int Units, double TotalOutputM3, double SharePct);
+
+    /// <summary>产能分类对比：按设备类型(铲/车/钻…)聚合累计产量 + 台数 + 占比，降序。</summary>
+    public static List<CapacityCategoryRow> GetCapacityByCategory(SqliteConnection conn)
+    {
+        var raw = new List<(string cat, int units, double tot)>();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = @"SELECT COALESCE(e.category,'(未分类)'), COUNT(DISTINCT c.equipment_id), SUM(c.output_m3)
+                                FROM capacity_monthly c LEFT JOIN equipment e ON e.equipment_id = c.equipment_id
+                                GROUP BY e.category ORDER BY SUM(c.output_m3) DESC";
+            using var rd = cmd.ExecuteReader();
+            while (rd.Read()) raw.Add((rd.GetString(0), rd.GetInt32(1), rd.GetDouble(2)));
+        }
+        double grand = 0; foreach (var r in raw) grand += r.tot;
+        var rows = new List<CapacityCategoryRow>();
+        foreach (var r in raw) rows.Add(new CapacityCategoryRow(r.cat, r.units, r.tot, grand > 0 ? r.tot / grand * 100 : 0));
+        return rows;
+    }
+
     public sealed record FaultStats(int Events, double DowntimeHours, int Unresolved, string TopType, int TopTypeCount);
 
     /// <summary>故障分析（设备状态·故障报修）：事件数 / 累计停机时 / 未修复数 / 最多故障类型。</summary>
