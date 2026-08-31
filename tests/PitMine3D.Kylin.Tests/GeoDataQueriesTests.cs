@@ -164,6 +164,30 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Import_capacity_and_fault_from_csv()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        string eq;
+        using (var c = db.Connection.CreateCommand()) { c.CommandText = "SELECT equipment_id FROM equipment LIMIT 1"; eq = (string)c.ExecuteScalar(); }
+        // 月度产能: 新键插入 + 同键更新
+        var cap = GeoDataQueries.ImportCapacityMonthly(db.Connection, new[]
+        { (IReadOnlyDictionary<string,string>)new Dictionary<string,string>{["equipment_id"]=eq,["year"]="2099",["month"]="6",["output_m3"]="50000"} }, true);
+        Assert.Equal(1, cap.Inserted);
+        var cap2 = GeoDataQueries.ImportCapacityMonthly(db.Connection, new[]
+        { (IReadOnlyDictionary<string,string>)new Dictionary<string,string>{["equipment_id"]=eq,["year"]="2099",["month"]="6",["output_m3"]="60000"} }, true);
+        Assert.Equal(1, cap2.Updated);
+        // 故障记录: 插入型 + 坏行(缺 fault_type)错误
+        long fbefore = db.ScalarLong("SELECT COUNT(*) FROM fault_event");
+        var fe = GeoDataQueries.ImportFaultEvents(db.Connection, new[]
+        {
+            (IReadOnlyDictionary<string,string>)new Dictionary<string,string>{["equipment_id"]=eq,["date"]="2099-06-01",["fault_type"]="机械故障",["duration_hours"]="3.5",["is_resolved"]="1"},
+            (IReadOnlyDictionary<string,string>)new Dictionary<string,string>{["equipment_id"]=eq,["date"]="2099-06-02"},  // 缺 fault_type
+        });
+        Assert.Equal(1, fe.Inserted); Assert.Equal(1, fe.Errors);
+        Assert.Equal(fbefore + 1, db.ScalarLong("SELECT COUNT(*) FROM fault_event"));
+    }
+
+    [Fact]
     public void Horizon_points_floor_and_roof_from_seed()
     {
         using var db = GeoDatabase.OpenSeeded();

@@ -681,6 +681,8 @@ public partial class MainWindow : Window
             if (cmd == "导入") { await ImportDxfAsync(); return; }
             if (cmd == "导入点") { await ImportPointsAsync(); return; }
             if (cmd == "导入生产记录" || cmd == "生产记录导入" || cmd == "导入生产数据") { await ImportProductionRecordsAsync(); return; }
+            if (cmd == "导入月度产能" || cmd == "月度产能导入" || cmd == "导入产能") { await ImportCsvToDbAsync("导入月度产能", "equipment_id,year,month,output_m3", rs => Data.GeoDataQueries.ImportCapacityMonthly(EnsureGeoDb()!.Connection, rs, true)); return; }
+            if (cmd == "导入故障记录" || cmd == "故障记录导入" || cmd == "导入故障") { await ImportCsvToDbAsync("导入故障记录", "equipment_id,date,fault_type[,shift,duration_hours,description,is_resolved,repair_team]", rs => Data.GeoDataQueries.ImportFaultEvents(EnsureGeoDb()!.Connection, rs)); return; }
             if (cmd == "展绘钻孔" || cmd == "钻孔柱状图" || cmd == "导入钻孔数据" || cmd == "原始钻孔柱状图") { await ImportBoreholesAsync(); return; }
             if (cmd == "煤厚分析" || cmd == "煤层厚度分析" || cmd == "煤厚") { await CoalThicknessAsync(); return; }
             if (cmd == "等高线" || cmd == "等高线生产" || cmd == "等值线") { await ContourFromCsvAsync(); return; }
@@ -5619,7 +5621,25 @@ public partial class MainWindow : Window
         return outRows;
     }
 
-    // 导入生产班次记录(CSV → production_record, 按 设备+年+月+班次 upsert)
+    // 通用 CSV → 库导入：文件选择 → ParseCsvRows → importFn，报 新增/更新/跳过/错误。
+    private async Task ImportCsvToDbAsync(string title, string colsHint, System.Func<List<System.Collections.Generic.IReadOnlyDictionary<string, string>>, Data.GeoDataQueries.ImportOutcome> importFn)
+    {
+        if (EnsureGeoDb() == null) return;
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = $"{title}：选 CSV ({colsHint})", AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("CSV/TXT") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (files.Count == 0) return;
+        List<System.Collections.Generic.IReadOnlyDictionary<string, string>> rows;
+        try { rows = ParseCsvRows(System.IO.File.ReadAllText(files[0].Path.LocalPath)); }
+        catch (System.Exception ex) { StatusMsg.Text = $"{title}：读取失败 {ex.Message}"; return; }
+        if (rows.Count == 0) { StatusMsg.Text = $"{title}：无数据行(需表头 + 数据)"; return; }
+        var o = importFn(rows);
+        StatusMsg.Text = $"{title}：新增 {o.Inserted} · 更新 {o.Updated} · 跳过 {o.Skipped} · 错误 {o.Errors}（共 {rows.Count} 行）";
+    }
+
+    // 导入生产班次记录(CSV → production_record, 按 设备+日期+班次 upsert)
     private async Task ImportProductionRecordsAsync()
     {
         var db = EnsureGeoDb(); if (db == null) return;
@@ -6338,7 +6358,7 @@ public partial class MainWindow : Window
         // 生产计划/投影
         "境界圈定","剥采比均衡","方案综合对比","开采程序确定","平盘宽度识别","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
-        "设备台账","生产数据","产能分析","故障分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","导入生产记录",
+        "设备台账","生产数据","产能分析","故障分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","导入生产记录","导入月度产能","导入故障记录",
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","数据看板","煤种分类",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
         "产能分类对比","故障类型分布","分工序验收合格率","数据导出","达成度评价","产量预测","时序预测","编组优化","智能编组优化","导出编组","导出预测",

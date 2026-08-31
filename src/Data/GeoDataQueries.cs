@@ -553,6 +553,56 @@ public static class GeoDataQueries
         return new ImportOutcome(ins, upd, skip, err);
     }
 
+    /// <summary>月度产能 CSV 入库（忠实 CapacityMonthlySpec）：按 设备+年+月 键 upsert。列: equipment_id,year,month,output_m3。</summary>
+    public static ImportOutcome ImportCapacityMonthly(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
+    {
+        int ins = 0, upd = 0, skip = 0, err = 0;
+        foreach (var row in rows)
+        {
+            string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
+            string eq = Get("equipment_id");
+            if (eq.Length == 0 || !int.TryParse(Get("year"), out int yr) || !int.TryParse(Get("month"), out int mo)) { err++; continue; }
+            double.TryParse(Get("output_m3"), out double outp);
+            bool exists;
+            using (var q = conn.CreateCommand())
+            {
+                q.CommandText = "SELECT COUNT(*) FROM capacity_monthly WHERE equipment_id=@e AND year=@y AND month=@m";
+                q.Parameters.AddWithValue("@e", eq); q.Parameters.AddWithValue("@y", yr); q.Parameters.AddWithValue("@m", mo);
+                exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0;
+            }
+            using var cmd = conn.CreateCommand();
+            if (exists) { if (!overwrite) { skip++; continue; } cmd.CommandText = "UPDATE capacity_monthly SET output_m3=@o WHERE equipment_id=@e AND year=@y AND month=@m"; upd++; }
+            else { cmd.CommandText = "INSERT INTO capacity_monthly (equipment_id, year, month, output_m3) VALUES (@e,@y,@m,@o)"; ins++; }
+            cmd.Parameters.AddWithValue("@e", eq); cmd.Parameters.AddWithValue("@y", yr); cmd.Parameters.AddWithValue("@m", mo); cmd.Parameters.AddWithValue("@o", outp);
+            try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
+        }
+        return new ImportOutcome(ins, upd, skip, err);
+    }
+
+    /// <summary>故障记录 CSV 入库（忠实 FaultEventSpec）：事件表, 插入型(无自然键)。列: equipment_id,date,fault_type[,shift,duration_hours,description,is_resolved,repair_team]。</summary>
+    public static ImportOutcome ImportFaultEvents(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows)
+    {
+        int ins = 0, err = 0;
+        foreach (var row in rows)
+        {
+            string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
+            string eq = Get("equipment_id"), date = Get("date"), ft = Get("fault_type");
+            if (eq.Length == 0 || date.Length == 0 || ft.Length == 0) { err++; continue; }
+            double.TryParse(Get("duration_hours"), out double dur);
+            int resolved = Get("is_resolved") is "1" or "true" or "是" or "已修复" ? 1 : 0;
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "INSERT INTO fault_event (equipment_id, date, shift, fault_type, duration_hours, description, is_resolved, repair_team) VALUES (@e,@d,@s,@t,@u,@desc,@r,@team)";
+            cmd.Parameters.AddWithValue("@e", eq); cmd.Parameters.AddWithValue("@d", date);
+            cmd.Parameters.AddWithValue("@s", Get("shift") is { Length: > 0 } sh ? sh : (object)System.DBNull.Value);
+            cmd.Parameters.AddWithValue("@t", ft); cmd.Parameters.AddWithValue("@u", dur);
+            cmd.Parameters.AddWithValue("@desc", Get("description") is { Length: > 0 } de ? de : (object)System.DBNull.Value);
+            cmd.Parameters.AddWithValue("@r", resolved);
+            cmd.Parameters.AddWithValue("@team", Get("repair_team") is { Length: > 0 } tm ? tm : (object)System.DBNull.Value);
+            try { cmd.ExecuteNonQuery(); ins++; } catch { err++; }
+        }
+        return new ImportOutcome(ins, 0, 0, err);
+    }
+
     public sealed record HorizonPoint(string SeamCode, bool IsRoof, double X, double Y, double Z);
 
     /// <summary>层位展点（忠实 HorizonPointBuilder）：borehole_seam_result join 孔位 → 分煤层 底板(floor_elevation)/顶板(底+采用厚度) 高程点。</summary>
