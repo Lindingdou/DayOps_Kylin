@@ -119,9 +119,14 @@ public static class EntityProperties
         return null;
     }
 
-    // 复制样式(色 + 层)到新实体。
+    // 复制全样式(色/线型/线宽/可见/层 + 文字专属格式)到新实体 —— 属性编辑不丢样式。
     private static SceneEntity Style(SceneEntity src, SceneEntity dst)
-    { dst.Cr = src.Cr; dst.Cg = src.Cg; dst.Cb = src.Cb; dst.LayerName = src.LayerName; return dst; }
+    {
+        dst.CopyStyleFrom(src);
+        if (src is TextEntity ts && dst is TextEntity td)   // 文字五属中未被本次编辑改写的(对齐/字宽/倾斜)一并保留
+        { td.HAlign = ts.HAlign; td.VAlign = ts.VAlign; td.WidthFactor = ts.WidthFactor; td.ObliqueAngle = ts.ObliqueAngle; }
+        return dst;
+    }
 
     // 同类型浅拷贝(改 图层/颜色 用, 几何不变)。
     private static SceneEntity? CloneShallow(SceneEntity e) => e switch

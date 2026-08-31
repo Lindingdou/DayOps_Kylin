@@ -50,6 +50,32 @@ public class EntityPropertyEditTests
     }
 
     [Fact]
+    public void Edit_preserves_full_style()
+    {
+        var l = new LineEntity { X0 = 0, Y0 = 0, X1 = 1, Y1 = 1, LayerName = "L1",
+            Dash = DashPattern.ByName("虚线"), LineWeight = 25, Visible = false };
+        var e = EntityProperties.WithEdited(l, "终点", "5, 7") as LineEntity;
+        Assert.NotNull(e);
+        Assert.Equal(new[] { 6.0, 3.0 }, e!.Dash!);   // 编辑属性不丢线型
+        Assert.Equal(25, e.LineWeight);               // 不丢线宽
+        Assert.False(e.Visible);                      // 不丢可见性
+    }
+
+    [Fact]
+    public void Edit_text_content_preserves_alignment_and_shape()
+    {
+        var t = new TextEntity { X = 0, Y = 0, Height = 2, Text = "旧", Rotation = 0.5,
+            HAlign = 1, VAlign = 2, WidthFactor = 0.8, ObliqueAngle = 0.3 };
+        var e = EntityProperties.WithEdited(t, "内容", "新") as TextEntity;
+        Assert.NotNull(e);
+        Assert.Equal("新", e!.Text);
+        Assert.Equal(0.5, e.Rotation, 6);             // 旋转保留(改内容不动)
+        Assert.Equal(1, e.HAlign); Assert.Equal(2, e.VAlign);   // 对齐保留
+        Assert.Equal(0.8, e.WidthFactor, 6);          // 字宽保留
+        Assert.Equal(0.3, e.ObliqueAngle, 6);         // 倾斜保留
+    }
+
+    [Fact]
     public void Edit_polygon_sides()
     {
         var pg = new PolygonEntity { Cx = 0, Cy = 0, Radius = 5, Sides = 6 };

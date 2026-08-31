@@ -30,7 +30,7 @@ public static class TrimTools
         }
         if (best == null) return null;
 
-        var r = new PolylineEntity { Closed = target.Closed, Cr = target.Cr, Cg = target.Cg, Cb = target.Cb, LayerName = target.LayerName };
+        var r = new PolylineEntity { Closed = target.Closed }; r.CopyStyleFrom(target);   // 修剪/延伸保源全样式
         for (int i = 0; i < pts.Count; i++)
         {
             if ((atStart && i == 0) || (!atStart && i == pts.Count - 1)) r.Points.Add((best.Value.x, best.Value.y));
@@ -68,7 +68,7 @@ public static class TrimTools
         foreach (var h in hits) { double d = D2(h.x, h.y, ex, ey); if (d < bestD) { bestD = d; best = h; } }
         if (best == null) return null;
 
-        var r2 = new ArcEntity { X1 = a.X1, Y1 = a.Y1, X2 = a.X2, Y2 = a.Y2, X3 = a.X3, Y3 = a.Y3, Cr = a.Cr, Cg = a.Cg, Cb = a.Cb, LayerName = a.LayerName, Segments = a.Segments };
+        var r2 = new ArcEntity { X1 = a.X1, Y1 = a.Y1, X2 = a.X2, Y2 = a.Y2, X3 = a.X3, Y3 = a.Y3, Segments = a.Segments }; r2.CopyStyleFrom(a);   // 修剪/延伸保源全样式
         if (moveStart) { r2.X1 = best.Value.x; r2.Y1 = best.Value.y; } else { r2.X3 = best.Value.x; r2.Y3 = best.Value.y; }
         return r2;
     }
