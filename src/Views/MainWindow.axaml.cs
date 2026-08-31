@@ -856,6 +856,7 @@ public partial class MainWindow : Window
             if (cmd == "达成分析" || cmd == "产量达成" || cmd == "达成率" || cmd == "达成度评价" || cmd == "产量统计") { await AttainmentAsync(); return; }
             if (cmd == "车铲匹配" || cmd == "配车匹配" || cmd == "车铲配比") { await FleetMatchAsync(); return; }
             if (cmd == "点云质量统计" || cmd == "点云统计" || cmd == "点云质量") { await PointCloudStatsAsync(); return; }
+            if (cmd == "分割点云" || cmd == "点云分割" || cmd == "欧氏聚类" || cmd == "点云聚类" || cmd.StartsWith("分割点云 ")) { await SegmentCloudAsync(cmd); return; }
             if (cmd == "点云高程着色" || cmd == "高程着色" || cmd == "点云着色") { await ElevationColorAsync(); return; }
             if (cmd == "色带" || cmd == "配色方案" || cmd.StartsWith("色带 ") || cmd.StartsWith("配色方案 ")) { SetColormapCmd(cmd); return; }
             if (cmd == "加载点云" || cmd == "展点" || cmd == "导入点云" || cmd == "加载点") { await LoadPointCloudAsync(); return; }
@@ -2945,6 +2946,50 @@ public partial class MainWindow : Window
     }
 
     // 点云质量统计：点 CSV(x,y,z) → 计数/包围盒/XY面积/密度/高程均值·标准差 报表
+    // 分割点云(欧氏聚类)：高程点 CSV → 距离聚类 → 按簇着色(hue 循环), 小簇/噪点归灰
+    private async Task SegmentCloudAsync(string cmd)
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "分割点云：选点 CSV (x,y[,z])",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("点云 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success || r.Points.Count == 0) { StatusMsg.Text = "分割点云：导入失败/无点"; return; }
+        double dx = r.Bounds[2] - r.Bounds[0], dy = r.Bounds[3] - r.Bounds[1];
+        double radius = System.Math.Max(System.Math.Sqrt(dx * dx + dy * dy) / 100.0, 1e-6);   // 默认=对角/100
+        var tk = cmd.Split(new[] { ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
+        if (tk.Length >= 2 && double.TryParse(tk[1], out double rr) && rr > 0) radius = rr;
+        var label = PointCluster.Euclidean(r.Points, radius, minSize: 3, out int nc);
+        BeginChange();
+        for (int i = 0; i < r.Points.Count; i++)
+        {
+            float cr, cg, cb;
+            if (label[i] < 0) { cr = cg = cb = 0.5f; }                       // 噪点/小簇 灰
+            else { var (hr, hg, hb) = HueColor(label[i]); cr = hr; cg = hg; cb = hb; }
+            var pe = new PointEntity { X = r.Points[i].x, Y = r.Points[i].y, Cr = cr, Cg = cg, Cb = cb };
+            AssignLayer(pe); pe.Cr = cr; pe.Cg = cg; pe.Cb = cb;
+            _scene.Add(pe);
+        }
+        RefreshScene();
+        Viewport.FitBounds(r.Bounds);
+        StatusMsg.Text = $"分割点云(欧氏聚类, radius {radius:0.##})：{nc} 簇 · {r.Points.Count} 点（各簇异色, 灰=小簇/噪点）";
+    }
+
+    // 簇 id → 循环色(黄金角 hue)
+    private static (float r, float g, float b) HueColor(int id)
+    {
+        double h = (id * 137.508) % 360.0 / 60.0;   // 黄金角散布色相
+        double x = 1 - System.Math.Abs(h % 2 - 1);
+        double r, g, b;
+        if (h < 1) { r = 1; g = x; b = 0; } else if (h < 2) { r = x; g = 1; b = 0; }
+        else if (h < 3) { r = 0; g = 1; b = x; } else if (h < 4) { r = 0; g = x; b = 1; }
+        else if (h < 5) { r = x; g = 0; b = 1; } else { r = 1; g = 0; b = x; }
+        return ((float)(0.3 + 0.7 * r), (float)(0.3 + 0.7 * g), (float)(0.3 + 0.7 * b));
+    }
+
     private async Task PointCloudStatsAsync()
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
