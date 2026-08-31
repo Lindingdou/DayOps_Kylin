@@ -778,6 +778,7 @@ public partial class MainWindow : Window
             if (cmd == "中心线管理" || cmd == "边状态" || cmd == "路网拓扑" || cmd == "中线管理") { RoadNetworkReportCmd(); return; }
             if (cmd == "排土场容量校核" || cmd == "容量校核" || cmd == "排土容量") { await DumpCapacityAsync(); return; }
             if (cmd == "生产量核算" || cmd == "任务量汇总" || cmd == "分账合计" || cmd == "生产任务量") { await ProductionQuantityAsync(); return; }
+            if (cmd == "采剥平衡" || cmd == "采剥平衡分析" || cmd == "剥采平衡" || cmd == "物料平衡") { await StripBalanceAsync(); return; }
             if (cmd == "物料换算" || cmd == "煤岩换算" || cmd.StartsWith("物料换算 ") || cmd.StartsWith("煤岩换算 "))
             {
                 var tok = cmd.Split(new[] { ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
@@ -1340,6 +1341,49 @@ public partial class MainWindow : Window
         if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
         StatusMsg.Text = $"网格边界：{loops.Count} 环 · {totPts} 点(投影 XY 作闭合折线入场景)";
     }
+
+    // 采剥平衡分析（TaskLib 物料流切片）：读物料流 CSV(物料,实方m³,去向,运距km) → 采出/剥离/剥采比/内排率/运输功/加权运距。
+    private async Task StripBalanceAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "采剥平衡：选物料流 CSV(物料,实方m³,去向[内排/外排/破碎站],运距km)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("物料流 (CSV/TXT)") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (files.Count == 0) return;
+        string[] rows;
+        try { rows = System.IO.File.ReadAllLines(files[0].Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"采剥平衡：读取失败 {ex.Message}"; return; }
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var b = new Cad.Tasks.PeriodBalance();
+        foreach (var raw in rows)
+        {
+            var s = raw.Trim();
+            if (s.Length == 0 || s.StartsWith("#")) continue;
+            var c = s.Split(new[] { ',', '\t', ';' }, System.StringSplitOptions.RemoveEmptyEntries);
+            if (c.Length < 2) continue;
+            string code = Cad.Tasks.MaterialCatalog.CodeFromText(c[0].Trim());
+            if (code.Length == 0) continue;   // 跳表头/未知
+            if (!double.TryParse(c[1].Trim(), System.Globalization.NumberStyles.Float, inv, out double vol)) continue;
+            var sink = c.Length > 2 ? ParseSink(c[2].Trim()) : Cad.Tasks.SinkKind.ExternalDump;
+            double km = c.Length > 3 && double.TryParse(c[3].Trim(), System.Globalization.NumberStyles.Float, inv, out var k) ? k : 0;
+            b.Flows.Add(new Cad.Tasks.MaterialFlow { MaterialCode = code, InSituM3 = vol, SinkKind = sink, HaulKm = km });
+        }
+        if (b.Flows.Count == 0) { StatusMsg.Text = "采剥平衡：未解析到物料流(需 物料,实方m³[,去向,运距])"; return; }
+        StatusMsg.Text = $"采剥平衡：采出 {b.OreWanT:0.00}万t · 剥离 {b.StripWanM3:0.00}万m³ · 剥采比 {b.StripRatio:0.00} · 排弃 {b.DumpedWanM3:0.00}万m³(内排率 {b.InternalDumpPct:0.#}%) · 运输功 {b.TransportWorkWanTKm:0.00}万t·km · 加权运距 {b.WeightedAvgHaulKm:0.00}km";
+    }
+
+    private static Cad.Tasks.SinkKind ParseSink(string s) => s switch
+    {
+        "内排" or "内排土场" => Cad.Tasks.SinkKind.InternalDump,
+        "外排" or "外排土场" => Cad.Tasks.SinkKind.ExternalDump,
+        "破碎站" or "破碎" => Cad.Tasks.SinkKind.Crusher,
+        "仓" or "原煤仓" => Cad.Tasks.SinkKind.Silo,
+        "堆场" or "储煤场" or "储矿场" => Cad.Tasks.SinkKind.Stockpile,
+        "表土堆场" => Cad.Tasks.SinkKind.TopsoilYard,
+        _ => Cad.Tasks.SinkKind.ExternalDump,
+    };
 
     // 物料换算（TaskLib 物料切片）：混采文本 + 实方体积 → 吨量/松散方/占容方/煤占比。用法 "物料换算 煤7:岩3 1000"。
     private void MaterialConvertCmd(string mixText, double inSituM3)
