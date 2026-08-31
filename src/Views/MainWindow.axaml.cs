@@ -929,6 +929,8 @@ public partial class MainWindow : Window
             if (cmd == "连续标注" || cmd == "连续") { StartDimContinue(); return; }
             if (cmd == "标注样式" || cmd == "标注设置" || cmd.StartsWith("标注样式 ") || cmd.StartsWith("标注设置 ")) { DimStyleCmd(cmd); return; }
             if (cmd == "裁剪" || cmd == "多边形裁剪" || cmd == "区运算" || cmd == "范围裁剪") { ClipPolygon(); return; }
+            if (cmd == "线裁剪" || cmd == "裁剪线对象" || cmd == "线内裁剪" || cmd == "边界裁线") { ClipLinesByBoundary(true); return; }
+            if (cmd == "线外裁剪" || cmd == "外裁线" || cmd == "裁剪线外") { ClipLinesByBoundary(false); return; }
             if (cmd == "平滑" || cmd == "光滑" || cmd == "曲线平滑" || cmd == "光滑曲线") { SmoothPolyline(); return; }
             if (cmd == "样条平滑" || cmd == "插值平滑" || cmd == "CatmullRom" || cmd == "过点平滑") { SmoothPolyline(spline: true); return; }
             if (cmd == "简化" || cmd == "多段线简化" || cmd == "抽稀线" || cmd == "抽稀等值线") { SimplifyPolyline(); return; }
@@ -3670,6 +3672,34 @@ public partial class MainWindow : Window
         _scene.Add(pl);
         RefreshScene();
         StatusMsg.Text = $"裁剪完成：交集 {result.Count} 顶点";
+    }
+
+    // 线对象裁剪(POLYCLIP)：选中≥2 条多段线, 最后一条=闭合边界, 其余按边界裁成界内(或界外)段
+    private void ClipLinesByBoundary(bool keepInside)
+    {
+        var polys = _selected.FindAll(e => e is PolylineEntity).ConvertAll(e => (PolylineEntity)e);
+        if (polys.Count < 2) { StatusMsg.Text = "线裁剪：请先选中≥2 条多段线(末条=闭合边界, 其余=被裁线)"; return; }
+        var boundary = polys[^1].Points;
+        if (boundary.Count < 3) { StatusMsg.Text = "线裁剪：末条(边界)需≥3 点且闭合"; return; }
+        BeginChange();
+        int made = 0, removed = 0;
+        for (int i = 0; i < polys.Count - 1; i++)
+        {
+            var subj = polys[i];
+            var pieces = LineClip.ByPolygon(subj.Points, subj.Closed, boundary, keepInside);
+            if (pieces.Count == 0) continue;
+            foreach (var piece in pieces)
+            {
+                var pl = new PolylineEntity { Cr = subj.Cr, Cg = subj.Cg, Cb = subj.Cb, LayerName = subj.LayerName };
+                foreach (var p in piece) pl.Points.Add(p);
+                _scene.Add(pl); made++;
+            }
+            _scene.Remove(subj); removed++;   // 原线被裁段取代
+        }
+        RefreshScene();
+        StatusMsg.Text = made > 0
+            ? $"线裁剪({(keepInside ? "保内" : "保外")})：{removed} 条 → {made} 段"
+            : $"线裁剪：无{(keepInside ? "界内" : "界外")}段";
     }
 
     // 线性标注：取两点
