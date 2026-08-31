@@ -1173,3 +1173,10 @@ grade-only 数据模型无法持多属性(架构限, 记录), 但可**部分缓�
 - 参数透镜边界(记录): 抽稀 `cell`(Kylin auto `span/100`)、去噪 SOR k/std·ROR 半径、抽稀 keepFraction 等参数——Kylin 有合理缺省, 底层 `PointThin/PointDenoise(参数)` 已单测; 显式暴露仅 UI 粘合(需 dispatch 加 StartsWith 变体)无新可验逻辑, 判为边际便利, 记录不实现(区别于等高距: 后者含新可验逻辑 `Contour.Levels` round 高程)。**判据: 加新可验逻辑或显著改用户输出→实现; 纯粘合既有已测逻辑+有合理缺省→记录。**
 
 **本会话累计补 31 真功能 + 1 并发修复, 896 测。** 四条新系统透镜(点云命令/报表生成器/着色对话框/参数对话框)diff 收敛; 参数透镜已至边际粘合。
+
+## 八十五、GeoDataBase 窗口透镜 —— 煤厚分析等厚线(isopach)
+
+枚举 GeoDataBase 全窗口逐一核, `ThicknessAnalysisDialog`/`ThicknessSurfaceBuilder`「煤厚分析：见煤点 (底板标高,煤厚) 做 2.5D 插值成煤厚面」——Kylin 有逐孔累计煤厚(`CoalThicknessAnalyzer`)、逐点合成钻孔(`VirtualBorehole`), **但无煤厚插值面/等厚线**:
+- [x] **煤厚等厚线(isopach)**(`ThicknessSurface.Isopach` + "煤厚等值线"命令)：观测/见煤点 (x,y,煤厚) → IDW 插值网格 → 逐厚度层 Marching Squares 抽等厚线 + 煤厚分布统计(min/max/mean/std/分位)。复用 `Contour`(网格+MS+层表) 与 `Statistics`; 蓝薄→红厚配色 + 层厚标注。2D 线段架构下呈平面等厚线图(非 3D 定位面, 记录)。命令读 CSV 每行前 3 数值列作 (x,y,煤厚)(跳过 point_id/seam_code 非数值); "煤厚等值线 <等厚距>" 整数倍厚度。5 测(统计对/等厚距层/**层厚随梯度**[厚层线在更大 x 处]/均匀无线/点不足安全)。**煤厚面复用等值线基元, 是新用户可见地质成果(煤厚图)——组合既有已测基元成新忠实分析, 同 CrestToe/VirtualBorehole 类。**
+
+**本会话累计补 32 真功能 + 1 并发修复, 901 测。** 五条新系统透镜(点云/报表/着色/参数/GeoDataBase 窗口)diff。

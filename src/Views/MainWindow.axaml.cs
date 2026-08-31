@@ -788,6 +788,7 @@ public partial class MainWindow : Window
             if (cmd == "用途适宜性" || cmd == "煤炭用途" || cmd == "动力炼焦评价") { CoalUtilizationCmd(); return; }
             if (cmd == "煤层管理" || cmd == "煤层定义" || cmd == "煤层列表") { CoalSeamsCmd(); return; }
             if (cmd == "见煤统计" || cmd == "煤层对比" || cmd == "见煤对比" || cmd == "钻孔见煤") { SeamIntersectionsCmd(); return; }
+            if (cmd == "煤厚等值线" || cmd == "煤厚分析" || cmd == "等厚线" || cmd == "煤厚等厚线" || cmd.StartsWith("煤厚等值线 ") || cmd.StartsWith("煤厚分析 ")) { await ThicknessIsopachAsync(cmd); return; }
             if (cmd == "分煤层煤质" || cmd == "煤层煤质" || cmd == "分层煤质") { CoalQualityBySeamCmd(); return; }
             if (cmd == "年度产量" || cmd == "产量趋势" || cmd == "年度产量趋势" || cmd == "年产量") { AnnualOutputCmd(); return; }
             if (cmd == "设备故障排名" || cmd == "故障排名" || cmd == "检修排名") { FaultRankCmd(); return; }
@@ -1451,6 +1452,63 @@ public partial class MainWindow : Window
         Viewport.FitBounds(r.Bounds);
         string how = interval > 1e-9 ? $"等高距 {interval:0.##}" : "auto";
         StatusMsg.Text = $"等高线：{r.Points.Count} 点 → {contourLevels.Count} 层({how}) · {segCount} 段 + 高程标注（z {zmin:0.#}~{zmax:0.#}）";
+    }
+
+    // 煤厚分析等厚线(原 ThicknessSurfaceBuilder「煤厚分析面」的平面等厚线): 观测/见煤点 CSV → 取每行前 3 个
+    // 数值列作(x,y,煤厚)(跳过 point_id/seam_code 非数值)→ IDW 插值 → 等厚线(蓝薄→红厚)+ 层厚标注 + 煤厚统计。
+    // "煤厚等值线 <等厚距>" 指定等厚距(整数倍厚度), 缺省 auto 10 层。
+    private async Task ThicknessIsopachAsync(string cmd)
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "煤厚等值线：选观测/见煤点 CSV (含 x,y,煤厚 列)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("观测点 (CSV/TXT)") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (files.Count == 0) return;
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var pts = new System.Collections.Generic.List<(double x, double y, double thickness)>();
+        try
+        {
+            foreach (var raw in System.IO.File.ReadAllLines(files[0].Path.LocalPath))
+            {
+                var line = raw.Trim();
+                if (line.Length == 0 || line.StartsWith("#") || line.StartsWith("//")) continue;
+                var nums = new System.Collections.Generic.List<double>();
+                foreach (var tok in line.Split(new[] { ',', '\t', ';', ' ' }, System.StringSplitOptions.RemoveEmptyEntries))
+                    if (double.TryParse(tok, System.Globalization.NumberStyles.Float, inv, out double v)) { nums.Add(v); if (nums.Count == 3) break; }
+                if (nums.Count == 3) pts.Add((nums[0], nums[1], nums[2]));   // 每行前 3 数值 = x,y,煤厚
+            }
+        }
+        catch (System.Exception ex) { StatusMsg.Text = $"煤厚等值线：读取失败 {ex.Message}"; return; }
+        if (pts.Count < 3) { StatusMsg.Text = "煤厚等值线：需 ≥3 个 (x,y,煤厚) 点(表头会自动跳过)"; return; }
+
+        double interval = 0;
+        int sp = cmd.IndexOf(' ');
+        if (sp >= 0) double.TryParse(cmd.Substring(sp + 1).Trim(), System.Globalization.NumberStyles.Float, inv, out interval);
+        var res = ThicknessSurface.Isopach(pts, gridN: 64, interval: interval);
+        if (res.Lines.Count == 0) { StatusMsg.Text = $"煤厚等值线：煤厚无起伏或点不足（{Statistics.SummaryLine(res.Stats)}）"; return; }
+
+        double tmin = res.Stats.Min, trange = System.Math.Max(res.Stats.Max - res.Stats.Min, 1e-9);
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        BeginChange();
+        foreach (var s in res.Lines)
+        {
+            float t = (float)((s.Level - tmin) / trange);
+            _scene.Add(new LineEntity { X0 = s.X0, Y0 = s.Y0, X1 = s.X1, Y1 = s.Y1, Cr = t, Cg = 0.5f, Cb = 1 - t });
+            if (s.X0 < minX) minX = s.X0; if (s.Y0 < minY) minY = s.Y0; if (s.X0 > maxX) maxX = s.X0; if (s.Y0 > maxY) maxY = s.Y0;
+        }
+        double labelH = System.Math.Max((maxX - minX) / 60.0, 1e-3);
+        foreach (double L in res.Levels)   // 每层一个厚度标注(取该层首段)
+        {
+            var seg = res.Lines.FirstOrDefault(x => x.Level == L);
+            if (seg.X1 == 0 && seg.Y1 == 0 && seg.X0 == 0 && seg.Y0 == 0) continue;
+            float t = (float)((L - tmin) / trange);
+            _scene.Add(new TextEntity { X = seg.X0, Y = seg.Y0, Height = labelH, Text = L.ToString("0.##", inv), Cr = t, Cg = 0.5f, Cb = 1 - t });
+        }
+        RefreshScene();
+        if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
+        StatusMsg.Text = $"煤厚等值线：{pts.Count} 见煤点 → {res.Levels.Count} 层等厚线 · 煤厚 {Statistics.SummaryLine(res.Stats)}";
     }
 
     // 剥采比均衡(VP曲线)：分期物料量 CSV → 累计 V-P 曲线 → DP 分段均衡 → 曲线/折线/比值上屏 + 报表
