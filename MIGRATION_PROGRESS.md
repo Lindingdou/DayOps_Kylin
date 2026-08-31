@@ -820,3 +820,9 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 - [x] **离群 QC DetectOutliers**：Tukey IQR 1.5×IQR 栅栏 + 严重度(超几个 IQR)降序 + 线性插值分位数。命令 煤质离群 <指标>。
 - CoalSample 加 厚度/密度(可选默认不破坏既有构造)，GetCoalSamples 补两列。+4 单测(累计单调/厚度加权均值/IQR 识别极值/小样本跳过)。
 - **实现忠实度轴累计 7 真实算法**(ForecastModels/FleetOptimizer/BenchLines/OrdinaryKriging + CoalAnalytics 的 商品煤符合性/品位-储量/分标高/离群QC)。CoalQualityAnalytics 6 分析已移 4，余 2(洗选提质[需 raw+clean 对，数据齐]/用途适宜性[需 GB 分级参考规则])。655 测试。
+
+**实现忠实度轴续（commit `6ef3a16`）——CoalQualityAnalytics 全 6 分析补齐**：
+- [x] **洗选提质 WashingBySeam**：成对原煤↔浮煤 → 降灰率(raw-clean)/raw·脱硫率·挥发变化·浮煤回收率 + 全矿汇总。命令 洗选提质。
+- [x] **用途适宜性 UtilizationBySeam**：动力煤评价(灰/硫/热分级综合→优良中差) + 炼焦评价(粘结指数 G→炼焦价值)。煤类名用样本存的 GB/T5751 `coal_type` 替代原 `_ref.ResolveCoalType`(参考服务)——**忠实适配**(用已存分类而非重推)。命令 用途适宜性。
+- CoalSample 加 回收率/G/胶质Y/煤类(可选默认)，GetCoalSamples 补 4 列。+4 单测。
+- **★CoalQualityAnalytics(647行) 全 6 分析补齐**：商品煤符合性/品位-储量曲线/分标高煤质/离群QC/洗选提质/用途适宜性。**实现忠实度轴累计 9 真实算法**。659 测试。
