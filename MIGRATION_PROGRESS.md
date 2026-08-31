@@ -598,3 +598,13 @@
 **mesh 内核 op 再核实**: 补洞✓(标准填充已做); **剔面(三角网)**=PointCloudLib 障碍剔除(native ObstacleFilter)受阻; **分割三角网**=沿多段线鲁棒切割+重三角化(复杂, 无法目视验证正确性, 不做失真近似); **处理尖灭**=地质域特定。→ 补洞是清洁标准算法, 余 mesh op 或 native 或复杂重三角化。
 
 **死按钮 68**(总 264, 功能按钮 196)。剩余 = TaskLib 大港(~18) / 复杂几何港(分割三角网·QuickModelBuilder) / native 内核(剔面·点云·PitDesign·倾斜摄影·地质模型) / 交互对话框(~13)。
+
+## 二十九、mesh 标准几何再攻克：分割三角网 + 快速建模（死按钮→65）
+
+"先读源再判" + 组合已验证 primitives, 再攻克 2 个原判"内核"的 mesh op:
+- [x] **分割三角网**(commit `86b8b96`)：三角形-竖直面裁剪(选中折线首末点定切面)——顶点符号距离分左右, 跨界三角在交点裁子三角。`MeshPlaneSplit.cs` +4 单测(**面积守恒**/半空间归属/无穿越/退化)。直线精确, 曲折线弦近似。
+- [x] **快速建模**(commit `68cad45`)：原 QuickModelBuilder 1000 行, 但 BuildFromMeshesDirect(2 面→体)可**组合已移 primitives**: 提两面最大边界环(MeshBoundaryLoops)→侧壁放样(SideSurface.Loft)→顶+底+侧焊接(MeshWeld)→水密自检(MeshDiagnose)。+1 单测(顶方+底方→焊成水密盒 开放边=0)。原估值建模路径(样本克里金入格)仍需 Estimation, 未移。
+
+**mesh 标准几何 op 全清**: OSNAP/图案填充/补洞/分割三角网/快速建模 —— 引擎 op 若算法标准可见即托管重算/组合。
+
+**死按钮精确计正为 65**(早前 67/68 因计数脚本按空格拆多词 Tag[如"2.5D TIN"]虚高; 2.5D TIN 实已处理)。剩余 65 = **TaskLib 排程 ~22 / PitDesign 内核+对话框 ~16(IPitDesignCapability: 工作线/坑线/台阶/排土场/联络道/破碎站/结构路面) / native 内核 ~10(点云分割·剔面·坡顶底线 PMTB·倾斜摄影·地质模型更新) / 交互对话框+路网状态 ~7**。清洁标准几何/数据驱动的增量项已尽; 余为大工程港(TaskLib)、域内核(PitDesign/point-cloud native)、交互对话框(录入/审批/渲染配置)。
