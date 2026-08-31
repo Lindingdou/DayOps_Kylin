@@ -985,9 +985,9 @@ public partial class MainWindow : Window
             if (cmd == "固化成体" || cmd == "固化实体") { await SolidifyAsync(); return; }
             if (cmd == "体素格网体积" || cmd == "体素体积" || cmd == "体素算量") { await VoxelVolumeAsync(); return; }
             if (cmd == "实体转块体" || cmd == "网格转块体" || cmd == "体转块") { await EntityToBlocksAsync(); return; }
-            if (cmd == "立方体" || cmd == "长方体") { await BoxPrimitiveAsync(); return; }
-            if (cmd == "球体" || cmd == "球") { await SpherePrimitiveAsync(); return; }
-            if (cmd == "圆柱" || cmd == "圆柱体") { await CylinderPrimitiveAsync(); return; }
+            if (cmd == "立方体" || cmd == "长方体" || cmd.StartsWith("立方体 ") || cmd.StartsWith("长方体 ")) { await BoxPrimitiveAsync(cmd); return; }       // 立方体 [边长 | sx sy sz]
+            if (cmd == "球体" || cmd == "球" || cmd.StartsWith("球体 ") || cmd.StartsWith("球 ")) { await SpherePrimitiveAsync(cmd); return; }                  // 球体 [半径]
+            if (cmd == "圆柱" || cmd == "圆柱体" || cmd.StartsWith("圆柱 ") || cmd.StartsWith("圆柱体 ")) { await CylinderPrimitiveAsync(cmd); return; }        // 圆柱 [半径 [高]]
             if (cmd == "网格边界" || cmd == "边界环提取" || cmd == "提取边界") { await MeshBoundaryAsync(); return; }
             if (cmd == "SOR去噪" || cmd == "统计去噪" || cmd == "SOR") { await DenoiseAsync(false); return; }
             if (cmd == "ROR去噪" || cmd == "半径去噪" || cmd == "ROR") { await DenoiseAsync(true); return; }
@@ -2400,14 +2400,36 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"{name}：{m.VertexCount} 顶点 · {m.TriangleCount} 三角 · 体积 {m.Volume.ToString("0.##", inv)} · {(d.IsClosed ? "闭合" : "非闭合")} → {System.IO.Path.GetFileName(file.Path.LocalPath)}";
     }
 
-    private async Task BoxPrimitiveAsync()
-    { var (v, t) = PrimitiveBodies.Box(0, 0, 0, 10, 10, 10); await SavePrimitiveAsync("立方体", v, t); }
+    // 命令后的数字参数(空格/逗号分隔; 跳过命令词)
+    private static double[] PrimitiveNums(string cmd)
+    {
+        var nums = new List<double>();
+        foreach (var p in cmd.Split(new[] { ' ', ',' }, System.StringSplitOptions.RemoveEmptyEntries))
+            if (double.TryParse(p, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double d)) nums.Add(d);
+        return nums.ToArray();
+    }
 
-    private async Task SpherePrimitiveAsync()
-    { var (v, t) = PrimitiveBodies.Sphere(0, 0, 0, 5, 16, 24); await SavePrimitiveAsync("球体", v, t); }
+    private async Task BoxPrimitiveAsync(string cmd = "")
+    {
+        var a = PrimitiveNums(cmd);   // 立方体 <边长> 或 立方体 <sx> <sy> <sz>
+        double sx = a.Length >= 1 && a[0] > 0 ? a[0] : 10;
+        double sy = a.Length >= 2 && a[1] > 0 ? a[1] : sx, sz = a.Length >= 3 && a[2] > 0 ? a[2] : sx;
+        var (v, t) = PrimitiveBodies.Box(0, 0, 0, sx, sy, sz); await SavePrimitiveAsync("立方体", v, t);
+    }
 
-    private async Task CylinderPrimitiveAsync()
-    { var (v, t) = PrimitiveBodies.Cylinder(0, 0, 0, 5, 10, 24); await SavePrimitiveAsync("圆柱", v, t); }
+    private async Task SpherePrimitiveAsync(string cmd = "")
+    {
+        var a = PrimitiveNums(cmd);   // 球体 <半径>
+        double r = a.Length >= 1 && a[0] > 0 ? a[0] : 5;
+        var (v, t) = PrimitiveBodies.Sphere(0, 0, 0, r, 16, 24); await SavePrimitiveAsync("球体", v, t);
+    }
+
+    private async Task CylinderPrimitiveAsync(string cmd = "")
+    {
+        var a = PrimitiveNums(cmd);   // 圆柱 <半径> [高]
+        double r = a.Length >= 1 && a[0] > 0 ? a[0] : 5, hgt = a.Length >= 2 && a[1] > 0 ? a[1] : 10;
+        var (v, t) = PrimitiveBodies.Cylinder(0, 0, 0, r, hgt, 24); await SavePrimitiveAsync("圆柱", v, t);
+    }
 
     // 网格焊接：OFF 网格 → 按容差合并重合顶点 → 落 .welded.off + 报表
     private async Task MeshWeldAsync()
