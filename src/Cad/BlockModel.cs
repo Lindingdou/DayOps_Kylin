@@ -74,6 +74,55 @@ public static class BlockModel
         return (ore, waste, strip, avg, gsum, ore * density);
     }
 
+    public readonly record struct BenchResource(
+        double ZLow, double ZHigh, double OreVol, double WasteVol,
+        double StripRatio, double AvgGrade, double Metal, double Tonnage);
+
+    /// <summary>
+    /// 分标高(台阶)资源量 —— 按 benchHeight 把块体分高程带, 各带独立算矿/废/剥采比/品位/金属。
+    /// 忠实原「整体+分台阶报量」的分台阶部分, 供分级规划。各带矿量之和 == 整体矿量(守恒)。
+    /// </summary>
+    public static List<BenchResource> ResourceByElevation(
+        IReadOnlyList<Block> blocks, double cutoff, double density, double benchHeight)
+    {
+        var res = new List<BenchResource>();
+        if (blocks == null || blocks.Count == 0) return res;
+        double minZ = double.MaxValue, maxZ = double.MinValue;
+        foreach (var b in blocks) { if (b.Z < minZ) minZ = b.Z; if (b.Z > maxZ) maxZ = b.Z; }
+        if (benchHeight <= 1e-9) benchHeight = (maxZ - minZ) / 10.0;
+        if (benchHeight <= 1e-9) benchHeight = 1.0;
+        int nBench = Math.Max(1, (int)Math.Ceiling((maxZ - minZ + 1e-9) / benchHeight));
+        var buckets = new List<Block>[nBench];
+        for (int i = 0; i < nBench; i++) buckets[i] = new List<Block>();
+        foreach (var b in blocks)
+        {
+            int idx = (int)((b.Z - minZ) / benchHeight);
+            if (idx < 0) idx = 0; if (idx >= nBench) idx = nBench - 1;
+            buckets[idx].Add(b);
+        }
+        for (int i = 0; i < nBench; i++)
+        {
+            if (buckets[i].Count == 0) continue;
+            var (ore, waste, strip, avg, metal, tonnage) = Resource(buckets[i], cutoff, density);
+            double zl = minZ + i * benchHeight, zh = Math.Min(maxZ, zl + benchHeight);
+            res.Add(new BenchResource(zl, zh, ore, waste, strip, avg, metal, tonnage));
+        }
+        return res;
+    }
+
+    /// <summary>分标高资源量 → CSV。</summary>
+    public static string ResourceByElevationCsv(IReadOnlyList<BenchResource> benches)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var sb = new System.Text.StringBuilder("z_low,z_high,ore_vol,waste_vol,strip_ratio,avg_grade,metal,tonnage\n");
+        foreach (var b in benches)
+            sb.Append(b.ZLow.ToString("R", inv)).Append(',').Append(b.ZHigh.ToString("R", inv)).Append(',')
+              .Append(b.OreVol.ToString("R", inv)).Append(',').Append(b.WasteVol.ToString("R", inv)).Append(',')
+              .Append(b.StripRatio.ToString("R", inv)).Append(',').Append(b.AvgGrade.ToString("R", inv)).Append(',')
+              .Append(b.Metal.ToString("R", inv)).Append(',').Append(b.Tonnage.ToString("R", inv)).Append('\n');
+        return sb.ToString();
+    }
+
     /// <summary>品位 → 蓝(低)→红(高)。</summary>
     public static (float r, float g, float b) GradeColor(double grade, double min, double max)
     {

@@ -3488,9 +3488,12 @@ public partial class MainWindow : Window
                      $"品位范围,{gmin.ToString("0.###", inv)}~{gmax.ToString("0.###", inv)}\n矿量(体积),{ore.ToString("0.#", inv)}\n" +
                      $"吨位,{tonnage.ToString("0.#", inv)}\n废石(体积),{waste.ToString("0.#", inv)}\n剥采比,{strip.ToString("0.##", inv)}\n" +
                      $"平均品位,{avg.ToString("0.###", inv)}\n金属量,{metal.ToString("0.#", inv)}\n";
+        // 分标高报量(整体+分台阶)：自动 10 台阶带
+        var benches = BlockModel.ResourceByElevation(_lastBlocks, cut, 2.7, benchHeight: 0);
+        txt += "\n分标高报量\n" + BlockModel.ResourceByElevationCsv(benches);
         try { System.IO.File.WriteAllText(file.Path.LocalPath, txt); }
         catch (System.Exception ex) { StatusMsg.Text = $"输出报告：写出失败 {ex.Message}"; return; }
-        StatusMsg.Text = $"输出报告：资源量报告已保存 → {System.IO.Path.GetFileName(file.Path.LocalPath)}";
+        StatusMsg.Text = $"输出报告：资源量报告已保存({benches.Count} 台阶带) → {System.IO.Path.GetFileName(file.Path.LocalPath)}";
     }
 
     // 块体着色：按品位配色重渲全部块体(恢复全显)
