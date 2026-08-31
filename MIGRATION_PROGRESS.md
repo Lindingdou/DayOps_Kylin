@@ -1441,3 +1441,12 @@ CopyStyleFrom 审计续查 `.LayerName = 源.LayerName` 模式, 又揪 3 处纯�
 - [x] 3 测: Describe 显示线型线宽 + 编辑线型线宽(点划线/0.5mm→50/未知名拒绝/实线→null) + LineWeightUtil。964 测。
 
 **本会话累计补 57 真功能 + 1 并发修复 + 4 潜伏 bug 修 + 9 样式保真点统一 + 1 latent 攻克, 964 测。**
+
+## 一一四、特性面板 可见 属性 —— 原版 bag diff 续补
+
+核原版 `EntityPropertyBag` 常规类 = layer/color/lineweight/**transparency/visible**。Kylin 缺后二:
+- [x] **可见 (visible)**: Kylin 早有 `SceneEntity.Visible`(隐藏对象命令 + 渲染支持), 仅特性面板未 surfaced。补 `Describe`(是/否)+`EditableLabels`+`WithEdited`(是/否/显示/隐藏/true/false 解析)。完全可用(有渲染)。1 测。
+- **透明度 (transparency)**: 原版有, 但 Kylin 渲染不透明(P3_C3 无 alpha), 面板给值却不视觉生效会误导 → **记录为渲染受阻**(需顶点格式加 alpha + 混合, 类同变宽线渲染); 其唯一价值即视觉, 故不做 store-only。
+- 线型面板行: 原版 bag 无(线型在工具栏/命令, Kylin 亦有 线型 命令); 面板显示为合理 surfacing 既有数据, 保留。
+
+**本会话累计补 58 真功能 + 1 并发修复 + 4 潜伏 bug 修 + 9 样式保真点统一 + 1 latent 攻克, 965 测。** 特性面板 vs 原版 bag 已对齐(除渲染受阻的透明度)。

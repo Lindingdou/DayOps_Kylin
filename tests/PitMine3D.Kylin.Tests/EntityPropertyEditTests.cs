@@ -103,6 +103,20 @@ public class EntityPropertyEditTests
     }
 
     [Fact]
+    public void Edit_visibility_via_panel()
+    {
+        var l = new LineEntity { X0 = 0, Y0 = 0, X1 = 1, Y1 = 0, Visible = true };
+        var rows = EntityProperties.Describe(l);
+        Assert.Contains(rows, r => r.label == "可见" && r.value == "是");
+        var hidden = EntityProperties.WithEdited(l, "可见", "否");
+        Assert.NotNull(hidden);
+        Assert.False(hidden!.Visible);
+        var shown = EntityProperties.WithEdited(hidden, "可见", "是");
+        Assert.True(shown!.Visible);
+        Assert.Null(EntityProperties.WithEdited(l, "可见", "也许"));   // 无法解析拒绝
+    }
+
+    [Fact]
     public void Edit_text_content_preserves_alignment_and_shape()
     {
         var t = new TextEntity { X = 0, Y = 0, Height = 2, Text = "旧", Rotation = 0.5,
