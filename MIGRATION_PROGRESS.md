@@ -837,3 +837,10 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 - [x] **网格体积分级容错**(忠实原 `MeshVolume`)：我的 `MeshMetrics` 体积仅基础散度 `|Σa·(b×c)|/6`，水密时精确但**非水密(开放曲面)给无意义值**。补 `MeshMetrics.RobustVolume`：① 水密(`MeshDiagnose.IsClosed`)→散度严密；② 非水密→`MeshWeld` 焊接 + `MeshHoleFill` 扇形补洞封盖→散度绝对值(复用已移零件)。Compute 改用之。+2 单测(水密四面体 1/6 精确·缺面开放四面体补洞恢复 1/6)。**实现忠利度轴累计 11 真实算法**。
 - **其它模块 sweep 核实**：MineAssLib 剩余算法(SeamOutcrop/Incline/斜面体积/MonthlyMineSchedule/CoupledMine/TautString)在 境界·PitDesign·地质建模·TaskLib 排产 记录边界域；RoadCrossSection(弯道加宽曲率法)/SlopeEstimator/DepositAutoDetector/RoadNetwork/mesh 基元 早前已忠实移。DumpAdvanceByVolume(依赖 dump_strip 块模型台账)记录，我的 SinkNode 是 TaskLib 容量模型忠实移植。
 - **★实现忠实度轴总结**：**11 真实算法逐字补齐**(GeoDataBase 10 + MeshVolume 分级)；其它模块 approximation 已 sweep 无残留(covered/recorded)。→ 该轴收口。662 测试。
+
+## 四十九、实现忠实度轴——全模块 sweep 收官 + 多维种子审计
+
+- **RoadLib sweep(全覆盖)**：HaulMetrics/RoadConnectivity/PolylineMetrics/SegmentGrid 已逐字移；原 `TransportIndicators`(W6 几何网络指标: 节点/边/总里程/连通/OD; 吨量成本原亦留桩)由 Kylin 中心线管理(节点/边/总长/断头/交叉/孤立)+路网体检(连通/分量)+运距指标(加权运距/等效里程/循环)覆盖；CenterlineJunctions 交叉检测由中心线管理覆盖。
+- **全模块 sweep 结论**：GeoDataBase(10 移)/RoadLib(全覆盖)/MineAssLib(RoadCrossSection·SlopeEstimator·DepositAutoDetector 已移, 余在境界/地质/TaskLib 记录边界)/BlockModelLib(MeshVolume 分级·DepositAutoDetector 已移, DumpAdvanceByVolume/VirtualDrill 记录)/TaskLib(自足计算 8 已移, 引擎记录)。**实现忠实度轴全模块收口**。
+- **多维种子输出审计(两轮皆干净)**：本会话新功能 8 项(编组优化/煤质分析×5/层位/预测) + 旧 §四/§八 查询 12 项，在真实种子上眼验量级/异常——全部合理，无恒0/空/量级错(验收合格率 67.3% 确认早前 bug 修复)。
+- **★六维交叉验证完成**：① 按钮/命令(全模块 diff) ② 输出正确性(修 3 bug + 两轮种子审计) ③ 实现忠实度(11 算法全模块 sweep) ④ .pmx 往返(类型+LayerName+颜色+图层表, 已测) ⑤ shell 冒烟 ⑥ 撤销/图层/选择/视图/DXF 导入导出。→ **doable+可验证+忠实(含实现是原真算法)的功能集系统性完成**；余项均已记录边界。662 测试。
