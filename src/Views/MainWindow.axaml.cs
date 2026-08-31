@@ -905,6 +905,7 @@ public partial class MainWindow : Window
             if (cmd == "标注样式" || cmd == "标注设置" || cmd.StartsWith("标注样式 ") || cmd.StartsWith("标注设置 ")) { DimStyleCmd(cmd); return; }
             if (cmd == "裁剪" || cmd == "多边形裁剪" || cmd == "区运算" || cmd == "范围裁剪") { ClipPolygon(); return; }
             if (cmd == "平滑" || cmd == "光滑" || cmd == "曲线平滑" || cmd == "光滑曲线") { SmoothPolyline(); return; }
+            if (cmd == "样条平滑" || cmd == "插值平滑" || cmd == "CatmullRom" || cmd == "过点平滑") { SmoothPolyline(spline: true); return; }
             if (cmd == "简化" || cmd == "多段线简化" || cmd == "抽稀线" || cmd == "抽稀等值线") { SimplifyPolyline(); return; }
             if (cmd == "圈选" || cmd == "窗口圈选") { PolygonSelect(false); return; }
             if (cmd == "交叉圈选") { PolygonSelect(true); return; }
@@ -3579,19 +3580,19 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"多段线简化：{pl.Points.Count} → {np.Points.Count} 点（容差 {eps:0.##}）";
     }
 
-    // 曲线平滑：对选中多段线做 Chaikin 平滑替换
-    private void SmoothPolyline()
+    // 曲线平滑：Chaikin(逼近/收缩) 或 CatmullRom(插值/过点)
+    private void SmoothPolyline(bool spline = false)
     {
         if (_selected.Count != 1 || _selected[0] is not PolylineEntity pl || pl.Points.Count < 3)
         { StatusMsg.Text = "平滑：请先选中一条至少 3 点的多段线"; return; }
-        var sm = PolylineSmooth.Chaikin(pl.Points, 3, pl.Closed);
+        var sm = spline ? PolylineSmooth.CatmullRom(pl.Points, 8, pl.Closed) : PolylineSmooth.Chaikin(pl.Points, 3, pl.Closed);
         var np = new PolylineEntity { Closed = pl.Closed, Cr = pl.Cr, Cg = pl.Cg, Cb = pl.Cb, LayerName = pl.LayerName };
         foreach (var p in sm) np.Points.Add(p);
         BeginChange();
         _scene.Replace(pl, np);
         _selected.Clear(); _selected.Add(np);
         RefreshScene(); HighlightSelection();
-        StatusMsg.Text = $"曲线平滑：{pl.Points.Count} → {np.Points.Count} 点（Chaikin×3）";
+        StatusMsg.Text = $"曲线平滑：{pl.Points.Count} → {np.Points.Count} 点（{(spline ? "CatmullRom 插值·过原点" : "Chaikin×3·逼近")}）";
     }
 
     // 多边形裁剪：选两条多段线(第1=被裁, 第2=凸裁剪边界)→交集
@@ -6859,7 +6860,7 @@ public partial class MainWindow : Window
         "剪切","复制到剪贴板","粘贴","基点粘贴","原坐标粘贴",
         "快速选择","全部选择","取消选择","创建选择集","特性",
         // 线编辑
-        "加密多段线","简化","抽稀等值线","两线交点","闭合多段线","删除重复点","删除重复线","连接多段线","组合工作线",
+        "加密多段线","简化","平滑","样条平滑","抽稀等值线","两线交点","闭合多段线","删除重复点","删除重复线","连接多段线","组合工作线",
         // 网格/建模
         "网格度量","网格诊断","创建三角网","约束三角网","裁剪三角网","网格焊接","网格边界","网格交线","网格剖面","网格光顺","合并三角网","固化成体","侧面三角网","立方体","球体","圆柱","体素格网体积","实体转块体",
         // 区域/地形/点云

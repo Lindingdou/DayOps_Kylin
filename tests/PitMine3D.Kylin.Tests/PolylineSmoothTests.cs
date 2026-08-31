@@ -33,4 +33,27 @@ public class PolylineSmoothTests
         int c3 = PolylineSmooth.Chaikin(pl, 3, false).Count;
         Assert.True(c3 > c1);
     }
+
+    // ── CatmullRom 插值样条(过原点) ──
+    [Fact]
+    public void CatmullRom_passes_through_input_points()
+    {
+        var pl = new List<(double x, double y)> { (0, 0), (10, 5), (20, 0), (30, 8) };
+        var sm = PolylineSmooth.CatmullRom(pl, 8, closed: false);
+        Assert.True(sm.Count > pl.Count, "应加密");
+        // 每个输入点都应出现在输出里(插值样条过原点)
+        foreach (var ip in pl)
+            Assert.Contains(sm, sp => System.Math.Abs(sp.x - ip.x) < 1e-6 && System.Math.Abs(sp.y - ip.y) < 1e-6);
+    }
+
+    [Fact]
+    public void CatmullRom_degenerate()
+    {
+        var one = new List<(double x, double y)> { (0, 0) };
+        Assert.Single(PolylineSmooth.CatmullRom(one, 8, false));           // <2 点原样
+        // 直线两点 → 加密后仍全部共线(y=x)
+        var two = new List<(double x, double y)> { (0, 0), (10, 10) };
+        var sm = PolylineSmooth.CatmullRom(two, 8, false);
+        Assert.All(sm, p => Assert.Equal(p.x, p.y, 6));
+    }
 }
