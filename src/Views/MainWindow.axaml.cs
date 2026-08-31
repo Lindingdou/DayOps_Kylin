@@ -4300,6 +4300,8 @@ public partial class MainWindow : Window
 
     // ---------- 右键上下文菜单 ----------
     private void OnCtxZoomExtents(object? s, RoutedEventArgs e) => Viewport.ZoomExtents();
+    // 通用右键菜单项 → 按 Tag 派发命令（复用既有命令处理，忠实原丰富上下文菜单）
+    private void OnCtxCommand(object? s, RoutedEventArgs e) { if (s is MenuItem { Tag: string cmd }) DispatchRibbon(cmd); }
     private void OnCtx2D(object? s, RoutedEventArgs e) { Viewport.SetViewMode(true); StatusMsg.Text = "视图: 2D 平面"; }
     private void OnCtx3D(object? s, RoutedEventArgs e) { Viewport.SetViewMode(false); StatusMsg.Text = "视图: 3D 轨道"; }
     private void OnCtxGrid(object? s, RoutedEventArgs e) => SetGrid(!_gridOn);
