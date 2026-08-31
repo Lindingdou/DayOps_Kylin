@@ -397,10 +397,27 @@ public partial class MainWindow : Window
             // 对象捕捉：吸附到最近顶点（优先场景几何；显示态导入用其网格顶点）
             _snapWorld = null;
             var snapSrc = _lastImport?.LineVertices ?? _snapVerts;
-            if (w != null && SnapToggle.IsChecked == true && snapSrc.Length > 0)
+            _snapHitMode = null;
+            if (w != null && SnapToggle.IsChecked == true)
             {
                 double tol = SnapTolWorld(p);
-                _snapWorld = SnapPoints.FindNearest(snapSrc, w.Value.x, w.Value.y, tol);
+                // ① 顶点候选(端点/中点/圆心/象限) —— 高优先精确点
+                var vhit = snapSrc.Length > 0 ? SnapPoints.FindNearest(snapSrc, w.Value.x, w.Value.y, tol) : null;
+                double dv = vhit != null ? Dist2(vhit.Value, w.Value) : double.MaxValue;
+                // ② 扩展模式(交点/最近/垂足) —— 顶点未覆盖, 从场景原语补算; 垂足以上一取点为锚
+                ObjectSnap.Hit? ohit = null;
+                if (_snapExtraMask != 0)
+                {
+                    var (segs, circles, arcs, spts) = BuildSnapGeom();
+                    ohit = ObjectSnap.Find(segs, circles, arcs, spts, w.Value.x, w.Value.y, tol, _snapExtraMask, _lastInputPoint);
+                }
+                // ③ 合并: 交点若不比顶点远则取交点; 否则取顶点; 最近/垂足仅在无顶点时兜底
+                if (ohit != null && ohit.Value.Mode == ObjectSnap.Mode.Intersection && Dist2((ohit.Value.X, ohit.Value.Y), w.Value) <= dv)
+                { _snapWorld = (ohit.Value.X, ohit.Value.Y); _snapHitMode = ObjectSnap.Mode.Intersection; }
+                else if (vhit != null) _snapWorld = vhit;
+                else if (ohit != null) { _snapWorld = (ohit.Value.X, ohit.Value.Y); _snapHitMode = ohit.Value.Mode; }
+                else _snapWorld = null;
+
                 if (_snapWorld != null)
                 {
                     Viewport.SetSnapMarker(SnapCross(_snapWorld.Value.x, _snapWorld.Value.y, tol * 0.6));
@@ -414,7 +431,7 @@ public partial class MainWindow : Window
             if (shown != null && _snapWorld == null)   // osnap 未命中 → 预览点也应用 栅格/正交(与落点 PickWorld 一致)
                 shown = ApplyDraftAids(shown.Value.x, shown.Value.y);
             CoordText.Text = shown != null
-                ? $"X {shown.Value.x:0.00}  Y {shown.Value.y:0.00}{(_snapWorld != null ? "  [捕捉]" : (_orthoOn || _snapOn ? "  [辅助]" : ""))}"
+                ? $"X {shown.Value.x:0.00}  Y {shown.Value.y:0.00}{(_snapWorld != null ? $"  [{SnapModeLabel(_snapHitMode)}]" : (_orthoOn || _snapOn ? "  [辅助]" : ""))}"
                 : $"视口 px  X {p.X:0}  Y {p.Y:0}";
 
             _cursorWorld = shown;
@@ -582,7 +599,10 @@ public partial class MainWindow : Window
     private (double x, double y)? _snapWorld;   // 当前捕捉到的世界点
     private (double x, double y)? _cursorWorld; // 当前光标世界点(橡皮筋预览用)
     private (double x, double y)? _lastInputPoint; // 上一取点(命令行相对坐标 @ 的基点)
-    private float[] _snapVerts = System.Array.Empty<float>();   // 场景几何顶点缓存(对象捕捉源)
+    private float[] _snapVerts = System.Array.Empty<float>();   // 场景几何顶点缓存(对象捕捉源: 端点/中点/圆心/象限)
+    // 扩展捕捉模式(交点/最近/垂足)——SnapCandidates 未覆盖, 由 ObjectSnap 从场景原语补算。默认仅交点开(最近/垂足按需)。
+    private int _snapExtraMask = 1 << (int)ObjectSnap.Mode.Intersection;
+    private ObjectSnap.Mode? _snapHitMode;         // 本次捕捉命中的扩展模式(交点/最近/垂足), null=顶点候选或未命中
     private string? _currentPath;                  // 当前 .pmx 文档路径(保存直接回写)
     private double _snapTolPx = 12.0;              // 对象捕捉容差(屏幕像素, 选项可调)
     private bool _gridOn = true;                    // 网格显示状态(选项/GRID 同步)
@@ -821,6 +841,11 @@ public partial class MainWindow : Window
             if (cmd == "夹点开关" || cmd == "夹点") { ToggleGizmo(); return; }
             if (cmd == "正交" || cmd == "正交开关") { _orthoOn = !_orthoOn; SyncDraftToggles(); StatusMsg.Text = _orthoOn ? "正交: 开" : "正交: 关"; return; }
             if (cmd == "栅格捕捉" || cmd == "捕捉开关") { _snapOn = !_snapOn; SyncDraftToggles(); StatusMsg.Text = _snapOn ? $"栅格捕捉: 开（步长 {_snapStep:0.##}）" : "栅格捕捉: 关"; return; }
+            if (cmd == "对象捕捉" || cmd == "对象捕捉开关" || cmd == "OSNAP") { SnapToggle.IsChecked = !(SnapToggle.IsChecked == true); StatusMsg.Text = $"对象捕捉: {(SnapToggle.IsChecked == true ? "开" : "关")}"; return; }
+            if (cmd == "交点捕捉") { ToggleSnapExtra(ObjectSnap.Mode.Intersection, "交点"); return; }
+            if (cmd == "最近捕捉" || cmd == "最近点捕捉") { ToggleSnapExtra(ObjectSnap.Mode.Nearest, "最近"); return; }
+            if (cmd == "垂足捕捉" || cmd == "垂直捕捉") { ToggleSnapExtra(ObjectSnap.Mode.Perpendicular, "垂足"); return; }
+            if (cmd == "捕捉全模式" || cmd == "全部对象捕捉") { _snapExtraMask = ObjectSnap.MaskOf(ObjectSnap.Mode.Intersection, ObjectSnap.Mode.Nearest, ObjectSnap.Mode.Perpendicular); SnapToggle.IsChecked = true; StatusMsg.Text = "对象捕捉: 交点+最近+垂足 全开(端点/中点/圆心/象限恒开)"; return; }
             if (cmd == "滑动多段线") { StartSlide(); return; }
             if (ActivateDrawTool(cmd)) return;
             StatusMsg.Text = $"命令: {cmd}";
@@ -3814,6 +3839,76 @@ public partial class MainWindow : Window
         e.LayerName = _layers.Current.Name;
         e.Cr = _layers.Current.Cr; e.Cg = _layers.Current.Cg; e.Cb = _layers.Current.Cb;
     }
+
+    // 从场景实体抽取捕捉原语(线段/圆/圆弧/点)——供 ObjectSnap 补算交点/最近/垂足(端点/中点/圆心已由 SnapCandidates 覆盖)。
+    private (List<ObjectSnap.Seg> segs, List<ObjectSnap.Circ> circles, List<ObjectSnap.ArcP> arcs, List<(double x, double y)> pts) BuildSnapGeom()
+    {
+        var segs = new List<ObjectSnap.Seg>();
+        var circles = new List<ObjectSnap.Circ>();
+        var arcs = new List<ObjectSnap.ArcP>();
+        var pts = new List<(double x, double y)>();
+        foreach (var e in _scene.Entities)
+        {
+            if (!_layers.IsShown(e.LayerName)) continue;
+            switch (e)
+            {
+                case LineEntity l: segs.Add(new ObjectSnap.Seg(l.X0, l.Y0, l.X1, l.Y1)); break;
+                case RectEntity r:
+                    segs.Add(new ObjectSnap.Seg(r.X0, r.Y0, r.X1, r.Y0));
+                    segs.Add(new ObjectSnap.Seg(r.X1, r.Y0, r.X1, r.Y1));
+                    segs.Add(new ObjectSnap.Seg(r.X1, r.Y1, r.X0, r.Y1));
+                    segs.Add(new ObjectSnap.Seg(r.X0, r.Y1, r.X0, r.Y0));
+                    break;
+                case PolylineEntity pl:
+                    for (int i = 0; i + 1 < pl.Points.Count; i++)
+                        segs.Add(new ObjectSnap.Seg(pl.Points[i].x, pl.Points[i].y, pl.Points[i + 1].x, pl.Points[i + 1].y));
+                    break;
+                case CircleEntity c: circles.Add(new ObjectSnap.Circ(c.Cx, c.Cy, c.Radius)); break;
+                case PointEntity p: pts.Add((p.X, p.Y)); break;
+                case ArcEntity a:
+                    var cc = ArcMath.Circumcircle(a.X1, a.Y1, a.X2, a.Y2, a.X3, a.Y3);
+                    if (cc != null)
+                    {
+                        double cx = cc.Value.cx, cy = cc.Value.cy, rr = cc.Value.r;
+                        double a0 = System.Math.Atan2(a.Y1 - cy, a.X1 - cx);
+                        double am = System.Math.Atan2(a.Y2 - cy, a.X2 - cx);
+                        double a1 = System.Math.Atan2(a.Y3 - cy, a.X3 - cx);
+                        // 定向: 使 CCW A0→A1 经过弧上中间点 am; 否则换向(取互补弧)。
+                        double Norm(double x) { while (x < 0) x += 2 * System.Math.PI; while (x >= 2 * System.Math.PI) x -= 2 * System.Math.PI; return x; }
+                        double sweep = Norm(a1 - a0), amid = Norm(am - a0);
+                        if (sweep < 1e-9 || amid > sweep) arcs.Add(new ObjectSnap.ArcP(cx, cy, rr, a1, a0));
+                        else arcs.Add(new ObjectSnap.ArcP(cx, cy, rr, a0, a1));
+                    }
+                    break;
+            }
+        }
+        return (segs, circles, arcs, pts);
+    }
+
+    private static double Dist2((double x, double y) a, (double x, double y) b)
+    { double dx = a.x - b.x, dy = a.y - b.y; return dx * dx + dy * dy; }
+
+    // 切换某扩展捕捉模式(交点/最近/垂足)位; 顺带确保主对象捕捉开。
+    private void ToggleSnapExtra(ObjectSnap.Mode m, string name)
+    {
+        int bit = 1 << (int)m;
+        _snapExtraMask ^= bit;
+        bool on = (_snapExtraMask & bit) != 0;
+        if (on) SnapToggle.IsChecked = true;
+        StatusMsg.Text = $"{name}捕捉: {(on ? "开" : "关")}";
+    }
+
+    // 捕捉标记文案: 扩展模式显名(交点/最近/垂足), 顶点候选统称"捕捉"。
+    private static string SnapModeLabel(ObjectSnap.Mode? m) => m switch
+    {
+        ObjectSnap.Mode.Intersection => "交点",
+        ObjectSnap.Mode.Nearest => "最近",
+        ObjectSnap.Mode.Perpendicular => "垂足",
+        ObjectSnap.Mode.Center => "圆心",
+        ObjectSnap.Mode.Midpoint => "中点",
+        ObjectSnap.Mode.Endpoint => "端点",
+        _ => "捕捉",
+    };
 
     // 重绘场景（含当前工具进行中的预览：已点的段 + 到光标的橡皮筋）
     private void RefreshScene()
