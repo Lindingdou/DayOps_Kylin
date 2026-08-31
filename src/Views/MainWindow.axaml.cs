@@ -777,6 +777,7 @@ public partial class MainWindow : Window
             if (cmd == "快速建模" || cmd == "一键建模" || cmd == "顶底成体") { await QuickModelAsync(); return; }
             if (cmd == "中心线管理" || cmd == "边状态" || cmd == "路网拓扑" || cmd == "中线管理") { RoadNetworkReportCmd(); return; }
             if (cmd == "排土场容量校核" || cmd == "容量校核" || cmd == "排土容量") { await DumpCapacityAsync(); return; }
+            if (cmd == "生产量核算" || cmd == "任务量汇总" || cmd == "分账合计" || cmd == "生产任务量") { await ProductionQuantityAsync(); return; }
             if (cmd == "固化成体" || cmd == "固化实体") { await SolidifyAsync(); return; }
             if (cmd == "体素格网体积" || cmd == "体素体积" || cmd == "体素算量") { await VoxelVolumeAsync(); return; }
             if (cmd == "实体转块体" || cmd == "网格转块体" || cmd == "体转块") { await EntityToBlocksAsync(); return; }
@@ -1331,6 +1332,59 @@ public partial class MainWindow : Window
         if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
         StatusMsg.Text = $"网格边界：{loops.Count} 环 · {totPts} 点(投影 XY 作闭合折线入场景)";
     }
+
+    // 生产量核算（TaskLib 量核算切片）：读任务记录 CSV(工序,方量,吨,车次,运距) → 按工序取账分账合计。
+    private async Task ProductionQuantityAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "生产量核算：选任务记录 CSV(工序,方量m³,吨,车次,运距km[,孔数,延米])",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("任务记录 (CSV/TXT)") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (files.Count == 0) return;
+        string[] rows;
+        try { rows = System.IO.File.ReadAllLines(files[0].Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"生产量核算：读取失败 {ex.Message}"; return; }
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var tasks = new List<Cad.Tasks.ProductionTask>();
+        foreach (var raw in rows)
+        {
+            var s = raw.Trim();
+            if (s.Length == 0 || s.StartsWith("#")) continue;
+            var c = s.Split(new[] { ',', '\t', ';' }, System.StringSplitOptions.None);
+            if (c.Length < 1) continue;
+            var proc = ParseProcess(c[0].Trim());
+            if (proc == null) continue;   // 跳表头/未知工序
+            double D(int i) => c.Length > i && double.TryParse(c[i].Trim(), System.Globalization.NumberStyles.Float, inv, out var v) ? v : 0;
+            int I(int i) => c.Length > i && int.TryParse(c[i].Trim(), out var v) ? v : 0;
+            double vol = D(1), ton = D(2), km = D(4);
+            tasks.Add(new Cad.Tasks.ProductionTask
+            {
+                Process = proc.Value,
+                ControlVolumeM3 = proc == Cad.Tasks.ProcessType.Drill ? vol : 0,
+                TargetVolumeM3 = proc == Cad.Tasks.ProcessType.Load ? vol : 0,
+                TargetTonnageT = proc == Cad.Tasks.ProcessType.Load ? ton : 0,
+                HaulTonnageT = proc == Cad.Tasks.ProcessType.Haul ? ton : 0,
+                TripCount = I(3),
+                DumpVolumeM3 = proc == Cad.Tasks.ProcessType.Dump ? vol : 0,
+                EffectiveHaulKm = km,
+                Drill = proc == Cad.Tasks.ProcessType.Drill ? new Cad.Tasks.DrillInfo { PlanHoles = I(5), PlanMeters = D(6) } : null,
+            });
+        }
+        if (tasks.Count == 0) { StatusMsg.Text = "生产量核算：未解析到任务记录(工序需 穿孔/爆破/采装/运输/排土)"; return; }
+        StatusMsg.Text = "生产量核算（分账，不合总）：" + Cad.Tasks.TaskQuantity.Sum(tasks).Caption;
+    }
+
+    private static Cad.Tasks.ProcessType? ParseProcess(string s) => s switch
+    {
+        "穿孔" or "钻孔" or "drill" or "Drill" => Cad.Tasks.ProcessType.Drill,
+        "爆破" or "blast" or "Blast" => Cad.Tasks.ProcessType.Blast,
+        "采装" or "采掘" or "装载" or "load" or "Load" => Cad.Tasks.ProcessType.Load,
+        "运输" or "haul" or "Haul" => Cad.Tasks.ProcessType.Haul,
+        "排土" or "排弃" or "dump" or "Dump" => Cad.Tasks.ProcessType.Dump,
+        _ => null,
+    };
 
     // 排土场容量校核：排土设计面 vs 现状面 的填方体积 = 设计形态总容积(原义)。复用 TerrainAnalysis.TwoEpochVolume。
     private async Task DumpCapacityAsync()
