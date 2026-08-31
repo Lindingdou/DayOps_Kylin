@@ -728,9 +728,11 @@ public partial class MainWindow : Window
             if (cmd == "约束块体" || cmd == "块体约束") { ConstrainBlocksCmd(); return; }
             if (cmd == "删除块体" || cmd == "清除块体") { DeleteBlocksCmd(); return; }
             if (cmd == "切面剖切" || cmd == "块体剖切" || cmd == "切面") { SectionBlocksCmd(); return; }
-            if (cmd == "克里金估值" || cmd == "OK估值" || cmd == "克里金") { await EstimateGradeAsync(kriging: true); return; }
-            if (cmd == "快速估值" || cmd == "品位估值" || cmd == "IDW估值" || cmd == "空间分布") { await EstimateGradeAsync(kriging: false); return; }
-            if (cmd == "泛克里金" || cmd == "UK估值" || cmd == "泛克里金估值" || cmd == "趋势克里金") { await EstimateGradeAsync(kriging: true, universal: true); return; }
+            if (cmd == "克里金估值" || cmd == "OK估值" || cmd == "克里金") { await EstimateGradeAsync("OK"); return; }
+            if (cmd == "快速估值" || cmd == "品位估值" || cmd == "IDW估值" || cmd == "空间分布") { await EstimateGradeAsync("IDW"); return; }
+            if (cmd == "泛克里金" || cmd == "UK估值" || cmd == "泛克里金估值" || cmd == "趋势克里金") { await EstimateGradeAsync("UK"); return; }
+            if (cmd == "最近邻估值" || cmd == "NN估值" || cmd == "邻近估值") { await EstimateGradeAsync("NN"); return; }
+            if (cmd == "移动平均估值" || cmd == "MA估值" || cmd == "均值估值") { await EstimateGradeAsync("MA"); return; }
             if (cmd == "设备信息管理" || cmd == "设备台账" || cmd == "设备台账管理" || cmd == "设备信息") { EquipmentRosterCmd(); return; }
             if (cmd == "设备生产数据" || cmd == "生产数据" || cmd == "设备数据分析") { ProductionStatsCmd(); return; }
             if (cmd == "产能分析" || cmd == "设备能力" || cmd == "能力分析" || cmd == "产能") { CapacityRankingCmd(); return; }
@@ -3733,9 +3735,9 @@ public partial class MainWindow : Window
     }
 
     // 快速估值：品位样本 CSV(x,y,品位) → IDW/克里金 网格 → 品位配色估值面
-    private async Task EstimateGradeAsync(bool kriging = false, bool universal = false)
+    private async Task EstimateGradeAsync(string method = "IDW")
     {
-        string mode = universal ? "泛克里金" : kriging ? "克里金估值" : "快速估值";
+        string mode = method switch { "OK" => "克里金估值", "UK" => "泛克里金", "NN" => "最近邻估值", "MA" => "移动平均估值", _ => "快速估值(IDW)" };
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = mode + "：选品位样本 CSV (x,y,品位)",
@@ -3747,10 +3749,18 @@ public partial class MainWindow : Window
         if (!r.Success) { StatusMsg.Text = $"{mode}：样本导入失败 {r.Error}"; return; }
         int n = 48;
         double[,] grid; double gx0, gy0, gdx, gdy; double avgVar = 0; string extra = "";
-        if (kriging || universal)
+        if (method == "OK" || method == "UK")
         {
-            grid = BuildKrigingGrid(r.Points, n, n, out gx0, out gy0, out gdx, out gdy, out avgVar, universal);
-            extra = $" · {(universal ? "UK泛" : "OK普通")}克里金 avg克里金方差 {avgVar:0.###}";
+            grid = BuildKrigingGrid(r.Points, n, n, out gx0, out gy0, out gdx, out gdy, out avgVar, method == "UK");
+            extra = $" · {(method == "UK" ? "UK泛" : "OK普通")}克里金 avg克里金方差 {avgVar:0.###}";
+        }
+        else if (method == "NN" || method == "MA")
+        {
+            // 与 GridFromPoints 同布局，再按方法建格
+            _ = Contour.GridFromPoints(r.Points, n, n, out gx0, out gy0, out gdx, out gdy);
+            grid = method == "NN" ? Contour.GridNearest(r.Points, n, n, gx0, gy0, gdx, gdy)
+                                  : Contour.GridMovingAverage(r.Points, n, n, gx0, gy0, gdx, gdy, System.Math.Max(gdx, gdy) * 3);
+            extra = method == "NN" ? " · 最近邻(块状)" : " · 移动平均(半径3格)";
         }
         else
         {
@@ -6844,7 +6854,7 @@ public partial class MainWindow : Window
         // 网格/建模
         "网格度量","网格诊断","创建三角网","约束三角网","裁剪三角网","网格焊接","网格边界","网格交线","网格剖面","网格光顺","合并三角网","固化成体","侧面三角网","立方体","球体","圆柱","体素格网体积","实体转块体",
         // 区域/地形/点云
-        "区域求差","区域重叠检测","克里金估值","泛克里金","快速估值",
+        "区域求差","区域重叠检测","克里金估值","泛克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","地面点滤波","高程着色","点云质量统计","点云裁剪",
         // 块体/运输/路网
         "块体模型","资源量","道路横断面","路面生成","纵坡分析","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","演化对比","螺旋斜坡道","折返斜坡道",

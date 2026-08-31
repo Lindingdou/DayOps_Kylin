@@ -123,4 +123,46 @@ public static class Contour
         }
         return g;
     }
+
+    /// <summary>最近邻(NN)网格：每格取最近样本点的值(块状/类别数据用, 不插值)。忠实原「NN 快速估值」。</summary>
+    public static double[,] GridNearest(
+        IReadOnlyList<(double x, double y, double z)> pts, int nx, int ny, double x0, double y0, double dx, double dy)
+    {
+        var g = new double[nx, ny];
+        for (int ix = 0; ix < nx; ix++)
+            for (int iy = 0; iy < ny; iy++)
+            {
+                double px = x0 + ix * dx, py = y0 + iy * dy;
+                double best = double.MaxValue, val = 0;
+                foreach (var p in pts)
+                {
+                    double d2 = (px - p.x) * (px - p.x) + (py - p.y) * (py - p.y);
+                    if (d2 < best) { best = d2; val = p.z; }
+                }
+                g[ix, iy] = val;
+            }
+        return g;
+    }
+
+    /// <summary>移动平均(MA)网格：每格取半径内样本的均匀平均(无距离加权); 半径内无点则退回最近邻。忠实原「MA 快速估值」。</summary>
+    public static double[,] GridMovingAverage(
+        IReadOnlyList<(double x, double y, double z)> pts, int nx, int ny, double x0, double y0, double dx, double dy, double radius)
+    {
+        double r2 = radius * radius;
+        var g = new double[nx, ny];
+        for (int ix = 0; ix < nx; ix++)
+            for (int iy = 0; iy < ny; iy++)
+            {
+                double px = x0 + ix * dx, py = y0 + iy * dy;
+                double sum = 0; int cnt = 0; double nnBest = double.MaxValue, nnVal = 0;
+                foreach (var p in pts)
+                {
+                    double d2 = (px - p.x) * (px - p.x) + (py - p.y) * (py - p.y);
+                    if (d2 <= r2) { sum += p.z; cnt++; }
+                    if (d2 < nnBest) { nnBest = d2; nnVal = p.z; }
+                }
+                g[ix, iy] = cnt > 0 ? sum / cnt : nnVal;   // 半径内无点 → 最近邻兜底
+            }
+        return g;
+    }
 }

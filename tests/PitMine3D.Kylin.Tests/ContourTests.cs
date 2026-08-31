@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using PitMine3D.Kylin.Cad;
 using Xunit;
 
@@ -67,5 +68,30 @@ public class ContourTests
         Assert.Equal(0, x0, 4); Assert.Equal(10, dx, 4); Assert.Equal(10, dy, 4);
         Assert.Equal(10, g[0, 0], 3); Assert.Equal(20, g[1, 0], 3);
         Assert.Equal(30, g[0, 1], 3); Assert.Equal(40, g[1, 1], 3);
+    }
+
+    // ── NN(最近邻) / MA(移动平均) 估值网格 ──
+    [Fact]
+    public void Nearest_grid_takes_closest_sample_value()
+    {
+        // 两点: (0,0,v=5), (10,0,v=9)。格 x0=0 dx=5, 3 列: 0(近5), 5(等距→先者5), 10(近9)
+        var pts = new List<(double x, double y, double z)> { (0, 0, 5), (10, 0, 9) };
+        var g = Contour.GridNearest(pts, 3, 1, 0, 0, 5, 1);
+        Assert.Equal(5, g[0, 0], 6);          // x=0 → 近 (0,0)=5
+        Assert.Equal(9, g[2, 0], 6);          // x=10 → 近 (10,0)=9
+        // 块状：非样本处直接取最近值(不插值)，g[0]≠g[2] 且都是原始样本值
+        Assert.Contains(g[1, 0], new[] { 5.0, 9.0 });
+    }
+
+    [Fact]
+    public void MovingAverage_grid_averages_within_radius_else_nearest()
+    {
+        var pts = new List<(double x, double y, double z)> { (0, 0, 10), (2, 0, 20), (100, 0, 99) };
+        // 格点 (1,0) 半径 5 内含 (0,0)=10 与 (2,0)=20 → 均值 15；不含远点 99
+        var g = Contour.GridMovingAverage(pts, 1, 1, 1, 0, 1, 1, radius: 5);
+        Assert.Equal(15.0, g[0, 0], 6);
+        // 半径内无点 → 最近邻兜底
+        var g2 = Contour.GridMovingAverage(pts, 1, 1, 50, 0, 1, 1, radius: 5);
+        Assert.Equal(20.0, g2[0, 0], 6);      // (50,0) 最近是 (2,0)=20
     }
 }
