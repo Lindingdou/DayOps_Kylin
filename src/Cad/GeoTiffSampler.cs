@@ -24,7 +24,7 @@ public readonly struct GeoTransform
 /// <summary>
 /// GeoTIFF 正射影像采样 —— 忠实原 PointCloudLib「真实色(正射影像着色)」: 读 TIFF 头(无压缩 RGB) + 地理配准,
 /// 在世界 (x,y) 采像素色, 供点云真实色着色。曾误记 native, 实则 TIFF 公开 + 无压缩样本→可做可验(同 LAS 判据)。
-/// 仅支持 无压缩(Compression=1)、chunky、8bit; 其它(LZW/JPEG/planar)返错记录。IDisposable(持流)。
+/// 支持 无压缩/LZW/Deflate/PackBits/JPEG 压缩、chunky(planar=1)、8bit RGB; planar≠1 及罕见压缩返错记录。IDisposable(持流)。
 /// </summary>
 public sealed class GeoTiffSampler : IDisposable
 {
