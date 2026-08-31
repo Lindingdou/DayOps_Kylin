@@ -510,6 +510,30 @@ public static class GeoDataQueries
         return rows;
     }
 
+    /// <summary>编组优化规则：dispatch_rule join equipment_model 取 卡车载重/电铲斗容（供 FleetOptimizer）。</summary>
+    public static List<FleetDispatchRule> GetFleetDispatchRules(SqliteConnection conn)
+    {
+        var rows = new List<FleetDispatchRule>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"SELECT r.shovel_model, r.truck_model, COALESCE(r.cycle_time_min,0), COALESCE(r.recommended_truck_count,0),
+                                   COALESCE(tm.load_t,0), COALESCE(r.bucket_loads_per_truck,0), COALESCE(sm.bucket_m3,0),
+                                   COALESCE(r.efficiency_score,0)
+                            FROM dispatch_rule r
+                            LEFT JOIN equipment_model tm ON tm.model = r.truck_model
+                            LEFT JOIN equipment_model sm ON sm.model = r.shovel_model
+                            WHERE r.is_active = 1";
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+            rows.Add(new FleetDispatchRule
+            {
+                ShovelModel = rd.GetString(0), TruckModel = rd.GetString(1),
+                CycleTimeMin = rd.GetDouble(2), RecommendedTruckCount = rd.GetInt32(3),
+                TruckPayloadT = rd.GetDouble(4), BucketLoadsPerTruck = rd.GetDouble(5),
+                ShovelBucketM3 = rd.GetDouble(6), EfficiencyScore = rd.GetInt32(7),
+            });
+        return rows;
+    }
+
     /// <summary>月度总产量时间序列（万m³，按年月升序）——供 ForecastModels 时序预测。</summary>
     public static List<double> GetMonthlyOutputSeries(SqliteConnection conn)
     {

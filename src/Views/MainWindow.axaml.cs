@@ -730,6 +730,7 @@ public partial class MainWindow : Window
             if (cmd == "故障类型分布" || cmd == "故障类型" || cmd == "故障构成") { FaultByTypeCmd(); return; }
             if (cmd == "分工序验收" || cmd == "分工序验收合格率" || cmd == "工序验收") { AcceptanceByPhaseCmd(); return; }
             if (cmd == "设备智能编组" || cmd == "调度规则" || cmd == "配车规则" || cmd == "铲车配比") { DispatchRulesCmd(); return; }
+            if (cmd == "编组优化" || cmd == "智能编组优化" || cmd == "设备编组优化" || cmd.StartsWith("编组优化 ")) { FleetOptimizeCmd(cmd); return; }
             if (cmd == "工艺架构定义" || cmd == "工艺架构" || cmd == "平盘工艺地图" || cmd == "工艺系统") { ProcessArchitectureCmd(); return; }
             if (cmd == "现场验收录入" || cmd == "现场验收" || cmd == "参数验收") { AcceptanceStatsCmd(); return; }
             if (cmd == "作业面台账" || cmd == "作业面" || cmd == "工作面台账" || cmd == "采场参数") { WorkingFacesCmd(); return; }
@@ -5642,6 +5643,30 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"设备智能编组（在役 {d.Active} 规则，按评分）：" + string.Join(" · ", parts);
     }
 
+    // 编组优化(FleetOptimizer)：物理产能子模型+M/M/c排队+DP最小卡车数达标 → 达日产目标的最优铲车编组
+    private void FleetOptimizeCmd(string cmd)
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var rules = Data.GeoDataQueries.GetFleetDispatchRules(db.Connection);
+        if (rules.Count == 0) { StatusMsg.Text = "编组优化：无在役编组规则"; return; }
+        // 日产目标：可 "编组优化 <日目标万m³>"；缺省取月计划剥离量/26 工作日(万m³→m³)
+        double targetM3;
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        if (tk.Length >= 2 && double.TryParse(tk[1], out double wan)) targetM3 = wan * 1e4;
+        else
+        {
+            double stripWan = 0;
+            foreach (var p in Data.GeoDataQueries.GetMonthlyPlans(db.Connection)) stripWan = System.Math.Max(stripWan, p.PlanStripWanM3);
+            targetM3 = (stripWan > 0 ? stripWan : 1000) * 1e4 / 26.0;   // 月剥离/26 工作日
+        }
+        var r = Data.FleetOptimizer.Optimize(new Data.FleetOptInput { DailyTargetM3 = targetM3, Rules = rules });
+        if (r.Groups.Count == 0) { StatusMsg.Text = $"编组优化：{(r.Notes.Count > 0 ? r.Notes[0] : "无解")}"; return; }
+        var parts = new List<string>();
+        foreach (var g in r.Groups)
+            parts.Add($"{g.Rule.ShovelModel}×{g.ShovelCount}台(配{g.Rule.TruckModel}×{g.TotalTrucks}车/组日产{g.GroupDailyM3 / 1e4:0.##}万m³/匹配{g.MatchFactor:0.##}/{g.Bottleneck})");
+        StatusMsg.Text = $"编组优化（目标 {targetM3 / 1e4:0.##}万m³/天 → {(r.TargetMet ? "达标" : "缺口")} {r.TotalDailyM3 / 1e4:0.##}万m³ · 铲{r.TotalShovels}/车{r.TotalTrucks}）：" + string.Join(" · ", parts);
+    }
+
     private void ProcessArchitectureCmd()
     {
         var db = EnsureGeoDb(); if (db == null) return;
@@ -5979,7 +6004,7 @@ public partial class MainWindow : Window
         "设备台账","生产数据","产能分析","故障分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构",
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","数据看板","煤种分类",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
-        "产能分类对比","故障类型分布","分工序验收合格率","数据导出","达成度评价","产量预测","时序预测",
+        "产能分类对比","故障类型分布","分工序验收合格率","数据导出","达成度评价","产量预测","时序预测","编组优化","智能编组优化",
         // TaskLib 自足计算
         "生产量核算","物料换算","采剥平衡","排土场按量推进","配煤核算","工序进度跟踪","编组产能","环节降效",
     };
