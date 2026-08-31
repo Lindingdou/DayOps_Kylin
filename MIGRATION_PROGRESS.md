@@ -1170,4 +1170,6 @@ grade-only 数据模型无法持多属性(架构限, 记录), 但可**部分缓�
 原命令多带参数对话框, 核 Kylin 是否只做了固定/缺省参数版:
 - [x] **等高线等高距**(`Contour.Levels` + "等高线 <等高距>")：Kylin 原固定 10 层(`zmin+step·k` 任意高程); 原 `ContourDialog` 参数对话框核心参数即等高距。补 `Contour.Levels(zmin,zmax,interval)`——interval>0 取整数倍高程处布线(`ceil(zmin/interval)·interval` 起, 如间距5→100/105/110, round 高程), 缺省 auto 10 层; maxLevels 防间距过小爆炸。测量用整高程等高线(非任意 zmin+step·k)。4 测(整数倍/首层≥zmin/auto10升序/封顶+退化)。原等高线生成走 native PMCT, 但等值线=marching squares 标准算法, Kylin 托管版补参数化等高距忠实对话框。
 
-**本会话累计补 31 真功能 + 1 并发修复, 896 测。** 四条新系统透镜(点云命令/报表生成器/着色对话框/参数对话框)diff 收敛。
+- 参数透镜边界(记录): 抽稀 `cell`(Kylin auto `span/100`)、去噪 SOR k/std·ROR 半径、抽稀 keepFraction 等参数——Kylin 有合理缺省, 底层 `PointThin/PointDenoise(参数)` 已单测; 显式暴露仅 UI 粘合(需 dispatch 加 StartsWith 变体)无新可验逻辑, 判为边际便利, 记录不实现(区别于等高距: 后者含新可验逻辑 `Contour.Levels` round 高程)。**判据: 加新可验逻辑或显著改用户输出→实现; 纯粘合既有已测逻辑+有合理缺省→记录。**
+
+**本会话累计补 31 真功能 + 1 并发修复, 896 测。** 四条新系统透镜(点云命令/报表生成器/着色对话框/参数对话框)diff 收敛; 参数透镜已至边际粘合。
