@@ -50,4 +50,18 @@ public class BenchLinesTests
             Assert.True(cur < prev);
         }
     }
+
+    [Fact]
+    public void BenchDistance_real_formula_w_plus_h_over_tan()
+    {
+        // W=20, H=15, α=45° → tan45=1 → 20 + 15/1 = 35
+        Assert.Equal(35.0, BenchLines.BenchDistance(20, 15, 45), 6);
+        // α=60° → tan60≈1.732 → 20 + 15/1.732 ≈ 28.66
+        Assert.Equal(20 + 15 / System.Math.Tan(60 * System.Math.PI / 180), BenchLines.BenchDistance(20, 15, 60), 6);
+        // 陡坡 α→90° 台阶距→W(垂直无水平投影); α≤0/≥90 回落 W
+        Assert.Equal(20.0, BenchLines.BenchDistance(20, 15, 90), 6);
+        Assert.Equal(20.0, BenchLines.BenchDistance(20, 15, 0), 6);
+        // 缓坡台阶距更大(H 水平投影更长)
+        Assert.True(BenchLines.BenchDistance(20, 15, 30) > BenchLines.BenchDistance(20, 15, 60));
+    }
 }

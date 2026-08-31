@@ -12,6 +12,14 @@ namespace PitMine3D.Kylin.Cad;
 /// </summary>
 public static class BenchLines
 {
+    /// <summary>真实台阶距 = 平盘宽 W + 台阶高 H / tan(坡面角 α)（水平投影距）。α∈(0,90)°。退化(α≤0/≥90)回落 W。</summary>
+    public static double BenchDistance(double benchWidthM, double benchHeightM, double slopeAngleDeg)
+    {
+        if (slopeAngleDeg <= 0 || slopeAngleDeg >= 90) return Math.Max(benchWidthM, 0);
+        double t = Math.Tan(slopeAngleDeg * Math.PI / 180.0);
+        return Math.Max(benchWidthM, 0) + (t > 1e-9 ? Math.Max(benchHeightM, 0) / t : 0);
+    }
+
     /// <summary>闭合多边形按定距 d 内偏移一圈；退化(平行/太小)返回 null。</summary>
     public static List<(double x, double y)>? OffsetClosed(IReadOnlyList<(double x, double y)> pts, double d)
     {

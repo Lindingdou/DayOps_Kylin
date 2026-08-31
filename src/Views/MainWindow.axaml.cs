@@ -766,7 +766,17 @@ public partial class MainWindow : Window
             if (cmd == "距离" || cmd == "测量距离" || cmd == "测距") { _measure = new MeasureState(); _tool = null; StatusMsg.Text = "测距：点第一点"; return; }
             if (cmd == "角度" || cmd == "测量角度" || cmd == "三点测角") { _angle = new AngleState(); _tool = null; _measure = null; StatusMsg.Text = "测角：点顶点"; return; }
             if (cmd == "等效运距" || cmd == "运输指标" || cmd == "运输指标报表" || cmd == "驱动距离") { await HaulMetricsAsync(); return; }
-            if (cmd == "批量台阶扩帮" || cmd == "台阶线生成" || cmd == "台阶扩帮") { GenerateBenchLines(); return; }
+            if (cmd == "批量台阶扩帮" || cmd == "台阶线生成" || cmd == "台阶扩帮"
+                || cmd.StartsWith("批量台阶扩帮 ") || cmd.StartsWith("台阶线生成 ") || cmd.StartsWith("台阶扩帮 "))
+            {
+                // 可选 "台阶扩帮 <帮宽W> <台阶高H> <坡面角α>" → 真实台阶距 W+H/tanα；缺省用境界短边/10
+                double? benchD = null;
+                var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+                if (tk.Length >= 4 && double.TryParse(tk[1], out double bw) && double.TryParse(tk[2], out double bh) && double.TryParse(tk[3], out double ba))
+                    benchD = Cad.BenchLines.BenchDistance(bw, bh, ba);
+                GenerateBenchLines(benchD);
+                return;
+            }
             if (cmd == "剥采比均衡" || cmd == "VP曲线" || cmd == "剥采比") { await StrippingBalanceAsync(); return; }
             if (cmd == "工作面线拟合" || cmd == "工作面线" || cmd == "拟合工作面线") { await WorkingFaceLineAsync(); return; }
             if (cmd == "质量统计" || cmd == "统计分析" || cmd == "煤质CSV统计" || cmd == "样本统计") { await QualityStatsAsync(); return; }   // 用户 CSV 统计(区别于 §四 库煤质统计)
@@ -5155,15 +5165,22 @@ public partial class MainWindow : Window
         StatusMsg.Text = "打断：指定第一点（两点间的一段将被移除）";
     }
 
-    // 批量台阶扩帮(几何核)：选中闭合多段线 → 逐圈定距内偏移生成台阶顶线
-    private void GenerateBenchLines()
+    // 批量台阶扩帮(几何核)：选中闭合多段线 → 逐圈定距内偏移生成台阶顶线。
+    // benchD 给定(=真实 W+H/tanα)时用之；否则回落境界短边/10 的几何默认。
+    private void GenerateBenchLines(double? benchD = null)
     {
         if (_selected.Count != 1 || _selected[0] is not PolylineEntity pl || !pl.Closed || pl.Points.Count < 3)
         { StatusMsg.Text = "批量台阶扩帮：请先选中一条闭合多段线(境界)"; return; }
-        // 台阶距默认 = 境界包围盒短边/10（真实应由帮参数 W+H/tanα 定，对话框待接）
-        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
-        foreach (var p in pl.Points) { minX = System.Math.Min(minX, p.x); minY = System.Math.Min(minY, p.y); maxX = System.Math.Max(maxX, p.x); maxY = System.Math.Max(maxY, p.y); }
-        double d = System.Math.Max(System.Math.Min(maxX - minX, maxY - minY) / 10.0, 1e-6);
+        double d;
+        string basis;
+        if (benchD is > 1e-6) { d = benchD.Value; basis = "帮参数 W+H/tanα"; }
+        else
+        {
+            double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+            foreach (var p in pl.Points) { minX = System.Math.Min(minX, p.x); minY = System.Math.Min(minY, p.y); maxX = System.Math.Max(maxX, p.x); maxY = System.Math.Max(maxY, p.y); }
+            d = System.Math.Max(System.Math.Min(maxX - minX, maxY - minY) / 10.0, 1e-6);
+            basis = "境界短边/10(可 台阶扩帮 帮宽 台阶高 坡面角 用真实距)";
+        }
         var rings = BenchLines.Generate(pl.Points, d, 20);
         if (rings.Count == 0) { StatusMsg.Text = "批量台阶扩帮：未生成台阶线(境界过小/自交)"; return; }
         BeginChange();
@@ -5175,7 +5192,7 @@ public partial class MainWindow : Window
             _scene.Add(bl);
         }
         RefreshScene();
-        StatusMsg.Text = $"批量台阶扩帮：生成 {rings.Count} 圈台阶线(台阶距 {d:0.##})";
+        StatusMsg.Text = $"批量台阶扩帮：生成 {rings.Count} 圈台阶线(台阶距 {d:0.##} · {basis})";
     }
 
     // GIZMO：切换夹点显示；关时选中实体不显方块、也不可拖夹点
