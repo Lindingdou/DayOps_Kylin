@@ -866,10 +866,10 @@ public partial class MainWindow : Window
             if (cmd == "数据导入导出" || cmd == "数据导出" || cmd == "导出数据库" || cmd == "地质数据导出") { await ExportGeoDataAsync(); return; }
             if (cmd == "数据字典" || cmd == "导出数据字典" || cmd == "表结构" || cmd == "库结构") { await ExportDataDictionaryAsync(); return; }
             if (cmd.StartsWith("SQL查询 ") || cmd.StartsWith("运行SQL ") || cmd.StartsWith("执行SQL ") || cmd.StartsWith("SQL ")) { await RunSqlQueryAsync(cmd); return; }
-            if (cmd == "点云抽稀" || cmd == "抽稀" || cmd == "点云精简") { await ThinPointsAsync(); return; }
-            if (cmd == "自适应抽稀" || cmd == "保特征抽稀" || cmd == "特征抽稀") { await ThinPointsAsync("adaptive"); return; }
-            if (cmd == "均匀抽稀" || cmd == "距离抽稀" || cmd == "等距抽稀") { await ThinPointsAsync("uniform"); return; }
-            if (cmd == "随机抽稀" || cmd == "随机采样" || cmd == "随机精简") { await ThinPointsAsync("random"); return; }
+            if (cmd == "点云抽稀" || cmd == "抽稀" || cmd == "点云精简" || cmd.StartsWith("点云抽稀 ") || cmd.StartsWith("抽稀 ")) { await ThinPointsAsync("voxel", cmd); return; }     // 抽稀 [格距]
+            if (cmd == "自适应抽稀" || cmd == "保特征抽稀" || cmd == "特征抽稀" || cmd.StartsWith("自适应抽稀 ")) { await ThinPointsAsync("adaptive", cmd); return; }
+            if (cmd == "均匀抽稀" || cmd == "距离抽稀" || cmd == "等距抽稀" || cmd.StartsWith("均匀抽稀 ")) { await ThinPointsAsync("uniform", cmd); return; }
+            if (cmd == "随机抽稀" || cmd == "随机采样" || cmd == "随机精简" || cmd.StartsWith("随机抽稀 ")) { await ThinPointsAsync("random", cmd); return; }
             if (cmd == "地面点滤波" || cmd == "地面滤波") { await GroundFilterAsync(); return; }
             if (cmd == "C2C" || cmd == "点云比对" || cmd == "位移监测 C2C" || cmd == "位移监测") { await CloudCompareAsync(); return; }
             if (cmd == "画道路中线" || cmd == "手动标定线路" || cmd == "道路中线绘制") { ActivateDrawTool("多段线"); StatusMsg.Text = "画道路中线：绘制折线作道路中线（供路网/寻径/演化对比）"; return; }
@@ -3976,7 +3976,7 @@ public partial class MainWindow : Window
     }
 
     // 点云抽稀：XYZ CSV → 体素抽稀 → 抽稀后点入场景 + 报压缩比
-    private async Task ThinPointsAsync(string thinMode = "voxel")
+    private async Task ThinPointsAsync(string thinMode = "voxel", string cmd = "")
     {
         string mode = thinMode switch { "adaptive" => "自适应保特征抽稀", "uniform" => "均匀抽稀", "random" => "随机抽稀", _ => "点云抽稀(体素)" };
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
@@ -3989,7 +3989,8 @@ public partial class MainWindow : Window
         var r = PointDataImportService.Load(files[0].Path.LocalPath);
         if (!r.Success) { StatusMsg.Text = $"{mode}：导入失败 {r.Error}"; return; }
         double span = System.Math.Max(r.Bounds[2] - r.Bounds[0], r.Bounds[3] - r.Bounds[1]);
-        double cell = System.Math.Max(span / 100.0, 1e-6);   // 约 100 格跨度
+        var ca = PrimitiveNums(cmd);
+        double cell = ca.Length >= 1 && ca[0] > 0 ? ca[0] : System.Math.Max(span / 100.0, 1e-6);   // 命令给格距, 否则约 100 格跨度
         var thinned = thinMode switch
         {
             "adaptive" => PointThin.ThinAdaptive(r.Points, cell),
