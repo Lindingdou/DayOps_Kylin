@@ -1056,6 +1056,8 @@ public partial class MainWindow : Window
             if (cmd == "OD运距矩阵" || cmd == "OD矩阵" || cmd == "运距矩阵") { await OdMatrixAsync(); return; }
             if (cmd == "新建图层") { var l = _layers.New(); PopulateDrawingLayers(); StatusMsg.Text = $"新建图层「{l.Name}」并置为当前"; return; }
             if (cmd == "删除图层" || cmd == "删层" || cmd == "删除当前图层") { DeleteCurrentLayer(); return; }
+            if (cmd.StartsWith("重命名图层 ") || cmd.StartsWith("图层重命名 ") || cmd.StartsWith("图层命名 ")) { RenameCurrentLayer(cmd.Substring(cmd.IndexOf(' ') + 1)); return; }
+            if (cmd.StartsWith("合并图层 ") || cmd.StartsWith("图层合并 ")) { MergeLayerIntoCurrent(cmd.Substring(cmd.IndexOf(' ') + 1)); return; }
             if (cmd == "图层特性管理器") { var l = _layers.CycleCurrent(); StatusMsg.Text = $"当前图层「{l.Name}」 显示{( l.Shown?"开":"关")}/{(l.Locked?"锁":"解锁")}（再点循环切换）"; return; }
             if (cmd == "全开" || cmd == "全部打开" || cmd == "图层全开") { _layers.AllOn(); PopulateDrawingLayers(); AfterLayerStateChange(); StatusMsg.Text = "已打开全部图层"; return; }
             if (cmd == "冻结") { FreezeCurrentLayer(true); return; }
@@ -6476,6 +6478,44 @@ public partial class MainWindow : Window
         RefreshScene();
         StatusMsg.Text = $"已删除图层「{target.Name}」（{moved} 个实体移至图层 0，当前切至 0）";
     }
+
+    // 图层重命名：当前层就地改名，实体 LayerName 随迁（忠实原版"图层命名/重命名"）
+    private void RenameCurrentLayer(string newName)
+    {
+        newName = newName.Trim();
+        string old = _layers.Current.Name;
+        if (!_layers.Rename(old, newName))
+        {
+            StatusMsg.Text = old == "0" ? "默认图层「0」不可改名"
+                : _layers.Get(newName) != null ? $"重命名失败：图层「{newName}」已存在（改名不合并，用「合并图层」）"
+                : "重命名失败：新名为空或与原名相同";
+            return;
+        }
+        BeginChange();
+        int moved = _scene.ReassignLayer(old, newName);
+        PopulateDrawingLayers();
+        AfterLayerStateChange();
+        RefreshScene();
+        StatusMsg.Text = $"图层「{old}」→「{newName}」（{moved} 个实体随迁）";
+    }
+
+    // 图层合并：把源图层实体并入当前层后删源层（忠实原版"图层合并"）
+    private void MergeLayerIntoCurrent(string sourceName)
+    {
+        sourceName = sourceName.Trim();
+        string dst = _layers.Current.Name;
+        if (sourceName.Length == 0) { StatusMsg.Text = "合并图层：请给出源图层名"; return; }
+        if (sourceName == dst) { StatusMsg.Text = "合并图层：源层与目标（当前层）相同"; return; }
+        if (_layers.Get(sourceName) == null) { StatusMsg.Text = $"合并图层：源图层「{sourceName}」不存在"; return; }
+        BeginChange();
+        int moved = _scene.ReassignLayer(sourceName, dst);
+        _layers.Remove(sourceName);                       // 源=="0" 时 Remove 拒绝，实体已移出，"0" 保留(空)
+        PopulateDrawingLayers();
+        AfterLayerStateChange();
+        RefreshScene();
+        StatusMsg.Text = $"图层「{sourceName}」并入「{dst}」（{moved} 个实体）";
+    }
+
     private void LockCurrentLayer(bool locked)
     {
         _layers.Current.Locked = locked;

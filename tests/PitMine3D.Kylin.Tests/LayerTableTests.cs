@@ -26,6 +26,49 @@ public class LayerTableTests
     }
 
     [Fact]
+    public void Rename_changes_name_in_place_preserving_color_and_state()
+    {
+        var t = new LayerTable();
+        var l = t.New("旧层");
+        l.Cr = 0.3f; l.Frozen = true; l.Locked = true;
+        Assert.True(t.Rename("旧层", "新层"));
+        Assert.Null(t.Get("旧层"));
+        var r = t.Get("新层");
+        Assert.NotNull(r);
+        Assert.Equal(0.3f, r!.Cr, 3);          // 色保留
+        Assert.True(r.Frozen); Assert.True(r.Locked);   // 状态保留
+    }
+
+    [Fact]
+    public void Rename_rejects_default_empty_same_and_collision()
+    {
+        var t = new LayerTable();
+        t.New("A"); t.New("B");
+        Assert.False(t.Rename("0", "别的"));       // 默认层不可改名
+        Assert.False(t.Rename("A", ""));           // 空名
+        Assert.False(t.Rename("A", "A"));          // 与原名同
+        Assert.False(t.Rename("A", "B"));          // 目标已存在
+        Assert.True(t.Rename("A", "C"));           // 正常
+    }
+
+    [Fact]
+    public void Merge_moves_entities_and_removes_source_layer()
+    {
+        var t = new LayerTable();
+        t.New("源"); t.New("目标");
+        var scene = new Scene();
+        scene.Add(new LineEntity { X0 = 0, Y0 = 0, X1 = 1, Y1 = 0, LayerName = "源" });
+        scene.Add(new LineEntity { X0 = 0, Y0 = 0, X1 = 2, Y1 = 0, LayerName = "源" });
+        scene.Add(new LineEntity { X0 = 0, Y0 = 0, X1 = 3, Y1 = 0, LayerName = "目标" });
+        // 合并 源 → 目标: 实体改指派 + 删源层
+        int moved = scene.ReassignLayer("源", "目标");
+        Assert.True(t.Remove("源"));
+        Assert.Equal(2, moved);
+        Assert.Null(t.Get("源"));
+        Assert.Equal(3, System.Linq.Enumerable.Count(scene.Entities, e => e.LayerName == "目标"));
+    }
+
+    [Fact]
     public void SetCurrent_and_cycle()
     {
         var t = new LayerTable();

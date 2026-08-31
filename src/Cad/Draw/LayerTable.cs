@@ -86,6 +86,20 @@ public sealed class LayerTable
         return true;
     }
 
+    /// <summary>重命名图层(就地改名, 保色/开关/冻结/锁定)。默认层 "0" 不可改; 新名空/与旧同/已存在则失败。返回成功。
+    /// 注: 实体的 LayerName 由调用方另行 Scene.ReassignLayer 同步。忠实原版"图层命名/重命名"。</summary>
+    public bool Rename(string oldName, string newName)
+    {
+        if (oldName == "0") return false;                        // 默认层不改名
+        newName = newName?.Trim() ?? "";
+        if (newName.Length == 0 || oldName == newName) return false;
+        if (Get(newName) != null) return false;                  // 目标名已存在(合并另走)
+        var l = Get(oldName);
+        if (l == null) return false;
+        l.Name = newName;
+        return true;
+    }
+
     /// <summary>该图层上的实体是否上屏（未知图层按显示处理）。</summary>
     public bool IsShown(string name) { var l = Get(name); return l == null || l.Shown; }
     /// <summary>该图层上的实体是否可拾取/编辑（未知图层按可选处理）。</summary>
