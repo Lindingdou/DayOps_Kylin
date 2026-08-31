@@ -977,3 +977,7 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 
 - [x] **泛克里金 UK**(`本次`)：`OrdinaryKriging.EstimateUniversalAt` + `KrigeUniversal` —— 一次趋势基 f=[1,x,y], 系统 (n+3) 阶(OK 的 (n+1) 加 x,y 无偏约束)。邻点<3 回落 OK。命令 泛克里金/UK估值(EstimateGradeAsync universal 分支, BuildKrigingGrid 逐格 EstimateUniversalAt)。
   - **★强验证**：+3 单测——**UK 对线性趋势 V=10+2x+3y 处处精确**(非控制点 (23,17)→107 解析精确, OK 做不到)/控制点精确/远点 null + <3 点回落。**"趋势可复现"不变量强锁 UK 正确性**。732 tests。
+
+## 六十二、网格剖面(曲面精确断面) —— MeshEdit「沿剖面线切三角网」补齐
+
+- [x] **网格剖面**(`本次`)：`MeshPlaneSection.Profile(v,t,p0,p1)` —— 网格 ∩ 过剖面线的竖直平面 → 逐三角求交(顶点符号距straddle→边交点)→ 按沿线距排序去重的 (dist,z) 精确断面。**区别于点采样剖面(剖面分析)**：用三角面精确求交得曲面真实断面。命令 网格剖面：选剖面线(直线/多段线) + OFF → 剖面曲线入场景。+3 单测(斜面 z=x 沿 x 剖面→z=dist 精确/网外空/零长空)。735 tests。

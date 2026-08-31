@@ -945,6 +945,7 @@ public partial class MainWindow : Window
             if (cmd == "确定可采区域" || cmd == "可采区域" || cmd == "可采区域识别") { await MineableAreaAsync(); return; }
             if (cmd == "点落到面上" || cmd == "点落面" || cmd == "点投影到面") { await ProjectPointsToMeshAsync(); return; }
             if (cmd == "网格交线" || cmd == "两网交线" || cmd == "面交线" || cmd == "求交线") { await MeshIntersectionAsync(); return; }
+            if (cmd == "网格剖面" || cmd == "三角网剖面" || cmd == "面剖面" || cmd == "曲面剖面") { await MeshSectionAsync(); return; }
             if (cmd == "线落到面上" || cmd == "线落面" || cmd == "线投影到面") { await ProjectPolylinesToMeshAsync(); return; }
             if (cmd == "侧面三角网" || cmd == "侧面放样" || cmd == "放样侧面") { await SideSurfaceAsync(); return; }
             if (cmd == "道路横断面" || cmd == "路面加宽超高" || cmd == "弯道加宽") { RoadCrossSectionCmd(); return; }
@@ -2318,6 +2319,34 @@ public partial class MainWindow : Window
         { sb.Append($"{s.A.x.ToString("R", inv)},{s.A.y.ToString("R", inv)},{s.A.z.ToString("R", inv)}\n"); sb.Append($"{s.B.x.ToString("R", inv)},{s.B.y.ToString("R", inv)},{s.B.z.ToString("R", inv)}\n"); }
         try { string outPath = System.IO.Path.ChangeExtension(m1[0].Path.LocalPath, ".intersect.csv"); System.IO.File.WriteAllText(outPath, sb.ToString(), new System.Text.UTF8Encoding(true)); StatusMsg.Text = $"网格交线：{segs.Count} 段交线入场景 + 3D 交点 → {System.IO.Path.GetFileName(outPath)}"; }
         catch { StatusMsg.Text = $"网格交线：{segs.Count} 段交线入场景（图层 网格交线；CSV 写出失败）"; }
+    }
+
+    // 网格剖面：选剖面线(选中多段线/两点) + OFF 网格 → 网格∩竖直面 精确断面 → 剖面曲线(沿线距→高程)入场景。
+    private async Task MeshSectionAsync()
+    {
+        (double x, double y)? a = null, b = null;
+        foreach (var e in _selected)
+        {
+            if (e is LineEntity l) { a = (l.X0, l.Y0); b = (l.X1, l.Y1); break; }
+            if (e is PolylineEntity p && p.Points.Count >= 2) { a = p.Points[0]; b = p.Points[^1]; break; }
+        }
+        if (a == null || b == null) { StatusMsg.Text = "网格剖面：请先选中一条剖面线(直线/多段线)"; return; }
+        var mf = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        { Title = "网格剖面：选网格 OFF", AllowMultiple = false, FileTypeFilter = new[] { new FilePickerFileType("OFF") { Patterns = new[] { "*.off" } } } });
+        if (mf.Count == 0) return;
+        var (v, t) = ReadConcatOff(new[] { mf[0].Path.LocalPath });
+        if (t.Count == 0) { StatusMsg.Text = "网格剖面：网格无三角"; return; }
+        var prof = Cad.MeshPlaneSection.Profile(v, t, a.Value, b.Value);
+        if (prof.Count < 2) { StatusMsg.Text = "网格剖面：剖面线未穿过网格（无断面）"; return; }
+        double zmin = double.MaxValue; foreach (var (_, z) in prof) if (z < zmin) zmin = z;
+        // 剖面曲线画在剖面线起点旁(沿线距为 x, 高程抬为 y)
+        double baseX = a.Value.x, baseY = a.Value.y;
+        var curve = new PolylineEntity { Cr = 0.3f, Cg = 0.85f, Cb = 0.95f, LayerName = "网格剖面" };
+        foreach (var (dist, z) in prof) curve.Points.Add((baseX + dist, baseY + (z - zmin)));
+        BeginChange(); _scene.Add(curve); RefreshScene();
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        double zmax = double.MinValue; foreach (var (_, z) in prof) if (z > zmax) zmax = z;
+        StatusMsg.Text = $"网格剖面：{prof.Count} 断面点 · 长 {prof[^1].dist.ToString("0.#", inv)} · 高程 {zmin.ToString("0.#", inv)}~{zmax.ToString("0.#", inv)}（剖面曲线入场景）";
     }
 
     private async Task ProjectPointsToMeshAsync()
@@ -6756,7 +6785,7 @@ public partial class MainWindow : Window
         // 线编辑
         "加密多段线","简化","抽稀等值线","两线交点","闭合多段线","删除重复点","删除重复线","连接多段线","组合工作线",
         // 网格/建模
-        "网格度量","网格诊断","创建三角网","约束三角网","裁剪三角网","网格焊接","网格边界","网格交线","合并三角网","固化成体","侧面三角网","立方体","球体","圆柱","体素格网体积","实体转块体",
+        "网格度量","网格诊断","创建三角网","约束三角网","裁剪三角网","网格焊接","网格边界","网格交线","网格剖面","合并三角网","固化成体","侧面三角网","立方体","球体","圆柱","体素格网体积","实体转块体",
         // 区域/地形/点云
         "区域求差","区域重叠检测","克里金估值","泛克里金","快速估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","地面点滤波","高程着色","点云质量统计","点云裁剪",
