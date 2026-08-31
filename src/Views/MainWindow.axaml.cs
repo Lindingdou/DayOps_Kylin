@@ -857,6 +857,7 @@ public partial class MainWindow : Window
             if (cmd == "色带" || cmd == "配色方案" || cmd.StartsWith("色带 ") || cmd.StartsWith("配色方案 ")) { SetColormapCmd(cmd); return; }
             if (cmd == "加载点云" || cmd == "展点" || cmd == "导入点云" || cmd == "加载点") { await LoadPointCloudAsync(); return; }
             if (cmd == "导入LAS" || cmd == "加载LAS" || cmd == "LAS导入" || cmd == "导入激光点云") { await LoadLasAsync(); return; }
+            if (cmd == "正射着色" || cmd == "真实色" || cmd == "影像着色" || cmd == "正射影像着色") { await OrthoColorAsync(); return; }
             if (cmd == "逐点坡度/坡向" || cmd == "逐点坡度坡向" || cmd == "法向估计" || cmd == "点云法向") { await PointNormalsAsync(); return; }
             if (cmd == "高程截断" || cmd == "高程裁剪" || cmd == "Z截断") { await ElevationClipAsync(); return; }
             if (cmd == "点云裁剪" || cmd == "边界裁剪点云" || cmd == "裁剪点云") { await CropCloudByBoundaryAsync(); return; }
@@ -2870,6 +2871,44 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"导入 LAS(v{r.VersionMajor}.{r.VersionMinor})：{r.PointCount} 点"
             + (r.Points.Count < r.PointCount ? $"(抽稀显示 {r.Points.Count})" : "")
             + $" · 范围 X[{r.MinX.ToString("0.#", inv)}~{r.MaxX.ToString("0.#", inv)}] Z[{r.MinZ.ToString("0.#", inv)}~{r.MaxZ.ToString("0.#", inv)}]（可着色/抽稀/统计）";
+    }
+
+    // 正射着色(真实色)：选点 CSV + GeoTIFF 正射影像 → 逐点采像素色 → 真实色点云入场景
+    private async Task OrthoColorAsync()
+    {
+        var pf = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "正射着色：选点 CSV (x,y[,z])",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("点云 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (pf.Count == 0) return;
+        var pr = PointDataImportService.Load(pf[0].Path.LocalPath);
+        if (!pr.Success || pr.Points.Count == 0) { StatusMsg.Text = "正射着色：点导入失败/无点"; return; }
+        var gf = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "正射着色：选 GeoTIFF 正射影像",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("GeoTIFF (*.tif;*.tiff)") { Patterns = new[] { "*.tif", "*.tiff" } } }
+        });
+        if (gf.Count == 0) return;
+        using var samp = GeoTiffSampler.Load(gf[0].Path.LocalPath);
+        if (!samp.Success) { StatusMsg.Text = $"正射着色：{samp.Error}"; return; }
+        BeginChange();
+        int colored = 0;
+        foreach (var p in pr.Points)
+        {
+            var rgb = samp.SampleRgb(p.x, p.y);
+            float cr, cg, cb;
+            if (rgb != null) { cr = rgb.Value.r / 255f; cg = rgb.Value.g / 255f; cb = rgb.Value.b / 255f; colored++; }
+            else { cr = cg = cb = 0.5f; }   // 影像外灰
+            var pe = new PointEntity { X = p.x, Y = p.y, Cr = cr, Cg = cg, Cb = cb };
+            AssignLayer(pe); pe.Cr = cr; pe.Cg = cg; pe.Cb = cb;
+            _scene.Add(pe);
+        }
+        RefreshScene();
+        Viewport.FitBounds(pr.Bounds);
+        StatusMsg.Text = $"正射着色(真实色)：{pr.Points.Count} 点 · {colored} 着色（影像 {samp.Width}×{samp.Height}）";
     }
 
     // 点云去噪 SOR/ROR：点 CSV(x,y,z) → 去噪 → 保留点入场景(黄) + 报表
