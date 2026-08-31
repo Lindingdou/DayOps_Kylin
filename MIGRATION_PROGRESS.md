@@ -677,3 +677,11 @@
 - 审计另核对 `borehole_seam_result.status LIKE '%尖灭%'`：种子确含 尖灭=2(分布 正常650/未达30/不取芯23/…)，**正确无 bug**。
 
 **教训**：凡 WHERE/CASE 里假设的字面量(status/type/枚举/中英文)必须先诊断种子实际值再定；测试若只验 InRange/>0 可能放过"恒 0/恒兜底"的 latent bug —— 关键计数应断言其**语义量级**(占多数/>1)。见 memory [[verify-seed-enum-values-before-filter]]。
+
+**审计续（commit `e8a2390`/`3bc01cf`）——单位/量级/排名全表核对**：
+- [x] **fix 月度计划显示真实剥离量**(`e8a2390`)：种子 monthly_plan 仅 `plan_strip_wan_m3`(≈1041万m³)有值，`plan_coal_wan_t`/`ratio_strip_coal` **均空**——原显示恰只读这两空列。加 PlanStripWanM3 显示 + 剥采比稳健推导(存值>0 用存值，否则 剥离/煤，均无则0[种子如实0，未来数据自动算])。
+- [x] **锁定 dispatch 排名有意义**(`3bc01cf`)：efficiency_score 种子 55~86/20不同值/40全active，断言 Top[0].Score>0 防退化假绿。
+- 单位核对（诊断种子实测量级，全部正确无误）：coal_sample 灰 ad_raw 7.9~83%·硫 std_raw 0.01~9.5%·热 qnet_ad 4.8~29MJ/kg·挥发 vdaf_raw 23~90%(均百分数/MJ，显示正确)；KPI availability/utilization 存 **0..1 分数**(`<=1→×100` 启发式正确)；shift=A/B/C 各3366(`{Shift}班` 正确)；生产作业率~96%；钻孔深 avg199/max482m。
+- JOIN 行乘积核对：3 处 JOIN(capacity×equipment / acceptance×phase)均针对 PK 列(equipment_id/phase_id, 1:1)，无膨胀。
+
+**★阶段定论**：§四/§八 读侧分析**功能全面覆盖 + 正确性审计完成**(本会话共 5 视图 + 2 latent bug 修复 + 1 空列纠正 + 排名/单位/JOIN 全核对)。可加的互异视图已尽(再加即 reslice 充数)，高风险查询模式(枚举/比率/排名/JOIN/单位)已逐一诊断种子验证。**doable+可验证+忠实的功能集至此完成**；实质余项均属已记录边界：TaskLib 引擎管线(§三十五，大工程+保真难验) / C++ 内核几何(mesh修复·点云·倾斜摄影·地质·PitDesign) / §四§八 CRUD 录入审批对话框(GUI 本机不可验)。
