@@ -741,6 +741,7 @@ public partial class MainWindow : Window
             if (cmd == "分帮扩帮" || cmd == "批量台阶扩帮" || cmd == "批量扩坑") { StartBench(); return; }
             if (cmd == "组合工作线" || cmd == "合并多段线" || cmd == "连接台阶线" || cmd == "连接多段线") { JoinPolylines(); return; }
             if (cmd == "块体模型" || cmd == "导入块体" || cmd == "地质体建模") { await ImportBlockModelAsync(); return; }
+            if (cmd == "导入PMB" || cmd == "加载PMB" || cmd == "PMB导入" || cmd == "导入块体模型文件") { await LoadPmbAsync(); return; }
             if (cmd == "资源量估算" || cmd == "剥采比" || cmd == "资源量") { ResourceReport(null); return; }
             if (cmd == "导出块体" || cmd == "块体导出") { await ExportBlocksAsync(); return; }
             if (cmd == "输出报告" || cmd == "资源量报告" || cmd == "块体报告") { await ExportResourceReportAsync(); return; }
@@ -3427,6 +3428,29 @@ public partial class MainWindow : Window
     }
 
     // 块体模型：CSV(x,y,z[,尺寸,品位]) → 品位配色方块平面显示 + 统计
+    // 导入 PMB(PitMine 块体模型 v1, 公开格式)：解析网格几何+首属性→grade-only 块入场景
+    private async Task LoadPmbAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "导入 PMB 块体模型",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("PitMine 块体 (PMB)") { Patterns = new[] { "*.pmb" } } }
+        });
+        if (files.Count == 0) return;
+        var r = PmbImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success) { StatusMsg.Text = $"导入 PMB：{r.Error}"; return; }
+        if (r.Blocks.Count == 0) { StatusMsg.Text = "导入 PMB：无块"; return; }
+        _lastBlocks = r.Blocks;
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        foreach (var b in r.Blocks) { if (b.X < minX) minX = b.X; if (b.Y < minY) minY = b.Y; if (b.X > maxX) maxX = b.X; if (b.Y > maxY) maxY = b.Y; }
+        BeginChange();
+        RenderBlocks(r.Blocks);
+        RefreshScene();
+        if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
+        StatusMsg.Text = $"导入 PMB：{r.Nx}×{r.Ny}×{r.Nz} 网格 · {r.Blocks.Count} 块（几何+首属性作品位；多属性受 grade-only 数据模型限）";
+    }
+
     private async Task ImportBlockModelAsync()
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
