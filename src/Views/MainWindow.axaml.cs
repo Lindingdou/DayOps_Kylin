@@ -908,6 +908,7 @@ public partial class MainWindow : Window
             if (cmd == "补洞(三角网)" || cmd == "补洞" || cmd == "网格补洞" || cmd == "填洞") { await MeshHoleFillAsync(); return; }
             if (cmd == "网格修复" || cmd == "修复拓扑" || cmd == "修复拓扑关系" || cmd == "拓扑修复" || cmd == "一键修复") { await MeshRepairAsync(); return; }
             if (cmd == "剔面(三角网)" || cmd == "剔面" || cmd == "网格剔面" || cmd == "删陡面" || cmd.StartsWith("剔面 ")) { await MeshFaceCullAsync(cmd); return; }
+            if (cmd == "剔倒刺" || cmd == "去尖刺" || cmd == "剔除障碍" || cmd == "剔高Z倒刺" || cmd.StartsWith("剔倒刺 ")) { await MeshSpikeCullAsync(cmd); return; }
             if (cmd == "分割三角网" || cmd == "沿线分割三角网" || cmd == "网格分割" || cmd == "切分三角网") { await MeshSplitAsync(); return; }
             if (cmd == "边界分割三角网" || cmd == "内外分割" || cmd == "闭合边界分割" || cmd == "网格内外分片") { await MeshBoundarySplitAsync(); return; }
             if (cmd == "快速建模" || cmd == "一键建模" || cmd == "顶底成体") { await QuickModelAsync(); return; }
@@ -2099,6 +2100,32 @@ public partial class MainWindow : Window
         catch (System.Exception ex) { StatusMsg.Text = $"剔面：写出失败 {ex.Message}"; return; }
         var inv = System.Globalization.CultureInfo.InvariantCulture;
         StatusMsg.Text = $"剔面(坡度>{maxSlope.ToString("0.#", inv)}°)：删 {removed} 陡面 · 留 {kept.Count}/{tris.Count} → {System.IO.Path.GetFileName(outPath)}";
+    }
+
+    // 剔倒刺(原 pc_remove_obs 孤立高Z尖刺部分)：选 OFF → 删含"高于最高邻居>阈值"顶点的三角(坡度无关)
+    private async Task MeshSpikeCullAsync(string cmd)
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "剔倒刺：选 OFF 网格", AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } } }
+        });
+        if (files.Count == 0) return;
+        string text;
+        try { text = System.IO.File.ReadAllText(files[0].Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"剔倒刺：读取失败 {ex.Message}"; return; }
+        var (verts, tris) = MeshMetrics.ParseOff(text);
+        if (tris.Count == 0) { StatusMsg.Text = "剔倒刺：未解析到三角网格"; return; }
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        double tol = 2.0;   // 可选 "剔倒刺 <高差阈值>"
+        var tk = cmd.Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
+        if (tk.Length >= 2 && double.TryParse(tk[1], System.Globalization.NumberStyles.Float, inv, out double v)) tol = v;
+        var kept = MeshFaceCull.BySpike(verts, tris, tol);
+        int removed = tris.Count - kept.Count;
+        string outPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(files[0].Path.LocalPath) ?? ".", "spikeculled.off");
+        try { System.IO.File.WriteAllText(outPath, MeshWeld.ToOff(verts, kept)); }
+        catch (System.Exception ex) { StatusMsg.Text = $"剔倒刺：写出失败 {ex.Message}"; return; }
+        StatusMsg.Text = $"剔倒刺(高于最高邻居>{tol.ToString("0.#", inv)})：删 {removed} 含倒刺三角 · 留 {kept.Count}/{tris.Count}（坡度无关，坡上局部隆起亦剔）→ {System.IO.Path.GetFileName(outPath)}";
     }
 
     private async Task MeshHoleFillAsync()

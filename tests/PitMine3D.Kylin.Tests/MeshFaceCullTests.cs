@@ -66,4 +66,44 @@ public class MeshFaceCullTests
         Assert.False(MeshFaceCull.SlopeDeg(v[0], v[1], v[2], out _));
         Assert.Empty(MeshFaceCull.BySlope(v, t, 90));
     }
+
+    // 3×3 格网 TIN(8 三角), 中心顶点 v4 抬成倒刺
+    private static (List<(double x, double y, double z)> v, List<(int a, int b, int c)> t) Grid3x3(double centerZ)
+    {
+        var v = new List<(double x, double y, double z)>
+        {
+            (0,0,0),(1,0,0),(2,0,0), (0,1,0),(1,1,centerZ),(2,1,0), (0,2,0),(1,2,0),(2,2,0),
+        };
+        var t = new List<(int a, int b, int c)>
+        { (0,1,4),(0,4,3),(1,2,5),(1,5,4),(3,4,7),(3,7,6),(4,5,8),(4,8,7) };
+        return (v, t);
+    }
+
+    [Fact]
+    public void BySpike_removes_triangles_touching_local_high_spike()
+    {
+        var (v, t) = Grid3x3(centerZ: 10);   // 中心 v4 抬高 10(倒刺)
+        var kept = MeshFaceCull.BySpike(v, t, heightTol: 1);
+        // v4 是倒刺(z=10 vs 邻居中位 0) → 含 v4 的 6 三角删, 留 2 (1,2,5)/(3,7,6)
+        Assert.Equal(2, kept.Count);
+        Assert.All(kept, tr => Assert.True(tr.a != 4 && tr.b != 4 && tr.c != 4));
+    }
+
+    [Fact]
+    public void BySpike_keeps_all_on_flat_or_gentle()
+    {
+        var (v, t) = Grid3x3(centerZ: 0);    // 全平 → 无倒刺
+        Assert.Equal(t.Count, MeshFaceCull.BySpike(v, t, heightTol: 1).Count);
+    }
+
+    [Fact]
+    public void BySpike_preserves_uniform_slope()
+    {
+        // 均匀斜坡 z=x：每顶点 z≈邻居中位, 无倒刺 → 全留(区别于绝对高度剔面会误删高处)
+        var v = new List<(double x, double y, double z)>
+        { (0,0,0),(1,0,1),(2,0,2), (0,1,0),(1,1,1),(2,1,2), (0,2,0),(1,2,1),(2,2,2) };
+        var t = new List<(int a, int b, int c)>
+        { (0,1,4),(0,4,3),(1,2,5),(1,5,4),(3,4,7),(3,7,6),(4,5,8),(4,8,7) };
+        Assert.Equal(t.Count, MeshFaceCull.BySpike(v, t, heightTol: 0.5).Count);
+    }
 }

@@ -42,6 +42,42 @@ public static class MeshFaceCull
         return kept;
     }
 
+    /// <summary>
+    /// 剔局部高Z倒刺（原 pc_remove_obs「剔除车辆/设备/植被/高Z倒刺」的孤立尖刺部分）：顶点 z 比其
+    /// **最高**边邻接顶点还高出 &gt; heightTol 者判为孤立倒刺，删含倒刺顶点的三角。
+    /// 用"高于最高邻居"而非中位/均值，才**坡度无关**（均匀斜坡上高处顶点其上坡邻居 ≥ 之，不误判）；
+    /// 区别于 <see cref="ByHeight"/>(绝对基准, 坡上局部隆起漏检) 与 GroundFilter.LowestPerCell(整格抽最低, 抽稀)。
+    /// 只删面不删点。纯逻辑、可单测。
+    /// </summary>
+    public static List<(int a, int b, int c)> BySpike(
+        IReadOnlyList<(double x, double y, double z)> verts, IReadOnlyList<(int a, int b, int c)> tris, double heightTol)
+    {
+        var kept = new List<(int a, int b, int c)>();
+        if (verts == null || tris == null || verts.Count == 0) return kept;
+        var nbr = new Dictionary<int, List<int>>();
+        void Link(int u, int w) { if (!nbr.TryGetValue(u, out var l)) { l = new List<int>(); nbr[u] = l; } if (!l.Contains(w)) l.Add(w); }
+        foreach (var (a, b, c) in tris)
+        {
+            if (a < 0 || b < 0 || c < 0 || a >= verts.Count || b >= verts.Count || c >= verts.Count) continue;
+            Link(a, b); Link(b, a); Link(b, c); Link(c, b); Link(c, a); Link(a, c);
+        }
+        var spike = new bool[verts.Count];
+        for (int i = 0; i < verts.Count; i++)
+        {
+            if (!nbr.TryGetValue(i, out var ns) || ns.Count == 0) continue;
+            double maxNbrZ = double.MinValue;
+            foreach (int j in ns) if (verts[j].z > maxNbrZ) maxNbrZ = verts[j].z;   // 最高邻居 z
+            if (verts[i].z - maxNbrZ > heightTol) spike[i] = true;   // 高于最高邻居→孤立倒刺(坡度无关)
+        }
+        foreach (var (a, b, c) in tris)
+        {
+            if (a < 0 || b < 0 || c < 0 || a >= verts.Count || b >= verts.Count || c >= verts.Count) continue;
+            if (spike[a] || spike[b] || spike[c]) continue;   // 含倒刺顶点的三角丢弃
+            kept.Add((a, b, c));
+        }
+        return kept;
+    }
+
     /// <summary>三角坡度(度)：面法向与竖直的夹角 = acos(|nz|/|n|)。退化三角返回 false。</summary>
     public static bool SlopeDeg((double x, double y, double z) p0, (double x, double y, double z) p1, (double x, double y, double z) p2, out double deg)
     {
