@@ -724,6 +724,10 @@ public partial class MainWindow : Window
             if (cmd == "工艺架构定义" || cmd == "工艺架构" || cmd == "平盘工艺地图" || cmd == "工艺系统") { ProcessArchitectureCmd(); return; }
             if (cmd == "现场验收录入" || cmd == "现场验收" || cmd == "参数验收") { AcceptanceStatsCmd(); return; }
             if (cmd == "作业面台账" || cmd == "作业面" || cmd == "工作面台账" || cmd == "采场参数") { WorkingFacesCmd(); return; }
+            if (cmd == "参数模板库" || cmd == "参数化模板" || cmd == "参数模板" || cmd == "参数定义") { ParamTemplatesCmd(); return; }
+            if (cmd == "月度计划" || cmd == "月计划" || cmd == "月度计划查看") { MonthlyPlansCmd(); return; }   // 只读展示(编制/授权工作流走 TaskLib, 受阻)
+            if (cmd == "路况显示" || cmd == "运输道路" || cmd == "道路台账") { HaulRoadsCmd(); return; }
+            if (cmd == "边坡设计" || cmd == "边坡参数" || cmd == "帮坡角设计") { SlopeDesignsCmd(); return; }
             if (cmd == "点云抽稀" || cmd == "抽稀" || cmd == "点云精简") { await ThinPointsAsync(); return; }
             if (cmd == "地面点滤波" || cmd == "地面滤波") { await GroundFilterAsync(); return; }
             if (cmd == "C2C" || cmd == "点云比对" || cmd == "位移监测 C2C" || cmd == "位移监测") { await CloudCompareAsync(); return; }
@@ -5114,6 +5118,43 @@ public partial class MainWindow : Window
         var parts = new List<string>();
         foreach (var f in faces) parts.Add($"{f.FaceCode}(台阶{f.BenchHeight:0.#}m/坡{f.SlopeAngle:0.#}°/采宽{f.MiningWidth:0.#}m/推进{f.AdvanceRate:0.#}m·月)");
         StatusMsg.Text = $"作业面台账：{faces.Count} 面 · " + string.Join(" · ", parts);
+    }
+
+    private void ParamTemplatesCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var p = Data.GeoDataQueries.GetParamTemplates(db.Connection);
+        StatusMsg.Text = $"参数模板库：{p.Definitions} 参数定义（{p.Required} 必填 · 涉 {p.Phases} 工序）· {p.TemplateValues} 模板取值";
+    }
+
+    private void MonthlyPlansCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var plans = Data.GeoDataQueries.GetMonthlyPlans(db.Connection);
+        if (plans.Count == 0) { StatusMsg.Text = "月度计划：无计划数据"; return; }
+        var parts = new List<string>();
+        foreach (var p in plans) parts.Add($"{p.Year}-{p.Month:00}: 煤 {p.PlanCoalWanT:0.#}万t/剥采比 {p.StripRatio:0.##}/运距 {p.AvgDistanceKm:0.#}km");
+        StatusMsg.Text = $"月度计划（{plans.Count} 期）：" + string.Join(" · ", parts);
+    }
+
+    private void HaulRoadsCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var roads = Data.GeoDataQueries.GetHaulRoads(db.Connection);
+        if (roads.Count == 0) { StatusMsg.Text = "路况显示：无道路数据"; return; }
+        var parts = new List<string>();
+        foreach (var r in roads) parts.Add($"{(string.IsNullOrEmpty(r.Name) ? r.RoadId : r.Name)}(长{r.LengthM:0.#}m/坡{r.MaxSlopePct:0.#}%/宽{r.WidthM:0.#}m{(string.IsNullOrEmpty(r.Condition) ? "" : "/" + r.Condition)})");
+        StatusMsg.Text = $"路况显示（{roads.Count} 路段）：" + string.Join(" · ", parts);
+    }
+
+    private void SlopeDesignsCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var slopes = Data.GeoDataQueries.GetSlopeDesigns(db.Connection);
+        if (slopes.Count == 0) { StatusMsg.Text = "边坡设计：无边坡数据"; return; }
+        var parts = new List<string>();
+        foreach (var s in slopes) parts.Add($"{s.Side}(工作帮{s.WorkingAngle:0.#}°/最终帮{s.FinalAngle:0.#}°/深{s.MaxDepth:0.#}m/安全系数{s.SafetyFactor:0.##})");
+        StatusMsg.Text = $"边坡设计（{slopes.Count} 帮）：" + string.Join(" · ", parts);
     }
 
     // ---------- 智能助手面板（菜单引导，点选即执行命令）----------

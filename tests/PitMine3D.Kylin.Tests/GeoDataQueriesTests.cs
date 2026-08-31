@@ -126,4 +126,31 @@ public class GeoDataQueriesTests
         var f = GeoDataQueries.GetWorkingFaces(db.Connection);
         Assert.NotEmpty(f);                                    // 种子 5 面
     }
+
+    [Fact]
+    public void Param_templates_from_seed()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var p = GeoDataQueries.GetParamTemplates(db.Connection);
+        Assert.True(p.Definitions > 0, "参数定义");            // 种子 29
+        Assert.True(p.TemplateValues > 0, "模板取值");         // 种子 42
+    }
+
+    [Fact]
+    public void Monthly_plans_from_seed()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var plans = GeoDataQueries.GetMonthlyPlans(db.Connection);
+        Assert.NotEmpty(plans);
+        for (int i = 1; i < plans.Count; i++)                  // 按年月升序
+            Assert.True(plans[i - 1].Year * 100 + plans[i - 1].Month <= plans[i].Year * 100 + plans[i].Month);
+    }
+
+    [Fact]
+    public void Haul_roads_and_slopes_from_seed()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        Assert.NotEmpty(GeoDataQueries.GetHaulRoads(db.Connection));      // 种子 6
+        Assert.NotEmpty(GeoDataQueries.GetSlopeDesigns(db.Connection));   // 种子 4
+    }
 }

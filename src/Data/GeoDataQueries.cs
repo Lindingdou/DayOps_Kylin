@@ -213,6 +213,62 @@ public static class GeoDataQueries
         return rows;
     }
 
+    public sealed record ParamTemplateStats(int Definitions, int TemplateValues, int Phases, int Required);
+
+    /// <summary>参数模板库 / 参数化模板：参数定义数 / 模板取值数 / 涉及工序 / 必填数。</summary>
+    public static ParamTemplateStats GetParamTemplates(SqliteConnection conn)
+    {
+        int defs = (int)Scalar(conn, "SELECT COUNT(*) FROM parameter_definition");
+        int vals = (int)Scalar(conn, "SELECT COUNT(*) FROM template_param_value");
+        int phases = (int)Scalar(conn, "SELECT COUNT(DISTINCT phase_id) FROM parameter_definition WHERE phase_id IS NOT NULL");
+        int req = (int)Scalar(conn, "SELECT COUNT(*) FROM parameter_definition WHERE is_required = 1");
+        return new ParamTemplateStats(defs, vals, phases, req);
+    }
+
+    public sealed record MonthlyPlanRow(int Year, int Month, double PlanCoalWanT, double StripRatio, double AvgDistanceKm, double AvgHeightM);
+
+    /// <summary>月度计划：各期 计划煤量(万t)/剥采比/平均运距/平均台阶高。</summary>
+    public static List<MonthlyPlanRow> GetMonthlyPlans(SqliteConnection conn)
+    {
+        var rows = new List<MonthlyPlanRow>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"SELECT year, month, COALESCE(plan_coal_wan_t,0), COALESCE(ratio_strip_coal,0),
+                            COALESCE(avg_distance_km,0), COALESCE(avg_height_m,0)
+                            FROM monthly_plan ORDER BY year, month";
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read()) rows.Add(new MonthlyPlanRow(rd.GetInt32(0), rd.GetInt32(1), rd.GetDouble(2), rd.GetDouble(3), rd.GetDouble(4), rd.GetDouble(5)));
+        return rows;
+    }
+
+    public sealed record HaulRoadRow(string RoadId, string Name, double LengthM, double MaxSlopePct, double WidthM, string Condition);
+
+    /// <summary>路况显示 / 运输道路：各路段 长度/最大坡度/宽度/路况。</summary>
+    public static List<HaulRoadRow> GetHaulRoads(SqliteConnection conn)
+    {
+        var rows = new List<HaulRoadRow>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"SELECT COALESCE(road_id,''), COALESCE(name,''), COALESCE(length_m,0),
+                            COALESCE(max_slope_pct,0), COALESCE(road_width_m,0), COALESCE(condition,'')
+                            FROM haul_road ORDER BY road_id";
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read()) rows.Add(new HaulRoadRow(rd.GetString(0), rd.GetString(1), rd.GetDouble(2), rd.GetDouble(3), rd.GetDouble(4), rd.GetString(5)));
+        return rows;
+    }
+
+    public sealed record SlopeDesignRow(string Side, double WorkingAngle, double FinalAngle, double MaxDepth, double SafetyFactor);
+
+    /// <summary>边坡设计：各帮 工作帮坡角/最终帮坡角/最大深度/安全系数。</summary>
+    public static List<SlopeDesignRow> GetSlopeDesigns(SqliteConnection conn)
+    {
+        var rows = new List<SlopeDesignRow>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"SELECT COALESCE(side_name,''), COALESCE(working_slope_angle_deg,0), COALESCE(final_slope_angle_deg,0),
+                            COALESCE(max_depth_m,0), COALESCE(safety_factor,0) FROM slope_design ORDER BY side_name";
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read()) rows.Add(new SlopeDesignRow(rd.GetString(0), rd.GetDouble(1), rd.GetDouble(2), rd.GetDouble(3), rd.GetDouble(4)));
+        return rows;
+    }
+
     private static double ScalarDouble(SqliteConnection conn, string sql)
     {
         using var cmd = conn.CreateCommand();
