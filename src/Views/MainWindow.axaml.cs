@@ -856,6 +856,7 @@ public partial class MainWindow : Window
             if (cmd == "点云高程着色" || cmd == "高程着色" || cmd == "点云着色") { await ElevationColorAsync(); return; }
             if (cmd == "色带" || cmd == "配色方案" || cmd.StartsWith("色带 ") || cmd.StartsWith("配色方案 ")) { SetColormapCmd(cmd); return; }
             if (cmd == "加载点云" || cmd == "展点" || cmd == "导入点云" || cmd == "加载点") { await LoadPointCloudAsync(); return; }
+            if (cmd == "导入LAS" || cmd == "加载LAS" || cmd == "LAS导入" || cmd == "导入激光点云") { await LoadLasAsync(); return; }
             if (cmd == "逐点坡度/坡向" || cmd == "逐点坡度坡向" || cmd == "法向估计" || cmd == "点云法向") { await PointNormalsAsync(); return; }
             if (cmd == "高程截断" || cmd == "高程裁剪" || cmd == "Z截断") { await ElevationClipAsync(); return; }
             if (cmd == "点云裁剪" || cmd == "边界裁剪点云" || cmd == "裁剪点云") { await CropCloudByBoundaryAsync(); return; }
@@ -2820,6 +2821,34 @@ public partial class MainWindow : Window
         RefreshScene();
         Viewport.FitBounds(r.Bounds);
         StatusMsg.Text = $"加载点云：{r.Points.Count} 点已入场景（灰点；可着色/去噪/抽稀/统计）";
+    }
+
+    // 导入 LAS 点云(公开 LAS 1.2/1.4 规范, 托管解析)：读头 + 抽稀点入场景(俯视灰点)
+    private async Task LoadLasAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "导入 LAS 点云",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("LAS 点云") { Patterns = new[] { "*.las" } } }
+        });
+        if (files.Count == 0) return;
+        var r = LasImportService.Load(files[0].Path.LocalPath, 200000);
+        if (!r.Success) { StatusMsg.Text = $"导入 LAS：{r.Error}"; return; }
+        if (r.Points.Count == 0) { StatusMsg.Text = "导入 LAS：头有效但无点"; return; }
+        BeginChange();
+        foreach (var p in r.Points)
+        {
+            var pe = new PointEntity { X = p.x, Y = p.y, Cr = 0.75f, Cg = 0.78f, Cb = 0.82f };
+            AssignLayer(pe); pe.Cr = 0.75f; pe.Cg = 0.78f; pe.Cb = 0.82f;
+            _scene.Add(pe);
+        }
+        RefreshScene();
+        Viewport.FitBounds(new[] { r.MinX, r.MinY, r.MaxX, r.MaxY });
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        StatusMsg.Text = $"导入 LAS(v{r.VersionMajor}.{r.VersionMinor})：{r.PointCount} 点"
+            + (r.Points.Count < r.PointCount ? $"(抽稀显示 {r.Points.Count})" : "")
+            + $" · 范围 X[{r.MinX.ToString("0.#", inv)}~{r.MaxX.ToString("0.#", inv)}] Z[{r.MinZ.ToString("0.#", inv)}~{r.MaxZ.ToString("0.#", inv)}]（可着色/抽稀/统计）";
     }
 
     // 点云去噪 SOR/ROR：点 CSV(x,y,z) → 去噪 → 保留点入场景(黄) + 报表
