@@ -855,3 +855,13 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 - [x] **补齐全 6 煤质分析结果导出**(`8fb8613`)：续补 品位-储量曲线/分标高/洗选/用途 的 ToCsv + 导出命令，加通用 `SaveCsvAsync` 辅助。至此 CoalQualityAnalytics **全 6 分析结果均可导出 CSV**(符合性/离群/品位-储量/分标高/洗选/用途)。+1 单测(4 序列化)。
 - [x] **编组优化 + 产量预测结果导出**(`f4bdd19`)：`FleetOptimizer.ToCsv`(逐编组方案: 铲型/铲数/车型/组日产/匹配/瓶颈 + 汇总/说明) + `ForecastModels.PathToCsv`(元信息 + 历史序列 + 未来 12 期 + 95% 区间) + 导出编组/导出预测 命令。+2 单测。
 - **★结果导出脉络完成**：**8 个结构化计算结果均可导出 CSV**(煤质 6 + 编组优化 + 产量预测)——含逐段明细/曲线/编组方案/预测路径+区间，供现场定位处置/绘图/计划。此脉络三轮前发现(结果只显截断摘要)，逐步补齐完备。§四/§八 聚合类结果(产能/故障排名等)较简单，状态栏文本 + 既有 ExportTableToCsv(原始表)已足。667 测试。
+
+## 五十一、数据导入脉络（DataImportCenter 全 5 类 CSV 入库，670 测试）
+
+新脉络(与结果导出配对——原是"导入导出中心")：原 `DataImportCenter` 有 5 类设备数据 CSV 入库(表头映射 + 逐行 insert/update/skip)，我的 Kylin 只有几何导入(点/点云/钻孔/块体)。补全 5 类(均 CSV 基础、可验证[导入后查库行]、参数化防注入、FK 约束正确生效)：
+
+- [x] **生产班次记录**(`1aa7493`)：`ImportProductionRecords`(设备+日期+班次 upsert)。
+- [x] **月度产能 + 故障记录**(`a64b9af`)：`ImportCapacityMonthly`(设备+年+月 upsert) + `ImportFaultEvents`(事件插入型)。加通用 `ImportCsvToDbAsync` 辅助 + `ParseCsvRows`。
+- [x] **月度KPI + 设备台账**(`dd1f40e`)：`ImportKpiMonthly`(9列 upsert) + `ImportEquipmentLedger`(equipment_id upsert, model FK→equipment_model 正确校验)。
+- 命令：导入生产记录/导入月度产能/导入故障记录/导入月度KPI/导入设备台账。+3 单测(插入/更新/跳过/坏行错误/FK 约束)。
+- **★"导入导出中心"补齐**：导入侧(5 类设备数据 CSV 入库) + 导出侧(8 结构化结果 CSV + ExportTableToCsv 原始表)——原 DataImportCenter 的导入导出功能essence 均托管落地。用户可"改自己数据(导入)→跑分析→导出结果处置"闭环。670 测试。
