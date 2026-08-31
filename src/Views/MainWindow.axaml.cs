@@ -661,7 +661,8 @@ public partial class MainWindow : Window
             if (cmd == "点对点寻径" || cmd == "寻径" || cmd == "点对点寻路") { StartPathfind(); return; }
             if (cmd == "备选路径" || cmd == "K最短路" || cmd == "备用路径") { StartKPathfind(); return; }
             if (cmd == "路网校验" || cmd == "连通性诊断" || cmd == "路网体检") { ValidateRoadNetwork(); return; }
-            if (cmd == "基础道路网络构建" || cmd == "路网构建" || cmd == "路网预览" || cmd == "构建路网") { BuildRoadNetworkCmd(); return; }
+            if (cmd == "基础道路网络构建" || cmd == "路网构建" || cmd == "路网预览" || cmd == "构建路网" || cmd == "路网更新") { BuildRoadNetworkCmd(); return; }
+            if (cmd == "路网存档" || cmd == "路网导出") { await SnapshotEpochAsync(); return; }
             if (cmd == "演化对比" || cmd == "路网演化" || cmd == "两期路网对比") { await EvolutionCompareAsync(); return; }
             if (cmd == "时段快照" || cmd == "路网快照" || cmd == "纪元快照") { await SnapshotEpochAsync(); return; }
             if (cmd == "排土条带" || cmd == "条带填充" || cmd == "排土条带划分") { DumpStrips(); return; }
