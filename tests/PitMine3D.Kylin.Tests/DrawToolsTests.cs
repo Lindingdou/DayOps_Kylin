@@ -167,12 +167,13 @@ public class DrawToolsTests
     [Fact]
     public void Transform_preserves_style_attributes()
     {
-        var line = new LineEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 0,
+        var line = new LineEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 0, LayerName = "开采境界",
             Dash = DashPattern.ByName("虚线"), LineWeight = 25, Visible = false };
         var moved = (LineEntity)line.Apply(Affine2.Translate(5, 3));
         Assert.Equal(new[] { 6.0, 3.0 }, moved.Dash!);   // 线型随变换保留
         Assert.Equal(25, moved.LineWeight);              // 线宽随变换保留
         Assert.False(moved.Visible);                     // 可见性随变换保留(Colored 统一)
+        Assert.Equal("开采境界", moved.LayerName);        // 图层随变换保留(移动/复制不应改层)
     }
 
     [Fact]
