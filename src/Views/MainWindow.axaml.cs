@@ -3408,7 +3408,7 @@ public partial class MainWindow : Window
         var rb = PointDataImportService.Load(f2[0].Path.LocalPath);
         if (!ra.Success || !rb.Success) { StatusMsg.Text = "C2C：点导入失败"; return; }
         var dists = CloudCompare.Distances(ra.Points, rb.Points);
-        var (max, mean) = CloudCompare.Stats(dists);
+        var (max, _) = CloudCompare.Stats(dists);
         BeginChange();
         for (int i = 0; i < ra.Points.Count; i++)
         {
@@ -3417,7 +3417,11 @@ public partial class MainWindow : Window
         }
         RefreshScene();
         Viewport.FitBounds(ra.Bounds);
-        StatusMsg.Text = $"C2C 比对：{ra.Points.Count} 点 · 最大偏差 {max:0.###} · 平均 {mean:0.###}";
+        // 位移分布(原「统计与分布直方图」)：偏差 → min/max/mean/std/分位数 + 20 桶直方图 → CSV
+        var summary = Statistics.Describe(dists, 20);
+        var name = await SaveCsvAsync("导出C2C分布", "c2c_distribution.csv", Statistics.HistogramCsv(summary));
+        StatusMsg.Text = $"C2C 比对：{ra.Points.Count} 点 · {Statistics.SummaryLine(summary)}"
+            + (name != null ? $" · 分布直方图 → {name}" : "");
     }
 
     // 地面点滤波：XYZ CSV → 每 XY 格取最低点(≈地面) → 点入场景
