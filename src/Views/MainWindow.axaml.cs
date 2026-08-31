@@ -681,6 +681,7 @@ public partial class MainWindow : Window
             if (cmd == "导入") { await ImportDxfAsync(); return; }
             if (cmd == "导入点") { await ImportPointsAsync(); return; }
             if (cmd == "导入模板" || cmd.StartsWith("导入模板 ") || cmd == "下载模板") { await ExportImportTemplateAsync(cmd); return; }
+            if (cmd == "导出分析" || cmd.StartsWith("导出分析 ")) { await ExportAnalysisAsync(cmd); return; }
             if (cmd == "导入生产记录" || cmd == "生产记录导入" || cmd == "导入生产数据") { await ImportProductionRecordsAsync(); return; }
             if (cmd == "导入月度产能" || cmd == "月度产能导入" || cmd == "导入产能") { await ImportCsvToDbAsync("导入月度产能", "equipment_id,year,month,output_m3", rs => Data.GeoDataQueries.ImportCapacityMonthly(EnsureGeoDb()!.Connection, rs, true)); return; }
             if (cmd == "导入故障记录" || cmd == "故障记录导入" || cmd == "导入故障") { await ImportCsvToDbAsync("导入故障记录", "equipment_id,date,fault_type[,shift,duration_hours,description,is_resolved,repair_team]", rs => Data.GeoDataQueries.ImportFaultEvents(EnsureGeoDb()!.Connection, rs)); return; }
@@ -5613,6 +5614,40 @@ public partial class MainWindow : Window
     private static List<System.Collections.Generic.IReadOnlyDictionary<string, string>> ParseCsvRows(string text)
         => Data.GeoDataQueries.ParseCsv(text);
 
+    // 导出 §四/§八 聚合分析结果 → CSV（反射序列化）。可 "导出分析 <类型>"。
+    private async Task ExportAnalysisAsync(string cmd)
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var c = db.Connection;
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        string key = tk.Length >= 2 ? tk[1] : "";
+        (string csv, int n, string name)? R = key switch
+        {
+            "产能排名" => Wrap(Data.GeoDataQueries.GetCapacityRanking(c, 1000), "capacity_ranking"),
+            "故障排名" => Wrap(Data.GeoDataQueries.GetFaultByEquipment(c, 1000), "fault_ranking"),
+            "见煤统计" => Wrap(Data.GeoDataQueries.GetSeamIntersections(c), "seam_intersections"),
+            "分层煤质" => Wrap(Data.GeoDataQueries.GetCoalQualityBySeam(c), "coal_quality_by_seam"),
+            "年度产量" => Wrap(Data.GeoDataQueries.GetAnnualOutput(c), "annual_output"),
+            "KPI趋势" => Wrap(Data.GeoDataQueries.GetKpiTrend(c), "kpi_trend"),
+            "产能分类" => Wrap(Data.GeoDataQueries.GetCapacityByCategory(c), "capacity_by_category"),
+            "故障类型" => Wrap(Data.GeoDataQueries.GetFaultByType(c), "fault_by_type"),
+            "班次产量" => Wrap(Data.GeoDataQueries.GetProductionByShift(c), "production_by_shift"),
+            "月度计划" => Wrap(Data.GeoDataQueries.GetMonthlyPlans(c), "monthly_plans"),
+            "作业面" => Wrap(Data.GeoDataQueries.GetWorkingFaces(c), "working_faces"),
+            _ => null,
+        };
+        if (R == null)
+        {
+            StatusMsg.Text = "导出分析：类型须为 产能排名/故障排名/见煤统计/分层煤质/年度产量/KPI趋势/产能分类/故障类型/班次产量/月度计划/作业面（如「导出分析 产能排名」）";
+            return;
+        }
+        var fname = await SaveCsvAsync($"导出分析 · {key}", R.Value.name + ".csv", R.Value.csv);
+        if (fname != null) StatusMsg.Text = $"导出分析（{key}）：{R.Value.n} 行 → {fname}";
+    }
+
+    private static (string csv, int n, string name) Wrap<T>(System.Collections.Generic.IReadOnlyList<T> rows, string name)
+        => (Data.GeoDataQueries.RecordsToCsv(rows), rows.Count, name);
+
     // 导出导入模板：生成带表头+示例行的空 CSV, 供用户按格式填写后导入。可 "导入模板 <类型>"。
     private async Task ExportImportTemplateAsync(string cmd)
     {
@@ -6365,7 +6400,7 @@ public partial class MainWindow : Window
         // 生产计划/投影
         "境界圈定","剥采比均衡","方案综合对比","开采程序确定","平盘宽度识别","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
-        "设备台账","生产数据","产能分析","故障分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","导入生产记录","导入月度产能","导入故障记录","导入月度KPI","导入设备台账","导入煤质","导入观测点","导入月度计划","导入见煤成果","导入模板",
+        "设备台账","生产数据","产能分析","故障分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","导入生产记录","导入月度产能","导入故障记录","导入月度KPI","导入设备台账","导入煤质","导入观测点","导入月度计划","导入见煤成果","导入模板","导出分析",
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","数据看板","煤种分类",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
         "产能分类对比","故障类型分布","分工序验收合格率","数据导出","达成度评价","产量预测","时序预测","编组优化","智能编组优化","导出编组","导出预测",

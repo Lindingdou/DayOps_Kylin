@@ -510,6 +510,24 @@ public static class GeoDataQueries
         return rows;
     }
 
+    /// <summary>通用：record/对象列表 → CSV（反射公开属性为表头 + 逐行值）。供 §四/§八 聚合结果导出。</summary>
+    public static string RecordsToCsv<T>(IReadOnlyList<T> rows)
+    {
+        var props = typeof(T).GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        static string Cell(object? v)
+        {
+            if (v == null) return "";
+            string s = v is System.IFormattable f ? f.ToString(v is double or float ? "0.####" : null, System.Globalization.CultureInfo.InvariantCulture) : v.ToString() ?? "";
+            return s.IndexOfAny(new[] { ',', '"', '\n' }) >= 0 ? "\"" + s.Replace("\"", "\"\"") + "\"" : s;
+        }
+        var sb = new System.Text.StringBuilder();
+        sb.Append(string.Join(",", System.Array.ConvertAll(props, p => p.Name))).Append('\n');
+        foreach (var r in rows)
+            sb.Append(string.Join(",", System.Array.ConvertAll(props, p => Cell(p.GetValue(r))))).Append('\n');
+        return sb.ToString();
+    }
+
     public sealed record ImportOutcome(int Inserted, int Updated, int Skipped, int Errors);
 
     /// <summary>解析 CSV：首行=表头(去 BOM/星号/空白)，逗号/制表分隔，'#' 行与空行跳过。返回逐行(列名→值，大小写不敏感)。</summary>

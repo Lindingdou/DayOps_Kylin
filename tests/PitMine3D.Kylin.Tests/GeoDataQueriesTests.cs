@@ -181,6 +181,25 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void RecordsToCsv_reflects_properties_and_values()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        // 产能排名(记录含 EquipmentId/Model/TotalOutputM3) → CSV 表头 + 行
+        var rows = GeoDataQueries.GetCapacityRanking(db.Connection, 5);
+        string csv = GeoDataQueries.RecordsToCsv(rows);
+        var lines = csv.TrimEnd('\n').Split('\n');
+        Assert.Equal(rows.Count + 1, lines.Length);        // 表头 + N 行
+        Assert.Contains("EquipmentId", lines[0]);          // 反射属性名为表头
+        Assert.Contains("TotalOutputM3", lines[0]);
+        // KPI趋势(含 Year/AvgAvailabilityPct...) 也可序列化
+        var kpi = GeoDataQueries.RecordsToCsv(GeoDataQueries.GetKpiTrend(db.Connection));
+        Assert.Contains("Year,AvgAvailabilityPct", kpi.Replace(" ", ""));
+        // 空列表 → 仅表头
+        var empty = GeoDataQueries.RecordsToCsv(new List<GeoDataQueries.AnnualOutputRow>());
+        Assert.Equal("Year,OutputWanM3", empty.TrimEnd('\n'));
+    }
+
+    [Fact]
     public void ParseCsv_headers_skip_comments_blanks()
     {
         var rows = GeoDataQueries.ParseCsv("# 注释\nequipment_id,date,shift\n\nEX-01,2025-01-01,A\nEX-02,2025-01-02,B\n");
