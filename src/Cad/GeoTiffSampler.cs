@@ -32,8 +32,10 @@ public sealed class GeoTiffSampler : IDisposable
     private BinaryReader _br = null!;
     private bool _le;
     public int Width, Height, Samples;
-    private int _rowsPerStrip;
+    private int _rowsPerStrip, _compression = 1, _predictor = 1;
     private long[] _stripOffsets = Array.Empty<long>();
+    private long[] _stripByteCounts = Array.Empty<long>();
+    private readonly Dictionary<int, byte[]> _stripCache = new();   // LZW: 解码后条带缓存
     private GeoTransform _geo;
     public double MinX, MaxX, MinY, MaxY;
     public bool Success; public string Error = "";
@@ -59,10 +61,11 @@ public sealed class GeoTiffSampler : IDisposable
         int n = U16();
         int compression = 1, planar = 1, rps = int.MaxValue;
         long stripOffTagVal = 0, stripOffCnt = 0; int stripOffType = 0;
+        long stripCntTagVal = 0, stripCntCnt = 0; int stripCntType = 0;
         double[] pixScale = Array.Empty<double>(); double[] tiePt = Array.Empty<double>();
         for (int i = 0; i < n; i++)
         {
-            int tag = U16(), type = U16(); long cnt = U32(); long valPos = _s.Position; uint val = U32();
+            int tag = U16(), type = U16(); long cnt = U32(); uint val = U32();
             switch (tag)
             {
                 case 256: Width = (int)val; break;
@@ -70,18 +73,22 @@ public sealed class GeoTiffSampler : IDisposable
                 case 259: compression = (int)val; break;
                 case 277: Samples = (int)val; break;
                 case 278: rps = (int)val; break;
+                case 279: stripCntTagVal = val; stripCntCnt = cnt; stripCntType = type; break;
                 case 284: planar = (int)val; break;
+                case 317: _predictor = (int)val; break;
                 case 273: stripOffTagVal = val; stripOffCnt = cnt; stripOffType = type; break;
                 case 33550: pixScale = ReadDoubles(val, cnt); break;
                 case 33922: tiePt = ReadDoubles(val, cnt); break;
             }
         }
-        if (compression != 1) { Error = $"暂不支持压缩(Compression={compression}); 仅无压缩"; return; }
+        if (compression != 1 && compression != 5) { Error = $"暂不支持压缩(Compression={compression}); 仅无压缩/LZW"; return; }
         if (planar != 1) { Error = "暂不支持 planar 排列"; return; }
         if (Width <= 0 || Height <= 0) { Error = "无效尺寸"; return; }
         if (Samples <= 0) Samples = 3;
+        _compression = compression;
         _rowsPerStrip = rps == int.MaxValue ? Height : rps;
         _stripOffsets = ReadLongs(stripOffTagVal, stripOffCnt, stripOffType);
+        _stripByteCounts = ReadLongs(stripCntTagVal, stripCntCnt, stripCntType);
         if (_stripOffsets.Length == 0) { Error = "缺 StripOffsets"; return; }
         if (pixScale.Length < 2 || tiePt.Length < 5) { Error = "缺地理配准(PixelScale/Tiepoint)"; return; }
         _geo = new GeoTransform(pixScale[0], pixScale[1], tiePt[0], tiePt[1], tiePt[3], tiePt[4]);
@@ -102,11 +109,23 @@ public sealed class GeoTiffSampler : IDisposable
         int strip = row / _rowsPerStrip;
         if (strip >= _stripOffsets.Length) return null;
         int rowInStrip = row - strip * _rowsPerStrip;
-        long off = _stripOffsets[strip] + ((long)rowInStrip * Width + col) * Samples;
-        if (off + Samples > _s.Length) return null;
-        _s.Seek(off, SeekOrigin.Begin);
-        var px = _br.ReadBytes(Samples);
-        if (px.Length < Samples) return null;
+        long inStrip = ((long)rowInStrip * Width + col) * Samples;
+        byte[] px;
+        if (_compression == 5)                       // LZW: 解码整条带(缓存)后取像素
+        {
+            var decoded = DecodeStrip(strip);
+            if (decoded == null || inStrip + Samples > decoded.Length) return null;
+            px = new byte[Samples];
+            Array.Copy(decoded, inStrip, px, 0, Samples);
+        }
+        else                                         // 无压缩: 直接 seek+read
+        {
+            long off = _stripOffsets[strip] + inStrip;
+            if (off + Samples > _s.Length) return null;
+            _s.Seek(off, SeekOrigin.Begin);
+            px = _br.ReadBytes(Samples);
+            if (px.Length < Samples) return null;
+        }
         return Samples >= 3 ? (px[0], px[1], px[2]) : (px[0], px[0], px[0]);   // 灰度→RGB
     }
 
@@ -133,6 +152,22 @@ public sealed class GeoTiffSampler : IDisposable
         var r = new long[count];
         for (int i = 0; i < count; i++) r[i] = type == 3 ? U16() : U32();   // SHORT or LONG
         _s.Seek(save, SeekOrigin.Begin); return r;
+    }
+
+    private byte[]? DecodeStrip(int strip)
+    {
+        if (_stripCache.TryGetValue(strip, out var cached)) return cached;
+        if (strip >= _stripByteCounts.Length || strip >= _stripOffsets.Length) return null;
+        long off = _stripOffsets[strip], cnt = _stripByteCounts[strip];
+        if (cnt <= 0 || off + cnt > _s.Length) return null;
+        _s.Seek(off, SeekOrigin.Begin);
+        var comp = _br.ReadBytes((int)cnt);
+        int rowsInStrip = Math.Min(_rowsPerStrip, Height - strip * _rowsPerStrip);
+        int expected = rowsInStrip * Width * Samples;
+        var decoded = TiffLzw.Decode(comp, expected);
+        if (_predictor == 2) TiffLzw.UndoHorizontalPredictor(decoded, Width, rowsInStrip, Samples);
+        _stripCache[strip] = decoded;
+        return decoded;
     }
 
     public void Dispose() { _br?.Dispose(); _s?.Dispose(); }

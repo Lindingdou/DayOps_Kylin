@@ -80,6 +80,43 @@ public class GeoTiffSamplerTests
         Assert.Equal(198, g.MinY, 6); Assert.Equal(200, g.MaxY, 6);   // 顶 200, 底 200-2
     }
 
+    // 4×4 LZW GeoTIFF: PIL 压缩的 [红绿蓝白]×4 条带 + 地理配准(像素(0,0)=世界(100,200), 每像素1)
+    private static byte[] MakeLzwGeoTiff()
+    {
+        byte[] lzw = { 128, 63, 192, 16, 56, 20, 17, 255, 7, 130, 128, 33, 48, 136, 60, 14, 21, 14, 134, 66, 226, 16, 136, 8 };
+        var ms = new MemoryStream(); var w = new BinaryWriter(ms);
+        w.Write(new byte[] { (byte)'I', (byte)'I' }); w.Write((ushort)42); w.Write((uint)8);
+        void Entry(ushort tag, ushort type, uint count, uint val) { w.Write(tag); w.Write(type); w.Write(count); w.Write(val); }
+        uint stripOff = 134, scaleOff = (uint)(134 + lzw.Length), tieOff = scaleOff + 24;
+        w.Write((ushort)10);
+        Entry(256, 3, 1, 4); Entry(257, 3, 1, 4);   // 4×4
+        Entry(259, 3, 1, 5);                          // Compression=LZW
+        Entry(273, 4, 1, stripOff);
+        Entry(277, 3, 1, 3); Entry(278, 3, 1, 4);     // Samples=3, RowsPerStrip=4
+        Entry(279, 4, 1, (uint)lzw.Length);           // StripByteCounts
+        Entry(284, 3, 1, 1);
+        Entry(33550, 12, 3, scaleOff); Entry(33922, 12, 6, tieOff);
+        w.Write((uint)0);
+        w.Write(lzw);
+        w.Write(1.0); w.Write(1.0); w.Write(0.0);
+        w.Write(0.0); w.Write(0.0); w.Write(0.0); w.Write(100.0); w.Write(200.0); w.Write(0.0);
+        return ms.ToArray();
+    }
+
+    [Fact]
+    public void Lzw_geotiff_decodes_and_samples()
+    {
+        var g = new GeoTiffSampler();
+        g.Init(new MemoryStream(MakeLzwGeoTiff()));
+        Assert.True(g.Success, g.Error);
+        Assert.Equal(4, g.Width);
+        // 每行像素 = 红绿蓝白(col 0..3); 行不变
+        Assert.Equal((byte)255, g.SampleRgb(100, 200)!.Value.r);   // (0,0)红
+        var green = g.SampleRgb(101, 200)!.Value; Assert.Equal((byte)255, green.g); Assert.Equal((byte)0, green.r);   // (1,0)绿
+        var blue = g.SampleRgb(102, 199)!.Value; Assert.Equal((byte)255, blue.b);   // (2,1)蓝
+        var white = g.SampleRgb(103, 197)!.Value; Assert.Equal((byte)255, white.r); Assert.Equal((byte)255, white.b);   // (3,3)白
+    }
+
     [Fact]
     public void Non_tiff_rejected()
     {
