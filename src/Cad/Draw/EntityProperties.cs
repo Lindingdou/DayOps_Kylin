@@ -56,6 +56,8 @@ public static class EntityProperties
                 break;
             case PointEntity p:
                 r.Add(("几何", "坐标", F(p.X, p.Y)));
+                r.Add(("几何", "点大小", N(p.Size)));
+                r.Add(("几何", "点样式", p.Style.ToString(Inv)));
                 break;
             case PolylineEntity pl:
                 r.Add(("几何", "闭合", pl.Closed ? "是" : "否"));
@@ -81,7 +83,7 @@ public static class EntityProperties
             case CircleEntity: s.Add("圆心"); s.Add("半径"); break;
             case RectEntity: s.Add("角点1"); s.Add("角点2"); break;
             case PolygonEntity: s.Add("圆心"); s.Add("半径"); s.Add("边数"); break;
-            case PointEntity: s.Add("坐标"); break;
+            case PointEntity: s.Add("坐标"); s.Add("点大小"); s.Add("点样式"); break;
             case ArcEntity: s.Add("起点"); s.Add("端点"); break;
             case TextEntity: s.Add("位置"); s.Add("字高"); s.Add("内容"); s.Add("旋转"); break;
         }
@@ -134,7 +136,9 @@ public static class EntityProperties
             case PolygonEntity pg when label == "圆心" && TryXY(text, out double x, out double y): return Style(e, new PolygonEntity { Cx = x, Cy = y, Radius = pg.Radius, Rotation = pg.Rotation, Sides = pg.Sides });
             case PolygonEntity pg when label == "半径" && TryD(text, out double d) && d > 1e-9: return Style(e, new PolygonEntity { Cx = pg.Cx, Cy = pg.Cy, Radius = d, Rotation = pg.Rotation, Sides = pg.Sides });
             case PolygonEntity pg when label == "边数" && int.TryParse(text.Trim(), out int n) && n >= 3 && n <= 512: return Style(e, new PolygonEntity { Cx = pg.Cx, Cy = pg.Cy, Radius = pg.Radius, Rotation = pg.Rotation, Sides = n });
-            case PointEntity p when label == "坐标" && TryXY(text, out double x, out double y): return Style(e, new PointEntity { X = x, Y = y, Size = p.Size });
+            case PointEntity p when label == "坐标" && TryXY(text, out double x, out double y): return Style(e, new PointEntity { X = x, Y = y, Size = p.Size, Style = p.Style });
+            case PointEntity p when label == "点大小" && TryD(text, out double d) && d > 1e-9: return Style(e, new PointEntity { X = p.X, Y = p.Y, Size = d, Style = p.Style });
+            case PointEntity p when label == "点样式" && int.TryParse(text.Trim(), out int st) && st >= 0 && st <= 127: return Style(e, new PointEntity { X = p.X, Y = p.Y, Size = p.Size, Style = st });
             case ArcEntity a when label == "起点" && TryXY(text, out double x, out double y): return Style(e, new ArcEntity { X1 = x, Y1 = y, X2 = a.X2, Y2 = a.Y2, X3 = a.X3, Y3 = a.Y3, Segments = a.Segments });
             case ArcEntity a when label == "端点" && TryXY(text, out double x, out double y): return Style(e, new ArcEntity { X1 = a.X1, Y1 = a.Y1, X2 = a.X2, Y2 = a.Y2, X3 = x, Y3 = y, Segments = a.Segments });
             case TextEntity t when label == "位置" && TryXY(text, out double x, out double y): return Style(e, new TextEntity { X = x, Y = y, Height = t.Height, Text = t.Text, Rotation = t.Rotation });
@@ -173,7 +177,7 @@ public static class EntityProperties
         CircleEntity c => Style(e, new CircleEntity { Cx = c.Cx, Cy = c.Cy, Radius = c.Radius, Segments = c.Segments }),
         RectEntity rc => Style(e, new RectEntity { X0 = rc.X0, Y0 = rc.Y0, X1 = rc.X1, Y1 = rc.Y1 }),
         PolygonEntity pg => Style(e, new PolygonEntity { Cx = pg.Cx, Cy = pg.Cy, Radius = pg.Radius, Rotation = pg.Rotation, Sides = pg.Sides }),
-        PointEntity p => Style(e, new PointEntity { X = p.X, Y = p.Y, Size = p.Size }),
+        PointEntity p => Style(e, new PointEntity { X = p.X, Y = p.Y, Size = p.Size, Style = p.Style }),
         ArcEntity a => Style(e, new ArcEntity { X1 = a.X1, Y1 = a.Y1, X2 = a.X2, Y2 = a.Y2, X3 = a.X3, Y3 = a.Y3, Segments = a.Segments }),
         TextEntity t => Style(e, new TextEntity { X = t.X, Y = t.Y, Height = t.Height, Text = t.Text, Rotation = t.Rotation }),
         PolylineEntity pl => Style(e, new PolylineEntity { Points = new List<(double, double)>(pl.Points), Closed = pl.Closed }),

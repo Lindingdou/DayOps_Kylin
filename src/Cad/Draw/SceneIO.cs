@@ -76,7 +76,7 @@ public static class SceneIO
                 LineEntity l => new Dto { T = "line", N = new[] { l.X0, l.Y0, l.X1, l.Y1 } },
                 CircleEntity ci => new Dto { T = "circle", N = new[] { ci.Cx, ci.Cy, ci.Radius } },
                 RectEntity r => new Dto { T = "rect", N = new[] { r.X0, r.Y0, r.X1, r.Y1 } },
-                PointEntity p => new Dto { T = "point", N = new[] { p.X, p.Y } },
+                PointEntity p => new Dto { T = "point", N = new[] { p.X, p.Y, p.Size, p.Style } },   // 含点大小/样式
                 ArcEntity a => new Dto { T = "arc", N = new[] { a.X1, a.Y1, a.X2, a.Y2, a.X3, a.Y3 } },
                 PolygonEntity pg => new Dto { T = "polygon", N = new[] { pg.Cx, pg.Cy, pg.Radius, pg.Rotation, pg.Sides } },
                 TextEntity tx => new Dto { T = "text", N = new[] { tx.X, tx.Y, tx.Height, tx.Rotation }, S = tx.Text },
@@ -110,7 +110,7 @@ public static class SceneIO
                 "line" when d.N.Length >= 4 => new LineEntity { X0 = d.N[0], Y0 = d.N[1], X1 = d.N[2], Y1 = d.N[3] },
                 "circle" when d.N.Length >= 3 => new CircleEntity { Cx = d.N[0], Cy = d.N[1], Radius = d.N[2] },
                 "rect" when d.N.Length >= 4 => new RectEntity { X0 = d.N[0], Y0 = d.N[1], X1 = d.N[2], Y1 = d.N[3] },
-                "point" when d.N.Length >= 2 => new PointEntity { X = d.N[0], Y = d.N[1] },
+                "point" when d.N.Length >= 2 => new PointEntity { X = d.N[0], Y = d.N[1], Size = d.N.Length >= 3 ? d.N[2] : 0.5, Style = d.N.Length >= 4 ? (int)d.N[3] : 2 },
                 "arc" when d.N.Length >= 6 => new ArcEntity { X1 = d.N[0], Y1 = d.N[1], X2 = d.N[2], Y2 = d.N[3], X3 = d.N[4], Y3 = d.N[5] },
                 "polygon" when d.N.Length >= 5 => new PolygonEntity { Cx = d.N[0], Cy = d.N[1], Radius = d.N[2], Rotation = d.N[3], Sides = (int)d.N[4] },
                 "text" when d.N.Length >= 3 => new TextEntity { X = d.N[0], Y = d.N[1], Height = d.N[2], Rotation = d.N.Length >= 4 ? d.N[3] : 0, Text = d.S ?? "" },

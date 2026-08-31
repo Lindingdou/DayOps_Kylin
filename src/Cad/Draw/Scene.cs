@@ -313,18 +313,33 @@ public sealed class PointEntity : SceneEntity
 {
     public double X, Y;
     public double Size = 0.5;
+    public int Style = 2;   // 点样式(PDMODE): 低5位基本符号 0=点/2=加号/3=叉/4=竖线; +32=外接圆, +64=外接方。忠实原"修改点样式"
     public override void Tessellate(List<float> o)
     {
-        Seg(o, X - Size, Y, X + Size, Y);
-        Seg(o, X, Y - Size, X, Y + Size);
+        double s = Size;
+        switch (Style & 31)
+        {
+            case 0: Seg(o, X - s * 0.15, Y, X + s * 0.15, Y); Seg(o, X, Y - s * 0.15, X, Y + s * 0.15); break;   // 点(小十字)
+            case 1: break;                                                                                       // 无标记
+            case 3: Seg(o, X - s, Y - s, X + s, Y + s); Seg(o, X - s, Y + s, X + s, Y - s); break;               // ×
+            case 4: Seg(o, X, Y, X, Y + s); break;                                                               // 竖线
+            default: Seg(o, X - s, Y, X + s, Y); Seg(o, X, Y - s, X, Y + s); break;                              // +（2 及默认）
+        }
+        if ((Style & 32) != 0)   // 外接圆
+        {
+            const int n = 24; double px = X + s, py = Y;
+            for (int i = 1; i <= n; i++) { double a = 2 * Math.PI * i / n; double nx = X + s * Math.Cos(a), ny = Y + s * Math.Sin(a); Seg(o, px, py, nx, ny); px = nx; py = ny; }
+        }
+        if ((Style & 64) != 0)   // 外接方
+        { Seg(o, X - s, Y - s, X + s, Y - s); Seg(o, X + s, Y - s, X + s, Y + s); Seg(o, X + s, Y + s, X - s, Y + s); Seg(o, X - s, Y + s, X - s, Y - s); }
     }
     public override SceneEntity Apply(Affine2 m)
     {
         var (x, y) = m.Map(X, Y);
-        return Colored(new PointEntity { X = x, Y = y, Size = Size });
+        return Colored(new PointEntity { X = x, Y = y, Size = Size, Style = Style });
     }
     public override List<(double x, double y)> Grips() => new() { (X, Y) };
-    public override SceneEntity? MoveGrip(int i, double nx, double ny) => Colored(new PointEntity { X = nx, Y = ny, Size = Size });
+    public override SceneEntity? MoveGrip(int i, double nx, double ny) => Colored(new PointEntity { X = nx, Y = ny, Size = Size, Style = Style });
 }
 
 public sealed class ArcEntity : SceneEntity

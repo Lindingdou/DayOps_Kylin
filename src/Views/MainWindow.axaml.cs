@@ -1029,6 +1029,7 @@ public partial class MainWindow : Window
             if (cmd == "上次") { SelectPrevious(); return; }
             if (cmd == "取消选择" || cmd == "全部取消选择" || cmd == "清除选择") { DeselectAll(); return; }
             if (cmd == "反选" || cmd == "反向选择" || cmd == "反转选择") { InvertSelection(); return; }
+            if (cmd == "修改点样式" || cmd.StartsWith("修改点样式 ") || cmd == "点样式") { ModifyPointStyle(cmd); return; }
             if (cmd == "分解") { ExplodeSelected(); return; }
             if (cmd == "加密多段线" || cmd == "加密") { DensifySelectedPolylines(); return; }
             if (cmd == "两线交点" || cmd == "求交点" || cmd == "线交点") { IntersectSelectedPolylines(); return; }
@@ -5926,6 +5927,31 @@ public partial class MainWindow : Window
         _selected.AddRange(_scene.Entities);
         HighlightSelection();
         StatusMsg.Text = $"全选 {_selected.Count} 个";
+    }
+
+    // 修改点样式：批量改选中点实体的样式(PDMODE 0-127)与大小。用法「修改点样式 <样式> [大小]」。忠实原"修改点样式"
+    private void ModifyPointStyle(string cmd)
+    {
+        var pts = new List<SceneEntity>();
+        foreach (var e in _selected) if (e is PointEntity) pts.Add(e);
+        if (pts.Count == 0) { StatusMsg.Text = "修改点样式：请先选中点实体（用法：修改点样式 <样式0-127> [大小]）"; return; }
+        var parts = cmd.Split(new[] { ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
+        int style = 2; double size = -1;
+        if (parts.Length >= 2) int.TryParse(parts[1], out style);
+        if (parts.Length >= 3) double.TryParse(parts[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out size);
+        style = System.Math.Clamp(style, 0, 127);
+        BeginChange();
+        var newSel = new List<SceneEntity>();
+        foreach (PointEntity p in pts)
+        {
+            var np = new PointEntity { X = p.X, Y = p.Y, Size = size > 1e-9 ? size : p.Size, Style = style };
+            np.CopyStyleFrom(p);                      // 保色/层/透明等
+            _scene.Replace(p, np);
+            newSel.Add(np);
+        }
+        _selected.Clear(); _selected.AddRange(newSel);
+        RefreshScene(); HighlightSelection();
+        StatusMsg.Text = $"修改点样式：{pts.Count} 点 → 样式 {style}{(size > 1e-9 ? $" 大小 {size:0.##}" : "")}";
     }
 
     // 反选：新选择集 = 当前未选中的全部实体（忠实原版"反选"）
