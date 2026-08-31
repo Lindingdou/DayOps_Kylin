@@ -69,6 +69,21 @@ public class LayerTableTests
     }
 
     [Fact]
+    public void Isolate_shows_only_target_and_allon_restores()
+    {
+        var t = new LayerTable();
+        t.New("A"); t.New("B"); t.New("C");
+        int hidden = t.Isolate("B");
+        Assert.Equal(3, hidden);                       // 0/A/C 关闭
+        Assert.True(t.Get("B")!.Visible);
+        Assert.False(t.Get("A")!.Visible);
+        Assert.False(t.Get("0")!.Visible);
+        t.AllOn();                                     // 取消隔离
+        Assert.True(t.Get("A")!.Visible);
+        Assert.True(t.Get("0")!.Visible);
+    }
+
+    [Fact]
     public void SetCurrent_and_cycle()
     {
         var t = new LayerTable();

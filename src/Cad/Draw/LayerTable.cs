@@ -108,6 +108,18 @@ public sealed class LayerTable
     /// <summary>全部打开：所有层开且解冻（锁定保持）。</summary>
     public void AllOn() { foreach (var l in _layers) { l.Visible = true; l.Frozen = false; } }
 
+    /// <summary>图层隔离：只显示 name 层，其余全部关闭(Visible=false)。返回被关闭层数。取消用 AllOn。忠实原版"图层隔离"(LAYISO)。</summary>
+    public int Isolate(string name)
+    {
+        int n = 0;
+        foreach (var l in _layers)
+        {
+            if (l.Name == name) l.Visible = true;
+            else if (l.Visible) { l.Visible = false; n++; }
+        }
+        return n;
+    }
+
     /// <summary>用持久化的图层状态整表恢复（打开 .pmx 新格式用）。空列表则不动（交调用方按实体回退重建）。</summary>
     public void Restore(IReadOnlyList<SceneIO.LayerState> layers, string current)
     {

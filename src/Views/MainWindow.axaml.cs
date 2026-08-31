@@ -1058,6 +1058,8 @@ public partial class MainWindow : Window
             if (cmd == "删除图层" || cmd == "删层" || cmd == "删除当前图层") { DeleteCurrentLayer(); return; }
             if (cmd.StartsWith("重命名图层 ") || cmd.StartsWith("图层重命名 ") || cmd.StartsWith("图层命名 ")) { RenameCurrentLayer(cmd.Substring(cmd.IndexOf(' ') + 1)); return; }
             if (cmd.StartsWith("合并图层 ") || cmd.StartsWith("图层合并 ")) { MergeLayerIntoCurrent(cmd.Substring(cmd.IndexOf(' ') + 1)); return; }
+            if (cmd == "图层隔离" || cmd == "隔离图层") { IsolateLayer(); return; }
+            if (cmd == "取消隔离" || cmd == "结束隔离" || cmd == "取消图层隔离") { _layers.AllOn(); PopulateDrawingLayers(); AfterLayerStateChange(); StatusMsg.Text = "已取消图层隔离（全部打开）"; return; }
             if (cmd == "图层特性管理器") { var l = _layers.CycleCurrent(); StatusMsg.Text = $"当前图层「{l.Name}」 显示{( l.Shown?"开":"关")}/{(l.Locked?"锁":"解锁")}（再点循环切换）"; return; }
             if (cmd == "全开" || cmd == "全部打开" || cmd == "图层全开") { _layers.AllOn(); PopulateDrawingLayers(); AfterLayerStateChange(); StatusMsg.Text = "已打开全部图层"; return; }
             if (cmd == "冻结") { FreezeCurrentLayer(true); return; }
@@ -6516,6 +6518,18 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"图层「{sourceName}」并入「{dst}」（{moved} 个实体）";
     }
 
+    // 图层隔离：只显示目标层（有选中→选中实体的层，否则当前层），其余关闭。忠实原版 LAYISO
+    private void IsolateLayer()
+    {
+        string target = _selected.Count > 0 ? _selected[0].LayerName : _layers.Current.Name;
+        int hidden = _layers.Isolate(target);
+        _layers.SetCurrent(target);
+        PopulateDrawingLayers();
+        AfterLayerStateChange();
+        RefreshScene();
+        StatusMsg.Text = $"图层隔离：只显示「{target}」（关闭 {hidden} 层，「取消隔离」恢复）";
+    }
+
     private void LockCurrentLayer(bool locked)
     {
         _layers.Current.Locked = locked;
@@ -7733,7 +7747,7 @@ public partial class MainWindow : Window
         // 草图辅助
         "正交","栅格","栅格捕捉",
         // 图层/视图
-        "新建图层","删除图层","图层特性管理器","冻结","锁定","全开",
+        "新建图层","删除图层","图层特性管理器","冻结","锁定","全开","图层隔离","取消隔离",
         // 隐藏/隔离
         "隐藏对象","隐藏同一图层对象","结束隐藏",
         "2D","3D","俯视","仰视","主视","后视","左视","右视","西南等轴测","东南等轴测","东北等轴测","西北等轴测","缩放","清空视图","清理标记",
