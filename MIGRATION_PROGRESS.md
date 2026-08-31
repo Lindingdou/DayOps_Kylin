@@ -1277,3 +1277,12 @@ pc_quality「点数/密度/包围盒/高程分布/**强度分类**」的强度/�
 - **LAS 域收官**: 读(XYZ+RGB+强度+分类)→ 可视(真彩色/强度灰阶/分类离散色)→ 过滤(几何 BySpike/抽稀地面/语义剔植被建筑)→ 分析报告(分类统计+强度分布)。全链条从公开 ASPRS 规范托管实现, 合成样本可验。
 
 **本会话累计补 44 真功能 + 1 并发修复 + 1 潜伏字形 bug 修 + 1 latent 攻克 + GWN 硬化, 936 测。** LAS/点云域子特性彻底补齐; 余 LAS return号/GPS时间(专门元数据)、GeoTIFF-DEM(原程序无, 非缺口)。
+
+## 九十七、线型(CAD linetype) —— 虚线/点划线绘制
+
+原程序支持线型(KdfReader.LinetypeDef 带 dashes), Kylin 此前只渲实线——导入的虚线显为实线, 也画不了虚线:
+- [x] **线型虚线化**(`DashPattern.Dashes` + `SceneEntity.Dash` + `SegD`): 按样式[画,空,…世界单位]把线段切成"画"子段镶嵌; LineEntity/PolylineEntity 用 SegD; `Colored` 拷 Dash 保变换后线型不丢。`DashPattern.ByName`: 实线/虚线/点划线/点线/双点划线(可 scale)。5 测(切段/占空比/空样式单段/零长线/线型名+缩放)。
+- [x] **"线型/实线/虚线/点划线/点线/双点划线"命令**: 设当前 `_currentDash`, 新画直线/多段线继承(FeedPoint 落点时赋 Dash)。默认 Dash=null 实线, 既有渲染不变。
+- 记录: DXF 导入线型保真(导入的虚线显虚线)需把 `ent.LineType` 穿过递归 Emit + 名映射(自定义 LTYPE 精确 dash 需解 LTYPE 表), invasive 且近似, 记录为扩展; 圆/弧虚线同理可扩(现 scope 直线/多段线)。
+
+**本会话累计补 45 真功能 + 1 并发修复 + 1 潜伏字形 bug 修 + 1 latent 攻克 + GWN 硬化, 941 测。**

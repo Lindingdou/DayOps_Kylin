@@ -1095,6 +1095,7 @@ public partial class MainWindow : Window
             if (cmd == "滑动多段线") { StartSlide(); return; }
             if (cmd == "平移" || cmd == "PAN") { StatusMsg.Text = "平移：按住鼠标中键拖拽视图（滚轮朝光标缩放）"; return; }
             if (cmd == "填充十字" || cmd == "交叉填充" || cmd == "十字填充") { _hatchCross = !_hatchCross; StatusMsg.Text = $"图案填充: 十字交叉 {(_hatchCross ? "开" : "关")}（再执行 图案填充）"; return; }
+            if (cmd == "线型" || cmd == "实线" || cmd == "虚线" || cmd == "点划线" || cmd == "点线" || cmd == "双点划线" || cmd == "破折线" || cmd.StartsWith("线型 ")) { SetLinetypeCmd(cmd); return; }
             if (cmd == "图案填充" || cmd == "填充" || cmd == "HATCH" || cmd == "剖面线"
                 || cmd.StartsWith("图案填充 ") || cmd.StartsWith("填充 ") || cmd.StartsWith("HATCH ") || cmd.StartsWith("剖面线 "))
             {
@@ -4393,6 +4394,20 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"标注样式已设：文字高 {(_dimStyle.TextHeight > 0 ? _dimStyle.TextHeight.ToString("0.##") : "自动")} · 小数位 {_dimStyle.DecimalPlaces} · 箭头比 {_dimStyle.ArrowRatio:0.##}（影响新建标注）";
     }
 
+    // 线型(CAD linetype)：设当前虚线样式, 新画直线/多段线继承。实线/虚线/点划线/点线/双点划线, 或 "线型 <名>"
+    private void SetLinetypeCmd(string cmd)
+    {
+        if (cmd == "线型")
+        {
+            StatusMsg.Text = $"线型：当前 {(_currentDash == null ? "实线" : "虚线类")}（可选 实线/虚线/点划线/点线/双点划线，或 线型 <名>；影响新画直线/多段线）";
+            return;
+        }
+        int sp = cmd.IndexOf(' ');
+        string name = sp >= 0 ? cmd.Substring(sp + 1).Trim() : cmd;
+        _currentDash = Cad.Draw.DashPattern.ByName(name);
+        StatusMsg.Text = $"线型已设：{name}（{(_currentDash == null ? "实线" : $"虚线, {_currentDash.Length} 段样式")}；新画直线/多段线用此线型）";
+    }
+
     // 文字：进入模式，下一条命令行输入即文字内容
     private void ArmText()
     {
@@ -5478,6 +5493,7 @@ public partial class MainWindow : Window
     { double dx = a.x - b.x, dy = a.y - b.y; return dx * dx + dy * dy; }
 
     private bool _hatchCross;   // 图案填充: 是否十字交叉
+    private double[]? _currentDash;   // 当前线型(虚线样式); null=实线。新画线/多段线继承
 
     // 图案填充(用户定义线剖面): 选中闭合边界(闭合多段线/矩形/正多边形) → 按角度+间距生成剖面线入场景。
     // 原「填充」走引擎命名图案库(不可见, 记录); 此为标准可见的用户定义线填充, 亦本 2D 线渲染器唯一可行形式。
@@ -6565,7 +6581,7 @@ public partial class MainWindow : Window
         if (_tool != null)
         {
             var ent = _tool.AddPoint(x, y);
-            if (ent != null) { BeginChange(); AssignLayer(ent); _scene.Add(ent); }
+            if (ent != null) { BeginChange(); AssignLayer(ent); if (_currentDash != null) ent.Dash = _currentDash; _scene.Add(ent); }
             RefreshScene();
             StatusMsg.Text = $"{_tool.Prompt}（已画 {_scene.Count}）";
         }

@@ -12,6 +12,7 @@ public abstract class SceneEntity
     public float Cr = 0.86f, Cg = 0.9f, Cb = 0.6f;   // 绘制实体默认色（浅黄绿，区别于导入）
     public string LayerName = "0";                    // 所属图层
     public bool Visible = true;                        // 逐实体隐藏(隐藏对象/结束隐藏)；false=不上屏且不可拾取
+    public double[]? Dash;                             // 线型虚线样式(画/空,世界单位); null=实线
 
     /// <summary>把自身镶嵌为线段（交错 P3_C3）追加到 o。</summary>
     public abstract void Tessellate(List<float> o);
@@ -20,6 +21,13 @@ public abstract class SceneEntity
     {
         o.Add((float)x0); o.Add((float)y0); o.Add(0); o.Add(Cr); o.Add(Cg); o.Add(Cb);
         o.Add((float)x1); o.Add((float)y1); o.Add(0); o.Add(Cr); o.Add(Cg); o.Add(Cb);
+    }
+
+    /// <summary>按线型 Dash 把一段切成虚线子段镶嵌(实线时=单段)。</summary>
+    protected void SegD(List<float> o, double x0, double y0, double x1, double y1)
+    {
+        if (Dash == null || Dash.Length == 0) { Seg(o, x0, y0, x1, y1); return; }
+        foreach (var (sx, sy, ex, ey) in DashPattern.Dashes(x0, y0, x1, y1, Dash)) Seg(o, sx, sy, ex, ey);
     }
 
     /// <summary>点 (px,py) 到本实体几何的最近距离（拾取用；对自身镶嵌的每段求点到线段距离取最小）。</summary>
@@ -66,7 +74,7 @@ public abstract class SceneEntity
     public virtual SceneEntity? MoveGrip(int i, double nx, double ny) => null;
 
     /// <summary>把本实体颜色复制给 e 并返回（变换保留颜色）。</summary>
-    protected T Colored<T>(T e) where T : SceneEntity { e.Cr = Cr; e.Cg = Cg; e.Cb = Cb; return e; }
+    protected T Colored<T>(T e) where T : SceneEntity { e.Cr = Cr; e.Cg = Cg; e.Cb = Cb; e.Dash = Dash; return e; }
 
     /// <summary>闭环(矩形/正多边形)打断：投两点到全部边(含闭合边)，移除两点间一段，返回绕另一侧的开口多段线；两点重合返 null。</summary>
     protected static PolylineEntity? BreakClosedLoop(IReadOnlyList<(double x, double y)> vs, double x1, double y1, double x2, double y2)
@@ -140,7 +148,7 @@ public readonly struct Affine2
 public sealed class LineEntity : SceneEntity
 {
     public double X0, Y0, X1, Y1;
-    public override void Tessellate(List<float> o) => Seg(o, X0, Y0, X1, Y1);
+    public override void Tessellate(List<float> o) => SegD(o, X0, Y0, X1, Y1);
     public override SceneEntity Apply(Affine2 m)
     {
         var (x0, y0) = m.Map(X0, Y0); var (x1, y1) = m.Map(X1, Y1);
@@ -395,9 +403,9 @@ public sealed class PolylineEntity : SceneEntity
     public override void Tessellate(List<float> o)
     {
         for (int i = 0; i + 1 < Points.Count; i++)
-            Seg(o, Points[i].x, Points[i].y, Points[i + 1].x, Points[i + 1].y);
+            SegD(o, Points[i].x, Points[i].y, Points[i + 1].x, Points[i + 1].y);
         if (Closed && Points.Count > 1)
-            Seg(o, Points[^1].x, Points[^1].y, Points[0].x, Points[0].y);
+            SegD(o, Points[^1].x, Points[^1].y, Points[0].x, Points[0].y);
     }
     public override SceneEntity Apply(Affine2 m)
     {
