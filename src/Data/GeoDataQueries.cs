@@ -230,7 +230,8 @@ public static class GeoDataQueries
     public static AcceptanceStats GetAcceptanceStats(SqliteConnection conn)
     {
         int n = (int)Scalar(conn, "SELECT COUNT(*) FROM parameter_acceptance");
-        int pass = (int)Scalar(conn, "SELECT COUNT(*) FROM parameter_acceptance WHERE status IN ('合格','通过','达标','正常')");
+        // status 枚举为英文 pass/warning/fail/pending（见 V011 CHECK 约束）。合格=pass。
+        int pass = (int)Scalar(conn, "SELECT COUNT(*) FROM parameter_acceptance WHERE status = 'pass'");
         double avgDev = ScalarDouble(conn, "SELECT COALESCE(AVG(ABS(deviation_pct)),0) FROM parameter_acceptance WHERE deviation_pct IS NOT NULL");
         var byStatus = new List<CategoryCount>();
         using (var cmd = conn.CreateCommand())
@@ -240,6 +241,26 @@ public static class GeoDataQueries
             while (rd.Read()) byStatus.Add(new CategoryCount(rd.GetString(0), rd.GetInt32(1)));
         }
         return new AcceptanceStats(n, n > 0 ? pass * 100.0 / n : 0, avgDev, byStatus);
+    }
+
+    public sealed record AcceptancePhaseRow(string Phase, int Records, int Passed, double PassPct);
+
+    /// <summary>分工序验收合格率：parameter_acceptance join process_phase，按工序统计合格率(升序找薄弱环节)。</summary>
+    public static List<AcceptancePhaseRow> GetAcceptanceByPhase(SqliteConnection conn)
+    {
+        var rows = new List<AcceptancePhaseRow>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"SELECT COALESCE(p.name,'(未知工序)') ph, COUNT(*) n,
+                                   SUM(CASE WHEN a.status='pass' THEN 1 ELSE 0 END) pass
+                            FROM parameter_acceptance a LEFT JOIN process_phase p ON p.phase_id = a.phase_id
+                            GROUP BY a.phase_id ORDER BY (pass*1.0/COUNT(*)) ASC, n DESC";
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+        {
+            int n = rd.GetInt32(1), pass = rd.GetInt32(2);
+            rows.Add(new AcceptancePhaseRow(rd.GetString(0), n, pass, n > 0 ? pass * 100.0 / n : 0));
+        }
+        return rows;
     }
 
     public sealed record WorkingFaceRow(string FaceCode, double BenchHeight, double SlopeAngle, double MiningWidth, double AdvanceRate);
@@ -458,6 +479,25 @@ public static class GeoDataQueries
         cmd.Parameters.AddWithValue("@n", topN);
         using var rd = cmd.ExecuteReader();
         while (rd.Read()) rows.Add(new FaultRankRow(rd.GetString(0), rd.GetInt32(1), rd.GetDouble(2)));
+        return rows;
+    }
+
+    public sealed record FaultTypeRow(string FaultType, int Events, double DowntimeHours, double DowntimeSharePct);
+
+    /// <summary>故障类型分布：按 fault_type 统计事件数 + 累计停机时 + 停机占比，按停机时降序（看故障构成）。</summary>
+    public static List<FaultTypeRow> GetFaultByType(SqliteConnection conn)
+    {
+        var raw = new List<(string t, int n, double dt)>();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = @"SELECT COALESCE(fault_type,'(未分类)'), COUNT(*), COALESCE(SUM(duration_hours),0) dt
+                                FROM fault_event GROUP BY fault_type ORDER BY dt DESC";
+            using var rd = cmd.ExecuteReader();
+            while (rd.Read()) raw.Add((rd.GetString(0), rd.GetInt32(1), rd.GetDouble(2)));
+        }
+        double tot = 0; foreach (var r in raw) tot += r.dt;
+        var rows = new List<FaultTypeRow>();
+        foreach (var r in raw) rows.Add(new FaultTypeRow(r.t, r.n, r.dt, tot > 0 ? r.dt / tot * 100 : 0));
         return rows;
     }
 

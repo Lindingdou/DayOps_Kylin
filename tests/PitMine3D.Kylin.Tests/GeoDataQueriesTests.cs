@@ -189,6 +189,29 @@ public class GeoDataQueriesTests
         var a = GeoDataQueries.GetAcceptanceStats(db.Connection);
         Assert.True(a.Records > 0, "验收记录");                 // 种子 156
         Assert.InRange(a.PassPct, 0, 100);
+        Assert.True(a.PassPct > 0, "合格率非0(status='pass' 英文枚举, 曾误用中文匹配)");   // 回归:修复恒0 bug
+    }
+
+    [Fact]
+    public void Acceptance_by_phase_pass_rate_ascending()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var rows = GeoDataQueries.GetAcceptanceByPhase(db.Connection);
+        Assert.NotEmpty(rows);
+        Assert.All(rows, r => Assert.True(r.Passed <= r.Records));
+        Assert.All(rows, r => Assert.InRange(r.PassPct, 0, 100));
+        for (int i = 1; i < rows.Count; i++) Assert.True(rows[i - 1].PassPct <= rows[i].PassPct);   // 合格率升序(薄弱在前)
+    }
+
+    [Fact]
+    public void Fault_by_type_downtime_shares_sum_to_100()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var rows = GeoDataQueries.GetFaultByType(db.Connection);
+        Assert.NotEmpty(rows);
+        for (int i = 1; i < rows.Count; i++) Assert.True(rows[i - 1].DowntimeHours >= rows[i].DowntimeHours);   // 停机时降序
+        Assert.Equal(100.0, rows.Sum(r => r.DowntimeSharePct), 3);
+        Assert.Equal(rows.Sum(r => r.Events), (int)db.ScalarLong("SELECT COUNT(*) FROM fault_event"));
     }
 
     [Fact]

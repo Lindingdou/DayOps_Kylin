@@ -727,6 +727,8 @@ public partial class MainWindow : Window
             if (cmd == "班次产量对比" || cmd == "班次产量" || cmd == "班产对比") { ShiftOutputCmd(); return; }
             if (cmd == "KPI趋势" || cmd == "设备KPI趋势" || cmd == "kpi趋势") { KpiTrendCmd(); return; }
             if (cmd == "产能分类对比" || cmd == "产能分类" || cmd == "分类产能") { CapacityByCategoryCmd(); return; }
+            if (cmd == "故障类型分布" || cmd == "故障类型" || cmd == "故障构成") { FaultByTypeCmd(); return; }
+            if (cmd == "分工序验收" || cmd == "分工序验收合格率" || cmd == "工序验收") { AcceptanceByPhaseCmd(); return; }
             if (cmd == "设备智能编组" || cmd == "调度规则" || cmd == "配车规则" || cmd == "铲车配比") { DispatchRulesCmd(); return; }
             if (cmd == "工艺架构定义" || cmd == "工艺架构" || cmd == "平盘工艺地图" || cmd == "工艺系统") { ProcessArchitectureCmd(); return; }
             if (cmd == "现场验收录入" || cmd == "现场验收" || cmd == "参数验收") { AcceptanceStatsCmd(); return; }
@@ -5508,6 +5510,26 @@ public partial class MainWindow : Window
         var parts = new List<string>();
         foreach (var r in rows) parts.Add($"{r.Category}({r.Units}台·{r.TotalOutputM3 / 1e4:0.#}万m³·{r.SharePct:0.#}%)");
         StatusMsg.Text = $"产能分类对比：" + string.Join(" · ", parts);
+    }
+
+    private void FaultByTypeCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var rows = Data.GeoDataQueries.GetFaultByType(db.Connection);
+        if (rows.Count == 0) { StatusMsg.Text = "故障类型分布：无故障记录"; return; }
+        var parts = new List<string>();
+        foreach (var r in rows) parts.Add($"{r.FaultType}({r.Events}次·{r.DowntimeHours:0.#}h·{r.DowntimeSharePct:0.#}%)");
+        StatusMsg.Text = $"故障类型分布：" + string.Join(" · ", parts);
+    }
+
+    private void AcceptanceByPhaseCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var rows = Data.GeoDataQueries.GetAcceptanceByPhase(db.Connection);
+        if (rows.Count == 0) { StatusMsg.Text = "分工序验收：无验收记录"; return; }
+        var parts = new List<string>();
+        foreach (var r in rows) parts.Add($"{r.Phase}({r.Passed}/{r.Records}·{r.PassPct:0.#}%)");
+        StatusMsg.Text = $"分工序验收合格率(薄弱在前)：" + string.Join(" · ", parts);
     }
 
     private void FaultRankCmd()
