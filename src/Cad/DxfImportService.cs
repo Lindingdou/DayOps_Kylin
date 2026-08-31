@@ -622,6 +622,40 @@ public static class DxfImportService
                         }
                     break;
                 }
+                case Mesh mesh:   // 网格：逐面还原为闭合折线线框(与 Face3D 一致的 2D 投影)
+                {
+                    var mv = mesh.Vertices;
+                    foreach (var face in mesh.Faces)
+                    {
+                        if (face == null || face.Length < 3) continue;
+                        int start = (face.Length >= 4 && face[0] == face.Length - 1) ? 1 : 0;   // 首元素为顶点数 → 跳过
+                        var pl = new PolylineEntity { Closed = true };
+                        for (int i = start; i < face.Length; i++)
+                        {
+                            int idx = face[i];
+                            if (idx >= 0 && idx < mv.Count) pl.Points.Add((mv[idx].X, mv[idx].Y));
+                        }
+                        if (pl.Points.Count >= 3) Finalize(pl, xf, col, layer);
+                    }
+                    break;
+                }
+                case PolyfaceMesh pfm:   // 多面网格：面记录 1-based(负=隐藏边取绝对值, 0=缺=三角)
+                {
+                    var pv = pfm.Vertices;
+                    foreach (var face in pfm.Faces)
+                    {
+                        short[] idxs = { face.Index1, face.Index2, face.Index3, face.Index4 };
+                        var pl = new PolylineEntity { Closed = true };
+                        foreach (short raw in idxs)
+                        {
+                            if (raw == 0) continue;
+                            int idx = Math.Abs(raw) - 1;
+                            if (idx >= 0 && idx < pv.Count) pl.Points.Add((pv[idx].Location.X, pv[idx].Location.Y));
+                        }
+                        if (pl.Points.Count >= 3) Finalize(pl, xf, col, layer);
+                    }
+                    break;
+                }
                 default:
                     result.Warnings.Add($"跳过未支持实体：{ent.GetType().Name}");
                     break;

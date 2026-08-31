@@ -525,4 +525,50 @@ public class DxfImportTests
         Assert.Equal(1, r.TypeCounts["引线"]);
         try { File.Delete(path); } catch { /* 清理失败无碍 */ }
     }
+
+    [Fact]
+    public void Loads_polyface_mesh_faces_as_wireframe_polylines()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "pm_dxf_pfm_test.dxf");
+        var doc = new CadDocument();
+        var pfm = new PolyfaceMesh();
+        pfm.Vertices.Add(new VertexFaceMesh { Location = new XYZ(0, 0, 0) });    // 1
+        pfm.Vertices.Add(new VertexFaceMesh { Location = new XYZ(10, 0, 0) });   // 2
+        pfm.Vertices.Add(new VertexFaceMesh { Location = new XYZ(10, 10, 0) });  // 3
+        pfm.Vertices.Add(new VertexFaceMesh { Location = new XYZ(0, 10, 0) });   // 4
+        pfm.Faces.Add(new VertexFaceRecord { Index1 = 1, Index2 = 2, Index3 = 3, Index4 = 4 });   // 一个四边形面
+        doc.Entities.Add(pfm);
+        using (var writer = new DxfWriter(path, doc, false)) writer.Write();
+
+        var er = DxfImportService.LoadEntities(path);
+        Assert.True(er.Success, er.Error);
+        var pl = Assert.IsType<PolylineEntity>(Assert.Single(er.Entities));
+        Assert.True(pl.Closed);
+        Assert.Equal(4, pl.Points.Count);                                   // 四边形面 → 4 点闭合折线
+        Assert.Contains(pl.Points, p => System.Math.Abs(p.x - 10) < 1e-6 && System.Math.Abs(p.y - 10) < 1e-6);
+        try { File.Delete(path); } catch { /* 清理失败无碍 */ }
+    }
+
+    [Fact]
+    public void Loads_mesh_faces_as_wireframe_polylines()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "pm_dxf_mesh_test.dxf");
+        var doc = new CadDocument();
+        var mesh = new Mesh();
+        mesh.Vertices.Add(new XYZ(0, 0, 0));
+        mesh.Vertices.Add(new XYZ(10, 0, 0));
+        mesh.Vertices.Add(new XYZ(10, 10, 0));
+        mesh.Vertices.Add(new XYZ(0, 10, 0));
+        mesh.Faces.Add(new int[] { 0, 1, 2, 3 });     // 一个四边形面(0-based 索引)
+        doc.Entities.Add(mesh);
+        using (var writer = new DxfWriter(path, doc, false)) writer.Write();
+
+        var er = DxfImportService.LoadEntities(path);
+        Assert.True(er.Success, er.Error);
+        var pl = Assert.IsType<PolylineEntity>(Assert.Single(er.Entities));
+        Assert.True(pl.Closed);
+        Assert.Equal(4, pl.Points.Count);
+        Assert.Contains(pl.Points, p => System.Math.Abs(p.x - 10) < 1e-6 && System.Math.Abs(p.y - 10) < 1e-6);
+        try { File.Delete(path); } catch { /* 清理失败无碍 */ }
+    }
 }
