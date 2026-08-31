@@ -358,6 +358,36 @@ public static class GeoDataQueries
         return rows;
     }
 
+    /// <summary>把一张表整表导出为 CSV 文本(表头 + 数据行, 逗号分隔, 值内含逗号/引号/换行则加引号转义)。可单测。</summary>
+    public static string ExportTableToCsv(SqliteConnection conn, string tableName)
+    {
+        // 表名只允许标识符字符, 防注入。
+        foreach (char c in tableName) if (!char.IsLetterOrDigit(c) && c != '_') throw new System.ArgumentException($"非法表名: {tableName}");
+        var sb = new System.Text.StringBuilder();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = $"SELECT * FROM \"{tableName}\"";
+        using var rd = cmd.ExecuteReader();
+        int fc = rd.FieldCount;
+        for (int i = 0; i < fc; i++) { if (i > 0) sb.Append(','); sb.Append(CsvCell(rd.GetName(i))); }
+        sb.Append('\n');
+        while (rd.Read())
+        {
+            for (int i = 0; i < fc; i++)
+            {
+                if (i > 0) sb.Append(',');
+                sb.Append(CsvCell(rd.IsDBNull(i) ? "" : rd.GetValue(i)?.ToString() ?? ""));
+            }
+            sb.Append('\n');
+        }
+        return sb.ToString();
+    }
+
+    private static string CsvCell(string v)
+    {
+        if (v.IndexOfAny(new[] { ',', '"', '\n', '\r' }) < 0) return v;
+        return "\"" + v.Replace("\"", "\"\"") + "\"";
+    }
+
     private static List<CategoryCount> GroupCount(SqliteConnection conn, string sql)
     {
         var list = new List<CategoryCount>();

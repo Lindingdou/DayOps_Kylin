@@ -738,6 +738,7 @@ public partial class MainWindow : Window
             if (cmd == "展绘观测点" || cmd == "煤层观测点" || cmd == "观测点" || cmd == "露头观测点") { DrawObservationPointsCmd(); return; }
             if (cmd == "采区列表" || cmd == "采区管理" || cmd == "矿区位置" || cmd == "采场位置") { MineLocationsCmd(); return; }
             if (cmd == "设备效能预测" || cmd == "效能预测" || cmd == "班次效能预测" || cmd == "产能预测") { EfficiencyForecastCmd(); return; }
+            if (cmd == "数据导入导出" || cmd == "数据导出" || cmd == "导出数据库" || cmd == "地质数据导出") { await ExportGeoDataAsync(); return; }
             if (cmd == "点云抽稀" || cmd == "抽稀" || cmd == "点云精简") { await ThinPointsAsync(); return; }
             if (cmd == "地面点滤波" || cmd == "地面滤波") { await GroundFilterAsync(); return; }
             if (cmd == "C2C" || cmd == "点云比对" || cmd == "位移监测 C2C" || cmd == "位移监测") { await CloudCompareAsync(); return; }
@@ -5240,6 +5241,32 @@ public partial class MainWindow : Window
         RefreshScene();
         if (maxX > minX && maxY > minY) Viewport.FitBounds(new double[] { minX, minY, maxX, maxY });
         StatusMsg.Text = $"展绘观测点：{pts.Count} 点入场景（图层「煤层观测点」）· 平均煤厚 {(nT > 0 ? sumT / nT : 0):0.##}m（{nT} 有效）";
+    }
+
+    // 数据导出：§四 关键表整表导出为 CSV(选目标文件夹)。导入半需模板对话框(记录)。
+    private async System.Threading.Tasks.Task ExportGeoDataAsync()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var folders = await StorageProvider.OpenFolderPickerAsync(new Avalonia.Platform.Storage.FolderPickerOpenOptions
+        { Title = "数据导出：选导出目标文件夹", AllowMultiple = false });
+        if (folders.Count == 0) return;
+        string dir = folders[0].Path.LocalPath;
+        string[] tables = { "equipment", "equipment_model", "production_record", "capacity_monthly",
+                            "equipment_kpi_monthly", "fault_event", "borehole", "coal_sample",
+                            "coal_seam_def", "dispatch_rule", "parameter_acceptance", "working_face",
+                            "monthly_plan", "haul_road", "slope_design", "mine_location" };
+        int ok = 0;
+        foreach (var t in tables)
+        {
+            try
+            {
+                string csv = Data.GeoDataQueries.ExportTableToCsv(db.Connection, t);
+                System.IO.File.WriteAllText(System.IO.Path.Combine(dir, t + ".csv"), csv, new System.Text.UTF8Encoding(true));
+                ok++;
+            }
+            catch { /* 单表失败不阻整体 */ }
+        }
+        StatusMsg.Text = $"数据导出：{ok}/{tables.Length} 张 §四 表 → {dir}（导入需模板对话框，受阻记录）";
     }
 
     private void EfficiencyForecastCmd()

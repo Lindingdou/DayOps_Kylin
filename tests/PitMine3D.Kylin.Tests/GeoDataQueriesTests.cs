@@ -201,4 +201,15 @@ public class GeoDataQueriesTests
         Assert.InRange(f.AvgAvailabilityPct, 0, 100);
         Assert.True(f.ProjectedAnnualWanM3 > f.BaselineMonthlyWanM3, "投影年产 > 单台月产");
     }
+
+    [Fact]
+    public void Export_table_to_csv()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        string csv = GeoDataQueries.ExportTableToCsv(db.Connection, "equipment_model");
+        var lines = csv.TrimEnd('\n').Split('\n');
+        Assert.True(lines.Length > 5, "表头 + 数据行");                 // 50 型号 + 表头
+        Assert.Contains("model", lines[0]);                            // 表头含列名
+        Assert.Throws<System.ArgumentException>(() => GeoDataQueries.ExportTableToCsv(db.Connection, "x; DROP TABLE"));  // 防注入
+    }
 }
