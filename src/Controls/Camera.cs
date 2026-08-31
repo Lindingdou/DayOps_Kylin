@@ -20,6 +20,15 @@ internal sealed class Camera
     /// <summary>切换 2D 平面 / 3D 轨道。</summary>
     public void SetMode(bool is2D) => Is2D = is2D;
 
+    /// <summary>相机完整状态（供上一视图历史）。</summary>
+    public readonly record struct State(double Yaw, double Pitch, double Dist, float Tx, float Ty, float Tz, bool Is2D);
+    public State Snapshot() => new(Yaw, Pitch, Dist, Target[0], Target[1], Target[2], Is2D);
+    public void Restore(State s)
+    {
+        Yaw = s.Yaw; Pitch = s.Pitch; Dist = s.Dist;
+        Target[0] = s.Tx; Target[1] = s.Ty; Target[2] = s.Tz; Is2D = s.Is2D;
+    }
+
     /// <summary>直接设相机朝向（标准视图预设用）：Yaw 绕 Z、Pitch 抬头，切到 3D。</summary>
     public void SetOrientation(double yaw, double pitch)
     {

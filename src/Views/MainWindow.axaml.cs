@@ -728,6 +728,8 @@ public partial class MainWindow : Window
             if (cmd == "东南等轴测" || cmd == "东南轴测") { Viewport.SetView("se"); StatusMsg.Text = "视图: 东南等轴测"; return; }
             if (cmd == "东北等轴测" || cmd == "东北轴测") { Viewport.SetView("ne"); StatusMsg.Text = "视图: 东北等轴测"; return; }
             if (cmd == "西北等轴测" || cmd == "西北轴测") { Viewport.SetView("nw"); StatusMsg.Text = "视图: 西北等轴测"; return; }
+            if (cmd == "范围缩放" || cmd == "全部缩放" || cmd == "范围") { Viewport.ZoomExtents(); StatusMsg.Text = "视图: 范围缩放"; return; }
+            if (cmd == "上一视图" || cmd == "返回视图") { StatusMsg.Text = Viewport.PrevView() ? "视图: 已返回上一视图" : "视图: 无更早视图"; return; }
             if (cmd == "清空视图") { _selected.Clear(); Viewport.SetHighlight(null); Viewport.SetSnapMarker(null); _snapShown = false; RefreshScene(); StatusMsg.Text = "已清空选择/高亮/捕捉标记"; return; }
             if (cmd == "帮助文档") { ShowHelp(); return; }
             if (cmd == "选项") { ShowOptions(); return; }

@@ -341,8 +341,26 @@ public class CadGlViewport : OpenGlControlBase
     }
 
     /// <summary>切换 2D 平面 / 3D 轨道视图。</summary>
+    private readonly System.Collections.Generic.List<Camera.State> _viewHistory = new();
+    private void PushView()
+    {
+        _viewHistory.Add(_camera.Snapshot());
+        if (_viewHistory.Count > 20) _viewHistory.RemoveAt(0);
+    }
+
+    /// <summary>上一视图：恢复到最近一次视图变更前的相机状态。</summary>
+    public bool PrevView()
+    {
+        if (_viewHistory.Count == 0) return false;
+        _camera.Restore(_viewHistory[^1]);
+        _viewHistory.RemoveAt(_viewHistory.Count - 1);
+        RequestNextFrameRendering();
+        return true;
+    }
+
     public void SetViewMode(bool is2D)
     {
+        PushView();
         _camera.SetMode(is2D);
         RequestNextFrameRendering();
     }
@@ -350,6 +368,7 @@ public class CadGlViewport : OpenGlControlBase
     /// <summary>标准视图预设(Z 上约定)：top/bottom/front/back/left/right/sw/se/ne/nw。俯/仰视走 2D 正交。</summary>
     public void SetView(string preset)
     {
+        PushView();
         const double iso = 0.61547971;   // atan(1/√2) ≈ 35.26°
         const double pi = System.Math.PI;
         switch (preset)

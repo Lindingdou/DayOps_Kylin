@@ -223,6 +223,9 @@
                                                         <MenuItem Header="东南等轴测" Tag="东南等轴测" Click="OnRibbonCommand" />
                                                         <MenuItem Header="东北等轴测" Tag="东北等轴测" Click="OnRibbonCommand" />
                                                         <MenuItem Header="西北等轴测" Tag="西北等轴测" Click="OnRibbonCommand" />
+                                                        <Separator />
+                                                        <MenuItem Header="范围缩放" Tag="范围缩放" Click="OnRibbonCommand" />
+                                                        <MenuItem Header="上一视图" Tag="上一视图" Click="OnRibbonCommand" />
                                                     </MenuFlyout>
                                                 </Button.Flyout>
                                                 <StackPanel Orientation="Horizontal"><TextBlock Text="视图预设 ▾" /></StackPanel>
