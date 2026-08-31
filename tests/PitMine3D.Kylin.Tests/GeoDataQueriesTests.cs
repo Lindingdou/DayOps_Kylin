@@ -181,6 +181,31 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void ParseCsv_headers_skip_comments_blanks()
+    {
+        var rows = GeoDataQueries.ParseCsv("# 注释\nequipment_id,date,shift\n\nEX-01,2025-01-01,A\nEX-02,2025-01-02,B\n");
+        Assert.Equal(2, rows.Count);
+        Assert.Equal("EX-01", rows[0]["equipment_id"]);
+        Assert.Equal("A", rows[0]["SHIFT"]);            // 大小写不敏感
+        Assert.Equal("2025-01-02", rows[1]["date"]);
+    }
+
+    [Fact]
+    public void Export_table_then_reimport_roundtrips()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        // 导出 production_record 原始表(全列) → 解析 → 再导入(按列名, 忽略 id/created_at) → 全部更新(既有键)
+        string csv = GeoDataQueries.ExportTableToCsv(db.Connection, "production_record");
+        var rows = GeoDataQueries.ParseCsv(csv);
+        Assert.NotEmpty(rows);
+        var take = rows.Take(50).ToList();              // 取前 50 行验证往返
+        var o = GeoDataQueries.ImportProductionRecords(db.Connection, take, overwrite: true);
+        Assert.Equal(0, o.Errors);                      // 导出的行可无错再导入(往返自洽)
+        Assert.Equal(take.Count, o.Updated);            // 既有键 → 全部更新, 无新增
+        Assert.Equal(0, o.Inserted);
+    }
+
+    [Fact]
     public void Import_templates_headers_and_roundtrip()
     {
         // 9 类模板非空 + 未知返 null

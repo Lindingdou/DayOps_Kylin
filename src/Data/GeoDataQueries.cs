@@ -512,6 +512,26 @@ public static class GeoDataQueries
 
     public sealed record ImportOutcome(int Inserted, int Updated, int Skipped, int Errors);
 
+    /// <summary>解析 CSV：首行=表头(去 BOM/星号/空白)，逗号/制表分隔，'#' 行与空行跳过。返回逐行(列名→值，大小写不敏感)。</summary>
+    public static List<IReadOnlyDictionary<string, string>> ParseCsv(string text)
+    {
+        var outRows = new List<IReadOnlyDictionary<string, string>>();
+        if (text == null) return outRows;
+        var lines = text.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
+        string[]? headers = null;
+        foreach (var raw in lines)
+        {
+            var ln = raw.Trim();
+            if (ln.Length == 0 || ln.StartsWith("#")) continue;
+            var cells = ln.Split(new[] { ',', '\t' }, System.StringSplitOptions.None);
+            if (headers == null) { headers = System.Array.ConvertAll(cells, s => s.Trim().Trim('﻿', '*', '"')); continue; }
+            var d = new Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase);
+            for (int c = 0; c < headers.Length && c < cells.Length; c++) d[headers[c]] = cells[c].Trim().Trim('"');
+            outRows.Add(d);
+        }
+        return outRows;
+    }
+
     /// <summary>导入模板（表头 + 一行示例）。key ∈ 生产记录/月度产能/故障记录/月度KPI/设备台账/煤质化验/观测点/月度计划/见煤成果。未知返 null。</summary>
     public static string? ImportTemplate(string key) => key switch
     {

@@ -5609,24 +5609,9 @@ public partial class MainWindow : Window
     private static string CoalIndicator(string[] tk, int idx, string def)
         => tk.Length > idx && (tk[idx] is "ad" or "std" or "vdaf" or "qgr" or "qnet") ? tk[idx] : def;
 
-    // 解析 CSV：首行=表头，逗号/制表分隔，返回逐行(列名→值)。简单实现(不处理引号内逗号)。
+    // 解析 CSV（委托可测的 GeoDataQueries.ParseCsv）
     private static List<System.Collections.Generic.IReadOnlyDictionary<string, string>> ParseCsvRows(string text)
-    {
-        var outRows = new List<System.Collections.Generic.IReadOnlyDictionary<string, string>>();
-        var lines = text.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
-        int hi = -1; string[]? headers = null;
-        for (int i = 0; i < lines.Length; i++)
-        {
-            var ln = lines[i].Trim();
-            if (ln.Length == 0 || ln.StartsWith("#")) continue;
-            var cells = ln.Split(new[] { ',', '\t' }, System.StringSplitOptions.None);
-            if (hi < 0) { hi = i; headers = System.Array.ConvertAll(cells, s => s.Trim().TrimStart('﻿', '*')); continue; }
-            var d = new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase);
-            for (int c = 0; c < headers!.Length && c < cells.Length; c++) d[headers[c]] = cells[c].Trim();
-            outRows.Add(d);
-        }
-        return outRows;
-    }
+        => Data.GeoDataQueries.ParseCsv(text);
 
     // 导出导入模板：生成带表头+示例行的空 CSV, 供用户按格式填写后导入。可 "导入模板 <类型>"。
     private async Task ExportImportTemplateAsync(string cmd)
