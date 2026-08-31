@@ -555,8 +555,23 @@ public static class DxfImportService
                     break;
                 }
                 case MText mt:
-                    Finalize(new DrawText { X = mt.InsertPoint.X, Y = mt.InsertPoint.Y, Height = mt.Height > 0 ? mt.Height : 1, Rotation = mt.Rotation, Text = StripMTextFormatting(mt.Value ?? "") }, xf, col, layer);
+                {
+                    var lines = MTextLines(mt.Value ?? "");
+                    double mh = mt.Height > 0 ? mt.Height : 1;
+                    double step = mh * 1.4;                    // 行距
+                    double mc = System.Math.Cos(mt.Rotation), ms = System.Math.Sin(mt.Rotation);
+                    double dnx = ms, dny = -mc;                // 行向下(垂直文字方向)
+                    for (int li = 0; li < lines.Length; li++)
+                    {
+                        if (lines[li].Length == 0) continue;
+                        Finalize(new DrawText
+                        {
+                            X = mt.InsertPoint.X + li * step * dnx, Y = mt.InsertPoint.Y + li * step * dny,
+                            Height = mh, Rotation = mt.Rotation, Text = lines[li]
+                        }, xf, col, layer);
+                    }
                     break;
+                }
                 case Solid so:
                 {
                     var pl = new PolylineEntity { Closed = true };   // 2D 实心：角点序 1,2,4,3 成四边形轮廓
@@ -773,6 +788,16 @@ public static class DxfImportService
             sb.Append(ch);
         }
         return sb.ToString();
+    }
+
+    /// <summary>MText 按段落换行 \P 拆成多行, 各行剥格式码。空/无 \P → 单行。供多行文字导入逐行渲染。</summary>
+    internal static string[] MTextLines(string raw)
+    {
+        if (string.IsNullOrEmpty(raw)) return System.Array.Empty<string>();
+        var parts = raw.Split(new[] { "\\P", "\\p" }, System.StringSplitOptions.None);
+        var res = new string[parts.Length];
+        for (int i = 0; i < parts.Length; i++) res[i] = StripMTextFormatting(parts[i]);
+        return res;
     }
 
     /// <summary>实体颜色：ByLayer 取图层色；真彩色直接用 RGB；否则按 ACI 索引映射。失败回落统一色。</summary>

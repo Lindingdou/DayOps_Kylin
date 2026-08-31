@@ -28,4 +28,25 @@ public class MTextStripTests
     {
         Assert.Equal("A B", DxfImportService.StripMTextFormatting(@"A\PB"));
     }
+
+    // ── 多行 MText 拆行(供逐行渲染) ──
+    [Fact]
+    public void MTextLines_splits_on_paragraph_break()
+    {
+        Assert.Equal(new[] { "line1", "line2", "line3" }, DxfImportService.MTextLines(@"line1\Pline2\Pline3"));
+    }
+
+    [Fact]
+    public void MTextLines_strips_formatting_per_line()
+    {
+        // 各行独立剥格式码
+        Assert.Equal(new[] { "big", "normal" }, DxfImportService.MTextLines(@"\H2.5;big\Pnormal"));
+    }
+
+    [Fact]
+    public void MTextLines_single_line_and_empty()
+    {
+        Assert.Equal(new[] { "single" }, DxfImportService.MTextLines("single"));
+        Assert.Empty(DxfImportService.MTextLines(""));
+    }
 }
