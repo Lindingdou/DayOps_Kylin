@@ -648,9 +648,9 @@ public partial class MainWindow : Window
             if (cmd == "导入点") { await ImportPointsAsync(); return; }
             if (cmd == "展绘钻孔" || cmd == "钻孔柱状图" || cmd == "导入钻孔数据" || cmd == "原始钻孔柱状图") { await ImportBoreholesAsync(); return; }
             if (cmd == "等高线" || cmd == "等高线生产" || cmd == "等值线") { await ContourFromCsvAsync(); return; }
-            if (cmd == "创建三角网" || cmd == "三角网") { await CreateTinAsync(); return; }
+            if (cmd == "创建三角网" || cmd == "三角网" || cmd == "2.5D TIN" || cmd == "2.5DTIN") { await CreateTinAsync(); return; }
             if (cmd == "示例三角网" || cmd == "三角网示例") { GenerateSampleTrimesh(); return; }
-            if (cmd == "坡度着色") { await ShadeTinAsync("坡度着色", "绿=平 → 红=陡", TerrainAnalysis.BuildSlopeMap); return; }
+            if (cmd == "坡度着色" || cmd == "三角网着色") { await ShadeTinAsync("坡度着色", "绿=平 → 红=陡", TerrainAnalysis.BuildSlopeMap); return; }
             if (cmd == "坡向着色") { await ShadeTinAsync("坡向着色", "按朝向 HSV 配色", TerrainAnalysis.BuildAspectMap); return; }
             if (cmd == "高程着色" || cmd == "分色显示" || cmd == "高程分带") { await ShadeTinAsync("高程着色", "低绿→中黄→高棕", TerrainAnalysis.BuildElevationMap); return; }
             if (cmd == "体积计算" || cmd == "算量" || cmd == "土方量") { await VolumeAsync(); return; }
@@ -670,7 +670,7 @@ public partial class MainWindow : Window
             if (cmd == "点云抽稀" || cmd == "抽稀" || cmd == "点云精简") { await ThinPointsAsync(); return; }
             if (cmd == "地面点滤波" || cmd == "地面滤波") { await GroundFilterAsync(); return; }
             if (cmd == "C2C" || cmd == "点云比对") { await CloudCompareAsync(); return; }
-            if (cmd == "境界圈定" || cmd == "凸包" || cmd == "确定境界" || cmd == "采场圈定") { await BoundaryHullAsync(); return; }
+            if (cmd == "境界圈定" || cmd == "凸包" || cmd == "确定境界" || cmd == "采场圈定" || cmd == "采场/排土场圈定") { await BoundaryHullAsync(); return; }
             if (cmd == "剖面分析" || cmd == "剖面" || cmd == "点云剖面") { await SectionProfileAsync(); return; }
             if (cmd == "粗糙度" || cmd == "地表粗糙度") { await RoughnessAsync(); return; }
             if (cmd == "曲率" || cmd == "地表曲率") { await CurvatureAsync(); return; }
@@ -748,7 +748,7 @@ public partial class MainWindow : Window
             if (cmd == "删除重复线" || cmd == "去重复线" || cmd == "线去重") { DedupeSelectedPolylines(); return; }
             if (cmd == "区域求差" || cmd == "可采区域求差" || cmd == "多边形求差") { SubtractRegions(); return; }
             if (cmd == "区域重叠检测" || cmd == "区域重叠" || cmd == "重叠检测") { CheckRegionOverlap(); return; }
-            if (cmd == "平盘宽度识别" || cmd == "现场参数提取" || cmd == "平盘识别") { await BenchWidthAsync(); return; }
+            if (cmd == "平盘宽度识别" || cmd == "现场参数提取" || cmd == "平盘识别" || cmd == "采场参数识别") { await BenchWidthAsync(); return; }
             if (cmd == "确定可采区域" || cmd == "可采区域" || cmd == "可采区域识别") { await MineableAreaAsync(); return; }
             if (cmd == "点落到面上" || cmd == "点落面" || cmd == "点投影到面") { await ProjectPointsToMeshAsync(); return; }
             if (cmd == "线落到面上" || cmd == "线落面" || cmd == "线投影到面") { await ProjectPolylinesToMeshAsync(); return; }
