@@ -1009,15 +1009,16 @@ public partial class MainWindow : Window
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "导入图形（DXF/DWG/OFF/MapGIS/KDF）",
+            Title = "导入图形（DXF/DWG/OFF/MapGIS/KDF/3DMine）",
             AllowMultiple = false,
             FileTypeFilter = new[]
             {
-                new FilePickerFileType("支持的格式 (DXF/DWG/OFF/WL/WT/WP/MPJ/KDF)") { Patterns = new[] { "*.dxf", "*.dwg", "*.off", "*.wl", "*.wt", "*.wp", "*.mpj", "*.kdf" } },
+                new FilePickerFileType("支持的格式 (DXF/DWG/OFF/WL/WT/WP/MPJ/KDF/3DM)") { Patterns = new[] { "*.dxf", "*.dwg", "*.off", "*.wl", "*.wt", "*.wp", "*.mpj", "*.kdf", "*.3dm" } },
                 new FilePickerFileType("CAD 图纸 (DXF/DWG)") { Patterns = new[] { "*.dxf", "*.dwg" } },
                 new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } },
                 new FilePickerFileType("MapGIS 6.x (WL 线/WT 注记/WP 区/MPJ 工程)") { Patterns = new[] { "*.wl", "*.wt", "*.wp", "*.mpj" } },
-                new FilePickerFileType("WeCAD 地质地形图 (KDF)") { Patterns = new[] { "*.kdf" } }
+                new FilePickerFileType("WeCAD 地质地形图 (KDF)") { Patterns = new[] { "*.kdf" } },
+                new FilePickerFileType("3DMine 网格 (3DM)") { Patterns = new[] { "*.3dm" } }
             }
         });
         if (files.Count == 0) return;
@@ -1169,7 +1170,8 @@ public partial class MainWindow : Window
         if (ext == ".wl" || ext == ".wt" || ext == ".wp" || ext == ".mpj") { ImportMapGisEditable(path); return; }
         if (ext == ".kdf") { ImportKdfEditable(path); return; }
 
-        var r = OffImportService.Load(path);
+        // OFF 网格 / 3DMine .3dm 三角网 → 显示态线框
+        var r = ext == ".3dm" ? Cad.TdmImportService.Load(path) : OffImportService.Load(path);
         if (!r.Success) { StatusMsg.Text = $"导入失败：{r.Error}"; return; }
         _lastImport = r;
         Viewport.ShowImportedLayers(r.LayerGeometry, r.Bounds);
