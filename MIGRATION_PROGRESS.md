@@ -1023,3 +1023,10 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 **近失纠正(纪律)**：两面 cut-fill 填挖方 —— 本欲新建 `CutFill`, 但**查 Kylin dispatch 表**发现 `TerrainAnalysis.TwoEpochVolume`(接"两期点云算量"命令)**已实现**(grid 采两面 4 角均 dz×面积)→ **冗余, 删除未提交代码**。**教训**: 实现前必查 (a)原程序有无 **且** (b)Kylin dispatch 是否已有(可能别名)。
 
 **非缺口核实(本轮)**：山体阴影(原无)、断面法体积(原无)、组合样(原"Composite"是复合方案非钻孔样)、坡向(PointNormals 逐点 dip+aspect 已有)、境界优化(BoundaryHullAsync+PitDepthCmd 已有)、测量族(测距/面积/角度/周长已有)、块体剖切/导出/约束(已有)、DXF 实体导入(Face3D/Solid/Polyline3D 全覆盖)、坐标转换(4参相似)。**288 命令处理器全实现, 无桩/TODO/未实现**。
+
+## 六十九、导出保真核对 + 坐标标注 + M系列 aspirational 图标甄别
+
+- **DXF/DWG 导出已高保真**(核实非缺口)：`SceneExportService` 把全 8 场景实体类型(Line/Circle/Arc/Point/Text/Rect/Polygon/Polyline)映射为 ACadSharp **原生实体**(非折线化) + 图层/真彩色 + DXF/DWG 双格式, **超原程序**(原仅 LINE/CIRCLE/ARC/LWPOLYLINE/POINT, Kylin 还含 TEXT)。`Map` 覆盖全部子类型无静默丢弃。(旧 32 行 DxfExportService 仅 LINE 是遗留简单路径, 实际走 SceneExportService。)
+- **编辑操作已全**(核实非缺口)：移动/复制/旋转/镜像/缩放/偏移/修剪/延伸/打断/删除 全有; 原 Ribbon 编辑按钮=前 9 项, **拉伸/阵列/圆角/倒角原程序无**(拉伸匹配全是"竖向拉伸"描述/WPF 布局/超高系数)。
+- [x] **坐标标注**(`10c7538`)：原 CAD 工具栏有 `M14_坐标标注`(图标级/native), Kylin 缺。补 `DimTools.BuildCoordLabel`(点→小十字+引线+"X=… Y=…"文字, 可选 Z, 小数位随 DimStyle, 引线朝向决定文字左右对齐) + 坐标标注命令(连续点选 ESC 退出)。同 ObjectSnap 先例(native 但标准无歧义几何可托管, insight #5)。6 测。**776 tests**。
+- **M 系列图标 aspirational 甄别**: `Icons.xaml` 的 M01-M25 **全是坐标系抽象**(世界/用户坐标系·坐标系原点/旋转/平移/对齐/镜像/阵列·极/柱/球坐标·UCS 保存/恢复/列表/删除/重命名)。**核实原程序模块无任何 UCS 实现** → M 系列是设计了图标未实现的 aspirational 集, 属 AutoCAD 级抽象矿业 CAD 不做(同"圆角/倒角/阵列/极轴 原无")。仅 M13 坐标转换(已有 4 参相似) + M14 坐标标注(本轮补)是具体标准操作。**其余 M 系列非缺口**(不因图标存在就臆造 UCS 子系统)。
