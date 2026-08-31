@@ -865,3 +865,5 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 - [x] **月度KPI + 设备台账**(`dd1f40e`)：`ImportKpiMonthly`(9列 upsert) + `ImportEquipmentLedger`(equipment_id upsert, model FK→equipment_model 正确校验)。
 - 命令：导入生产记录/导入月度产能/导入故障记录/导入月度KPI/导入设备台账。+3 单测(插入/更新/跳过/坏行错误/FK 约束)。
 - **★"导入导出中心"补齐**：导入侧(5 类设备数据 CSV 入库) + 导出侧(8 结构化结果 CSV + ExportTableToCsv 原始表)——原 DataImportCenter 的导入导出功能essence 均托管落地。用户可"改自己数据(导入)→跑分析→导出结果处置"闭环。670 测试。
+- [x] **地质数据导入**(`6f7a7d9`/`1d3dad4`)：`ImportCoalSamples`(忠实 CoalQualityExcelIo，hole_id→borehole.id 查找，按 孔+煤层+起深 upsert，15+ 分析相关列) + `ImportObservationPoints`(忠实 CurrentStatePointExcelIo，point_id+seam_code upsert，直接 x/y)。命令 导入煤质/导入观测点。+2 单测。→ **闭合煤质数据生命周期**：导入煤质→跑分析(符合性/品位储量/洗选/用途/离群)→导出结果处置。
+- **★数据导入脉络完成(7 类)**：设备域 5(DataImportCenter: 生产记录/产能/故障/KPI/台账) + 地质 2(煤质化验/观测点)，均 CSV 基础、可验证(导入后查库行)、参数化防注入、FK 约束正确生效。余表(见煤成果/边坡/月计划等)可循 `ImportCsvToDbAsync`+`ImportXxx` 模式扩展；这 7 类覆盖分析/展绘的高价值数据。672 测试。
