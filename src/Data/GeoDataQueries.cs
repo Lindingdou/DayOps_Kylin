@@ -388,6 +388,21 @@ public static class GeoDataQueries
         return "\"" + v.Replace("\"", "\"\"") + "\"";
     }
 
+    public sealed record FaultRankRow(string EquipmentId, int Events, double DowntimeHours);
+
+    /// <summary>设备故障排名：按累计停机时降序取 topN（找最需检修的设备）。</summary>
+    public static List<FaultRankRow> GetFaultByEquipment(SqliteConnection conn, int topN = 8)
+    {
+        var rows = new List<FaultRankRow>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"SELECT equipment_id, COUNT(*), COALESCE(SUM(duration_hours),0) dt
+                            FROM fault_event GROUP BY equipment_id ORDER BY dt DESC LIMIT @n";
+        cmd.Parameters.AddWithValue("@n", topN);
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read()) rows.Add(new FaultRankRow(rd.GetString(0), rd.GetInt32(1), rd.GetDouble(2)));
+        return rows;
+    }
+
     public sealed record AnnualOutputRow(int Year, double OutputWanM3);
 
     /// <summary>年度产量趋势：capacity_monthly 按年聚合总产量（万m³）。</summary>

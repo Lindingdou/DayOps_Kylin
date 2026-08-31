@@ -113,6 +113,15 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Fault_by_equipment_ranked_by_downtime()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var rows = GeoDataQueries.GetFaultByEquipment(db.Connection, 8);
+        Assert.NotEmpty(rows);
+        for (int i = 1; i < rows.Count; i++) Assert.True(rows[i - 1].DowntimeHours >= rows[i].DowntimeHours);   // 停机时降序
+    }
+
+    [Fact]
     public void Annual_output_from_seed_sorted_by_year()
     {
         using var db = GeoDatabase.OpenSeeded();
