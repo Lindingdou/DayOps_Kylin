@@ -683,11 +683,12 @@ public partial class MainWindow : Window
             if (cmd == "工作面线拟合" || cmd == "工作面线" || cmd == "拟合工作面线") { await WorkingFaceLineAsync(); return; }
             if (cmd == "煤质统计" || cmd == "质量统计" || cmd == "煤质分析") { await QualityStatsAsync(); return; }
             if (cmd == "坡角估算" || cmd == "工作帮坡角" || cmd == "坡角") { await SlopeEstimateAsync(); return; }
-            if (cmd == "台阶参数分析" || cmd == "台阶分析" || cmd == "台阶参数") { await BenchAnalyzeAsync(); return; }
+            if (cmd == "台阶参数分析" || cmd == "台阶分析" || cmd == "台阶参数" || cmd == "工艺参数分析") { await BenchAnalyzeAsync(); return; }
             if (cmd == "达成分析" || cmd == "产量达成" || cmd == "达成率") { await AttainmentAsync(); return; }
             if (cmd == "车铲匹配" || cmd == "配车匹配" || cmd == "车铲配比") { await FleetMatchAsync(); return; }
             if (cmd == "点云质量统计" || cmd == "点云统计" || cmd == "点云质量") { await PointCloudStatsAsync(); return; }
             if (cmd == "点云高程着色" || cmd == "高程着色" || cmd == "点云着色") { await ElevationColorAsync(); return; }
+            if (cmd == "加载点云" || cmd == "展点" || cmd == "导入点云" || cmd == "加载点") { await LoadPointCloudAsync(); return; }
             if (cmd == "网格度量" || cmd == "网格面积体积" || cmd == "网格体积") { await MeshMetricsAsync(); return; }
             if (cmd == "网格诊断" || cmd == "网格检查" || cmd == "网格拓扑") { await MeshDiagnoseAsync(); return; }
             if (cmd == "网格焊接" || cmd == "合并顶点" || cmd == "顶点焊接") { await MeshWeldAsync(); return; }
@@ -1852,6 +1853,31 @@ public partial class MainWindow : Window
         Viewport.FitBounds(r.Bounds);
         var inv = System.Globalization.CultureInfo.InvariantCulture;
         StatusMsg.Text = $"高程着色：{r.Points.Count} 点 · z {zmin.ToString("0.#", inv)}~{zmax.ToString("0.#", inv)}（地形色带）";
+    }
+
+    // 加载点云/展点：点 CSV(x,y[,z]) → 灰点入场景 + 范围缩放
+    private async Task LoadPointCloudAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "加载点云：选点 CSV (x,y[,z])",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("点云 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success) { StatusMsg.Text = $"加载点云：导入失败 {r.Error}"; return; }
+        if (r.Points.Count == 0) { StatusMsg.Text = "加载点云：无点"; return; }
+        BeginChange();
+        foreach (var p in r.Points)
+        {
+            var pe = new PointEntity { X = p.x, Y = p.y, Cr = 0.75f, Cg = 0.78f, Cb = 0.82f };
+            AssignLayer(pe); pe.Cr = 0.75f; pe.Cg = 0.78f; pe.Cb = 0.82f;
+            _scene.Add(pe);
+        }
+        RefreshScene();
+        Viewport.FitBounds(r.Bounds);
+        StatusMsg.Text = $"加载点云：{r.Points.Count} 点已入场景（灰点；可着色/去噪/抽稀/统计）";
     }
 
     // 点云去噪 SOR/ROR：点 CSV(x,y,z) → 去噪 → 保留点入场景(黄) + 报表

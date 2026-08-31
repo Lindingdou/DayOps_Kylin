@@ -414,8 +414,15 @@
                                             <Button Classes="ribbon-btn small" Tag="展点" Click="OnRibbonCommand" ToolTip.Tip="展点">
                                                 <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mb_show_pts}" /><TextBlock Text="展点" /></StackPanel>
                                             </Button>
-                                            <Button Classes="ribbon-btn small" Tag="基本几何体" Click="OnRibbonCommand" ToolTip.Tip="基本几何体">
-                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mb_primitives}" /><TextBlock Text="基本几何体" /></StackPanel>
+                                            <Button Classes="ribbon-btn small" ToolTip.Tip="基本几何体">
+                                                <Button.Flyout>
+                                                    <MenuFlyout>
+                                                        <MenuItem Header="立方体" Tag="立方体" Click="OnRibbonCommand" />
+                                                        <MenuItem Header="球体" Tag="球体" Click="OnRibbonCommand" />
+                                                        <MenuItem Header="圆柱" Tag="圆柱" Click="OnRibbonCommand" />
+                                                    </MenuFlyout>
+                                                </Button.Flyout>
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mb_primitives}" /><TextBlock Text="基本几何体 ▾" /></StackPanel>
                                             </Button>
                                         </WrapPanel>
                                     </StackPanel>
