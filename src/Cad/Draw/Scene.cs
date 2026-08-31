@@ -75,7 +75,7 @@ public abstract class SceneEntity
     public virtual SceneEntity? MoveGrip(int i, double nx, double ny) => null;
 
     /// <summary>把本实体颜色复制给 e 并返回（变换保留颜色）。</summary>
-    protected T Colored<T>(T e) where T : SceneEntity { e.Cr = Cr; e.Cg = Cg; e.Cb = Cb; e.Dash = Dash; e.LineWeight = LineWeight; return e; }
+    protected T Colored<T>(T e) where T : SceneEntity { e.Cr = Cr; e.Cg = Cg; e.Cb = Cb; e.Dash = Dash; e.LineWeight = LineWeight; e.Visible = Visible; return e; }
 
     /// <summary>闭环(矩形/正多边形)打断：投两点到全部边(含闭合边)，移除两点间一段，返回绕另一侧的开口多段线；两点重合返 null。</summary>
     protected static PolylineEntity? BreakClosedLoop(IReadOnlyList<(double x, double y)> vs, double x1, double y1, double x2, double y2)
