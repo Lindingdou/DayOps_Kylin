@@ -871,4 +871,18 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 - [x] **导入模板生成**(`d0414d3`)：完成原 DataImportCenter"**模板/导入/导出**"三件套(我原做了导入 + 结果导出，缺模板)。`ImportTemplate`(9 类各带表头 + 示例行的模板 CSV) + 导入模板命令。用户闭环：下载模板→按格式填数据→导入入库→跑分析→导出结果。+1 单测(9 类非空/未知 null/表头含键列/**模板示例行往返可导入自洽**)。→ **DataImportCenter 三件套完整落地**。675 测试。
 - [x] **CSV 解析可测化 + 往返验证**(`c346530`)：`ParseCsvRows`→`GeoDataQueries.ParseCsv`(公开可测)；往返验证 `ExportTableToCsv`→`ParseCsv`→`ImportProductionRecords`(按列名忽略 id/created_at)既有键全部更新 0 错误。+2 单测。677 测试。
 - [x] **§四/§八 聚合结果导出**(`384dbb2`)：**诚实纠偏**——我一度判聚合导出"边际"拟跳过，但按用户指令"补全功能"，聚合导出满足验证+可实现，应做非跳过。加通用 `RecordsToCsv<T>`(反射 record 属性→CSV) + 导出分析 <类型> 命令，一次覆盖 11 聚合结果(产能排名/故障排名/见煤统计/分层煤质/年度产量/KPI趋势/产能分类/故障类型/班次产量/月度计划/作业面)。+1 单测(反射表头/值/空列表)。→ **导出能力完整**：8 结构化分析结果 + 11 聚合结果 + 原始表 ExportTableToCsv。678 测试。
-- [x] **设计数据导入(路况/边坡)**(`本次`)：**贯彻同一诚实纠偏**——曾判"纯展示数据价值低"拟跳过，但与已导入的观测点(配对展绘)同理，路况/边坡也配对显示功能(路况显示/边坡设计)，用户会载入自有设计数据，故应补非跳过。`ImportHaulRoads`(按 road_id upsert，road_type CHECK main/branch/dump/temp) + `ImportSlopeDesigns`(插入型无自然键，side_type CHECK working/final/transition)。命令 导入路况/导入边坡，模板 运输道路/边坡设计。+2 单测(插入/更新/跳过/缺必填错误/**违反 CHECK 约束→错误**)。→ **导入侧覆盖全部可载入表(操作域5+地质3+计划1+设计2=11)**。680 测试。
+- [x] **设计数据导入(路况/边坡)**(`8d86e99`)：**贯彻同一诚实纠偏**——曾判"纯展示数据价值低"拟跳过，但与已导入的观测点(配对展绘)同理，路况/边坡也配对显示功能(路况显示/边坡设计)，用户会载入自有设计数据，故应补非跳过。`ImportHaulRoads`(按 road_id upsert，road_type CHECK main/branch/dump/temp) + `ImportSlopeDesigns`(插入型无自然键，side_type CHECK working/final/transition)。命令 导入路况/导入边坡，模板 运输道路/边坡设计。+2 单测(插入/更新/跳过/缺必填错误/**违反 CHECK 约束→错误**)。→ **导入侧覆盖全部可载入表(操作域5+地质3+计划1+设计2=11)**。680 测试。
+
+## 五十二、全 Ribbon 命令面差集探查（新正交角度：不看模块，逐命令核对原始 MainWindow.xaml 全部按钮 header）
+
+**方法**：提取原始 `MainWindow.xaml` 全部 Ribbon 按钮 header(~110)，逐条对 Kylin 源码做覆盖 grep；再对每个"缺失"项回原始查其真实实现，判 真功能/桩/架构受阻。此前各轮按"模块/数据脉络"探，本轮按"原始逐命令"探——抓模块视角漏掉的散命令。
+
+- [x] **AI 助手命令面全覆盖核对**：原 `MockAiEngine.cs`(官方 AI 助手"点一下直接执行"命令集)24 个 CAD token(CIRCLE/RECTANG/LINE/PLINE/POLYGON/POINT/MOVE/COPY/ROTATE/SCALE/MIRROR/OFFSET/TRIM/ERASE/DIMALIGNED/DIMRADIAL/DIST/MANG/ZOOMEXTENTS/PAN/3DORBIT/GIZMO/3DVIEW/toggle3d)**逐一 grep 确认 24/24 已实现**。AI 助手核心命令面完整。
+- [x] **隐藏/隔离三件套**(`fa6f8ad`)：Ribbon 逐命令 diff 抓到此前缺的 隐藏对象/隐藏同一图层对象/结束隐藏(原 `MainWindow.ContextMenu.cs` OnCtxHideObject/HideLayer/ShowAll)。SceneEntity 加 `Visible` 标志(BuildGeometry/Pick/SnapCandidates 均跳过)，Scene.HideEntities/ShowAllHidden/HiddenCount 辅助，`_hiddenLayers` 跟踪层恢复。会话瞬态(不入 SceneIO)与原一致。+1 单测。681 测试。
+- **⛔ 本轮 5 个记录边界(逐一回原始核实非疏漏)**——根因同源：**托管场景在创建/导入时即把复合体炸开为图元、把网格化为边线、且线段渲染**；原始这些命令均走 **native 引擎**保留态(句柄/逐面)，托管重实现刻意不建该架构：
+  1. **编辑填充(HATCHEDIT)**——**原始自身即桩**：`OnHatchEditClick` 仅 `AppendToHistory("编辑填充（待引擎实现 HATCHEDIT 命令）")`。原程序未实现→按忠实原则不发明。**并非疏漏，是原始留白**。
+  2. **保存选择集**——实为"导出选中三角网→OFF 文件"(非命名集；命名集是 创建/调用选择集，已有)。Kylin 的 OFF 导入被解析为**边线段**(非保留三角网)，场景无可选网格实体→无导出源。需一等 MeshEntity + 面表(原绑 native AcDbIds)。
+  3. **标注样式(DIMSTYLE)**——原 `DimensionStyleWindow` 经 native `PitMine_SetDimensionProperty(handle,arrowSize/textHeight/...)` 编辑**选中标注实体**。Kylin 标注创建时即炸为 线+文字(`DimTools.Build`→List)，无保留复合标注实体可编辑；且经不可见 native 属性模型。create-time 全局样式≠原(编辑既有选中)，属发明→不做。
+  4. **采剥演示**——`BlockModelLib.Simulation.MiningSimController` 加载 .blk 逐条带推演，坐落于**整个 32,107 行 BlockModelLib 子系统**(块体浏览器/创建/导入/煤质属性/体素体积/仿真)。**整模块级，超"补单命令"范围**。
+  5. **渲染配置**——非模态对话框设**全局着色模式(线框/实体)** + native 逐面色覆盖。Kylin 托管场景为**线段渲染**，无实体面着色管线可切换；走原生网格着色。**渲染器架构边界**。
+- **结论**：Ribbon 逐命令差集探查**收敛**——可做+可验证+忠实者(隐藏/隔离)已补；余 5 项均**回原始核实**为 原始留白(1) / 托管架构刻意边界(2-3,5) / 整子系统级(4)，非命令级疏漏。**命令面覆盖到此为托管重实现的忠实上界**。681 测试。
