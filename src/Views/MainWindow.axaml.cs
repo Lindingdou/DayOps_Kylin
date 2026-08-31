@@ -4209,7 +4209,17 @@ public partial class MainWindow : Window
         var grades = _lastBlocks.Select(b => b.Grade).ToList();
         var s = Statistics.Describe(grades, 20);
         var name = await SaveCsvAsync("导出品位直方图", "grade_histogram.csv", Statistics.HistogramCsv(s));
-        StatusMsg.Text = $"属性统计(品位)：{Statistics.SummaryLine(s)} · 20 桶直方图" + (name != null ? $" → {name}" : "");
+        // 直方图柱状图入场景(可视)——忠实原版"直方图"
+        double hvw = ViewportHost.Bounds.Width, hvh = ViewportHost.Bounds.Height;
+        var hp0 = Viewport.ScreenToWorld(hvw * 0.3, hvh * 0.85) ?? (0.0, 0.0);
+        var hp1 = Viewport.ScreenToWorld(hvw * 0.7, hvh * 0.4) ?? (100.0, 50.0);
+        double hw = System.Math.Abs(hp1.x - hp0.x), hh = System.Math.Abs(hp1.y - hp0.y);
+        if (hw < 1e-6) hw = 100; if (hh < 1e-6) hh = 50;
+        BeginChange();
+        foreach (var he in HistogramPlot.Build(s, System.Math.Min(hp0.x, hp1.x), System.Math.Min(hp0.y, hp1.y), hw, hh, System.Math.Max(hh * 0.05, 1e-3)))
+        { he.LayerName = _layers.Current.Name; _scene.Add(he); }
+        RefreshScene();
+        StatusMsg.Text = $"属性统计(品位)：{Statistics.SummaryLine(s)} · 20 桶直方图（柱状图入场景）" + (name != null ? $" · CSV → {name}" : "");
     }
 
     // 块体多属性统计报告(原 BlockReportGenerator「每属性 min/max/mean/std/count+直方图」表格部分):

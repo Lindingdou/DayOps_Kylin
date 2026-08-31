@@ -1746,3 +1746,13 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - **坐标偏移正确**: 曲线画在偏移坐标(baseX+dist, baseY+(z-zmin)), 但轴标签显真实里程/标高值(coord≠label 已处理)。
 
 **本会话累计补 82 真功能/保真 + 4 潜伏 bug 修 + 多处忠实性/深度证伪, 1005 测。**
+
+## 一四三、直方图柱状图 —— 统计可视化（present-but-shallow）
+
+原版有 直方图(149)/Histogram(292), Kylin 的属性统计**只算桶+导 CSV**, 无可视柱状图。补:
+- [x] **`HistogramPlot.Build`**(纯逻辑): `Statistics.Summary.Histogram`(桶计数)→ 竖条(高∝count/maxCount, 轮廓线) + 外框 + X轴(值 Min/Max) + Y轴(频数 0/maxCount) + 轴名"值/频数"。空/零尺寸返空。
+- [x] 接入 `GradeStatsAsync`: Describe → 柱状图入场景(视口中区) + CSV 导出(并存)。
+- [x] 2 测: 桶高按 maxCount 缩放(最高桶顶达图区顶) + 轴名/min/max 标签; 空/零宽返空。1007 测。
+- **统计可视化补齐**: 数据(Statistics.Describe)+CSV 已有, 补柱状图 plot(同剖面图 present-but-shallow: 有数据无图)。
+
+**本会话累计补 83 真功能/保真 + 4 潜伏 bug 修 + 多处忠实性/深度证伪, 1007 测。** 输出可视化透镜(图例/指北针/比例尺/标题栏/剖面图/直方图)高产 6 项——原版"出图/图表"元素独立脉络。
