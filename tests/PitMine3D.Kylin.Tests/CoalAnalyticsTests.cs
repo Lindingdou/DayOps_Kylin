@@ -140,6 +140,20 @@ public class CoalAnalyticsTests
     }
 
     [Fact]
+    public void Outliers_to_csv_header_and_rows()
+    {
+        var rows = new List<CoalSample>();
+        for (int i = 0; i < 10; i++) rows.Add(ST(i + 1, "5", 20 + i * 0.5, 0, 1, 1));
+        rows.Add(ST(100, "5", 90, 0, 1, 1));   // 离群
+        var r = CoalAnalytics.DetectOutliers(rows, "ad", false);
+        string csv = CoalAnalytics.OutliersToCsv(r);
+        Assert.Contains("hole_id,seam,value,z,kind,severity_iqr", csv);   // 表头
+        Assert.Contains("indicator=ad", csv);                             // 元信息行
+        Assert.Contains("H100", csv);                                     // 含离群孔号
+        Assert.Contains("偏高", csv);                                     // 方向
+    }
+
+    [Fact]
     public void DetectOutliers_small_sample_no_result()
     {
         var rows = new List<CoalSample> { ST(1, "5", 20, 0, 1, 1), ST(2, "5", 21, 0, 1, 1) };  // <5

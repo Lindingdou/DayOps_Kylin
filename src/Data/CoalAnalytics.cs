@@ -316,6 +316,19 @@ public static class CoalAnalytics
         return (type ?? "—", "缺 G 值,按挥发分粗判");
     }
 
+    /// <summary>离群结果 → CSV（表头 + 逐离群段：孔号/煤层/值/标高/方向/严重度IQR）。按严重度降序。</summary>
+    public static string OutliersToCsv(OutlierResult r)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"# indicator={r.Indicator} N={r.N} Q1={r.Q1:0.###} Q3={r.Q3:0.###} lower={r.Lower:0.###} upper={r.Upper:0.###}\n");
+        sb.Append("hole_id,seam,value,z,kind,severity_iqr\n");
+        static string Q(string s) => "\"" + (s ?? "").Replace("\"", "\"\"") + "\"";
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        foreach (var o in r.Outliers)
+            sb.Append($"{Q(o.HoleId)},{Q(o.SeamCode)},{o.Value.ToString("0.###", inv)},{(o.Z.HasValue ? o.Z.Value.ToString("0.##", inv) : "")},{Q(o.Kind)},{o.Severity.ToString("0.##", inv)}\n");
+        return sb.ToString();
+    }
+
     /// <summary>线性插值分位数（p∈[0,100]）；vals 须已升序。</summary>
     private static double Percentile(IReadOnlyList<double> sorted, double p)
     {
