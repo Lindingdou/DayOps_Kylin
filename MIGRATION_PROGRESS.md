@@ -990,3 +990,10 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 ## 六十四、网格光顺(Laplacian) —— 又一误记 native 的标准算法补齐
 
 - [x] **网格光顺**(`本次`)：`MeshSmooth.Laplacian(v,t,iters,λ,fixBoundary)` —— 每顶点朝邻点质心移 λ 比例, 迭代去噪/光顺, 固定开边界顶点保轮廓。**标准几何非变体敏感可托管**(insight #5; 原记 native 是误记, "平滑 OK" 实为等值线 Chaikin 平滑非网格)。命令 网格光顺 [迭代数]：OFF → 光顺 → 落 .smoothed.off + 边线框入场景。+3 单测(尖峰 30→15 λ=0.5 解析可验/平面不变/边界固定)。741 tests。
+
+## 六十五、自适应保特征抽稀 —— 重审"refinement"揪出 distinct 能力
+
+**教训延续**：把抽稀模式一概判"refinement"过草率——**自适应保特征抽稀是 distinct 能力**(保高曲率细节 vs 均匀削减, 用户会刻意选), 非体素的简单变体。别再像 drape 那样过早否定。
+
+- [x] **自适应保特征抽稀**(`本次`)：`PointThin.ThinAdaptive` —— 曲率度量=|z−3×3×3 邻域均z|(平面≈0/脊棱高), 按曲率降序贪心, 排斥半径 cell·(1..maxThin) 随平坦度增大(高曲率密留/平坦疏化), 网格哈希加速。命令 自适应抽稀。+2 单测(**脊特征保留率>平坦保留率**/全平退回体素/退化)。743 tests。
+- **判据**：抽稀模式里 体素(已有)/自适应(本次) 是**结果材料级不同**(均匀 vs 保特征)→ distinct 补; 随机/距离与体素结果近似→ refinement 略。同理 kriging 里 IDW/OK/UK distinct(补齐), NN/MA/SK 近似→略。
