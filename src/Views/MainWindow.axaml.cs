@@ -696,6 +696,7 @@ public partial class MainWindow : Window
             if (cmd == "点云质量统计" || cmd == "点云统计" || cmd == "点云质量") { await PointCloudStatsAsync(); return; }
             if (cmd == "点云高程着色" || cmd == "高程着色" || cmd == "点云着色") { await ElevationColorAsync(); return; }
             if (cmd == "加载点云" || cmd == "展点" || cmd == "导入点云" || cmd == "加载点") { await LoadPointCloudAsync(); return; }
+            if (cmd == "逐点坡度/坡向" || cmd == "逐点坡度坡向" || cmd == "法向估计" || cmd == "点云法向") { await PointNormalsAsync(); return; }
             if (cmd == "网格度量" || cmd == "网格面积体积" || cmd == "网格体积") { await MeshMetricsAsync(); return; }
             if (cmd == "网格诊断" || cmd == "网格检查" || cmd == "网格拓扑") { await MeshDiagnoseAsync(); return; }
             if (cmd == "网格焊接" || cmd == "合并顶点" || cmd == "顶点焊接") { await MeshWeldAsync(); return; }
@@ -1899,6 +1900,36 @@ public partial class MainWindow : Window
         Viewport.FitBounds(r.Bounds);
         var inv = System.Globalization.CultureInfo.InvariantCulture;
         StatusMsg.Text = $"高程着色：{r.Points.Count} 点 · z {zmin.ToString("0.#", inv)}~{zmax.ToString("0.#", inv)}（地形色带）";
+    }
+
+    // 逐点坡度坡向 / 法向估计：点 CSV(x,y,z) → k 近邻 PCA 逐点法向 → 坡度配色点(绿平→红陡)入场景 + 报表
+    private async Task PointNormalsAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "逐点坡度/坡向：选点 CSV (x,y,z)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("点云 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success) { StatusMsg.Text = $"逐点坡度坡向：导入失败 {r.Error}"; return; }
+        if (r.Points.Count < 3) { StatusMsg.Text = "逐点坡度坡向：点太少(≥3)"; return; }
+        var pts = new List<(double x, double y, double z)>(); foreach (var p in r.Points) pts.Add((p.x, p.y, p.z));
+        var attrs = PointNormals.Compute(pts, 12);
+        if (attrs.Count == 0) { StatusMsg.Text = "逐点坡度坡向：计算失败"; return; }
+        double smin = double.MaxValue, smax = double.MinValue, ssum = 0;
+        foreach (var a in attrs) { if (a.slope < smin) smin = a.slope; if (a.slope > smax) smax = a.slope; ssum += a.slope; }
+        BeginChange();
+        for (int i = 0; i < pts.Count; i++)
+        {
+            double f = System.Math.Min(1.0, attrs[i].slope / 60.0);   // 0..60° 映射满量程(绿→红)
+            _scene.Add(new PointEntity { X = pts[i].x, Y = pts[i].y, Cr = (float)f, Cg = (float)(1 - f) * 0.85f, Cb = 0.25f });
+        }
+        RefreshScene();
+        Viewport.FitBounds(r.Bounds);
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        StatusMsg.Text = $"逐点坡度坡向(k=12 PCA)：{pts.Count} 点 · 坡度 {smin.ToString("0.#", inv)}~{smax.ToString("0.#", inv)}° · 均 {(ssum / attrs.Count).ToString("0.#", inv)}°（绿平→红陡）";
     }
 
     // 加载点云/展点：点 CSV(x,y[,z]) → 灰点入场景 + 范围缩放
