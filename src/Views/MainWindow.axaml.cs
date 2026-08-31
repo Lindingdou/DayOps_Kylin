@@ -662,6 +662,7 @@ public partial class MainWindow : Window
             if (cmd == "备选路径" || cmd == "K最短路" || cmd == "备用路径") { StartKPathfind(); return; }
             if (cmd == "路网校验" || cmd == "连通性诊断" || cmd == "路网体检") { ValidateRoadNetwork(); return; }
             if (cmd == "演化对比" || cmd == "路网演化" || cmd == "两期路网对比") { await EvolutionCompareAsync(); return; }
+            if (cmd == "时段快照" || cmd == "路网快照" || cmd == "纪元快照") { await SnapshotEpochAsync(); return; }
             if (cmd == "排土条带" || cmd == "条带填充" || cmd == "排土条带划分") { DumpStrips(); return; }
             if (cmd == "分帮扩帮" || cmd == "批量台阶扩帮" || cmd == "批量扩坑") { StartBench(); return; }
             if (cmd == "组合工作线" || cmd == "合并多段线" || cmd == "连接台阶线" || cmd == "连接多段线") { JoinPolylines(); return; }
@@ -3047,6 +3048,31 @@ public partial class MainWindow : Window
         }
         foreach (var id in order) if (groups[id].Centerline.Count >= 2) lines.Add(groups[id]);
         return lines;
+    }
+
+    // 时段快照：把当前场景折线(路网中线)导出为纪元 CSV(lineId,x,y,z)——供演化对比作两期输入
+    private async Task SnapshotEpochAsync()
+    {
+        var polys = new List<PolylineEntity>();
+        foreach (var e in _scene.Entities) if (e is PolylineEntity p && p.Points.Count >= 2) polys.Add(p);
+        if (polys.Count == 0) { StatusMsg.Text = "时段快照：场景无路网（多段线）"; return; }
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "时段快照：导出路网纪元 CSV", DefaultExtension = "csv", SuggestedFileName = "epoch.csv",
+            FileTypeChoices = new[] { new FilePickerFileType("路网纪元 CSV") { Patterns = new[] { "*.csv" } } }
+        });
+        if (file == null) return;
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var sb = new System.Text.StringBuilder("lineId,x,y,z\n");
+        int id = 0, verts = 0;
+        foreach (var p in polys)
+        {
+            id++;
+            foreach (var (x, y) in p.Points) { sb.Append("L").Append(id).Append(',').Append(x.ToString("R", inv)).Append(',').Append(y.ToString("R", inv)).Append(",0\n"); verts++; }
+        }
+        try { System.IO.File.WriteAllText(file.Path.LocalPath, sb.ToString()); }
+        catch (System.Exception ex) { StatusMsg.Text = $"时段快照：写出失败 {ex.Message}"; return; }
+        StatusMsg.Text = $"时段快照：{polys.Count} 条中线·{verts} 顶点 → {System.IO.Path.GetFileName(file.Path.LocalPath)}（可作演化对比的一期输入）";
     }
 
     // 演化对比：读上期 + 本期中线 CSV(lineId,x,y[,z]) → 逐段分类(保持/移位/延拓/截短/废除) → 配色入场景 + 里程账
