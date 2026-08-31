@@ -1046,5 +1046,13 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 - [x] **连续多层自动建模**(`ad78190`)：原「N 层位面→N-1 夹层体」, Kylin 仅顶底成体(2面)。抽取 QuickModelAsync 核为 `LayerSolid.FromSurfaces`(边界环放样+焊接, QuickModelAsync 改用之去重), 加 `MultiLayer`(N 面按均高降序逐对成体) + 命令。5 测(水密/12三角/包围盒/N→N-1/退化)。
 - [x] **网格简化(顶点聚类)**(`2f552ba`)：原「网格简化(顶点聚类占位)」命令, Kylin 有算法(MeshWeld 容差合并=顶点聚类)无命令(**under-exposed**)。补 `MeshSimplify.ByClustering`(容差=包围盒对角×比例, 复用已测 MeshWeld.Weld) + 网格简化命令(选 OFF→simplified.off 报减面率)。5 测(大容差显著减点减面/包围盒守/微容差不减/单调/空)。**798 tests**。
 - **unwired 系统扫描**: 遍历 src/Cad 类查 MainWindow 未引用但有测试的 → 仅 DxfExportService(被 SceneExportService 取代的遗留 LINE-only) + RasterMorphology(被其他 src 内部调用的形态学基元, insight #11 已排除)。**无用户级未接线缺口**。
+
+## 七十二、SqlLib 深核 —— 重审"已记录 UI 项"找可做核: SQL 查询执行
+
+**第 9 个插件域 SqlLib**(唯一未深查): 原「SQL Console(查表结构/数据预览/SQL 查询)」。Kylin 有 数据字典/表结构/导出库, 但缺**查询执行**。**v1 曾整记 SQL Console 为"交互持久化 UI 阻"——重审发现查询侧核可做**(执行 SQL→结果, 非交互 console UI):
+
+- [x] **只读 SQL 查询执行**(`ef2b754`)：`GeoDataQueries.RunSelectCsv`(跑 SELECT/PRAGMA/WITH/EXPLAIN→结果表头+行 CSV) + `IsReadOnlySql`(拒 INSERT/UPDATE/DELETE/DROP **保护数据**, 含前导注释判定) + SQL查询命令(取首空格后为语句→只读执行→导出 CSV)。9 测(表头+行/聚合/PRAGMA/**4 写入语句拒绝**/只读判定/坏SQL返错不抛)。**807 tests**。**教训**: 记录为"交互 UI 阻"的项也要拆核——SQL Console 的**查询执行核**是可做可验的只读命令, 只有 grid/持久化 console UI 属交互(记录)。同 [[unlock-blocked-insights]] #11 拆层。
+
+**★9 插件域全部深核完毕**(BlockModel/GeoDataBase/PointCloud/Road/MeshEdit/Plan/Task/Sql + 跨域 导出/编辑/注记)。本会话累计补 **9 真功能**, 807 测。
 - **记录(2D 场景架构阻)**：**点/节点 Z 编辑**(统一Z/POINTSETZ/Z=aX+bY+c 平面赋Z/POLYUNIFYZ)——场景实体 2D 无 Z(PointEntity 仅 X,Y; PolylineEntity.Points 是 `(x,y)`), 无 Z 可设, 属线段渲染架构边界。
 - **latent 记录(非本轮引入)**：loft+weld(QuickModelAsync/LayerSolid)产**边流形水密但定向不一致**网格 → MeshMetrics 散度体积对定向敏感(随 z 位置变); 但实际取体积走**体素/缠绕数**路径(WindingNumberTester, 定向无关 robust), 工作流不受影响。
