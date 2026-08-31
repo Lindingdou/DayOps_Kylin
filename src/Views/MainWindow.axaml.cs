@@ -779,6 +779,16 @@ public partial class MainWindow : Window
             if (cmd == "排土场容量校核" || cmd == "容量校核" || cmd == "排土容量") { await DumpCapacityAsync(); return; }
             if (cmd == "生产量核算" || cmd == "任务量汇总" || cmd == "分账合计" || cmd == "生产任务量") { await ProductionQuantityAsync(); return; }
             if (cmd == "采剥平衡" || cmd == "采剥平衡分析" || cmd == "剥采平衡" || cmd == "物料平衡") { await StripBalanceAsync(); return; }
+            if (cmd == "排土场按量推进" || cmd == "排土按量推进" || cmd.StartsWith("排土场按量推进 ") || cmd.StartsWith("排土按量推进 "))
+            {
+                var tok = cmd.Split(new[] { ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
+                double vol = 60000, wl = 300, bh = 20;
+                if (tok.Length >= 2) double.TryParse(tok[1], out vol);
+                if (tok.Length >= 3) double.TryParse(tok[2], out wl);
+                if (tok.Length >= 4) double.TryParse(tok[3], out bh);
+                DumpAdvanceByVolumeCmd(vol, wl, bh);
+                return;
+            }
             if (cmd == "物料换算" || cmd == "煤岩换算" || cmd.StartsWith("物料换算 ") || cmd.StartsWith("煤岩换算 "))
             {
                 var tok = cmd.Split(new[] { ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
@@ -1340,6 +1350,16 @@ public partial class MainWindow : Window
         RefreshScene();
         if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
         StatusMsg.Text = $"网格边界：{loops.Count} 环 · {totPts} 点(投影 XY 作闭合折线入场景)";
+    }
+
+    // 排土场按量推进（TaskLib 汇切片）：按排弃占容方反算推进距离 d = V容 / (工作线长 × 台阶高)。
+    // 用法 "排土场按量推进 <占容方m³> <工作线长m> <台阶高m>"，缺省 (占容/工作线/台阶)=(60000/300/20)。
+    private void DumpAdvanceByVolumeCmd(double dumpM3, double workLineM, double benchH)
+    {
+        var sink = new Cad.Tasks.SinkNode { WorkLineLengthM = workLineM, BenchHeightM = benchH };
+        double d = sink.AdvanceMetersFor(dumpM3);
+        if (d <= 0) { StatusMsg.Text = "排土场按量推进：工作线长/台阶高需 > 0"; return; }
+        StatusMsg.Text = $"排土场按量推进：排弃占容 {dumpM3 / 1e4:0.##}万m³ · 工作线 {workLineM:0.#}m · 台阶 {benchH:0.#}m → 推进距离 {d:0.##} m（坡顶线沿推进方向偏移此距生成堆填面；三维形态需内核）";
     }
 
     // 采剥平衡分析（TaskLib 物料流切片）：读物料流 CSV(物料,实方m³,去向,运距km) → 采出/剥离/剥采比/内排率/运输功/加权运距。
