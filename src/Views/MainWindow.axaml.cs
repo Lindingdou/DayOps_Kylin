@@ -4013,8 +4013,35 @@ public partial class MainWindow : Window
         if (_selected.Count == 0) { PropertyHint.Text = "选中单个实体查看特性"; PropertyHint.IsVisible = true; return; }
         if (_selected.Count > 1) { PropertyHint.Text = $"选中 {_selected.Count} 个实体（单选查看特性）"; PropertyHint.IsVisible = true; return; }
         PropertyHint.IsVisible = false;
-        foreach (var (_, label, value) in Cad.Draw.EntityProperties.Describe(_selected[0]))
-            PropertyPanel.Children.Add(PropRow(label, value));
+        var ent = _selected[0];
+        var editable = Cad.Draw.EntityProperties.EditableLabels(ent);
+        foreach (var (_, label, value) in Cad.Draw.EntityProperties.Describe(ent))
+            PropertyPanel.Children.Add(editable.Contains(label) ? EditablePropRow(ent, label, value) : PropRow(label, value));
+    }
+
+    // 可编辑特性行: 值为 TextBox, 回车/失焦提交 → WithEdited 重建实体并替换。
+    private Control EditablePropRow(SceneEntity ent, string label, string value)
+    {
+        var g = new Grid { ColumnDefinitions = new ColumnDefinitions("92,*"), Margin = new Thickness(6, 2, 6, 2) };
+        var l = new TextBlock { Text = label, FontSize = 11, Foreground = Brush.Parse("#6A727C"), VerticalAlignment = VerticalAlignment.Center };
+        var tb = new TextBox { Text = value, FontSize = 11, Padding = new Thickness(3, 1, 3, 1), MinHeight = 0, Background = Brush.Parse("#FBFCFD"), BorderBrush = Brush.Parse("#DCDFE4") };
+        Grid.SetColumn(l, 0); Grid.SetColumn(tb, 1);
+        g.Children.Add(l); g.Children.Add(tb);
+
+        void Commit()
+        {
+            if (tb.Text == value) return;                       // 未改
+            var edited = Cad.Draw.EntityProperties.WithEdited(ent, label, tb.Text ?? "");
+            if (edited == null) { tb.Text = value; StatusMsg.Text = $"特性编辑：「{label}」输入无效，已还原"; return; }
+            BeginChange();
+            _scene.Replace(ent, edited);
+            _selected.Clear(); _selected.Add(edited);
+            RefreshScene(); HighlightSelection(); UpdatePropertyPanel();
+            StatusMsg.Text = $"特性编辑：{label} 已更新";
+        }
+        tb.LostFocus += (_, _) => Commit();
+        tb.KeyDown += (_, ev) => { if (ev.Key == Avalonia.Input.Key.Enter) { Commit(); ev.Handled = true; } };
+        return g;
     }
 
     private static Control PropRow(string label, string value)

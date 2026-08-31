@@ -66,4 +66,100 @@ public static class EntityProperties
         }
         return r;
     }
+
+    /// <summary>该实体在特性面板中可编辑的行标签集合(其余只读, 如长度/宽/高等派生量)。</summary>
+    public static HashSet<string> EditableLabels(SceneEntity e)
+    {
+        var s = new HashSet<string> { "图层", "颜色" };   // 常规: 图层 + 颜色 恒可编辑
+        switch (e)
+        {
+            case LineEntity: s.Add("起点"); s.Add("终点"); break;
+            case CircleEntity: s.Add("圆心"); s.Add("半径"); break;
+            case RectEntity: s.Add("角点1"); s.Add("角点2"); break;
+            case PolygonEntity: s.Add("圆心"); s.Add("半径"); s.Add("边数"); break;
+            case PointEntity: s.Add("坐标"); break;
+            case ArcEntity: s.Add("起点"); s.Add("端点"); break;
+            case TextEntity: s.Add("位置"); s.Add("字高"); s.Add("内容"); s.Add("旋转"); break;
+        }
+        return s;
+    }
+
+    /// <summary>把特性面板某行(label)编辑为 text, 返回改写后的新实体(复制原色/层); 不可编辑或解析失败返回 null。</summary>
+    public static SceneEntity? WithEdited(SceneEntity e, string label, string text)
+    {
+        if (!EditableLabels(e).Contains(label)) return null;
+        // 常规: 图层 / 颜色
+        if (label == "图层")
+        { var c = CloneShallow(e); if (c == null) return null; c.LayerName = string.IsNullOrWhiteSpace(text) ? "0" : text.Trim(); return c; }
+        if (label == "颜色")
+        {
+            if (!TryColor(text, out float cr, out float cg, out float cb)) return null;
+            var c = CloneShallow(e); if (c == null) return null; c.Cr = cr; c.Cg = cg; c.Cb = cb; return c;
+        }
+        // 几何: 按类型 + 标签
+        switch (e)
+        {
+            case LineEntity l when label == "起点" && TryXY(text, out double x, out double y): return Style(e, new LineEntity { X0 = x, Y0 = y, X1 = l.X1, Y1 = l.Y1 });
+            case LineEntity l when label == "终点" && TryXY(text, out double x, out double y): return Style(e, new LineEntity { X0 = l.X0, Y0 = l.Y0, X1 = x, Y1 = y });
+            case CircleEntity c when label == "圆心" && TryXY(text, out double x, out double y): return Style(e, new CircleEntity { Cx = x, Cy = y, Radius = c.Radius, Segments = c.Segments });
+            case CircleEntity c when label == "半径" && TryD(text, out double d) && d > 1e-9: return Style(e, new CircleEntity { Cx = c.Cx, Cy = c.Cy, Radius = d, Segments = c.Segments });
+            case RectEntity rc when label == "角点1" && TryXY(text, out double x, out double y): return Style(e, new RectEntity { X0 = x, Y0 = y, X1 = rc.X1, Y1 = rc.Y1 });
+            case RectEntity rc when label == "角点2" && TryXY(text, out double x, out double y): return Style(e, new RectEntity { X0 = rc.X0, Y0 = rc.Y0, X1 = x, Y1 = y });
+            case PolygonEntity pg when label == "圆心" && TryXY(text, out double x, out double y): return Style(e, new PolygonEntity { Cx = x, Cy = y, Radius = pg.Radius, Rotation = pg.Rotation, Sides = pg.Sides });
+            case PolygonEntity pg when label == "半径" && TryD(text, out double d) && d > 1e-9: return Style(e, new PolygonEntity { Cx = pg.Cx, Cy = pg.Cy, Radius = d, Rotation = pg.Rotation, Sides = pg.Sides });
+            case PolygonEntity pg when label == "边数" && int.TryParse(text.Trim(), out int n) && n >= 3 && n <= 512: return Style(e, new PolygonEntity { Cx = pg.Cx, Cy = pg.Cy, Radius = pg.Radius, Rotation = pg.Rotation, Sides = n });
+            case PointEntity p when label == "坐标" && TryXY(text, out double x, out double y): return Style(e, new PointEntity { X = x, Y = y, Size = p.Size });
+            case ArcEntity a when label == "起点" && TryXY(text, out double x, out double y): return Style(e, new ArcEntity { X1 = x, Y1 = y, X2 = a.X2, Y2 = a.Y2, X3 = a.X3, Y3 = a.Y3, Segments = a.Segments });
+            case ArcEntity a when label == "端点" && TryXY(text, out double x, out double y): return Style(e, new ArcEntity { X1 = a.X1, Y1 = a.Y1, X2 = a.X2, Y2 = a.Y2, X3 = x, Y3 = y, Segments = a.Segments });
+            case TextEntity t when label == "位置" && TryXY(text, out double x, out double y): return Style(e, new TextEntity { X = x, Y = y, Height = t.Height, Text = t.Text, Rotation = t.Rotation });
+            case TextEntity t when label == "字高" && TryD(text, out double d) && d > 1e-9: return Style(e, new TextEntity { X = t.X, Y = t.Y, Height = d, Text = t.Text, Rotation = t.Rotation });
+            case TextEntity t when label == "内容": return Style(e, new TextEntity { X = t.X, Y = t.Y, Height = t.Height, Text = text, Rotation = t.Rotation });
+            case TextEntity t when label == "旋转" && TryD(text, out double deg): return Style(e, new TextEntity { X = t.X, Y = t.Y, Height = t.Height, Text = t.Text, Rotation = deg * Math.PI / 180.0 });
+        }
+        return null;
+    }
+
+    // 复制样式(色 + 层)到新实体。
+    private static SceneEntity Style(SceneEntity src, SceneEntity dst)
+    { dst.Cr = src.Cr; dst.Cg = src.Cg; dst.Cb = src.Cb; dst.LayerName = src.LayerName; return dst; }
+
+    // 同类型浅拷贝(改 图层/颜色 用, 几何不变)。
+    private static SceneEntity? CloneShallow(SceneEntity e) => e switch
+    {
+        LineEntity l => Style(e, new LineEntity { X0 = l.X0, Y0 = l.Y0, X1 = l.X1, Y1 = l.Y1 }),
+        CircleEntity c => Style(e, new CircleEntity { Cx = c.Cx, Cy = c.Cy, Radius = c.Radius, Segments = c.Segments }),
+        RectEntity rc => Style(e, new RectEntity { X0 = rc.X0, Y0 = rc.Y0, X1 = rc.X1, Y1 = rc.Y1 }),
+        PolygonEntity pg => Style(e, new PolygonEntity { Cx = pg.Cx, Cy = pg.Cy, Radius = pg.Radius, Rotation = pg.Rotation, Sides = pg.Sides }),
+        PointEntity p => Style(e, new PointEntity { X = p.X, Y = p.Y, Size = p.Size }),
+        ArcEntity a => Style(e, new ArcEntity { X1 = a.X1, Y1 = a.Y1, X2 = a.X2, Y2 = a.Y2, X3 = a.X3, Y3 = a.Y3, Segments = a.Segments }),
+        TextEntity t => Style(e, new TextEntity { X = t.X, Y = t.Y, Height = t.Height, Text = t.Text, Rotation = t.Rotation }),
+        PolylineEntity pl => Style(e, new PolylineEntity { Points = new List<(double, double)>(pl.Points), Closed = pl.Closed }),
+        _ => null,
+    };
+
+    private static bool TryXY(string text, out double x, out double y)
+    {
+        x = y = 0;
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        var t = text.Trim().TrimStart('(').TrimEnd(')').Split(new[] { ',', ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+        return t.Length >= 2 && double.TryParse(t[0], NumberStyles.Float, Inv, out x) && double.TryParse(t[1], NumberStyles.Float, Inv, out y);
+    }
+
+    private static bool TryD(string text, out double d) =>
+        double.TryParse((text ?? "").Trim().TrimEnd('°'), NumberStyles.Float, Inv, out d);
+
+    private static bool TryColor(string text, out float cr, out float cg, out float cb)
+    {
+        cr = cg = cb = 0;
+        var s = (text ?? "").Trim().TrimStart('#');
+        if (s.Length != 6) return false;
+        try
+        {
+            cr = Convert.ToInt32(s.Substring(0, 2), 16) / 255f;
+            cg = Convert.ToInt32(s.Substring(2, 2), 16) / 255f;
+            cb = Convert.ToInt32(s.Substring(4, 2), 16) / 255f;
+            return true;
+        }
+        catch { return false; }
+    }
 }
