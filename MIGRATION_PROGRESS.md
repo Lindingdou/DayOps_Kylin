@@ -1043,6 +1043,8 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 **MeshEditLib 逐命令核实**（"内核模块"但含可移植子算）：约束Delaunay/焊接/放样/顶底成体/primitives/去重(点线)/加密/闭合/**Douglas-Peucker简化**(PolylineSimplify) 均已有; OSGB 倾斜摄影=native 阻。补 2 真缺口：
 
 - [x] **线对象裁剪 POLYCLIP**(`9f5b137`)：原「用闭合多段线裁剪其它线对象」, Kylin ClipPolygon 仅多边形∩凸包。补 `LineClip.ByPolygon`(逐段插边界交点→连续走增广点序按中点内外判, 断成同侧段; 吃开放线、**非凸边界**、保内/保外) + 线裁剪/线外裁剪命令。7 测(穿线保内/保外两段/全内/全外/折线/**非凸边界**/退化)。
-- [x] **连续多层自动建模**(`ad78190`)：原「N 层位面→N-1 夹层体」, Kylin 仅顶底成体(2面)。抽取 QuickModelAsync 核为 `LayerSolid.FromSurfaces`(边界环放样+焊接, QuickModelAsync 改用之去重), 加 `MultiLayer`(N 面按均高降序逐对成体) + 命令。5 测(水密/12三角/包围盒/N→N-1/退化)。**793 tests**。
+- [x] **连续多层自动建模**(`ad78190`)：原「N 层位面→N-1 夹层体」, Kylin 仅顶底成体(2面)。抽取 QuickModelAsync 核为 `LayerSolid.FromSurfaces`(边界环放样+焊接, QuickModelAsync 改用之去重), 加 `MultiLayer`(N 面按均高降序逐对成体) + 命令。5 测(水密/12三角/包围盒/N→N-1/退化)。
+- [x] **网格简化(顶点聚类)**(`2f552ba`)：原「网格简化(顶点聚类占位)」命令, Kylin 有算法(MeshWeld 容差合并=顶点聚类)无命令(**under-exposed**)。补 `MeshSimplify.ByClustering`(容差=包围盒对角×比例, 复用已测 MeshWeld.Weld) + 网格简化命令(选 OFF→simplified.off 报减面率)。5 测(大容差显著减点减面/包围盒守/微容差不减/单调/空)。**798 tests**。
+- **unwired 系统扫描**: 遍历 src/Cad 类查 MainWindow 未引用但有测试的 → 仅 DxfExportService(被 SceneExportService 取代的遗留 LINE-only) + RasterMorphology(被其他 src 内部调用的形态学基元, insight #11 已排除)。**无用户级未接线缺口**。
 - **记录(2D 场景架构阻)**：**点/节点 Z 编辑**(统一Z/POINTSETZ/Z=aX+bY+c 平面赋Z/POLYUNIFYZ)——场景实体 2D 无 Z(PointEntity 仅 X,Y; PolylineEntity.Points 是 `(x,y)`), 无 Z 可设, 属线段渲染架构边界。
 - **latent 记录(非本轮引入)**：loft+weld(QuickModelAsync/LayerSolid)产**边流形水密但定向不一致**网格 → MeshMetrics 散度体积对定向敏感(随 z 位置变); 但实际取体积走**体素/缠绕数**路径(WindingNumberTester, 定向无关 robust), 工作流不受影响。
