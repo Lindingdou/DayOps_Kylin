@@ -632,3 +632,15 @@
 - [x] **增量 3 物料流/采剥平衡 MaterialFlow**(commit `3b77f1d`)：MaterialFlow(六元组→吨量/占容/运输功) + PeriodBalance(**采出/剥离/剥采比/排弃/内排率/总运输功/吨量加权运距**)。命令 **采剥平衡**(读物料流 CSV → 全指标报表)。+5 测。忠实: 未错配到 量驱动采剥接续(排产接续)。
 
 **TaskLib 已交付 3 增量，均自足 + 可测 + 出独立功能**(生产量核算/物料换算/采剥平衡——真露天矿生产分析)。域基础 TaskQuantity/MaterialSpec/MaterialFlow 通。**下**: SinkNode(汇容量) → 面输入 FaceInput/EquipmentGroup/ExploderConfig(富域, 无独立功能=纯基础) → TaskExploder 引擎(生产任务编制) → DB 输入 + 排产功能。586 测试。
+
+## 三十三、TaskLib 增量 4-5（汇节点/排土推进 + 煤质/配煤）+ 自足域提尽
+
+- [x] **增量 4 汇节点 SinkNode**(commit `ef98e36`)：去向本体(库容占容方 Kr/剩余/填充率/接纳/**按量推进距离 d=V容/(工作线×台阶高)**) + SinkRegistry。命令 **排土场按量推进**(复活死按钮)。+5 测。
+- [x] **增量 5 煤质/配煤 CoalQuality**(commit `a19d751`)：灰/热/硫/水 + MeetsTarget 达标判定 + Blend(按吨量加权混合=标准)。命令 **配煤核算**(读配煤 CSV→混合煤质)。+3 测。
+
+**★TaskLib 自足域 FEATURE 已提尽 5 个**(量核算/物料规格/采剥平衡/排土按量推进/配煤核算——均自足、可测、真露天矿分析)。594 测试, 死按钮 61(排土场按量推进 已复活)。
+
+**TaskLib 余下 = 引擎链共享基础(纯基础, 无独立功能) + 引擎**:
+- Dispatch(779, 派车/任务实例/派工/实绩 数据结构) + full ProductionTask(474) + ExploderConfig/FaceInput(561) —— 引擎共享域, **纯基础无独立功能**(违"只考虑功能"), 但为 生产任务编制/派工/台账(~22 死按钮)的必经路。
+- 引擎: TaskExploder(971 面→5工序)/HaulDumpDeriver(448)/FlowAssigner(1032)/DispatchEngine(987)/MonthlyShiftDecomposer(658, 需 BlockModelLib 空间) —— 各 500-1000+ 行, 用共享域。
+→ 引擎类 TaskLib 功能需先移 ~1000 行纯基础 + 引擎(多 tick 无 feature), 是大工程。自足域已尽。
