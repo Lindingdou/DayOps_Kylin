@@ -113,6 +113,16 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Production_by_shift_from_seed()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var rows = GeoDataQueries.GetProductionByShift(db.Connection);
+        Assert.NotEmpty(rows);
+        Assert.All(rows, r => Assert.InRange(r.UtilizationPct, 0, 100));
+        Assert.Equal(rows.Sum(r => r.Records), (int)db.ScalarLong("SELECT COUNT(*) FROM production_record"));
+    }
+
+    [Fact]
     public void Fault_by_equipment_ranked_by_downtime()
     {
         using var db = GeoDatabase.OpenSeeded();

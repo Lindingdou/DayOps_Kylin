@@ -388,6 +388,26 @@ public static class GeoDataQueries
         return "\"" + v.Replace("\"", "\"\"") + "\"";
     }
 
+    public sealed record ShiftOutputRow(string Shift, int Records, double OutputM3, double WorkHours, double UtilizationPct);
+
+    /// <summary>班次产量对比：各班次 记录数/产量/工时/作业率（production_record 按 shift 分组）。</summary>
+    public static List<ShiftOutputRow> GetProductionByShift(SqliteConnection conn)
+    {
+        var rows = new List<ShiftOutputRow>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"SELECT COALESCE(shift,'(无)'), COUNT(*), COALESCE(SUM(output_m3),0),
+                            COALESCE(SUM(work_hours),0), COALESCE(SUM(fault_hours),0)
+                            FROM production_record GROUP BY shift ORDER BY SUM(output_m3) DESC";
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+        {
+            double wh = rd.GetDouble(3), fh = rd.GetDouble(4);
+            double util = (wh + fh) > 1e-9 ? wh / (wh + fh) * 100 : 0;
+            rows.Add(new ShiftOutputRow(rd.GetString(0), rd.GetInt32(1), rd.GetDouble(2), wh, util));
+        }
+        return rows;
+    }
+
     public sealed record FaultRankRow(string EquipmentId, int Events, double DowntimeHours);
 
     /// <summary>设备故障排名：按累计停机时降序取 topN（找最需检修的设备）。</summary>
