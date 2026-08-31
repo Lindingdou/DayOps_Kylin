@@ -35,9 +35,40 @@ public class TiffLzwTests
         Assert.Equal(new byte[] { 10, 20, 30, 15, 26, 37 }, data);   // 像素2 = 像素1 + 差分
     }
 
+    // PIL 生成的同一 4×4[红绿蓝白]×4 图像的期望解压结果
+    private static readonly byte[] Expected48 =
+    {
+        255,0,0, 0,255,0, 0,0,255, 255,255,255,
+        255,0,0, 0,255,0, 0,0,255, 255,255,255,
+        255,0,0, 0,255,0, 0,0,255, 255,255,255,
+        255,0,0, 0,255,0, 0,0,255, 255,255,255,
+    };
+
+    [Fact]
+    public void PackBits_decodes_pil_reference()
+    {
+        byte[] c = { 0,255,254,0,0,255,254,0,253,255,0,255,254,0,0,255,254,0,253,255,0,255,254,0,0,255,254,0,253,255,0,255,254,0,0,255,254,0,253,255 };
+        Assert.Equal(Expected48, TiffLzw.PackBitsDecode(c, 48));
+    }
+
+    [Fact]
+    public void Deflate_decodes_pil_reference()
+    {
+        byte[] c = { 120,156,251,207,192,192,240,31,132,65,128,8,54,0,38,38,23,233 };
+        Assert.Equal(Expected48, TiffLzw.InflateZlib(c, 48));
+    }
+
+    [Fact]
+    public void PackBits_run_and_literal()
+    {
+        // 字面(0→复制1字节 42) + 游程(254=-2→重复1字节 3次)
+        Assert.Equal(new byte[] { 42, 7, 7, 7 }, TiffLzw.PackBitsDecode(new byte[] { 0, 42, 254, 7 }));
+    }
+
     [Fact]
     public void Empty_input_safe()
     {
         Assert.Empty(TiffLzw.Decode(new byte[0]));
+        Assert.Empty(TiffLzw.PackBitsDecode(new byte[0]));
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using PitMine3D.Kylin.Cad;
 using Xunit;
@@ -80,34 +81,42 @@ public class GeoTiffSamplerTests
         Assert.Equal(198, g.MinY, 6); Assert.Equal(200, g.MaxY, 6);   // 顶 200, 底 200-2
     }
 
-    // 4×4 LZW GeoTIFF: PIL 压缩的 [红绿蓝白]×4 条带 + 地理配准(像素(0,0)=世界(100,200), 每像素1)
-    private static byte[] MakeLzwGeoTiff()
+    // 4×4 压缩 GeoTIFF: PIL 压缩的 [红绿蓝白]×4 条带 + 地理配准(像素(0,0)=世界(100,200), 每像素1)
+    private static byte[] MakeCompressedGeoTiff(ushort compression, byte[] strip)
     {
-        byte[] lzw = { 128, 63, 192, 16, 56, 20, 17, 255, 7, 130, 128, 33, 48, 136, 60, 14, 21, 14, 134, 66, 226, 16, 136, 8 };
         var ms = new MemoryStream(); var w = new BinaryWriter(ms);
         w.Write(new byte[] { (byte)'I', (byte)'I' }); w.Write((ushort)42); w.Write((uint)8);
         void Entry(ushort tag, ushort type, uint count, uint val) { w.Write(tag); w.Write(type); w.Write(count); w.Write(val); }
-        uint stripOff = 134, scaleOff = (uint)(134 + lzw.Length), tieOff = scaleOff + 24;
+        uint stripOff = 134, scaleOff = (uint)(134 + strip.Length), tieOff = scaleOff + 24;
         w.Write((ushort)10);
         Entry(256, 3, 1, 4); Entry(257, 3, 1, 4);   // 4×4
-        Entry(259, 3, 1, 5);                          // Compression=LZW
+        Entry(259, 3, 1, compression);
         Entry(273, 4, 1, stripOff);
         Entry(277, 3, 1, 3); Entry(278, 3, 1, 4);     // Samples=3, RowsPerStrip=4
-        Entry(279, 4, 1, (uint)lzw.Length);           // StripByteCounts
+        Entry(279, 4, 1, (uint)strip.Length);         // StripByteCounts
         Entry(284, 3, 1, 1);
         Entry(33550, 12, 3, scaleOff); Entry(33922, 12, 6, tieOff);
         w.Write((uint)0);
-        w.Write(lzw);
+        w.Write(strip);
         w.Write(1.0); w.Write(1.0); w.Write(0.0);
         w.Write(0.0); w.Write(0.0); w.Write(0.0); w.Write(100.0); w.Write(200.0); w.Write(0.0);
         return ms.ToArray();
     }
 
-    [Fact]
-    public void Lzw_geotiff_decodes_and_samples()
+    // PIL 生成的 [红绿蓝白]×4 各压缩条带
+    public static IEnumerable<object[]> CompressedStrips() => new[]
+    {
+        new object[] { (ushort)5, new byte[] { 128,63,192,16,56,20,17,255,7,130,128,33,48,136,60,14,21,14,134,66,226,16,136,8 } },   // LZW
+        new object[] { (ushort)32773, new byte[] { 0,255,254,0,0,255,254,0,253,255,0,255,254,0,0,255,254,0,253,255,0,255,254,0,0,255,254,0,253,255,0,255,254,0,0,255,254,0,253,255 } },   // PackBits
+        new object[] { (ushort)8, new byte[] { 120,156,251,207,192,192,240,31,132,65,128,8,54,0,38,38,23,233 } },   // Deflate
+    };
+
+    [Theory]
+    [MemberData(nameof(CompressedStrips))]
+    public void Compressed_geotiff_decodes_and_samples(ushort compression, byte[] strip)
     {
         var g = new GeoTiffSampler();
-        g.Init(new MemoryStream(MakeLzwGeoTiff()));
+        g.Init(new MemoryStream(MakeCompressedGeoTiff(compression, strip)));
         Assert.True(g.Success, g.Error);
         Assert.Equal(4, g.Width);
         // 每行像素 = 红绿蓝白(col 0..3); 行不变

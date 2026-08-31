@@ -68,6 +68,32 @@ public static class TiffLzw
         return output.ToArray();
     }
 
+    /// <summary>PackBits(TIFF Compression=32773) RLE 解码: n≥0 复制 n+1 字节字面; n∈[-127,-1] 重复下一字节 1−n 次; n=−128 跳过。</summary>
+    public static byte[] PackBitsDecode(byte[] input, int expectedLength = 0)
+    {
+        var o = new List<byte>(expectedLength > 0 ? expectedLength : (input?.Length ?? 0) * 2);
+        if (input == null) return Array.Empty<byte>();
+        int i = 0;
+        while (i < input.Length)
+        {
+            sbyte n = (sbyte)input[i++];
+            if (n >= 0) { int cnt = n + 1; for (int k = 0; k < cnt && i < input.Length; k++) o.Add(input[i++]); }
+            else if (n != -128 && i < input.Length) { int cnt = 1 - n; byte b = input[i++]; for (int k = 0; k < cnt; k++) o.Add(b); }
+        }
+        return o.ToArray();
+    }
+
+    /// <summary>Deflate/zlib(TIFF Compression=8 Adobe Deflate) 解码, 复用内置 ZLibStream(zlib 头)。</summary>
+    public static byte[] InflateZlib(byte[] input, int expectedLength = 0)
+    {
+        if (input == null || input.Length == 0) return Array.Empty<byte>();
+        using var ms = new System.IO.MemoryStream(input);
+        using var z = new System.IO.Compression.ZLibStream(ms, System.IO.Compression.CompressionMode.Decompress);
+        using var o = new System.IO.MemoryStream(expectedLength > 0 ? expectedLength : input.Length * 3);
+        z.CopyTo(o);
+        return o.ToArray();
+    }
+
     /// <summary>撤销水平差分预测器(TIFF Predictor=2): 每行逐样本累加前一样本。samplesPerPixel 用于跨通道。</summary>
     public static void UndoHorizontalPredictor(byte[] data, int width, int height, int samplesPerPixel)
     {

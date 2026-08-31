@@ -81,7 +81,8 @@ public sealed class GeoTiffSampler : IDisposable
                 case 33922: tiePt = ReadDoubles(val, cnt); break;
             }
         }
-        if (compression != 1 && compression != 5) { Error = $"暂不支持压缩(Compression={compression}); 仅无压缩/LZW"; return; }
+        if (compression != 1 && compression != 5 && compression != 8 && compression != 32946 && compression != 32773)
+        { Error = $"暂不支持压缩(Compression={compression}); 支持 无压缩/LZW/Deflate/PackBits"; return; }
         if (planar != 1) { Error = "暂不支持 planar 排列"; return; }
         if (Width <= 0 || Height <= 0) { Error = "无效尺寸"; return; }
         if (Samples <= 0) Samples = 3;
@@ -111,7 +112,7 @@ public sealed class GeoTiffSampler : IDisposable
         int rowInStrip = row - strip * _rowsPerStrip;
         long inStrip = ((long)rowInStrip * Width + col) * Samples;
         byte[] px;
-        if (_compression == 5)                       // LZW: 解码整条带(缓存)后取像素
+        if (_compression != 1)                       // 压缩: 解码整条带(缓存)后取像素
         {
             var decoded = DecodeStrip(strip);
             if (decoded == null || inStrip + Samples > decoded.Length) return null;
@@ -164,7 +165,13 @@ public sealed class GeoTiffSampler : IDisposable
         var comp = _br.ReadBytes((int)cnt);
         int rowsInStrip = Math.Min(_rowsPerStrip, Height - strip * _rowsPerStrip);
         int expected = rowsInStrip * Width * Samples;
-        var decoded = TiffLzw.Decode(comp, expected);
+        byte[] decoded = _compression switch
+        {
+            5 => TiffLzw.Decode(comp, expected),
+            8 or 32946 => TiffLzw.InflateZlib(comp, expected),
+            32773 => TiffLzw.PackBitsDecode(comp, expected),
+            _ => Array.Empty<byte>(),
+        };
         if (_predictor == 2) TiffLzw.UndoHorizontalPredictor(decoded, Width, rowsInStrip, Samples);
         _stripCache[strip] = decoded;
         return decoded;
