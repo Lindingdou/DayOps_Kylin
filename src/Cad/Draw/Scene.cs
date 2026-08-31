@@ -66,6 +66,38 @@ public abstract class SceneEntity
 
     /// <summary>把本实体颜色复制给 e 并返回（变换保留颜色）。</summary>
     protected T Colored<T>(T e) where T : SceneEntity { e.Cr = Cr; e.Cg = Cg; e.Cb = Cb; return e; }
+
+    /// <summary>闭环(矩形/正多边形)打断：投两点到全部边(含闭合边)，移除两点间一段，返回绕另一侧的开口多段线；两点重合返 null。</summary>
+    protected static PolylineEntity? BreakClosedLoop(IReadOnlyList<(double x, double y)> vs, double x1, double y1, double x2, double y2)
+    {
+        int n = vs.Count;
+        if (n < 3) return null;
+        (int seg, double t, double cum) Proj(double px, double py)
+        {
+            int bs = 0; double bt = 0, bd = double.MaxValue, best = 0, acc = 0;
+            for (int i = 0; i < n; i++)   // 含闭合边 vs[n-1]->vs[0]
+            {
+                var a = vs[i]; var b = vs[(i + 1) % n];
+                double dx = b.x - a.x, dy = b.y - a.y, len2 = dx * dx + dy * dy, len = Math.Sqrt(len2);
+                double t = len2 < 1e-12 ? 0 : Math.Clamp(((px - a.x) * dx + (py - a.y) * dy) / len2, 0, 1);
+                double cxp = a.x + t * dx, cyp = a.y + t * dy, d = (px - cxp) * (px - cxp) + (py - cyp) * (py - cyp);
+                if (d < bd) { bd = d; bs = i; bt = t; best = acc + t * len; }
+                acc += len;
+            }
+            return (bs, bt, best);
+        }
+        var p1 = Proj(x1, y1); var p2 = Proj(x2, y2);
+        if (p1.cum > p2.cum) (p1, p2) = (p2, p1);
+        if (Math.Abs(p1.cum - p2.cum) < 1e-9) return null;   // 两点重合
+        (double x, double y) At(int seg, double t) { var a = vs[seg]; var b = vs[(seg + 1) % n]; return (a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t); }
+        var b1 = At(p1.seg, p1.t); var b2 = At(p2.seg, p2.t);
+        // 保留段 = [p1..p2] 的补：从 b2 起，沿 vs 绕行(mod n)回到 b1
+        var c = new PolylineEntity(); c.Points.Add(b2);
+        int idx = (p2.seg + 1) % n;
+        while (true) { c.Points.Add(vs[idx]); if (idx == p1.seg) break; idx = (idx + 1) % n; }
+        c.Points.Add(b1);
+        return c.Points.Count >= 2 ? c : null;
+    }
 }
 
 /// <summary>2D 仿射变换：x' = A·x + C·y + E，y' = B·x + D·y + F。</summary>
@@ -248,6 +280,12 @@ public sealed class RectEntity : SceneEntity
             case 3: e.X0 = nx; e.Y1 = ny; break;
         }
         return e;
+    }
+    public override List<SceneEntity>? Break(double x1, double y1, double x2, double y2)   // 矩形→开口多段线
+    {
+        var vs = new[] { (X0, Y0), (X1, Y0), (X1, Y1), (X0, Y1) };
+        var pl = BreakClosedLoop(vs, x1, y1, x2, y2);
+        return pl != null ? new List<SceneEntity> { Colored(pl) } : null;
     }
 }
 
@@ -531,6 +569,12 @@ public sealed class PolygonEntity : SceneEntity
     {
         double r = Math.Sqrt((px - Cx) * (px - Cx) + (py - Cy) * (py - Cy));
         return r < 1e-6 ? null : Colored(new PolygonEntity { Cx = Cx, Cy = Cy, Radius = r, Sides = Sides, Rotation = Rotation });
+    }
+    public override List<SceneEntity>? Break(double x1, double y1, double x2, double y2)   // 正多边形→开口多段线
+    {
+        if (Sides < 3) return null;
+        var pl = BreakClosedLoop(new List<(double x, double y)>(Vertices()), x1, y1, x2, y2);
+        return pl != null ? new List<SceneEntity> { Colored(pl) } : null;
     }
 }
 

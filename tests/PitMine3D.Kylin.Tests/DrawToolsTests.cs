@@ -476,6 +476,35 @@ public class DrawToolsTests
     }
 
     [Fact]
+    public void RectEntity_break_into_open_polyline()
+    {
+        var rect = new RectEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 10 };
+        // 两点都在左边(闭合边 (0,10)->(0,0))：验证闭合边可打断。移除 (0,7)..(0,3) 短段，
+        // 保留补段=从(0,3)经(0,0)绕右侧回到(0,7)——含全部 4 角。
+        var parts = rect.Break(0, 3, 0, 7)!;
+        var pl = Assert.IsType<PolylineEntity>(Assert.Single(parts));
+        Assert.False(pl.Closed);                              // 开口
+        var first = pl.Points[0]; var last = pl.Points[^1];
+        bool ends = System.Math.Abs(first.x) < 1e-6 && System.Math.Abs(last.x) < 1e-6
+                 && System.Math.Abs((first.y - 3) * (first.y - 7)) < 1e-6 && System.Math.Abs((last.y - 3) * (last.y - 7)) < 1e-6
+                 && System.Math.Abs(first.y - last.y) > 1e-6;
+        Assert.True(ends, $"端点应为(0,3)与(0,7), 实为({first.x},{first.y})..({last.x},{last.y})");
+        // 保留段绕另一侧 → 含全部 4 角(闭合边被正确纳入投影)
+        foreach (var (cx, cy) in new[] { (0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0) })
+            Assert.Contains(pl.Points, p => System.Math.Abs(p.x - cx) < 1e-6 && System.Math.Abs(p.y - cy) < 1e-6);
+    }
+
+    [Fact]
+    public void PolygonEntity_break_into_open_polyline()
+    {
+        var poly = new PolygonEntity { Cx = 0, Cy = 0, Radius = 5, Sides = 4, Rotation = 0 };  // 顶点在 0/90/180/270°
+        var parts = poly.Break(5, 0, 0, 5)!;                  // 在 (5,0)&(0,5) 附近打断
+        var pl = Assert.IsType<PolylineEntity>(Assert.Single(parts));
+        Assert.False(pl.Closed);
+        Assert.True(pl.Points.Count >= 2);
+    }
+
+    [Fact]
     public void SegmentsIntersect_detects_crossing()
     {
         Assert.True(LineMath.SegmentsIntersect(0, 0, 10, 0, 5, -5, 5, 5));    // 十字相交

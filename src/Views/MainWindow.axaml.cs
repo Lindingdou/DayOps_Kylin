@@ -157,7 +157,7 @@ public partial class MainWindow : Window
                             _selected.Clear(); Viewport.SetHighlight(null);
                             StatusMsg.Text = $"已打断（剩 {parts.Count} 段）";
                         }
-                        else StatusMsg.Text = "该实体暂不支持打断（矩形/多边形/点/文字；直线/多段线/圆弧/圆可打断）";
+                        else StatusMsg.Text = "该实体不支持打断（点/文字；直线/多段线/圆弧/圆/矩形/多边形可打断）";
                         _breakActive = false; _breakPts.Clear();
                         RefreshScene();
                     }
