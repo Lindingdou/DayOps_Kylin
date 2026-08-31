@@ -647,6 +647,7 @@ public partial class MainWindow : Window
             if (cmd == "导入") { await ImportDxfAsync(); return; }
             if (cmd == "导入点") { await ImportPointsAsync(); return; }
             if (cmd == "展绘钻孔" || cmd == "钻孔柱状图" || cmd == "导入钻孔数据" || cmd == "原始钻孔柱状图") { await ImportBoreholesAsync(); return; }
+            if (cmd == "煤厚分析" || cmd == "煤层厚度分析" || cmd == "煤厚") { await CoalThicknessAsync(); return; }
             if (cmd == "等高线" || cmd == "等高线生产" || cmd == "等值线") { await ContourFromCsvAsync(); return; }
             if (cmd == "创建三角网" || cmd == "三角网" || cmd == "2.5D TIN" || cmd == "2.5DTIN") { await CreateTinAsync(); return; }
             if (cmd == "示例三角网" || cmd == "三角网示例") { GenerateSampleTrimesh(); return; }
@@ -1052,6 +1053,44 @@ public partial class MainWindow : Window
         RefreshScene();
         Viewport.FitBounds(new[] { r.Bounds[0], r.Bounds[1] - maxDepth * scale, r.Bounds[2] + width, r.Bounds[3] });
         StatusMsg.Text = $"已展绘 {r.Boreholes.Count} 个钻孔 · 柱状图+孔号标注（岩性配色）";
+    }
+
+    // 煤厚分析：导入钻孔 CSV → 逐孔累计煤层(岩性含「煤」)厚度 → 按厚配色标记(点)入场景 + 统计报表
+    private async Task CoalThicknessAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "煤厚分析：选钻孔 CSV（孔号,X,Y,高程,自,至,岩性）",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("钻孔 CSV/TXT") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (files.Count == 0) return;
+        var r = BoreholeImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success) { StatusMsg.Text = $"煤厚分析：钻孔导入失败 {r.Error}"; return; }
+        if (r.Boreholes.Count == 0) { StatusMsg.Text = "煤厚分析：无钻孔"; return; }
+        var thicks = new List<(double x, double y, double t, string name)>();
+        double tmin = double.MaxValue, tmax = double.MinValue, tsum = 0;
+        int coalHoles = 0;
+        foreach (var h in r.Boreholes)
+        {
+            var iv = h.Intervals.Select(i => (i.From, i.To, i.Rock));
+            double t = CoalThicknessAnalyzer.CoalThickness(iv);
+            thicks.Add((h.X, h.Y, t, h.Name));
+            if (t < tmin) tmin = t; if (t > tmax) tmax = t; tsum += t; if (t > 1e-9) coalHoles++;
+        }
+        double range = tmax - tmin;
+        double markSize = System.Math.Max((r.Bounds[2] - r.Bounds[0]) / 40.0, 1.0);
+        BeginChange();
+        foreach (var (x, y, t, _) in thicks)
+        {
+            double f = range > 1e-9 ? (t - tmin) / range : 0.5;   // 薄蓝→厚红
+            _scene.Add(new PointEntity { X = x, Y = y, Size = markSize, Cr = (float)f, Cg = 0.35f, Cb = (float)(1 - f) });
+        }
+        RefreshScene();
+        Viewport.FitBounds(r.Bounds);
+        double mean = tsum / r.Boreholes.Count;
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        StatusMsg.Text = $"煤厚分析：{r.Boreholes.Count} 孔(含煤 {coalHoles}) · 煤厚 {tmin.ToString("0.##", inv)}~{tmax.ToString("0.##", inv)}m · 均 {mean.ToString("0.##", inv)}m（薄蓝→厚红标记）";
     }
 
     // 等高线：高程点 CSV(x,y,z) → IDW 网格 → 多层 Marching Squares → 彩色等值折线
