@@ -716,3 +716,14 @@
 **覆盖矩阵现状(完整)**：Offset=Line/Circle/Rect/Arc/Polyline/Polygon(全几何形)；Break=Line/Polyline/Arc/Circle/Rect/Polygon(点/文字不可断，符合语义)；Explode=Rect/Polyline/Polygon(复合形)；Grips/MoveGrip=全 8 类；.pmx SceneIO 写读对称覆盖 8 类(无数据丢失)。→ 此轴亦已尽。教训见 memory [[shell-completeness-priority]] 第4审计轴。
 
 **★会话进展**：LIVE 命令实体覆盖是继 死按钮/缺按钮/交互维度 之后又一被"已尽"结论漏掉的轴——提示"完成"结论应对**每一条正交完整度轴**逐一验证，而非笼统宣称。
+
+## 四十、第 5 审计轴：DXF 导入/导出实体类型覆盖（补 Mesh/PolyfaceMesh，623 测试）
+
+对照原 `DwgDxfImportService` 逐类型 diff DXF 实体覆盖：
+
+- [x] **导入补 Mesh + PolyfaceMesh**(`040a250`)：原处理二者(合并为 3D TriangleMesh 走内核)，我的可编辑路 `LoadEntities` 落 default 丢弃(仅记警告)。补两 case——逐面提取为闭合折线线框(与既有 Face3D→闭合折线一致的 2D 投影，保几何、可"打开图纸看")；Mesh 面 int[](首元素为顶点数则跳)、PolyfaceMesh 面 Index1..4(1-based/负=隐藏边/0=缺)。+2 单测(ACadSharp 构造→DxfWriter→LoadEntities 读回 四边形面得 4 点闭合折线)。
+- 核实：实际导入命令走 `LoadEntities`(可编辑路，MainWindow:1131)，非预览 `Load`——全覆盖生效。
+- **导入覆盖现状(≥原)**：Line/LwPolyline/Polyline2D/Polyline3D/XLine/Ray/Arc/Circle/Point/Ellipse/Spline/Text/MText/Solid/Face3D/Dimension(爆炸块)/Hatch(边界环)/Insert(递归)/Leader/MLine/MultiLeader/**Mesh/PolyfaceMesh**；default 记警告(无静默丢失)。
+- **导出覆盖(完整)**：SceneExportService.Map 覆盖全部 8 种场景实体(Line/Circle/Arc/Point/Text/Rect→闭合折线/Polygon→闭合折线/Polyline)，Arc 带 CCW 判向——scene→DXF→scene 往返不丢类型。
+
+→ DXF 导入/导出轴亦已尽(匹配并超越原实体集)。**注**：原 Mesh/PolyfaceMesh 走 3D TriangleMesh 内核渲染，本移植为 2D 折线线框(与 Face3D 现状一致)——3D 网格渲染属块体模型子系统，若需保真 3D 需桥接该子系统(记录)。
