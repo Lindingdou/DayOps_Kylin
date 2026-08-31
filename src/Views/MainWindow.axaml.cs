@@ -661,6 +661,7 @@ public partial class MainWindow : Window
             if (cmd == "点对点寻径" || cmd == "寻径" || cmd == "点对点寻路") { StartPathfind(); return; }
             if (cmd == "备选路径" || cmd == "K最短路" || cmd == "备用路径") { StartKPathfind(); return; }
             if (cmd == "路网校验" || cmd == "连通性诊断" || cmd == "路网体检") { ValidateRoadNetwork(); return; }
+            if (cmd == "基础道路网络构建" || cmd == "路网构建" || cmd == "路网预览" || cmd == "构建路网") { BuildRoadNetworkCmd(); return; }
             if (cmd == "演化对比" || cmd == "路网演化" || cmd == "两期路网对比") { await EvolutionCompareAsync(); return; }
             if (cmd == "时段快照" || cmd == "路网快照" || cmd == "纪元快照") { await SnapshotEpochAsync(); return; }
             if (cmd == "排土条带" || cmd == "条带填充" || cmd == "排土条带划分") { DumpStrips(); return; }
@@ -3030,6 +3031,25 @@ public partial class MainWindow : Window
         var sb = new System.Text.StringBuilder();
         for (int i = 0; i < lens.Count; i++) { if (i > 0) sb.Append(" · "); sb.Append($"#{i + 1} {lens[i]:0.#}"); }
         StatusMsg.Text = $"备选路径：{paths.Count} 条(里程升序) {sb}";
+    }
+
+    // 基础道路网络构建：场景多段线建无向加权图 → 报节点/边/连通片数 + 交点(度≥3)黄点标注
+    private void BuildRoadNetworkCmd()
+    {
+        var polys = new List<System.Collections.Generic.IReadOnlyList<(double x, double y)>>();
+        foreach (var e in _scene.Entities) if (e is PolylineEntity pl && pl.Points.Count >= 2) polys.Add(pl.Points);
+        if (polys.Count == 0) { StatusMsg.Text = "路网构建：场景无路（多段线）"; return; }
+        double tol = System.Math.Max(1e-6, SnapTolWorld(_lastPointer) * 0.5);
+        var (nodes, adj) = RoadNetwork.Build(polys, tol);
+        int edges = 0; for (int i = 0; i < adj.Count; i++) edges += adj[i].Count; edges /= 2;   // 无向
+        RoadConnectivity.Components(adj, out int comps);
+        double markSize = tol > 0 ? tol * 1.5 : 1.0;
+        BeginChange();
+        int junctions = 0;
+        for (int i = 0; i < nodes.Count; i++)
+            if (adj[i].Count >= 3) { _scene.Add(new PointEntity { X = nodes[i].x, Y = nodes[i].y, Size = markSize, Cr = 0.95f, Cg = 0.85f, Cb = 0.25f }); junctions++; }
+        RefreshScene();
+        StatusMsg.Text = $"路网构建：{polys.Count} 中线 → {nodes.Count} 节点·{edges} 边·{comps} 连通片·{junctions} 交点(度≥3, 黄点)";
     }
 
     // 路网校验：场景多段线建图 → 连通分量数 + 片间最窄缺口(品红线标注) + 报表
