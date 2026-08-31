@@ -1286,3 +1286,12 @@ pc_quality「点数/密度/包围盒/高程分布/**强度分类**」的强度/�
 - 记录: DXF 导入线型保真(导入的虚线显虚线)需把 `ent.LineType` 穿过递归 Emit + 名映射(自定义 LTYPE 精确 dash 需解 LTYPE 表), invasive 且近似, 记录为扩展; 圆/弧虚线同理可扩(现 scope 直线/多段线)。
 
 **本会话累计补 45 真功能 + 1 并发修复 + 1 潜伏字形 bug 修 + 1 latent 攻克 + GWN 硬化, 941 测。**
+
+## 九十八、文字对齐(hAlign/vAlign) —— 含 DXF 导入保真
+
+原程序文字带 hAlign/vAlign(BinaryPayloadWriter Text 有对齐字段)。Kylin TextEntity 有 Rotation(已支持旋转)但缺对齐——导入的居中/右对齐文字错位, 也无法对齐:
+- [x] **TextEntity 对齐**(`HAlign` 0左/1中/2右, `VAlign` 0底/1中/2顶): Tessellate 按文字宽(字数×0.8高)/高偏移锚点。默认 0/0 = 左/基线(向后兼容, 既有渲染不变)。Apply/MoveGrip 拷对齐。2 测(右对齐左移一宽/居中半宽·顶对齐下移一高/默认兼容)。
+- [x] **DXF 导入文字对齐保真**: 读 ACadSharp `te.HorizontalAlignment/VerticalAlignment`(枚举名稳健映射)+ 非左/基线时锚点取 `AlignmentPoint`(而非 InsertPoint)。导入的对齐文字位置正确。
+- 文字旋转本已有(TextEntity.Rotation, 双查确认非缺口)。
+
+**本会话累计补 46 真功能 + 1 并发修复 + 1 潜伏字形 bug 修 + 1 latent 攻克 + GWN 硬化, 943 测。** CAD 属性透镜续: 线型(§九十七)+文字对齐(本节); 双查确认 文字旋转/栅格捕捉/正交 早已有。

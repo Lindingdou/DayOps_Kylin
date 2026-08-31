@@ -544,8 +544,16 @@ public static class DxfImportService
                     break;
                 }
                 case ACadSharp.Entities.TextEntity te:
-                    Finalize(new DrawText { X = te.InsertPoint.X, Y = te.InsertPoint.Y, Height = te.Height > 0 ? te.Height : 1, Rotation = te.Rotation, Text = te.Value ?? "" }, xf, col, layer);
+                {
+                    // 对齐(用枚举名, 稳健)：非左/基线时锚点取 AlignmentPoint
+                    int ha = te.HorizontalAlignment.ToString() switch { "Center" or "Middle" or "Aligned" or "Fit" => 1, "Right" => 2, _ => 0 };
+                    int va = te.VerticalAlignment.ToString() switch { "Middle" => 1, "Top" => 2, _ => 0 };
+                    var ap = te.AlignmentPoint;
+                    bool useAlign = (ha != 0 || va != 0) && (ap.X != 0 || ap.Y != 0);
+                    double tx = useAlign ? ap.X : te.InsertPoint.X, ty = useAlign ? ap.Y : te.InsertPoint.Y;
+                    Finalize(new DrawText { X = tx, Y = ty, Height = te.Height > 0 ? te.Height : 1, Rotation = te.Rotation, HAlign = ha, VAlign = va, Text = te.Value ?? "" }, xf, col, layer);
                     break;
+                }
                 case MText mt:
                     Finalize(new DrawText { X = mt.InsertPoint.X, Y = mt.InsertPoint.Y, Height = mt.Height > 0 ? mt.Height : 1, Rotation = mt.Rotation, Text = StripMTextFormatting(mt.Value ?? "") }, xf, col, layer);
                     break;

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using PitMine3D.Kylin.Cad.Draw;
 using Xunit;
 
@@ -761,5 +762,35 @@ public class DrawToolsTests
         Assert.Equal(2, n);
         Assert.Equal(1f, s.Entities[0].Cr, 4);          // A 层变红
         Assert.Equal(0.86f, s.Entities[2].Cr, 4);       // B 层保持默认色
+    }
+
+    // ── 文字对齐(TextEntity HAlign/VAlign) ──
+    private static (double minX, double minY) TextBounds(TextEntity t)
+    {
+        var o = new List<float>(); t.Tessellate(o);
+        double mnX = double.MaxValue, mnY = double.MaxValue;
+        for (int i = 0; i + 1 < o.Count; i += 6) { if (o[i] < mnX) mnX = o[i]; if (o[i + 1] < mnY) mnY = o[i + 1]; }
+        return (mnX, mnY);
+    }
+
+    [Fact]
+    public void Text_halign_shifts_by_width()
+    {
+        // "AB" 高1: 宽=2×0.8=1.6。右对齐(2)较左对齐(0)左移一个宽度
+        var left = new TextEntity { X = 0, Y = 0, Height = 1, Text = "AB", HAlign = 0 };
+        var right = new TextEntity { X = 0, Y = 0, Height = 1, Text = "AB", HAlign = 2 };
+        var center = new TextEntity { X = 0, Y = 0, Height = 1, Text = "AB", HAlign = 1 };
+        Assert.Equal(TextBounds(left).minX - 1.6, TextBounds(right).minX, 4);
+        Assert.Equal(TextBounds(left).minX - 0.8, TextBounds(center).minX, 4);   // 居中移半宽
+    }
+
+    [Fact]
+    public void Text_valign_shifts_down_and_default_is_backward_compatible()
+    {
+        var baseline = new TextEntity { X = 0, Y = 0, Height = 1, Text = "A", VAlign = 0 };
+        var top = new TextEntity { X = 0, Y = 0, Height = 1, Text = "A", VAlign = 2 };
+        Assert.Equal(TextBounds(baseline).minY - 1.0, TextBounds(top).minY, 4);   // 顶对齐下移一个高度
+        // 默认(HAlign=VAlign=0) 与不设对齐同(向后兼容)
+        Assert.Equal(TextBounds(baseline).minX, TextBounds(new TextEntity { X = 0, Y = 0, Height = 1, Text = "A" }).minX, 6);
     }
 }

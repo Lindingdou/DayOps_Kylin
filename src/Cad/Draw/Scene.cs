@@ -753,17 +753,23 @@ public sealed class TextEntity : SceneEntity
 {
     public double X, Y, Height = 1;
     public double Rotation;   // 弧度，绕锚点 (X,Y) 逆时针；0 = 水平（向后兼容）
+    public int HAlign;        // 水平对齐: 0=左(锚点在左端,向后兼容)/1=中/2=右
+    public int VAlign;        // 垂直对齐: 0=底(基线)/1=中/2=顶
     public string Text = "";
     public override void Tessellate(List<float> o)
     {
         double c = Math.Cos(Rotation), s = Math.Sin(Rotation);
-        double adv = Height * 0.8, cursor = 0;
-        foreach (char ch in Text)
+        double adv = Height * 0.8;
+        double width = (Text?.Length ?? 0) * adv;
+        double hOff = HAlign == 1 ? -width / 2 : HAlign == 2 ? -width : 0;   // 对齐偏移(局部)
+        double vOff = VAlign == 1 ? -Height / 2 : VAlign == 2 ? -Height : 0;
+        double cursor = hOff;
+        foreach (char ch in Text ?? "")
         {
             foreach (var (sx0, sy0, sx1, sy1) in StrokeFont.Strokes(ch))
             {
-                double lx0 = cursor + sx0 * Height, ly0 = sy0 * Height;   // 锚点为原点的局部坐标
-                double lx1 = cursor + sx1 * Height, ly1 = sy1 * Height;
+                double lx0 = cursor + sx0 * Height, ly0 = vOff + sy0 * Height;   // 锚点为原点的局部坐标
+                double lx1 = cursor + sx1 * Height, ly1 = vOff + sy1 * Height;
                 Seg(o, X + lx0 * c - ly0 * s, Y + lx0 * s + ly0 * c,      // 旋转后平移到锚点
                        X + lx1 * c - ly1 * s, Y + lx1 * s + ly1 * c);
             }
@@ -774,10 +780,10 @@ public sealed class TextEntity : SceneEntity
     {
         var (x, y) = m.Map(X, Y);
         double addRot = Math.Atan2(m.B, m.A);   // 仿射的旋转分量并入文字角
-        return Colored(new TextEntity { X = x, Y = y, Height = Height * m.ScaleMag, Rotation = Rotation + addRot, Text = Text });
+        return Colored(new TextEntity { X = x, Y = y, Height = Height * m.ScaleMag, Rotation = Rotation + addRot, HAlign = HAlign, VAlign = VAlign, Text = Text });
     }
     public override List<(double x, double y)> Grips() => new() { (X, Y) };
-    public override SceneEntity? MoveGrip(int i, double nx, double ny) => Colored(new TextEntity { X = nx, Y = ny, Height = Height, Rotation = Rotation, Text = Text });
+    public override SceneEntity? MoveGrip(int i, double nx, double ny) => Colored(new TextEntity { X = nx, Y = ny, Height = Height, Rotation = Rotation, HAlign = HAlign, VAlign = VAlign, Text = Text });
 }
 
 /// <summary>实体 → 类型中文名（对象树 / 快速选择用；椭圆/样条导入后并为多段线）。</summary>
