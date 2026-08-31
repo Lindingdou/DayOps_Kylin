@@ -893,5 +893,10 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 **方法**：探原始 `Cad/Import/` 目录, 发现 Kylin 缺原有的额外导入格式 reader——**KdfReader**(811行, WeCAD KDF 二进制)、**MapGisWlReader**(363行, .WL 线)、**MapGisWtReader**(233行, .WT 点注记)。均为**逆向文档化的纯托管二进制解析器**(有格式规格 MD, 非 native), 且 `AlgoCore/GISLib/T01_0036/` 有**真实样本文件**可作夹具→ 可做+可验证+忠实。
 
 - [x] **MapGIS WL/WT 导入**(`本次`)：`MapGisImportService.cs` 忠实移植 WL+WT 二进制解析(magic `WMAP\`D2`, section index @0x291, WL: obj0 属性表57B/record + obj1 顶点池16B + obj2 等高线Z识别; WT: Section0 属性表93B/record + Section1 GBK字符串池, 字高/旋转/颜色)。产出可编辑 `PolylineEntity`(WL 线)/`TextEntity`(WT 注记), 复用 `EntityImportResult` 走既有可编辑导入通道(`ApplyEntityImport` 抽出 DXF/MapGIS 共享)。MapGIS colorId→RGB 表移自原。文件选择器 + `ImportPath` 加 `.wl/.wt` 分派。加 `System.Text.Encoding.CodePages` 包(.NET Core 默认无 GBK 中文代码页)。
-  - **验证**：真实样本(`剖面方向.WL`/`A1煤层.WL`/`图例.WT`)入 `TestData/mapgis/` 作夹具(二进制逆向格式无法内联生成)。+5 单测：WL 线顶点**落在文件 bbox 内**(防错位读出天文坐标)、煤层 WL 解析、WT 注记**GBK 中文解码非空 + 位置在 bbox 内**(至少一条含 CJK——证 GBK 生效)、扩展名分派、坏 magic/缺文件报错不崩。**端到端对真实矿区地质图数据验证**。→ Kylin 导入格式: DXF/DWG/OFF/CSV/XYZ/PTS/BLK/PMX + **MapGIS WL/WT**。686 测试。
-  - **记录**：KDF(811行, WeCAD 二进制)暂缓——本仓库无 .kdf 样本文件(原格式逆向自 平朔数据), **无夹具则解析正确性不可端到端验**(纯合成 buffer 循环风险)；格式规格可见, 有样本时可循同法移。
+  - **验证**：真实样本(`剖面方向.WL`/`A1煤层.WL`/`图例.WT`)入 `TestData/mapgis/` 作夹具(二进制逆向格式无法内联生成)。+5 单测：WL 线顶点**落在文件 bbox 内**(防错位读出天文坐标)、煤层 WL 解析、WT 注记**GBK 中文解码非空 + 位置在 bbox 内**(至少一条含 CJK——证 GBK 生效)、扩展名分派、坏 magic/缺文件报错不崩。**端到端对真实矿区地质图数据验证**。686 测试。
+- [x] **MapGIS WP(区/面) + MPJ(工程) 导入**(`本次`)：补齐 MapGIS 三元 + 工程编排。
+  - **WP(区)**：忠实移植原 `MapGisWpReader` 的 **arc 级提取**(Section 0 arc表 57B/record +0x0E=顶点偏移, 相邻差=arc长; Section 1 顶点池; Section 6/10 独立顶点池)。各 arc 作 PolylineEntity(地质图斑边界轮廓——原自陈 MVP 目标)。**region 环拓扑重建**(Section 3 arc-node DFS 串环)**原始自陈不完整**(未闭合丢弃/色映射不全)且弱可验, 按验证置信度纪律**暂记不移**。
+  - **MPJ(工程)**：忠实移植 `MapGisProjectReader`——magic `WMAP\`D2:`, GBK 解码全文, 正则抓 `.\\xxx.WL/WT/WP` 成员(去重), 相对 mpj 目录解析。`LoadProject` 逐个加载存在成员 → 各成员一图层合并入一结果(缺失/失败计数报警)。用户可一键开整个 MapGIS 工程载全部图层。
+  - 文件选择器 + `ImportPath` 加 `.wp/.mpj`。+3 单测：WP 边界 arc **顶点落 bbox 内**、MPJ **对真实 T01_0036.mpj 抽成员清单**(WL/WT/WP 扩展名+去重)、MPJ **合成工程端到端**(合成 mpj + 真实成员同置临时目录→加载合并出 Polyline+Text 两成员两图层)。689 测试。
+  - **结论**：Kylin 导入格式 = DXF/DWG/OFF/CSV/XYZ/PTS/BLK/PMX + **MapGIS WL/WT/WP/MPJ 全族**。均托管、可验证(真实矿区地质图夹具)、忠实移植逆向格式。
+  - **记录**：KDF(811行, WeCAD 二进制)+ TDM 族(3DMine 实体/字符串/点, TdmReader/TdmSolidReader/TdmStringReader)暂缓——**本仓库无 .kdf/.tdm 样本文件**, **无夹具则解析正确性不可端到端验**(纯合成 buffer 循环风险)；格式规格/源可见, 有样本时可循同法移。WP region 环拓扑重建同理弱可验暂记。

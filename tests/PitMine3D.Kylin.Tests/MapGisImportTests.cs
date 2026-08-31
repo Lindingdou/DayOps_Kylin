@@ -65,10 +65,73 @@ public class MapGisImportTests
     }
 
     [Fact]
+    public void Wp_parses_region_boundary_arcs_inside_bbox()
+    {
+        var er = MapGisImportService.LoadWp(Fx("legend.wp"));
+        Assert.True(er.Success, $"WP 应解析成功：{er.Error}");
+        var plines = er.Entities.OfType<PolylineEntity>().ToList();
+        Assert.NotEmpty(plines);                                  // 至少若干边界 arc
+        Assert.All(plines, p => Assert.True(p.Points.Count >= 2, "每条 arc≥2 点"));
+        double xmin = er.Bounds[0], ymin = er.Bounds[1], xmax = er.Bounds[2], ymax = er.Bounds[3];
+        Assert.True(xmax > xmin && ymax > ymin, "bbox 非退化");
+        double pad = Math.Max(100.0, (xmax - xmin) * 0.01);       // WP 解析器本身按 bbox±100 过滤垃圾顶点
+        foreach (var p in plines)
+            foreach (var (x, y) in p.Points)
+            {
+                Assert.InRange(x, xmin - pad, xmax + pad);
+                Assert.InRange(y, ymin - pad, ymax + pad);
+            }
+        Assert.Equal(plines.Count, er.TypeCounts["多段线"]);
+    }
+
+    [Fact]
     public void Load_dispatches_by_extension()
     {
         Assert.True(MapGisImportService.Load(Fx("section.wl")).Success);
         Assert.True(MapGisImportService.Load(Fx("legend.wt")).Success);
+        Assert.True(MapGisImportService.Load(Fx("legend.wp")).Success);
+    }
+
+    [Fact]
+    public void Project_reader_extracts_members_from_real_mpj()
+    {
+        var members = MapGisImportService.ReadProjectLayers(Fx("project.mpj"));
+        Assert.NotEmpty(members);
+        Assert.All(members, m => Assert.Contains(m.Ext, new[] { ".wl", ".wt", ".wp" }));
+        Assert.All(members, m => Assert.EndsWith(m.Ext, m.FileName.ToLowerInvariant()));
+        // 去重：文件名唯一
+        Assert.Equal(members.Count, members.Select(m => m.FileName.ToLowerInvariant()).Distinct().Count());
+        // 真实工程应至少含线(WL)与区(WP)成员
+        Assert.Contains(members, m => m.Ext == ".wl");
+    }
+
+    [Fact]
+    public void Project_load_merges_member_entities_end_to_end()
+    {
+        // 合成最小 .mpj(magic + GBK 成员路径), 与真实成员文件同置临时目录 → LoadProject 加载并合并
+        string dir = Path.Combine(Path.GetTempPath(), "pm_mpj_test_" + System.Guid.NewGuid().ToString("N").Substring(0, 8));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.Copy(Fx("section.wl"), Path.Combine(dir, "线.wl"));
+            File.Copy(Fx("legend.wt"), Path.Combine(dir, "注记.wt"));
+            try { System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance); } catch { }
+            var gbk = System.Text.Encoding.GetEncoding("GBK");
+            byte[] head = System.Text.Encoding.ASCII.GetBytes("WMAP`D2:");
+            // 头 8B + 正文, 需 ≥64B(reader 最小长度校验)——补足占位
+            byte[] body = gbk.GetBytes("mapgis project layers list padding........ .\\线.wl , .\\注记.wt ........end\0");
+            string mpj = Path.Combine(dir, "proj.mpj");
+            using (var fs = File.Create(mpj)) { fs.Write(head); fs.Write(body); }
+
+            var er = MapGisImportService.LoadProject(mpj);
+            Assert.True(er.Success, $"合成工程应加载：{er.Error}");
+            Assert.Contains(er.Entities, e => e is PolylineEntity);   // 来自 WL 成员
+            Assert.Contains(er.Entities, e => e is TextEntity);       // 来自 WT 成员
+            Assert.True(er.LayerOrder.Count >= 2, "两成员各一图层");
+            Assert.Contains("线", er.LayerOrder);
+            Assert.Contains("注记", er.LayerOrder);
+        }
+        finally { try { Directory.Delete(dir, true); } catch { } }
     }
 
     [Fact]

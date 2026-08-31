@@ -3,6 +3,7 @@ using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using PitMine3D.Kylin.Cad.Draw;
 
 namespace PitMine3D.Kylin.Cad;
@@ -18,6 +19,7 @@ public static class MapGisImportService
     public const string ExpectedMagic = "WMAP`D2";
     public const byte WlSubtype = (byte)'1';
     public const byte WtSubtype = (byte)'2';
+    public const byte WpSubtype = (byte)'3';
 
     /// <summary>MapGIS 内部 color ID → RGB(0xRRGGBB)。移自原 MapGisWlReader.MapGisColorTable(实测 1:1)。</summary>
     private static readonly int[] ColorRgb = new int[256];
@@ -46,8 +48,62 @@ public static class MapGisImportService
         {
             ".wl" => LoadWl(path),
             ".wt" => LoadWt(path),
-            _ => new DxfImportService.EntityImportResult { Error = $"不支持的 MapGIS 格式：{ext}（支持 .wl/.wt）" }
+            ".wp" => LoadWp(path),
+            ".mpj" => LoadProject(path),
+            _ => new DxfImportService.EntityImportResult { Error = $"不支持的 MapGIS 格式：{ext}（支持 .wl/.wt/.wp/.mpj）" }
         };
+    }
+
+    /// <summary>MPJ 工程成员引用（忠实 MapGisProjectReader）。</summary>
+    public readonly record struct ProjectLayer(string FileName, string FullPath, string Ext);
+
+    /// <summary>解析 MapGIS .mpj 工程 → 成员 WL/WT/WP 文件清单（正则抓 ".\\xxx.WL" 形式, 去重, 相对 mpj 目录解析）。</summary>
+    public static IReadOnlyList<ProjectLayer> ReadProjectLayers(string mpjPath)
+    {
+        byte[] data = File.ReadAllBytes(mpjPath);
+        if (data.Length < 64) throw new InvalidDataException("MPJ 文件过小");
+        if (Encoding.ASCII.GetString(data, 0, 7) != ExpectedMagic) throw new InvalidDataException("不是 MapGIS 文件");
+        if (data[7] != (byte)':') throw new InvalidDataException($"不是 MPJ 工程文件 (subtype='{(char)data[7]}')");
+
+        string text = GbkEncoding().GetString(data);
+        string mpjDir = Path.GetDirectoryName(mpjPath) ?? "";
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var layers = new List<ProjectLayer>();
+        var rx = new Regex(@"\.\\([^\\:?*""<>|\x00-\x1f]+\.(WL|WT|WP))", RegexOptions.IgnoreCase);
+        foreach (Match m in rx.Matches(text))
+        {
+            string fname = m.Groups[1].Value;
+            if (string.IsNullOrWhiteSpace(fname) || !seen.Add(fname)) continue;
+            layers.Add(new ProjectLayer(fname, Path.Combine(mpjDir, fname), Path.GetExtension(fname).ToLowerInvariant()));
+        }
+        return layers;
+    }
+
+    /// <summary>导入整个 MapGIS 工程：解析成员清单 → 逐个加载存在的 WL/WT/WP → 各成员一图层合并入一个结果。</summary>
+    public static DxfImportService.EntityImportResult LoadProject(string mpjPath)
+    {
+        var result = new DxfImportService.EntityImportResult();
+        IReadOnlyList<ProjectLayer> layers;
+        try { layers = ReadProjectLayers(mpjPath); }
+        catch (Exception ex) { result.Error = $"MPJ 解析失败：{ex.Message}"; return result; }
+
+        int loaded = 0, missing = 0, failed = 0;
+        double xmin = double.MaxValue, ymin = double.MaxValue, xmax = double.MinValue, ymax = double.MinValue;
+        foreach (var ly in layers)
+        {
+            if (!File.Exists(ly.FullPath)) { missing++; continue; }
+            var sub = ly.Ext switch { ".wl" => LoadWl(ly.FullPath), ".wt" => LoadWt(ly.FullPath), ".wp" => LoadWp(ly.FullPath), _ => null };
+            if (sub == null || !sub.Success) { failed++; continue; }
+            foreach (var en in sub.Entities) result.Entities.Add(en);
+            foreach (var ln in sub.LayerOrder) { if (!result.LayerColors.ContainsKey(ln)) { result.LayerColors[ln] = sub.LayerColors[ln]; result.LayerOrder.Add(ln); } }
+            foreach (var kv in sub.TypeCounts) result.TypeCounts[kv.Key] = (result.TypeCounts.TryGetValue(kv.Key, out int c) ? c : 0) + kv.Value;
+            if (sub.Bounds[2] > sub.Bounds[0]) { xmin = Math.Min(xmin, sub.Bounds[0]); ymin = Math.Min(ymin, sub.Bounds[1]); xmax = Math.Max(xmax, sub.Bounds[2]); ymax = Math.Max(ymax, sub.Bounds[3]); }
+            loaded++;
+        }
+        if (loaded == 0) { result.Error = $"MPJ 无可加载成员（清单 {layers.Count}，缺失 {missing}，失败 {failed}）"; return result; }
+        result.Bounds = xmin < xmax ? new[] { xmin, ymin, xmax, ymax } : new double[] { 0, 0, 0, 0 };
+        result.Warnings.Add($"工程 {layers.Count} 成员：加载 {loaded}，缺失 {missing}，失败 {failed}");
+        return result;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -120,6 +176,96 @@ public static class MapGisImportService
             if (withZ > 0) result.Warnings.Add($"识别等高线 Z {withZ} 条（2D 折线不改点，Z 供参考）");
         }
         catch (Exception ex) { result.Error = $"WL 解析失败：{ex.Message}"; }
+        return result;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // .WP 区/面文件（arc 级 MVP，忠实原 MapGisWpReader 的 arc 提取，视觉呈现地质图斑边界轮廓）
+    //   Section 0 arc 表(57B/record, +0x0E=顶点 byte 偏移) + Section 1 顶点池(相邻差=arc 长)
+    //   + Section 6/10 独立顶点池(inner ring/孤立 region)。各 arc 作一条折线。
+    //   region 环拓扑重建(Section 3 arc-node)原始自陈不完整，暂记不移。
+    // ─────────────────────────────────────────────────────────────────────────
+    public static DxfImportService.EntityImportResult LoadWp(string path)
+    {
+        var result = new DxfImportService.EntityImportResult();
+        byte[] data;
+        try { data = File.ReadAllBytes(path); }
+        catch (Exception ex) { result.Error = $"读取失败：{ex.Message}"; return result; }
+        try
+        {
+            if (data.Length < 0x300) throw new InvalidDataException("WP 文件过小");
+            if (Encoding.ASCII.GetString(data, 0, 7) != ExpectedMagic) throw new InvalidDataException("Magic 不匹配");
+            if (data[7] != WpSubtype) throw new InvalidDataException($"不是 WP 文件 (subtype='{(char)data[7]}')");
+
+            double xmin = BitConverter.ToDouble(data, 0x130), ymin = BitConverter.ToDouble(data, 0x138);
+            double xmax = BitConverter.ToDouble(data, 0x140), ymax = BitConverter.ToDouble(data, 0x148);
+
+            var sections = ReadSectionIndex(data, 0x291, 16);
+            if (sections.Count < 7) throw new InvalidDataException($"WP section 数不足({sections.Count})");
+
+            string layer = Path.GetFileNameWithoutExtension(path);
+            var (r, g, b) = Rgb(0);   // WP 逐 region 色需 Section 8 拓扑，arc 级用默认导入色
+            var arcs = new List<PolylineEntity>();
+
+            bool InBox(double x, double y) => x > xmin - 100 && x < xmax + 100 && y > ymin - 100 && y < ymax + 100;
+            PolylineEntity? BuildArc(long baseOff, int vc)
+            {
+                var pl = new PolylineEntity { LayerName = layer, Cr = r, Cg = g, Cb = b };
+                for (int v = 0; v < vc; v++)
+                {
+                    long off = baseOff + v * 16;
+                    if (off + 16 > data.Length) break;
+                    double x = BitConverter.ToDouble(data, (int)off), y = BitConverter.ToDouble(data, (int)(off + 8));
+                    if (InBox(x, y)) pl.Points.Add((x, y));
+                }
+                return pl.Points.Count >= 2 ? pl : null;
+            }
+
+            // Section 0 arc 表 + Section 1 顶点池：相邻 +0x0E 差值 = 该 arc 的 byte 长
+            var s0 = sections[0]; var s1 = sections[1];
+            const int S0HeaderSkip = 57, RecStride = 57;
+            int maxRecords = (s0.size - S0HeaderSkip) / RecStride;
+            var byteOffsets = new List<uint>(Math.Max(0, maxRecords + 1));
+            for (int i = 0; i < maxRecords; i++)
+            {
+                int rec = s0.off + S0HeaderSkip + i * RecStride;
+                if (rec + RecStride > data.Length) break;
+                if (data[rec] != 0x01 || data[rec + 1] != 0x02) break;
+                byteOffsets.Add(BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(rec + 0x0E, 4)));
+            }
+            for (int i = 0; i < byteOffsets.Count; i++)
+            {
+                uint thisOff = byteOffsets[i];
+                uint nextOff = (i + 1 < byteOffsets.Count) ? byteOffsets[i + 1] : (uint)s1.size;
+                long byteCount = (long)nextOff - thisOff;
+                if (byteCount <= 0 || byteCount > 100_000) continue;
+                int vc = (int)(byteCount / 16);
+                if (vc < 2) continue;
+                long arcBase = s1.off + thisOff;
+                if (arcBase + (long)vc * 16 > data.Length) break;
+                var a = BuildArc(arcBase, vc);
+                if (a != null) arcs.Add(a);
+            }
+
+            // Section 6/10 独立顶点池(跳 32B 头)
+            foreach (var si in new[] { 6, 10 })
+            {
+                if (si >= sections.Count) continue;
+                var s = sections[si]; const int Hdr = 32;
+                if (s.size <= Hdr) continue;
+                int nVerts = (s.size - Hdr) / 16;
+                var a = BuildArc(s.off + Hdr, nVerts);
+                if (a != null) arcs.Add(a);
+            }
+
+            foreach (var pl in arcs) result.Entities.Add(pl);
+            result.Bounds = new[] { xmin, ymin, xmax, ymax };
+            result.LayerColors[layer] = (r, g, b);
+            result.LayerOrder.Add(layer);
+            result.TypeCounts["多段线"] = arcs.Count;
+            result.Warnings.Add($"WP arc 级导入 {arcs.Count} 条边界（region 环拓扑重建未移）");
+        }
+        catch (Exception ex) { result.Error = $"WP 解析失败：{ex.Message}"; }
         return result;
     }
 

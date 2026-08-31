@@ -1009,14 +1009,14 @@ public partial class MainWindow : Window
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "导入图形（DXF/DWG/OFF/MapGIS WL·WT）",
+            Title = "导入图形（DXF/DWG/OFF/MapGIS WL·WT·WP·MPJ）",
             AllowMultiple = false,
             FileTypeFilter = new[]
             {
-                new FilePickerFileType("支持的格式 (DXF/DWG/OFF/WL/WT)") { Patterns = new[] { "*.dxf", "*.dwg", "*.off", "*.wl", "*.wt" } },
+                new FilePickerFileType("支持的格式 (DXF/DWG/OFF/WL/WT/WP/MPJ)") { Patterns = new[] { "*.dxf", "*.dwg", "*.off", "*.wl", "*.wt", "*.wp", "*.mpj" } },
                 new FilePickerFileType("CAD 图纸 (DXF/DWG)") { Patterns = new[] { "*.dxf", "*.dwg" } },
                 new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } },
-                new FilePickerFileType("MapGIS 6.x (WL 线/WT 注记)") { Patterns = new[] { "*.wl", "*.wt" } }
+                new FilePickerFileType("MapGIS 6.x (WL 线/WT 注记/WP 区/MPJ 工程)") { Patterns = new[] { "*.wl", "*.wt", "*.wp", "*.mpj" } }
             }
         });
         if (files.Count == 0) return;
@@ -1165,7 +1165,7 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"正在导入 {Path.GetFileName(path)} …";
         string ext = Path.GetExtension(path).ToLowerInvariant();
         if (ext == ".dxf" || ext == ".dwg") { ImportCadEditable(path); return; }
-        if (ext == ".wl" || ext == ".wt") { ImportMapGisEditable(path); return; }
+        if (ext == ".wl" || ext == ".wt" || ext == ".wp" || ext == ".mpj") { ImportMapGisEditable(path); return; }
 
         var r = OffImportService.Load(path);
         if (!r.Success) { StatusMsg.Text = $"导入失败：{r.Error}"; return; }
