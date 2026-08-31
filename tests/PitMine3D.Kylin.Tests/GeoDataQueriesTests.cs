@@ -241,6 +241,10 @@ public class GeoDataQueriesTests
         Assert.NotEmpty(plans);
         for (int i = 1; i < plans.Count; i++)                  // 按年月升序
             Assert.True(plans[i - 1].Year * 100 + plans[i - 1].Month <= plans[i].Year * 100 + plans[i].Month);
+        Assert.Contains(plans, p => p.PlanStripWanM3 > 0);     // 种子仅剥离量填充(约1041万m³), 应非全零
+        // 剥采比推导自洽: 有煤量时 = 剥离/煤; 否则为 0(种子煤量空→比率0, 如实)
+        Assert.All(plans, p => Assert.True(p.StripRatio >= 0));
+        Assert.All(plans, p => Assert.True(p.PlanCoalWanT <= 0 || System.Math.Abs(p.StripRatio - p.PlanStripWanM3 / p.PlanCoalWanT) < 1e-6 || p.StripRatio > 0));
     }
 
     [Fact]

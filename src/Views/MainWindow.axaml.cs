@@ -5633,7 +5633,7 @@ public partial class MainWindow : Window
         var plans = Data.GeoDataQueries.GetMonthlyPlans(db.Connection);
         if (plans.Count == 0) { StatusMsg.Text = "月度计划：无计划数据"; return; }
         var parts = new List<string>();
-        foreach (var p in plans) parts.Add($"{p.Year}-{p.Month:00}: 煤 {p.PlanCoalWanT:0.#}万t/剥采比 {p.StripRatio:0.##}/运距 {p.AvgDistanceKm:0.#}km");
+        foreach (var p in plans) parts.Add($"{p.Year}-{p.Month:00}: 剥离 {p.PlanStripWanM3:0.#}万m³/煤 {p.PlanCoalWanT:0.#}万t/剥采比 {p.StripRatio:0.##}/运距 {p.AvgDistanceKm:0.#}km");
         StatusMsg.Text = $"月度计划（{plans.Count} 期）：" + string.Join(" · ", parts);
     }
 

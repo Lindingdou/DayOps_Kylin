@@ -293,18 +293,22 @@ public static class GeoDataQueries
         return new ParamTemplateStats(defs, vals, phases, req);
     }
 
-    public sealed record MonthlyPlanRow(int Year, int Month, double PlanCoalWanT, double StripRatio, double AvgDistanceKm, double AvgHeightM);
+    public sealed record MonthlyPlanRow(int Year, int Month, double PlanStripWanM3, double PlanCoalWanT, double StripRatio, double AvgDistanceKm, double AvgHeightM);
 
-    /// <summary>月度计划：各期 计划煤量(万t)/剥采比/平均运距/平均台阶高。</summary>
+    /// <summary>月度计划：各期 计划剥离(万m³)/计划煤量(万t)/剥采比/平均运距/平均台阶高。
+    /// 剥采比: 存值>0 用存值, 否则由 剥离量/煤量 推导(单位 万m³÷万t=m³/t), 均无则 0。</summary>
     public static List<MonthlyPlanRow> GetMonthlyPlans(SqliteConnection conn)
     {
         var rows = new List<MonthlyPlanRow>();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = @"SELECT year, month, COALESCE(plan_coal_wan_t,0), COALESCE(ratio_strip_coal,0),
+        cmd.CommandText = @"SELECT year, month, COALESCE(plan_strip_wan_m3,0), COALESCE(plan_coal_wan_t,0),
+                            CASE WHEN COALESCE(ratio_strip_coal,0) > 0 THEN ratio_strip_coal
+                                 WHEN COALESCE(plan_coal_wan_t,0) > 0 THEN plan_strip_wan_m3 / plan_coal_wan_t
+                                 ELSE 0 END,
                             COALESCE(avg_distance_km,0), COALESCE(avg_height_m,0)
                             FROM monthly_plan ORDER BY year, month";
         using var rd = cmd.ExecuteReader();
-        while (rd.Read()) rows.Add(new MonthlyPlanRow(rd.GetInt32(0), rd.GetInt32(1), rd.GetDouble(2), rd.GetDouble(3), rd.GetDouble(4), rd.GetDouble(5)));
+        while (rd.Read()) rows.Add(new MonthlyPlanRow(rd.GetInt32(0), rd.GetInt32(1), rd.GetDouble(2), rd.GetDouble(3), rd.GetDouble(4), rd.GetDouble(5), rd.GetDouble(6)));
         return rows;
     }
 
