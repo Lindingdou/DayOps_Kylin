@@ -781,6 +781,19 @@ public partial class MainWindow : Window
             if (cmd == "采剥平衡" || cmd == "采剥平衡分析" || cmd == "剥采平衡" || cmd == "物料平衡") { await StripBalanceAsync(); return; }
             if (cmd == "配煤核算" || cmd == "配煤" || cmd == "煤质混合" || cmd == "配煤计算") { await CoalBlendAsync(); return; }
             if (cmd == "工序进度跟踪" || cmd == "工序进度" || cmd == "进度跟踪") { await ProcessProgressAsync(); return; }
+            if (cmd == "编组产能" || cmd == "车铲循环" || cmd.StartsWith("编组产能 ") || cmd.StartsWith("车铲循环 "))
+            {
+                var t = cmd.Split(new[] { ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
+                double bm = 12, pl = 100, rho = 2.5, ks = 1.5, km = 3; int nt = 0;
+                if (t.Length >= 2) double.TryParse(t[1], out bm);
+                if (t.Length >= 3) double.TryParse(t[2], out pl);
+                if (t.Length >= 4) double.TryParse(t[3], out rho);
+                if (t.Length >= 5) double.TryParse(t[4], out ks);
+                if (t.Length >= 6) double.TryParse(t[5], out km);
+                if (t.Length >= 7) int.TryParse(t[6], out nt);
+                FleetCycleCmd(bm, pl, rho, ks, km, nt);
+                return;
+            }
             if (cmd == "排土场按量推进" || cmd == "排土按量推进" || cmd.StartsWith("排土场按量推进 ") || cmd.StartsWith("排土按量推进 "))
             {
                 var tok = cmd.Split(new[] { ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
@@ -1352,6 +1365,14 @@ public partial class MainWindow : Window
         RefreshScene();
         if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
         StatusMsg.Text = $"网格边界：{loops.Count} 环 · {totPts} 点(投影 XY 作闭合折线入场景)";
+    }
+
+    // 编组产能（TaskLib 车铲循环切片）：铲斗/载重/密度/运距/车数 → 斗数/节拍/循环/匹配系数/编组产能。
+    // 用法 "编组产能 <铲斗m³> <载重t> <ρ实> <Ks> <运距km> [车数]"，缺省 12/100/2.5/1.5/3/最优。
+    private void FleetCycleCmd(double bucketM3, double payloadT, double rho, double ks, double haulKm, int trucks)
+    {
+        var r = Cad.Tasks.FleetCycle.Solve(bucketM3, payloadT, rho, ks, haulKm, trucks);
+        StatusMsg.Text = $"编组产能：{r.BucketsPerTruck:0.#}斗/车 · 节拍 {r.LoadTaktMin:0.##}min · 循环 {r.CycleTimeMin:0.#}min · 最优 {r.OptimalTrucks}车(实 {r.Trucks}) · MF {r.MatchFactor:0.##}({r.Bottleneck}) · 铲{r.ShovelCapTph:0}t/h·队{r.FleetCapTph:0}t/h → 编组产能 {r.GroupCapM3PerH:0.#}m³实方/h";
     }
 
     // 工序进度跟踪（TaskLib 进度切片）：读任务 计划/实绩 CSV(工序,计划量,实绩量[,计划延米,实绩延米]) → 按工序聚合达成率。
