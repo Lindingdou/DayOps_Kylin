@@ -878,6 +878,7 @@ public partial class MainWindow : Window
             if (cmd == "快速选择" || cmd == "选择类似") { SelectSimilar(); return; }
             if (cmd == "最后") { SelectLast(); return; }
             if (cmd == "上次") { SelectPrevious(); return; }
+            if (cmd == "取消选择" || cmd == "全部取消选择" || cmd == "清除选择") { DeselectAll(); return; }
             if (cmd == "分解") { ExplodeSelected(); return; }
             if (cmd == "加密多段线" || cmd == "加密") { DensifySelectedPolylines(); return; }
             if (cmd == "两线交点" || cmd == "求交点" || cmd == "线交点") { IntersectSelectedPolylines(); return; }
@@ -4736,6 +4737,18 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"恢复上次选择 {_selected.Count} 个";
     }
 
+    // 取消选择：清空当前选择集(保留为"上次"以便"上次"恢复)，清高亮；不动视图/捕捉标记（忠实原 SelectNone）
+    private void DeselectAll()
+    {
+        if (_selected.Count == 0) { StatusMsg.Text = "当前无选择"; return; }
+        SaveSel();
+        int n = _selected.Count;
+        _selected.Clear();
+        Viewport.SetHighlight(null);
+        RefreshScene();
+        StatusMsg.Text = $"已取消选择（{n} 个；「上次」可恢复）";
+    }
+
     private void ExplodeSelected()
     {
         var explodable = _selected.FindAll(e => e.Explode() != null);
@@ -5917,7 +5930,7 @@ public partial class MainWindow : Window
         "线性标注","对齐标注","半径标注","连续标注",
         "距离","面积","角度",
         "剪切","复制到剪贴板","粘贴","基点粘贴","原坐标粘贴",
-        "快速选择","全部选择","创建选择集",
+        "快速选择","全部选择","取消选择","创建选择集",
         // 线编辑
         "加密多段线","简化","抽稀等值线","两线交点","闭合多段线","删除重复点","删除重复线","连接多段线","组合工作线",
         // 网格/建模
