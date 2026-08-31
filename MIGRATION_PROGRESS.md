@@ -490,3 +490,7 @@
 **记录·DXF 导入余项**：MultiLeader(多重引线, 嵌套 context/content 块 + landing, API 繁)、Wipeout(遮罩)、Tolerance(形位公差框)、Mesh(多边形网格, 走 3D 网格路径非 2D 线)、MLine 偏移线族。均较罕见或需深解析, 记录待需时补。
 
 **本会话累计 8 项功能(502→527 测试)**：块体模型组·运输指标报表·对象捕捉六模式·图案填充·平移命令·特性面板可编辑·右键选择集·DXF Leader/MLine。
+
+**追加**：MultiLeader(多重引线) 亦补(commit `49f10c9`)——`ContextData.LeaderRoots→Lines→Points` 逐引线折线。DXF 导入现 **20 类**。余 Wipeout(遮罩)/Tolerance(形位公差框)/Mesh(3D 网格走另路径) 系罕见/异路径, 记录待需时补。
+
+**本会话累计 9 项功能(502→527 测试)**：块体模型组·运输指标报表·对象捕捉六模式·图案填充·平移命令·特性面板可编辑·右键选择集·DXF Leader/MLine·DXF MultiLeader。I/O 层核对完整: 导入 20 类·导出保类型(SceneExportService)·.pmx 存载全 8 类+色+层。**均原程序确有/标准可见几何/可验证**。
