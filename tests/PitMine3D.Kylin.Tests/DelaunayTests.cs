@@ -133,4 +133,35 @@ public class DelaunayTests
         Assert.Single(con);
         Assert.True(HasEdge(con, 0, 1));
     }
+
+    [Fact]
+    public void Clipped_tin_keeps_only_triangles_inside_boundary()
+    {
+        // 6×6 网格(0..50)，边界只框左下 [0,20]×[0,20] → 只保留质心在此的三角。
+        var pts = new List<(double x, double y)>();
+        for (int i = 0; i < 6; i++)
+            for (int j = 0; j < 6; j++)
+                pts.Add((i * 10.0, j * 10.0));
+        var boundary = new List<(double x, double y)> { (-1, -1), (21, -1), (21, 21), (-1, 21) };
+        var full = Delaunay.Triangulate(pts);
+        var clip = Delaunay.TriangulateClipped(pts, boundary);
+        Assert.True(clip.Count > 0 && clip.Count < full.Count, "裁剪后三角更少但非空");
+        // 所有保留三角的质心都在边界内
+        foreach (var t in clip)
+        {
+            double cx = (pts[t.a].x + pts[t.b].x + pts[t.c].x) / 3;
+            double cy = (pts[t.a].y + pts[t.b].y + pts[t.c].y) / 3;
+            Assert.InRange(cx, -1, 21);
+            Assert.InRange(cy, -1, 21);
+        }
+    }
+
+    [Fact]
+    public void Clipped_tin_degenerate_boundary_returns_full()
+    {
+        var pts = new List<(double x, double y)> { (0, 0), (10, 0), (10, 10), (0, 10) };
+        var full = Delaunay.Triangulate(pts);
+        var clip = Delaunay.TriangulateClipped(pts, new List<(double x, double y)> { (0, 0), (1, 1) });   // <3 点
+        Assert.Equal(full.Count, clip.Count);   // 不裁
+    }
 }

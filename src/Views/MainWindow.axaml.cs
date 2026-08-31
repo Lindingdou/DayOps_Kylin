@@ -700,6 +700,7 @@ public partial class MainWindow : Window
             if (cmd == "等高线" || cmd == "等高线生产" || cmd == "等值线") { await ContourFromCsvAsync(); return; }
             if (cmd == "创建三角网" || cmd == "三角网" || cmd == "2.5D TIN" || cmd == "2.5DTIN") { await CreateTinAsync(); return; }
             if (cmd == "约束三角网" || cmd == "约束Delaunay" || cmd == "约束剖分" || cmd == "breakline三角网") { await CreateConstrainedTinAsync(); return; }
+            if (cmd == "裁剪三角网" || cmd == "三角网裁剪" || cmd == "边界三角网") { await CreateClippedTinAsync(); return; }
             if (cmd == "示例三角网" || cmd == "三角网示例") { GenerateSampleTrimesh(); return; }
             if (cmd == "坡度着色" || cmd == "三角网着色" || cmd == "坡度") { await ShadeTinAsync("坡度着色", "绿=平 → 红=陡", TerrainAnalysis.BuildSlopeMap); return; }
             if (cmd == "坡向着色" || cmd == "坡向") { await ShadeTinAsync("坡向着色", "按朝向 HSV 配色", TerrainAnalysis.BuildAspectMap); return; }
@@ -3030,6 +3031,34 @@ public partial class MainWindow : Window
             foreach (var (p, q) in new[] { (t.a, t.b), (t.b, t.c), (t.c, t.a) })
                 if ((p == u && q == v) || (p == v && q == u)) return true;
         return false;   // 分段链情形从简不深判(面积守恒已在单测锁定正确性)
+    }
+
+    // 裁剪三角网：点 CSV + 选中闭合多段线作边界 → 三角剖分只保留质心在界内的三角(不规则域建面)。忠实原「多段线裁剪三角网」。
+    private async Task CreateClippedTinAsync()
+    {
+        PolylineEntity? bnd = null;
+        foreach (var e in _selected) if (e is PolylineEntity p && p.Closed && p.Points.Count >= 3) { bnd = p; break; }
+        if (bnd == null) { StatusMsg.Text = "裁剪三角网：请先选中一条闭合多段线作裁剪边界，再执行；不裁请用 创建三角网"; return; }
+        var boundary = new List<(double x, double y)>(bnd.Points);
+
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "裁剪三角网：选点 CSV (x,y[,z])",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("点 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success) { StatusMsg.Text = $"裁剪三角网：点导入失败 {r.Error}"; return; }
+        var pts2d = new List<(double x, double y)>();
+        foreach (var p in r.Points) pts2d.Add((p.x, p.y));
+        var tris = Delaunay.TriangulateClipped(pts2d, boundary);
+        if (tris.Count == 0) { StatusMsg.Text = "裁剪三角网：边界内无三角(点太少/边界外/共线)"; return; }
+        var edges = Delaunay.BuildEdges(pts2d, tris, 0.55f, 0.85f, 0.7f);
+        BeginChange();
+        foreach (var e in edges) _scene.Add(e);
+        RefreshScene();
+        StatusMsg.Text = $"裁剪三角网：{pts2d.Count} 点 → 界内 {tris.Count} 三角 · {edges.Count} 边（质心在边界内）";
     }
 
     // 体积/土方量：散点 CSV → 三角网 → 相对最低点体积（挖方/填方/净值），报状态栏
@@ -6661,7 +6690,7 @@ public partial class MainWindow : Window
         // 线编辑
         "加密多段线","简化","抽稀等值线","两线交点","闭合多段线","删除重复点","删除重复线","连接多段线","组合工作线",
         // 网格/建模
-        "网格度量","网格诊断","创建三角网","约束三角网","网格焊接","网格边界","合并三角网","固化成体","侧面三角网","立方体","球体","圆柱","体素格网体积","实体转块体",
+        "网格度量","网格诊断","创建三角网","约束三角网","裁剪三角网","网格焊接","网格边界","合并三角网","固化成体","侧面三角网","立方体","球体","圆柱","体素格网体积","实体转块体",
         // 区域/地形/点云
         "区域求差","区域重叠检测","克里金估值","快速估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","地面点滤波","高程着色","点云质量统计","点云裁剪",

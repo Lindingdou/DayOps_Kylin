@@ -217,6 +217,25 @@ public static class Delaunay
         return !(neg && pos);   // 同侧(含边)→ 内部
     }
 
+    /// <summary>
+    /// 裁剪三角网：三角剖分后只保留质心落在闭合边界多边形内的三角形
+    /// (忠实原「用闭合多段线裁剪三角网」——不规则域如矿坑轮廓建面)。boundary &lt;3 点则不裁。
+    /// </summary>
+    public static List<(int a, int b, int c)> TriangulateClipped(
+        IReadOnlyList<(double x, double y)> input, IReadOnlyList<(double x, double y)> boundary)
+    {
+        var tris = Triangulate(input);
+        if (boundary == null || boundary.Count < 3) return tris;
+        var kept = new List<(int a, int b, int c)>();
+        foreach (var t in tris)
+        {
+            double cx = (input[t.a].x + input[t.b].x + input[t.c].x) / 3;
+            double cy = (input[t.a].y + input[t.b].y + input[t.c].y) / 3;
+            if (LineMath.PointInPolygon(cx, cy, boundary)) kept.Add(t);
+        }
+        return kept;
+    }
+
     /// <summary>三角网 → 去重的三角边线实体（TIN 线框渲染）。</summary>
     public static List<SceneEntity> BuildEdges(
         IReadOnlyList<(double x, double y)> pts, List<(int a, int b, int c)> tris, float r, float g, float b)
