@@ -1178,14 +1178,22 @@
         </Grid>
 
         <!-- ============================ 命令行 ============================ -->
-        <Border Grid.Row="2" Background="#1E1F22" Padding="8,5">
-            <Grid ColumnDefinitions="Auto,*">
-                <TextBlock Grid.Column="0" Text="命令:" Foreground="#9DA3AD" VerticalAlignment="Center" Margin="2,0,8,0" FontFamily="Consolas,monospace" />
-                <TextBox Grid.Column="1" x:Name="CommandInput"
-                         Background="Transparent" BorderThickness="0" Foreground="#E6E6E6"
-                         FontFamily="Consolas,monospace" Watermark="输入命令别名后回车（LINE / CIRCLE / TR / EX …）"
-                         KeyDown="OnCommandKeyDown" />
-            </Grid>
+        <Border Grid.Row="2" Background="#1E1F22" Padding="8,4">
+            <DockPanel>
+                <!-- 命令输入行 -->
+                <Grid DockPanel.Dock="Bottom" ColumnDefinitions="Auto,*">
+                    <TextBlock Grid.Column="0" Text="命令:" Foreground="#9DA3AD" VerticalAlignment="Center" Margin="2,0,8,0" FontFamily="Consolas,monospace" />
+                    <TextBox Grid.Column="1" x:Name="CommandInput"
+                             Background="Transparent" BorderThickness="0" Foreground="#E6E6E6"
+                             FontFamily="Consolas,monospace" Watermark="命令别名/中文命令后回车（LINE / 距离 / 俯视 …），↑↓ 回溯历史"
+                             KeyDown="OnCommandKeyDown" />
+                </Grid>
+                <!-- 命令历史/输出回显 -->
+                <ScrollViewer x:Name="CmdLogScroll" DockPanel.Dock="Top" MaxHeight="60" Margin="0,0,0,3"
+                              HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                    <StackPanel x:Name="CmdLog" />
+                </ScrollViewer>
+            </DockPanel>
         </Border>
 
         <!-- ============================ 状态栏 ============================ -->

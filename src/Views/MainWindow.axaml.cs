@@ -628,6 +628,7 @@ public partial class MainWindow : Window
     {
         if (sender is Control c && c.Tag is string cmd)
         {
+            if (_suppressCmdLog) _suppressCmdLog = false; else LogCommand(cmd);   // 命令回显(转派来的已回显, 跳过)
             if (cmd == "新建") { NewScene(); return; }
             if (cmd == "打开") { await OpenSceneAsync(); return; }
             if (cmd == "保存") { await SaveSceneAsync(); return; }
@@ -4310,7 +4311,21 @@ public partial class MainWindow : Window
         => typed.Length > 0 ? typed : (string.IsNullOrEmpty(last) ? null : last);
 
     // 命令框未识别 → 合成 Tag 转派整条中文命令链(复用 OnRibbonCommand，命令框亦可打中文命令)
-    private void DispatchRibbon(string cmd) => OnRibbonCommand(new Button { Tag = cmd }, new RoutedEventArgs());
+    private bool _suppressCmdLog;   // DispatchRibbon 转派时抑制 OnRibbonCommand 重复回显(命令框侧已回显)
+    private void DispatchRibbon(string cmd) { _suppressCmdLog = true; OnRibbonCommand(new Button { Tag = cmd }, new RoutedEventArgs()); }
+
+    // 命令历史/输出面板：回显执行的命令（▸ cmd），滚动到底，上限 100 行
+    private void LogCommand(string cmd)
+    {
+        if (CmdLog == null || string.IsNullOrWhiteSpace(cmd)) return;
+        CmdLog.Children.Add(new TextBlock
+        {
+            Text = "▸ " + cmd, FontSize = 11, FontFamily = new FontFamily("Consolas,monospace"),
+            Foreground = Brush.Parse("#8FB6E8")
+        });
+        while (CmdLog.Children.Count > 100) CmdLog.Children.RemoveAt(0);
+        CmdLogScroll?.ScrollToEnd();
+    }
 
     // 命令历史（供命令行 ↑/↓ 回溯）
     private readonly List<string> _cmdHistory = new();
@@ -4385,6 +4400,7 @@ public partial class MainWindow : Window
 
         _lastCommand = cmd;                    // 记录供"空命令行 + Enter 重复"（坐标已在上一步返回，不会记为命令）
         PushHistory(cmd);                      // 入命令历史（供 ↑/↓ 回溯；坐标/交互输入不入）
+        LogCommand(cmd);                       // 命令输出面板回显(typed; 转派中文由 _suppressCmdLog 防重复)
 
         switch (cmd.ToUpperInvariant())
         {
