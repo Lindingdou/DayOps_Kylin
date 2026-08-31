@@ -781,6 +781,16 @@ public partial class MainWindow : Window
             if (cmd == "采剥平衡" || cmd == "采剥平衡分析" || cmd == "剥采平衡" || cmd == "物料平衡") { await StripBalanceAsync(); return; }
             if (cmd == "配煤核算" || cmd == "配煤" || cmd == "煤质混合" || cmd == "配煤计算") { await CoalBlendAsync(); return; }
             if (cmd == "工序进度跟踪" || cmd == "工序进度" || cmd == "进度跟踪") { await ProcessProgressAsync(); return; }
+            if (cmd == "环节降效" || cmd == "天气降效" || cmd.StartsWith("环节降效 ") || cmd.StartsWith("天气降效 "))
+            {
+                var t = cmd.Split(new[] { ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
+                double dl = 10, dh = 20, dd = 15;
+                if (t.Length >= 2) double.TryParse(t[1], out dl);
+                if (t.Length >= 3) double.TryParse(t[2], out dh);
+                if (t.Length >= 4) double.TryParse(t[3], out dd);
+                LinkDerateCmd(dl, dh, dd);
+                return;
+            }
             if (cmd == "编组产能" || cmd == "车铲循环" || cmd.StartsWith("编组产能 ") || cmd.StartsWith("车铲循环 "))
             {
                 var t = cmd.Split(new[] { ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
@@ -1365,6 +1375,16 @@ public partial class MainWindow : Window
         RefreshScene();
         if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
         StatusMsg.Text = $"网格边界：{loops.Count} 环 · {totPts} 点(投影 XY 作闭合折线入场景)";
+    }
+
+    // 环节降效产能（TaskLib 降效切片）：给采/运/排降效% → 用默认编组解 τ_L/T_c/MF → 采装面/排土面能力系数 + 降后产能。
+    // 用法 "环节降效 <采%> <运%> <排%>"，缺省 (10/20/15)。
+    private void LinkDerateCmd(double dLoad, double dHaul, double dDump)
+    {
+        var fc = Cad.Tasks.FleetCycle.Solve(12, 100, 2.5, 1.5, 3, trucks: 0);   // 默认编组解出 τ_L/T_c/MF
+        double fLoad = Cad.Tasks.LinkDerate.Factor(Cad.Tasks.ProcessType.Load, fc.LoadTaktMin, fc.CycleTimeMin, fc.MatchFactor, dLoad, dHaul, dDump);
+        double fDump = Cad.Tasks.LinkDerate.Factor(Cad.Tasks.ProcessType.Dump, 0, 0, 0, dLoad, dHaul, dDump);
+        StatusMsg.Text = $"环节降效：采装{dLoad:0.#}%/运输{dHaul:0.#}%/排土{dDump:0.#}% · 编组(MF {fc.MatchFactor:0.##}) → 采装面系数 {fLoad:0.###}(降后产能 {fc.GroupCapM3PerH * fLoad:0.#}m³/h) · 排土面系数 {fDump:0.###}（运输降效对铲瓶颈面不生效=物理）";
     }
 
     // 编组产能（TaskLib 车铲循环切片）：铲斗/载重/密度/运距/车数 → 斗数/节拍/循环/匹配系数/编组产能。
