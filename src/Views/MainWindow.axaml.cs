@@ -862,6 +862,7 @@ public partial class MainWindow : Window
             if (cmd == "网格焊接" || cmd == "合并顶点" || cmd == "顶点焊接") { await MeshWeldAsync(); return; }
             if (cmd == "合并三角网" || cmd == "网格合并" || cmd == "合并网格") { await MeshMergeAsync(); return; }
             if (cmd == "补洞(三角网)" || cmd == "补洞" || cmd == "网格补洞" || cmd == "填洞") { await MeshHoleFillAsync(); return; }
+            if (cmd == "剔面(三角网)" || cmd == "剔面" || cmd == "网格剔面" || cmd == "删陡面" || cmd.StartsWith("剔面 ")) { await MeshFaceCullAsync(cmd); return; }
             if (cmd == "分割三角网" || cmd == "沿线分割三角网" || cmd == "网格分割" || cmd == "切分三角网") { await MeshSplitAsync(); return; }
             if (cmd == "快速建模" || cmd == "一键建模" || cmd == "顶底成体") { await QuickModelAsync(); return; }
             if (cmd == "连续多层建模" || cmd == "多层建模" || cmd == "逐层成体" || cmd == "层位建模") { await MultiLayerModelAsync(); return; }
@@ -1887,6 +1888,33 @@ public partial class MainWindow : Window
     }
 
     // 补洞(三角网)：选 OFF → 提边界洞 → 扇形填充 → 落 .filled.off + 前后开放边报表。
+    // 三角网剔面(原「按离地高/坡度丢弃三角面」)：选 OFF → 删坡度>阈值(默认60°)的陡三角 → 写 faceculled.off
+    private async Task MeshFaceCullAsync(string cmd)
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "剔面：选 OFF 网格",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } } }
+        });
+        if (files.Count == 0) return;
+        string text;
+        try { text = System.IO.File.ReadAllText(files[0].Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"剔面：读取失败 {ex.Message}"; return; }
+        var (verts, tris) = MeshMetrics.ParseOff(text);
+        if (tris.Count == 0) { StatusMsg.Text = "剔面：未解析到三角网格"; return; }
+        double maxSlope = 60;   // 可选 "剔面 <坡度阈值°>"
+        var tk = cmd.Split(new[] { ' ', '°' }, System.StringSplitOptions.RemoveEmptyEntries);
+        if (tk.Length >= 2 && double.TryParse(tk[1], out double s)) maxSlope = s;
+        var kept = MeshFaceCull.BySlope(verts, tris, maxSlope);
+        int removed = tris.Count - kept.Count;
+        string outPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(files[0].Path.LocalPath) ?? ".", "faceculled.off");
+        try { System.IO.File.WriteAllText(outPath, MeshWeld.ToOff(verts, kept)); }
+        catch (System.Exception ex) { StatusMsg.Text = $"剔面：写出失败 {ex.Message}"; return; }
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        StatusMsg.Text = $"剔面(坡度>{maxSlope.ToString("0.#", inv)}°)：删 {removed} 陡面 · 留 {kept.Count}/{tris.Count} → {System.IO.Path.GetFileName(outPath)}";
+    }
+
     private async Task MeshHoleFillAsync()
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
