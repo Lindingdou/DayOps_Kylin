@@ -790,20 +790,27 @@ public sealed class TextEntity : SceneEntity
         double wf = WidthFactor <= 0 ? 1 : WidthFactor;
         double tanOb = Math.Tan(ObliqueAngle);
         double adv = Height * 0.8 * wf;
-        double width = (Text?.Length ?? 0) * adv;
-        double hOff = HAlign == 1 ? -width / 2 : HAlign == 2 ? -width : 0;   // 对齐偏移(局部)
-        double vOff = VAlign == 1 ? -Height / 2 : VAlign == 2 ? -Height : 0;
-        double cursor = hOff;
-        foreach (char ch in Text ?? "")
+        var lines = (Text ?? "").Split('\n');                            // 多行文字: 按 \n 分行, 逐行下落
+        double lineH = Height * 1.5;                                     // 行距
+        for (int li = 0; li < lines.Length; li++)
         {
-            foreach (var (sx0, sy0, sx1, sy1) in StrokeFont.Strokes(ch))
+            string line = lines[li];
+            double width = line.Length * adv;
+            double hOff = HAlign == 1 ? -width / 2 : HAlign == 2 ? -width : 0;   // 对齐偏移(局部, 逐行)
+            double lineBase = -li * lineH;                              // 第 li 行基线相对首行下移
+            double vOff = (VAlign == 1 ? -Height / 2 : VAlign == 2 ? -Height : 0) + lineBase;
+            double cursor = hOff;
+            foreach (char ch in line)
             {
-                double lx0 = cursor + sx0 * Height * wf + sy0 * Height * tanOb, ly0 = vOff + sy0 * Height;   // x 按字宽缩放 + 倾斜斜切
-                double lx1 = cursor + sx1 * Height * wf + sy1 * Height * tanOb, ly1 = vOff + sy1 * Height;
-                Seg(o, X + lx0 * c - ly0 * s, Y + lx0 * s + ly0 * c,      // 旋转后平移到锚点
-                       X + lx1 * c - ly1 * s, Y + lx1 * s + ly1 * c);
+                foreach (var (sx0, sy0, sx1, sy1) in StrokeFont.Strokes(ch))
+                {
+                    double lx0 = cursor + sx0 * Height * wf + sy0 * Height * tanOb, ly0 = vOff + sy0 * Height;   // x 按字宽缩放 + 倾斜斜切
+                    double lx1 = cursor + sx1 * Height * wf + sy1 * Height * tanOb, ly1 = vOff + sy1 * Height;
+                    Seg(o, X + lx0 * c - ly0 * s, Y + lx0 * s + ly0 * c,      // 旋转后平移到锚点
+                           X + lx1 * c - ly1 * s, Y + lx1 * s + ly1 * c);
+                }
+                cursor += adv;
             }
-            cursor += adv;
         }
     }
     public override SceneEntity Apply(Affine2 m)

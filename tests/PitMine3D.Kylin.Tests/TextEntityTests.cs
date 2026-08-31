@@ -7,6 +7,24 @@ namespace PitMine3D.Kylin.Tests;
 /// <summary>单笔画文字 + TextEntity 回归。</summary>
 public class TextEntityTests
 {
+    private static float MinY(List<float> o) { float m = float.MaxValue; for (int i = 1; i < o.Count; i += 6) if (o[i] < m) m = o[i]; return m; }
+
+    [Fact]
+    public void Multiline_text_stacks_lines_downward()
+    {
+        var single = new List<float>(); new TextEntity { X = 0, Y = 0, Height = 1, Text = "8" }.Tessellate(single);
+        var multi = new List<float>(); new TextEntity { X = 0, Y = 0, Height = 1, Text = "8\n8" }.Tessellate(multi);
+        Assert.Equal(2 * single.Count, multi.Count);              // 两行 = 两倍段
+        Assert.True(MinY(multi) < MinY(single) - 0.5);            // 第二行落在首行下方
+    }
+
+    [Fact]
+    public void Single_line_text_unchanged_by_multiline_support()
+    {
+        var o = new List<float>(); new TextEntity { X = 0, Y = 0, Height = 1, Text = "8" }.Tessellate(o);
+        Assert.Equal(7 * 2 * 6, o.Count);                        // 数字 8 = 7 段, 单行不受多行改动影响
+    }
+
     [Fact]
     public void Digit_eight_has_seven_segments()
     {

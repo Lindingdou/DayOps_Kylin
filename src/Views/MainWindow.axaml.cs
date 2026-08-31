@@ -710,6 +710,7 @@ public partial class MainWindow : Window
     private bool _spotActive;                       // 高程查询：点击报高程
     private System.Collections.Generic.List<(double x, double y, double z)>? _spotTerrain;
     private bool _textActive;                        // 文字：等待命令行输入内容
+    private bool _mtextMode;                          // 多行文字模式：输入中 '|' 作换行分隔
     private bool _dimActive;                          // 线性标注：取两点
     private (double x, double y)? _dimP1;
     private bool _dimRadActive;                        // 半径标注：选圆/弧后指定方向
@@ -993,7 +994,8 @@ public partial class MainWindow : Window
             if (cmd == "矿床识别" || cmd == "自动识别" || cmd == "矿床类型识别") { await DepositDetectAsync(); return; }
             if (cmd == "方案综合对比" || cmd == "方案比选" || cmd == "方案对比") { await ProgramCompareAsync(); return; }
             if (cmd == "高程查询" || cmd == "虚拟钻孔" || cmd == "查询高程") { await StartSpotQueryAsync(); return; }
-            if (cmd == "文字" || cmd == "单行文字") { ArmText(); return; }
+            if (cmd == "文字" || cmd == "单行文字") { _mtextMode = false; ArmText(); return; }
+            if (cmd == "多行文字" || cmd == "多行文本") { _mtextMode = true; _textActive = true; _tool = null; _measure = null; StatusMsg.Text = "多行文字：命令行输入内容, 用 | 分行, 回车放置（数字/符号/XYZM 可显）"; return; }
             if (cmd == "对齐标注") { StartDim(true); return; }                                        // 对齐: 平行测线,真距
             if (cmd == "标注" || cmd == "线性标注" || cmd == "尺寸标注" || cmd == "标注台阶标高") { StartDim(false); return; }   // 线性: 轴对齐,量 X/Y
             if (cmd == "半径标注" || cmd == "半径") { StartDimRadial(); return; }
@@ -7822,7 +7824,7 @@ public partial class MainWindow : Window
     {
         // 文件/绘制/修改
         "新建","打开","保存","另存为","导入","选项",
-        "点","直线","多段线","滑动多段线","圆","矩形","正多边形","文字","圆弧","图案填充","填充十字",
+        "点","直线","多段线","滑动多段线","圆","矩形","正多边形","文字","多行文字","圆弧","图案填充","填充十字",
         "复制","移动","旋转","偏移","修剪","延伸","打断","分解","删除","撤销","重做",
         // 对象捕捉
         "对象捕捉","交点捕捉","最近捕捉","垂足捕捉","捕捉全模式",
@@ -7924,7 +7926,7 @@ public partial class MainWindow : Window
         tb.Text = string.Empty;
 
         // 文字：下一条命令行输入即内容
-        if (_textActive) { _textActive = false; if (cmd.Length > 0) PlaceText(cmd); return; }
+        if (_textActive) { _textActive = false; bool mt = _mtextMode; _mtextMode = false; if (cmd.Length > 0) PlaceText(mt ? cmd.Replace("|", "\n") : cmd); return; }
 
         // 圆 TTR：等待半径
         if (_ttrActive && _ttrAwaitRadius && _ttrRef1 != null && _ttrRef2 != null && double.TryParse(cmd, out double ttrR) && ttrR > 0)
