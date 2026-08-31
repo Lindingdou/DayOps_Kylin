@@ -4249,7 +4249,7 @@ public partial class MainWindow : Window
         { StatusMsg.Text = "简化：请先选中一条至少 3 点的多段线"; return; }
         double eps = System.Math.Max(SnapTolWorld(_lastPointer) * 0.5, 1e-6);
         var simp = PolylineSimplify.DouglasPeucker(pl.Points, eps);
-        var np = new PolylineEntity { Closed = pl.Closed, Cr = pl.Cr, Cg = pl.Cg, Cb = pl.Cb, LayerName = pl.LayerName };
+        var np = new PolylineEntity { Closed = pl.Closed }; np.CopyStyleFrom(pl);   // 全样式(含线型/线宽/可见)随简化保留
         foreach (var p in simp) np.Points.Add(p);
         BeginChange();
         _scene.Replace(pl, np);
@@ -4264,7 +4264,7 @@ public partial class MainWindow : Window
         if (_selected.Count != 1 || _selected[0] is not PolylineEntity pl || pl.Points.Count < 3)
         { StatusMsg.Text = "平滑：请先选中一条至少 3 点的多段线"; return; }
         var sm = spline ? PolylineSmooth.CatmullRom(pl.Points, 8, pl.Closed) : PolylineSmooth.Chaikin(pl.Points, 3, pl.Closed);
-        var np = new PolylineEntity { Closed = pl.Closed, Cr = pl.Cr, Cg = pl.Cg, Cb = pl.Cb, LayerName = pl.LayerName };
+        var np = new PolylineEntity { Closed = pl.Closed }; np.CopyStyleFrom(pl);   // 全样式随平滑保留
         foreach (var p in sm) np.Points.Add(p);
         BeginChange();
         _scene.Replace(pl, np);
@@ -4306,7 +4306,7 @@ public partial class MainWindow : Window
             if (pieces.Count == 0) continue;
             foreach (var piece in pieces)
             {
-                var pl = new PolylineEntity { Cr = subj.Cr, Cg = subj.Cg, Cb = subj.Cb, LayerName = subj.LayerName };
+                var pl = new PolylineEntity(); pl.CopyStyleFrom(subj);   // 全样式随裁剪段保留
                 foreach (var p in piece) pl.Points.Add(p);
                 _scene.Add(pl); made++;
             }
@@ -4701,7 +4701,7 @@ public partial class MainWindow : Window
         var first = (PolylineEntity)polys[0];
         foreach (var chain in merged)
         {
-            var pl = new PolylineEntity { Cr = first.Cr, Cg = first.Cg, Cb = first.Cb, LayerName = first.LayerName };
+            var pl = new PolylineEntity(); pl.CopyStyleFrom(first);   // 合并保源全样式
             foreach (var pt in chain) pl.Points.Add(pt);
             _scene.Add(pl);
         }
@@ -5985,7 +5985,7 @@ public partial class MainWindow : Window
             double diag = PolyDiag(p.Points);
             double step = diag > 0 ? diag / 50.0 : 1.0;
             var densified = PolylineEdit.Densify(p.Points, p.Closed, step);
-            var np = new PolylineEntity { Closed = p.Closed, Cr = p.Cr, Cg = p.Cg, Cb = p.Cb, LayerName = p.LayerName };
+            var np = new PolylineEntity { Closed = p.Closed }; np.CopyStyleFrom(p);   // 加密保源全样式
             np.Points.AddRange(densified);
             ov += p.Points.Count; fv += densified.Count;
             _scene.Remove(p); _scene.Add(np); newSel.Add(np);
@@ -6055,7 +6055,7 @@ public partial class MainWindow : Window
         var newSel = new List<SceneEntity>();
         foreach (var p in open)
         {
-            var np = new PolylineEntity { Closed = true, Cr = p.Cr, Cg = p.Cg, Cb = p.Cb, LayerName = p.LayerName };
+            var np = new PolylineEntity { Closed = true }; np.CopyStyleFrom(p);   // 闭合保源全样式
             np.Points.AddRange(p.Points);
             _scene.Replace(p, np); newSel.Add(np);
         }

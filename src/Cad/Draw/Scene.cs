@@ -75,9 +75,16 @@ public abstract class SceneEntity
     public virtual SceneEntity? MoveGrip(int i, double nx, double ny) => null;
 
     /// <summary>把本实体颜色复制给 e 并返回（变换保留颜色）。</summary>
-    // 变换/克隆深拷: 保留全部非几何属性(色/线型/线宽/可见/图层)。图层保留使 移动/复制/镜像/剪贴板 不改层;
+    /// <summary>把源实体的全部非几何样式(色/线型/线宽/可见/图层)拷到本实体。
+    /// 单一枢纽: 变换深拷(Colored)与各处手工构造新实体(简化/平滑/裁剪)都经此, 加样式字段只改这一处。</summary>
+    public void CopyStyleFrom(SceneEntity s)
+    {
+        Cr = s.Cr; Cg = s.Cg; Cb = s.Cb; Dash = s.Dash; LineWeight = s.LineWeight; Visible = s.Visible; LayerName = s.LayerName;
+    }
+
+    // 变换/克隆深拷: 保留全部非几何属性。图层保留使 移动/复制/镜像/剪贴板 不改层;
     // DXF 块展开在 Apply 后另行覆盖层名, 故不受影响。
-    protected T Colored<T>(T e) where T : SceneEntity { e.Cr = Cr; e.Cg = Cg; e.Cb = Cb; e.Dash = Dash; e.LineWeight = LineWeight; e.Visible = Visible; e.LayerName = LayerName; return e; }
+    protected T Colored<T>(T e) where T : SceneEntity { e.CopyStyleFrom(this); return e; }
 
     /// <summary>闭环(矩形/正多边形)打断：投两点到全部边(含闭合边)，移除两点间一段，返回绕另一侧的开口多段线；两点重合返 null。</summary>
     protected static PolylineEntity? BreakClosedLoop(IReadOnlyList<(double x, double y)> vs, double x1, double y1, double x2, double y2)
