@@ -832,3 +832,8 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 - **记录 VirtualDrillEngine(964行) 为边界**：多煤层顶/底板 TIN 竖直采样合成钻孔柱，依赖地质模型的煤层面 TIN 基建——Kylin 只有 §四/§八 见煤数据、无煤层面 TIN(建面属地质建模管线，未建)。我的 虚拟钻孔=单面高程点查询(简化占位)。→ 依赖 Kylin 缺失基建，记录。
 - 核实 **矿床识别=DepositAutoDetector 已忠实移植**(PCA 倾角/走向 + Z 层煤层数)。
 - **★GeoDataBase 可见算法 sweep 收官**：CoalQualityAnalytics(6)/ForecastModels/FleetOptimizer/HorizonPointBuilder/DepositAutoDetector 全移；VirtualDrillEngine 记录(缺地质建模基建)。→ 该模块(§四/§八 approximation 集中地)实现忠实度已收口。660 测试。
+
+**实现忠实度轴续（commit `608ed31`）——其它模块 sweep + 网格体积分级容错**：
+- [x] **网格体积分级容错**(忠实原 `MeshVolume`)：我的 `MeshMetrics` 体积仅基础散度 `|Σa·(b×c)|/6`，水密时精确但**非水密(开放曲面)给无意义值**。补 `MeshMetrics.RobustVolume`：① 水密(`MeshDiagnose.IsClosed`)→散度严密；② 非水密→`MeshWeld` 焊接 + `MeshHoleFill` 扇形补洞封盖→散度绝对值(复用已移零件)。Compute 改用之。+2 单测(水密四面体 1/6 精确·缺面开放四面体补洞恢复 1/6)。**实现忠利度轴累计 11 真实算法**。
+- **其它模块 sweep 核实**：MineAssLib 剩余算法(SeamOutcrop/Incline/斜面体积/MonthlyMineSchedule/CoupledMine/TautString)在 境界·PitDesign·地质建模·TaskLib 排产 记录边界域；RoadCrossSection(弯道加宽曲率法)/SlopeEstimator/DepositAutoDetector/RoadNetwork/mesh 基元 早前已忠实移。DumpAdvanceByVolume(依赖 dump_strip 块模型台账)记录，我的 SinkNode 是 TaskLib 容量模型忠实移植。
+- **★实现忠实度轴总结**：**11 真实算法逐字补齐**(GeoDataBase 10 + MeshVolume 分级)；其它模块 approximation 已 sweep 无残留(covered/recorded)。→ 该轴收口。662 测试。
