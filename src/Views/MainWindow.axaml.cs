@@ -670,6 +670,8 @@ public partial class MainWindow : Window
             if (cmd == "组合工作线" || cmd == "合并多段线" || cmd == "连接台阶线" || cmd == "连接多段线") { JoinPolylines(); return; }
             if (cmd == "块体模型" || cmd == "导入块体" || cmd == "地质体建模") { await ImportBlockModelAsync(); return; }
             if (cmd == "资源量估算" || cmd == "剥采比") { ResourceReport(null); return; }
+            if (cmd == "导出块体" || cmd == "块体导出") { await ExportBlocksAsync(); return; }
+            if (cmd == "输出报告" || cmd == "资源量报告" || cmd == "块体报告") { await ExportResourceReportAsync(); return; }
             if (cmd == "快速估值" || cmd == "品位估值" || cmd == "克里金估值" || cmd == "空间分布") { await EstimateGradeAsync(); return; }
             if (cmd == "点云抽稀" || cmd == "抽稀" || cmd == "点云精简") { await ThinPointsAsync(); return; }
             if (cmd == "地面点滤波" || cmd == "地面滤波") { await GroundFilterAsync(); return; }
@@ -2624,6 +2626,50 @@ public partial class MainWindow : Window
         _tool = null; _measure = null; _editMode = EditMode.None;
         Viewport.FitBounds(r.Bounds);
         StatusMsg.Text = $"高程查询：已载入 {r.Points.Count} 点，点击视口任意位置查询高程（ESC 退出）";
+    }
+
+    // 导出块体：最近块体 → CSV(x,y,z,尺寸,品位)
+    private async Task ExportBlocksAsync()
+    {
+        if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "导出块体：请先导入/生成块体"; return; }
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "导出块体", DefaultExtension = "csv", SuggestedFileName = "blocks.csv",
+            FileTypeChoices = new[] { new FilePickerFileType("块体 CSV") { Patterns = new[] { "*.csv" } } }
+        });
+        if (file == null) return;
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var sb = new System.Text.StringBuilder("x,y,z,size,grade\n");
+        foreach (var b in _lastBlocks)
+            sb.Append(b.X.ToString("R", inv)).Append(',').Append(b.Y.ToString("R", inv)).Append(',').Append(b.Z.ToString("R", inv))
+              .Append(',').Append(b.Size.ToString("R", inv)).Append(',').Append(b.Grade.ToString("R", inv)).Append('\n');
+        try { System.IO.File.WriteAllText(file.Path.LocalPath, sb.ToString()); }
+        catch (System.Exception ex) { StatusMsg.Text = $"导出块体：写出失败 {ex.Message}"; return; }
+        StatusMsg.Text = $"导出块体：{_lastBlocks.Count} 块 → {System.IO.Path.GetFileName(file.Path.LocalPath)}";
+    }
+
+    // 输出报告：最近块体资源量/剥采比 → 文本报告文件
+    private async Task ExportResourceReportAsync()
+    {
+        if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "输出报告：请先导入/生成块体"; return; }
+        double gsum = 0, gmin = double.MaxValue, gmax = double.MinValue;
+        foreach (var b in _lastBlocks) { gsum += b.Grade; if (b.Grade < gmin) gmin = b.Grade; if (b.Grade > gmax) gmax = b.Grade; }
+        double cut = gsum / _lastBlocks.Count;
+        var (ore, waste, strip, avg, metal, tonnage) = BlockModel.Resource(_lastBlocks, cut, 2.7);
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "输出资源量报告", DefaultExtension = "txt", SuggestedFileName = "resource_report.txt",
+            FileTypeChoices = new[] { new FilePickerFileType("报告 (TXT/CSV)") { Patterns = new[] { "*.txt", "*.csv" } } }
+        });
+        if (file == null) return;
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        string txt = $"资源量报告\n块体数,{_lastBlocks.Count}\ncutoff(平均品位),{cut.ToString("0.###", inv)}\n" +
+                     $"品位范围,{gmin.ToString("0.###", inv)}~{gmax.ToString("0.###", inv)}\n矿量(体积),{ore.ToString("0.#", inv)}\n" +
+                     $"吨位,{tonnage.ToString("0.#", inv)}\n废石(体积),{waste.ToString("0.#", inv)}\n剥采比,{strip.ToString("0.##", inv)}\n" +
+                     $"平均品位,{avg.ToString("0.###", inv)}\n金属量,{metal.ToString("0.#", inv)}\n";
+        try { System.IO.File.WriteAllText(file.Path.LocalPath, txt); }
+        catch (System.Exception ex) { StatusMsg.Text = $"输出报告：写出失败 {ex.Message}"; return; }
+        StatusMsg.Text = $"输出报告：资源量报告已保存 → {System.IO.Path.GetFileName(file.Path.LocalPath)}";
     }
 
     // 多边形圈选：以选中的闭合多段线为边界，选中其内实体
