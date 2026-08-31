@@ -1191,3 +1191,9 @@ grade-only 数据模型无法持多属性(架构限, 记录), 但可**部分缓�
 - [x] **字体补字形**(`StrokeFont`)：加 `Ø`(直径,六边≈圆+斜杠)、`°`(度,顶部小圈)、`=`(等号,顺带补——原坐标标注 "X=" 的等号一直缺字形不显)。1 测(三字形非空)。
 
 **本会话累计补 34 真功能 + 1 并发修复, 907 测。** 六条新系统透镜(点云/报表/着色/参数/GeoDataBase 窗口/标注型别)diff; 标注型别现齐(线性·对齐/半径/直径/角度/坐标/连续 + 样式)。
+
+## 八十七、绘图辅助/DXF 实体透镜 —— 全覆盖(含一次冗余提交纠正)
+
+- **DXF 实体导入**: Kylin `DxfImportService` 已**超集覆盖**原全型别(Line/LwPolyline/Polyline2D3D/Circle/Arc/Ellipse/Spline/Hatch/Text/MText/Point/Insert/XLine/Ray/Solid/Face3D)且多 Leader/MLine/MultiLeader/Dimension。无缺。
+- **绘图辅助全已有**: 正交(`_orthoOn` + `DraftAids.Ortho`, 命令"正交/正交开关", FeedPoint 落点 6551 应用)、栅格捕捉(`_snapOn` + `DraftAids.Snap`, 命令"栅格捕捉")、对象捕捉(六模式)全在。极轴追踪原本就无(非缺口)。
+- **★冗余提交纠正(硬教训)**: 误判"Kylin 无正交"→实现并提交了并行冗余正交系统(`DrawTool.OrthoSnap`/`Anchor` + `_ortho` + 双重应用 + 死"正交"别名, commit 0f13673)→查栅格捕捉时撞见既有 `_orthoOn`/DraftAids→`git revert`(ab10fbf)全撤, 回 907 测。**根因: 实现前 grep "正交|ortho" 返回了无关行(ViewportHost)却据此断"无", 未核对确切标识符 `_orthoOn`/`DraftAids`/命令字面量。教训见 [[unlock-blocked-insights]]。**
