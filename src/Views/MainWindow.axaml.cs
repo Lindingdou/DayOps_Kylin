@@ -4665,10 +4665,15 @@ public partial class MainWindow : Window
         var r2 = PointDataImportService.Load(f2[0].Path.LocalPath);
         if (!r1.Success || !r2.Success) { StatusMsg.Text = "两期算量：点导入失败"; return; }
         var (cut, fill, net) = TerrainAnalysis.TwoEpochVolume(r1.Points, r2.Points, 64);
-        // 分标高带明细(原 VolumeReportGenerator「按标高带」)：各带挖/填之和==整体(守恒), 供分台阶报量
+        // 分标高带 + 按连通块明细(原 VolumeReportGenerator「按标高带/按连通块」)：各分区和==整体(守恒)
         var bands = TerrainAnalysis.TwoEpochVolumeByElevation(r1.Points, r2.Points, 64, bandHeight: 0);
-        var name = await SaveCsvAsync("导出两期分标高填挖", "twoepoch_by_elevation.csv", TerrainAnalysis.TwoEpochByElevationCsv(bands));
-        StatusMsg.Text = $"两期算量：挖方(下降) {cut:0.##} · 填方(上升) {fill:0.##} · 净 {net:0.##} · {bands.Count} 标高带"
+        var parts = TerrainAnalysis.TwoEpochVolumeByPart(r1.Points, r2.Points, 64);
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        string report = $"# 汇总\ncut,fill,net\n{cut.ToString("R", inv)},{fill.ToString("R", inv)},{net.ToString("R", inv)}\n\n"
+            + "# 按标高带\n" + TerrainAnalysis.TwoEpochByElevationCsv(bands)
+            + "\n# 按连通块\n" + TerrainAnalysis.TwoEpochByPartCsv(parts);
+        var name = await SaveCsvAsync("导出两期算量报表", "twoepoch_report.csv", report);
+        StatusMsg.Text = $"两期算量：挖方(下降) {cut:0.##} · 填方(上升) {fill:0.##} · 净 {net:0.##} · {bands.Count} 标高带 · {parts.Count} 连通块"
             + (name != null ? $" → {name}" : "");
     }
 

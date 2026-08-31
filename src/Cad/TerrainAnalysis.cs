@@ -217,6 +217,72 @@ public static class TerrainAnalysis
         return res;
     }
 
+    public readonly record struct CutFillPart(int Id, bool IsCut, double Volume, int CellCount);
+
+    /// <summary>
+    /// 两期算量按连通块（忠实原 VolumeReportGenerator「按连通块」）——网格上挖(dz&lt;0)/填(dz&gt;0)
+    /// 各自 4-邻域同号连通标记, 逐块累计体积, 按体积降序返回。识别相互分离的挖/填区(如主坑 vs 侧挖)。
+    /// 挖块体积和==整体挖(守恒)。纯逻辑、可单测。
+    /// </summary>
+    public static List<CutFillPart> TwoEpochVolumeByPart(
+        IReadOnlyList<(double x, double y, double z)> a, IReadOnlyList<(double x, double y, double z)> b, int n)
+    {
+        var res = new List<CutFillPart>();
+        if (a.Count == 0 || b.Count == 0 || n < 2) return res;
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        void Ext(IReadOnlyList<(double x, double y, double z)> pts) { foreach (var p in pts) { if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y; if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y; } }
+        Ext(a); Ext(b);
+        double dx = maxX > minX ? (maxX - minX) / (n - 1) : 1;
+        double dy = maxY > minY ? (maxY - minY) / (n - 1) : 1;
+        var g1 = Contour.GridInto(a, n, n, minX, minY, dx, dy);
+        var g2 = Contour.GridInto(b, n, n, minX, minY, dx, dy);
+        double cellArea = dx * dy;
+
+        int nc = n - 1;                                    // 格子数(n-1)×(n-1)
+        var sign = new sbyte[nc, nc];                      // +1 填 / -1 挖 / 0 无变化
+        var vol = new double[nc, nc];
+        for (int ix = 0; ix < nc; ix++)
+        for (int iy = 0; iy < nc; iy++)
+        {
+            double dz = (Dz(g1, g2, ix, iy) + Dz(g1, g2, ix + 1, iy) + Dz(g1, g2, ix + 1, iy + 1) + Dz(g1, g2, ix, iy + 1)) / 4.0;
+            vol[ix, iy] = System.Math.Abs(dz) * cellArea;
+            sign[ix, iy] = dz > 1e-12 ? (sbyte)1 : dz < -1e-12 ? (sbyte)-1 : (sbyte)0;
+        }
+
+        var seen = new bool[nc, nc];
+        var stack = new Stack<(int, int)>();
+        for (int ix = 0; ix < nc; ix++)
+        for (int iy = 0; iy < nc; iy++)
+        {
+            if (seen[ix, iy] || sign[ix, iy] == 0) continue;
+            sbyte s = sign[ix, iy];
+            double v = 0; int cnt = 0;
+            stack.Push((ix, iy)); seen[ix, iy] = true;
+            while (stack.Count > 0)
+            {
+                var (cx, cy) = stack.Pop();
+                v += vol[cx, cy]; cnt++;
+                void Try(int nx, int ny) { if (nx >= 0 && ny >= 0 && nx < nc && ny < nc && !seen[nx, ny] && sign[nx, ny] == s) { seen[nx, ny] = true; stack.Push((nx, ny)); } }
+                Try(cx - 1, cy); Try(cx + 1, cy); Try(cx, cy - 1); Try(cx, cy + 1);
+            }
+            res.Add(new CutFillPart(0, s < 0, v, cnt));
+        }
+        res.Sort((p, q) => q.Volume.CompareTo(p.Volume));   // 体积降序
+        for (int i = 0; i < res.Count; i++) res[i] = res[i] with { Id = i };
+        return res;
+    }
+
+    /// <summary>两期按连通块 → CSV(id,kind,volume,cells)。</summary>
+    public static string TwoEpochByPartCsv(IReadOnlyList<CutFillPart> parts)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var sb = new System.Text.StringBuilder("id,kind,volume,cells\n");
+        foreach (var p in parts)
+            sb.Append(p.Id).Append(',').Append(p.IsCut ? "cut" : "fill").Append(',')
+              .Append(p.Volume.ToString("R", inv)).Append(',').Append(p.CellCount).Append('\n');
+        return sb.ToString();
+    }
+
     /// <summary>两期分标高填挖 → CSV(z_low,z_high,cut,fill,net)。</summary>
     public static string TwoEpochByElevationCsv(IReadOnlyList<CutFillBand> bands)
     {

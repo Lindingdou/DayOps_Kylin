@@ -201,4 +201,51 @@ public class TerrainAnalysisTests
         Assert.Empty(TerrainAnalysis.TwoEpochVolumeByElevation(empty, empty, 8, 1));
         Assert.Equal("z_low,z_high,cut,fill,net\n", TerrainAnalysis.TwoEpochByElevationCsv(new List<TerrainAnalysis.CutFillBand>()));
     }
+
+    // ── 两期算量按连通块(原 VolumeReportGenerator「按连通块」) ──
+    [Fact]
+    public void TwoEpoch_by_part_uniform_rise_is_one_fill_zone()
+    {
+        // 全域均匀升 → 恰 1 个填块, 无挖块; 该块体积==整体填(守恒)
+        var e1 = new List<(double x, double y, double z)> { (0, 0, 0), (10, 0, 0), (10, 10, 0), (0, 10, 0) };
+        var e2 = new List<(double x, double y, double z)> { (0, 0, 5), (10, 0, 5), (10, 10, 5), (0, 10, 5) };
+        int n = 20;
+        var (_, fillTot, _) = TerrainAnalysis.TwoEpochVolume(e1, e2, n);
+        var parts = TerrainAnalysis.TwoEpochVolumeByPart(e1, e2, n);
+        Assert.Single(parts);
+        Assert.False(parts[0].IsCut);
+        Assert.Equal(fillTot, parts[0].Volume, 2);
+        Assert.Equal(0, parts[0].Id);                          // 最大块 id=0
+    }
+
+    [Fact]
+    public void TwoEpoch_by_part_conserves_by_kind()
+    {
+        // 左升右降 → 挖块与填块分离; 各类体积和==整体对应量(守恒)
+        var e1 = new List<(double x, double y, double z)> { (0, 0, 10), (10, 0, 10), (10, 10, 10), (0, 10, 10), (5, 5, 10) };
+        var e2 = new List<(double x, double y, double z)> { (0, 0, 16), (10, 0, 4), (10, 10, 4), (0, 10, 16), (5, 5, 10) };
+        int n = 24;
+        var (cut, fill, _) = TerrainAnalysis.TwoEpochVolume(e1, e2, n);
+        var parts = TerrainAnalysis.TwoEpochVolumeByPart(e1, e2, n);
+        Assert.NotEmpty(parts);
+        double pcut = 0, pfill = 0;
+        foreach (var p in parts) { if (p.IsCut) pcut += p.Volume; else pfill += p.Volume; }
+        Assert.Equal(cut, pcut, 2);
+        Assert.Equal(fill, pfill, 2);
+        // 体积降序
+        for (int i = 1; i < parts.Count; i++) Assert.True(parts[i - 1].Volume >= parts[i].Volume);
+    }
+
+    [Fact]
+    public void TwoEpoch_by_part_csv_and_empty_safe()
+    {
+        var e1 = new List<(double x, double y, double z)> { (0, 0, 0), (10, 0, 0), (10, 10, 0), (0, 10, 0) };
+        var e2 = new List<(double x, double y, double z)> { (0, 0, 3), (10, 0, 3), (10, 10, 3), (0, 10, 3) };
+        var csv = TerrainAnalysis.TwoEpochByPartCsv(TerrainAnalysis.TwoEpochVolumeByPart(e1, e2, 12));
+        Assert.StartsWith("id,kind,volume,cells\n", csv);
+        Assert.Contains(",fill,", csv);
+        var empty = new List<(double x, double y, double z)>();
+        Assert.Empty(TerrainAnalysis.TwoEpochVolumeByPart(empty, empty, 8));
+        Assert.Equal("id,kind,volume,cells\n", TerrainAnalysis.TwoEpochByPartCsv(new List<TerrainAnalysis.CutFillPart>()));
+    }
 }

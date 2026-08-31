@@ -1151,7 +1151,8 @@ grade-only 数据模型无法持多属性(架构限, 记录), 但可**部分缓�
 ## 八十二、报表生成器透镜 —— 两期算量分标高带(整体+分X 缺口)
 
 系统扫原全模块 `*Report*/*Analytics*` 生成器, 逐一核对 Kylin 是否只做了"整体"半:
-- [x] **两期算量分标高带**(`TerrainAnalysis.TwoEpochVolumeByElevation` + CSV)：原 PointCloudLib `VolumeReportGenerator` 出"按标高带/按连通块/按区域"多分区表; Kylin `TwoEpochVolume` 仅返 `(cut,fill,net)` 整体三元。补分标高带——各格变化柱 `[min(g1,g2),max(g1,g2)]` 按 bandHeight 切到各高程带逐带累计挖/填, 挖/填判据与整体一致。**守恒: 各带挖和==整体挖(强不变量单测)**。接入 两期算量 命令(算完落 `twoepoch_by_elevation.csv`)。4 测(守恒/纯升柱落变化区间/CSV表头/空安全)。
+- [x] **两期算量分标高带**(`TerrainAnalysis.TwoEpochVolumeByElevation` + CSV)：原 PointCloudLib `VolumeReportGenerator` 出"按标高带/按连通块/按区域"多分区表; Kylin `TwoEpochVolume` 仅返 `(cut,fill,net)` 整体三元。补分标高带——各格变化柱 `[min(g1,g2),max(g1,g2)]` 按 bandHeight 切到各高程带逐带累计挖/填, 挖/填判据与整体一致。**守恒: 各带挖和==整体挖(强不变量单测)**。4 测(守恒/纯升柱落变化区间/CSV表头/空安全)。
+- [x] **两期算量按连通块**(`TerrainAnalysis.TwoEpochVolumeByPart` + CSV)：网格上挖/填各自 4-邻域同号连通(BFS 泛洪)标记, 逐块累计体积按降序, 识别分离的挖/填区(主坑 vs 侧挖)。**守恒: 各类块体积和==整体对应量**。3 测(均匀升=单填块=整体量/左右升降按类守恒+降序/CSV+空安全)。二分区并入 两期算量 命令(汇总+按标高带+按连通块 三段并落一 CSV, 单文件单弹窗)。「按区域」需外部作业区定义, 记录。
 - 其余报表生成器核对结论: `BlockReportGenerator`(每属性统计)已补(§八十一); `VolumeByLevelReport`(体素分标高)数据已由 `VoxelBands.ByElevation` 覆盖(占比/合计为派生格式); MeshEditLib 各 Report(Boolean/CutMesh/Repair/SplitBySurface)= 内核 mesh 布尔/切分绑定(记录受阻); MineAssLib(CutMeshByRamp/InsertRamp/ExpandBench)= 境界 ramp 内核(记录); TaskReportWindow = TaskLib 引擎(记录)。
 
-**又两条新系统透镜(点云原命令 diff · 报表生成器 diff)**: 点云域 12+ 算子全覆盖(含补洞/坐标变换通用移动旋转), 报表域仅两期分标高一处真缺口(已补), 余为已记录内核/引擎边界。**本会话累计补 28 真功能 + 1 并发修复, 887 测。**
+**又两条新系统透镜(点云原命令 diff · 报表生成器 diff)**: 点云域 12+ 算子全覆盖(含补洞/坐标变换通用移动旋转), 报表域两期算量分标高带+按连通块两处真缺口(已补, 按区域需外部定义记录), 余为已记录内核/引擎边界。**本会话累计补 29 真功能 + 1 并发修复, 890 测。**
