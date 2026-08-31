@@ -897,7 +897,7 @@ public partial class MainWindow : Window
             if (cmd == "交叉圈选") { PolygonSelect(true); return; }
             if (cmd == "坐标转换") { await CoordTransformAsync(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
-            if (cmd == "工具") { new NodeEditorWindow().Show(); StatusMsg.Text = "打开节点编辑器"; return; }
+            if (cmd == "工具") { OpenNodeEditor(); return; }
             if (cmd == "2D") { Viewport.SetViewMode(true); StatusMsg.Text = "视图: 2D 平面（正交俯视）"; return; }
             if (cmd == "3D") { Viewport.SetViewMode(false); StatusMsg.Text = "视图: 3D 轨道"; return; }
             if (cmd == "俯视" || cmd == "顶视") { Viewport.SetView("top"); StatusMsg.Text = "视图: 俯视"; return; }
@@ -1196,6 +1196,21 @@ public partial class MainWindow : Window
         if (!er.Success) { StatusMsg.Text = $"导入失败：{er.Error}"; return; }
         string warn = er.Warnings.Count > 0 ? $" · {string.Join("；", er.Warnings)}" : "";
         ApplyEntityImport(er, Path.GetFileName(path), warn);
+    }
+
+    // 打开节点编辑器：求值"烘焙"节点产出的几何，加入主绘图场景（可选中/编辑/删除）
+    private void OpenNodeEditor()
+    {
+        var win = new NodeEditorWindow(geoms =>
+        {
+            if (geoms.Count == 0) return;
+            BeginChange();
+            foreach (var g in geoms) { AssignLayer(g); _scene.Add(g); }
+            RefreshScene();
+            StatusMsg.Text = $"节点编辑器：烘焙 {geoms.Count} 个几何入场景（当前图层「{_layers.Current.Name}」）";
+        });
+        win.Show();
+        StatusMsg.Text = "打开节点编辑器（参数→几何→烘焙；点「求值到场景」入图）";
     }
 
     // WeCAD .KDF 地质地形图 导入为可编辑实体（忠实移植 KdfReader 二进制解析）
@@ -6622,8 +6637,7 @@ public partial class MainWindow : Window
                 break;
             case "NODEEDITOR":
             case "节点编辑器":
-                new NodeEditorWindow().Show();
-                StatusMsg.Text = "打开节点编辑器";
+                OpenNodeEditor();
                 break;
             case "ZE":
             case "ZOOM":

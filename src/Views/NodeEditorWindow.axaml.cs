@@ -5,6 +5,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using PitMine3D.Kylin.Cad.Draw;
 using PitMine3D.Kylin.Nodes;
 
 namespace PitMine3D.Kylin.Views;
@@ -23,19 +24,88 @@ public partial class NodeEditorWindow : Window
     private Node? _dragNode;
     private Point _dragOffset;
     private (int node, int port)? _pendingOut;
+    private readonly Action<System.Collections.Generic.List<SceneEntity>>? _onBake;
 
-    public NodeEditorWindow()
+    public NodeEditorWindow() : this(null) { }
+
+    /// <summary>onBake：点"求值到场景"时，把所有 烘焙 节点产出的几何交给宿主(加入主绘图场景)。</summary>
+    public NodeEditorWindow(Action<System.Collections.Generic.List<SceneEntity>>? onBake)
     {
         InitializeComponent();
+        _onBake = onBake;
 
         Canvas.PointerMoved += OnCanvasMoved;
         Canvas.PointerReleased += OnCanvasReleased;
 
-        // 预置演示：数字 → 圆
-        var num = _graph.AddNode(NodeKind.Number, 60, 90);
-        var circle = _graph.AddNode(NodeKind.Circle, 340, 120);
-        _graph.Connect(num.Id, 0, circle.Id, 0);
+        // 预置演示：数字(50) → 圆半径 → 烘焙
+        var num = _graph.AddNode(NodeKind.Number, 60, 90); num.Value = 50.0;
+        var circle = _graph.AddNode(NodeKind.Circle, 300, 90);
+        var bake = _graph.AddNode(NodeKind.Bake, 540, 110);
+        _graph.Connect(num.Id, 0, circle.Id, 1);       // 数字 → 半径
+        _graph.Connect(circle.Id, 0, bake.Id, 0);      // 圆 → 烘焙
         Rebuild();
+    }
+
+    // 求值所有 烘焙 节点 → 几何交宿主入场景
+    private void OnBakeToScene(object? sender, RoutedEventArgs e)
+    {
+        var geoms = _graph.EvaluateBakes();
+        if (geoms.Count == 0) { Hint.Text = "无产出：请添加 烘焙 节点并把几何连到其输入口"; return; }
+        if (_onBake == null) { Hint.Text = $"求值出 {geoms.Count} 个几何（独立打开时无宿主场景可接收）"; return; }
+        _onBake(geoms);
+        Hint.Text = $"已烘焙 {geoms.Count} 个几何到主场景";
+    }
+
+    // 参数节点值编辑（双击）：Number/String/Bool/Point → 弹出 TextBox 改值
+    private void EditParamValue(Node n)
+    {
+        if (n.Kind is not (NodeKind.Number or NodeKind.String or NodeKind.Bool or NodeKind.Point)) return;
+        var tb = new TextBox
+        {
+            Width = NodeW, Text = ValueText(n),
+            Watermark = n.Kind switch { NodeKind.Point => "x,y[,z]", NodeKind.Bool => "true/false", _ => "值" }
+        };
+        Canvas.SetLeft(tb, n.X); Canvas.SetTop(tb, n.Y + TitleH);
+        void Commit()
+        {
+            ApplyValue(n, tb.Text ?? "");
+            if (Canvas.Children.Contains(tb)) Canvas.Children.Remove(tb);
+            Rebuild();
+        }
+        tb.KeyDown += (_, ke) => { if (ke.Key == Key.Enter) Commit(); else if (ke.Key == Key.Escape) { Canvas.Children.Remove(tb); } };
+        tb.LostFocus += (_, _) => Commit();
+        Canvas.Children.Add(tb);
+        tb.Focus();
+    }
+
+    private static string ValueText(Node n) => n.Kind switch
+    {
+        NodeKind.Number => n.Value is double d ? d.ToString(System.Globalization.CultureInfo.InvariantCulture) : "0",
+        NodeKind.String => n.Value as string ?? "",
+        NodeKind.Bool => n.Value is bool b && b ? "true" : "false",
+        NodeKind.Point => n.Value is Vec3 v ? $"{v.X},{v.Y},{v.Z}" : "0,0,0",
+        _ => ""
+    };
+
+    private static void ApplyValue(Node n, string text)
+    {
+        text = text.Trim();
+        switch (n.Kind)
+        {
+            case NodeKind.Number:
+                if (double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double d)) n.Value = d;
+                break;
+            case NodeKind.String: n.Value = text; break;
+            case NodeKind.Bool: n.Value = text.Equals("true", StringComparison.OrdinalIgnoreCase) || text == "1"; break;
+            case NodeKind.Point:
+                var parts = text.Split(',');
+                double px = 0, py = 0, pz = 0;
+                if (parts.Length >= 1) double.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out px);
+                if (parts.Length >= 2) double.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out py);
+                if (parts.Length >= 3) double.TryParse(parts[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out pz);
+                n.Value = new Vec3(px, py, pz);
+                break;
+        }
     }
 
     private void OnAddNode(object? sender, RoutedEventArgs e)
@@ -71,20 +141,23 @@ public partial class NodeEditorWindow : Window
         // 节点卡片 + 端口
         foreach (var n in _graph.Nodes)
         {
+            bool isParam = n.Kind is NodeKind.Number or NodeKind.String or NodeKind.Bool or NodeKind.Point;
+            string label = isParam ? $"{n.Title} = {ValueText(n)}" : n.Title;
             var card = new Border
             {
                 Width = NodeW,
                 Height = NodeHeight(n),
-                Background = Brushes.White,
+                Background = n.Kind == NodeKind.Bake ? new SolidColorBrush(Color.Parse("#E8F5E9")) : Brushes.White,
                 BorderBrush = Brushes.SlateGray,
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(6),
                 Tag = n,
-                Child = new TextBlock { Text = n.Title, Margin = new Thickness(8, 5, 0, 0), FontWeight = FontWeight.SemiBold }
+                Child = new TextBlock { Text = label, Margin = new Thickness(8, 5, 6, 0), FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis }
             };
             Canvas.SetLeft(card, n.X);
             Canvas.SetTop(card, n.Y);
             card.PointerPressed += OnNodePressed;
+            if (isParam) card.DoubleTapped += (_, _) => EditParamValue(n);
             Canvas.Children.Add(card);
 
             for (int i = 0; i < n.InputCount; i++) AddPort(InPort(n, i), new PortRef(n.Id, i, true));

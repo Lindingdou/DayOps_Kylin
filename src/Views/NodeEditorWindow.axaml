@@ -4,14 +4,24 @@
         Title="节点编辑器" Width="900" Height="600"
         Background="#FBFBFD">
     <Grid RowDefinitions="Auto,*">
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="8" Spacing="6">
-            <TextBlock Text="添加节点:" VerticalAlignment="Center" Foreground="#555" />
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="8" Spacing="4">
+            <TextBlock Text="参数:" VerticalAlignment="Center" Foreground="#555" />
             <Button Content="数字" Tag="Number" Click="OnAddNode" />
             <Button Content="点" Tag="Point" Click="OnAddNode" />
+            <Button Content="文本" Tag="String" Click="OnAddNode" />
+            <Button Content="布尔" Tag="Bool" Click="OnAddNode" />
+            <TextBlock Text="几何:" VerticalAlignment="Center" Foreground="#555" Margin="8,0,0,0" />
+            <Button Content="直线" Tag="Line" Click="OnAddNode" />
             <Button Content="圆" Tag="Circle" Click="OnAddNode" />
+            <Button Content="圆弧" Tag="Arc" Click="OnAddNode" />
             <Button Content="矩形" Tag="Rectangle" Click="OnAddNode" />
-            <TextBlock x:Name="Hint" Text="拖拽移动节点 · 点绿色输出口再点橙色输入口连线"
-                       VerticalAlignment="Center" Margin="16,0,0,0" Foreground="#8A929C" FontSize="12" />
+            <Button Content="多边形" Tag="Polygon" Click="OnAddNode" />
+            <Button Content="多段线" Tag="Polyline" Click="OnAddNode" />
+            <Button Content="烘焙" Tag="Bake" Click="OnAddNode" />
+            <Button Content="▶ 求值到场景" Click="OnBakeToScene" Background="#2E7D32" Foreground="White" Margin="8,0,0,0"
+                    ToolTip.Tip="求值所有 烘焙 节点，把产出的几何加入主绘图场景" />
+            <TextBlock x:Name="Hint" Text="拖拽移动 · 点绿输出口再点橙输入口连线 · 双击参数节点改值"
+                       VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#8A929C" FontSize="12" />
         </StackPanel>
         <Border Grid.Row="1" Background="#FFFFFF" BorderBrush="#E3E6EA" BorderThickness="1" Margin="8,0,8,8">
             <Canvas x:Name="Canvas" Background="Transparent" ClipToBounds="True" />

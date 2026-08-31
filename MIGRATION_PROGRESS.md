@@ -89,6 +89,7 @@
 - [x] **对象管理器面板**：左侧 TreeView，导入后按图元类型列出（`TypeCounts`，含计数单测）。app 左面板正常。commit `bf9a1a0`。
 - [x] **文件管理器面板**：`CadFileBrowser.ListDxf` 枚举文件夹 .dxf（+2 单测）；左面板拆「文件管理器 | 对象管理器」，双击文件导入。10 tests；app 双面板正常。commit `4cdc546`。
 - [x] **节点编辑器**：`NodeGraph` 模型（节点/连线校验，3 单测）+ Avalonia 画布窗口（添加/拖拽/点击连线）；「工具」按钮 / 命令 `节点编辑器` 打开。13 tests。commit `ee7da6f`。
+  - [x] **节点求值引擎 + 补全节点类型**(`本次`)：**对比原 NodeEditor 发现 Kylin 仅 4 类型且是死画布(无求值，产不出几何)**。补齐至**原 11 类型**(参数 Number/String/Bool/Point + 几何 Line/Circle/Arc/Rectangle/Polygon/Polyline + Bake)，并实现**忠实的 pull-based 求值**(原 NodeModel.Evaluate，原产 native 句柄→此产托管 SceneEntity=几何等价)：参数节点输出值，几何节点按输入(连线取上游/否则默认值)产实体，Bake 汇总。UI 补全部按钮 + 「▶求值到场景」(EvaluateBakes→主绘图场景，走 AssignLayer) + 参数节点双击改值 + 卡片显示值。演示图 数字(50)→圆半径→烘焙。+8 单测(参数求值/圆默认半径10/数字连半径拉取/点连圆心/各几何类型产实体/圆弧起终点几何/Bake端到端/环保护)。→ **节点编辑器从结构画布升级为可求值的可视化脚本(节点图→几何→入场景)**。703 tests。
 - [x] **图层管理器**：几何按图层分组（`LayerGeometry`）+ 左面板「图层」勾选框显隐（`SetLayerVisible`）。+1 单测（墙/柱 分组），14 tests。commit `4760dfe`。
 - [x] **坐标读数**：状态栏显示光标世界坐标（`Mat4.Invert` + 屏幕→世界反投影交 Z=0）。+2 单测，16 tests。commit `0d18dbb`。
 - [x] **视图命令**：`ZE`/`ZOOMEXTENTS` 范围缩放（复用 `FitBounds`）+ `GRID` 网格/轴开关。16 tests 无回归。commit `90161f0`。
