@@ -173,6 +173,7 @@ public class GeoDataQueriesTests
         Assert.True(d.Active > 0, "在役规则");
         for (int i = 1; i < d.Top.Count; i++)
             Assert.True(d.Top[i - 1].Score >= d.Top[i].Score, "按评分降序");
+        Assert.True(d.Top.Count > 0 && d.Top[0].Score > 0, "评分非全零(种子 efficiency_score 55~86, 排名有意义)");
     }
 
     [Fact]
