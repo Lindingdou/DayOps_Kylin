@@ -1000,6 +1000,7 @@ public partial class MainWindow : Window
             if (cmd == "交叉圈选") { PolygonSelect(true); return; }
             if (cmd == "坐标转换") { await CoordTransformAsync(); return; }
             if (cmd == "另存为") { await SaveAsAsync(); return; }
+            if (cmd == "导出选中实体" || cmd == "导出选中" || cmd == "导出选择") { await ExportSelectedAsync(); return; }
             if (cmd == "工具") { OpenNodeEditor(); return; }
             if (cmd == "2D") { Viewport.SetViewMode(true); StatusMsg.Text = "视图: 2D 平面（正交俯视）"; return; }
             if (cmd == "3D") { Viewport.SetViewMode(false); StatusMsg.Text = "视图: 3D 轨道"; return; }
@@ -1161,6 +1162,37 @@ public partial class MainWindow : Window
     }
 
     // 另存为：场景存 .pmx / 导出 .dxf / .dwg（按所选扩展名）
+    // 导出选中实体：仅把选中的实体导出为 .dxf/.dwg/.kdf。
+    // 原版菜单有"导出选中实体"项但引擎未实装(注释"待引擎能力到位后接入", 仅整模型)；
+    // Kylin 托管架构可完成此既有命令（[[unlock-blocked-insights]] 受阻前试托管重算）。不改当前文档。
+    private async Task ExportSelectedAsync()
+    {
+        if (_selected.Count == 0) { StatusMsg.Text = "导出选中：请先选中实体"; return; }
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "导出选中实体",
+            DefaultExtension = "dxf",
+            SuggestedFileName = "selection.dxf",
+            FileTypeChoices = new[]
+            {
+                new FilePickerFileType("DXF 图纸") { Patterns = new[] { "*.dxf" } },
+                new FilePickerFileType("DWG 图纸") { Patterns = new[] { "*.dwg" } },
+                new FilePickerFileType("WeCAD 地质地形图 (KDF)") { Patterns = new[] { "*.kdf" } }
+            }
+        });
+        if (file == null) return;
+        string path = file.Path.LocalPath;
+        var sub = new Scene();
+        foreach (var e in _selected) sub.Add(e);   // 仅选中实体入临时场景（共享引用，只读导出）
+        try
+        {
+            string ext = Path.GetExtension(path).ToLowerInvariant();
+            int n = ext == ".kdf" ? KdfExportService.Export(sub, path, _layers) : SceneExportService.Export(sub, path, _layers);
+            StatusMsg.Text = $"导出选中：{n} 个实体 → {Path.GetFileName(path)}（不改当前文档）";
+        }
+        catch (System.Exception ex) { StatusMsg.Text = $"导出选中失败：{ex.Message}"; }
+    }
+
     private async Task SaveAsAsync()
     {
         if (_scene.Count == 0) { StatusMsg.Text = "场景为空，无可另存"; return; }

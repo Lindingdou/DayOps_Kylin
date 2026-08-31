@@ -629,6 +629,21 @@ public class DxfImportTests
     }
 
     [Fact]
+    public void Export_selection_subset_yields_only_those_entities()
+    {
+        // "导出选中实体" 核心机制: 仅选中实体入临时场景 → 导出只含该子集
+        var keep = new LineEntity { X0 = 0, Y0 = 0, X1 = 5, Y1 = 0 };
+        var sub = new Scene();
+        sub.Add(keep);                                       // 选中的 1 条线（不含场景其余实体）
+        var doc = SceneExportService.BuildDocument(sub);
+        var res = DxfImportService.MapDocument(doc);
+        Assert.Single(System.Linq.Enumerable.OfType<LineEntity>(res.Entities));
+        Assert.Empty(System.Linq.Enumerable.OfType<CircleEntity>(res.Entities));   // 未选中的圆不导出
+        var line = System.Linq.Enumerable.First(System.Linq.Enumerable.OfType<LineEntity>(res.Entities));
+        Assert.Equal(5, line.X1, 6);
+    }
+
+    [Fact]
     public void Layer_state_survives_export_import_roundtrip()
     {
         var layers = new LayerTable();
