@@ -571,4 +571,23 @@ public class DxfImportTests
         Assert.Contains(pl.Points, p => System.Math.Abs(p.x - 10) < 1e-6 && System.Math.Abs(p.y - 10) < 1e-6);
         try { File.Delete(path); } catch { /* 清理失败无碍 */ }
     }
+
+    [Fact]
+    public void Text_alignment_width_oblique_survive_export_import_roundtrip()
+    {
+        // Kylin 文字(对齐/字宽/倾斜/旋转) → BuildDocument 导出 → MapDocument 导入 → 属性保留
+        var scene = new Scene();
+        scene.Add(new PitMine3D.Kylin.Cad.Draw.TextEntity
+        { X = 5, Y = 3, Height = 2, Text = "AB", HAlign = 1, VAlign = 2, WidthFactor = 1.5, ObliqueAngle = 0.3, Rotation = 0.2 });
+        var doc = SceneExportService.BuildDocument(scene);
+        var res = DxfImportService.MapDocument(doc);
+        var txt = System.Linq.Enumerable.FirstOrDefault(
+            System.Linq.Enumerable.OfType<PitMine3D.Kylin.Cad.Draw.TextEntity>(res.Entities));
+        Assert.NotNull(txt);
+        Assert.Equal(1, txt!.HAlign);
+        Assert.Equal(2, txt.VAlign);
+        Assert.Equal(1.5, txt.WidthFactor, 2);
+        Assert.Equal(0.3, txt.ObliqueAngle, 2);   // 弧度→度→弧度往返
+        Assert.Equal(0.2, txt.Rotation, 2);
+    }
 }

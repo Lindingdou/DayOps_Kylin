@@ -1325,3 +1325,12 @@ pc_quality「点数/密度/包围盒/高程分布/**强度分类**」的强度/�
 - **文字保真 100% 完整**: 旋转[本有] + 对齐(hAlign/vAlign) + 多行(MText \P) + 字宽系数(WidthFactor) + 倾斜角(ObliqueAngle)。全 DXF 导入保真 + 绘制默认向后兼容。
 
 **本会话累计补 50 真功能 + 1 并发修复 + 1 潜伏字形 bug 修 + 1 latent 攻克 + GWN 硬化, 951 测。** CAD 属性保真透镜收敛: 文字五属性齐、线型闭环; 余线宽(变宽线渲染需改管线, 主打印价值)记录。
+
+## 一〇三、文字属性导出 —— 完整 round-trip 保真
+
+文字保真此前只在导入侧(§九十八/一〇一/一〇二)。导出侧(`SceneExportService`)只写 Rotation, 丢对齐/字宽/倾斜:
+- [x] **文字属性导出**(SceneExport DrawText case): 设 ACadSharp `te.WidthFactor`、`te.ObliqueAngle`(弧度→度)、`HorizontalAlignment`/`VerticalAlignment`(枚举, 非左/基线时置 `AlignmentPoint`)。ACadSharp 垂直对齐枚举名为 `TextVerticalAlignmentType`(反射查证, 与水平 `TextHorizontalAlignment` 不一致命名)。
+- [x] **完整 round-trip 验证**: Kylin 文字(对齐/字宽/倾斜/旋转)→ BuildDocument 导出 → MapDocument 导入 → 五属性全保留。1 round-trip 测。
+- 文字保真现**导入+导出双向完整**。
+
+**本会话累计补 51 真功能 + 1 并发修复 + 1 潜伏字形 bug 修 + 1 latent 攻克 + GWN 硬化, 952 测。**

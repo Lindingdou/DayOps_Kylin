@@ -82,8 +82,21 @@ public static class SceneExportService
                 yield return new Point { Location = new XYZ(p.X, p.Y, 0) };
                 break;
             case DrawText t:
-                yield return new ACadSharp.Entities.TextEntity { InsertPoint = new XYZ(t.X, t.Y, 0), Height = t.Height, Rotation = t.Rotation, Value = t.Text };
+            {
+                var te = new ACadSharp.Entities.TextEntity
+                {
+                    InsertPoint = new XYZ(t.X, t.Y, 0), Height = t.Height, Rotation = t.Rotation, Value = t.Text,
+                    WidthFactor = t.WidthFactor > 0 ? t.WidthFactor : 1, ObliqueAngle = t.ObliqueAngle * 180.0 / System.Math.PI,
+                };
+                if (t.HAlign != 0 || t.VAlign != 0)   // 对齐: 设枚举 + AlignmentPoint(非左/基线时 DXF 用对齐点)
+                {
+                    te.HorizontalAlignment = t.HAlign switch { 1 => ACadSharp.Entities.TextHorizontalAlignment.Center, 2 => ACadSharp.Entities.TextHorizontalAlignment.Right, _ => ACadSharp.Entities.TextHorizontalAlignment.Left };
+                    te.VerticalAlignment = t.VAlign switch { 1 => ACadSharp.Entities.TextVerticalAlignmentType.Middle, 2 => ACadSharp.Entities.TextVerticalAlignmentType.Top, _ => ACadSharp.Entities.TextVerticalAlignmentType.Baseline };
+                    te.AlignmentPoint = new XYZ(t.X, t.Y, 0);
+                }
+                yield return te;
                 break;
+            }
             case RectEntity r:
                 yield return Poly(new[] { (r.X0, r.Y0), (r.X1, r.Y0), (r.X1, r.Y1), (r.X0, r.Y1) }, true);
                 break;
