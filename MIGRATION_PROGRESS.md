@@ -504,3 +504,12 @@
 **⚠ 前文"受阻清单"更正**：§十二/§十四/§十五等处列的「AI 助手(聊天引擎)」**移出受阻**——它不需要聊天引擎, 已按菜单引擎忠实实现。
 
 **本会话累计 10 项功能(502→535 测试)**：块体模型组·运输指标报表·对象捕捉六模式·图案填充·平移命令·特性面板可编辑·右键选择集·DXF Leader/MLine·DXF MultiLeader·**智能助手面板**。
+
+## 二十二、TaskLib 分类更正（托管非内核，但大域+持久化+对话框）
+
+受 AI 面板误判纠正启发, 复查最大受阻块 **TaskLib 排程(27 死按钮)**：
+- **更正**：TaskLib **是托管 C#**(`Modules/TaskLib/Domain` + `Engine` + `Simulation`), 非 C++ 内核。`TaskExploder.Explode`/`TaskRescheduler`/`ShortTermLink`/`FlowAssigner`/`DispatchEngine` 皆纯托管算法(仅 System + TaskLib.Domain, 无 EngineInterop)。我早前记"TaskLib 内核受阻"不准确。
+- **但仍非单 tick 可做**：全域 **~20,170 行**深度互联(ProductionPlanContext 1428 / FlowAssigner 1032 / DispatchEngine 987 / ShortTermLink 952 / TaskExploder 971 / ExploderConfig 561 / Domain 各 400-800…), 且 `TaskPersistence`(DM8 持久化)、`Features/*.xaml.cs`(对话框)受阻, `SampleTaskBoard`(427 行样本数据可作 CSV 源)。§七 最小 plan 之所以能一击是因求解器只读少数标量; TaskLib 的 ExploderConfig(561 行)+ 富结构域输入不适用最小 plan。
+- **结论**：TaskLib 忠实移植是**独立大工程**(多 tick/多会话级), 非本 loop 单步。仓促部分移植会因未移部分而失真, 违「原不可见/不完整者不臆测」。**记录为"托管可移·大域·待专项"**, 区别于真内核阻(mesh/点云/倾斜摄影)。已达成度评价/产量统计等 CSV 可做项早已落地。
+
+**受阻清单再校准**：真内核阻(C++ EngineInterop 无托管源)=mesh 布尔/修复·点云内核·倾斜摄影·地质模型更新·PitDesign 台阶/坑线; 托管可移但大域/受持久化=TaskLib 排程链; DM8 阻=§四/§八 持久化; 对话框阻=渲染配置/约束设置等; Skia 阻=实心填充; 引擎图案库=命名 hatch。
