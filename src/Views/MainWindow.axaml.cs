@@ -900,6 +900,7 @@ public partial class MainWindow : Window
             if (cmd == "运距指标" || cmd == "循环时间" || cmd == "运距统计") { await HaulRecordMetricsAsync(); return; }
             if (cmd == "OD运距矩阵" || cmd == "OD矩阵" || cmd == "运距矩阵") { await OdMatrixAsync(); return; }
             if (cmd == "新建图层") { var l = _layers.New(); PopulateDrawingLayers(); StatusMsg.Text = $"新建图层「{l.Name}」并置为当前"; return; }
+            if (cmd == "删除图层" || cmd == "删层" || cmd == "删除当前图层") { DeleteCurrentLayer(); return; }
             if (cmd == "图层特性管理器") { var l = _layers.CycleCurrent(); StatusMsg.Text = $"当前图层「{l.Name}」 显示{( l.Shown?"开":"关")}/{(l.Locked?"锁":"解锁")}（再点循环切换）"; return; }
             if (cmd == "全开" || cmd == "全部打开" || cmd == "图层全开") { _layers.AllOn(); PopulateDrawingLayers(); AfterLayerStateChange(); StatusMsg.Text = "已打开全部图层"; return; }
             if (cmd == "冻结") { FreezeCurrentLayer(true); return; }
@@ -5187,6 +5188,21 @@ public partial class MainWindow : Window
         PopulateDrawingLayers();
         StatusMsg.Text = $"图层「{_layers.Current.Name}」{(freeze ? "已冻结（隐藏且不可选）" : "已解冻")}";
     }
+
+    // 删除当前图层：默认层「0」不可删；该层实体移到「0」层不丢；当前切至「0」；可撤销（忠实原 DeleteLayer 语义）
+    private void DeleteCurrentLayer()
+    {
+        var target = _layers.Current;
+        if (target.Name == "0") { StatusMsg.Text = "默认图层「0」不可删除"; return; }
+        BeginChange();
+        int moved = _scene.ReassignLayer(target.Name, "0");
+        _layers.SetCurrent("0");
+        _layers.Remove(target.Name);
+        PopulateDrawingLayers();
+        AfterLayerStateChange();
+        RefreshScene();
+        StatusMsg.Text = $"已删除图层「{target.Name}」（{moved} 个实体移至图层 0，当前切至 0）";
+    }
     private void LockCurrentLayer(bool locked)
     {
         _layers.Current.Locked = locked;
@@ -5895,7 +5911,7 @@ public partial class MainWindow : Window
         // 对象捕捉
         "对象捕捉","交点捕捉","最近捕捉","垂足捕捉","捕捉全模式",
         // 图层/视图
-        "新建图层","图层特性管理器","冻结","锁定","全开",
+        "新建图层","删除图层","图层特性管理器","冻结","锁定","全开",
         "2D","3D","俯视","仰视","主视","后视","左视","右视","西南等轴测","东南等轴测","东北等轴测","西北等轴测","缩放","清空视图","清理标记",
         // 注释/测量/剪贴板/选择
         "线性标注","对齐标注","半径标注","连续标注",

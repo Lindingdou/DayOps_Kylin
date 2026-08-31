@@ -91,4 +91,38 @@ public class LayerTableTests
         Assert.Single(t.Layers);          // 只剩 "0"
         Assert.Equal("0", t.Current.Name);
     }
+
+    [Fact]
+    public void Remove_protects_default_layer_and_removes_others()
+    {
+        var t = new LayerTable();
+        t.New("A");
+        Assert.False(t.Remove("0"));       // 默认层不可删
+        Assert.True(t.Remove("A"));        // 普通层可删
+        Assert.Null(t.Get("A"));
+    }
+
+    [Fact]
+    public void Remove_current_layer_falls_back_to_default()
+    {
+        var t = new LayerTable();
+        var a = t.New("A");
+        t.SetCurrent("A");
+        Assert.Equal("A", t.Current.Name);
+        t.Remove("A");
+        Assert.Equal("0", t.Current.Name);  // 删当前层 → 回退到 "0"
+    }
+
+    [Fact]
+    public void Scene_reassign_layer_moves_entities()
+    {
+        var s = new Scene();
+        s.Add(new LineEntity { X0 = 0, Y0 = 0, X1 = 1, Y1 = 1, LayerName = "钻孔" });
+        s.Add(new LineEntity { X0 = 1, Y0 = 1, X1 = 2, Y1 = 2, LayerName = "钻孔" });
+        s.Add(new LineEntity { X0 = 2, Y0 = 2, X1 = 3, Y1 = 3, LayerName = "0" });
+        int moved = s.ReassignLayer("钻孔", "0");
+        Assert.Equal(2, moved);                                        // 2 个实体移出
+        Assert.All(s.Entities, e => Assert.Equal("0", e.LayerName));   // 全部在 "0"
+        Assert.Equal(0, s.ReassignLayer("钻孔", "0"));                 // 已无该层实体
+    }
 }

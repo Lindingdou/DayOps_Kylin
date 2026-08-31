@@ -818,6 +818,15 @@ public sealed class Scene
 
     public bool Remove(SceneEntity e) => Entities.Remove(e);
 
+    /// <summary>把 from 图层上的实体全部改指派到 to 图层（删图层时实体不丢，移到目标层）。返回移动数。</summary>
+    public int ReassignLayer(string from, string to)
+    {
+        int n = 0;
+        foreach (var e in Entities)
+            if (e.LayerName == from) { e.LayerName = to; n++; }
+        return n;
+    }
+
     public void Replace(SceneEntity oldE, SceneEntity newE)
     {
         int i = Entities.IndexOf(oldE);
