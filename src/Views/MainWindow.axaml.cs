@@ -847,6 +847,7 @@ public partial class MainWindow : Window
             if (cmd == "垂足捕捉" || cmd == "垂直捕捉") { ToggleSnapExtra(ObjectSnap.Mode.Perpendicular, "垂足"); return; }
             if (cmd == "捕捉全模式" || cmd == "全部对象捕捉") { _snapExtraMask = ObjectSnap.MaskOf(ObjectSnap.Mode.Intersection, ObjectSnap.Mode.Nearest, ObjectSnap.Mode.Perpendicular); SnapToggle.IsChecked = true; StatusMsg.Text = "对象捕捉: 交点+最近+垂足 全开(端点/中点/圆心/象限恒开)"; return; }
             if (cmd == "滑动多段线") { StartSlide(); return; }
+            if (cmd == "平移" || cmd == "PAN") { StatusMsg.Text = "平移：按住鼠标中键拖拽视图（滚轮朝光标缩放）"; return; }
             if (cmd == "填充十字" || cmd == "交叉填充" || cmd == "十字填充") { _hatchCross = !_hatchCross; StatusMsg.Text = $"图案填充: 十字交叉 {(_hatchCross ? "开" : "关")}（再执行 图案填充）"; return; }
             if (cmd == "图案填充" || cmd == "填充" || cmd == "HATCH" || cmd == "剖面线"
                 || cmd.StartsWith("图案填充 ") || cmd.StartsWith("填充 ") || cmd.StartsWith("HATCH ") || cmd.StartsWith("剖面线 "))
