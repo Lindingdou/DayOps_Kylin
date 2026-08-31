@@ -670,7 +670,8 @@ public partial class MainWindow : Window
             if (cmd == "点云抽稀" || cmd == "抽稀" || cmd == "点云精简") { await ThinPointsAsync(); return; }
             if (cmd == "地面点滤波" || cmd == "地面滤波") { await GroundFilterAsync(); return; }
             if (cmd == "C2C" || cmd == "点云比对") { await CloudCompareAsync(); return; }
-            if (cmd == "境界圈定" || cmd == "凸包" || cmd == "确定境界" || cmd == "采场圈定" || cmd == "采场/排土场圈定") { await BoundaryHullAsync(); return; }
+            if (cmd == "境界圈定" || cmd == "凸包" || cmd == "采场圈定" || cmd == "采场/排土场圈定") { await BoundaryHullAsync(); return; }
+            if (cmd == "确定境界" || cmd == "境界优化" || cmd == "最优坑深" || cmd == "经济境界") { PitDepthCmd(); return; }
             if (cmd == "采区划分" || cmd == "采区" || cmd == "储量均衡划分") { PanelSplitCmd(); return; }
             if (cmd == "规划计算" || cmd == "开采程序评价" || cmd == "程序评价") { ProgramEvaluateCmd(); return; }
             if (cmd == "派生计划方案" || cmd == "派生方案" || cmd == "多方案派生") { DerivePlansCmd(); return; }
@@ -2806,6 +2807,21 @@ public partial class MainWindow : Window
         if (panels.Count == 0) { StatusMsg.Text = "规划计算：未切出采区"; return; }
         var r = ProgramEvaluator.Evaluate(plan, panels);
         StatusMsg.Text = $"规划计算：{r.PanelCount} 采区 · 服务 {r.ServiceLifeYears:0.#}a · 峰值剥采比 {r.ProductionRatioPeak:0.##} · 储量均衡 {r.ReserveBalanceCoef:0.##} · 内排率 {r.InnerDumpPct:0}% · 基建剥离 {r.BasicStrippingYiM3:0.##}亿m³ · 平均运距 {r.AvgHaulKm:0.##}km · NPV {r.Npv:0}万元 · 校核{(r.Ok ? "通过" : "待校核")}";
+    }
+
+    // 确定境界·经济最优坑深：块体→逐 Z 层煤/岩剖面→净值最大定坑底 报表
+    private void PitDepthCmd()
+    {
+        if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "确定境界：请先导入/生成块体"; return; }
+        double gsum = 0; foreach (var b in _lastBlocks) gsum += b.Grade;
+        double cutoff = gsum / _lastBlocks.Count;
+        var blocks = _lastBlocks.Select(b => (b.X, b.Y, b.Z, b.Size, b.Grade)).ToList();
+        var prof = ResourceProfileLite.FromBlocks(blocks, cutoff, 1.35);
+        if (prof == null) { StatusMsg.Text = "确定境界：资源剖面构建失败"; return; }
+        // 经济口径: 单位煤净收益 (煤价-采煤成本)=300-80=220 元/t; 剥离成本 20 元/m³
+        var r = SectionSolver.SolveDepth(prof, revenuePerCoalT: 220, stripCostPerM3: 20);
+        double coalWan = r.CoalT / 1e4, wasteWan = r.WasteM3 / 1e4;
+        StatusMsg.Text = $"确定境界(净值最大)：最优坑深 {r.DepthM:0.#}m(底层 k={r.BottomK}/{prof.Nz}) · 圈入煤 {coalWan:0.#}万t · 岩 {wasteWan:0.#}万m³ · 境界剥采比 {r.ContourSR:0.##} · 净值 {r.NetValueYuan / 1e4:0.#}万元";
     }
 
     // 派生计划方案：块体→场→按不同采区数/推进方位派生多方案→逐一评价→按 NPV 排名 报表
