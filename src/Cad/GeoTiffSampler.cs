@@ -35,7 +35,8 @@ public sealed class GeoTiffSampler : IDisposable
     private int _rowsPerStrip, _compression = 1, _predictor = 1;
     private long[] _stripOffsets = Array.Empty<long>();
     private long[] _stripByteCounts = Array.Empty<long>();
-    private readonly Dictionary<int, byte[]> _stripCache = new();   // LZW: 解码后条带缓存
+    private byte[] _jpegTables = Array.Empty<byte>();               // JPEG(347): 共享 DQT/DHT 表
+    private readonly Dictionary<int, byte[]> _stripCache = new();   // 压缩: 解码后条带缓存
     private GeoTransform _geo;
     public double MinX, MaxX, MinY, MaxY;
     public bool Success; public string Error = "";
@@ -76,13 +77,14 @@ public sealed class GeoTiffSampler : IDisposable
                 case 279: stripCntTagVal = val; stripCntCnt = cnt; stripCntType = type; break;
                 case 284: planar = (int)val; break;
                 case 317: _predictor = (int)val; break;
+                case 347: _jpegTables = ReadRawBytes(val, cnt); break;   // JPEGTables
                 case 273: stripOffTagVal = val; stripOffCnt = cnt; stripOffType = type; break;
                 case 33550: pixScale = ReadDoubles(val, cnt); break;
                 case 33922: tiePt = ReadDoubles(val, cnt); break;
             }
         }
-        if (compression != 1 && compression != 5 && compression != 8 && compression != 32946 && compression != 32773)
-        { Error = $"暂不支持压缩(Compression={compression}); 支持 无压缩/LZW/Deflate/PackBits"; return; }
+        if (compression != 1 && compression != 5 && compression != 8 && compression != 32946 && compression != 32773 && compression != 7)
+        { Error = $"暂不支持压缩(Compression={compression}); 支持 无压缩/LZW/Deflate/PackBits/JPEG"; return; }
         if (planar != 1) { Error = "暂不支持 planar 排列"; return; }
         if (Width <= 0 || Height <= 0) { Error = "无效尺寸"; return; }
         if (Samples <= 0) Samples = 3;
@@ -170,11 +172,36 @@ public sealed class GeoTiffSampler : IDisposable
             5 => TiffLzw.Decode(comp, expected),
             8 or 32946 => TiffLzw.InflateZlib(comp, expected),
             32773 => TiffLzw.PackBitsDecode(comp, expected),
+            7 => DecodeJpeg(comp),
             _ => Array.Empty<byte>(),
         };
-        if (_predictor == 2) TiffLzw.UndoHorizontalPredictor(decoded, Width, rowsInStrip, Samples);
+        if (_compression != 7 && _predictor == 2) TiffLzw.UndoHorizontalPredictor(decoded, Width, rowsInStrip, Samples);
         _stripCache[strip] = decoded;
         return decoded;
+    }
+
+    // JPEG(Compression=7): 拼 JPEGTables(去尾 EOI) + 条带(去头 SOI) 成完整 JPEG → 解码 RGB
+    private byte[] DecodeJpeg(byte[] strip)
+    {
+        byte[] full;
+        if (_jpegTables.Length > 4 && strip.Length > 2)
+        {
+            int tlen = _jpegTables.Length - 2;                 // 去 JPEGTables 尾 EOI(FFD9)
+            full = new byte[tlen + strip.Length - 2];
+            Array.Copy(_jpegTables, 0, full, 0, tlen);
+            Array.Copy(strip, 2, full, tlen, strip.Length - 2);   // 去条带头 SOI(FFD8)
+        }
+        else full = strip;
+        var res = JpegDecoder.Decode(full);
+        return res.Success ? res.Rgb : Array.Empty<byte>();
+    }
+
+    private byte[] ReadRawBytes(uint offset, long count)
+    {
+        if (count <= 0 || offset + count > _s.Length) return Array.Empty<byte>();
+        long save = _s.Position; _s.Seek(offset, SeekOrigin.Begin);
+        var b = _br.ReadBytes((int)count); _s.Seek(save, SeekOrigin.Begin);
+        return b;
     }
 
     public void Dispose() { _br?.Dispose(); _s?.Dispose(); }
