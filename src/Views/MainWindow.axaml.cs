@@ -775,8 +775,8 @@ public partial class MainWindow : Window
             if (cmd == "圆弧SER" || cmd == "圆弧(起点端点半径)") { StartArcSer(); return; }
             if (cmd == "打断") { StartBreak(); return; }
             if (cmd == "夹点开关" || cmd == "夹点") { ToggleGizmo(); return; }
-            if (cmd == "正交" || cmd == "正交开关") { _orthoOn = !_orthoOn; StatusMsg.Text = _orthoOn ? "正交: 开" : "正交: 关"; return; }
-            if (cmd == "栅格捕捉" || cmd == "捕捉开关") { _snapOn = !_snapOn; StatusMsg.Text = _snapOn ? $"栅格捕捉: 开（步长 {_snapStep:0.##}）" : "栅格捕捉: 关"; return; }
+            if (cmd == "正交" || cmd == "正交开关") { _orthoOn = !_orthoOn; SyncDraftToggles(); StatusMsg.Text = _orthoOn ? "正交: 开" : "正交: 关"; return; }
+            if (cmd == "栅格捕捉" || cmd == "捕捉开关") { _snapOn = !_snapOn; SyncDraftToggles(); StatusMsg.Text = _snapOn ? $"栅格捕捉: 开（步长 {_snapStep:0.##}）" : "栅格捕捉: 关"; return; }
             if (cmd == "滑动多段线") { StartSlide(); return; }
             if (ActivateDrawTool(cmd)) return;
             StatusMsg.Text = $"命令: {cmd}";
@@ -4282,6 +4282,32 @@ public partial class MainWindow : Window
     private string? _lastCommand;   // 上次成功派发的命令（空命令行 + Enter 重复用）
     private bool _orthoOn;          // 正交约束（ORTHO）
     private bool _snapOn;           // 栅格捕捉（SNAP）
+    private bool _syncToggle;       // 防状态栏开关↔命令/键 同步回环
+
+    // 状态栏「正交」开关 → _orthoOn
+    private void OnOrthoToggle(object? sender, RoutedEventArgs e)
+    {
+        if (_syncToggle) return;
+        _orthoOn = OrthoToggle.IsChecked == true;
+        StatusMsg.Text = _orthoOn ? "正交: 开（取点锁定水平/垂直）" : "正交: 关";
+    }
+
+    // 状态栏「栅格捕捉」开关 → _snapOn
+    private void OnGridSnapToggle(object? sender, RoutedEventArgs e)
+    {
+        if (_syncToggle) return;
+        _snapOn = GridSnapToggle.IsChecked == true;
+        StatusMsg.Text = _snapOn ? $"栅格捕捉: 开（步长 {_snapStep:0.##}）" : "栅格捕捉: 关";
+    }
+
+    // 命令/键切换正交/栅格后：同步状态栏开关按钮视觉态
+    private void SyncDraftToggles()
+    {
+        _syncToggle = true;
+        if (OrthoToggle != null) OrthoToggle.IsChecked = _orthoOn;
+        if (GridSnapToggle != null) GridSnapToggle.IsChecked = _snapOn;
+        _syncToggle = false;
+    }
     private double _snapStep = 1.0; // 栅格步长（世界单位）
 
     /// <summary>按开关对点应用栅格捕捉 / 正交约束（默认关闭 → 原样返回）。osnap 命中的点不应调用此(osnap 优先)。</summary>
@@ -4758,10 +4784,12 @@ public partial class MainWindow : Window
                 break;
             case "ORTHO":
                 _orthoOn = !_orthoOn;
+                SyncDraftToggles();
                 StatusMsg.Text = _orthoOn ? "正交: 开（取点锁定水平/垂直）" : "正交: 关";
                 break;
             case "SNAP":
                 _snapOn = !_snapOn;
+                SyncDraftToggles();
                 StatusMsg.Text = _snapOn ? $"栅格捕捉: 开（步长 {_snapStep:0.##}）" : "栅格捕捉: 关";
                 break;
             case "BENCHLINES":

@@ -1198,13 +1198,14 @@
 
         <!-- ============================ 状态栏 ============================ -->
         <Border Grid.Row="3" Background="#0A5AD4" Height="26">
-            <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto">
+            <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto">
                 <TextBlock Grid.Column="0" x:Name="CoordText" Text="X 0.000  Y 0.000  Z 0.000"
                            Foreground="White" VerticalAlignment="Center" Margin="10,0" FontSize="12" FontFamily="Consolas,monospace" />
                 <ToggleButton Grid.Column="1" x:Name="SnapToggle" Content="对象捕捉" Foreground="White" Background="Transparent" BorderThickness="0" Padding="8,0" FontSize="12" />
-                <ToggleButton Grid.Column="2" Content="正交" Foreground="White" Background="Transparent" BorderThickness="0" Padding="8,0" FontSize="12" />
-                <TextBlock Grid.Column="3" x:Name="StatusMsg" Text="就绪" Foreground="#DCE8FF" VerticalAlignment="Center" Margin="12,0" FontSize="12" />
-                <TextBlock Grid.Column="4" Text="Avalonia 11 · OpenGL · 麒麟 SP10 就绪"
+                <ToggleButton Grid.Column="2" x:Name="OrthoToggle" Content="正交" IsCheckedChanged="OnOrthoToggle" Foreground="White" Background="Transparent" BorderThickness="0" Padding="8,0" FontSize="12" />
+                <ToggleButton Grid.Column="3" x:Name="GridSnapToggle" Content="栅格捕捉" IsCheckedChanged="OnGridSnapToggle" Foreground="White" Background="Transparent" BorderThickness="0" Padding="8,0" FontSize="12" />
+                <TextBlock Grid.Column="4" x:Name="StatusMsg" Text="就绪" Foreground="#DCE8FF" VerticalAlignment="Center" Margin="12,0" FontSize="12" />
+                <TextBlock Grid.Column="5" Text="Avalonia 11 · OpenGL · 麒麟 SP10 就绪"
                            Foreground="#DCE8FF" VerticalAlignment="Center" Margin="10,0" FontSize="12" />
             </Grid>
         </Border>
