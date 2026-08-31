@@ -724,6 +724,7 @@ public partial class MainWindow : Window
             if (cmd == "裁剪三角网" || cmd == "三角网裁剪" || cmd == "边界三角网") { await CreateClippedTinAsync(); return; }
             if (cmd == "示例三角网" || cmd == "三角网示例") { GenerateSampleTrimesh(); return; }
             if (cmd == "坡度着色" || cmd == "三角网着色" || cmd == "坡度") { await ShadeTinAsync("坡度着色", "绿=平 → 红=陡", TerrainAnalysis.BuildSlopeMap); return; }
+            if (cmd == "坡顶底线" || cmd == "坡顶坡底线" || cmd == "断棱线提取" || cmd == "坡顶底线提取" || cmd.StartsWith("坡顶底线 ")) { await CrestToeAsync(cmd); return; }
             if (cmd == "坡向着色" || cmd == "坡向") { await ShadeTinAsync("坡向着色", "按朝向 HSV 配色", TerrainAnalysis.BuildAspectMap); return; }
             if (cmd == "高程着色" || cmd == "分色显示" || cmd == "高程分带") { await ShadeTinAsync("高程着色", "低绿→中黄→高棕", TerrainAnalysis.BuildElevationMap); return; }
             if (cmd == "体积计算" || cmd == "算量" || cmd == "土方量") { await VolumeAsync(); return; }
@@ -4564,6 +4565,36 @@ public partial class MainWindow : Window
     }
 
     // 三角网着色通用流程：散点 CSV → 三角网 → builder 生成着色边入场景
+    // 坡顶底线提取：高程点 CSV → TIN → 坡度断棱线检测 → 坡顶线(橙)/坡底线(青)入场景
+    private async Task CrestToeAsync(string cmd)
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "坡顶底线：选高程点 CSV (x,y,z)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("高程点 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success) { StatusMsg.Text = $"坡顶底线：点导入失败 {r.Error}"; return; }
+        double thr = 30;   // 可选 "坡顶底线 <坡度阈值°>"
+        var tk = cmd.Split(new[] { ' ', '°' }, System.StringSplitOptions.RemoveEmptyEntries);
+        if (tk.Length >= 2 && double.TryParse(tk[1], out double th)) thr = th;
+        var pts2d = new List<(double x, double y)>();
+        foreach (var p in r.Points) pts2d.Add((p.x, p.y));
+        var tris = Delaunay.Triangulate(pts2d);
+        if (tris.Count == 0) { StatusMsg.Text = "坡顶底线：点太少或共线"; return; }
+        var (crest, toe) = CrestToe.Extract(r.Points, tris, thr);
+        BeginChange();
+        foreach (var e in crest)
+        { var l = new LineEntity { X0 = e.X0, Y0 = e.Y0, X1 = e.X1, Y1 = e.Y1, Cr = 0.95f, Cg = 0.55f, Cb = 0.2f }; l.LayerName = "坡顶线"; _scene.Add(l); }
+        foreach (var e in toe)
+        { var l = new LineEntity { X0 = e.X0, Y0 = e.Y0, X1 = e.X1, Y1 = e.Y1, Cr = 0.2f, Cg = 0.7f, Cb = 0.9f }; l.LayerName = "坡底线"; _scene.Add(l); }
+        RefreshScene();
+        Viewport.FitBounds(r.Bounds);
+        StatusMsg.Text = $"坡顶底线(坡度阈 {thr:0.#}°)：坡顶 {crest.Count} 段(橙) · 坡底 {toe.Count} 段(青) · {tris.Count} 三角";
+    }
+
     private async Task ShadeTinAsync(string title, string doneHint,
         System.Func<System.Collections.Generic.IReadOnlyList<(double x, double y, double z)>, List<(int a, int b, int c)>, List<SceneEntity>> builder)
     {
