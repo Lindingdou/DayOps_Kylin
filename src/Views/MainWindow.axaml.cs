@@ -971,7 +971,7 @@ public partial class MainWindow : Window
             if (cmd == "创建选择集" || cmd == "选择集") { CreateSelSet(); return; }
             if (cmd == "调用选择集") { RecallSelSet(); return; }
             if (cmd == "刷新") { Regen(); return; }
-            if (cmd == "特性" || cmd == "属性") { ShowProperties(); return; }
+            if (cmd == "特性" || cmd == "属性" || cmd.StartsWith("特性 ") || cmd.StartsWith("属性 ")) { PropertiesCmd(cmd); return; }
             if (cmd == "清理标记" || cmd == "清除标记") { ClrMark(); return; }
             if (cmd == "修剪" || cmd == "延伸") { StartTrim(); return; }
             if (cmd == "圆TTR" || cmd == "圆(切切半径)") { StartTTR(); return; }
@@ -4826,7 +4826,33 @@ public partial class MainWindow : Window
         var rows = Cad.Draw.EntityProperties.Describe(_selected[0]);
         var parts = new List<string>();
         foreach (var (_, label, value) in rows) parts.Add($"{label}={value}");
-        StatusMsg.Text = "特性  " + string.Join(" · ", parts);
+        string editable = string.Join("/", Cad.Draw.EntityProperties.EditableLabels(_selected[0]));
+        StatusMsg.Text = "特性  " + string.Join(" · ", parts) + $"  （编辑：特性 <标签> <值>，可改 {editable}）";
+    }
+
+    // 特性编辑：无参→显示；「特性 <标签> <值>」→ 改选中实体属性(图层/颜色/几何)。忠实 EntityProperties.WithEdited(已测)。
+    private void PropertiesCmd(string cmd)
+    {
+        int sp0 = cmd.IndexOf(' ');
+        string rest = sp0 < 0 ? "" : cmd.Substring(sp0 + 1).Trim();
+        if (rest.Length == 0) { ShowProperties(); return; }
+        if (_selected.Count != 1) { StatusMsg.Text = "特性编辑：请单选一个实体（特性 <标签> <值>）"; return; }
+        int sp1 = rest.IndexOf(' ');
+        if (sp1 < 0) { StatusMsg.Text = "特性编辑：用法 特性 <标签> <值>，如「特性 颜色 #FF0000」「特性 半径 8.5」「特性 图层 煤层」"; return; }
+        string label = rest.Substring(0, sp1).Trim(), value = rest.Substring(sp1 + 1).Trim();
+        var edited = Cad.Draw.EntityProperties.WithEdited(_selected[0], label, value);
+        if (edited == null)
+        {
+            string editable = string.Join("/", Cad.Draw.EntityProperties.EditableLabels(_selected[0]));
+            StatusMsg.Text = $"特性编辑：无法设「{label}={value}」（该实体可改：{editable}）";
+            return;
+        }
+        BeginChange();
+        _scene.Replace(_selected[0], edited);
+        _selected.Clear(); _selected.Add(edited);
+        HighlightSelection();
+        RefreshScene();
+        StatusMsg.Text = $"特性已改：{label} = {value}";
     }
 
     private void Regen()   // 刷新 / REGEN：重建显示几何
@@ -6511,7 +6537,7 @@ public partial class MainWindow : Window
         "线性标注","对齐标注","半径标注","连续标注","标注样式",
         "距离","面积","角度",
         "剪切","复制到剪贴板","粘贴","基点粘贴","原坐标粘贴",
-        "快速选择","全部选择","取消选择","创建选择集",
+        "快速选择","全部选择","取消选择","创建选择集","特性",
         // 线编辑
         "加密多段线","简化","抽稀等值线","两线交点","闭合多段线","删除重复点","删除重复线","连接多段线","组合工作线",
         // 网格/建模
