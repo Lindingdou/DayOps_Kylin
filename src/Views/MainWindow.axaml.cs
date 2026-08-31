@@ -778,6 +778,14 @@ public partial class MainWindow : Window
             if (cmd == "中心线管理" || cmd == "边状态" || cmd == "路网拓扑" || cmd == "中线管理") { RoadNetworkReportCmd(); return; }
             if (cmd == "排土场容量校核" || cmd == "容量校核" || cmd == "排土容量") { await DumpCapacityAsync(); return; }
             if (cmd == "生产量核算" || cmd == "任务量汇总" || cmd == "分账合计" || cmd == "生产任务量") { await ProductionQuantityAsync(); return; }
+            if (cmd == "物料换算" || cmd == "煤岩换算" || cmd.StartsWith("物料换算 ") || cmd.StartsWith("煤岩换算 "))
+            {
+                var tok = cmd.Split(new[] { ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
+                string mixText = tok.Length >= 2 ? tok[1] : "煤7:岩3";
+                double vol = 1000; if (tok.Length >= 3) double.TryParse(tok[2], out vol);
+                MaterialConvertCmd(mixText, vol);
+                return;
+            }
             if (cmd == "固化成体" || cmd == "固化实体") { await SolidifyAsync(); return; }
             if (cmd == "体素格网体积" || cmd == "体素体积" || cmd == "体素算量") { await VoxelVolumeAsync(); return; }
             if (cmd == "实体转块体" || cmd == "网格转块体" || cmd == "体转块") { await EntityToBlocksAsync(); return; }
@@ -1331,6 +1339,16 @@ public partial class MainWindow : Window
         RefreshScene();
         if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
         StatusMsg.Text = $"网格边界：{loops.Count} 环 · {totPts} 点(投影 XY 作闭合折线入场景)";
+    }
+
+    // 物料换算（TaskLib 物料切片）：混采文本 + 实方体积 → 吨量/松散方/占容方/煤占比。用法 "物料换算 煤7:岩3 1000"。
+    private void MaterialConvertCmd(string mixText, double inSituM3)
+    {
+        var mix = Cad.Tasks.MaterialMix.Parse(mixText);
+        if (mix.IsEmpty) { StatusMsg.Text = "物料换算：未解析到物料（例 煤7:岩3 或 岩）"; return; }
+        double ton = mix.ToTonnage(inSituM3), loose = mix.ToLooseM3(inSituM3), dump = mix.ToDumpM3(inSituM3);
+        double oreM3 = inSituM3 * mix.OreFraction, wasteM3 = inSituM3 * (1 - mix.OreFraction);
+        StatusMsg.Text = $"物料换算：{mix.Caption} · 实方 {inSituM3:0.#}m³ → 吨 {ton:0.#}t · 松散 {loose:0.#}m³ · 占容 {dump:0.#}m³ · 采出(煤) {oreM3:0.#}m³/剥离(岩) {wasteM3:0.#}m³（煤占比 {mix.OreFraction * 100:0.#}%）";
     }
 
     // 生产量核算（TaskLib 量核算切片）：读任务记录 CSV(工序,方量,吨,车次,运距) → 按工序取账分账合计。
