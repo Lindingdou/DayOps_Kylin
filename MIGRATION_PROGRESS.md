@@ -1097,6 +1097,8 @@ diff 全部 `cmd == "X"` 处理器(593) vs CommandCatalog(126) → 477 缺失。
 
 - [x] **GeoTIFF Deflate + PackBits 解压**(`1754083`)：正射着色补齐**全部常见非 JPEG 压缩**。`TiffLzw.InflateZlib`(Deflate=8, 内置 ZLibStream) + `PackBitsDecode`(32773 RLE), GeoTiffSampler 按 Compression 分派。均 PIL 参照独立强验。GeoTIFF 编解码现全: **无压缩/LZW/Deflate/PackBits**。**852 tests**。
 
-**本会话累计补 18 真功能, 852 测。过度记录纠正累计 7 处**(drape/mesh光顺交线/剔面/虚拟钻孔/**LAS/GeoTIFF**)。**格式判据精化**: **公开规范 + (有样本 或 可用工具生成参照) + 解码器可实现 → 可做**——**压缩也可**(LZW/Deflate/PackBits 皆补, PIL 生成参照独立验)。GeoTIFF 现支持 无压缩+LZW+Deflate+PackBits(覆盖绝大多数正射)。**仍记录**: GeoTIFF **JPEG**(需大 DCT/huffman 解码器, .NET 无内置跨平台 JPEG, 属大工程) · OSGB(复杂+3D纹理) · PMB/PMxx(专有无规格)。
+- [x] **基线 JPEG 解码器 + GeoTIFF JPEG**(`d5e30f5`)：GeoTIFF 正射着色补齐**全部常见压缩**。`JpegDecoder`(基线 SOF0: DQT/DHT/SOF0/DRI/SOS 段解析 + huffman + 8×8 IDCT + 色度双线性上采样 + **YCbCr/RGB 色彩变换检测**[APP14 Adobe/组件 id 启发——TIFF-JPEG 常 RGB 直存]), 集成 GeoTiffSampler(Compression=7 拼 JPEGTables 表+条带帧)。PIL 生成 JPEG + 重解码像素独立强验(4:4:4 精确/4:2:0 双线性≤4/TIFF-JPEG RGB 直存端到端≤5)。**856 tests**。
+
+**本会话累计补 19 真功能, 856 测。过度记录纠正累计 8 处**(drape/mesh光顺交线/剔面/虚拟钻孔/**LAS/GeoTIFF/JPEG**)。**格式判据终态**: **公开规范 + (有样本 或 可用工具生成参照) + 解码器可实现 → 可做**——**连 JPEG(基线 DCT)也可**(PIL 生成参照 + 双线性色度上采样 + 色彩变换检测)。**GeoTIFF 正射着色现支持无压缩/LZW/Deflate/PackBits/JPEG 全部常见压缩**。**仍记录**(真边界): OSGB(OSG 序列化复杂+3D纹理需3D显示) · PMB/PMxx(专有无公开规格) · JPEG 渐进式 SOF2(rare) · mesh 布尔刀切(鲁棒) · TaskLib 引擎(不可验) · 面填充/3D/per-entity Z/多属性块(架构)。
 - **记录(2D 场景架构阻)**：**点/节点 Z 编辑**(统一Z/POINTSETZ/Z=aX+bY+c 平面赋Z/POLYUNIFYZ)——场景实体 2D 无 Z(PointEntity 仅 X,Y; PolylineEntity.Points 是 `(x,y)`), 无 Z 可设, 属线段渲染架构边界。
 - **latent 记录(非本轮引入)**：loft+weld(QuickModelAsync/LayerSolid)产**边流形水密但定向不一致**网格 → MeshMetrics 散度体积对定向敏感(随 z 位置变); 但实际取体积走**体素/缠绕数**路径(WindingNumberTester, 定向无关 robust), 工作流不受影响。
