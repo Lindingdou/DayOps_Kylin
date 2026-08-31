@@ -1459,7 +1459,9 @@ public partial class MainWindow : Window
         }
         if (src.Count == 0) { StatusMsg.Text = "配煤核算：未解析到配煤记录(需 吨,灰%,热MJ,硫%)"; return; }
         var b = Cad.Tasks.CoalQuality.Blend(src);
-        StatusMsg.Text = $"配煤核算：{src.Count} 路 · 总 {totT / 1e4:0.##}万t → 混合煤质 {b.Caption}";
+        var std = Cad.Tasks.CoalQuality.Standard;
+        bool ok = b.MeetsTarget(std);
+        StatusMsg.Text = $"配煤核算：{src.Count} 路 · 总 {totT / 1e4:0.##}万t → 混合煤质 {b.Caption} · 对标(灰≤{std.AshPct}/热≥{std.CalorificMJkg}/硫≤{std.SulfurPct}) {(ok ? "达标 ✓" : "不达标 ✗")}";
     }
 
     // 排土场按量推进（TaskLib 汇切片）：按排弃占容方反算推进距离 d = V容 / (工作线长 × 台阶高)。

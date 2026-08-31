@@ -22,6 +22,9 @@ public sealed class CoalQuality
         && CalorificMJkg >= target.CalorificMJkg - cvTolMJ
         && SulfurPct <= target.SulfurPct + sTolPct;
 
+    /// <summary>综合配煤入仓标准（忠实 ExploderConfig.BlendStandard 默认值）。</summary>
+    public static CoalQuality Standard => new() { AshPct = 12.8, CalorificMJkg = 21.5, SulfurPct = 0.7 };
+
     /// <summary>按吨量加权混合多路煤质（配煤核算：灰/热/硫/水按质量加权）。空/零吨返回全零。</summary>
     public static CoalQuality Blend(IEnumerable<(double tonnage, CoalQuality q)> sources)
     {

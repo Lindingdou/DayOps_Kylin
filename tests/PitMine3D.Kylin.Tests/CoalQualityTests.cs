@@ -36,6 +36,22 @@ public class CoalQualityTests
     }
 
     [Fact]
+    public void Standard_and_blend_meets_it()
+    {
+        var std = CoalQuality.Standard;
+        Assert.Equal(12.8, std.AshPct, 4);
+        Assert.Equal(21.5, std.CalorificMJkg, 4);
+        Assert.Equal(0.7, std.SulfurPct, 4);
+        // 好煤 8 路混合应达标(灰<12.8/热>21.5/硫<0.7)
+        var good = CoalQuality.Blend(new List<(double, CoalQuality)>
+        { (100, new CoalQuality { AshPct = 10, CalorificMJkg = 23, SulfurPct = 0.5 }) });
+        Assert.True(good.MeetsTarget(std));
+        // 高灰煤不达标
+        var bad = new CoalQuality { AshPct = 18, CalorificMJkg = 20, SulfurPct = 1.2 };
+        Assert.False(bad.MeetsTarget(std));
+    }
+
+    [Fact]
     public void Blend_empty_or_zero_tonnage()
     {
         Assert.Equal(0, CoalQuality.Blend(new List<(double, CoalQuality)>()).AshPct, 6);
