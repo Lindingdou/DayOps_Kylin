@@ -694,3 +694,13 @@
 - **关键**：它消费的 `cfg.Faces`(FaceInput) 带 `HasCycleBreakdown`、编组周期分解(τ_L/T_c)、配煤输入、瓶颈侧等**预计算字段**——这些由庞大上游链构建，非 DB 直取。
 - **全貌**：TaskLib/Engine = **17,588 行 / 43 文件**。构建合法 ExploderConfig 的上游 = `ProductionPlanContext`(1428)+`FlowAssigner`(1032)+`HaulResolver`(897)+`MonthlyShiftDecomposer`(658)+`ProcessZoneFaceSource`(545)+`SinkRegistryLoader`(781)+`FaceLedgerLoader`(383)+`ShiftPlanAssembler`(539)… 端到端出真任务须移 ≈**6k–10k 行**。
 - **为何仍是边界(而非"可逐字移")**：① 逐字复制可保真、不变量测试可抓转录错——但**规模是多周专项，非 loop-tick 增量**；② 只移 TaskExploder 得无法喂入的空壳；③ 自造简化 ExploderConfig-builder = **发明原程序没有的流量分配逻辑(违"勿发明")** 且无原输出可比对(端到端本机跑不了原 WPF→**不可验**)。→ 命中"不满足验证条件先跳过、无法验证先记录"。**记录为大工程边界，不在 loop 内启动**。自足计算切片已尽 8 个(§三十一~三十五)。见 memory [[unlock-blocked-insights]] 第7条。
+
+## 三十八、★60 死按钮完整归类——逐一「先读源再判」，确认无漏掉的可做命令
+
+精确重算(264 唯一 Tag，`while IFS= read -r` 防多词分割，交叉核对 .cs 中 `"TAG"` 字面量)：**LIVE=204 / DEAD=60**。逐一核对(含对可疑者实读原实现)，60 个全部落入三大已记录边界，**无一是被误判的简单可做命令**：
+
+- **A. TaskLib 排产引擎/对话框（28）**：生产任务编制/生产任务书/生产任务动态调整/任务下达/班组派工/派车单/生产报告/去向台账/实绩录入/编制配置/采排配对/采掘单元清单/运量驱动布线/量驱动采剥接续/驱动量/钻爆计划衔接/进度计划方案出图/周计划编制/月度计划编制/短期生产计划编制/短期进度计划动态模拟/中长远进度计划编制/中长远规划动态模拟/生产任务动态调整/动态调整/班内工艺·工序推演/检修档期/班次日历/作业区划分(WorkZoneLayoutWindow)。→ 需 §三十七 的 17,588 行引擎链 + 对话框。
+- **B. C++ 内核几何（15）**：分割点云(native PMSG)/剔面(三角网)/坡顶底线提取(native PMTB)/转化为三角格网/点云管理/加载倾斜摄影/影像底图/隐藏(IObliqueCapability.SetVisible)/现状写实/补勘钻孔写实/煤层露头着色/更新煤层面/处理尖灭(BenchTemplateBuilder域)/刀量切割/渲染配置。→ 无托管源纯 native，记录待上机。
+- **C. PitDesign 境界 / MineAssLib 内核 + 对话框（17）**：坑线落地/直线坑线/撤销坑线/增量增删边/创建工作线(IPitDesignCapability.SetWorkLineAdvanceMode+WorkLineDialog)/创建工程位置(EngineeringPositionWindow+端帮对接)/编辑台阶/局部台阶/最终并段/延拓触发设置/约束条件设置/确定开采程序/排土场放坡/排土模板/破碎站位置设置/平盘联络道/结构路面。→ 全程 IPitDesignCapability(内核)+ WPF 对话框，非简单画线(工作线带前进方式/扇形回转语义)，忠实移植需内核。
+
+**结论**：death=60 全部 = A(引擎)+B(内核)+C(境界)，与三大边界一一对应。本 loop 内 doable+可验证+忠实的功能确已补全；这 60 个继续做必然触碰"发明原程序没有的逻辑"或"本机不可验"，命中用户"先跳过/先记录"红线。
