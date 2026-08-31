@@ -603,6 +603,52 @@ public static class GeoDataQueries
         return new ImportOutcome(ins, 0, 0, err);
     }
 
+    /// <summary>月度可用率 KPI CSV 入库（忠实 KpiMonthlySpec）：按 设备+年+月 键 upsert。列: equipment_id,year,month,plan_hours,work_hours,fault_hours,availability,actual_run_rate,utilization_rate。</summary>
+    public static ImportOutcome ImportKpiMonthly(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
+    {
+        int ins = 0, upd = 0, skip = 0, err = 0;
+        foreach (var row in rows)
+        {
+            string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
+            string eq = Get("equipment_id");
+            if (eq.Length == 0 || !int.TryParse(Get("year"), out int yr) || !int.TryParse(Get("month"), out int mo)) { err++; continue; }
+            double D(string k) { double.TryParse(Get(k), out double v); return v; }
+            bool exists;
+            using (var q = conn.CreateCommand())
+            { q.CommandText = "SELECT COUNT(*) FROM equipment_kpi_monthly WHERE equipment_id=@e AND year=@y AND month=@m"; q.Parameters.AddWithValue("@e", eq); q.Parameters.AddWithValue("@y", yr); q.Parameters.AddWithValue("@m", mo); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
+            using var cmd = conn.CreateCommand();
+            if (exists) { if (!overwrite) { skip++; continue; } cmd.CommandText = "UPDATE equipment_kpi_monthly SET plan_hours=@p, work_hours=@w, fault_hours=@f, availability=@a, actual_run_rate=@r, utilization_rate=@u WHERE equipment_id=@e AND year=@y AND month=@m"; upd++; }
+            else { cmd.CommandText = "INSERT INTO equipment_kpi_monthly (equipment_id, year, month, plan_hours, work_hours, fault_hours, availability, actual_run_rate, utilization_rate) VALUES (@e,@y,@m,@p,@w,@f,@a,@r,@u)"; ins++; }
+            cmd.Parameters.AddWithValue("@e", eq); cmd.Parameters.AddWithValue("@y", yr); cmd.Parameters.AddWithValue("@m", mo);
+            cmd.Parameters.AddWithValue("@p", D("plan_hours")); cmd.Parameters.AddWithValue("@w", D("work_hours")); cmd.Parameters.AddWithValue("@f", D("fault_hours"));
+            cmd.Parameters.AddWithValue("@a", D("availability")); cmd.Parameters.AddWithValue("@r", D("actual_run_rate")); cmd.Parameters.AddWithValue("@u", D("utilization_rate"));
+            try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
+        }
+        return new ImportOutcome(ins, upd, skip, err);
+    }
+
+    /// <summary>设备台账 CSV 入库（忠实 EquipmentLedgerSpec）：按 equipment_id 键 upsert。列: equipment_id,category[,model,manufacturer,origin,status]。category 必填。</summary>
+    public static ImportOutcome ImportEquipmentLedger(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
+    {
+        int ins = 0, upd = 0, skip = 0, err = 0;
+        foreach (var row in rows)
+        {
+            string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
+            string eq = Get("equipment_id"), cat = Get("category");
+            if (eq.Length == 0 || cat.Length == 0) { err++; continue; }
+            object Opt(string k) => Get(k) is { Length: > 0 } v ? v : (object)System.DBNull.Value;
+            bool exists;
+            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM equipment WHERE equipment_id=@e"; q.Parameters.AddWithValue("@e", eq); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
+            using var cmd = conn.CreateCommand();
+            if (exists) { if (!overwrite) { skip++; continue; } cmd.CommandText = "UPDATE equipment SET category=@c, model=@m, manufacturer=@mf, origin=@o, status=@s WHERE equipment_id=@e"; upd++; }
+            else { cmd.CommandText = "INSERT INTO equipment (equipment_id, category, model, manufacturer, origin, status) VALUES (@e,@c,@m,@mf,@o,@s)"; ins++; }
+            cmd.Parameters.AddWithValue("@e", eq); cmd.Parameters.AddWithValue("@c", cat);
+            cmd.Parameters.AddWithValue("@m", Opt("model")); cmd.Parameters.AddWithValue("@mf", Opt("manufacturer")); cmd.Parameters.AddWithValue("@o", Opt("origin")); cmd.Parameters.AddWithValue("@s", Opt("status"));
+            try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
+        }
+        return new ImportOutcome(ins, upd, skip, err);
+    }
+
     public sealed record HorizonPoint(string SeamCode, bool IsRoof, double X, double Y, double Z);
 
     /// <summary>层位展点（忠实 HorizonPointBuilder）：borehole_seam_result join 孔位 → 分煤层 底板(floor_elevation)/顶板(底+采用厚度) 高程点。</summary>

@@ -164,6 +164,29 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Import_kpi_and_equipment_ledger_from_csv()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        // 设备台账: 新设备插入(无 FK 依赖, 是父表) + 同键更新
+        // model 留空(避免 FK→equipment_model); 新设备插入(equipment 是父表)
+        var eqOut = GeoDataQueries.ImportEquipmentLedger(db.Connection, new[]
+        { (IReadOnlyDictionary<string,string>)new Dictionary<string,string>{["equipment_id"]="NEWEQ1",["category"]="Shovel",["status"]="在用"} }, true);
+        Assert.True(eqOut.Inserted == 1, $"设备台账插入: ins={eqOut.Inserted} upd={eqOut.Updated} skip={eqOut.Skipped} err={eqOut.Errors}");
+        Assert.True(db.ScalarLong("SELECT COUNT(*) FROM equipment WHERE equipment_id='NEWEQ1'") == 1);
+        var eqOut2 = GeoDataQueries.ImportEquipmentLedger(db.Connection, new[]
+        { (IReadOnlyDictionary<string,string>)new Dictionary<string,string>{["equipment_id"]="NEWEQ1",["category"]="Truck"} }, true);
+        Assert.Equal(1, eqOut2.Updated);
+        // KPI: 用刚导入的设备(过 FK) 插入
+        var kpi = GeoDataQueries.ImportKpiMonthly(db.Connection, new[]
+        { (IReadOnlyDictionary<string,string>)new Dictionary<string,string>{["equipment_id"]="NEWEQ1",["year"]="2099",["month"]="6",["availability"]="0.9",["utilization_rate"]="0.85"} }, true);
+        Assert.Equal(1, kpi.Inserted);
+        // 坏行(缺 category) → 错误
+        var bad = GeoDataQueries.ImportEquipmentLedger(db.Connection, new[]
+        { (IReadOnlyDictionary<string,string>)new Dictionary<string,string>{["equipment_id"]="X"} }, true);
+        Assert.Equal(1, bad.Errors);
+    }
+
+    [Fact]
     public void Import_capacity_and_fault_from_csv()
     {
         using var db = GeoDatabase.OpenSeeded();
