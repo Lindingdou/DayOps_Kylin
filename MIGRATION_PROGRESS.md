@@ -1785,3 +1785,14 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - [x] 2 测: 乱序 3 段连成 4 点折线 + 分离链保持分离。1010 测。
 
 **本会话累计补 85 真功能/保真 + 4 潜伏 bug 修 + 多处忠实性/深度证伪, 1010 测。**
+
+## 一四八、tested-but-unwired 审计假阳性纠正 —— 冗余 采区划分 已撤
+
+「遍历 *Tests.cs 对应 src **文件名** 查 MainWindow 零引用」审计**方法有缺陷**: 文件名≠类名。4 个候选全假阳性:
+- **PanelSplit.cs** 类=PanelSplitter/StripRatioField/ProgramEvaluator → **已接线**(采区划分 §880, 4837+)。
+- **PitDepthSolver.cs** 类=SectionSolver/ResourceProfileLite → **已接线**(确定境界 §879)。
+- **RoadEvolutionModel.cs** 类=RoadEvolution*/EvoLine(各 6 引用)→ **已接线**。
+- **DrawTools.cs** 空文件; DrawToolsTests 测的是已接线的绘图工具。
+- **教训(双查纪律复发)**: 我据假阳性加了冗余「采区划分」命令(§797, 与既有 §880 撞且遮蔽), 编译前**未 grep 既有 `cmd == "采区划分"`** → `git revert 9118685`(75669d2)。**tested-but-unwired 审计必按 src 文件里的实际类名(非文件名)查引用**; 且**加任何命令前必 `grep 'cmd == "该名"'` 双查既有**(见 [[unlock-blocked-insights]] #14 双查纪律)。
+
+**结论**: 无真 tested-but-unwired 能力(4 候选皆假阳性/已接线)。本会话仍 86 真功能/保真(采区划分冗余已撤), 1010 测。
