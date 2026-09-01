@@ -568,6 +568,38 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Kpi_import_loads_idle_delay_and_fault_attribution()
+    {
+        // KPI 无损: idle_hours/delay_hours + internal/external_fault_rate_pct 此前 import 漏→丢, 现入库 + 汇总呈现故障归因
+        using var db = GeoDatabase.OpenSeeded();
+        string eq;
+        using (var q = db.Connection.CreateCommand()) { q.CommandText = "SELECT equipment_id FROM equipment LIMIT 1"; eq = (string)q.ExecuteScalar(); }
+        var o = GeoDataQueries.ImportKpiMonthly(db.Connection, new[]
+        {
+            (IReadOnlyDictionary<string,string>)new Dictionary<string,string>
+            { ["equipment_id"]=eq, ["year"]="2099", ["month"]="7", ["plan_hours"]="720", ["work_hours"]="600",
+              ["fault_hours"]="40", ["idle_hours"]="60", ["delay_hours"]="20",
+              ["availability"]="0.9", ["actual_run_rate"]="0.83", ["utilization_rate"]="0.8",
+              ["internal_fault_rate_pct"]="3.5", ["external_fault_rate_pct"]="1.5" }
+        }, true);
+        Assert.True(o.Inserted == 1, $"KPI导入 ins={o.Inserted} err={o.Errors}");
+        using (var q2 = db.Connection.CreateCommand())
+        {
+            q2.CommandText = "SELECT idle_hours, delay_hours, internal_fault_rate_pct, external_fault_rate_pct FROM equipment_kpi_monthly WHERE equipment_id=@e AND year=2099 AND month=7";
+            q2.Parameters.AddWithValue("@e", eq);
+            using var rd = q2.ExecuteReader();
+            Assert.True(rd.Read());
+            Assert.Equal(60, rd.GetDouble(0), 6);    // idle_hours(修前丢)
+            Assert.Equal(20, rd.GetDouble(1), 6);    // delay_hours(修前丢)
+            Assert.Equal(3.5, rd.GetDouble(2), 6);   // 内部故障率(修前丢)
+            Assert.Equal(1.5, rd.GetDouble(3), 6);   // 外部故障率(修前丢)
+        }
+        var k = GeoDataQueries.GetKpiStats(db.Connection);
+        Assert.True(k.AvgInternalFaultPct > 0, "KPI 汇总含内部故障率");
+        Assert.True(k.AvgExternalFaultPct > 0, "KPI 汇总含外部故障率");
+    }
+
+    [Fact]
     public void Kpi_trend_by_year_ratios_normalized()
     {
         using var db = GeoDatabase.OpenSeeded();

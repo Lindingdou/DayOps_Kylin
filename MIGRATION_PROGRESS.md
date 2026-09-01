@@ -1926,3 +1926,12 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - **修**: 动态列表构建 INSERT/UPDATE, 无损全列 + condition 枚举校验 + truck_model FK 安全 + 命令 hint 补列。+2 单测(condition=poor/转弯/载重/路面 查回入库; 非法 condition='excellent'→回退 good 不失败)。1021 测全绿, 0 错, smoke [GLINIT] 正常。
 
 **教训补**: 导入列完整性修复的**约束三防**——① FK 列父表校验后 NULL 降级 ② CHECK 列枚举校验后跳过留默认 ③ NOT NULL 列给默认。均"无损降级不整行失败"。数据完整性累计 **4 修**(层位展点/煤质/设备台账/路况)。本轮 1 修。
+
+## 一六四、导入列完整性透镜续三(基本闭合) —— KPI 补 idle/delay+故障归因 · 修
+
+核对末两候选:
+- **★KPI 导入 ImportKpiMonthly 无损化 · 修**: 原解析 9 列, **漏 idle_hours(待机)/delay_hours(延误)/internal_fault_rate_pct(内部故障率)/external_fault_rate_pct(外部故障率)** 4 列——原 DataImportCenter(266/296/299)全导, 时间预算(计划=作业+故障+待机+延误)此前不闭合, 故障归因(内/外部)缺失。修: import 无损全 13 列; **加消费者** `GetKpiStats`+`KpiStats` 增 AvgInternalFaultPct/AvgExternalFaultPct(AVG(NULLIF(.,0)) 忽略无值), `KPI分析` 显示"故障归因 内X%/外Y%"(有数据才附加)。+1 单测(导入 idle60/delay20/内3.5/外1.5→查回入库 + 汇总呈现)。1022 测。
+- **monthly_plan**: import 已覆盖 8/9 分析列(plan_strip/coal/outsource/ratio/distance/height + year/month), 仅漏 `team`(文本元数据, 0 消费, 且破坏纯数值 cols 模式)——**记录为可接受简化, 不补**(分析列全在)。
+- production_record/fault_event/capacity_monthly/slope_design 前扫已基本齐。
+
+**导入列完整性透镜基本闭合**: 8 张主导入表, **4 修**(煤质/设备台账/路况/KPI 无损全列 + 各加消费者或 SQL 可取)+ 4 基本齐(仅个别文本元数据可接受)。**约束三防**(FK 父校验/CHECK 枚举校验/NOT NULL 默认)全程无损降级不整行失败。本轮 1 修。数据完整性累计 **5 修**(层位展点/煤质/设备/路况/KPI)。

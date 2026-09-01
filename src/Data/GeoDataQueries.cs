@@ -99,14 +99,17 @@ public static class GeoDataQueries
         return new FaultStats(events, downtime, unresolved, topType, topCount);
     }
 
-    public sealed record KpiStats(int Records, double AvgAvailabilityPct, double AvgUtilizationPct, int LatestYear, int LatestMonth);
+    public sealed record KpiStats(int Records, double AvgAvailabilityPct, double AvgUtilizationPct, int LatestYear, int LatestMonth,
+        double AvgInternalFaultPct = 0, double AvgExternalFaultPct = 0);   // 故障归因: 内/外部故障率均值
 
-    /// <summary>KPI 分析：equipment_kpi_monthly 平均可用率/利用率 + 最新期。</summary>
+    /// <summary>KPI 分析：equipment_kpi_monthly 平均可用率/利用率 + 内/外部故障率(故障归因) + 最新期。</summary>
     public static KpiStats GetKpiStats(SqliteConnection conn)
     {
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"SELECT COUNT(*), COALESCE(AVG(availability),0), COALESCE(AVG(utilization_rate),0),
-                            COALESCE(MAX(year),0), COALESCE(MAX(month),0) FROM equipment_kpi_monthly";
+                            COALESCE(MAX(year),0), COALESCE(MAX(month),0),
+                            COALESCE(AVG(NULLIF(internal_fault_rate_pct,0)),0), COALESCE(AVG(NULLIF(external_fault_rate_pct,0)),0)
+                            FROM equipment_kpi_monthly";
         using var rd = cmd.ExecuteReader();
         rd.Read();
         int n = rd.GetInt32(0);
@@ -114,7 +117,10 @@ public static class GeoDataQueries
         // availability/utilization 可能存为 0..1 或 0..100，统一按 <=1 视为比率×100。
         double avPct = av <= 1.0 ? av * 100 : av;
         double utPct = ut <= 1.0 ? ut * 100 : ut;
-        return new KpiStats(n, avPct, utPct, rd.GetInt32(3), rd.GetInt32(4));
+        double ifr = rd.GetDouble(5), efr = rd.GetDouble(6);
+        double ifPct = ifr <= 1.0 && ifr > 0 ? ifr * 100 : ifr;
+        double efPct = efr <= 1.0 && efr > 0 ? efr * 100 : efr;
+        return new KpiStats(n, avPct, utPct, rd.GetInt32(3), rd.GetInt32(4), ifPct, efPct);
     }
 
     public sealed record EfficiencyForecast(int ActiveEquipment, int ProducingUnits, double BaselineMonthlyWanM3, double AvgAvailabilityPct, double AvgRunRatePct, double ProjectedAnnualWanM3);
@@ -756,11 +762,14 @@ public static class GeoDataQueries
             using (var q = conn.CreateCommand())
             { q.CommandText = "SELECT COUNT(*) FROM equipment_kpi_monthly WHERE equipment_id=@e AND year=@y AND month=@m"; q.Parameters.AddWithValue("@e", eq); q.Parameters.AddWithValue("@y", yr); q.Parameters.AddWithValue("@m", mo); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
             using var cmd = conn.CreateCommand();
-            if (exists) { if (!overwrite) { skip++; continue; } cmd.CommandText = "UPDATE equipment_kpi_monthly SET plan_hours=@p, work_hours=@w, fault_hours=@f, availability=@a, actual_run_rate=@r, utilization_rate=@u WHERE equipment_id=@e AND year=@y AND month=@m"; upd++; }
-            else { cmd.CommandText = "INSERT INTO equipment_kpi_monthly (equipment_id, year, month, plan_hours, work_hours, fault_hours, availability, actual_run_rate, utilization_rate) VALUES (@e,@y,@m,@p,@w,@f,@a,@r,@u)"; ins++; }
+            // 无损全列: 补此前漏的 idle_hours(待机)/delay_hours(延误) + internal/external_fault_rate_pct(内/外部故障率, 故障归因)
+            if (exists) { if (!overwrite) { skip++; continue; } cmd.CommandText = "UPDATE equipment_kpi_monthly SET plan_hours=@p, work_hours=@w, fault_hours=@f, idle_hours=@ih, delay_hours=@dh, availability=@a, actual_run_rate=@r, utilization_rate=@u, internal_fault_rate_pct=@ifr, external_fault_rate_pct=@efr WHERE equipment_id=@e AND year=@y AND month=@m"; upd++; }
+            else { cmd.CommandText = "INSERT INTO equipment_kpi_monthly (equipment_id, year, month, plan_hours, work_hours, fault_hours, idle_hours, delay_hours, availability, actual_run_rate, utilization_rate, internal_fault_rate_pct, external_fault_rate_pct) VALUES (@e,@y,@m,@p,@w,@f,@ih,@dh,@a,@r,@u,@ifr,@efr)"; ins++; }
             cmd.Parameters.AddWithValue("@e", eq); cmd.Parameters.AddWithValue("@y", yr); cmd.Parameters.AddWithValue("@m", mo);
             cmd.Parameters.AddWithValue("@p", D("plan_hours")); cmd.Parameters.AddWithValue("@w", D("work_hours")); cmd.Parameters.AddWithValue("@f", D("fault_hours"));
+            cmd.Parameters.AddWithValue("@ih", D("idle_hours")); cmd.Parameters.AddWithValue("@dh", D("delay_hours"));
             cmd.Parameters.AddWithValue("@a", D("availability")); cmd.Parameters.AddWithValue("@r", D("actual_run_rate")); cmd.Parameters.AddWithValue("@u", D("utilization_rate"));
+            cmd.Parameters.AddWithValue("@ifr", D("internal_fault_rate_pct")); cmd.Parameters.AddWithValue("@efr", D("external_fault_rate_pct"));
             try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
         }
         return new ImportOutcome(ins, upd, skip, err);
