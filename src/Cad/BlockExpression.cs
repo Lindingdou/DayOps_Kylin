@@ -8,7 +8,7 @@ namespace PitMine3D.Kylin.Cad;
 /// 块体表达式筛选/删除 —— 忠实原 BlockModelLib.ExpressionEngine 的「删除单元·表达式范围」用途:
 /// 把 "Grade > 5 AND Z &lt; 100" 编译成块谓词。属性(不分大小写): X/Y/Z/Grade/Size(及别名 品位=Grade/高程=Z)。
 /// 统一值语法(比较/布尔产 0/1, 同 C, 括号无歧义): OR &lt; AND &lt; NOT &lt; 比较 &lt; +− &lt; ×÷ &lt; 一元− &lt; 原子。
-/// 纯逻辑、可单测。(原多属性 CellData 公式赋值仍受数据模型限, 记录。)
+/// 纯逻辑、可单测。(值模式『属性赋值 公式』见 <see cref="BlockAttrExpression"/>——本类专司谓词筛选/删除。)
 /// </summary>
 public static class BlockExpression
 {

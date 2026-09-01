@@ -7,7 +7,7 @@ namespace PitMine3D.Kylin.Cad;
 /// <summary>
 /// 境界台阶线生成（MineAssLib「批量台阶扩帮」几何核）—— 闭合境界按定距逐圈内偏移，
 /// 生成各台阶顶线。miter 偏移 + 面积递减自交保护。纯逻辑、可单测。
-/// 说明：真实台阶距 = W + H/tanα（帮参数），此处以定距近似；帮参数对话框待接（记录）。
+/// 说明：真实台阶距 = W + H/tanα（帮参数）由 <see cref="BenchDistance"/> 计算；命令『台阶扩帮 &lt;W&gt; &lt;H&gt; &lt;α&gt;』用真实距, 缺省回落定距（境界短边/10）。
 /// 凹境界深偏移可能自交，面积不再递减即停（不产出病态环）。
 /// </summary>
 public static class BenchLines

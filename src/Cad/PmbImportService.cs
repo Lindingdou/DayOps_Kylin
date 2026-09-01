@@ -6,7 +6,7 @@ namespace PitMine3D.Kylin.Cad;
 /// <summary>
 /// PMB(PitMine 块体模型 v1)导入 —— 忠实移植原 `PmbmReader`/`PmbmFormat` 的公开二进制格式(源码可见, 非专有黑盒):
 /// Header(32B magic 'PMB1') + 段表(24B/项) + GridSpec(origin/blockSize/dims) + Blocks(Dense, 属性存为 double 数组) + Footer。
-/// 取几何(网格→cell 中心)+首属性作品位, 入 grade-only 块模型(多属性→单属性=数据模型限, 记录)。宽容读取(跳 CRC)。可单测。
+/// 取几何(网格→cell 中心)+选定/首属性作品位; 全属性留存 AllAttrs(供 切换属性/属性赋值, 同 BLK)。宽容读取(跳 CRC)。可单测。
 /// </summary>
 public static class PmbImportService
 {
