@@ -829,6 +829,7 @@ public partial class MainWindow : Window
             if (cmd == "简单克里金" || cmd == "SK估值" || cmd == "简单克里金估值") { await EstimateGradeAsync("SK"); return; }
             if (cmd == "设备信息管理" || cmd == "设备台账" || cmd == "设备台账管理" || cmd == "设备信息") { EquipmentRosterCmd(); return; }
             if (cmd == "设备生产数据" || cmd == "生产数据" || cmd == "设备数据分析") { ProductionStatsCmd(); return; }
+            if (cmd == "设备因素分析" || cmd == "主控因素" || cmd == "主控因素分析" || cmd == "因素相关分析") { EquipmentFactorCmd(); return; }
             if (cmd == "产能分析" || cmd == "设备能力" || cmd == "能力分析" || cmd == "产能") { CapacityRankingCmd(); return; }
             if (cmd == "故障分析" || cmd == "设备状态·故障报修" || cmd == "故障报修" || cmd == "设备状态") { FaultStatsCmd(); return; }
             if (cmd == "爆破分析" || cmd == "爆破统计" || cmd == "爆破数据" || cmd == "钻爆分析") { BlastStatsCmd(); return; }
@@ -8283,6 +8284,20 @@ public partial class MainWindow : Window
             + (r.ByCategory.Count > 0 ? " · 分类柱入场景" : "");
     }
 
+    // 设备主控因素分析(忠实原 EquipmentAnalysisWindow 因素分析): 因素-产能 Pearson 相关排名 → 主控因素 + 柱上屏。
+    private void EquipmentFactorCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var rows = Data.GeoDataQueries.GetEquipmentFactorRows(db.Connection);
+        if (rows.Count < 2) { StatusMsg.Text = $"设备因素分析：对齐的月度因素-产能行不足({rows.Count}, 需≥2; KPI⋈产能)"; return; }
+        var cc = Data.EquipmentFactorAnalysis.Correlate(rows);
+        if (cc.Count == 0) { StatusMsg.Text = "设备因素分析：因素均无方差, 无法相关"; return; }
+        DrawCategoryBars(cc.Select(c => (c.Factor, c.R)).ToList(), "与产能r");   // 有向 r 柱(正上负下)
+        var top = cc[0];
+        var parts = cc.Select(c => $"{c.Factor} r={c.R:+0.00;-0.00}({c.Strength}{c.Direction})");
+        StatusMsg.Text = $"设备主控因素({rows.Count} 对齐月)：主控【{top.Factor}】r={top.R:+0.00;-0.00}({top.Strength}{top.Direction}相关) · " + string.Join(" · ", parts) + " · 相关柱入场景";
+    }
+
     private void ProductionStatsCmd()
     {
         var db = EnsureGeoDb(); if (db == null) return;
@@ -9736,7 +9751,7 @@ public partial class MainWindow : Window
         "设备台账","生产数据","产能分析","故障分析","爆破分析","设备累计工时","KPI分析","机型KPI","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","层位求交","导入生产记录","导入月度产能","导入故障记录","导入月度KPI","导入设备台账","导入煤质","导入观测点","导入月度计划","导入见煤成果","导入路况","导入边坡","导入模板","导出分析",
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","机群驾驶舱","设备综合评分","数据看板","煤种分类","煤质数据健康度","分煤层煤质",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
-        "产能分类对比","故障类型分布","分工序验收合格率","数据导出","数据字典","达成度评价","产量预测","时序预测","编组优化","智能编组优化","导出编组","导出预测",
+        "产能分类对比","故障类型分布","设备因素分析","分工序验收合格率","数据导出","数据字典","达成度评价","产量预测","时序预测","编组优化","智能编组优化","导出编组","导出预测",
         "商品煤符合性","煤质达标","导出符合性","品位储量曲线","导出品位储量","分标高煤质","导出分标高","煤质离群","导出离群","洗选提质","导出洗选","用途适宜性","导出用途","灰分发热量回归","煤质综合结论","煤类反推","煤类一致率","煤质审核","测井一致","工分自洽","分煤层煤质","煤质三维插值","品位块模型","交叉验证","变差函数分析",
         // TaskLib 自足计算
         "生产量核算","物料换算","采剥平衡","排土场按量推进","配煤核算","工序进度跟踪","编组产能","环节降效",

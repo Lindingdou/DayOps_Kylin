@@ -313,6 +313,23 @@ public static class GeoDataQueries
         double TotalHoleLengthM, int Locations, IReadOnlyList<BlastMonthRow> ByMonth);
 
     /// <summary>爆破统计：总次数/爆破方量/炸药量/综合单耗(总炸药÷总方量, 体积加权) + 孔进尺 + 逐月聚合(忠实原 BlastService.GetMonthlyAggregate)。</summary>
+    /// <summary>设备月度因素 ⋈ 产能(equipment_id,year,month 对齐)→ 因素相关分析行(供 EquipmentFactorAnalysis)。</summary>
+    public static List<EquipmentFactorAnalysis.FactorRow> GetEquipmentFactorRows(SqliteConnection conn)
+    {
+        var rows = new List<EquipmentFactorAnalysis.FactorRow>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"SELECT k.availability, k.actual_run_rate, k.utilization_rate,
+                                   k.internal_fault_rate_pct, k.external_fault_rate_pct, c.output_m3
+                            FROM equipment_kpi_monthly k
+                            JOIN capacity_monthly c
+                              ON k.equipment_id = c.equipment_id AND k.year = c.year AND k.month = c.month";
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+            rows.Add(new EquipmentFactorAnalysis.FactorRow(
+                rd.GetDouble(0), rd.GetDouble(1), rd.GetDouble(2), rd.GetDouble(3), rd.GetDouble(4), rd.GetDouble(5)));
+        return rows;
+    }
+
     public static BlastStats GetBlastStats(SqliteConnection conn)
     {
         int events = 0, locs = 0; double totVol = 0, totExp = 0, totLen = 0;

@@ -2866,3 +2866,15 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [CoalStatsBySeamTests](tests/PitMine3D.Kylin.Tests/CoalStatsBySeamTests.cs) +2(A{10..50}→min10/max50/中位30/均30·B{5,15}→均10·缺指标跳·CSV 头+行) · [BoxPlotTests](tests/PitMine3D.Kylin.Tests/BoxPlotTests.cs) +2(共享量程须/中位线/类别轴名/空零). **build 0 错·单测 1325→1329**。
 
 **本会话第 62 功能**。教训: **第八角度(DB 聚合 present-but-partial)连出两功能**(§二五四 化验覆盖 · §二五五 分煤层箱线)——原分析窗常出比 Kylin 命令更细的**分组/分位/覆盖**统计, 逐窗对指标即挖。四类图(折线/柱/散点/箱线)补齐, 统计可视基本全谱。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二五六 设备主控因素分析（因素-产能相关排名）—— DB 聚合 present-but-partial 续
+
+**第八角度续**: 原 `EquipmentAnalysisWindow` 除 OEE/趋势/故障 Pareto(Kylin 已覆盖)外, 另有**因素分析(主控因素 + 相关性)**: 各因素(可用率/作业率/利用率/内外故障率)与产能做 Pearson 相关, 找主控因素 + 建议。Kylin `设备数据分析`(ProductionStatsCmd) 只出生产统计, **无因素相关**。
+
+**补** [EquipmentFactorAnalysis](src/Data/EquipmentFactorAnalysis.cs)(纯核): `Correlate(rows)` 各因素对产能 Pearson r, 按 |r| 降序 + 正/负向 + 强(≥0.7)/中(≥0.4)/弱; `Pearson`(长度不等/<2/无方差→null)。数据经 [GeoDataQueries](src/Data/GeoDataQueries.cs) `GetEquipmentFactorRows`(equipment_kpi_monthly ⋈ capacity_monthly on equipment_id/year/month)。命令 `设备因素分析`/`主控因素`([MainWindow](src/Views/MainWindow.axaml.cs) `EquipmentFactorCmd`): 相关排名 + 有向 r 柱上屏 + 主控因素状态行。
+
+**验证(合成已知值)**: [EquipmentFactorAnalysisTests](tests/PitMine3D.Kylin.Tests/EquipmentFactorAnalysisTests.cs) +3—— Pearson 完美正/负 =±1·无方差/样本<2→null; 可用率↑同产能↑→强正 r=1·内部故障率↓同产能↑→强负 r=-1·利用率恒定略去·按 |r| 排名; <2 行返空。**build 0 错·单测 1330→1333**。
+
+**本会话第 63 功能**。教训: **第八角度(DB 聚合 present-but-partial)连出三功能**(§254 化验覆盖·§255 分煤层箱线·§256 设备主控因素)——原分析窗常在同数据上多算**分组/分位/相关**维度, Kylin 命令只取其一。核可合成向量验(不依赖种子对齐)。见 [[unlock-blocked-insights]]。
