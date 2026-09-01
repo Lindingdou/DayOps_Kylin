@@ -2878,3 +2878,15 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(合成已知值)**: [EquipmentFactorAnalysisTests](tests/PitMine3D.Kylin.Tests/EquipmentFactorAnalysisTests.cs) +3—— Pearson 完美正/负 =±1·无方差/样本<2→null; 可用率↑同产能↑→强正 r=1·内部故障率↓同产能↑→强负 r=-1·利用率恒定略去·按 |r| 排名; <2 行返空。**build 0 错·单测 1330→1333**。
 
 **本会话第 63 功能**。教训: **第八角度(DB 聚合 present-but-partial)连出三功能**(§254 化验覆盖·§255 分煤层箱线·§256 设备主控因素)——原分析窗常在同数据上多算**分组/分位/相关**维度, Kylin 命令只取其一。核可合成向量验(不依赖种子对齐)。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二五七 设备效能 What-if 提升路径模拟（原 EquipmentForecastWindow 四杠杆）
+
+**第八角度续**: 原 `设备效能预测` 实为 **What-if 提升路径模拟器**(4 杠杆滑块→实时产能提升), Kylin `设备效能预测`(EfficiencyForecastCmd) 只做**静态基线+投影**, 无 what-if。
+
+**补** [EfficiencyWhatIf](src/Data/EfficiencyWhatIf.cs)(忠实原模型): `Simulate(baseOutput, faultShare, l1..l4)` = 基线 × (1 + Σ杠杆贡献 × 协同衰减0.85)。四杠杆: 故障降低 c1=l1×faultShare(故障工时占比, 解锁工时) · 出动率 c2=l2 · 装载 c3=l3 · 运距 c4=l4×0.6(仅60%转产能, 余在卡车侧)。[GeoDataQueries](src/Data/GeoDataQueries.cs) `GetFaultShare`(ΣFault/ΣPlan)。命令 `效能提升模拟 <故障降低%> <出动率%> <装载%> <运距%>`([MainWindow](src/Views/MainWindow.axaml.cs) `EfficiencyWhatIfCmd`): 基线(GetEfficiencyForecast)+故障占比 → 模拟产能 + 各杠杆贡献柱上屏。
+
+**验证(合成已知值)**: [EfficiencyWhatIfTests](tests/PitMine3D.Kylin.Tests/EfficiencyWhatIfTests.cs) +3—— base100·fs0.2·l(0.5,0.1,0.1,0.2): c1=0.10/c2=0.10/c3=0.10/c4=0.12→raw0.42→gain0.357→模拟135.7·增35.7; 零杠杆守基线; faultShare 夹 [0,1]。**build 0 错·单测 1333→1336**。
+
+**本会话第 64 功能**。教训: **第八角度(DB 聚合窗 present-but-partial)连出四功能**(§254 化验覆盖·§255 分煤层箱线·§256 主控因素·§257 效能 what-if)——原分析窗常比 Kylin 命令多一层(分位/相关/what-if 情景), 逐窗读原计算即挖, 纯核合成验。见 [[unlock-blocked-insights]]。

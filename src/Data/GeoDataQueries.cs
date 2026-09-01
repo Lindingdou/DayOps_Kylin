@@ -313,6 +313,16 @@ public static class GeoDataQueries
         double TotalHoleLengthM, int Locations, IReadOnlyList<BlastMonthRow> ByMonth);
 
     /// <summary>爆破统计：总次数/爆破方量/炸药量/综合单耗(总炸药÷总方量, 体积加权) + 孔进尺 + 逐月聚合(忠实原 BlastService.GetMonthlyAggregate)。</summary>
+    /// <summary>故障工时占计划工时比(ΣFault/ΣPlan, 供 What-if 故障降低杠杆)。无计划工时→0.1 缺省。</summary>
+    public static double GetFaultShare(SqliteConnection conn)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT COALESCE(SUM(fault_hours),0), COALESCE(SUM(plan_hours),0) FROM equipment_kpi_monthly";
+        using var rd = cmd.ExecuteReader();
+        if (rd.Read()) { double f = rd.GetDouble(0), p = rd.GetDouble(1); return p > 1e-9 ? f / p : 0.1; }
+        return 0.1;
+    }
+
     /// <summary>设备月度因素 ⋈ 产能(equipment_id,year,month 对齐)→ 因素相关分析行(供 EquipmentFactorAnalysis)。</summary>
     public static List<EquipmentFactorAnalysis.FactorRow> GetEquipmentFactorRows(SqliteConnection conn)
     {

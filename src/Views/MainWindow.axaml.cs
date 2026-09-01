@@ -830,6 +830,7 @@ public partial class MainWindow : Window
             if (cmd == "设备信息管理" || cmd == "设备台账" || cmd == "设备台账管理" || cmd == "设备信息") { EquipmentRosterCmd(); return; }
             if (cmd == "设备生产数据" || cmd == "生产数据" || cmd == "设备数据分析") { ProductionStatsCmd(); return; }
             if (cmd == "设备因素分析" || cmd == "主控因素" || cmd == "主控因素分析" || cmd == "因素相关分析") { EquipmentFactorCmd(); return; }
+            if (cmd.StartsWith("效能提升模拟") || cmd.StartsWith("提升路径模拟") || cmd.StartsWith("What-if") || cmd.StartsWith("效能whatif")) { EfficiencyWhatIfCmd(cmd); return; }
             if (cmd == "产能分析" || cmd == "设备能力" || cmd == "能力分析" || cmd == "产能") { CapacityRankingCmd(); return; }
             if (cmd == "故障分析" || cmd == "设备状态·故障报修" || cmd == "故障报修" || cmd == "设备状态") { FaultStatsCmd(); return; }
             if (cmd == "爆破分析" || cmd == "爆破统计" || cmd == "爆破数据" || cmd == "钻爆分析") { BlastStatsCmd(); return; }
@@ -9496,6 +9497,25 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"设备效能预测（基线+投影）：基线月产 {f.BaselineMonthlyWanM3:0.##}万m³/产出设备 · 可用率 {f.AvgAvailabilityPct:0.#}% · 作业率 {f.AvgRunRatePct:0.#}% · 投影年产 {f.ProjectedAnnualWanM3:0.#}万m³（产出设备 {f.ProducingUnits}台 · 在役 {f.ActiveEquipment}台）";
     }
 
+    // 效能提升 What-if 模拟(忠实原 EquipmentForecastWindow 四杠杆): 基线产能 × (1+Σ杠杆贡献×协同衰减)。
+    // 用法 效能提升模拟 <故障降低%> <出动率%> <装载%> <运距%>(缺省各 0)。
+    private void EfficiencyWhatIfCmd(string cmd)
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var f = Data.GeoDataQueries.GetEfficiencyForecast(db.Connection);
+        if (f.BaselineMonthlyWanM3 <= 0) { StatusMsg.Text = "效能提升模拟：无基线产能(产出设备月产=0)"; return; }
+        double faultShare = Data.GeoDataQueries.GetFaultShare(db.Connection);
+        var tk = cmd.Split(new[] { ' ', ',', '\t', '%' }, System.StringSplitOptions.RemoveEmptyEntries);
+        double P(int i) => tk.Length > i && double.TryParse(tk[i], out var v) ? System.Math.Max(0, v) / 100.0 : 0;
+        double l1 = P(1), l2 = P(2), l3 = P(3), l4 = P(4);
+        if (l1 == 0 && l2 == 0 && l3 == 0 && l4 == 0) { StatusMsg.Text = "效能提升模拟：用法 效能提升模拟 <故障降低%> <出动率%> <装载%> <运距%>（如 效能提升模拟 40 15 10 15）"; return; }
+        var r = Data.EfficiencyWhatIf.Simulate(f.BaselineMonthlyWanM3, faultShare, l1, l2, l3, l4);
+        // 各杠杆贡献柱(基线百分比) 上屏
+        DrawCategoryBars(new System.Collections.Generic.List<(string, double)>
+        { ("故障降低", r.C1 * 100), ("出动率", r.C2 * 100), ("装载", r.C3 * 100), ("运距", r.C4 * 100) }, "贡献%");
+        StatusMsg.Text = $"效能提升模拟(四杠杆·协同衰减 {Data.EfficiencyWhatIf.SynergyDecay})：基线 {r.BaseOutput:0.##} → 模拟 {r.Simulated:0.##}万m³/月(+{r.Delta:0.##}, 增益 {r.ActualGain * 100:0.#}%) · 贡献 故障{r.C1 * 100:0.#}/出动{r.C2 * 100:0.#}/装载{r.C3 * 100:0.#}/运距{r.C4 * 100:0.#}% · 故障工时占比 {faultShare * 100:0.#}% · 贡献柱入场景";
+    }
+
     // 产量时序预测：ForecastModels(LSQ趋势+EWMA融合/Holt) 对月度产量序列做点预测 + 趋势 + 异常
     private void OutputForecastCmd(bool holt)
     {
@@ -9751,7 +9771,7 @@ public partial class MainWindow : Window
         "设备台账","生产数据","产能分析","故障分析","爆破分析","设备累计工时","KPI分析","机型KPI","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","层位求交","导入生产记录","导入月度产能","导入故障记录","导入月度KPI","导入设备台账","导入煤质","导入观测点","导入月度计划","导入见煤成果","导入路况","导入边坡","导入模板","导出分析",
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","机群驾驶舱","设备综合评分","数据看板","煤种分类","煤质数据健康度","分煤层煤质",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
-        "产能分类对比","故障类型分布","设备因素分析","分工序验收合格率","数据导出","数据字典","达成度评价","产量预测","时序预测","编组优化","智能编组优化","导出编组","导出预测",
+        "产能分类对比","故障类型分布","设备因素分析","效能提升模拟","分工序验收合格率","数据导出","数据字典","达成度评价","产量预测","时序预测","编组优化","智能编组优化","导出编组","导出预测",
         "商品煤符合性","煤质达标","导出符合性","品位储量曲线","导出品位储量","分标高煤质","导出分标高","煤质离群","导出离群","洗选提质","导出洗选","用途适宜性","导出用途","灰分发热量回归","煤质综合结论","煤类反推","煤类一致率","煤质审核","测井一致","工分自洽","分煤层煤质","煤质三维插值","品位块模型","交叉验证","变差函数分析",
         // TaskLib 自足计算
         "生产量核算","物料换算","采剥平衡","排土场按量推进","配煤核算","工序进度跟踪","编组产能","环节降效",
