@@ -1075,6 +1075,7 @@ public partial class MainWindow : Window
             if (cmd == "竖曲线平滑" || cmd == "竖曲线" || cmd == "纵断面竖曲线" || cmd.StartsWith("竖曲线平滑 ") || cmd.StartsWith("竖曲线 ")) { await VerticalCurveAsync(cmd); return; }
             if (cmd == "线形处理" || cmd == "线形" || cmd == "中线线形" || cmd == "线形后处理" || cmd.StartsWith("线形处理 ")) { await LineFormAsync(cmd); return; }
             if (cmd == "台阶面提取" || cmd == "坡面提取" || cmd == "台阶坡面" || cmd == "台阶面" || cmd.StartsWith("台阶面提取 ")) { await BenchFaceExtractAsync(cmd); return; }
+            if (cmd == "煤岩台阶判定" || cmd == "煤岩判定" || cmd == "台阶煤岩" || cmd.StartsWith("煤岩台阶判定 ")) { await BenchCoalCmd(cmd); return; }
             if (cmd == "平行推进" || cmd == "开采程序确定" || cmd == "工作线推进") { AdvanceCmd(AdvanceMode.Parallel, "平行推进"); return; }
             if (cmd == "定点回转" || cmd == "定点回转推进") { AdvanceCmd(AdvanceMode.FixedPivot, "定点回转"); return; }
             if (cmd == "动点回转" || cmd == "动点回转推进") { AdvanceCmd(AdvanceMode.MovingPivot, "动点回转"); return; }
@@ -1791,6 +1792,44 @@ public partial class MainWindow : Window
         if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
         string warn = r.Warnings.Count > 0 ? " · " + string.Join(" ", r.Warnings) : "";
         StatusMsg.Text = $"台阶面提取(阈值{slopeDeg.ToString("0.#", inv)}°)：{r.Message} 青=坡顶线/橙=坡底线{warn}";
+    }
+
+    // 煤岩台阶判定：坡顶线 CSV(x,y,z) + 台阶高 → 沿线采样种子库各煤层柱(VirtualBorehole) → 台阶区间重叠煤厚
+    // → 煤/岩/混台阶 + 各煤层平均厚 + 是否出煤体。忠实原 StandardLevelModel 煤/岩判定核。可接台阶面提取出的坡顶线。
+    private async Task BenchCoalCmd(string cmd)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var db = EnsureGeoDb(); if (db == null) return;
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        double benchH = 12.0;   // 台阶高 m（默认 12）
+        if (tk.Length >= 2 && double.TryParse(tk[1], System.Globalization.NumberStyles.Float, inv, out double bh) && bh > 0) benchH = bh;
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        { Title = "煤岩台阶判定：选坡顶线 CSV (x,y,z; 可用台阶面提取得)", AllowMultiple = false, FileTypeFilter = new[] { new FilePickerFileType("3D 线 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } } });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success || r.Points.Count < 1) { StatusMsg.Text = "煤岩台阶判定：需 ≥1 个坡顶线点(x,y,z)"; return; }
+        var hp = Data.GeoDataQueries.GetHorizonPoints(db.Connection);
+        if (hp.Count == 0) { StatusMsg.Text = "煤岩台阶判定：库中无层位点(先展绘层位数据/配置地质模型)"; return; }
+        var seams = VirtualBorehole.SeamsFromHorizonPoints(
+            System.Linq.Enumerable.Select(hp, p => (p.SeamCode, p.IsRoof, p.X, p.Y, p.Z)));
+        double crestZ = 0; foreach (var p in r.Points) crestZ += p.z; crestZ /= r.Points.Count;   // 坡顶级代表标高
+        double toeZ = crestZ - benchH;
+        var foot = new List<(double, double)>(); foreach (var p in r.Points) foot.Add((p.x, p.y));
+        var res = Cad.BenchCoalClassifier.Classify(foot, toeZ, crestZ, seams);
+        // 坡顶线入场景, 按煤/岩着色（煤=黑·混=橙·岩=灰）
+        float cr = res.BenchKind == BenchCoalResult.Kind.Coal ? 0.15f : res.BenchKind == BenchCoalResult.Kind.Mixed ? 0.95f : 0.6f;
+        float cg = res.BenchKind == BenchCoalResult.Kind.Coal ? 0.15f : res.BenchKind == BenchCoalResult.Kind.Mixed ? 0.55f : 0.6f;
+        float cb = res.BenchKind == BenchCoalResult.Kind.Coal ? 0.15f : res.BenchKind == BenchCoalResult.Kind.Mixed ? 0.10f : 0.6f;
+        BeginChange();
+        var pl = new PolylineEntity { Cr = cr, Cg = cg, Cb = cb, LayerName = "煤岩台阶" };
+        foreach (var p in r.Points) pl.Points.Add((p.x, p.y));
+        _scene.Add(pl);
+        RefreshScene();
+        if (r.Bounds != null && r.Bounds.Length == 4) Viewport.FitBounds(r.Bounds);
+        string seamTxt = res.SeamSummary.Length > 0 ? " · 煤层 " + res.SeamSummary : "";
+        StatusMsg.Text = $"煤岩台阶判定(台阶[{toeZ.ToString("0.#", inv)},{crestZ.ToString("0.#", inv)}]·高{benchH.ToString("0.#", inv)}m)："
+            + $"{res.KindLabel} · 煤厚占比 {(res.CoalRatio * 100).ToString("0.#", inv)}% · 均厚 {res.MeanCoalThickM.ToString("0.##", inv)}m · "
+            + $"{(res.IsMineableCoal ? "出煤体(沿底板)" : "不出煤体(薄)")} · 见煤 {res.SampleHit}/{res.SampleCount} 点{seamTxt}";
     }
 
     // 环节降效产能（TaskLib 降效切片）：给采/运/排降效% → 用默认编组解 τ_L/T_c/MF → 采装面/排土面能力系数 + 降后产能。
@@ -8179,7 +8218,7 @@ public partial class MainWindow : Window
         // 线编辑
         "加密多段线","简化","平滑","样条平滑","抽稀等值线","两线交点","闭合多段线","删除重复点","删除重复线","连接多段线","组合工作线",
         // 网格/建模
-        "网格度量","网格诊断","创建三角网","约束三角网","裁剪三角网","网格焊接","网格边界","网格交线","网格剖面","网格光顺","合并三角网","固化成体","侧面三角网","台阶面提取","立方体","球体","圆柱","体素格网体积","实体转块体",
+        "网格度量","网格诊断","创建三角网","约束三角网","裁剪三角网","网格焊接","网格边界","网格交线","网格剖面","网格光顺","合并三角网","固化成体","侧面三角网","台阶面提取","煤岩台阶判定","立方体","球体","圆柱","体素格网体积","实体转块体",
         // 区域/地形/点云
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪",

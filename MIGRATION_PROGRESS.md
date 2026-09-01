@@ -2222,3 +2222,11 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 **移植** [src/Cad/BenchFaceExtractor.cs](src/Cad/BenchFaceExtractor.cs) 忠实全移 + 命令 `台阶面提取`(OFF 现状面→每片坡顶线[青]/坡底线[橙]入场景 + `r.Message`台阶高/坡度范围汇总) + 面编辑菜单项 + 命令目录。**非冗余**: 与 CrestToe 互补——CrestToe 出散断棱边, 台阶面提取出分片+有序上下沿+每片指标(真正的 3D 表面台阶分析, 区别 BenchAnalyzer 的 2D 剖面法)。验证 [BenchFaceExtractorTests](tests/PitMine3D.Kylin.Tests/BenchFaceExtractorTests.cs) 6 例已知值(单台阶: 台阶高10·坡度63.43°·投影宽5·坡顶落 x20z10/坡底 x25z0·采场环外排除·面积/台阶高下限丢弃)。**build 0 错·单测 1070→1076**。
 
 **纠正记录**: [[unlock-blocked-insights]] 曾记"坡顶底线(native PMTB)阻"——BenchFaceExtractor 证明**表面法(现状面 TIN 按坡度)的坡顶底线是纯托管可做且更完整的**(native PMTB 点云栅格化路径另论)。**本会话三真缺口**(竖曲线/线形处理/台阶面提取)均在"名字前缀归堆"被自查纠错后挖出——收敛没到, 是我扫描执行有归堆盲区。见 [[unlock-blocked-insights]]。
+
+## 一九七、煤岩台阶判定(StandardLevelModel 煤/岩判定核)—— 只移可验证切片, 大启发式记录
+
+复扫 BlockModelLib/Domain 又见 `StandardLevelModel`(795 行 + 依赖 BenchLevelInventory + SeamColumnSampler 151 行)——"标准水平采矿模型": 台阶线→归标准水平级→相邻级配对成「幅」→逐幅判煤/岩台阶。**拆两层处理**:
+- **可验证核 → 移**: 煤/岩判定(`SeamColumnSampler.CoalThicknessIn` + 分类)是自足可验切片。载体 [src/Cad/BenchCoalClassifier.cs](src/Cad/BenchCoalClassifier.cs): 沿坡顶线等点采样各煤层柱(**复用 [VirtualBorehole](src/Cad/VirtualBorehole.cs)**=TinSampler 竖直求交)→ 各层与台阶区间 [toeZ,crestZ] 重叠煤厚 → 沿线平均煤厚(**分母全采样点**, 尖灭处 0 拉低均值)→ 煤厚占比=均厚/台阶高 → 煤(≥0.5)/混(>0.05)/岩; 各煤层分列(一台阶压多层煤); 出不出煤体看均厚≥最小可采(与占比脱钩, 薄煤层不被台阶高永远判成岩)。命令 `煤岩台阶判定`(坡顶线 CSV+台阶高→种子库层位点建 seam→判定+按煤/岩着色入场景)+ 面编辑菜单 + 目录; **可接台阶面提取出的坡顶线**(§一九六→§一九七 链)。验证 [BenchCoalClassifierTests](tests/PitMine3D.Kylin.Tests/BenchCoalClassifierTests.cs) 6 例已知值(煤/混/岩边界·尖灭全点分母·薄煤占比与可采脱钩·多煤层分列)。
+- **不可验证的大启发式 → 记录不移**: `StandardLevelModel` 的**台阶线→标准水平级归级 + 相邻级配对**含**实测图纸调校的相对闸门启发式**(`FaceRunRelaxFactor`/`MinAbsFaceRun` 相对间距闸门、实测倾角前探、原注"配对判据换过四版每版都在真实图纸上出错")——**本机无真实矿山图纸不可验**(不满足 loop"可验证"条件), 795 行 + BenchLevelInventory 依赖属中等子系统。按 loop"无法验证的先记录"记录。
+
+**build 0 错·单测 1076→1082**。**本会话第 4 真缺口**(煤岩台阶判定), 承 §一九六 台阶面提取(几何)补上**煤/岩分类维**。判据: 大算法拆"可验证核"(移)与"实测调校启发式"(记录), 不整包硬吞不可验的启发式。见 [[unlock-blocked-insights]]。
