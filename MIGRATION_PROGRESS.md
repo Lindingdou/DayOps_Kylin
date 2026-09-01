@@ -2188,3 +2188,11 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - **借鉴后跳过 · TaskZoneSplitter(采掘单元→任务区域)**: 是完整几何算法(前脸/坡底线+推进宽+各份量→二分求宽切条, 鞋带面积, 非线性面积-宽), 但**依赖 `DumpStripPlanner.ProjectOnto/AdvanceDirs`**(排土条带规划器几何)——而 Kylin 无 DumpStripPlanner(排土条带按 §一九一 系受阻排土规划引擎按钮), 且本质=**排土条带同款"按量沿推进切条"**、输入份额来自受阻排产引擎。→ 与受阻 排土规划 几何纠缠 + 输入为调度上下文 + 独立价值人为, 记录(非干净切片)。
 
 **结论**: 两条**独立**系统扫描(§一九二 模块标识符 diff + §一九三 作者标注切片扫描)**双双收敛于同一结论**: 竖曲线是唯一干净的可移植独立切片(已补), 其余 `纯几何` 类要么已覆盖、要么是受阻引擎的流水线几何步。这比单一主题透镜的"收敛感"强得多。见 [[unlock-blocked-insights]]。
+
+## 一九四、分析窗口 + 原版单测枚举(第三、四独立收敛信号)
+
+再加两条**独立**扫描, 均确认收敛:
+- **分析/报表窗口指标 diff(方法三)**: 枚举原版 17 个 `*AnalysisWindow/*StatsWindow/*ReportWindow`, diff Kylin。纯分析窗全覆盖(EquipmentAnalysis→MTBF/OEE/Weibull · FleetCockpit→机群驾驶舱 · OutputStats→产量统计 · CoalQualityStats/Dashboard→煤质统计/健康度/分煤层 · MeshVolumeReport→网格体积)。**两个"缺"皆引擎依赖**: `EquipmentStageAnalysisWindow`=**周排班矩阵**(21班×5工序能力-需求, 依赖月计划=排产域) · `QualityAnalysisWindow`=质量·配煤分析("**取引擎任务的质量回灌**"=TaskLib 引擎每面任务质量)→ 记录。
+- **原版单测枚举 diff(方法四, 最精确)**: 原版有 **242 个单测**(Tests.MineAssLib/PitMineApp/RoadLib/TaskLib)——作者测过=自足可测。筛"纯算法气味"名 diff Kylin: **ProfileSmoother 赫然在列**(=竖曲线, 印证本法能命中真切片); 其余纯算法名全覆盖(Centerline*/PolygonRegion/RegionClip/PathSolver/RoadCenterlineExtractor/SeamQualitySampler/SlopeGeometry/TransportIndicators/HaulCaliper) 或引擎上下文(Incline*/Bench*/Chain*/Dispatch*/Shift*/RoadLayout*/TerrainRamp*/UnitGraph*)。抽查 3 个"缺": `LineAboveMeshClip`(创建工程位置引擎·排土面裁台阶线) · `MeasuredVolumeBackfill`(MiningModelPlanner 计划引擎) · `WorkSlopeRange`(本期工作帮范围·规划域)——**皆引擎上下文, 记录**。
+
+**四法收敛**: §一九二 模块标识符 diff · §一九三 作者标注切片 · §一九四a 分析窗口指标 · §一九四b 原版 242 单测枚举——**四条独立系统方法一致指向**: 竖曲线是唯一干净可移植独立切片(已补), 余皆已覆盖或受阻引擎(流水线几何步/调度/计划/native)纠缠。原版**自己的测试**(最精确信号)把 ProfileSmoother 列为可测切片、印证本法命中真缺口, 且未暴露其他 Kylin 缺的独立算法。功能面收敛已达**四重独立证据**。见 [[unlock-blocked-insights]]。
