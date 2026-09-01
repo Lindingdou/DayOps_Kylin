@@ -2230,3 +2230,14 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - **不可验证的大启发式 → 记录不移**: `StandardLevelModel` 的**台阶线→标准水平级归级 + 相邻级配对**含**实测图纸调校的相对闸门启发式**(`FaceRunRelaxFactor`/`MinAbsFaceRun` 相对间距闸门、实测倾角前探、原注"配对判据换过四版每版都在真实图纸上出错")——**本机无真实矿山图纸不可验**(不满足 loop"可验证"条件), 795 行 + BenchLevelInventory 依赖属中等子系统。按 loop"无法验证的先记录"记录。
 
 **build 0 错·单测 1076→1082**。**本会话第 4 真缺口**(煤岩台阶判定), 承 §一九六 台阶面提取(几何)补上**煤/岩分类维**。判据: 大算法拆"可验证核"(移)与"实测调校启发式"(记录), 不整包硬吞不可验的启发式。见 [[unlock-blocked-insights]]。
+
+## 一九八、逐项(非归堆)复扫剩余引擎组收官 —— 自足几何/地质切片脉挖尽
+
+按"不按名字前缀归堆"纪律**逐项开来读**剩余被归堆的组, 确认无更多可移独立切片:
+- **BlockModelLib/Domain 挖尽**: BlockEditor(块体删除/约束 AABB/Mesh)= Kylin `约束块体`/`实体转块体`(GWN 逐格判内外)/`删除块体` 已覆盖; SectionSampler(境界 Z 层聚合)≈ `ResourceByElevation`; MeshContainmentTester=`WindingNumberTester`; WorkingFaceLineFitter/DepositAutoDetector 已移; OctreeLeafBuilder=块模内部; TaskZoneSplitter=依赖受阻 DumpStripPlanner(记录)。
+- **TaskLib/Zoning**: ZoneRaster(占地栅格)/ZoneFaceBinding(区↔面匹配)虽标"纯几何", 但**被 ProcessZonePlanner/ZoneAutoPlanner/ZoneLinkage 消费**=区划规划引擎流水线几何步(输入引擎中间态), 非独立特性 → 记录。
+- **TaskLib/Simulation**: SimSolidBuilder/UnitSolidStage(推演层体三角化)几何= Kylin loft/prism 原语已有, 装配属 sim 引擎 → 记录。
+- **PlanLib**: AdvancePlanner/SectionSolver/BenchElevationAnnotator/ComparisonBuilder(→ProgramComparer 方向感知归一)/PitEvaluator(→规划计算/PitDepthSolver NPV·剥采比)/CoalSinkAdapter(→SinkNode) **均已覆盖**(多为前期"最小 plan/参数"切片提出)。
+- **TaskLib 排产核**(Chain/Dispatch/Shift/Unit/Day/Week/Month/Order/Fleet/Truck): 记录的 17,588 行引擎(ProductionPlanContext/ExploderConfig/FlowAssigner), 8 个自足切片早已提出, 余引擎上下文。
+
+**结论**: 自足几何/地质切片脉(RoadLayout 2 + BlockModelLib/Domain 2)**已挖尽**——本会话 4 真缺口后, 逐项(非归堆)复扫剩余引擎组无更多可移独立切片, 剩全为**引擎流水线几何步(消费者已核实)/已覆盖/记录的大引擎**。这比 §一九四 的"五法收敛"可靠——那次有归堆盲区, 本次逐项核实消费者。可验证/可实现/保真的独立算法切片在此收敛。见 [[unlock-blocked-insights]]。
