@@ -2344,3 +2344,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [BenchParameterExtractorTests](tests/PitMine3D.Kylin.Tests/BenchParameterExtractorTests.cs) 8 例—— 两级台阶 H=10/α=45°/W=5/β≈33.69°/实量β≈38.66°/采深20/齐整(合成台阶闭式核验)、单级告警无平盘、台阶高不齐告警、缺坡顶或坡底降级、坡面配对遵守 Δz 窗口、**重合点守卫保平盘宽非 0**、CSV 按 role+lineId 分组、报表含头部指标。**build 0 错·单测 1155→1163**。
 
 **本会话第 14 功能**。教训: **`测试实验/` 的 console 驱动器是发现 module 内深埋纯算子的线索**——顺 `param_extract` 引用挖出 PlanLib.ShortTerm 的件一/件二簇, 大引擎虽不可验但其中的**纯几何算子可单独移可验**(6 个里 4 个先前已移, 补 1 个, 余 BenchElevationAnnotator)。判"大引擎不可移"别一刀切, 内部纯算子要逐个看。见 [[unlock-blocked-insights]]。
+
+## 二一〇、标注台阶标高(BenchElevationAnnotator)—— ShortTerm 纯放置算法(第 15 功能)
+
+补 ShortTerm 簇最后一处缺口 `BenchElevationAnnotator`: [src/Cad/BenchElevationAnnotator.cs](src/Cad/BenchElevationAnnotator.cs) 移植其**放置算法**——① 每条台阶线代表点 = 最接近 XY 质心的顶点(符号坐落线上非悬空质心), 代表高程 = 顶点 Z 均值取整; ② **平盘居中** = 代表点与「最近同高程·异线」边点取中点(坡顶线↔坡底线夹出的平盘两沿同高程, 中点落平盘内部); ③ **网格去重** = 平盘点落同格 + 同整米高程只留一处(坡顶/坡底各算一次自然并成 1); ④ 按作业区域类别配色(采场橙/外排蓝/内排绿)。放置核与原版逐字一致。
+
+**2D 场景适配(记录)**: 原 `Build` 产出 **PMBI 三维实体载荷**(含绕 X/Y/Z 倾斜的立式朝向框、字体样式), 推入内核生成 AcDb 实体——PMBI 是**内核喂食内部传输**, Kylin 无内核、场景 2D XY, 故本类改出**放置点列(Marker)**(纯、可单测), 由命令层画成 2D 场景实体(▽ 闭合多段线 + 顶边引线 + 文字); 三维倾斜/朝向不适用 2D 场景故弃。符号几何(TriangleXY/LeaderXY/TextAnchorXY)平面化。命令 `标注台阶标高 [符号大小m]`(CSV lineId,x,y,z[,category] → 放置 → 画 ▽+引线+高程)。
+
+**验证(已知值)**: [BenchElevationAnnotatorTests](tests/PitMine3D.Kylin.Tests/BenchElevationAnnotatorTests.cs) 8 例—— 坡顶坡底同高程各自居中→同落 X=5→去重成 1(居中计数 2)、关居中留 2 处、网格去重(近并/远留)、高程标签正负零号、类别配色 + 固定色压过类别、代表点=最近质心顶点、空/无效降级、▽/引线/文字符号几何闭式值。**build 0 错·单测 1163→1171**。
+
+**本会话第 15 功能**。至此 **PlanLib.ShortTerm 件一/件二纯算子簇全数到位**(LandformClassifier/MineableArea/RegionGeometry/BenchWidth 先前已移 + ParameterExtractor + BenchElevationAnnotator 本会话补)。教训: **产出内核专属格式(PMBI)的纯算法, 把"算法核"与"输出格式"切开——核保真移植 + 输出改投 2D 场景实体**, 即可移可验; PMBI 本身(内核喂食传输)无 Kylin 消费者故不移。余 ParameterVerifier(件二·校核)依赖参数验收引擎链, 待评估。见 [[unlock-blocked-insights]]。

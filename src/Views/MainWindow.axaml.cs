@@ -773,6 +773,7 @@ public partial class MainWindow : Window
             if (cmd == "坡顶底线" || cmd == "坡顶坡底线" || cmd == "断棱线提取" || cmd == "坡顶底线提取" || cmd.StartsWith("坡顶底线 ")) { await CrestToeAsync(cmd); return; }
             if (cmd == "平盘标高清单" || cmd == "平盘清单" || cmd == "标高清单" || cmd == "平盘标高统计" || cmd.StartsWith("平盘标高清单 ") || cmd.StartsWith("平盘清单 ")) { await BenchLevelInventoryAsync(cmd); return; }
             if (cmd == "现状参数提取" || cmd == "台阶参数反推" || cmd == "现状台阶参数" || cmd == "参数反推" || cmd.StartsWith("现状参数提取 ") || cmd.StartsWith("台阶参数反推 ")) { await BenchParameterExtractAsync(cmd); return; }
+            if (cmd == "标注台阶标高" || cmd == "台阶标高标注" || cmd == "标高标注" || cmd.StartsWith("标注台阶标高 ") || cmd.StartsWith("台阶标高标注 ")) { await BenchElevationAnnotateAsync(cmd); return; }
             if (cmd == "坡向着色" || cmd == "坡向") { await ShadeTinAsync("坡向着色", "按朝向 HSV 配色", TerrainAnalysis.BuildAspectMap); return; }
             if (cmd == "高程着色" || cmd == "分色显示" || cmd == "高程分带") { await ShadeTinAsync("高程着色", "低绿→中黄→高棕", TerrainAnalysis.BuildElevationMap); return; }
             if (cmd == "体积计算" || cmd == "算量" || cmd == "土方量") { await VolumeAsync(); return; }
@@ -1750,6 +1751,56 @@ public partial class MainWindow : Window
 
         var saved = await SaveCsvAsync("现状台阶参数", "现状台阶参数.csv", BenchParameterExtractor.BuildReport(res, System.IO.Path.GetFileName(files[0].Path.LocalPath)));
         StatusMsg.Text = res.Message + (saved != null ? $" · 报表已存 {saved}" : "");
+    }
+
+    // 标注台阶标高(忠实 BenchElevationAnnotator 放置算法): 台阶线 CSV(lineId,x,y,z[,category]) →
+    // 逐条定「▽ 标高符号 + 高程数字」放置点(平盘居中/网格去重/类别配色) → 画 ▽+引线+文字到场景。
+    // 场景 2D 无逐点 Z, 故由 CSV 提供标高; 原三维倾斜朝向不适用 2D 场景(记录), 放置算法保真。
+    // "标注台阶标高 [符号大小m]" 指定符号大小(缺省按范围自动)。
+    private async Task BenchElevationAnnotateAsync(string cmd)
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "标注台阶标高：选台阶线 CSV (lineId,x,y,z[,category])",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("台阶线 (CSV/TXT)") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (files.Count == 0) return;
+        string text;
+        try { text = System.IO.File.ReadAllText(files[0].Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"标注台阶标高：读文件失败 {ex.Message}"; return; }
+
+        var lines = BenchElevationAnnotator.ParseCsv(text);
+        if (lines.Count == 0) { StatusMsg.Text = "标注台阶标高：CSV 没解析出线(需 lineId,x,y,z 四列)"; return; }
+
+        var opt = new BenchElevationAnnotator.Options();
+        int sp = cmd.IndexOf(' ');
+        if (sp >= 0 && double.TryParse(cmd.Substring(sp + 1).Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double sz) && sz > 0)
+            opt.SymbolSize = sz;
+
+        var res = BenchElevationAnnotator.Build(lines, opt);
+        if (!res.Ok) { StatusMsg.Text = $"标注台阶标高：{res.Message}"; return; }
+
+        double bx0 = double.MaxValue, by0 = double.MaxValue, bx1 = double.MinValue, by1 = double.MinValue;
+        void Grow(double x, double y) { if (x < bx0) bx0 = x; if (y < by0) by0 = y; if (x > bx1) bx1 = x; if (y > by1) by1 = y; }
+        BeginChange();
+        foreach (var m in res.Markers)
+        {
+            float cr = m.R / 255f, cg = m.G / 255f, cb = m.B / 255f;
+            // ▽ 符号(闭合三角) + 顶边引线 + 高程文字, 均落 台阶标高标注 图层。
+            var tri = BenchElevationAnnotator.TriangleXY(m.X, m.Y, res.SymbolSize);
+            var pl = new PolylineEntity { Closed = true, Cr = cr, Cg = cg, Cb = cb, LayerName = BenchElevationAnnotator.Layer };
+            foreach (var (x, y) in tri) { pl.Points.Add((x, y)); Grow(x, y); }
+            _scene.Add(pl);
+            var (lx0, ly0, lx1, ly1) = BenchElevationAnnotator.LeaderXY(m.X, m.Y, res.SymbolSize, m.Label.Length);
+            _scene.Add(new LineEntity { X0 = lx0, Y0 = ly0, X1 = lx1, Y1 = ly1, Cr = cr, Cg = cg, Cb = cb, LayerName = BenchElevationAnnotator.Layer });
+            var (tx, ty) = BenchElevationAnnotator.TextAnchorXY(m.X, m.Y, res.SymbolSize);
+            _scene.Add(new TextEntity { X = tx, Y = ty, Height = res.SymbolSize, Text = m.Label, Cr = cr, Cg = cg, Cb = cb, LayerName = BenchElevationAnnotator.Layer });
+            Grow(lx1, ly1);
+        }
+        RefreshScene();
+        if (bx1 > bx0) Viewport.FitBounds(new[] { bx0, by0, bx1, by1 });
+        StatusMsg.Text = res.Message;
     }
 
     // 煤厚分析等厚线(原 ThicknessSurfaceBuilder「煤厚分析面」的平面等厚线): 观测/见煤点 CSV → 取每行前 3 个
@@ -8715,7 +8766,7 @@ public partial class MainWindow : Window
         // 块体/运输/路网
         "块体模型","资源量","道路横断面","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","演化对比","螺旋斜坡道","折返斜坡道",
         // 生产计划/投影
-        "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","平盘宽度识别","平盘标高清单","现状参数提取","确定可采区域","点落到面上","线落到面上",
+        "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","平盘宽度识别","平盘标高清单","现状参数提取","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
         "设备台账","生产数据","产能分析","故障分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","层位求交","导入生产记录","导入月度产能","导入故障记录","导入月度KPI","导入设备台账","导入煤质","导入观测点","导入月度计划","导入见煤成果","导入路况","导入边坡","导入模板","导出分析",
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","机群驾驶舱","设备综合评分","数据看板","煤种分类","煤质数据健康度","分煤层煤质",
