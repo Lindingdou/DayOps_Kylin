@@ -775,6 +775,7 @@ public partial class MainWindow : Window
             if (cmd == "现状参数提取" || cmd == "台阶参数反推" || cmd == "现状台阶参数" || cmd == "参数反推" || cmd.StartsWith("现状参数提取 ") || cmd.StartsWith("台阶参数反推 ")) { await BenchParameterExtractAsync(cmd); return; }
             if (cmd == "标注台阶标高" || cmd == "台阶标高标注" || cmd == "标高标注" || cmd.StartsWith("标注台阶标高 ") || cmd.StartsWith("台阶标高标注 ")) { await BenchElevationAnnotateAsync(cmd); return; }
             if (cmd == "参数校核" || cmd == "台阶参数校核" || cmd == "现状参数校核" || cmd.StartsWith("参数校核 ") || cmd.StartsWith("台阶参数校核 ")) { await BenchParameterVerifyAsync(cmd); return; }
+            if (cmd == "趋势整合台阶" || cmd == "趋势整合" || cmd == "整合台阶" || cmd == "趋势规整台阶" || cmd.StartsWith("趋势整合台阶 ") || cmd.StartsWith("趋势整合 ")) { await TrendIntegrateAsync(cmd); return; }
             if (cmd == "坡向着色" || cmd == "坡向") { await ShadeTinAsync("坡向着色", "按朝向 HSV 配色", TerrainAnalysis.BuildAspectMap); return; }
             if (cmd == "高程着色" || cmd == "分色显示" || cmd == "高程分带") { await ShadeTinAsync("高程着色", "低绿→中黄→高棕", TerrainAnalysis.BuildElevationMap); return; }
             if (cmd == "体积计算" || cmd == "算量" || cmd == "土方量") { await VolumeAsync(); return; }
@@ -1847,6 +1848,55 @@ public partial class MainWindow : Window
         string statusCn = rep.OverallStatus switch { "pass" => "合格", "warning" => "偏差", "fail" => "超标", _ => "待定" };
         StatusMsg.Text = $"参数校核({(isDump ? "排土场" : "采场")}·{rep.DesignProvenance})：总体 {statusCn}；{ext.Message}"
                        + (saved != null ? $" · 报表已存 {saved}" : "");
+    }
+
+    // 趋势整合现状台阶(忠实 TrendBenchIntegrator): 选中一条趋势多段线 + 台阶线 CSV(lineId,x,y,z) →
+    // 趋势∩台阶求交 → 按标高聚级 → 每级压平到 z_k + 断头接平成规整线, 按级配色入场景。
+    // 趋势线取 XY(场景 2D 够用); 台阶标高由 CSV 提供。"趋势整合台阶 [聚级带宽m]"(缺省 5)。
+    private async Task TrendIntegrateAsync(string cmd)
+    {
+        var trendPl = _selected.OfType<PolylineEntity>().FirstOrDefault();
+        if (trendPl == null || trendPl.Points.Count < 2) { StatusMsg.Text = "趋势整合台阶：请先在场景选中一条趋势多段线(方向线)"; return; }
+        var trend = trendPl.Points.Select(p => (p.x, p.y, 0.0)).ToList();
+
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "趋势整合台阶：选现状台阶线 CSV (lineId,x,y,z)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("台阶线 (CSV/TXT)") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (files.Count == 0) return;
+        string text;
+        try { text = System.IO.File.ReadAllText(files[0].Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"趋势整合台阶：读文件失败 {ex.Message}"; return; }
+        var benchLines = BenchLevelInventory.ParseCsv(text).Select(l => l.Xyz).Where(x => x.Length >= 6).ToList();
+        if (benchLines.Count == 0) { StatusMsg.Text = "趋势整合台阶：CSV 无台阶线(需 lineId,x,y,z)"; return; }
+
+        double bw = 5;
+        int sp = cmd.IndexOf(' ');
+        if (sp >= 0 && double.TryParse(cmd.Substring(sp + 1).Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double b) && b > 0) bw = b;
+
+        var r = Cad.TrendBenchIntegrator.Integrate(trend, benchLines, bw);
+        if (!r.Success) { StatusMsg.Text = $"趋势整合台阶：{r.Error}"; return; }
+
+        double bx0 = double.MaxValue, by0 = double.MaxValue, bx1 = double.MinValue, by1 = double.MinValue;
+        BeginChange();
+        int nLv = r.Benches.Count;
+        for (int i = 0; i < r.Benches.Count; i++)
+        {
+            var ib = r.Benches[i];
+            float t = nLv > 1 ? (float)i / (nLv - 1) : 0f;
+            var pl = new PolylineEntity { Cr = 1 - t, Cg = 0.5f, Cb = t, LayerName = "整合台阶" };
+            foreach (var p in ib.Line)
+            {
+                pl.Points.Add((p.X, p.Y));
+                if (p.X < bx0) bx0 = p.X; if (p.Y < by0) by0 = p.Y; if (p.X > bx1) bx1 = p.X; if (p.Y > by1) by1 = p.Y;
+            }
+            _scene.Add(pl);
+        }
+        RefreshScene();
+        if (bx1 > bx0) Viewport.FitBounds(new[] { bx0, by0, bx1, by1 });
+        StatusMsg.Text = $"趋势整合台阶：{r.CrossingCount} 交点 → {r.Benches.Count} 级规整台阶(带宽 {bw:0.#}m; 标高 {r.Benches.Min(x => x.Elevation):0.#}~{r.Benches.Max(x => x.Elevation):0.#}m)";
     }
 
     // 煤厚分析等厚线(原 ThicknessSurfaceBuilder「煤厚分析面」的平面等厚线): 观测/见煤点 CSV → 取每行前 3 个
@@ -8921,7 +8971,7 @@ public partial class MainWindow : Window
         // 块体/运输/路网
         "块体模型","资源量","道路横断面","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","中线交点","演化对比","螺旋斜坡道","折返斜坡道",
         // 生产计划/投影
-        "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","标注台阶标高","确定可采区域","点落到面上","线落到面上",
+        "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
         "设备台账","生产数据","产能分析","故障分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","层位求交","导入生产记录","导入月度产能","导入故障记录","导入月度KPI","导入设备台账","导入煤质","导入观测点","导入月度计划","导入见煤成果","导入路况","导入边坡","导入模板","导出分析",
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","机群驾驶舱","设备综合评分","数据看板","煤种分类","煤质数据健康度","分煤层煤质",

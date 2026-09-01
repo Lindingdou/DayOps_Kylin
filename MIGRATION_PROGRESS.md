@@ -2394,3 +2394,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [CenterlineJunctionsTests](tests/PitMine3D.Kylin.Tests/CenterlineJunctionsTests.cs) 7 例—— X 十字内部交(5,5)/立交高差标记/T 端点落身/接缝非真路口(度2)/**三线汇合就近合并成 1 个 3 度真路口**(非 3 接缝, MergedCount=2)/Nearest 真路口优先于接缝+半径外 null/空退化安全。**build 0 错·单测 1196→1203**。
 
 **本会话第 19 功能**。教训: **全模块纯引擎清单交叉核对时, name-mismatch 假缺口成批**(StructurePavement/ParametricCenterlines/PolylineMetrics 都是改名已移)——grep 类名 ✗ 只是线索, 须回读确认语义(RoadSurface=结构路面 ribbon 已覆盖); 真缺口 CenterlineJunctions 与既有 RoadNetwork(只数度)**互补**(四型分类 vs 度计数)。**2D 场景限制**: Z=0 故不判立交(需 3D 中线), 但四型平面分类完整可用, 已记录。见 [[unlock-blocked-insights]]。
+
+## 二一五、趋势整合现状台阶(TrendBenchIntegrator)—— MineAssLib/Driving 续挖(第 20 功能)
+
+纯引擎清单剩余 ✗ 逐个核实: RoadClipRegion(DTO)/RoadSkeletonExtractor(点云路提取, 覆盖)/RoadConditionSymbology(=纵坡分析分档着色覆盖)/WorkLineProjector·UnitGraph·Incline*·StraightRamp*·TerrainRamp*(引擎中间层/native 斜面) 皆记录, 但 **`MineAssLib/Driving/TrendBenchIntegrator` 是真缺口**(该目录曾出 TautString 月度剥离, "读毕"又漏一处)。
+
+忠实移植 [src/Cad/TrendBenchIntegrator.cs](src/Cad/TrendBenchIntegrator.cs)(245 行, 0 引擎依赖): 用一条趋势线沿其方向整合现状台阶——趋势∩各台阶线(2D 求交)→ 交点取该台阶**整条代表标高**(=平盘水平, 比交点一点稳)→ 按标高 1D 聚级(带宽≈台阶高/2)→ 每级把源台阶段**压平到 z_k** + 贪心**断头接平**成一条规整线; 另 ExtractPlatformLevels/AlongTrend 出平盘标高序列(降序)。高程分布皆来自现状真值, 不放坡造假。命令 `趋势整合台阶 [聚级带宽m]`(选中趋势多段线 + 台阶线 CSV → 规整线按级配色入场景)。
+
+**验证(已知值)**: [TrendBenchIntegratorTests](tests/PitMine3D.Kylin.Tests/TrendBenchIntegratorTests.cs) 6 例—— 竖直趋势穿三级(标高 100/110/120 压平)、**同级两段压平+断头接平成一条(4 点, SourceCount=2)**、无交点降级、无效趋势降级、ExtractPlatformLevels 降序聚级(120.5/110/100)、AlongTrend 只计趋势穿过的级。**build 0 错·单测 1203→1209**。
+
+**本会话第 20 功能**。至此本会话续作(元角度: 逐子目录+全模块纯引擎清单)连补 **9 功能(12–20)**: 快速选择/平盘标高清单/现状参数提取/标注台阶标高/参数校核/煤质分析补全(灰分回归+综合结论)/空间交叉验证/中线交点分类/趋势整合台阶。单测 1010→1209。教训: **"读毕"的目录仍会漏——MineAssLib/Driving 出了 TautString 后又漏 TrendBenchIntegrator; 全模块纯引擎清单(注 纯C#/无依赖)逐个 grep+回读, 是比"逐目录读"更硬的收敛判据**。见 [[unlock-blocked-insights]]。
