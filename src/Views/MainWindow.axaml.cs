@@ -1105,6 +1105,7 @@ public partial class MainWindow : Window
             if (cmd == "侧面三角网" || cmd == "侧面放样" || cmd == "放样侧面") { await SideSurfaceAsync(); return; }
             if (cmd == "道路横断面" || cmd == "路面加宽超高" || cmd == "弯道加宽") { RoadCrossSectionCmd(); return; }
             if (cmd.StartsWith("道路设计参数") || cmd.StartsWith("最小平曲线半径") || cmd.StartsWith("平曲线半径") || cmd.StartsWith("道路设计校核")) { RoadDesignParamsCmd(cmd); return; }
+            if (cmd.StartsWith("运输布局方案") || cmd.StartsWith("道路布局求解") || cmd.StartsWith("坑线布局方案") || cmd.StartsWith("运输系统布局")) { await RoadLayoutCmd(cmd); return; }
             if (cmd == "路面生成" || cmd == "生成路面" || cmd == "中线外扩" || cmd.StartsWith("路面生成 ") || cmd.StartsWith("生成路面 ")) { RoadSurfaceCmd(cmd); return; }
             if (cmd == "纵坡分析" || cmd == "纵坡" || cmd == "坡度分档" || cmd == "限坡校核" || cmd.StartsWith("纵坡分析 ") || cmd.StartsWith("限坡校核 ")) { await GradeProfileAsync(cmd); return; }
             if (cmd == "竖曲线平滑" || cmd == "竖曲线" || cmd == "纵断面竖曲线" || cmd.StartsWith("竖曲线平滑 ") || cmd.StartsWith("竖曲线 ")) { await VerticalCurveAsync(cmd); return; }
@@ -5716,6 +5717,36 @@ public partial class MainWindow : Window
             + (name != null ? $" · 分期量表 → {name}(喂 剥采比均衡)" : "");
     }
 
+    // 运输道路布局求解: 坑线候选 CSV(fromLevel,toLevel,lengthM,geomFeasible[,note]) + 需求/单车道运力/单价 → 紧凑/均衡/单线三方案。
+    // 忠实原 RoadLayoutSolver 方案构建核(运量定车道→拆线→可行/成本)。候选可由坑线生成 + FleetOptimizer 运力估。
+    private async Task RoadLayoutCmd(string cmd)
+    {
+        var tk = cmd.Split(new[] { ' ', ',', '，' }, System.StringSplitOptions.RemoveEmptyEntries);
+        if (tk.Length < 2 || !double.TryParse(tk[1], out double demand) || demand <= 0)
+        { StatusMsg.Text = "运输布局方案：用法 运输布局方案 <每期需求t> [单车道运力t 默认1500] [单价元/tkm 默认2]（选坑线候选 CSV: fromLevel,toLevel,lengthM,geomFeasible[,note]）"; return; }
+        double perLane = 1500; if (tk.Length >= 3 && double.TryParse(tk[2], out var pl) && pl > 0) perLane = pl;
+        double unitCost = 2; if (tk.Length >= 4 && double.TryParse(tk[3], out var uc) && uc > 0) unitCost = uc;
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "运输布局方案：选坑线候选 CSV (fromLevel,toLevel,lengthM,geomFeasible[,note])",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("候选 (CSV/TXT)") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (files.Count == 0) return;
+        var cands = new List<Cad.RoadLayoutSolver.RampCand>();
+        foreach (var ln in System.IO.File.ReadAllLines(files[0].Path.LocalPath))
+        {
+            var p = ln.Split(new[] { ',', '\t' }, System.StringSplitOptions.None);
+            if (p.Length < 3 || !double.TryParse(p[0].Trim(), out double f) || !double.TryParse(p[1].Trim(), out double t2) || !double.TryParse(p[2].Trim(), out double len) || len <= 0) continue;
+            bool feas = p.Length < 4 || !(p[3].Trim().ToLowerInvariant() is "0" or "false" or "no" or "n" or "否");
+            cands.Add(new Cad.RoadLayoutSolver.RampCand(f, t2, len, feas, p.Length >= 5 ? p[4].Trim() : "几何不可行"));
+        }
+        if (cands.Count == 0) { StatusMsg.Text = "运输布局方案：候选 CSV 无有效行(需 fromLevel,toLevel,lengthM[,geomFeasible,note])"; return; }
+        var r = Cad.RoadLayoutSolver.Solve(cands, demand, perLane, unitCost);
+        var parts = r.Schemes.Select(s => $"{s.Name.Split('·')[0]}({s.TotalLanes}车道/{s.Lines.Count}线·{(s.Feasible ? "可行" : "✗" + s.Violations.Count + "违规")}·基建{s.TotalCapexProxyM:0}m·运营{s.TotalHaulCostYuan / 1e4:0.#}万元)");
+        StatusMsg.Text = $"运输布局方案({cands.Count} 候选·需求 {demand:0}t/期·单车道 {perLane:0}t)：推荐「{r.Recommended?.Name ?? "无可行方案"}」 · " + string.Join(" | ", parts);
+    }
+
     // 派生计划方案：块体→场→按不同采区数/推进方位派生多方案→逐一评价→按 NPV 排名 报表
     private void DerivePlansCmd()
     {
@@ -9468,7 +9499,7 @@ public partial class MainWindow : Window
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割","移除障碍物",
         // 块体/运输/路网
-        "块体模型","资源量","面约束块体","离散化模型","道路横断面","道路设计参数","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道","直线斜坡道",
+        "块体模型","资源量","面约束块体","离散化模型","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道","直线斜坡道",
         // 生产计划/投影
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","开采程序切分","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)

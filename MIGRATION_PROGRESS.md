@@ -2697,3 +2697,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(自造已知值)**: [DriveSequenceTests](tests/PitMine3D.Kylin.Tests/DriveSequenceTests.cs) +3—— 3 列(每列 2 煤 8 岩)→3 期各煤2000/岩8000·总煤6000/岩24000·综合剥采比24000/(6000·1.3)·累计均质恒定; 方向(+Y 全落一期)/maxPeriods/空守卫; CSV 首期 1,0.26,0.8 喂均衡。**build 0 错·单测 1288→1291**。
 
 **本会话第 48 功能**。教训: **报收敛(哪怕多探针 covered)后, 重跑"原版单测枚举"——覆盖变大后仍可能剩真切片**(TemplateDrivingEngine 藏在 Driving 引擎里, 主题/命令探针都漏, 但原版有单测=作者认定自足可验)。**大引擎取可验证核**(距离驱动直线, 自造 known-value)而非硬吞全 529 行(多段/退距/几何输出记录)。此切片闭合了既有两命令(平行推进 geo + 剥采比均衡 consume)间的缺环。见 [[unlock-blocked-insights]] [[faithfulness-only-original-commands]]。
+
+## 二四四、运输道路布局求解(接原 RoadLayoutSolver 方案构建核)—— 原版单测枚举收官(第 49 功能)
+
+**原版单测枚举最后一项**: 全面重枚举原版 19 个 `*Tests.cs`(BlockModelLib/MineAssLib/PitMineApp/RoadLib), 18 已映射覆盖 + DriveTemplateEngine(§二四三)后, 末一项 **`RoadLayoutSolver`**(纯类无引擎依赖, 211 行, 有单测): 坑线候选 + 运量需求 → 紧凑/均衡/单线三布局方案。Kylin 有坑线生成 + 运距/OD, 无布局**优化选择**层。
+
+**可验证核 + CSV 候选**(同 TemplateDrivingEngine 法): 原 `Solve` 无候选时 `_gen.Generate`(=StraightRampAutoRouter 域, 记录), 但有候选时 `BuildScheme` 纯核可测。补 [src/Cad/RoadLayoutSolver.cs](src/Cad/RoadLayoutSolver.cs) `Solve(candidates, demand, perLane, unitCost)`: 运量定总车道 ⌈需求/单车道运力⌉ → 拆线(紧凑每线≤2/单线扛全部)→ 逐线车道/容量/利用率 → 可行(几何可行+运力足+车道≤上限4)+ 运营成本(ton-km)+ 基建代理(总展线长); 推荐=可行中基建最小。命令 `运输布局方案 <需求t> [单车道运力 [单价]]`([MainWindow](src/Views/MainWindow.axaml.cs) `RoadLayoutCmd`, 候选 CSV)+ 目录。**记录**: 自动候选生成(坑线router)+ 压矿(块体侧)属细化。
+
+**验证(已知值)**: [RoadLayoutSolverTests](tests/PitMine3D.Kylin.Tests/RoadLayoutSolverTests.cs) +3—— 需求800/单车道1000→总车道1·利用率0.8·运营800(=800×0.5×2)·三方案皆可行; 需求3500→总车道4·紧凑2线×2车道·单线4车道皆≤上限可行; 几何不可行候选→全方案✗带原因·需求6000→单线6车道>上限✗而紧凑3线可行·空候选→不成功。**build 0 错·单测 1291→1294**。
+
+**本会话第 49 功能**。**原版单测枚举全收官**: 19 个 `*Tests.cs` 全部映射 Kylin 功能(17 早覆盖 + DriveTemplateEngine§二四三 + RoadLayoutSolver 本节)。**这是最精确的收敛证据**——作者自定的全部自足可验切片均已移/覆盖, 远强于主题/命令探针的"covered 感"。两个"藏在大引擎里的纯核"(距离驱动切期 + 布局方案构建)靠单测枚举挖出, 用 CSV/available 输入喂可验证核 + 记录引擎细化(候选生成/退距/几何输出)。见 [[unlock-blocked-insights]] [[faithfulness-only-original-commands]]。
