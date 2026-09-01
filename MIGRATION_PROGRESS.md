@@ -2832,3 +2832,22 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [BlockAttrExpressionTests](tests/PitMine3D.Kylin.Tests/BlockAttrExpressionTests.cs) +6—— 运算优先级/括号/%/一元−; 属性公式(grade·体积·密度、埋深1000−z、未定义→0); 14 函数逐一(min/max/abs/sqrt/floor/ceil/round 银行家舍入/exp/log); clamp 上下夹 + if 条件; 除零/模零→NaN 不抛; 语法错抛。**build 0 错·单测 1316→1322**。
 
 **本会话第 60 功能**。教训: **第四收敛角度=域引擎类(*Engine/*Solver)枚举**——继测试/命令/格式三角度, 域算法类枚举挖出 present-but-partial(Kylin 有谓词子集缺值模式)。又一"受数据模型限"误记被纠(`_blockAttrs` 本支持多属性)。**"受限/blocked"记录逐条复核仍是富矿, 第 N 次证明我的记录不可靠**。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二五四 自标限制复核 + 导出实体覆盖（第五/六收敛角度）
+
+**第五角度: 源码自标"限制/记录"注释逐条复核**。grep Kylin src 自标『受限/记录/仅/简化/待接』的限制注释, 逐条对证——**多为过期**(功能早落地, 注释未更, 是过往误记之源):
+- BenchLines "定距近似待接" → `BenchDistance(W+H/tanα)` 已由命令『台阶扩帮 W H α』接入(过期)
+- PmxExport "圆弧暂不导出" → 圆弧 type15 §39 已导(过期)
+- BlockExpression "公式赋值受数据模型限" → 值模式 §253 已补(过期)
+- PmbImport "多属性→单属性" → 全属性留 AllAttrs(过期)
+- 真阻(记录属实): RoadLayoutSolver 自动候选(3D 路由器)· AttainmentAnalyzer 等待原因码归因(任务域模型)· MeshHoleFill 大洞质量 · 原生填充图案库 · JPEG 渐进式 · RoadTopology 装卸点(次要建模差异)。
+
+**发现一真可做**: PmxExport 注"正多边形暂不导出"——但 `PolygonEntity` 几何即闭合多边形, 可如矩形导为闭合多段线2。补 `case PolygonEntity`(N 顶点=Cx+R·cos/sin(Rot+2πi/N)) + 往返测试(正方形→4 顶点精确)。
+
+**第六角度: 导出实体覆盖枚举**。Kylin 2D 场景全 8 类 `SceneEntity`(Line/Point/Polyline/Rect/Circle/Arc/Text/Polygon):
+- **PmxExport**: 加正多边形后 **8/8 全覆盖**; MText/Hatch/椭圆/样条 = 原版实体 Kylin 未建模(无从导, 非缺)。
+- **SceneExport(DXF/DWG, ACadSharp)**: **8/8 全覆盖** + 多行文字→MText(高保真, 甚超 PMX)。
+
+**教训**: **注释即"记录", 过期注释诱发再误判**——逐条复核自标限制是第五角度(继测试/命令/格式/引擎), 又纠 4 过期注释、挖 1 真可做(正多边形导出)。**导出实体覆盖(第六角度)= 枚举场景实体 × 各导出器 case**, 确认 PMX/DXF 皆 8/8。至此**六收敛角度**互证。见 [[unlock-blocked-insights]]。
