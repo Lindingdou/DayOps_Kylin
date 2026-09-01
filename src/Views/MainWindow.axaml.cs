@@ -907,6 +907,7 @@ public partial class MainWindow : Window
             if (cmd == "画道路中线" || cmd == "手动标定线路" || cmd == "道路中线绘制") { ActivateDrawTool("多段线"); StatusMsg.Text = "画道路中线：绘制折线作道路中线（供路网/寻径/演化对比）"; return; }
             if (cmd == "境界圈定" || cmd == "凸包" || cmd == "采场圈定" || cmd == "采场/排土场圈定") { await BoundaryHullAsync(); return; }
             if (cmd == "确定境界" || cmd == "境界优化" || cmd == "最优坑深" || cmd == "经济境界") { PitDepthCmd(); return; }
+            if (cmd == "开采程序切分" || cmd == "逐期量核算" || cmd == "分期量表" || cmd == "分期剥采比" || cmd.StartsWith("开采程序切分 ")) { await DriveSequenceCmd(cmd); return; }
             if (cmd == "采区划分" || cmd == "采区" || cmd == "储量均衡划分") { PanelSplitCmd(); return; }
             if (cmd == "规划计算" || cmd == "开采程序评价" || cmd == "程序评价") { ProgramEvaluateCmd(); return; }
             if (cmd == "派生计划方案" || cmd == "派生方案" || cmd == "多方案派生") { DerivePlansCmd(); return; }
@@ -5692,6 +5693,29 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"确定境界(净值最大)：最优坑深 {r.DepthM:0.#}m(底层 k={r.BottomK}/{prof.Nz}) · 圈入煤 {coalWan:0.#}万t · 岩 {wasteWan:0.#}万m³ · 境界剥采比 {r.ContourSR:0.##} · 净值 {r.NetValueYuan / 1e4:0.#}万元{econ}";
     }
 
+    // 开采程序切分: 块体(_lastBlocks) + 选中工作线(定推进方位) + 推进步距 → 逐期煤/岩量 + 累计剥采比 + 导 CSV(喂剥采比均衡)。
+    // 忠实原 TemplateDrivingEngine 距离驱动核(平面近似, 陡帮台阶退距≈0)。用法「开采程序切分 [推进步距m 默认50]」。
+    private async Task DriveSequenceCmd(string cmd)
+    {
+        if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "开采程序切分：请先导入/生成块体"; return; }
+        double adv = 50;
+        var tk = cmd.Split(new[] { ' ', ',', '，' }, System.StringSplitOptions.RemoveEmptyEntries);
+        if (tk.Length >= 2 && double.TryParse(tk[1], out var a) && a > 0) adv = a;
+        // 推进方位: 选中工作线首末方向的法向; 无选中默认 +X。
+        double dirX = 1, dirY = 0; string dirHint = "默认+X向";
+        var line = _selected.OfType<PolylineEntity>().FirstOrDefault(p => p.Points.Count >= 2);
+        if (line != null) { var p0 = line.Points[0]; var p1 = line.Points[^1]; double dx = p1.Item1 - p0.Item1, dy = p1.Item2 - p0.Item2; double dl = System.Math.Sqrt(dx * dx + dy * dy); if (dl > 1e-9) { dirX = -dy / dl; dirY = dx / dl; dirHint = "选中工作线法向"; } }
+        double gsum = 0; foreach (var b in _lastBlocks) gsum += b.Grade; double cutoff = gsum / _lastBlocks.Count;
+        var cells = _lastBlocks.Select(b => new Cad.DriveSequence.Cell(b.X, b.Y, b.Size * b.Size * b.Size, b.Grade >= cutoff)).ToList();
+        const double density = 1.3;
+        var r = Cad.DriveSequence.SweepByDistance(cells, dirX, dirY, adv, density);
+        if (r.Periods.Count == 0) { StatusMsg.Text = "开采程序切分：分期失败(检查块体/步距>0)"; return; }
+        var name = await SaveCsvAsync("导出分期量表", "drive_periods.csv", Cad.DriveSequence.ToBalanceCsv(r, density));
+        var head = string.Join(" ", r.Periods.Take(4).Select(p => $"期{p.Index + 1}(煤{p.CoalVolM3 / 1e4:0.#}/岩{p.RockVolM3 / 1e4:0.#}万m³·累计剥采比{p.CumStripRatio:0.##})"));
+        StatusMsg.Text = $"开采程序切分({dirHint}·步距{adv:0.#}m)：{r.Periods.Count} 期 · 总煤 {r.TotalCoalVolM3 / 1e4:0.#}万m³ · 总岩 {r.TotalRockVolM3 / 1e4:0.#}万m³ · 综合剥采比 {r.OverallStripRatio:0.##} · {head}"
+            + (name != null ? $" · 分期量表 → {name}(喂 剥采比均衡)" : "");
+    }
+
     // 派生计划方案：块体→场→按不同采区数/推进方位派生多方案→逐一评价→按 NPV 排名 报表
     private void DerivePlansCmd()
     {
@@ -9446,7 +9470,7 @@ public partial class MainWindow : Window
         // 块体/运输/路网
         "块体模型","资源量","面约束块体","离散化模型","道路横断面","道路设计参数","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道","直线斜坡道",
         // 生产计划/投影
-        "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
+        "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","开采程序切分","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
         "设备台账","生产数据","产能分析","故障分析","爆破分析","设备累计工时","KPI分析","机型KPI","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","层位求交","导入生产记录","导入月度产能","导入故障记录","导入月度KPI","导入设备台账","导入煤质","导入观测点","导入月度计划","导入见煤成果","导入路况","导入边坡","导入模板","导出分析",
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","机群驾驶舱","设备综合评分","数据看板","煤种分类","煤质数据健康度","分煤层煤质",

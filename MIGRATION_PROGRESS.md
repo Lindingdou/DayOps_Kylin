@@ -2687,3 +2687,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [MineEconomicsTests](tests/PitMine3D.Kylin.Tests/MineEconomicsTests.cs) +3—— Taylor: R1Mt→6.5·R16Mt→13(16^0.25=2)·R0→0·单调; 年金系数 r10%/T10=(1−1.1⁻¹⁰)/0.1·r→0退化T·T0→0; NPV: 净值1000/年限10/8%<1000(折现)·r0→名义1000。**build 0 错·单测 1285→1288**。
 
 **本会话第 47 功能**。教训: **同一命令的输出维度可 present-but-shallow**——确定境界有几何+净值, 缺时序(Taylor 年限)+经济(NPV 折现)维; 原 PitEvaluator 从同输入算全维。**标准经济式(Taylor 6.5R^0.25/DCF 年金)可移可验**; grep 先确认(Taylor 全无, NPV 别处有别式不冲突)。见 [[unlock-blocked-insights]] [[shell-completeness-priority]]。
+
+## 二四三、开采程序逐期切分(接原 TemplateDrivingEngine 距离驱动核)—— 重跑"原版单测枚举"角度(第 48 功能)
+
+**"报收敛后重跑原版单测枚举"(最精确切片发现法)**: 五个多样探针全 covered 后, 重枚举原版 18 个 `*Tests.cs`(比上次覆盖大得多), 逐个核 Kylin。17 个映射到已覆盖(BenchTemplateResolver/CenterlineLineForm/ProfileSmoother/RoadCrossSection/PathSolver/RegionClip→WindingNumber…), 唯 **`DriveTemplateEngine`(TemplateDrivingEngine)** 真缺口: 块体+工作线沿推进方向切成期→逐期煤/岩量+累计剥采比。Kylin `平行推进` 只几何推进不核块体量; `剥采比均衡` 消费分期量表(CSV)却无生成者——**此引擎生成的正是均衡的输入**(闭合"块体→分期→均衡"环)。
+
+**大引擎(529行)取可验证核**(最小 plan 法): 原含多段工作线/多层煤岩/台阶退距(s=a0+(cz−floorZ)/tanα)/几何输出。取**距离驱动直线核**(平面近似, 与原测试 α=89°→退距≈0 一致)。补 [src/Cad/DriveSequence.cs](src/Cad/DriveSequence.cs) `SweepByDistance`(逐格投影推进轴→按步距分期→逐期煤/岩+累计剥采比)+ `ToBalanceCsv`(直接喂剥采比均衡)。命令 `开采程序切分 [步距]`([MainWindow](src/Views/MainWindow.axaml.cs) `DriveSequenceCmd`, 块体+选中工作线法向→分期+导 CSV)+ 目录。**记录**: 台阶退距(缓帮)/多段/多层/几何输出属工程细化。
+
+**验证(自造已知值)**: [DriveSequenceTests](tests/PitMine3D.Kylin.Tests/DriveSequenceTests.cs) +3—— 3 列(每列 2 煤 8 岩)→3 期各煤2000/岩8000·总煤6000/岩24000·综合剥采比24000/(6000·1.3)·累计均质恒定; 方向(+Y 全落一期)/maxPeriods/空守卫; CSV 首期 1,0.26,0.8 喂均衡。**build 0 错·单测 1288→1291**。
+
+**本会话第 48 功能**。教训: **报收敛(哪怕多探针 covered)后, 重跑"原版单测枚举"——覆盖变大后仍可能剩真切片**(TemplateDrivingEngine 藏在 Driving 引擎里, 主题/命令探针都漏, 但原版有单测=作者认定自足可验)。**大引擎取可验证核**(距离驱动直线, 自造 known-value)而非硬吞全 529 行(多段/退距/几何输出记录)。此切片闭合了既有两命令(平行推进 geo + 剥采比均衡 consume)间的缺环。见 [[unlock-blocked-insights]] [[faithfulness-only-original-commands]]。
