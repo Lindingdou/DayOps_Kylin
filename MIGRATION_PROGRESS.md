@@ -2374,3 +2374,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [CoalQualityAnalyticsTests](tests/PitMine3D.Kylin.Tests/CoalQualityAnalyticsTests.cs) 8 例—— **Cal=30−0.5·Ad 精确线性 → 斜率−0.5/截距30/r²=1/无离群**、残差离群 z≥2.5 标记(OUT 点)、样本<5 空回归、七类结论齐全、表征含"中灰"(均值Ad=21)+煤层对比"3煤最低/5煤最高"、灰分-发热量负相关检出、空输入安全、CSV 头部。**build 0 错·单测 1182→1190**。
 
 **本会话第 17 功能**。教训: **"全模块读毕"要按子目录逐个核实, 别信笼统断言**——GeoDataBase/Domain/Services/Geology 此前没单独读过; 一个"纯 C# 无外部依赖"分析引擎移了 6/8 方法, 剩 2 处纯统计(回归/结论)正是 present-but-shallow 典型。**元角度: 枚举全部子目录 → 逐个 ls+读, 对已移子系统查方法级完整度**(类比 node-editor 4/11、CoalAnalytics 6/8)。见 [[unlock-blocked-insights]]。
+
+## 二一三、空间估值交叉验证(CoalQualityEstimator.CrossValidate)—— 方法级完整度续(第 18 功能)
+
+承 §二一二 元角度, 续查 GeoDataBase 其余"纯 C#"引擎的方法级完整度: `CoalQualityEstimator`(Kylin 已作 `OrdinaryKriging` 移)—— EstimateAt/EstimateWithVariance(方差, Kylin EstimateAt 已返回)/Interpolate 已覆盖, **但 `CrossValidate`(留一交叉验证)缺**。`VirtualDrillEngine` 对 Kylin `VirtualBorehole` 已覆盖。
+
+忠实补 [src/Cad/SpatialCrossValidation.cs](src/Cad/SpatialCrossValidation.cs): **留一交叉验证(LOO-CV)**——逐点把该点从控制集剔除, 用其余点按 OK/IDW/NN/MA 预测它, 汇总 ME(系统偏差)/MAE/RMSE/R² + (OK 有克里金方差时)标准化误差均值 MSE/方差 MSEVar(≈1 说明方差估计合理)。**OK 核直接复用 `OrdinaryKriging.EstimateAt`**(签名 (points,x,y,z,k,radius,vg) 与原 EstimateOne 完全一致); NN/IDW/MA 内联; 变差函数全体点拟合一次(原注"LOO 极小泄漏但拟合稳定, 通行做法")。命令 `交叉验证 [OK|IDW|NN|MA] [ad|qgr|std|vdaf]`(煤质指标点→CV→ME/MAE/RMSE/R²+CSV)。
+
+**验证(已知值)**: [SpatialCrossValidationTests](tests/PitMine3D.Kylin.Tests/SpatialCrossValidationTests.cs) 6 例—— **常量场全方法零误差**(ME/MAE/RMSE=0)、**NN 留一手算误差**((0,0)V10/(1,0)V20/(5,0)(6,0)V99 → 误差[+10,−10,0,0] → ME=0/MAE=5/RMSE=√50)、点<4 空、OK 产标准化误差(MSE 有值)、光滑线性场 IDW 高 R²+低偏差、CSV 头部。**build 0 错·单测 1190→1196**。
+
+**本会话第 18 功能**。教训: **方法级完整度要遍历子系统的每个"纯 C#"引擎**——GeoDataBase 三个估值/分析引擎(CoalQualityAnalytics/CoalQualityEstimator/VirtualDrillEngine)逐个 method-diff, 挖出 灰分回归/综合结论/交叉验证 三处; 复用已移基元(OrdinaryKriging.EstimateAt)可低成本补高价值验证算法。**GeoDataBase 纯引擎方法级已核毕**。见 [[unlock-blocked-insights]]。
