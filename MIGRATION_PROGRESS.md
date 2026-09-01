@@ -2677,3 +2677,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [RoadCrossSectionTests](tests/PitMine3D.Kylin.Tests/RoadCrossSectionTests.cs) +2—— R_min=25²/(127·0.21)=23.44m; **逆一致: R_min 处超高恰饱和到 e_max**(SuperelevationPct(R_min)=6%, 正逆自洽); 车速↑R_min↑·超高↑R_min↓; 展线长 45m@9%=500m·零纵坡→0·越缓越长。**build 0 错·单测 1283→1285**。
 
 **本会话第 46 功能**。教训: **同一物理关系的正逆两式常分处**——超高正算在 RoadCrossSection, 半径反算在 TransportConstraintSettings(约束模型), 只移了正算。**逆一致测试**(R_min 处超高饱和 e_max)锁定正逆同源。角度⑨(正逆配对)连出 2 功能(平盘宽反算/最小平曲线半径)。见 [[unlock-blocked-insights]]。
+
+## 二四二、矿山时序经济评价: 泰勒服务年限 + DCF NPV(接原 PitEvaluator)—— 命令输出补经济维(第 47 功能)
+
+**"present-but-shallow 命令输出"**: Kylin `确定境界`(PitDepthCmd)只报 坑深/圈入煤/剥采比/净值, 原 `PlanLib PitEvaluator.Evaluate` 从同样输入(ResourceProfile+DepthSolveResult)另算**储量/剥采比/时序/经济全维**: **泰勒规则服务年限 T=6.5·R^0.25**(R=储量 Mt) + 年产=储量/年限 + **NPV=总净值等额分摊后年金折现**。**grep 确认 Kylin 无 Taylor(6.5/^0.25)**(NPV 在 PanelSplit 采区语境有别式, 但 Taylor 全缺)→真缺口。
+
+补 [src/Cad/MineEconomics.cs](src/Cad/MineEconomics.cs): `TaylorMineLifeYears(R_Mt)=6.5·R^0.25` · `AnnuityPvFactor(r,T)=(1−(1+r)⁻ᵀ)/r`(r→0 退化 T) · `NpvLevelized(净值,年限,r)=(净值/年限)·年金系数`。忠实原 PitEvaluator 三式。[PitDepthCmd](src/Views/MainWindow.axaml.cs): 用圈入煤储量算 R(万t/100=Mt)→ 服务年限/年产/NPV(8%)追加到状态行。
+
+**验证(已知值)**: [MineEconomicsTests](tests/PitMine3D.Kylin.Tests/MineEconomicsTests.cs) +3—— Taylor: R1Mt→6.5·R16Mt→13(16^0.25=2)·R0→0·单调; 年金系数 r10%/T10=(1−1.1⁻¹⁰)/0.1·r→0退化T·T0→0; NPV: 净值1000/年限10/8%<1000(折现)·r0→名义1000。**build 0 错·单测 1285→1288**。
+
+**本会话第 47 功能**。教训: **同一命令的输出维度可 present-but-shallow**——确定境界有几何+净值, 缺时序(Taylor 年限)+经济(NPV 折现)维; 原 PitEvaluator 从同输入算全维。**标准经济式(Taylor 6.5R^0.25/DCF 年金)可移可验**; grep 先确认(Taylor 全无, NPV 别处有别式不冲突)。见 [[unlock-blocked-insights]] [[shell-completeness-priority]]。

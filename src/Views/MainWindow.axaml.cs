@@ -5684,7 +5684,12 @@ public partial class MainWindow : Window
         // 经济口径: 单位煤净收益 (煤价-采煤成本)=300-80=220 元/t; 剥离成本 20 元/m³
         var r = SectionSolver.SolveDepth(prof, revenuePerCoalT: 220, stripCostPerM3: 20);
         double coalWan = r.CoalT / 1e4, wasteWan = r.WasteM3 / 1e4;
-        StatusMsg.Text = $"确定境界(净值最大)：最优坑深 {r.DepthM:0.#}m(底层 k={r.BottomK}/{prof.Nz}) · 圈入煤 {coalWan:0.#}万t · 岩 {wasteWan:0.#}万m³ · 境界剥采比 {r.ContourSR:0.##} · 净值 {r.NetValueYuan / 1e4:0.#}万元";
+        // 时序/经济评价(忠实原 PitEvaluator): 泰勒规则服务年限 T=6.5·R^0.25(R=储量 Mt=万t/100) + 年产=储量/年限 + NPV(净值等额分摊折现 8%)。
+        double reserveMt = coalWan / 100.0, life = Cad.MineEconomics.TaylorMineLifeYears(reserveMt);
+        double annualWan = life > 1e-9 ? coalWan / life : 0;
+        double npvWan = Cad.MineEconomics.NpvLevelized(r.NetValueYuan / 1e4, life, 0.08);
+        string econ = life > 0 ? $" · 服务年限≈{life:0.#}a(泰勒) · 年产≈{annualWan:0.#}万t/a · NPV≈{npvWan:0.#}万元(8%)" : "";
+        StatusMsg.Text = $"确定境界(净值最大)：最优坑深 {r.DepthM:0.#}m(底层 k={r.BottomK}/{prof.Nz}) · 圈入煤 {coalWan:0.#}万t · 岩 {wasteWan:0.#}万m³ · 境界剥采比 {r.ContourSR:0.##} · 净值 {r.NetValueYuan / 1e4:0.#}万元{econ}";
     }
 
     // 派生计划方案：块体→场→按不同采区数/推进方位派生多方案→逐一评价→按 NPV 排名 报表
