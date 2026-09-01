@@ -7456,8 +7456,10 @@ public partial class MainWindow : Window
         var rows = Data.GeoDataQueries.GetFaultByType(db.Connection);
         if (rows.Count == 0) { StatusMsg.Text = "故障类型分布：无故障记录"; return; }
         var parts = new List<string>();
-        foreach (var r in rows) parts.Add($"{r.FaultType}({r.Events}次·{r.DowntimeHours:0.#}h·{r.DowntimeSharePct:0.#}%)");
-        StatusMsg.Text = $"故障类型分布：" + string.Join(" · ", parts);
+        foreach (var r in rows) parts.Add($"{r.FaultType}({r.Events}次·{r.DowntimeHours:0.#}h·{r.DowntimeSharePct:0.#}%·累计{r.CumulativeSharePct:0.#}%)");
+        // 帕累托 80/20: 前几类累计占 80% 停机
+        int vital = 0; foreach (var r in rows) { vital++; if (r.CumulativeSharePct >= 80) break; }
+        StatusMsg.Text = $"故障类型分布(帕累托 前{vital}/{rows.Count}类占80%停机)：" + string.Join(" · ", parts);
     }
 
     private void AcceptanceByPhaseCmd()

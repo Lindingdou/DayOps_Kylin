@@ -371,6 +371,27 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Fault_by_type_pareto_cumulative_prefix_sum_and_ends_at_100()
+    {
+        // 帕累托: 按停机降序 + 累计占比=前缀和 + 单调不减 + 末类=100%
+        using var db = GeoDatabase.OpenSeeded();
+        var rows = GeoDataQueries.GetFaultByType(db.Connection);
+        Assert.NotEmpty(rows);
+        double running = 0;
+        for (int i = 0; i < rows.Count; i++)
+        {
+            running += rows[i].DowntimeSharePct;
+            Assert.Equal(System.Math.Min(100, running), rows[i].CumulativeSharePct, 4);          // 累计=前缀和
+            if (i > 0)
+            {
+                Assert.True(rows[i].CumulativeSharePct >= rows[i - 1].CumulativeSharePct - 1e-9, "累计单调不减");
+                Assert.True(rows[i].DowntimeHours <= rows[i - 1].DowntimeHours + 1e-9, "按停机降序");
+            }
+        }
+        Assert.Equal(100, rows[rows.Count - 1].CumulativeSharePct, 2);                            // 末类累计=100%
+    }
+
+    [Fact]
     public void Export_table_then_reimport_roundtrips()
     {
         using var db = GeoDatabase.OpenSeeded();

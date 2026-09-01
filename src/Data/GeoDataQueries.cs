@@ -602,9 +602,9 @@ public static class GeoDataQueries
         return rows;
     }
 
-    public sealed record FaultTypeRow(string FaultType, int Events, double DowntimeHours, double DowntimeSharePct);
+    public sealed record FaultTypeRow(string FaultType, int Events, double DowntimeHours, double DowntimeSharePct, double CumulativeSharePct = 0);
 
-    /// <summary>故障类型分布：按 fault_type 统计事件数 + 累计停机时 + 停机占比，按停机时降序（看故障构成）。</summary>
+    /// <summary>故障类型分布(Pareto)：按 fault_type 统计事件数 + 累计停机时 + 停机占比 + 累计占比(帕累托 80/20)，按停机时降序。</summary>
     public static List<FaultTypeRow> GetFaultByType(SqliteConnection conn)
     {
         var raw = new List<(string t, int n, double dt)>();
@@ -617,7 +617,13 @@ public static class GeoDataQueries
         }
         double tot = 0; foreach (var r in raw) tot += r.dt;
         var rows = new List<FaultTypeRow>();
-        foreach (var r in raw) rows.Add(new FaultTypeRow(r.t, r.n, r.dt, tot > 0 ? r.dt / tot * 100 : 0));
+        double cum = 0;   // 帕累托累计占比(降序累加, 定位"贡献 80% 停机的少数类型")
+        foreach (var r in raw)
+        {
+            double share = tot > 0 ? r.dt / tot * 100 : 0;
+            cum += share;
+            rows.Add(new FaultTypeRow(r.t, r.n, r.dt, share, System.Math.Min(100, cum)));
+        }
         return rows;
     }
 
