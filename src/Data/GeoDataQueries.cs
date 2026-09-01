@@ -963,12 +963,37 @@ public static class GeoDataQueries
             object Txt(string k) => Get(k) is { Length: > 0 } s ? s : (object)System.DBNull.Value;
             bool exists;
             using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM haul_road WHERE road_id=@i"; q.Parameters.AddWithValue("@i", id); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
+            // 无损全列: 补此前漏的 turning_radius/max_load/pavement/maintenance/notes + 路况 condition + 主力车型
+            var extras = new System.Collections.Generic.List<(string col, object val)>
+            {
+                ("max_slope_pct", Num("max_slope_pct")), ("avg_slope_pct", Num("avg_slope_pct")), ("road_width_m", Num("road_width_m")),
+                ("start_location", Txt("start_location")), ("end_location", Txt("end_location")),
+                ("turning_radius_m", Num("turning_radius_m")), ("max_load_t", Num("max_load_t")),
+                ("pavement_type", Txt("pavement_type")), ("maintenance_team", Txt("maintenance_team")),
+                ("last_maintenance_date", Txt("last_maintenance_date")), ("notes", Txt("notes")),
+            };
+            string cond = Get("condition").ToLowerInvariant();   // CHECK: good/fair/poor/closed; 无效留 DEFAULT 'good'(此前恒默认→路况列表全空, 现载真值)
+            if (cond is "good" or "fair" or "poor" or "closed") extras.Add(("condition", cond));
+            string tm = Get("primary_truck_model");              // FK→equipment_model: 父表有该型号才写(免整行 FK 失败, 无损降级)
+            if (tm.Length > 0) { using var qm = conn.CreateCommand(); qm.CommandText = "SELECT 1 FROM equipment_model WHERE model=@m LIMIT 1"; qm.Parameters.AddWithValue("@m", tm); if (qm.ExecuteScalar() != null) extras.Add(("primary_truck_model", (object)tm)); }
+
             using var cmd = conn.CreateCommand();
-            if (exists) { if (!overwrite) { skip++; continue; } cmd.CommandText = "UPDATE haul_road SET name=@n, road_type=@t, length_m=@l, max_slope_pct=@ms, avg_slope_pct=@as, road_width_m=@w, start_location=@sl, end_location=@el WHERE road_id=@i"; upd++; }
-            else { cmd.CommandText = "INSERT INTO haul_road (road_id, name, road_type, length_m, max_slope_pct, avg_slope_pct, road_width_m, start_location, end_location) VALUES (@i,@n,@t,@l,@ms,@as,@w,@sl,@el)"; ins++; }
-            cmd.Parameters.AddWithValue("@i", id); cmd.Parameters.AddWithValue("@n", name); cmd.Parameters.AddWithValue("@t", type); cmd.Parameters.AddWithValue("@l", len);
-            cmd.Parameters.AddWithValue("@ms", Num("max_slope_pct")); cmd.Parameters.AddWithValue("@as", Num("avg_slope_pct")); cmd.Parameters.AddWithValue("@w", Num("road_width_m"));
-            cmd.Parameters.AddWithValue("@sl", Txt("start_location")); cmd.Parameters.AddWithValue("@el", Txt("end_location"));
+            if (exists)
+            {
+                if (!overwrite) { skip++; continue; }
+                var set = "name=@name, road_type=@road_type, length_m=@length_m, " + string.Join(", ", extras.ConvertAll(e => $"{e.col}=@{e.col}"));
+                cmd.CommandText = $"UPDATE haul_road SET {set} WHERE road_id=@road_id";
+                upd++;
+            }
+            else
+            {
+                var names = "road_id, name, road_type, length_m, " + string.Join(", ", extras.ConvertAll(e => e.col));
+                var vals = "@road_id, @name, @road_type, @length_m, " + string.Join(", ", extras.ConvertAll(e => "@" + e.col));
+                cmd.CommandText = $"INSERT INTO haul_road ({names}) VALUES ({vals})";
+                ins++;
+            }
+            cmd.Parameters.AddWithValue("@road_id", id); cmd.Parameters.AddWithValue("@name", name); cmd.Parameters.AddWithValue("@road_type", type); cmd.Parameters.AddWithValue("@length_m", len);
+            foreach (var e in extras) cmd.Parameters.AddWithValue("@" + e.col, e.val);
             try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
         }
         return new ImportOutcome(ins, upd, skip, err);

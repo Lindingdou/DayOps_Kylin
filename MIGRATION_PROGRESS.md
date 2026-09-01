@@ -1917,3 +1917,12 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - **普扫其余导入(schema 列 vs import 解析列, 近似)**: production_record(7/6 基本齐)、fault_event(8/10 齐)、capacity_monthly(4/8 齐)、**monthly_plan(~10/4)**、**haul_road(~17/7)**、**equipment_kpi_monthly(~13/4)** 疑有损; slope_design import 实解析 9 列(hint 证)但 GetSlopeDesigns 显示仅 6(cohesion/friction/rock_type 入库未显示=可 SQL 查, 非有损导入)。**候选(monthly_plan/haul_road/kpi)留下轮精确核对消费面再定**(需逐列确认原版导 + Kylin 有消费/SQL 可取, 且避 FK 陷阱)。
 
 **教训补**: 导入列完整性修复须防 **FK 列陷阱**——目标表有外键且父表运行期无数据时, 直插会整行失败, 须父表校验后 NULL 降级。本轮 1 修(设备台账无损)。数据完整性累计 3 修(层位展点/煤质导入/设备台账)。
+
+## 一六三、导入列完整性透镜续二 —— 路况导入丢 condition(反讽) · 修 + CHECK/FK 双陷阱
+
+精确核对 haul_road(schema 17 列, import 原 9 列):
+- **★反讽缺口**: 命令名叫**「导入路况」**却**漏 `condition` 列**! ImportHaulRoads 原不解析 condition → 恒用 DEFAULT 'good' → 而路况列表查询(GeoDataQueries:324 SELECT ...condition FROM haul_road)显示的 condition **全是 good**(用户导入的 poor/fair/closed 全丢)。另漏 turning_radius_m(转弯半径)/max_load_t(最大载重)/pavement_type(路面)/maintenance_team/last_maintenance_date/notes(0 消费但 SQL 查询/无损可取)。
+- **双约束陷阱**: ①`condition` 有 **CHECK(good/fair/poor/closed)** + NOT NULL DEFAULT 'good' → 解析后**校验枚举**, 有效才写、非法留默认(不整行失败); ②`primary_truck_model`→equipment_model **FK** → 父表校验后写(无损降级, 同设备台账 model)。
+- **修**: 动态列表构建 INSERT/UPDATE, 无损全列 + condition 枚举校验 + truck_model FK 安全 + 命令 hint 补列。+2 单测(condition=poor/转弯/载重/路面 查回入库; 非法 condition='excellent'→回退 good 不失败)。1021 测全绿, 0 错, smoke [GLINIT] 正常。
+
+**教训补**: 导入列完整性修复的**约束三防**——① FK 列父表校验后 NULL 降级 ② CHECK 列枚举校验后跳过留默认 ③ NOT NULL 列给默认。均"无损降级不整行失败"。数据完整性累计 **4 修**(层位展点/煤质/设备台账/路况)。本轮 1 修。

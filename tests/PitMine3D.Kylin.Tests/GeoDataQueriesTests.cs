@@ -530,6 +530,44 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Haul_road_import_loads_condition_and_extra_columns()
+    {
+        // 导入路况: condition(修前 import 漏→恒默认 good, 路况列表全 good) + 转弯半径/载重/路面 此前丢
+        using var db = GeoDatabase.OpenSeeded();
+        var o = GeoDataQueries.ImportHaulRoads(db.Connection, new[]
+        {
+            (IReadOnlyDictionary<string,string>)new Dictionary<string,string>
+            { ["road_id"]="R-TEST-1", ["name"]="测试路", ["road_type"]="main", ["length_m"]="1200",
+              ["condition"]="poor", ["turning_radius_m"]="35", ["max_load_t"]="220", ["pavement_type"]="碎石" }
+        }, true);
+        Assert.True(o.Inserted == 1, $"路况导入 ins={o.Inserted} err={o.Errors}");
+        using var q = db.Connection.CreateCommand();
+        q.CommandText = "SELECT condition, turning_radius_m, max_load_t, pavement_type FROM haul_road WHERE road_id='R-TEST-1'";
+        using var rd = q.ExecuteReader();
+        Assert.True(rd.Read());
+        Assert.Equal("poor", rd.GetString(0));         // 路况(修前恒默认 good)
+        Assert.Equal(35, rd.GetDouble(1), 6);          // 转弯半径(修前丢)
+        Assert.Equal(220, rd.GetDouble(2), 6);         // 最大载重(修前丢)
+        Assert.Equal("碎石", rd.GetString(3));         // 路面类型(修前丢)
+    }
+
+    [Fact]
+    public void Haul_road_import_invalid_condition_falls_back_to_default()
+    {
+        // 非法 condition 枚举(违反 CHECK)→ 跳过该列留 DEFAULT 'good', 不整行失败
+        using var db = GeoDatabase.OpenSeeded();
+        var o = GeoDataQueries.ImportHaulRoads(db.Connection, new[]
+        {
+            (IReadOnlyDictionary<string,string>)new Dictionary<string,string>
+            { ["road_id"]="R-TEST-2", ["name"]="测试路2", ["road_type"]="branch", ["length_m"]="800", ["condition"]="excellent" }
+        }, true);
+        Assert.True(o.Inserted == 1, $"非法路况应回退默认 ins={o.Inserted} err={o.Errors}");
+        using var q = db.Connection.CreateCommand();
+        q.CommandText = "SELECT condition FROM haul_road WHERE road_id='R-TEST-2'";
+        Assert.Equal("good", (string)q.ExecuteScalar());   // 非法值被跳过→默认 good, 未整行失败
+    }
+
+    [Fact]
     public void Kpi_trend_by_year_ratios_normalized()
     {
         using var db = GeoDatabase.OpenSeeded();
