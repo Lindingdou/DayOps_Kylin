@@ -105,8 +105,7 @@ public static class RoadTopology
                 if (v > u && v < n) { int ei = edges.Count; edges.Add(new Edge { A = u, B = v, W = w }); incident[u].Add(ei); incident[v].Add(ei); }
         }
 
-        bool IsBreak(int id) => degree[id] != 2;   // 真节点=度≠2(无装卸点概念, 记录)
-        bool IsOpen(int id) => degree[id] <= 1;    // 悬挂=度≤1
+        bool IsBreak(int id) => degree[id] != 2;   // 真节点=度≠2(无装卸点概念, 记录); 悬挂=度≤1 在 BuildSegment 内联
         int Other(int ei, int at) => edges[ei].A == at ? edges[ei].B : edges[ei].A;
 
         var used = new bool[edges.Count];
