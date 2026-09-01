@@ -7069,7 +7069,9 @@ public partial class MainWindow : Window
         string rel = f.MtbfHours > 0 ? $" · 可靠性 MTBF {f.MtbfHours:0.#}h/MTTR {f.MttrHours:0.#}h/稳态可用率 {f.SteadyAvailPct:0.#}%" : "";
         // Weibull 失效分布(浴盆定位)有拟合结果才附加
         string wb = f.WeibullPhase.Length > 0 ? $" · Weibull β={f.WeibullBeta:0.##}/η={f.WeibullEta:0.#}天({f.WeibullPhase})" : "";
-        StatusMsg.Text = $"故障分析：{f.Events} 起 · 累计停机 {f.DowntimeHours:0.#}h · 未修复 {f.Unresolved} · 最多「{f.TopType}」×{f.TopTypeCount}{rel}{wb}";
+        // 大修预警(可用率趋势+稳态)有 KPI 序列才附加
+        string oh = f.LatestAvailPct > 0 ? $" · {(f.OverhaulWarn ? "🔴大修预警" : "寿命良好")}(可用率 {f.LatestAvailPct:0.#}%·趋势 {f.AvailTrendPtPerMonth:+0.00;-0.00}pt/月)" : "";
+        StatusMsg.Text = $"故障分析：{f.Events} 起 · 累计停机 {f.DowntimeHours:0.#}h · 未修复 {f.Unresolved} · 最多「{f.TopType}」×{f.TopTypeCount}{rel}{wb}{oh}";
     }
 
     private void KpiStatsCmd()

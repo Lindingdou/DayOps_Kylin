@@ -307,6 +307,20 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Fault_stats_overhaul_warning_matches_condition()
+    {
+        // 大修预警 warn = 可用率趋势<−0.2pt/月 或 最新<80% 或 稳态<85%(忠实原阈值)
+        using var db = GeoDatabase.OpenSeeded();
+        var f = GeoDataQueries.GetFaultStats(db.Connection);
+        if (f.LatestAvailPct > 0)   // 有 KPI 月度序列
+        {
+            bool expected = f.AvailTrendPtPerMonth < -0.2 || f.LatestAvailPct < 80 || f.SteadyAvailPct < 85;
+            Assert.Equal(expected, f.OverhaulWarn);
+            Assert.InRange(f.LatestAvailPct, 0, 100);
+        }
+    }
+
+    [Fact]
     public void Kpi_stats_computes_oee_from_three_rates()
     {
         // OEE = 可用率×作业率×利用率(忠实原 CsvDataStore.Oee)

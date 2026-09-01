@@ -86,7 +86,8 @@ public static class GeoDataQueries
 
     public sealed record FaultStats(int Events, double DowntimeHours, int Unresolved, string TopType, int TopTypeCount,
         double MtbfHours = 0, double MttrHours = 0, double SteadyAvailPct = 0,
-        double WeibullBeta = 0, double WeibullEta = 0, string WeibullPhase = "");   // 可靠性: MTBF/MTTR/A_ss + Weibull β/η/浴盆阶段
+        double WeibullBeta = 0, double WeibullEta = 0, string WeibullPhase = "",
+        bool OverhaulWarn = false, double AvailTrendPtPerMonth = 0, double LatestAvailPct = 0);   // 大修预警: 可用率趋势/最新/稳态判恶化
 
     /// <summary>故障分析（设备状态·故障报修）：事件数 / 累计停机时 / 未修复数 / 最多故障类型 + 可靠性 MTBF·MTTR·A_ss + Weibull β/η。</summary>
     public static FaultStats GetFaultStats(SqliteConnection conn)
@@ -123,8 +124,26 @@ public static class GeoDataQueries
             }
         }
         var (wb, we, wok) = Cad.Reliability.WeibullFit(Cad.Reliability.PooledIntervalsDays(perEq));
+        // 大修预警(忠实原 §2.7): 可用率月度趋势斜率 + 最新可用率 + 稳态可用率, 任一恶化即预警(slope<−0.002/latest<0.80/A_ss<0.85)
+        var avSeries = new List<double>();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT COALESCE(AVG(availability),0) FROM equipment_kpi_monthly GROUP BY year, month ORDER BY year, month";
+            using var rd = cmd.ExecuteReader();
+            while (rd.Read()) { double a = rd.GetDouble(0); avSeries.Add(a <= 1 ? a : a / 100); }   // 归一 0..1
+        }
+        bool overhaulWarn = false; double avSlope = 0, latestAvail = 0;
+        if (avSeries.Count >= 3)
+        {
+            int n2 = avSeries.Count; double sx = 0, sy = 0, sxx = 0, sxy = 0;
+            for (int i = 0; i < n2; i++) { sx += i; sy += avSeries[i]; sxx += (double)i * i; sxy += (double)i * avSeries[i]; }
+            avSlope = (n2 * sxx - sx * sx) > 1e-9 ? (n2 * sxy - sx * sy) / (n2 * sxx - sx * sx) : 0;
+            latestAvail = avSeries[n2 - 1];
+            overhaulWarn = avSlope < -0.002 || latestAvail < 0.80 || ass / 100.0 < 0.85;
+        }
         return new FaultStats(events, downtime, unresolved, topType, topCount, mtbf, mttr, ass,
-            wok ? wb : 0, wok ? we : 0, wok ? Cad.Reliability.Phase(wb) : "");
+            wok ? wb : 0, wok ? we : 0, wok ? Cad.Reliability.Phase(wb) : "",
+            overhaulWarn, avSlope * 100, latestAvail * 100);   // 斜率/最新转百分点
     }
 
     public sealed record EquipmentScoreRow(string EquipmentId, double CapacityIntensity, double Stability,
