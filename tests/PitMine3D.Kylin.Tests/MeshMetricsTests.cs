@@ -87,4 +87,19 @@ public class MeshMetricsTests
         // 补洞封盖后恢复 ≈ 1/6(扇形补洞在缺面平面上, 体积不变)
         Assert.Equal(1.0 / 6.0, MeshMetrics.RobustVolume(v, t), 4);
     }
+
+    [Fact]
+    public void HullAreaXY_is_planar_footprint()
+    {
+        // XY 投影 = 10×10 方形(角点), 加一个内部点(不改凸包) → 足迹 100。
+        var v = new List<(double, double, double)>
+        {
+            (0, 0, 0), (10, 0, 0), (10, 10, 5), (0, 10, 5), (5, 5, 3),
+        };
+        var t = new List<(int, int, int)> { (0, 1, 2), (0, 2, 3) };
+        Assert.Equal(100, MeshMetrics.Compute(v, t).HullAreaXY, 6);
+        Assert.Equal(100, MeshMetrics.HullAreaXY(v), 6);
+        // 退化(<3 点)→ 0
+        Assert.Equal(0, MeshMetrics.HullAreaXY(new List<(double, double, double)> { (0, 0, 0), (1, 1, 1) }), 6);
+    }
 }

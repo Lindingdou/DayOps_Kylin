@@ -4,10 +4,11 @@ using System.Globalization;
 
 namespace PitMine3D.Kylin.Cad;
 
-/// <summary>网格度量结果。</summary>
+/// <summary>网格度量结果。HullAreaXY = 顶点 XY 投影凸包面积(水平投影足迹, 忠实原 BoundaryReport.HullArea)。</summary>
 public readonly record struct MeshMetricsResult(
     int VertexCount, int TriangleCount, double SurfaceArea, double Volume,
-    double MinX, double MinY, double MinZ, double MaxX, double MaxY, double MaxZ);
+    double MinX, double MinY, double MinZ, double MaxX, double MaxY, double MaxZ,
+    double HullAreaXY = 0);
 
 /// <summary>
 /// 三角网格度量（表面积 = Σ 三角面积；有向体积 = Σ 四面体 a·(b×c)/6，闭合网取绝对值）+ 包围盒。
@@ -38,7 +39,24 @@ public static class MeshMetrics
             area += 0.5 * Math.Sqrt(cx * cx + cy * cy + cz * cz);
             nt++;
         }
-        return new MeshMetricsResult(verts.Count, nt, area, RobustVolume(verts, tris), minX, minY, minZ, maxX, maxY, maxZ);
+        return new MeshMetricsResult(verts.Count, nt, area, RobustVolume(verts, tris), minX, minY, minZ, maxX, maxY, maxZ, HullAreaXY(verts));
+    }
+
+    /// <summary>顶点 XY 投影凸包面积(水平投影足迹)。忠实原 BoundaryReport.HullArea。</summary>
+    public static double HullAreaXY(IReadOnlyList<(double x, double y, double z)> verts)
+    {
+        if (verts == null || verts.Count < 3) return 0;
+        var pts = new List<(double x, double y)>(verts.Count);
+        foreach (var v in verts) pts.Add((v.x, v.y));
+        var hull = GeomHull.ConvexHull(pts);
+        if (hull.Count < 3) return 0;
+        double a2 = 0;   // 鞋带公式 ×2
+        for (int i = 0, n = hull.Count; i < n; i++)
+        {
+            var p = hull[i]; var q = hull[(i + 1) % n];
+            a2 += p.x * q.y - q.x * p.y;
+        }
+        return Math.Abs(a2) * 0.5;
     }
 
     /// <summary>有向四面体散度法（6×体积）：Σ a·(b×c)。水密网格严密。</summary>

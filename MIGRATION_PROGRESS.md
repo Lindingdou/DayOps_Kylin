@@ -2426,3 +2426,15 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [MeshDiagnoseTests](tests/PitMine3D.Kylin.Tests/MeshDiagnoseTests.cs) +2 例—— 竖立三角穿平面三角内部(无共顶点)=自交 2 · 共边相邻/相隔远/闭合四面体=自交 0。**build 0 错·单测 1217→1219**。
 
 **本会话第 22 功能**。教训: **全插件 `AddButton` 命令 diff 是命令级最全核对**——但 ✗ 须回读三分: ①别名覆盖 ②原版 SkeletonCommand/PlaceholderCommand 桩(忠实不移, 13 个) ③交互/引擎/native。桩命令的识别(`SkeletonCommand`/`PlaceholderCommand`)防了"实现原版根本没实现的东西"。且 **native 二进制诊断(PMDR)的托管重实现要 method(字段)级对齐**——缺的那项(自交检测)复评发现是"检测可做≠消解受阻"。见 [[unlock-blocked-insights]] [[faithfulness-only-original-commands]]。
+
+## 二一八、网格水平投影足迹(MeshMetrics.HullAreaXY)—— PMxx 结果字段级 diff(第 23 功能)
+
+承 §二一七 自交, 系统枚举原全部 **PMxx native 结果解析器**(ParseSafe, magic 'PMxx'): Diagnose(PMDR ✓补自交)/Repair(PMRR)/Weld(PMWR)/VolumeDiff(PMVD)/Boundary(PMBR)/SplitBySurface(PMSS)/Embed(PMEM)/Intersect(PMIC)/Boolean(PMBO)/Cut。逐个把**原 report record 字段** vs Kylin 重实现产出字段对齐:
+- Repair(PMRR 7 修复项): Kylin MeshRepair 覆盖 焊接/朝向/补洞/去退化, **非流形拆分/自交去除原自记内核级不含**(记录); 去孤立点 rebuild-from-tris 隐含。
+- Weld/VolumeDiff/Split/Embed/Intersect: Kylin MeshWeld/TwoEpochVolume/MeshPlaneSplit/Delaunay约束/MeshIntersect 覆盖字段。
+- Boolean/Cut: mesh 布尔/刀切 CGAL 级受阻(记录)。
+- **Boundary(PMBR)**: bbox/宽高/对角(MeshMetrics 已有) + BoundaryLoops(MeshBoundaryLoops 已有) + **`HullArea` 缺**——顶点 XY 投影凸包面积(水平投影足迹)。
+
+补 [src/Cad/MeshMetrics.cs](src/Cad/MeshMetrics.cs) `HullAreaXY`(复用 GeomHull.ConvexHull + 鞋带公式), 接入 `网格度量` 命令输出。**验证**: [MeshMetricsTests](tests/PitMine3D.Kylin.Tests/MeshMetricsTests.cs) +1—— 10×10 方形足迹(+内部点不改凸包)=100 · 退化<3点=0。**build 0 错·单测 1219→1220**。
+
+**本会话第 23 功能**。教训: **PMxx native 结果解析器是"字段级 present-but-shallow"的系统靶场**——每个 report record 的字段=native 引擎产出的完整量, Kylin 托管重实现要逐字段对齐(缺项=补, 如自交/足迹; 内核级项如布尔/非流形拆分=记录)。这是比"类在就算覆盖"更细的一层核对。见 [[unlock-blocked-insights]]。

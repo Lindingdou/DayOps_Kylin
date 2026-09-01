@@ -3624,7 +3624,7 @@ public partial class MainWindow : Window
         if (verts.Count == 0 || tris.Count == 0) { StatusMsg.Text = "网格度量：未解析到三角网格"; return; }
         var m = MeshMetrics.Compute(verts, tris);
         var inv = System.Globalization.CultureInfo.InvariantCulture;
-        StatusMsg.Text = $"网格度量：{m.VertexCount} 顶点 · {m.TriangleCount} 三角 · 表面积 {m.SurfaceArea.ToString("0.##", inv)} · 体积 {m.Volume.ToString("0.##", inv)} · 范围 X[{m.MinX.ToString("0.#", inv)},{m.MaxX.ToString("0.#", inv)}] Z[{m.MinZ.ToString("0.#", inv)},{m.MaxZ.ToString("0.#", inv)}]";
+        StatusMsg.Text = $"网格度量：{m.VertexCount} 顶点 · {m.TriangleCount} 三角 · 表面积 {m.SurfaceArea.ToString("0.##", inv)} · 体积 {m.Volume.ToString("0.##", inv)} · 水平投影足迹 {m.HullAreaXY.ToString("0.##", inv)} · 范围 X[{m.MinX.ToString("0.#", inv)},{m.MaxX.ToString("0.#", inv)}] Z[{m.MinZ.ToString("0.#", inv)},{m.MaxZ.ToString("0.#", inv)}]";
     }
 
     // 色带切换：「色带 <名>」设当前色带(Terrain/Jet/Grayscale/Viridis/Turbo/Magma/Plasma), 影响后续高程/属性着色。
