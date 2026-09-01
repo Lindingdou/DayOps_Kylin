@@ -2026,3 +2026,11 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - **点云统计**: 原 pc_quality 走 native PMQS 二进制, 无托管参照可对拍; Kylin PointCloudStats(计数/密度/包围盒/均值·σ)managed 重实现合理, 记录(native 参照不可验)。
 
 **输出完整性透镜再产出**(CAD 网格诊断 2 项)——判据同 DB 分析: 原版查 N 项、Kylin M<N、可做者补(孤立/重复点)、鲁棒/native 受阻记录(自相交/点云 PMQS)。本轮 1 修 + 1 记录。累计输出完整性 12 处(11 DB + 1 CAD 含 2 项)。
+
+## 一七七、受阻边界再评估——Weibull 失效分布可做(非图表)· 补
+
+复评"记录受阻"的 Weibull(§一六七 只补 MTBF/MTTR 时记为待评): 查原 EquipmentAnalysisWindow §1.5 —— Weibull 是**中位秩回归拟合故障间隔天数得 β/η + 浴盆阶段文本**(非图表!浴盆卡是文字建议)。故**可做可验**, 非受阻。
+- **修**: 新 `src/Cad/Reliability.cs`——`WeibullFit`(Bernard 中位秩 F=(i−0.3)/(n+0.4) 线性化 ln(−ln(1−F))=β·ln t−β·ln η 最小二乘)+ `Phase`(β<0.85 早期/≤1.15 随机/>1.15 损耗, 忠实原阈值)+ `PooledIntervalsDays`(逐设备故障日期相邻间隔池化, 跨设备不串)。`GetFaultStats` 按 equipment_id+date 取序、池化间隔、拟合, `FaultStats` 加 WeibullBeta/Eta/Phase; `故障分析` 显示"Weibull β/η/浴盆阶段"。
+- **验证**: +4 单测(已知 β=2.5/η=120 分位数据精确还原 β/η; n<3/全相等/空→ok=false; 浴盆三档阈值; 池化只取设备内间隔)。1042 测全绿, 0 错, smoke 正常。浴盆**曲线图**仍属图表受阻; β/η/阶段(数值+文字)已补。
+
+**教训**: "记录受阻"项要复评**载体**——原以为 Weibull 是图表(受阻), 实则 β/η/阶段是**数值+文字卡**(可做)。同 MTBF/OEE: 分析的**数值指标**可做, 仅**图形载体**受阻。本轮 1 补(受阻转可做)。见 [[unlock-blocked-insights]]。

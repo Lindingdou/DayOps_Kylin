@@ -85,9 +85,10 @@ public static class GeoDataQueries
     }
 
     public sealed record FaultStats(int Events, double DowntimeHours, int Unresolved, string TopType, int TopTypeCount,
-        double MtbfHours = 0, double MttrHours = 0, double SteadyAvailPct = 0);   // 可靠性: MTBF/MTTR/稳态可用率 A_ss
+        double MtbfHours = 0, double MttrHours = 0, double SteadyAvailPct = 0,
+        double WeibullBeta = 0, double WeibullEta = 0, string WeibullPhase = "");   // 可靠性: MTBF/MTTR/A_ss + Weibull β/η/浴盆阶段
 
-    /// <summary>故障分析（设备状态·故障报修）：事件数 / 累计停机时 / 未修复数 / 最多故障类型 + 可靠性 MTBF·MTTR·稳态可用率。</summary>
+    /// <summary>故障分析（设备状态·故障报修）：事件数 / 累计停机时 / 未修复数 / 最多故障类型 + 可靠性 MTBF·MTTR·A_ss + Weibull β/η。</summary>
     public static FaultStats GetFaultStats(SqliteConnection conn)
     {
         int events = (int)Scalar(conn, "SELECT COUNT(*) FROM fault_event");
@@ -105,7 +106,25 @@ public static class GeoDataQueries
         double mttr = events > 0 ? downtime / events : 0;
         double mtbf = events > 0 ? runHours / events : 0;
         double ass = (mtbf + mttr) > 1e-9 ? mtbf / (mtbf + mttr) * 100 : 0;
-        return new FaultStats(events, downtime, unresolved, topType, topCount, mtbf, mttr, ass);
+        // Weibull 失效分布(忠实原 §1.5): 逐设备故障日期相邻间隔(天)池化 → 中位秩回归 β/η
+        var perEq = new List<List<System.DateTime>>();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT equipment_id, date FROM fault_event WHERE date IS NOT NULL AND date <> '' ORDER BY equipment_id, date";
+            using var rd = cmd.ExecuteReader();
+            string? curEq = null; List<System.DateTime>? cur = null;
+            while (rd.Read())
+            {
+                string eq = rd.IsDBNull(0) ? "" : rd.GetString(0);
+                string ds = rd.IsDBNull(1) ? "" : rd.GetString(1);
+                if (!System.DateTime.TryParse(ds, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var dt)) continue;
+                if (cur == null || eq != curEq) { cur = new List<System.DateTime>(); perEq.Add(cur); curEq = eq; }
+                cur.Add(dt);
+            }
+        }
+        var (wb, we, wok) = Cad.Reliability.WeibullFit(Cad.Reliability.PooledIntervalsDays(perEq));
+        return new FaultStats(events, downtime, unresolved, topType, topCount, mtbf, mttr, ass,
+            wok ? wb : 0, wok ? we : 0, wok ? Cad.Reliability.Phase(wb) : "");
     }
 
     public sealed record KpiStats(int Records, double AvgAvailabilityPct, double AvgUtilizationPct, int LatestYear, int LatestMonth,
