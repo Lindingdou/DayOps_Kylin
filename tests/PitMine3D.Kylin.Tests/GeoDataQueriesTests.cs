@@ -260,6 +260,35 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Import_parses_numbers_invariantly_under_comma_decimal_locale()
+    {
+        // 建库在默认 culture 下; 仅"导入"切到逗号小数 locale(de-DE)验证数字按 InvariantCulture 解析(与导出对称)
+        using var db = GeoDatabase.OpenSeeded();
+        string eq;
+        using (var q = db.Connection.CreateCommand()) { q.CommandText = "SELECT equipment_id FROM equipment LIMIT 1"; eq = (string)q.ExecuteScalar(); }
+        var prev = System.Threading.Thread.CurrentThread.CurrentCulture;
+        try
+        {
+            System.Threading.Thread.CurrentThread.CurrentCulture = new System.Globalization.CultureInfo("de-DE");   // ',' 小数分隔
+            var o = GeoDataQueries.ImportKpiMonthly(db.Connection, new[]
+            {
+                (IReadOnlyDictionary<string,string>)new Dictionary<string,string>
+                { ["equipment_id"]=eq, ["year"]="2098", ["month"]="6", ["plan_hours"]="720", ["work_hours"]="600.5",
+                  ["fault_hours"]="40", ["availability"]="0.9", ["actual_run_rate"]="0.83", ["utilization_rate"]="0.8" }
+            }, true);
+            Assert.True(o.Inserted == 1, $"de-DE locale 导入 ins={o.Inserted} err={o.Errors}");
+            using var q2 = db.Connection.CreateCommand();
+            q2.CommandText = "SELECT work_hours, availability FROM equipment_kpi_monthly WHERE equipment_id=@e AND year=2098 AND month=6";
+            q2.Parameters.AddWithValue("@e", eq);
+            using var rd = q2.ExecuteReader();
+            Assert.True(rd.Read());
+            Assert.Equal(600.5, rd.GetDouble(0), 6);   // "600.5" 逗号 locale 下仍 =600.5(非 6005 或失败)
+            Assert.Equal(0.9, rd.GetDouble(1), 6);     // "0.9" 仍 =0.9
+        }
+        finally { System.Threading.Thread.CurrentThread.CurrentCulture = prev; }
+    }
+
+    [Fact]
     public void Export_table_then_reimport_roundtrips()
     {
         using var db = GeoDatabase.OpenSeeded();

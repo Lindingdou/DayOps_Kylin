@@ -1944,3 +1944,10 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - **修**: `ParseCsv` 换 RFC-4180 解析器 `SplitCsvRecords`(逐字符尊重双引号: 引号内 `,\t\n\r` 皆字面, `""` 转义引号; 引号外逗号/制表分列、换行分记录)。与导出 CsvCell 完全对称, 往返自洽。向后兼容(无引号 CSV 解析不变——现有 ParseCsv/往返测全过)。+3 单测(引号内逗号/`""`转义/引号内换行)。1025 测全绿, 0 错, smoke [GLINIT] 正常。
 
 **判据**: 导入导出**对称性**——导出加引号(CsvCell)则导入必解引号(否则往返破); 凡自由文本列(描述/备注/名称)可能含分隔符, 朴素 split 必错。本轮 1 修(CSV 引号解析, 影响全部 11 导入)。数据完整性/健壮性累计 **6 修**。
+
+## 一六六、数字解析 locale 健壮性 —— 导入侧 TryParse 统一 InvariantCulture(对称导出)
+
+对称审计续: 导出侧全用 `ToString("0.###", InvariantCulture)`, 但导入侧 **19 处 `double/int.TryParse` 全用 culture 默认**(0 处 invariant)——**不对称**: 导出写 "0.9"(invariant), 逗号小数 locale(de-DE/fr 等)下导入 `TryParse("0.9")` 会失败或误解。CSV 数字是机器数据, 应恒 invariant。zh-CN/en 小数分隔亦 '.' 故当前默认 locale 可跑, 但属 latent 不对称 + 与导出不一致。
+- **修**: `GeoDataQueries` 加 `ParseD/ParseI`(NumberStyles.Any/Integer + InvariantCulture), sed 替全部 19 处 `double.TryParse(`→`ParseD(` / `int.TryParse(`→`ParseI(`(helper 体用 System.Double/Int32.TryParse 不被替)。+1 单测(de-DE 逗号 locale 下导入 "600.5"/"0.9" 仍正确解析, 非 6005/失败; 连跑 2× 无 flake)。1026 测全绿, 0 错, smoke 正常。
+
+**判据**: 导入导出 **locale 对称**——导出 invariant 则导入必 invariant(CSV/机器数据恒 invariant, 勿随 UI locale)。本轮 1 修(导入数字 invariant, 影响全部 DB 导入)。数据完整性/健壮性累计 **7 修**。

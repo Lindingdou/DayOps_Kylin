@@ -621,6 +621,10 @@ public static class GeoDataQueries
     public sealed record ImportOutcome(int Inserted, int Updated, int Skipped, int Errors);
 
     /// <summary>解析 CSV：首行=表头(去 BOM/星号/空白)，逗号/制表分隔，'#' 行与空行跳过。返回逐行(列名→值，大小写不敏感)。</summary>
+    // CSV 数字解析统一走 InvariantCulture(机器数据; 与导出 ToString(inv) 对称, 免逗号小数 locale 往返破)。
+    private static bool ParseD(string s, out double v) => System.Double.TryParse(s, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out v);
+    private static bool ParseI(string s, out int v) => System.Int32.TryParse(s, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out v);
+
     public static List<IReadOnlyDictionary<string, string>> ParseCsv(string text)
     {
         var outRows = new List<IReadOnlyDictionary<string, string>>();
@@ -691,9 +695,9 @@ public static class GeoDataQueries
             string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
             string eq = Get("equipment_id"), date = Get("date"), shift = Get("shift");
             if (eq.Length == 0 || date.Length == 0 || shift.Length == 0) { err++; continue; }
-            double.TryParse(Get("output_m3"), out double outp);
-            double.TryParse(Get("work_hours"), out double wh);
-            double.TryParse(Get("fault_hours"), out double fh);
+            ParseD(Get("output_m3"), out double outp);
+            ParseD(Get("work_hours"), out double wh);
+            ParseD(Get("fault_hours"), out double fh);
             string reason = Get("fault_reason");
             bool exists;
             using (var q = conn.CreateCommand())
@@ -730,8 +734,8 @@ public static class GeoDataQueries
         {
             string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
             string eq = Get("equipment_id");
-            if (eq.Length == 0 || !int.TryParse(Get("year"), out int yr) || !int.TryParse(Get("month"), out int mo)) { err++; continue; }
-            double.TryParse(Get("output_m3"), out double outp);
+            if (eq.Length == 0 || !ParseI(Get("year"), out int yr) || !ParseI(Get("month"), out int mo)) { err++; continue; }
+            ParseD(Get("output_m3"), out double outp);
             bool exists;
             using (var q = conn.CreateCommand())
             {
@@ -757,7 +761,7 @@ public static class GeoDataQueries
             string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
             string eq = Get("equipment_id"), date = Get("date"), ft = Get("fault_type");
             if (eq.Length == 0 || date.Length == 0 || ft.Length == 0) { err++; continue; }
-            double.TryParse(Get("duration_hours"), out double dur);
+            ParseD(Get("duration_hours"), out double dur);
             int resolved = Get("is_resolved") is "1" or "true" or "是" or "已修复" ? 1 : 0;
             using var cmd = conn.CreateCommand();
             cmd.CommandText = "INSERT INTO fault_event (equipment_id, date, shift, fault_type, duration_hours, description, is_resolved, repair_team) VALUES (@e,@d,@s,@t,@u,@desc,@r,@team)";
@@ -780,8 +784,8 @@ public static class GeoDataQueries
         {
             string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
             string eq = Get("equipment_id");
-            if (eq.Length == 0 || !int.TryParse(Get("year"), out int yr) || !int.TryParse(Get("month"), out int mo)) { err++; continue; }
-            double D(string k) { double.TryParse(Get(k), out double v); return v; }
+            if (eq.Length == 0 || !ParseI(Get("year"), out int yr) || !ParseI(Get("month"), out int mo)) { err++; continue; }
+            double D(string k) { ParseD(Get(k), out double v); return v; }
             bool exists;
             using (var q = conn.CreateCommand())
             { q.CommandText = "SELECT COUNT(*) FROM equipment_kpi_monthly WHERE equipment_id=@e AND year=@y AND month=@m"; q.Parameters.AddWithValue("@e", eq); q.Parameters.AddWithValue("@y", yr); q.Parameters.AddWithValue("@m", mo); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
@@ -861,10 +865,10 @@ public static class GeoDataQueries
         {
             string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
             string hole = Get("hole_id"), seam = Get("seam_code");
-            if (hole.Length == 0 || seam.Length == 0 || !double.TryParse(Get("depth_from"), out double df)) { err++; continue; }
+            if (hole.Length == 0 || seam.Length == 0 || !ParseD(Get("depth_from"), out double df)) { err++; continue; }
             long bhId;
             using (var q = conn.CreateCommand()) { q.CommandText = "SELECT id FROM borehole WHERE hole_id=@h"; q.Parameters.AddWithValue("@h", hole); var o = q.ExecuteScalar(); if (o == null || o is System.DBNull) { err++; continue; } bhId = System.Convert.ToInt64(o); }
-            object Num(string k) => double.TryParse(Get(k), out double v) ? v : (object)System.DBNull.Value;
+            object Num(string k) => ParseD(Get(k), out double v) ? v : (object)System.DBNull.Value;
             object Txt(string k) => Get(k) is { Length: > 0 } s ? s : (object)System.DBNull.Value;
             bool exists;
             using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM coal_sample WHERE borehole_id=@b AND seam_code=@s AND depth_from=@d"; q.Parameters.AddWithValue("@b", bhId); q.Parameters.AddWithValue("@s", seam); q.Parameters.AddWithValue("@d", df); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
@@ -908,9 +912,9 @@ public static class GeoDataQueries
         {
             string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
             string pid = Get("point_id"), seam = Get("seam_code");
-            if (pid.Length == 0 || seam.Length == 0 || !double.TryParse(Get("x"), out double x) || !double.TryParse(Get("y"), out double y)) { err++; continue; }
-            object Num(string k) => double.TryParse(Get(k), out double v) ? v : (object)System.DBNull.Value;
-            int yfmt = int.TryParse(Get("original_y_format"), out int yf) ? yf : 8;
+            if (pid.Length == 0 || seam.Length == 0 || !ParseD(Get("x"), out double x) || !ParseD(Get("y"), out double y)) { err++; continue; }
+            object Num(string k) => ParseD(Get(k), out double v) ? v : (object)System.DBNull.Value;
+            int yfmt = ParseI(Get("original_y_format"), out int yf) ? yf : 8;
             bool exists;
             using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM coal_observation_point WHERE point_id=@p AND seam_code=@s"; q.Parameters.AddWithValue("@p", pid); q.Parameters.AddWithValue("@s", seam); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
             using var cmd = conn.CreateCommand();
@@ -932,8 +936,8 @@ public static class GeoDataQueries
         foreach (var row in rows)
         {
             string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
-            if (!int.TryParse(Get("year"), out int yr) || !int.TryParse(Get("month"), out int mo)) { err++; continue; }
-            double D(string k) { double.TryParse(Get(k), out double v); return v; }
+            if (!ParseI(Get("year"), out int yr) || !ParseI(Get("month"), out int mo)) { err++; continue; }
+            double D(string k) { ParseD(Get(k), out double v); return v; }
             bool exists;
             using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM monthly_plan WHERE year=@y AND month=@m"; q.Parameters.AddWithValue("@y", yr); q.Parameters.AddWithValue("@m", mo); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
             using var cmd = conn.CreateCommand();
@@ -969,7 +973,7 @@ public static class GeoDataQueries
             if (hole.Length == 0 || seam.Length == 0) { err++; continue; }
             long bhId;
             using (var q = conn.CreateCommand()) { q.CommandText = "SELECT id FROM borehole WHERE hole_id=@h"; q.Parameters.AddWithValue("@h", hole); var o = q.ExecuteScalar(); if (o == null || o is System.DBNull) { err++; continue; } bhId = System.Convert.ToInt64(o); }
-            object Num(string k) => double.TryParse(Get(k), out double v) ? v : (object)System.DBNull.Value;
+            object Num(string k) => ParseD(Get(k), out double v) ? v : (object)System.DBNull.Value;
             string status = Get("status") is { Length: > 0 } st ? st : "正常";
             bool exists;
             using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM borehole_seam_result WHERE borehole_id=@b AND seam_code=@s"; q.Parameters.AddWithValue("@b", bhId); q.Parameters.AddWithValue("@s", seam); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
@@ -991,8 +995,8 @@ public static class GeoDataQueries
         {
             string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
             string id = Get("road_id"), name = Get("name"), type = Get("road_type");
-            if (id.Length == 0 || name.Length == 0 || type.Length == 0 || !double.TryParse(Get("length_m"), out double len)) { err++; continue; }
-            object Num(string k) => double.TryParse(Get(k), out double v) ? v : (object)System.DBNull.Value;
+            if (id.Length == 0 || name.Length == 0 || type.Length == 0 || !ParseD(Get("length_m"), out double len)) { err++; continue; }
+            object Num(string k) => ParseD(Get(k), out double v) ? v : (object)System.DBNull.Value;
             object Txt(string k) => Get(k) is { Length: > 0 } s ? s : (object)System.DBNull.Value;
             bool exists;
             using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM haul_road WHERE road_id=@i"; q.Parameters.AddWithValue("@i", id); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
@@ -1041,7 +1045,7 @@ public static class GeoDataQueries
             string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
             string side = Get("side_name"), type = Get("side_type");
             if (side.Length == 0 || type.Length == 0) { err++; continue; }
-            object Num(string k) => double.TryParse(Get(k), out double v) ? v : (object)System.DBNull.Value;
+            object Num(string k) => ParseD(Get(k), out double v) ? v : (object)System.DBNull.Value;
             using var cmd = conn.CreateCommand();
             cmd.CommandText = "INSERT INTO slope_design (side_name, side_type, working_slope_angle_deg, final_slope_angle_deg, max_depth_m, safety_factor, cohesion_kpa, friction_angle_deg, rock_type) VALUES (@s,@t,@w,@f,@d,@sf,@c,@fr,@r)";
             cmd.Parameters.AddWithValue("@s", side); cmd.Parameters.AddWithValue("@t", type);
