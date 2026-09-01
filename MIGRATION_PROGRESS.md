@@ -3124,3 +3124,21 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **对象捕捉(osnap 端点/中点/圆心/交点/垂足…)**: 原 PitMine3D **未实现**(grep 空), Kylin 亦无——**非缺口**(忠实=不臆造原没有的)。
 
 **教训**: 第十五角度(最新构件深查)找到节点编辑器这一真缺口(刚建"增/拖/连"缺删/撤销/存取), 补齐后邻近组件(对象/图层/文件管理器)经查均成熟; osnap 双方皆无属非缺口。**"刚做完"的构件必单独深查其 CRUD/持久化/撤销全套; 但成熟组件勿为求变而 UI churn**。见 [[unlock-blocked-insights]] [[shell-completeness-priority]]。
+
+---
+
+## §二七四 孤立 Ribbon 标签 重扫（最决定性角度复核）—— 46 死按钮全为忠实占位/native
+
+**重跑历史最决定性角度**(曾据此挖出整个排产计划模块): 提 MainWindow.axaml 全部 `Tag="X" Click="On(Ribbon|Ctx)Command"`(276 标签) × 代码 behind `cmd=="X"`/StartsWith/ActivateDrawTool(1349 处) 求差 → 58 候选, 剔 draw 工具(点/直线/圆/圆弧/矩形/多段线经 `ActivateDrawTool` 分发, 假阳)后 **46 个零引用"死按钮"**。逐一核原版:
+
+- **TaskLib 集群(~13: 生产任务书/任务下达/班组派工/作业区划分/实绩录入/班次日历/检修档期/去向台账/生产报告/生产任务编制/生产任务动态调整/周计划编制/动态调整)**: 原版全由 **SampleTaskBoard 硬编码演示数据**驱动(0 DB·无算法; 窗口 60-108 行纯 UI)。**演示桩, 非真功能** → 忠实不移植。
+- **PlanLib 动态模拟(中长远规划动态模拟/短期进度计划动态模拟)**: 原版 `PlaceholderCommand(...)` 明标"待实现"。**真 编制 命令(中长远/短期进度计划编制)已移植(§68/69)**, 仅 动态模拟 占位变体为桩 → 精确忠实。
+- **MineAssLib/native(创建工作线/局部台阶/最终并段/编辑台阶/处理尖灭/坑线落地/创建工程位置)**: 原版 `IPitDesignCapability`(native C++ 内核)——"XX不可用:IPitDesignCapability 未注册"; 描述多标"待实现""几何已实现仅缺入口"(指 C++)。**native 无托管源** → 记录, 不重写。
+- **影像/点云/渲染(加载倾斜摄影/影像底图/点云管理/现状写实/煤层露头着色/补勘钻孔写实/渲染配置)**: 原版无源(纯 ribbon 标签/skeleton)或 RenderConfigDialog(native 渲染管线设置)。**桩/native** → 记录。
+- **无源杂项(派车单/排土场放坡/排土模板/采排配对/量驱动采剥接续/驱动量/钻爆计划衔接/采掘单元清单/增量增删边/延拓触发设置/平盘联络道/刀量切割/破碎站位置设置/约束条件设置/编制配置/进度计划方案出图/撤销坑线/最终并段…)**: 原版无托管源(SkeletonCommand 回显意图或纯标签) → 记录。
+
+**结论**: 46 死按钮**无一是 Kylin 漏掉的托管实现**——全对应原版 桩(SampleTaskBoard/Placeholder/Skeleton/无源) 或 native(IPitDesignCapability/渲染)。Kylin 忠实地: (1)照搬 ribbon 标签; (2)不实现原版所桩者(忠实); (3)统一以 `「X」暂未实现——属未移植子系统（排产计划/生产调度/坑线采剥内核/倾斜摄影等）` fallthrough 提示(等价原 SkeletonCommand 回显, 优于静默)。
+
+**这是最强收敛信号**: 历史上此角度挖出最大缺口(排产计划核心), 今复跑每个孤立标签皆已归账(真命令已移植 / 桩·native 已记录且有提示)。ribbon 命令维度**忠实完备**。
+
+**教训**: 决定性角度值得**周期性重跑**——上次挖出模块, 这次确认收敛(因核心已补 §66-69, 余为忠实桩)。孤立标签 ≠ 缺口: 须辨 (a)真命令漏接线(gap) vs (b)原版桩/native(忠实死按钮 + fallthrough)。见 [[unlock-blocked-insights]] [[faithfulness-only-original-commands]]。
