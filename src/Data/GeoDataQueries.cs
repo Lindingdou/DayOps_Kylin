@@ -81,9 +81,10 @@ public static class GeoDataQueries
         return rows;
     }
 
-    public sealed record FaultStats(int Events, double DowntimeHours, int Unresolved, string TopType, int TopTypeCount);
+    public sealed record FaultStats(int Events, double DowntimeHours, int Unresolved, string TopType, int TopTypeCount,
+        double MtbfHours = 0, double MttrHours = 0, double SteadyAvailPct = 0);   // 可靠性: MTBF/MTTR/稳态可用率 A_ss
 
-    /// <summary>故障分析（设备状态·故障报修）：事件数 / 累计停机时 / 未修复数 / 最多故障类型。</summary>
+    /// <summary>故障分析（设备状态·故障报修）：事件数 / 累计停机时 / 未修复数 / 最多故障类型 + 可靠性 MTBF·MTTR·稳态可用率。</summary>
     public static FaultStats GetFaultStats(SqliteConnection conn)
     {
         int events = (int)Scalar(conn, "SELECT COUNT(*) FROM fault_event");
@@ -96,7 +97,12 @@ public static class GeoDataQueries
             using var rd = cmd.ExecuteReader();
             if (rd.Read()) { topType = rd.GetString(0); topCount = rd.GetInt32(1); }
         }
-        return new FaultStats(events, downtime, unresolved, topType, topCount);
+        // 可靠性(忠实原 EquipmentAnalysisWindow §1.5): MTBF=总运行时长/故障次数, MTTR=总修复时长/故障次数, A_ss=MTBF/(MTBF+MTTR)
+        double runHours = ScalarDouble(conn, "SELECT COALESCE(SUM(work_hours),0) FROM production_record");
+        double mttr = events > 0 ? downtime / events : 0;
+        double mtbf = events > 0 ? runHours / events : 0;
+        double ass = (mtbf + mttr) > 1e-9 ? mtbf / (mtbf + mttr) * 100 : 0;
+        return new FaultStats(events, downtime, unresolved, topType, topCount, mtbf, mttr, ass);
     }
 
     public sealed record KpiStats(int Records, double AvgAvailabilityPct, double AvgUtilizationPct, int LatestYear, int LatestMonth,

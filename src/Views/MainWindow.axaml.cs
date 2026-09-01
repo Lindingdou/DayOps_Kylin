@@ -7059,7 +7059,9 @@ public partial class MainWindow : Window
     {
         var db = EnsureGeoDb(); if (db == null) return;
         var f = Data.GeoDataQueries.GetFaultStats(db.Connection);
-        StatusMsg.Text = $"故障分析：{f.Events} 起 · 累计停机 {f.DowntimeHours:0.#}h · 未修复 {f.Unresolved} · 最多「{f.TopType}」×{f.TopTypeCount}";
+        // 可靠性(MTBF/MTTR/稳态可用率)有运行时长数据才附加
+        string rel = f.MtbfHours > 0 ? $" · 可靠性 MTBF {f.MtbfHours:0.#}h/MTTR {f.MttrHours:0.#}h/稳态可用率 {f.SteadyAvailPct:0.#}%" : "";
+        StatusMsg.Text = $"故障分析：{f.Events} 起 · 累计停机 {f.DowntimeHours:0.#}h · 未修复 {f.Unresolved} · 最多「{f.TopType}」×{f.TopTypeCount}{rel}";
     }
 
     private void KpiStatsCmd()

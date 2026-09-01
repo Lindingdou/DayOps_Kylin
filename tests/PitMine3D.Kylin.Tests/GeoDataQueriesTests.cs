@@ -289,6 +289,24 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Fault_stats_computes_reliability_mtbf_mttr_availability()
+    {
+        // 可靠性: MTBF=Σ运行时长/故障次数, MTTR=累计停机/故障次数, A_ss=MTBF/(MTBF+MTTR)
+        using var db = GeoDatabase.OpenSeeded();
+        var f = GeoDataQueries.GetFaultStats(db.Connection);
+        Assert.True(f.Events > 0, "种子应有故障事件");
+        Assert.Equal(f.DowntimeHours / f.Events, f.MttrHours, 4);              // MTTR
+        double runHours;
+        using (var q = db.Connection.CreateCommand()) { q.CommandText = "SELECT COALESCE(SUM(work_hours),0) FROM production_record"; runHours = System.Convert.ToDouble(q.ExecuteScalar()); }
+        Assert.Equal(runHours / f.Events, f.MtbfHours, 4);                     // MTBF
+        if (f.MtbfHours > 0)
+        {
+            Assert.Equal(f.MtbfHours / (f.MtbfHours + f.MttrHours) * 100, f.SteadyAvailPct, 4);   // A_ss
+            Assert.InRange(f.SteadyAvailPct, 0, 100);
+        }
+    }
+
+    [Fact]
     public void Export_table_then_reimport_roundtrips()
     {
         using var db = GeoDatabase.OpenSeeded();

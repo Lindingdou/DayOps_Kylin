@@ -1951,3 +1951,11 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - **修**: `GeoDataQueries` 加 `ParseD/ParseI`(NumberStyles.Any/Integer + InvariantCulture), sed 替全部 19 处 `double.TryParse(`→`ParseD(` / `int.TryParse(`→`ParseI(`(helper 体用 System.Double/Int32.TryParse 不被替)。+1 单测(de-DE 逗号 locale 下导入 "600.5"/"0.9" 仍正确解析, 非 6005/失败; 连跑 2× 无 flake)。1026 测全绿, 0 错, smoke 正常。
 
 **判据**: 导入导出 **locale 对称**——导出 invariant 则导入必 invariant(CSV/机器数据恒 invariant, 勿随 UI locale)。本轮 1 修(导入数字 invariant, 影响全部 DB 导入)。数据完整性/健壮性累计 **7 修**。
+
+## 一六七、分析输出完整性透镜 —— 故障分析补可靠性 MTBF/MTTR/稳态可用率
+
+新透镜: 分析命令是否算全**原版同分析的所有指标**? 查故障分析:
+- **缺口**: 原 EquipmentAnalysisWindow §1.5 算 **MTBF/MTTR + 稳态可用率 A_ss + Weibull**(OEE 看板/故障 Pareto/MTBF), Kylin 故障分析只有 事件数/停机/未修/最多类型 + 排名, **无可靠性指标**。MTBF/MTTR 是标准可靠性分析且公式简单、数据齐(fault_event + production_record)。
+- **修**: `GetFaultStats`+`FaultStats` 加 MtbfHours(=Σwork_hours/故障次数)/MttrHours(=Σduration_hours/故障次数)/SteadyAvailPct(=MTBF/(MTBF+MTTR)×100), 忠实原公式(line 774 "MTBF=总运行时长/故障次数"); `故障分析` 显示"可靠性 MTBF/MTTR/稳态可用率"(有运行时长才附加)。+1 单测(种子上验 MTTR=停机/次数、MTBF=Σworkhours/次数、A_ss=MTBF/(MTBF+MTTR) 关系恒等 + A_ss∈[0,100])。1027 测全绿, 0 错, smoke 正常。Weibull 浴盆/大修预警属 GUI 图表(受阻记录)。
+
+**判据**: 分析输出完整性——同一分析原版算 N 指标, Kylin 算 M<N 即缺口(取公式简单+数据齐者补, 图表/GUI 受阻记录)。同煤质washability/KPI故障归因手法。本轮 1 修。累计分析补全 3 处(煤质 Mad/FCd·KPI 故障归因·故障 MTBF/MTTR)。
