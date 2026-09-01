@@ -321,6 +321,17 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Production_stats_computes_efficiency_avg_and_peak()
+    {
+        // 台效 = 产量/工时: 均值(=总产量/总工时) + 峰值(=逐记录 max output/work_hours)
+        using var db = GeoDatabase.OpenSeeded();
+        var s = GeoDataQueries.GetProductionStats(db.Connection);
+        Assert.True(s.WorkHours > 0);
+        Assert.Equal(s.OutputM3 / s.WorkHours, s.AvgEfficiencyM3PerH, 4);
+        Assert.True(s.PeakEfficiencyM3PerH >= s.AvgEfficiencyM3PerH - 1e-6, "峰值台效 ≥ 均值(比率加权均值 ≤ 最大比率)");
+    }
+
+    [Fact]
     public void Export_table_then_reimport_roundtrips()
     {
         using var db = GeoDatabase.OpenSeeded();

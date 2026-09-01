@@ -29,20 +29,23 @@ public static class GeoDataQueries
         return new EquipmentRoster(total, byCat, inSvc);
     }
 
-    public sealed record ProductionStats(int Records, double OutputM3, double WorkHours, double FaultHours, double UtilizationPct);
+    public sealed record ProductionStats(int Records, double OutputM3, double WorkHours, double FaultHours, double UtilizationPct,
+        double AvgEfficiencyM3PerH = 0, double PeakEfficiencyM3PerH = 0);   // 效率(产量/工时): 均值 + 峰值(忠实原 peakEff)
 
-    /// <summary>生产数据统计：记录数 / 总产量 / 工时 / 故障工时 / 作业率(工时/(工时+故障))。</summary>
+    /// <summary>生产数据统计：记录数 / 总产量 / 工时 / 故障工时 / 作业率(工时/(工时+故障)) + 台效(产量/工时)均值·峰值。</summary>
     public static ProductionStats GetProductionStats(SqliteConnection conn)
     {
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = @"SELECT COUNT(*), COALESCE(SUM(output_m3),0), COALESCE(SUM(work_hours),0), COALESCE(SUM(fault_hours),0)
+        cmd.CommandText = @"SELECT COUNT(*), COALESCE(SUM(output_m3),0), COALESCE(SUM(work_hours),0), COALESCE(SUM(fault_hours),0),
+                            COALESCE(MAX(CASE WHEN work_hours > 0 THEN output_m3 / work_hours END),0)
                             FROM production_record";
         using var rd = cmd.ExecuteReader();
         rd.Read();
         int n = rd.GetInt32(0);
-        double outp = rd.GetDouble(1), wh = rd.GetDouble(2), fh = rd.GetDouble(3);
+        double outp = rd.GetDouble(1), wh = rd.GetDouble(2), fh = rd.GetDouble(3), peakEff = rd.GetDouble(4);
         double util = (wh + fh) > 1e-9 ? wh / (wh + fh) * 100.0 : 0;
-        return new ProductionStats(n, outp, wh, fh, util);
+        double avgEff = wh > 1e-9 ? outp / wh : 0;   // 台效 = 总产量/总工时 (m³/h)
+        return new ProductionStats(n, outp, wh, fh, util, avgEff, peakEff);
     }
 
     public sealed record CapacityRow(string EquipmentId, string Model, double TotalOutputM3);

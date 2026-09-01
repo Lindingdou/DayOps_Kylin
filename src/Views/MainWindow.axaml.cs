@@ -7042,7 +7042,9 @@ public partial class MainWindow : Window
     {
         var db = EnsureGeoDb(); if (db == null) return;
         var s = Data.GeoDataQueries.GetProductionStats(db.Connection);
-        StatusMsg.Text = $"设备生产数据：{s.Records} 条记录 · 总产量 {s.OutputM3:0.#} m³ · 工时 {s.WorkHours:0.#}h · 故障 {s.FaultHours:0.#}h · 作业率 {s.UtilizationPct:0.#}%";
+        // 台效(产量/工时)有工时才附加
+        string eff = s.AvgEfficiencyM3PerH > 0 ? $" · 台效 均{s.AvgEfficiencyM3PerH:0.#}/峰{s.PeakEfficiencyM3PerH:0.#} m³/h" : "";
+        StatusMsg.Text = $"设备生产数据：{s.Records} 条记录 · 总产量 {s.OutputM3:0.#} m³ · 工时 {s.WorkHours:0.#}h · 故障 {s.FaultHours:0.#}h · 作业率 {s.UtilizationPct:0.#}%{eff}";
     }
 
     private void CapacityRankingCmd()

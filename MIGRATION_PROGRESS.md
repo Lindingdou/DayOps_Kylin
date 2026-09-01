@@ -1967,3 +1967,11 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - **修**: `GetKpiStats`+`KpiStats` 加 AvgRunRatePct(作业率均值)+ OeePct(=可用率×作业率×利用率, 由归一化三率百分比求积, 忠实原 Oee); `KPI分析` 显示"三率 可用/作业/利用 · OEE"。+1 单测(OEE=三率积关系恒等 + OEE≤各单率 + ∈[0,100] + 作业率>0)。1028 测全绿, 0 错, smoke 正常。
 
 **分析输出完整性透镜产出**: 累计补 4 处(煤质 Mad/FCd · KPI 故障归因 · 故障 MTBF/MTTR · KPI OEE+作业率)。判据: 原版同分析算的指标(公式简单+数据齐)Kylin 须算全; 图表/GUI(Weibull 浴盆/趋势图/Pareto 图)受阻记录。本轮 1 修。
+
+## 一六九、分析输出完整性续二 —— 生产数据补台效(产量/工时)均值+峰值
+
+承 §一六七/一六八, 续查生产数据分析:
+- **缺口**: 原 EquipmentAnalysisWindow 算 **peakEff = max(output/work_hours)**(班次台效峰值), Kylin `GetProductionStats` 有总产量+总工时但**无台效(产量/工时=m³/h)**——设备生产率核心指标缺失。
+- **修**: `GetProductionStats`+`ProductionStats` 加 AvgEfficiencyM3PerH(=总产量/总工时)+ PeakEfficiencyM3PerH(=逐记录 MAX(output_m3/work_hours), 忠实原 peakEff); `设备生产数据` 显示"台效 均X/峰Y m³/h"。+1 单测(均值=总产量/总工时 恒等; 峰值≥均值[比率加权均值≤最大比率])。1029 测全绿, 0 错, smoke 正常。
+
+**分析输出完整性透镜累计 5 处**(煤质 Mad/FCd · KPI 故障归因 · 故障 MTBF/MTTR · KPI OEE+作业率 · 生产台效均/峰)。产能峰值年/当前占峰比属 EquipmentCapabilityWindow GUI 图表(趋势图)——指标可算但主载体是图表, 命令行已有年度产量导出可支撑, 暂记录(如需可另补文本峰值年摘要)。本轮 1 修。
