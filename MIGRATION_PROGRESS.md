@@ -2109,3 +2109,12 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - 注: CommandCatalog 是 View private + 需 Avalonia UI 上下文, 无易测点(原「207/207 解析」是脚本非单测); 本次靠 grep 目录 vs 派发差集人工核。
 
 **教训**: 加新命令(dispatch `cmd == "X"`)后, 若是**主命令(非别名)**须同步登 `CommandCatalog`, 否则不可发现。加命令三步: ①dispatch ②handler ③CommandCatalog(主命令)。本轮补 4 命令入目录。
+
+## 一八七、新命令 Ribbon 可发现性 —— 3 新命令入功能区(命令行+目录+Ribbon 三路齐)
+
+承 §一八六 命令目录, 续补 Ribbon 功能区(主 UI 发现路径, 其它分析命令皆有 ribbon 按钮):
+- **设备管理组**: 补「机群驾驶舱」(equip_cockpit 图标)+「设备综合评分」(equip_capability 图标)——与既有 机群总览/设备智能编组/设备数据分析/设备效能预测 并列。
+- **煤质管理组**: 补「数据健康度」(coal_data 图标)——与既有 数据看板/统计分析/钻孔柱状图 并列。
+- 复用既有图标资源(equip_cockpit/equip_capability/coal_data, 已验证存在), tooltip 说明。0 错, 1050 测, smoke [GLINIT] 无 XAML/资源错。
+
+**★可发现性三路闭合**: 新增主命令现三路齐全——① 命令行 dispatch ② CommandCatalog 自动补全 ③ Ribbon 功能区按钮。**加主命令四步**: dispatch + handler + CommandCatalog + Ribbon 按钮(有图标)。承你的右键菜单反馈, 本会话补齐了新命令的 UI 可达性(右键置顶 + 目录 + ribbon)。本轮 3 命令入 ribbon。

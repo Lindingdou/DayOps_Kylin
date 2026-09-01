@@ -325,6 +325,9 @@
                                             <Button Classes="ribbon-btn small" Tag="钻孔柱状图" Click="OnRibbonCommand" ToolTip.Tip="钻孔柱状图">
                                                 <StackPanel Orientation="Horizontal"><Image Source="{StaticResource bh_column_3d}" /><TextBlock Text="钻孔柱状图" /></StackPanel>
                                             </Button>
+                                            <Button Classes="ribbon-btn small" Tag="煤质数据健康度" Click="OnRibbonCommand" ToolTip.Tip="煤质数据健康度：样品数/煤类标注率/化验孔覆盖/工分自洽率">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource coal_data}" /><TextBlock Text="数据健康度" /></StackPanel>
+                                            </Button>
                                         </WrapPanel>
                                     </StackPanel>
                                 </DockPanel>
@@ -381,6 +384,12 @@
                                             </Button>
                                             <Button Classes="ribbon-btn small" Tag="数据导入导出" Click="OnRibbonCommand" ToolTip.Tip="数据导入导出">
                                                 <StackPanel Orientation="Horizontal"><Image Source="{StaticResource equip_import}" /><TextBlock Text="数据导入导出" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="机群驾驶舱" Click="OnRibbonCommand" ToolTip.Tip="机群领导驾驶舱：健康度红绿灯/瓶颈/可解锁产能/需关注清单">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource equip_cockpit}" /><TextBlock Text="机群驾驶舱" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="设备综合评分" Click="OnRibbonCommand" ToolTip.Tip="设备五维综合评分(熵权法)：产能强度/稳定性/可用率/效率/可靠性">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource equip_capability}" /><TextBlock Text="设备综合评分" /></StackPanel>
                                             </Button>
                                         </WrapPanel>
                                     </StackPanel>
