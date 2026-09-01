@@ -3208,3 +3208,15 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 - `EquipmentModel3DFactory`(388)/`SurfaceInstanceBuilder`(295): 3D 实例/渲染(2D 场景记录)。
 
 **本轮无新增可实现+可验证缺口**——最广类枚举确认大型算法前沿已覆盖; 唯 StraightRampAutoRouter 是"退化命令"但验证条件不满足而记录。教训: **退化命令(直线斜坡道)未必都能补——须过验证关**; 全模块大类枚举是最强收敛信号(45 类全归账)。见 [[unlock-blocked-insights]] [[faithfulness-only-original-commands]]。
+
+---
+
+## §二七八 80–150行 纯托管类清扫 —— 算法前沿收敛确认(下探至中小算法)
+
+续 §277(>150行), 枚举**全 Modules 80–150 行、native引用0 类**逐一核。绝大多数为数据模型/实体/服务/接口(CoalSample/Equipment/ProductionTask/IRoadLayoutSolver 等, Kylin 有等价)。算法类候选核实**全覆盖或非缺口**:
+
+- 覆盖: ParameterVerifier→参数校核 · HorizonPointBuilder→展绘层位数据 · ElevationBinner/VolumeByLevelReport→分标高资源(BlockModel) · PolylineMetrics→RoadEvolutionAnalyzer · AdvancePlanner→AdvancePlanner(+测试) · StripRatioField→PanelSplit · BenchAnalyzer→BenchWidthIdentifier。
+- **SectionSampler**(131, `SampleLayers→ResourceProfile` 逐层煤/废/灰): Kylin **覆盖**——`ResourceProfileLite`(PitDepthSolver, "忠实移植原 ResourceProfile") + `BlockModel.分标高资源量`(按 benchHeight 分带算矿/废/剥采比/品位/金属) + 分标高煤质(§255)。
+- **RoadGraphSerializer**(114, RoadGraph↔JSON): **架构冗余非缺口**——Kylin 路网按需从场景折线 `RoadNetwork.Build` 重建(折线本身随 .pmx 持久化), 不单独建持久 RoadGraph 对象, 且无几何外的图属性(节点类型/边状态)可序列化(那些 Kylin 按需 CenterlineJunctions 分类)。
+
+**结论**: 算法前沿下探至 80 行仍收敛——全 Modules ≥80 行纯托管类**全归账**(覆盖 / 记录 native·格式·交互·不可验证 / 架构冗余)。本会话两真获(§79 RoadCenterlineExtractor + §80 RoadNetworkConnector)后, 穷举类枚举确认无更多可实现+可验证的大中算法缺口。见 [[unlock-blocked-insights]]。
