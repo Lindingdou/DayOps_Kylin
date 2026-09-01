@@ -2386,7 +2386,9 @@ public partial class MainWindow : Window
         if (recs.Count == 0) { StatusMsg.Text = "工序进度：未解析到任务(需 工序,计划量,实绩量)"; return; }
         var sum = Cad.Tasks.ProcessProgress.Summarize(recs);
         var parts = sum.Select(p => $"{Cad.Tasks.ProcessProgress.Label(p.Process)} {p.Count}项(达成{p.AvgAttainmentPct:0.#}%·达标{p.DoneCount})");
-        StatusMsg.Text = "工序进度跟踪：" + string.Join(" · ", parts);
+        if (sum.Count > 0)
+            DrawCategoryBars(sum.Select(p => (Cad.Tasks.ProcessProgress.Label(p.Process), p.AvgAttainmentPct)).ToList(), "达成%");
+        StatusMsg.Text = "工序进度跟踪：" + string.Join(" · ", parts) + (sum.Count > 0 ? " · 达成柱入场景" : "");
     }
 
     // 配煤核算（TaskLib 煤质切片）：读配煤 CSV(吨,灰%,热MJ,硫%) → 按吨量加权混合煤质。
@@ -3963,8 +3965,10 @@ public partial class MainWindow : Window
         string top = breakdown.Count > 0 ? string.Join(" · ", breakdown.Take(4).Select(b => $"{b.Name} {b.Count}")) : "无分类";
         string csv = "# 分类统计\n" + LasQualityReport.ClassBreakdownCsv(breakdown) + "\n# 强度直方图\n" + Statistics.HistogramCsv(iSummary);
         var name = await SaveCsvAsync("导出 LAS 质量报告", "las_quality.csv", csv);
+        if (breakdown.Count > 0)
+            DrawCategoryBars(breakdown.Select(b => (b.Name, (double)b.Count)).ToList(), "点数");
         StatusMsg.Text = $"LAS 分类统计：{r.PointCount} 点 · {breakdown.Count} 类[{top}] · 强度 {Statistics.SummaryLine(iSummary)}"
-            + (name != null ? $" → {name}" : "");
+            + (breakdown.Count > 0 ? " · 分类柱入场景" : "") + (name != null ? $" → {name}" : "");
     }
 
     // 正射着色(真实色)：选点 CSV + GeoTIFF 正射影像 → 逐点采像素色 → 真实色点云入场景
