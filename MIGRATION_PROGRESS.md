@@ -2904,3 +2904,17 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知图)**: [EdgeBetweennessTests](tests/PitMine3D.Kylin.Tests/EdgeBetweennessTests.cs) +3—— 链 0-1-2-3 端点源汇→三边各介数2; Y 型茎边介数4(最忙, 降序首位); 不连通对跳不抛。**build 0 错·单测 1336→1339**。
 
 **本会话第 65 功能**。教训: **第八角度(present-but-partial)不限 GeoDataBase, 拓展到 RoadLib/PointCloudLib 等**——逐分析器读原多算的维度(此为图介数)。数据模型缺属性时取可验证核(介数) + 记录加权refinement(车道/坡度)。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二五九 中长远进度计划排产（整模块缺失，第九角度=孤儿标签/无实现）
+
+**第九收敛角度**: 前八角度(测试/命令/格式/引擎/自标限制/导出实体/导入/DB聚合)均未捕获此项——`中长远` 仅存于 [MainWindow.axaml](src/Views/MainWindow.axaml) 的**孤儿 ribbon 标签 + 图标**(无 `cmd==` 处理), 故 §250 整串比对未标 0 命中(标签在 XAML 里), 实则**整个中长远进度计划模块无实现**。原 `PlanLib.LongTerm.LongTermScheduler`(量版合成排产)是真算法。
+
+**补** [LongTermScheduler](src/Cad/LongTermScheduler.cs)(忠实原量版合成分支): `Schedule(plan)` = 划期 → 达产爬坡(r0 按线性/阶梯/激进)分配采出量 → 超前剥离反推(合成剖面 ratio0=base+(peak−base)√progress 削峰) → 逐年现金流/NPV(内排省 15%运费) → Periods + Evaluate(服务年限/达产期/NPV/回收期/产量CV/剥采比CV/储量均衡/规范服务年限校核 GB50197)。工作线长×模式×方位→峰值因子。`AdvanceRateFrom`(推进度=能力·1e4/(线长·台阶高·密度))。模型 `LongTermPlan`/`PlanPeriod`/`LongTermResult` + 枚举。命令 `中长远进度计划 [能力] [储量] [基准剥采比] [爬坡型]`([MainWindow](src/Views/MainWindow.axaml.cs) `LongTermPlanCmd`): 排产 + 逐年剥采比曲线上屏 + CSV(年/相时/能力/煤/剥离/剥采比/累计/推进/排土/现金流/NPV) + 结果摘要。
+
+**忠实取舍**: 真剥采比场模式(块体采样逐列真地质序列)= Phase 2, 需 StripRatioFieldSampler, 记录; 量版合成核完整可移可验。多方案生成(工作线×方向笛卡尔积)接口原有, Kylin 已有 派生计划方案(§) 覆盖多方案需求。
+
+**验证(已知值+不变量)**: [LongTermSchedulerTests](tests/PitMine3D.Kylin.Tests/LongTermSchedulerTests.cs) +4—— AdvanceRateFrom 100/(1200·12·1.35)×1e4=51.44·退化0; 服务年限分级 1000→30/.../50→10; 基建期无煤有剥离负CF·生产采出总量≈储量·首年能力35%(r0)·服务年限=生产年数·峰值剥采比∈(base,7.7]·NPV=Σ折现; 确定性(同输入同输出)。**build 0 错·单测 1339→1343**。
+
+**本会话第 66 功能**。教训: **第九角度=孤儿标签(XAML/目录有标签但无 `cmd==` 处理)**——整串命令比对(§250)会被 XAML 里的孤儿标签骗过(标签在但无实现)。判据: **命令标签比对须查是否有对应 `cmd==` 分派处理, 而非仅字符串存在**。此为最大单项缺口(整规划模块), 前八角度全漏, 靠"逐模块读原 *Scheduler/*Plan 有无 Kylin 对应命令处理"挖出。见 [[unlock-blocked-insights]]。

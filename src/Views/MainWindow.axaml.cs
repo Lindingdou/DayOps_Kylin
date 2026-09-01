@@ -918,6 +918,7 @@ public partial class MainWindow : Window
             if (cmd == "采区划分" || cmd == "采区" || cmd == "储量均衡划分") { PanelSplitCmd(); return; }
             if (cmd == "规划计算" || cmd == "开采程序评价" || cmd == "程序评价") { ProgramEvaluateCmd(); return; }
             if (cmd == "派生计划方案" || cmd == "派生方案" || cmd == "多方案派生") { DerivePlansCmd(); return; }
+            if (cmd == "中长远进度计划" || cmd == "中长远规划" || cmd == "中长期计划" || cmd == "中长远进度计划编制" || cmd.StartsWith("中长远进度计划 ") || cmd.StartsWith("中长远规划 ")) { await LongTermPlanCmd(cmd); return; }
             if (cmd == "剖面分析" || cmd == "剖面" || cmd == "点云剖面") { await SectionProfileAsync(); return; }
             if (cmd == "粗糙度" || cmd == "地表粗糙度") { await RoughnessAsync(); return; }
             if (cmd == "曲率" || cmd == "地表曲率") { await CurvatureAsync(); return; }
@@ -5906,6 +5907,50 @@ public partial class MainWindow : Window
     }
 
     // 派生计划方案：块体→场→按不同采区数/推进方位派生多方案→逐一评价→按 NPV 排名 报表
+    // 中长远进度计划(忠实原 LongTermScheduler 量版合成排产): 参数→划期/爬坡/剥离反推/NPV→逐年表 + 剥采比曲线上屏。
+    // 用法 中长远进度计划 [设计能力万t/a] [可采储量万t] [基准剥采比] [爬坡:线性|阶梯|激进]。
+    private async Task LongTermPlanCmd(string cmd)
+    {
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        var p = new Cad.LongTermPlan();
+        if (tk.Length > 1 && double.TryParse(tk[1], out var cap) && cap > 0) p.DesignCapacityWanTa = cap;
+        if (tk.Length > 2 && double.TryParse(tk[2], out var res) && res > 0) p.CoalReserveWanT = res;
+        if (tk.Length > 3 && double.TryParse(tk[3], out var br) && br > 0) p.BaseStripRatio = br;
+        if (tk.Length > 4) p.RampProfile = tk[4].Contains("激进") ? Cad.RampProfileKind.Aggressive : tk[4].Contains("阶梯") ? Cad.RampProfileKind.Stepped : Cad.RampProfileKind.Linear;
+        Cad.LongTermScheduler.Schedule(p);
+        var r = p.Result!;
+        // 逐年生产剥采比曲线上屏(年 → 剥采比)
+        var prod = p.Periods.Where(z => z.CoalWanT > 0).ToList();
+        if (prod.Count >= 2)
+        {
+            double vw = ViewportHost.Bounds.Width, vh = ViewportHost.Bounds.Height;
+            var q0 = Viewport.ScreenToWorld(vw * 0.3, vh * 0.85) ?? (0.0, 0.0);
+            var q1 = Viewport.ScreenToWorld(vw * 0.7, vh * 0.4) ?? (100.0, 50.0);
+            double w = System.Math.Abs(q1.x - q0.x), h = System.Math.Abs(q1.y - q0.y);
+            if (w < 1e-6) w = 100; if (h < 1e-6) h = 50;
+            var pts = prod.Select((z, i) => ((double)(i + 1), z.Ratio)).ToList();
+            BeginChange();
+            foreach (var e in Cad.CurvePlot.Build(pts, System.Math.Min(q0.x, q1.x), System.Math.Min(q0.y, q1.y), w, h, System.Math.Max(h * 0.05, 1e-3), "生产年", "剥采比"))
+            { e.LayerName = _layers.Current.Name; _scene.Add(e); }
+            RefreshScene();
+        }
+        var name = await SaveCsvAsync("导出中长远进度计划", "long_term_plan.csv", LongTermToCsv(p));
+        StatusMsg.Text = $"中长远进度计划(能力 {p.DesignCapacityWanTa:0}万t/a·储量 {p.CoalReserveWanT:0}万t·{RampText(p.RampProfile)})：服务 {r.ServiceLifeYears:0}a(达产 {r.TimeToCapacityYears:0}a·稳产 {r.StablePlateauYears:0}a) · 峰值剥采比 {r.ProductionRatioPeak:0.#} · NPV {r.Npv:0}万 · 回收 {r.PaybackYears:0}a · 内排 {r.InnerDumpPct:0}% · 均衡 {r.ReserveBalanceCoef:0.##} · {(r.Ok ? "可行✓" : "不达标(服务年限/剥采比)")}"
+            + (prod.Count >= 2 ? " · 剥采比曲线入场景" : "") + (name != null ? $" · CSV → {name}" : "");
+    }
+
+    private static string RampText(Cad.RampProfileKind k) => k switch { Cad.RampProfileKind.Aggressive => "激进达产", Cad.RampProfileKind.Stepped => "阶梯爬坡", _ => "线性爬坡" };
+
+    private static string LongTermToCsv(Cad.LongTermPlan p)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var sb = new System.Text.StringBuilder();
+        sb.Append("年,相时,能力%,煤万t,剥离万m³,剥采比,累计煤,累计剥离,推进m/a,排土,现金流万,NPV万\n");
+        foreach (var z in p.Periods)
+            sb.Append($"{z.Label},{z.Phase},{z.CapacityPct.ToString("0", inv)},{z.CoalWanT.ToString("0", inv)},{z.StripWanM3.ToString("0", inv)},{z.Ratio.ToString("0.##", inv)},{z.CumCoal.ToString("0", inv)},{z.CumStrip.ToString("0", inv)},{z.AdvanceRateMpa.ToString("0", inv)},{(z.Dump == Cad.LongTermDumpMode.Internal ? "内排" : "外排")},{z.CashFlowWan.ToString("0", inv)},{z.NpvWan.ToString("0", inv)}\n");
+        return sb.ToString();
+    }
+
     private void DerivePlansCmd()
     {
         if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "派生计划方案：请先导入/生成块体"; return; }
@@ -9796,7 +9841,7 @@ public partial class MainWindow : Window
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割","移除障碍物",
         // 块体/运输/路网
-        "块体模型","导出PMB","属性赋值","资源量","面约束块体","离散化模型","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","瓶颈段分析","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道","直线斜坡道",
+        "块体模型","导出PMB","属性赋值","资源量","面约束块体","离散化模型","中长远进度计划","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","瓶颈段分析","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道","直线斜坡道",
         // 生产计划/投影
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","开采程序切分","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
