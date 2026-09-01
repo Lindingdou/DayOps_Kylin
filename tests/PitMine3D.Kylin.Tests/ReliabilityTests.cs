@@ -51,4 +51,30 @@ public class ReliabilityTests
         Assert.Contains(10.0, iv);
         Assert.Contains(5.0, iv);
     }
+
+    [Fact]
+    public void EntropyWeights_sum_to_one_and_favor_dispersion()
+    {
+        // dim0=[1,0,0] 集中(离散度大→高权); dim1=[1,1,1] 均匀(离散度0→低权)
+        var rows = new List<double[]> { new[] { 1.0, 1 }, new[] { 0.0, 1 }, new[] { 0.0, 1 } };
+        var w = EntropyWeighting.Weights(rows);
+        Assert.Equal(1.0, w[0] + w[1], 6);         // 权重和=1
+        Assert.True(w[0] > w[1], "离散维权重 > 均匀维");
+        Assert.Equal(1.0, w[0], 3);                // 均匀维熵=1→权 0
+        Assert.Equal(0.0, w[1], 3);
+    }
+
+    [Fact]
+    public void EntropyWeights_few_samples_equal_weights()
+    {
+        var w = EntropyWeighting.Weights(new List<double[]> { new[] { 1.0, 2 }, new[] { 3.0, 4 } }); // m<3
+        Assert.Equal(0.5, w[0], 6);
+        Assert.Equal(0.5, w[1], 6);
+    }
+
+    [Fact]
+    public void Composite_is_weighted_sum()
+    {
+        Assert.Equal(0.5 * 0.2 + 0.5 * 0.8, EntropyWeighting.Composite(new[] { 0.2, 0.8 }, new[] { 0.5, 0.5 }), 6);
+    }
 }

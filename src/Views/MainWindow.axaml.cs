@@ -813,6 +813,7 @@ public partial class MainWindow : Window
             if (cmd == "产能分析" || cmd == "设备能力" || cmd == "能力分析" || cmd == "产能") { CapacityRankingCmd(); return; }
             if (cmd == "故障分析" || cmd == "设备状态·故障报修" || cmd == "故障报修" || cmd == "设备状态") { FaultStatsCmd(); return; }
             if (cmd == "KPI分析" || cmd == "KPI" || cmd == "设备KPI") { KpiStatsCmd(); return; }
+            if (cmd == "设备综合评分" || cmd == "设备评分" || cmd == "综合评分" || cmd == "设备排名评分") { EquipmentScoreCmd(); return; }
             if (cmd == "钻孔管理" || cmd == "钻孔统计" || cmd == "钻孔信息") { BoreholeStatsCmd(); return; }
             if (cmd == "煤质统计" || cmd == "煤质数据管理" || cmd == "煤质分析" || cmd == "质量·配煤分析" || cmd == "配煤分析") { CoalQualityStatsCmd(); return; }
             if (cmd == "商品煤符合性" || cmd == "煤质达标" || cmd == "商品煤达标" || cmd.StartsWith("商品煤符合性 ") || cmd.StartsWith("煤质达标 ")) { CoalComplianceCmd(cmd); return; }
@@ -7079,6 +7080,17 @@ public partial class MainWindow : Window
         string fault = (k.AvgInternalFaultPct > 0 || k.AvgExternalFaultPct > 0)
             ? $" · 故障归因 内{k.AvgInternalFaultPct:0.#}%/外{k.AvgExternalFaultPct:0.#}%" : "";
         StatusMsg.Text = $"KPI 分析：{k.Records} 条 · 三率 可用{k.AvgAvailabilityPct:0.#}%/作业{k.AvgRunRatePct:0.#}%/利用{k.AvgUtilizationPct:0.#}% · OEE {k.OeePct:0.#}%{fault} · 最新 {k.LatestYear}-{k.LatestMonth:00}";
+    }
+
+    // 设备五维综合评分(熵权法客观赋权): 产能强度/稳定性/可用率/效率/可靠性 → 综合得分排名
+    private void EquipmentScoreCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var rows = Data.GeoDataQueries.GetEquipmentScores(db.Connection, topN: 8);
+        if (rows.Count == 0) { StatusMsg.Text = "设备综合评分：无可评设备(需生产记录)"; return; }
+        var parts = new List<string>();
+        foreach (var r in rows) parts.Add($"{r.EquipmentId} {r.CompositeScore:0.###}(产{r.CapacityIntensity:0.##}/稳{r.Stability:0.##}/用{r.Availability:0.##}/效{r.Efficiency:0.##}/靠{r.Reliability:0.##})");
+        StatusMsg.Text = $"设备综合评分(熵权五维 前{rows.Count})：" + string.Join(" · ", parts);
     }
 
     private void BoreholeStatsCmd()

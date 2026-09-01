@@ -127,6 +127,69 @@ public static class GeoDataQueries
             wok ? wb : 0, wok ? we : 0, wok ? Cad.Reliability.Phase(wb) : "");
     }
 
+    public sealed record EquipmentScoreRow(string EquipmentId, double CapacityIntensity, double Stability,
+        double Availability, double Efficiency, double Reliability, double CompositeScore);
+
+    /// <summary>设备五维综合评分（忠实原 EquipmentShiftForecastWindow §2.5 熵权法客观赋权）：
+    /// 产能强度(均产/峰产)/稳定性(1−CV)/可用率/效率(作业率)/可靠性(1−0.08·故障数) 五维 → 熵权 → 综合得分, 降序。</summary>
+    public static List<EquipmentScoreRow> GetEquipmentScores(SqliteConnection conn, int topN = 0)
+    {
+        var cap = new Dictionary<string, (double mean, double max, double cv)>();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = @"SELECT equipment_id, AVG(output_m3), MAX(output_m3), AVG(output_m3*output_m3)
+                                FROM production_record WHERE equipment_id IS NOT NULL AND output_m3 IS NOT NULL GROUP BY equipment_id";
+            using var rd = cmd.ExecuteReader();
+            while (rd.Read())
+            {
+                string eq = rd.GetString(0); double mean = rd.GetDouble(1), max = rd.GetDouble(2), avgSq = rd.GetDouble(3);
+                double var = System.Math.Max(0, avgSq - mean * mean);   // 总体方差
+                double cv = mean > 1e-9 ? System.Math.Sqrt(var) / mean : 0;
+                cap[eq] = (mean, max, cv);
+            }
+        }
+        var kpi = new Dictionary<string, (double av, double rr)>();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = @"SELECT equipment_id, AVG(availability), AVG(actual_run_rate) FROM equipment_kpi_monthly WHERE equipment_id IS NOT NULL GROUP BY equipment_id";
+            using var rd = cmd.ExecuteReader();
+            while (rd.Read())
+            {
+                string eq = rd.GetString(0); double av = rd.GetDouble(1), rr = rd.GetDouble(2);
+                kpi[eq] = (av > 1 ? av / 100 : av, rr > 1 ? rr / 100 : rr);   // 归一 0..1
+            }
+        }
+        var flt = new Dictionary<string, int>();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT equipment_id, COUNT(*) FROM fault_event WHERE equipment_id IS NOT NULL GROUP BY equipment_id";
+            using var rd = cmd.ExecuteReader();
+            while (rd.Read()) flt[rd.GetString(0)] = rd.GetInt32(1);
+        }
+        var eqs = new List<string>(cap.Keys); eqs.Sort();   // 基集=有产量记录的设备
+        var dimRows = new List<double[]>();
+        foreach (var eq in eqs)
+        {
+            var c = cap[eq];
+            kpi.TryGetValue(eq, out var k);
+            double capI = c.max > 1e-9 ? c.mean / c.max : 0;
+            double stab = 1 - System.Math.Min(1, c.cv);
+            int nf = flt.TryGetValue(eq, out var f) ? f : 0;
+            double rel = System.Math.Max(0, 1 - 0.08 * nf);
+            dimRows.Add(new[] { capI, stab, k.av, k.rr, rel });
+        }
+        var w = Cad.EntropyWeighting.Weights(dimRows);
+        var rows = new List<EquipmentScoreRow>();
+        for (int i = 0; i < eqs.Count; i++)
+        {
+            var d = dimRows[i];
+            rows.Add(new EquipmentScoreRow(eqs[i], d[0], d[1], d[2], d[3], d[4], Cad.EntropyWeighting.Composite(d, w)));
+        }
+        rows.Sort((a, b) => b.CompositeScore.CompareTo(a.CompositeScore));
+        if (topN > 0 && rows.Count > topN) rows = rows.GetRange(0, topN);
+        return rows;
+    }
+
     public sealed record KpiStats(int Records, double AvgAvailabilityPct, double AvgUtilizationPct, int LatestYear, int LatestMonth,
         double AvgInternalFaultPct = 0, double AvgExternalFaultPct = 0,
         double AvgRunRatePct = 0, double OeePct = 0);   // 故障归因: 内/外部故障率均值; 作业率 + OEE(=可用率×作业率×利用率)

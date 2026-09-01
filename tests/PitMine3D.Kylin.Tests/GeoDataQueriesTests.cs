@@ -431,6 +431,25 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Equipment_scores_ranked_and_dims_normalized()
+    {
+        // 设备五维综合评分(熵权): 综合得分降序 + 五维皆归一 [0,1] + 综合=加权和≤1
+        using var db = GeoDatabase.OpenSeeded();
+        var rows = GeoDataQueries.GetEquipmentScores(db.Connection);
+        Assert.NotEmpty(rows);
+        for (int i = 1; i < rows.Count; i++) Assert.True(rows[i].CompositeScore <= rows[i - 1].CompositeScore + 1e-9, "综合得分降序");
+        foreach (var r in rows)
+        {
+            Assert.InRange(r.CapacityIntensity, 0, 1.0001);
+            Assert.InRange(r.Stability, 0, 1.0001);
+            Assert.InRange(r.Availability, 0, 1.0001);
+            Assert.InRange(r.Efficiency, 0, 1.0001);
+            Assert.InRange(r.Reliability, 0, 1.0001);
+            Assert.InRange(r.CompositeScore, 0, 1.0001);   // 权重和1×各维≤1 → ≤1
+        }
+    }
+
+    [Fact]
     public void Export_table_then_reimport_roundtrips()
     {
         using var db = GeoDatabase.OpenSeeded();
