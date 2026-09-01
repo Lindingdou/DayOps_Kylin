@@ -1891,3 +1891,13 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - **★HorizonPointBuilder(层位展点)真缺口·修**: 原版**双源**展点(①borehole_seam_result 顶=底+采用厚度 ②coal_observation_point 见煤点 顶=底+见煤厚度), Kylin `GetHorizonPoints` **只读源①漏源②**——而 Kylin **有「导入见煤点」命令**(§758→ImportObservationPoints 填 coal_observation_point)且该表建表存在, 用户导入见煤点后**层位展点/层位求交却不展绘**(种子该表 0 行故此前测未覆盖)。修: `GetHorizonPoints` union 源② coal_observation_point(底=floor_elevation, 顶=底+seam_thickness), 忠实原双源。+1 单测(导入见煤点→GetHorizonPoints 含其底 99999/顶 100006)。1017 测全绿, 0 错, smoke [GLINIT] 正常。
 
 **保真轴闭合**: 累计 **13 核心算法审计——2 真 bug 修(估值半径/层位展点漏源) + 10 忠实/正确确认 + 1 低影响记录**。判据: 命令有但**数据源不全**也是真缺口(尤其原多源 Kylin 单源, 且另有导入命令能填空表)——种子空表掩盖, 靠"原用几个源"对拍揪出。本轮 1 修 + 2 忠实确认。
+
+## 一六〇、「数据源完整性」透镜系统扫描 —— 见煤点为唯一缺口, 无死导入
+
+承 §一五九 层位展点漏源, 系统扫描此透镜:
+- **11 张可导入表读消费统计**: borehole_seam_result(4)/capacity_monthly(7)/coal_observation_point(3, 含 §一五九 修补)/coal_sample(5)/equipment(19)/equipment_kpi_monthly(4)/fault_event(6)/haul_road(2)/monthly_plan(2)/production_record(3)/slope_design(1)——**无一张"只写不读"(无死导入)**。
+- **见煤点 coal_observation_point 消费面**: 原版仅 HorizonPointBuilder(层位展点)+ CoalSeamService 泛型仓储访问器(供层位展点)。Kylin 修后层位展点双源, 并经 GetHorizonPoints 惠及 层位求交/虚拟钻孔——**见煤点消费已全**。
+- **煤厚等厚线 ThicknessIsopachAsync**: 读**用户 CSV**(x,y,煤厚)非 DB 表——CSV 输入模型, 两 DB 源透镜不适用。
+- **slope_design(读最少 1)**: 原版仅 SlopeDesignService CRUD 检索(Get/All/CurrentDesigns), 无额外分析/报表; 安全系数是存储输入非计算(勿臆造 Bishop)。Kylin GetSlopeDesigns(All 排序)覆盖读侧——**无缺口**。
+
+**透镜结论**: 「数据源完整性」透镜找出 **1 真缺口(层位展点漏见煤点, 已修 §一五九)**, 系统确认**无死导入 + 其余表消费面与原版对齐**。判据固化: ①查每张导入表有无读消费(防死导入) ②查多源特性是否漏源(原 N 源 vs Kylin N−1) ③CSV 输入型特性不适用此透镜。本轮 0 新缺口(透镜已由上轮修复穷尽)。
