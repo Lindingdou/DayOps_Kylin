@@ -1230,9 +1230,16 @@
         <Panel Grid.Column="2" x:Name="ViewportHost" Background="Transparent">
             <Panel.ContextMenu>
                 <ContextMenu Opening="OnCtxMenuOpening">
+                    <!-- 视图切换置顶(高频、不依赖选中): 2D/3D/缩放/栅格 -->
+                    <MenuItem Header="2D 平面视图" Click="OnCtx2D" />
+                    <MenuItem Header="3D 轨道视图" Click="OnCtx3D" />
+                    <MenuItem Header="范围缩放" Click="OnCtxZoomExtents" />
+                    <MenuItem Header="网格 / 轴 开关" Click="OnCtxGrid" />
+                    <Separator />
                     <MenuItem Header="特性" Tag="特性" Click="OnCtxCommand" />
                     <MenuItem Header="快速选择（选类似）" Tag="快速选择" Click="OnCtxCommand" />
                     <MenuItem Header="全部选择" Tag="全部选择" Click="OnCtxCommand" />
+                    <MenuItem x:Name="CtxSelSets" Header="调用选择集" />
                     <Separator />
                     <MenuItem Header="复制" Tag="复制到剪贴板" Click="OnCtxCommand" />
                     <MenuItem Header="剪切" Tag="剪切" Click="OnCtxCommand" />
@@ -1247,12 +1254,6 @@
                     <MenuItem Header="测角" Tag="角度" Click="OnCtxCommand" />
                     <MenuItem Header="面积" Tag="面积" Click="OnCtxCommand" />
                     <Separator />
-                    <MenuItem Header="范围缩放" Click="OnCtxZoomExtents" />
-                    <MenuItem Header="2D 平面视图" Click="OnCtx2D" />
-                    <MenuItem Header="3D 轨道视图" Click="OnCtx3D" />
-                    <MenuItem x:Name="CtxSelSets" Header="调用选择集" />
-                    <Separator />
-                    <MenuItem Header="网格 / 轴 开关" Click="OnCtxGrid" />
                     <MenuItem Header="清除高亮" Click="OnCtxClearHighlight" />
                 </ContextMenu>
             </Panel.ContextMenu>
