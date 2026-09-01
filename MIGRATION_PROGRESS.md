@@ -2448,3 +2448,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [MeshContainmentTests](tests/PitMine3D.Kylin.Tests/MeshContainmentTests.cs) 4 例—— 平面 z=5 上/下(面外不留) · 四面体质心内/远点外 · KeepIndices 过滤点表(下留 0/2, 面外弃) · 闭合内过滤。**build 0 错·单测 1220→1224**。
 
 **本会话第 24 功能**。教训: **算法/模式 enum 逐值核对是第四层 diff**(类→命令→PMxx字段→enum值)——原 `enum *Mode` 的每个值=一个算法变体, Kylin 实现该 enum 但可能只覆盖部分值(present-but-shallow by variant, 同 SurfaceUpdate/更新煤层面多算法)。缺的变体常可复用已移基元低成本补(SampleMeshZ+WindingNumber)。见 [[unlock-blocked-insights]]。
+
+## 二二〇、变差函数分析(ComputeExperimentalVariogram)—— 全 public 方法名 diff(第 25 功能)
+
+**第五层 diff: 全模块 public static 方法名穷尽核对**(658 方法名 grep Kylin)。绝大多数缺项=排产/图表/PMBI/DB/UI(记录), 唯 `ComputeExperimentalVariogram` 值得深挖——原经 `VariogramEditor` 交互控件暴露**实验半变异 γ(h) 云**, Kylin `FitVariogram` 内部算了实验变差但**只返回拟合模型, 不暴露 γ(h) 云**。
+
+补 [src/Cad/OrdinaryKriging.cs](src/Cad/OrdinaryKriging.cs) `ExperimentalVariogram`(忠实原: 逐点对按 3D 滞后分箱, γ(h)=0.5·mean((v_i−v_j)²)) + `VariogramLag` 记录。命令 `变差函数分析 [ad|qgr|std|vdaf]`(煤质点 → 实验 γ(h) 表 + 球状拟合块金/基台/变程 + 拟合 γ(h) 对比列, CSV)。原交互 VariogramEditor 为 UI(记录), 但**计算核(实验变差+拟合)纯可托管**, 出表非图。用于建模前看空间相关结构 / 验证克里金拟合(与 §二一三 交叉验证互补=克里金前后诊断)。
+
+**验证(已知值)**: [OrdinaryKrigingTests](tests/PitMine3D.Kylin.Tests/OrdinaryKrigingTests.cs) +2—— 线性场 V=x 共线 4 点: 滞后 d 半变异 γ=0.5·d²(箱1 三对 γ=0.5·1 / 箱2 两对 γ=2 / 箱3 一对 γ=4.5, 空箱 Count=0) · auto maxLag 滞后中心递增 + <2 点全 0 箱不崩。**build 0 错·单测 1224→1226**。
+
+**本会话第 25 功能**。教训: **第五层 diff=全 public 方法名穷尽 grep**(类→命令→PMxx字段→enum值→方法名)。658 方法名里绝大多数缺项落排产/图表/PMBI/DB/UI 记录类, 但偶有"内部算了没暴露"的分析核(实验变差)——`FitVariogram` 内部分箱算 γ(h) 却只吐模型, 暴露 γ(h) 云=纯托管新分析。**交互控件(VariogramEditor)是 UI 记录, 但其计算核可出表**(同 Weibull "图表受阻但数值核可做")。见 [[unlock-blocked-insights]]。

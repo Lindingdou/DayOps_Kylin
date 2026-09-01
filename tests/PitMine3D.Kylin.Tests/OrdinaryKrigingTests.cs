@@ -142,4 +142,28 @@ public class OrdinaryKrigingTests
         var two = new List<CP> { new(0, 0, 0, 5), new(10, 0, 0, 9) };
         Assert.NotNull(OrdinaryKriging.EstimateUniversalAt(two, 5, 0, 0, radius: 100));
     }
+
+    [Fact]
+    public void ExperimentalVariogram_linear_field_known_gamma()
+    {
+        // 线性场 V=x, 4 点共线; maxLag=4/4 箱(bw=1)。滞后 d 的半变异 γ=0.5·d²。
+        var pts = new List<CP> { new(0, 0, 0, 0), new(1, 0, 0, 1), new(2, 0, 0, 2), new(3, 0, 0, 3) };
+        var exp = OrdinaryKriging.ExperimentalVariogram(pts, maxLag: 4, lagCount: 4);
+        Assert.Equal(4, exp.Count);
+        Assert.Equal(0, exp[0].Count);                       // [0,1) 无点对
+        Assert.Equal(3, exp[1].Count); Assert.Equal(0.5, exp[1].Gamma, 6);   // d=1 三对 → 0.5·1
+        Assert.Equal(2, exp[2].Count); Assert.Equal(2.0, exp[2].Gamma, 6);   // d=2 两对 → 0.5·4
+        Assert.Equal(1, exp[3].Count); Assert.Equal(4.5, exp[3].Gamma, 6);   // d=3 一对 → 0.5·9
+    }
+
+    [Fact]
+    public void ExperimentalVariogram_auto_maxlag_and_degenerate_safe()
+    {
+        var pts = new List<CP> { new(0, 0, 0, 1), new(5, 0, 0, 2), new(10, 0, 0, 3) };
+        var exp = OrdinaryKriging.ExperimentalVariogram(pts, maxLag: 0, lagCount: 6);   // auto maxLag
+        Assert.Equal(6, exp.Count);
+        Assert.True(exp[^1].H > exp[0].H);                   // 滞后中心递增
+        // <2 点 → 全 0 箱, 不崩
+        Assert.All(OrdinaryKriging.ExperimentalVariogram(new List<CP> { new(0, 0, 0, 1) }, 10, 5), b => Assert.Equal(0, b.Count));
+    }
 }

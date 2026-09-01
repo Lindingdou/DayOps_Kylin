@@ -833,6 +833,7 @@ public partial class MainWindow : Window
             if (cmd == "灰分发热量回归" || cmd == "灰分回归" || cmd == "煤质回归" || cmd == "灰热回归" || cmd.StartsWith("灰分发热量回归 ") || cmd.StartsWith("煤质回归 ")) { await AshCalorificRegressionCmd(cmd); return; }
             if (cmd == "煤质综合结论" || cmd == "煤质结论" || cmd == "综合结论" || cmd == "煤质分析结论" || cmd.StartsWith("煤质综合结论 ")) { await CoalConclusionsCmd(cmd); return; }
             if (cmd == "交叉验证" || cmd == "估值交叉验证" || cmd == "留一验证" || cmd == "克里金交叉验证" || cmd.StartsWith("交叉验证 ") || cmd.StartsWith("估值交叉验证 ")) { await SpatialCvCmd(cmd); return; }
+            if (cmd == "变差函数分析" || cmd == "实验变差" || cmd == "半变异分析" || cmd == "空间结构分析" || cmd.StartsWith("变差函数分析 ") || cmd.StartsWith("实验变差 ")) { await VariogramAnalysisCmd(cmd); return; }
             if (cmd == "导出离群" || cmd == "离群导出" || cmd.StartsWith("导出离群 ")) { await ExportOutliersAsync(cmd); return; }
             if (cmd == "导出品位储量" || cmd == "品位储量导出" || cmd.StartsWith("导出品位储量 ")) { await ExportGradeTonnageAsync(cmd); return; }
             if (cmd == "导出分标高" || cmd == "分标高导出" || cmd.StartsWith("导出分标高 ")) { await ExportElevationAsync(cmd); return; }
@@ -8407,6 +8408,45 @@ public partial class MainWindow : Window
                        + (saved != null ? $" · 存 {saved}" : "");
     }
 
+    // 变差函数分析(忠实 EstimationAlgorithms.ComputeExperimentalVariogram + FitSpherical): 煤质指标点 →
+    // 实验半变异 γ(h) 云 + 球状模型拟合(块金/基台/变程), 看空间相关结构/验证克里金拟合。原经 VariogramEditor 交互, 此出表。
+    private async Task VariogramAnalysisCmd(string cmd)
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var s = Data.GeoDataQueries.GetCoalSamples(db.Connection);
+        if (s.Count == 0) { StatusMsg.Text = "变差函数分析：无煤样"; return; }
+        string ind = "ad", label = "灰分Ad";
+        foreach (var t in cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries).Skip(1))
+        {
+            var u = t.ToUpperInvariant();
+            if (u == "AD" || t.Contains("灰")) { ind = "ad"; label = "灰分Ad"; }
+            else if (u == "QGR" || t.Contains("发热") || t.Contains("热量")) { ind = "qgr"; label = "发热量Qgr"; }
+            else if (u == "QNET") { ind = "qnet"; label = "发热量Qnet"; }
+            else if (u == "STD" || u == "ST" || t.Contains("硫")) { ind = "std"; label = "全硫St"; }
+            else if (u == "VDAF" || t.Contains("挥发")) { ind = "vdaf"; label = "挥发分Vdaf"; }
+        }
+        var cps = new List<Cad.OrdinaryKriging.ControlPoint>();
+        foreach (var r in s) { var v = Data.CoalAnalytics.Value(r, ind, false); if (v.HasValue) cps.Add(new(r.X, r.Y, r.Z ?? 0, v.Value)); }
+        if (cps.Count < 3) { StatusMsg.Text = $"变差函数分析({label})：有效点不足(<3)"; return; }
+
+        var exp = Cad.OrdinaryKriging.ExperimentalVariogram(cps);
+        var vg = Cad.OrdinaryKriging.FitVariogram(cps);
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("变差函数分析(实验半变异 + 球状拟合)");
+        sb.AppendLine($"指标,{label}");
+        sb.AppendLine($"控制点,{cps.Count}");
+        sb.AppendLine($"块金Nugget,{vg.Nugget:0.####}");
+        sb.AppendLine($"基台Sill,{vg.Sill:0.####}");
+        sb.AppendLine($"变程Range,{vg.Range:0.##}");
+        sb.AppendLine();
+        sb.AppendLine("滞后H,实验γ(h),点对数,拟合γ(h)");
+        foreach (var b in exp) sb.AppendLine($"{b.H:0.##},{b.Gamma:0.####},{b.Count},{vg.Gamma(b.H):0.####}");
+        var saved = await SaveCsvAsync("变差函数分析", "变差函数分析.csv", sb.ToString());
+        int filled = exp.Count(b => b.Count > 0);
+        StatusMsg.Text = $"变差函数分析({label})：{cps.Count}点 · 球状 块金{vg.Nugget:0.##}/基台{vg.Sill:0.##}/变程{vg.Range:0.#} · {filled}/{exp.Count}有效滞后箱"
+                       + (saved != null ? $" · 存 {saved}" : "");
+    }
+
     // 洗选提质：成对原煤↔浮煤 → 降灰率/脱硫率/回收率
     private void CoalWashingCmd()
     {
@@ -9041,7 +9081,7 @@ public partial class MainWindow : Window
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","机群驾驶舱","设备综合评分","数据看板","煤种分类","煤质数据健康度","分煤层煤质",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
         "产能分类对比","故障类型分布","分工序验收合格率","数据导出","数据字典","达成度评价","产量预测","时序预测","编组优化","智能编组优化","导出编组","导出预测",
-        "商品煤符合性","煤质达标","导出符合性","品位储量曲线","导出品位储量","分标高煤质","导出分标高","煤质离群","导出离群","洗选提质","导出洗选","用途适宜性","导出用途","灰分发热量回归","煤质综合结论","交叉验证",
+        "商品煤符合性","煤质达标","导出符合性","品位储量曲线","导出品位储量","分标高煤质","导出分标高","煤质离群","导出离群","洗选提质","导出洗选","用途适宜性","导出用途","灰分发热量回归","煤质综合结论","交叉验证","变差函数分析",
         // TaskLib 自足计算
         "生产量核算","物料换算","采剥平衡","排土场按量推进","配煤核算","工序进度跟踪","编组产能","环节降效",
     };

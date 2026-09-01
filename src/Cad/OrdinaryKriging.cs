@@ -168,6 +168,43 @@ public static class OrdinaryKriging
         return new Variogram(nugget, sill, range);
     }
 
+    /// <summary>实验(经验)变差函数的一个滞后 bin: 滞后中心 H · 半变异 γ(h) · 点对数。</summary>
+    public readonly record struct VariogramLag(double H, double Gamma, int Count);
+
+    /// <summary>
+    /// 实验变差函数(经验半变异 γ(h) 云) —— 忠实移植原 EstimationAlgorithms.ComputeExperimentalVariogram。
+    /// 逐点对按 3D 滞后距分箱, γ(h) = 0.5·mean((v_i−v_j)²)。maxLag≤0 自动取包围盒对角×0.6; lagCount 分箱数。
+    /// 用于建模前看空间相关结构 / 验证 <see cref="FitVariogram"/> 的球状拟合。纯逻辑、可单测。
+    /// </summary>
+    public static List<VariogramLag> ExperimentalVariogram(IReadOnlyList<ControlPoint> pts, double maxLag = 0, int lagCount = 12)
+    {
+        int nb = Math.Max(1, lagCount);
+        if (pts == null || pts.Count < 2) { var e = new List<VariogramLag>(nb); for (int i = 0; i < nb; i++) e.Add(new VariogramLag((i + 0.5), 0, 0)); return e; }
+        if (maxLag <= 0)
+        {
+            double xn = double.MaxValue, xx = double.MinValue, yn = double.MaxValue, yx = double.MinValue;
+            foreach (var p in pts) { if (p.X < xn) xn = p.X; if (p.X > xx) xx = p.X; if (p.Y < yn) yn = p.Y; if (p.Y > yx) yx = p.Y; }
+            double diag = Math.Sqrt((xx - xn) * (xx - xn) + (yx - yn) * (yx - yn));
+            maxLag = Math.Max(diag * 0.6, 1);
+        }
+        double bw = maxLag / nb;
+        var g = new double[nb]; var cn = new int[nb];
+        for (int i = 0; i < pts.Count; i++)
+            for (int j = i + 1; j < pts.Count; j++)
+            {
+                double dx = pts[i].X - pts[j].X, dy = pts[i].Y - pts[j].Y, dz = pts[i].Z - pts[j].Z;
+                double d = Math.Sqrt(dx * dx + dy * dy + dz * dz);
+                if (d >= maxLag || d < 1e-9) continue;
+                int b = (int)(d / bw);
+                if (b >= nb) continue;
+                double diff = pts[i].V - pts[j].V;
+                g[b] += 0.5 * diff * diff; cn[b]++;
+            }
+        var bins = new List<VariogramLag>(nb);
+        for (int i = 0; i < nb; i++) bins.Add(new VariogramLag((i + 0.5) * bw, cn[i] > 0 ? g[i] / cn[i] : 0, cn[i]));
+        return bins;
+    }
+
     private static (double est, double variance) Krige(List<(double d, ControlPoint pt)> nb, Variogram vg)
     {
         int n = nb.Count;
