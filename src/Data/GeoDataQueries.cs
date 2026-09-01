@@ -766,7 +766,8 @@ public static class GeoDataQueries
         return new ImportOutcome(ins, upd, skip, err);
     }
 
-    /// <summary>设备台账 CSV 入库（忠实 EquipmentLedgerSpec）：按 equipment_id 键 upsert。列: equipment_id,category[,model,manufacturer,origin,status]。category 必填。</summary>
+    /// <summary>设备台账 CSV 入库（忠实 EquipmentLedgerSpec/DataImportCenter，无损全列）：按 equipment_id 键 upsert。category 必填。
+    /// 列: equipment_id,category[,model,manufacturer,origin,status,serial_number,asset_code,acquisition_date,commission_year,cumulative_hours,last_overhaul_date,operating_area,notes]。</summary>
     public static ImportOutcome ImportEquipmentLedger(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
     {
         int ins = 0, upd = 0, skip = 0, err = 0;
@@ -776,13 +777,41 @@ public static class GeoDataQueries
             string eq = Get("equipment_id"), cat = Get("category");
             if (eq.Length == 0 || cat.Length == 0) { err++; continue; }
             object Opt(string k) => Get(k) is { Length: > 0 } v ? v : (object)System.DBNull.Value;
+            // FK 列(model→equipment_model, operating_area→mine_location): 父表无该值则置 NULL, 免整行 FK 失败(无损降级, 保引用完整)
+            object FkOpt(string k, string tbl, string pcol)
+            {
+                string v = Get(k); if (v.Length == 0) return System.DBNull.Value;
+                using var q = conn.CreateCommand(); q.CommandText = $"SELECT 1 FROM {tbl} WHERE {pcol}=@v LIMIT 1"; q.Parameters.AddWithValue("@v", v);
+                return q.ExecuteScalar() != null ? (object)v : System.DBNull.Value;
+            }
             bool exists;
-            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM equipment WHERE equipment_id=@e"; q.Parameters.AddWithValue("@e", eq); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
+            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM equipment WHERE equipment_id=@equipment_id"; q.Parameters.AddWithValue("@equipment_id", eq); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
+            // 台账全列(忠实原 EquipmentLedgerSpec/DataImportCenter): 型号/厂商/产权/状态 + 出厂编号/资产编码/购置·投产/累计台时/大修/所属矿/备注
+            var cols = new[] { "model", "manufacturer", "origin", "status", "serial_number", "asset_code",
+                "acquisition_date", "commission_year", "cumulative_hours", "last_overhaul_date", "operating_area", "notes" };
             using var cmd = conn.CreateCommand();
-            if (exists) { if (!overwrite) { skip++; continue; } cmd.CommandText = "UPDATE equipment SET category=@c, model=@m, manufacturer=@mf, origin=@o, status=@s WHERE equipment_id=@e"; upd++; }
-            else { cmd.CommandText = "INSERT INTO equipment (equipment_id, category, model, manufacturer, origin, status) VALUES (@e,@c,@m,@mf,@o,@s)"; ins++; }
-            cmd.Parameters.AddWithValue("@e", eq); cmd.Parameters.AddWithValue("@c", cat);
-            cmd.Parameters.AddWithValue("@m", Opt("model")); cmd.Parameters.AddWithValue("@mf", Opt("manufacturer")); cmd.Parameters.AddWithValue("@o", Opt("origin")); cmd.Parameters.AddWithValue("@s", Opt("status"));
+            if (exists)
+            {
+                if (!overwrite) { skip++; continue; }
+                var set = "category=@category, " + string.Join(", ", System.Array.ConvertAll(cols, c => $"{c}=@{c}"));
+                cmd.CommandText = $"UPDATE equipment SET {set} WHERE equipment_id=@equipment_id";
+                upd++;
+            }
+            else
+            {
+                var names = "equipment_id, category, " + string.Join(", ", cols);
+                var vals = "@equipment_id, @category, " + string.Join(", ", System.Array.ConvertAll(cols, c => "@" + c));
+                cmd.CommandText = $"INSERT INTO equipment ({names}) VALUES ({vals})";
+                ins++;
+            }
+            cmd.Parameters.AddWithValue("@equipment_id", eq); cmd.Parameters.AddWithValue("@category", cat);
+            foreach (var col in cols)
+            {
+                object val = col == "model" ? FkOpt("model", "equipment_model", "model")
+                           : col == "operating_area" ? FkOpt("operating_area", "mine_location", "location_code")
+                           : Opt(col);
+                cmd.Parameters.AddWithValue("@" + col, val);
+            }
             try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
         }
         return new ImportOutcome(ins, upd, skip, err);

@@ -507,6 +507,29 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Equipment_ledger_import_is_lossless()
+    {
+        // 台账无损: 投产年份/累计台时/出厂编号/备注 等非 FK 列此前 import 漏解析→丢, 现应入库(SQL查询/导出可取)
+        using var db = GeoDatabase.OpenSeeded();
+        var o = GeoDataQueries.ImportEquipmentLedger(db.Connection, new[]
+        {
+            (IReadOnlyDictionary<string,string>)new Dictionary<string,string>
+            { ["equipment_id"]="EX-TEST-1", ["category"]="Shovel",
+              ["commission_year"]="2015", ["cumulative_hours"]="42000",
+              ["serial_number"]="SN-999", ["notes"]="测试台账" }
+        }, true);
+        Assert.True(o.Inserted == 1, $"设备台账导入 ins={o.Inserted} err={o.Errors}");
+        using var q = db.Connection.CreateCommand();
+        q.CommandText = "SELECT commission_year, cumulative_hours, serial_number, notes FROM equipment WHERE equipment_id='EX-TEST-1'";
+        using var rd = q.ExecuteReader();
+        Assert.True(rd.Read());
+        Assert.Equal(2015, rd.GetInt32(0));            // 投产年份(修前丢)
+        Assert.Equal(42000, rd.GetDouble(1), 6);       // 累计台时(修前丢)
+        Assert.Equal("SN-999", rd.GetString(2));       // 出厂编号(修前丢)
+        Assert.Equal("测试台账", rd.GetString(3));     // 备注(修前丢)
+    }
+
+    [Fact]
     public void Kpi_trend_by_year_ratios_normalized()
     {
         using var db = GeoDatabase.OpenSeeded();
