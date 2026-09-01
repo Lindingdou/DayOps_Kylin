@@ -2541,3 +2541,15 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **本会话第 33 功能**。教训: **同一原文件挖到一个"简化替身"后, 通读该文件其余 public 算法**——IDW 之外, 同文件的 VariogramFitter(LSQ)亦被 Kylin 矩法启发式替身顶替。"拟合/估值/求解"这类词的同名方法, 底层算法可能是**降级替身**(矩法 vs 网格搜索 LSQ)。**改核心拟合器守稳妥**: 新增真 LSQ 器 + 只在模型选型路径切换(改善用户可见分析), 默认克里金保矩法快拟合不动, 避免波及既有克里金值测试。见 [[unlock-blocked-insights]] (H)。
 
 **边界记录(忠实): 资源量分类 331/332/333 = 原版自身桩, 不移**。续读估值编排器 `EstimationEngine.cs` 见其 `EstimationResult` 有 `TanMing/KongZhi/TuiDuan Blocks`(探明331/控制332/推断333 = 国标 Measured/Indicated/Inferred 资源量置信分类), 表面是标准可移的地统计特性(按克里金方差/工程控制度分级)。**但原版 203-204 行显式桩**: `// 资源量分类(331/332/333)需逐块体真实工程控制度判定, 非按比例拍——暂不输出假数据, 留待真实实现` → `TanMing=KongZhi=TuiDuan=0`。原作者**刻意未实现**(留待), 故**忠实不移**(同 SkeletonCommand/DelineationMethod config-only 桩纪律——见 §二一九、[[faithfulness-only-original-commands]])。EstimationEngine 其余产出(CellValues/CellVariance/网格/mean-std-min-max/煤质超限跳过 HighAsh>40%·LowCalorific<20·HighSulfur>2%)已由 BuildKrigingGrid + Statistics + CoalAnalytics 合规覆盖。**判据复盘**: 见"标准地统计特性"先别急着补——先查原版**是否真实现**(grep 到零输出+"留待真实实现"注释即桩); 这是"present-but-shallow 深挖"撞上"忠实不发明"的正确交汇——诱人特性 + 原版桩 = 记录不建。**估值/地统计簇至此完整**: 原实现者全移(IDW/FitSpherical/OK-SK-UK/NN-MA/变差实验-三模型-选型/交叉验证 + Krige 部分主元解+IDW 兜底已忠实), 原留白者(331/332/333)忠实记录。
+
+## 二二九、GB/T 5751 煤类反推 + 一致率 QC —— 纠正误记"已覆盖"(第 34 功能)
+
+**纠错**: 此前把 `煤种分类` 记为"已覆盖(coal_classification DB 字典查表)"——**误判**。Kylin 的 `煤种分类` 只**显示分类字典** + `煤种分布` 只按**标注** `coal_type` 分组(读存量标签); 原版另有 `CoalReferenceService.ResolveCoalType`——**从实测 Vdaf/G(粘结指数)/Y(胶质层) 反推煤类**的规则算法(类头明标"GB/T 5751 反推等'纯逻辑'委托 ICoalReferenceService"), 且被 CoalQuality 审核用作 **"煤类反推一致率"** QC(反推 vs 标注比对)。**读标签 ≠ 从指标反推**——Kylin 缺后者。
+
+**可做且可验的关键**: Kylin `coal_classification` 表**已种子全 16 类 GB/T 5751 区间**(code+vdaf_min/max+g_min/max+y_min/max, 如 WY1 Vdaf0-3.5·PM Vdaf10-20/G0-5·JM Vdaf18-28/G50-65/Y≥7…)——**数据齐, 只缺算法**。`CoalSample` 亦已带 CakingG/PlasticYMm/CoalType。补:
+- [src/Data/CoalTypeInference.cs](src/Data/CoalTypeInference.cs) 纯算法(忠实原 `ResolveCoalType`/`FindLevel`): `ResolveCoalType(vdaf,g,y,ranges)` 三维区间 [min,max) 半开匹配(min/max=null 即 ±∞, G/Y 样本未提供则跳过该维, 首命中胜) · `FindGradeLevel(value,rules)` 单指标分级 · `InferConsistency(samples,ranges)` 逐样反推+比对标注→一致率(分母=两者都有的样本, 缺 Vdaf/反推 null/缺标注 → 无法判定)。**区间阈值表由 DB 喂入(不臆造国标表值)**, 只移可验证的匹配算法。
+- [src/Data/GeoDataQueries.cs](src/Data/GeoDataQueries.cs) `GetCoalClassificationRanges`(读种子三维区间)。命令 `煤类反推`/`煤类一致率`([MainWindow](src/Views/MainWindow.axaml.cs) `CoalTypeInferCmd`): DB 煤样+DB 区间→逐样反推+一致率 QC + **不一致样红/一致绿/未判灰上图定位** + 导出 CSV。三路可发现 + 目录。
+
+**验证(已知值)**: [CoalTypeInferenceTests](tests/PitMine3D.Kylin.Tests/CoalTypeInferenceTests.cs) +7—— Vdaf 单维+半开边界(Vdaf10 出WY入PM·Vdaf37 出QM入CY)·G/Y 三维(Vdaf25 G70 Y10→JM 而 Y3→null·G10 落 PM/SM 空档→null)·缺Vdaf/空表→null·**重叠区间首命中胜**·分级半开·一致率(2/3=66.67%, 无法判定计数)·useClean 切浮煤 Vdaf 改反推。**build 0 错·单测 1247→1254**。
+
+**本会话第 34 功能**。教训: **"已覆盖"的记录也要复核语义粒度**——`煤种分类` 命令在、能显示字典、能按标注分组, 但"**从实测指标反推**"(GB/T 5751 纯逻辑规则)这一算法维缺失; "读存量标签" 与 "算法反推标签" 是两回事(同 present-but-shallow, 但这里是我**自己误记为已覆盖**)。**可做判据**: 算法(区间匹配)可移可验 + 数据(分类区间)已种子在库 → 补; 精确国标表值属 DB 数据(不臆造, 已在种子)。见 [[unlock-blocked-insights]] [[faithfulness-only-original-commands]]。

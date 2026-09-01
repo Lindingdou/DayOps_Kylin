@@ -579,6 +579,21 @@ public static class GeoDataQueries
         return rows;
     }
 
+    /// <summary>煤类分类完整区间(Vdaf/G/Y 三维)供 GB/T 5751 反推(<see cref="CoalTypeInference"/>)。按 sort_order 排序保首命中优先级。</summary>
+    public static List<CoalTypeInference.ClassRange> GetCoalClassificationRanges(SqliteConnection conn)
+    {
+        var rows = new List<CoalTypeInference.ClassRange>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"SELECT COALESCE(code,''), vdaf_min, vdaf_max, g_min, g_max, y_min, y_max
+                            FROM coal_classification ORDER BY COALESCE(sort_order,0), code";
+        using var rd = cmd.ExecuteReader();
+        static double? Nd(SqliteDataReader r, int i) => r.IsDBNull(i) ? (double?)null : r.GetDouble(i);
+        while (rd.Read())
+            rows.Add(new CoalTypeInference.ClassRange(rd.GetString(0),
+                Nd(rd, 1), Nd(rd, 2), Nd(rd, 3), Nd(rd, 4), Nd(rd, 5), Nd(rd, 6)));
+        return rows;
+    }
+
     public sealed record CoalTypeShareRow(string CoalType, int Samples, double SharePct);
 
     /// <summary>煤种分布(忠实原「煤类饼」的量化)：coal_sample 按实际 coal_type 分组计样本数 + 占比, 降序。</summary>

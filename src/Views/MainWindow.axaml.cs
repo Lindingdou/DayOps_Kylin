@@ -840,6 +840,7 @@ public partial class MainWindow : Window
             if (cmd == "煤质离群" || cmd == "离群质检" || cmd == "煤质异常" || cmd.StartsWith("煤质离群 ")) { CoalOutlierCmd(cmd); return; }
             if (cmd == "灰分发热量回归" || cmd == "灰分回归" || cmd == "煤质回归" || cmd == "灰热回归" || cmd.StartsWith("灰分发热量回归 ") || cmd.StartsWith("煤质回归 ")) { await AshCalorificRegressionCmd(cmd); return; }
             if (cmd == "煤质综合结论" || cmd == "煤质结论" || cmd == "综合结论" || cmd == "煤质分析结论" || cmd.StartsWith("煤质综合结论 ")) { await CoalConclusionsCmd(cmd); return; }
+            if (cmd == "煤类反推" || cmd == "GB5751反推" || cmd == "煤类一致率" || cmd == "煤类校核" || cmd == "煤类反演" || cmd.StartsWith("煤类反推 ")) { await CoalTypeInferCmd(cmd); return; }
             if (cmd == "交叉验证" || cmd == "估值交叉验证" || cmd == "留一验证" || cmd == "克里金交叉验证" || cmd.StartsWith("交叉验证 ") || cmd.StartsWith("估值交叉验证 ")) { await SpatialCvCmd(cmd); return; }
             if (cmd == "变差函数分析" || cmd == "实验变差" || cmd == "半变异分析" || cmd == "空间结构分析" || cmd.StartsWith("变差函数分析 ") || cmd.StartsWith("实验变差 ")) { await VariogramAnalysisCmd(cmd); return; }
             if (cmd == "导出离群" || cmd == "离群导出" || cmd.StartsWith("导出离群 ")) { await ExportOutliersAsync(cmd); return; }
@@ -8164,6 +8165,52 @@ public partial class MainWindow : Window
             + (drawn > 0 ? $"（{drawn} 上图·红叉超标/绿达标）" : "") + " · 分煤层 " + string.Join(" ", seamParts);
     }
 
+    // 煤类反推(GB/T 5751)：逐煤样按 Vdaf/G/Y 三维区间反推煤类(读 coal_classification 种子区间) + 与标注 coal_type 比对(一致率 QC)
+    // + 不一致样上图定位(红) + 导出。忠实原 CoalReferenceService.ResolveCoalType「纯逻辑」+ CoalQuality 审核「煤类反推」。
+    private async Task CoalTypeInferCmd(string cmd)
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var samples = Data.GeoDataQueries.GetCoalSamples(db.Connection);
+        if (samples.Count == 0) { StatusMsg.Text = "煤类反推：无煤样数据"; return; }
+        var ranges = Data.GeoDataQueries.GetCoalClassificationRanges(db.Connection);
+        if (ranges.Count == 0) { StatusMsg.Text = "煤类反推：coal_classification 字典为空(需 GB/T 5751 区间种子)"; return; }
+        bool useClean = cmd.Contains("浮煤") || cmd.Contains("clean");
+        var r = Data.CoalTypeInference.InferConsistency(samples, ranges, useClean);
+
+        // 上图定位: 反推≠标注(QC 不一致)红、一致淡绿、无法判定灰。
+        var byId = new Dictionary<long, (double x, double y)>();
+        foreach (var s in samples) byId[s.Id] = (s.X, s.Y);
+        int drawn = 0; double gx0 = double.MaxValue, gy0 = double.MaxValue, gx1 = double.MinValue, gy1 = double.MinValue;
+        BeginChange();
+        foreach (var row in r.Rows)
+        {
+            if (!byId.TryGetValue(row.Id, out var p) || (p.x == 0 && p.y == 0)) continue;
+            bool bad = row.Match == false, good = row.Match == true;
+            _scene.Add(new PointEntity { X = p.x, Y = p.y, Size = bad ? 2.0 : 1.2, Style = bad ? 3 : good ? 2 : 1,
+                Cr = bad ? 0.9f : good ? 0.3f : 0.6f, Cg = bad ? 0.15f : good ? 0.7f : 0.6f, Cb = bad ? 0.2f : good ? 0.2f : 0.6f,
+                LayerName = bad ? "煤类不一致" : good ? "煤类一致" : "煤类未判" });
+            drawn++; if (p.x < gx0) gx0 = p.x; if (p.y < gy0) gy0 = p.y; if (p.x > gx1) gx1 = p.x; if (p.y > gy1) gy1 = p.y;
+        }
+        if (drawn > 0) { RefreshScene(); if (gx1 > gx0) Viewport.FitBounds(new[] { gx0, gy0, gx1, gy1 }); }
+
+        // 反推煤类分布(前六)
+        var dist = new Dictionary<string, int>();
+        foreach (var row in r.Rows) if (row.Inferred != null) { dist.TryGetValue(row.Inferred, out int n); dist[row.Inferred] = n + 1; }
+        var top = new List<string>();
+        foreach (var kv in dist.OrderByDescending(k => k.Value)) { top.Add($"{kv.Key}×{kv.Value}"); if (top.Count >= 6) break; }
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append("id,hole_id,seam,vdaf,g,y,labeled,inferred,match\n");
+        string Q(string? s) => s == null ? "" : (s.Contains(',') ? "\"" + s + "\"" : s);
+        string F(double? v) => v?.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) ?? "";
+        foreach (var row in r.Rows)
+            sb.Append($"{row.Id},{Q(row.HoleId)},{Q(row.SeamCode)},{F(row.Vdaf)},{F(row.G)},{F(row.Y)},{Q(row.Labeled)},{Q(row.Inferred)},{(row.Match == null ? "" : row.Match.Value ? "1" : "0")}\n");
+        var name = await SaveCsvAsync("导出煤类反推", "coal_type_inference.csv", sb.ToString());
+
+        StatusMsg.Text = $"煤类反推(GB/T 5751·{(useClean ? "浮煤" : "原煤")}Vdaf)：一致率 {r.RatePct:0.#}%（{r.Consistent}/{r.Total}）· 无法判定 {r.Inconclusive} · 反推分布 [{string.Join(" ", top)}]"
+            + (drawn > 0 ? $"（{drawn} 上图·红不一致/绿一致/灰未判）" : "") + (name != null ? $" · CSV → {name}" : "");
+    }
+
     private static string CoalIndicator(string[] tk, int idx, string def)
         => tk.Length > idx && (tk[idx] is "ad" or "std" or "vdaf" or "qgr" or "qnet") ? tk[idx] : def;
 
@@ -9221,7 +9268,7 @@ public partial class MainWindow : Window
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","机群驾驶舱","设备综合评分","数据看板","煤种分类","煤质数据健康度","分煤层煤质",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
         "产能分类对比","故障类型分布","分工序验收合格率","数据导出","数据字典","达成度评价","产量预测","时序预测","编组优化","智能编组优化","导出编组","导出预测",
-        "商品煤符合性","煤质达标","导出符合性","品位储量曲线","导出品位储量","分标高煤质","导出分标高","煤质离群","导出离群","洗选提质","导出洗选","用途适宜性","导出用途","灰分发热量回归","煤质综合结论","交叉验证","变差函数分析",
+        "商品煤符合性","煤质达标","导出符合性","品位储量曲线","导出品位储量","分标高煤质","导出分标高","煤质离群","导出离群","洗选提质","导出洗选","用途适宜性","导出用途","灰分发热量回归","煤质综合结论","煤类反推","煤类一致率","交叉验证","变差函数分析",
         // TaskLib 自足计算
         "生产量核算","物料换算","采剥平衡","排土场按量推进","配煤核算","工序进度跟踪","编组产能","环节降效",
     };
