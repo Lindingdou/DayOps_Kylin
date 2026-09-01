@@ -1833,3 +1833,13 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - **不可枚举余项(内核内部)**: C++ 内置表的 3D/网格/布尔/内核几何命令——本就受阻(无源), 且不经托管暴露。
 
 **终结论**: 命令完整性调查已**溯源至 P/Invoke 原生边界**——托管侧无更多命令源可查。用户可见/可派发命令面 100% 覆盖; 唯一"未枚举"部分是 C++ 内核内置表(受阻, 已记录)。**命令层面功能迁移彻底收敛, 无进一步可验证的托管工作。**
+
+## 一五三、保真度审计揭真实偏差 —— 品位估值搜索半径裁剪(半径外不赋值)
+
+命令层收敛后转**可验证保真度审计**(对拍原版托管算法数值行为), 揪出一处真实偏差:
+- **原版**(EstimationAlgorithms.IdwEstimate / CoalQualityEstimator): 估值用**搜索半径 + K 近邻**, **半径外返回 null(不赋值)**——"把体素/属性压到贴着化验区的薄带", 不向无数据支撑区外推。
+- **Kylin 原状(偏差)**: IDW/NN 用全局 `Contour.GridFromPoints/GridNearest`(**全部点**, 恒返值), OK/UK/SK 的 `BuildKrigingGrid` 半径外**回落全局 IDW"免留洞"**——结果**整格铺满**, 在无数据支撑区**捏造品位**(误导), 与原版"薄带"行为不符。Kylin 的 OrdinaryKriging 内核本身忠实(半径外 null), 但编排层的"免留洞"是自造偏差。
+- **修**: `Contour.AutoRadius`(2.5×平均点距, 同原 AutoRadius) + `Contour.MaskByRadius`(半径内无样本的单元置 NaN); `Estimation.BuildCells/Range/CountValid` 跳过 NaN 不渲染/不计; `EstimateGradeAsync` 对**全部 6 法**(IDW/NN/MA/OK/UK/SK)统一按 `max(2.5×点距, 1.5×格步)` 半径裁剪, 状态栏报 `valid/total 格有数据支撑`。→ 估值面现忠实压在数据薄带, 不再全格外推。
+- **验证**: +6 单测(MaskByRadius 远格 NaN/近格保留、AutoRadius=2.5×spacing、空点集/0 半径 noop、BuildCells 跳 NaN、Range/CountValid 忽略 NaN、全 NaN→(0,0)); build 0 错; **1016 测全绿**; smoke [GLINIT] 正常。commit 见下。
+
+**这是真实保真 bug**(非同质命令核对): 估值输出的**空间范围**此前偏大(全格 vs 薄带), 现与原版一致。

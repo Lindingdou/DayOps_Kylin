@@ -234,4 +234,40 @@ public static class Contour
             }
         return g;
     }
+
+    /// <summary>自动搜索半径：2.5×平均点距(spacing=√(包围盒面积/点数))。忠实原 AutoRadius(≈2.5×平均点距)。</summary>
+    public static double AutoRadius(IReadOnlyList<(double x, double y, double z)> pts)
+    {
+        if (pts == null || pts.Count == 0) return 1;
+        double xn = double.MaxValue, xx = double.MinValue, yn = double.MaxValue, yx = double.MinValue;
+        foreach (var p in pts) { if (p.x < xn) xn = p.x; if (p.x > xx) xx = p.x; if (p.y < yn) yn = p.y; if (p.y > yx) yx = p.y; }
+        double dx = xx - xn, dy = yx - yn;
+        double spacing = Math.Sqrt(Math.Max(dx * dy, 1) / Math.Max(pts.Count, 1));
+        return spacing * 2.5;
+    }
+
+    /// <summary>
+    /// 搜索半径裁剪：把 radius 内无任何样本的网格单元置 NaN（忠实原「搜索半径外不赋值」——
+    /// 估值只压在贴着数据的薄带, 不向无数据支撑区外推）。就地修改 grid。纯逻辑、可单测。
+    /// </summary>
+    public static void MaskByRadius(
+        double[,] grid, IReadOnlyList<(double x, double y, double z)> pts,
+        double x0, double y0, double dx, double dy, double radius)
+    {
+        if (grid == null || pts == null || pts.Count == 0 || radius <= 0) return;
+        double r2 = radius * radius;
+        int nx = grid.GetLength(0), ny = grid.GetLength(1);
+        for (int ix = 0; ix < nx; ix++)
+            for (int iy = 0; iy < ny; iy++)
+            {
+                double px = x0 + ix * dx, py = y0 + iy * dy;
+                bool support = false;
+                foreach (var p in pts)
+                {
+                    double d2 = (px - p.x) * (px - p.x) + (py - p.y) * (py - p.y);
+                    if (d2 <= r2) { support = true; break; }
+                }
+                if (!support) grid[ix, iy] = double.NaN;
+            }
+    }
 }

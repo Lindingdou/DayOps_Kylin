@@ -33,6 +33,42 @@ public class ContourTests
         var polys = Contour.LinkSegments(segs, 1e-6);
         Assert.Equal(2, polys.Count);
     }
+
+    // ── 搜索半径裁剪(忠实原「半径外不赋值」) ──
+    [Fact]
+    public void MaskByRadius_nans_cells_with_no_sample_within_radius()
+    {
+        // 单样本在原点; 半径 1.5。5×1 网格 x=0..4。x=0,1 在半径内(≤1.5), x=2,3,4 无支撑→NaN
+        var pts = new List<(double x, double y, double z)> { (0, 0, 10) };
+        var g = new double[5, 1] { { 5 }, { 5 }, { 5 }, { 5 }, { 5 } };
+        Contour.MaskByRadius(g, pts, 0, 0, 1, 1, radius: 1.5);
+        Assert.False(double.IsNaN(g[0, 0]));   // x=0 距0 → 保留
+        Assert.False(double.IsNaN(g[1, 0]));   // x=1 距1 → 保留
+        Assert.True(double.IsNaN(g[2, 0]));    // x=2 距2>1.5 → NaN
+        Assert.True(double.IsNaN(g[3, 0]));
+        Assert.True(double.IsNaN(g[4, 0]));
+    }
+
+    [Fact]
+    public void AutoRadius_is_2p5x_spacing()
+    {
+        // 4 点铺 3×3 单位方(面积9, 点数4) → spacing=√(9/4)=1.5 → radius=1.5×2.5=3.75
+        var pts = new List<(double x, double y, double z)>
+        {
+            (0, 0, 1), (3, 0, 1), (0, 3, 1), (3, 3, 1)
+        };
+        Assert.Equal(3.75, Contour.AutoRadius(pts), 3);
+    }
+
+    [Fact]
+    public void MaskByRadius_empty_or_nonpositive_radius_is_noop()
+    {
+        var g = new double[2, 1] { { 7 }, { 7 } };
+        Contour.MaskByRadius(g, new List<(double x, double y, double z)>(), 0, 0, 1, 1, 5); // 空点集
+        Assert.Equal(7, g[0, 0], 6);
+        Contour.MaskByRadius(g, new List<(double x, double y, double z)> { (0, 0, 1) }, 0, 0, 1, 1, 0); // radius=0
+        Assert.Equal(7, g[0, 0], 6);
+    }
 }
 
 public class ContourTests_Legacy

@@ -9,7 +9,7 @@ namespace PitMine3D.Kylin.Cad;
 /// </summary>
 public static class Estimation
 {
-    /// <summary>网格 → 品位配色方块（每单元一个 RectEntity）。</summary>
+    /// <summary>网格 → 品位配色方块（每单元一个 RectEntity）。NaN 单元(搜索半径外·无数据支撑)跳过不渲染。</summary>
     public static List<SceneEntity> BuildCells(double[,] grid, double x0, double y0, double dx, double dy, double min, double max)
     {
         var list = new List<SceneEntity>();
@@ -17,6 +17,7 @@ public static class Estimation
         for (int ix = 0; ix < nx; ix++)
         for (int iy = 0; iy < ny; iy++)
         {
+            if (double.IsNaN(grid[ix, iy])) continue;   // 无数据支撑 → 不赋值/不渲染(忠实原半径外 null)
             var (r, g, b) = BlockModel.GradeColor(grid[ix, iy], min, max);
             double cx = x0 + ix * dx, cy = y0 + iy * dy;
             list.Add(new RectEntity { X0 = cx - dx / 2, Y0 = cy - dy / 2, X1 = cx + dx / 2, Y1 = cy + dy / 2, Cr = r, Cg = g, Cb = b });
@@ -24,11 +25,19 @@ public static class Estimation
         return list;
     }
 
-    /// <summary>网格值域(min,max)。</summary>
+    /// <summary>网格值域(min,max)，忽略 NaN 单元。全 NaN → (0,0)。</summary>
     public static (double min, double max) Range(double[,] grid)
     {
         double min = double.MaxValue, max = double.MinValue;
-        foreach (var v in grid) { if (v < min) min = v; if (v > max) max = v; }
-        return (min, max);
+        foreach (var v in grid) { if (double.IsNaN(v)) continue; if (v < min) min = v; if (v > max) max = v; }
+        return min <= max ? (min, max) : (0, 0);
+    }
+
+    /// <summary>有效(非 NaN)单元数——供报告"有数据支撑"的格数。</summary>
+    public static int CountValid(double[,] grid)
+    {
+        int c = 0;
+        foreach (var v in grid) if (!double.IsNaN(v)) c++;
+        return c;
     }
 }

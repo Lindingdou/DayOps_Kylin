@@ -4724,13 +4724,17 @@ public partial class MainWindow : Window
         {
             grid = Contour.GridFromPoints(r.Points, n, n, out gx0, out gy0, out gdx, out gdy);
         }
+        // 忠实原「搜索半径外不赋值」: 半径内无样本的单元置 NaN, 不向无数据支撑区外推(免 IDW/NN 全格铺满误导)
+        double radius = System.Math.Max(Contour.AutoRadius(r.Points), 1.5 * System.Math.Max(gdx, gdy));
+        Contour.MaskByRadius(grid, r.Points, gx0, gy0, gdx, gdy, radius);
+        int valid = Estimation.CountValid(grid), total = grid.Length;
         var (min, max) = Estimation.Range(grid);
         var cells = Estimation.BuildCells(grid, gx0, gy0, gdx, gdy, min, max);
         BeginChange();
         foreach (var e in cells) _scene.Add(e);
         RefreshScene();
         Viewport.FitBounds(r.Bounds);
-        StatusMsg.Text = $"{mode}：{r.Points.Count} 样本 → {n}² 网格 · 品位 {min:0.###}~{max:0.###}{extra}";
+        StatusMsg.Text = $"{mode}：{r.Points.Count} 样本 → {n}² 网格 · {valid}/{total} 格有数据支撑(半径 {radius:0.#}) · 品位 {min:0.###}~{max:0.###}{extra}";
     }
 
     // 克里金网格：逐格 EstimateAt(OK)/EstimateUniversalAt(UK)/EstimateSimpleAt(SK) 估值；半径外(null)回落 IDW 免留洞；出平均克里金方差
