@@ -2488,3 +2488,14 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [VirtualBoreholeTests](tests/PitMine3D.Kylin.Tests/VirtualBoreholeTests.cs) +2—— 煤3(顶100/底98)→深度矩形[0,−2]、煤5(顶90/底87)→[−10,−13] + 岩柱中轴到 −13 · 空安全。**build 0 错·单测 1231→1233**。
 
 **本会话第 28 功能**。教训: **✗ 再分类要连"present-but-shallow 的命令"一起复查**——`虚拟钻孔`命令在且算对了(顶/底板求交), 但漏了原有的可视化产出(2D 柱状预览)。命令存在 ≠ 输出完整; 有数据+2D 可画的可视化(柱状/剖面/标注)常是"算了没画"的浅坑。见 [[unlock-blocked-insights]]。
+
+## 二二四、煤质离群/符合性 上图定位 —— "算了没画"续(空间可视化, 第 29 功能)
+
+续"算了没画"角度查分析命令: `煤质离群`/`商品煤符合性` 都**只出文字**, 但原「超标段带坐标可上图定位」——离群/超标样点带 X,Y 应上图。补空间标记:
+- [src/Data/CoalAnalytics.cs](src/Data/CoalAnalytics.cs) `OutlierCoords`(离群行按 Id 关联样点坐标, 纯可测); `SampleEval` 本就带 X,Y。
+- `煤质离群`: 离群样点画圆(偏高红/偏低蓝, 大小随严重度) + FitBounds。
+- `商品煤符合性`: 逐评估样点画点(超标红叉/达标绿) + FitBounds。
+
+**验证**: [CoalQualityAnalyticsTests](tests/PitMine3D.Kylin.Tests/CoalQualityAnalyticsTests.cs) +1—— 6 正常+1 偏高(99)离群 → OutlierCoords 关联到 (42,43)·偏高; null 安全。**build 0 错·单测 1233→1234**。
+
+**本会话第 29 功能**。教训: **"算了没画"不止柱状/剖面, 还含"分析结果的空间定位"**——离群/超标/异常样点带坐标却只报文字, 上图定位(点/圆标记+FitBounds)是标准空间 QA, 2D 可画。分析命令复查问"结果有坐标吗?有则该上图"。见 [[unlock-blocked-insights]]。

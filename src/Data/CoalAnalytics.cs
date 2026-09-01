@@ -529,6 +529,18 @@ public static class CoalAnalytics
         return sb.ToString();
     }
 
+    /// <summary>离群行 → 样点坐标(按 Id 关联 samples), 供上图定位。忠实原「超标段带坐标可上图定位」。</summary>
+    public static List<(double x, double y, string kind, double severity)> OutlierCoords(OutlierResult r, IReadOnlyList<CoalSample> samples)
+    {
+        var res = new List<(double x, double y, string kind, double severity)>();
+        if (r == null || samples == null) return res;
+        var byId = new Dictionary<long, CoalSample>();
+        foreach (var s in samples) byId[s.Id] = s;   // 同 Id 取后者(样点 Id 唯一)
+        foreach (var o in r.Outliers)
+            if (byId.TryGetValue(o.Id, out var s)) res.Add((s.X, s.Y, o.Kind, o.Severity));
+        return res;
+    }
+
     private static double? AvgN(IEnumerable<double?> xs)
     { var v = xs.Where(x => x.HasValue).Select(x => x!.Value).ToList(); return v.Count > 0 ? v.Average() : null; }
     private static string Fmt(double? v, int dec = 1) => v.HasValue ? v.Value.ToString("F" + dec, Inv) : "—";

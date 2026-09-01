@@ -8099,9 +8099,22 @@ public partial class MainWindow : Window
         var lim = new Data.ComplianceLimits(UseClean: false, AshOn: true, AshMax: adMax, SulfurOn: true, SulfurMax: stMax,
             CalorificOn: true, CalorificMin: qMin, Calorific: Data.CalorificKind.Qgr, VdafOn: false, VdafMin: 0, VdafMax: 0);
         var r = Data.CoalAnalytics.Evaluate(samples, lim);
+
+        // 上图定位: 超标样点按坐标画红标记(达标点淡绿)——忠实「超标段带坐标可上图定位」。
+        int drawn = 0; double gx0 = double.MaxValue, gy0 = double.MaxValue, gx1 = double.MinValue, gy1 = double.MinValue;
+        BeginChange();
+        foreach (var ev in r.Samples)
+        {
+            if (!ev.Evaluated || (ev.X == 0 && ev.Y == 0)) continue;
+            _scene.Add(new PointEntity { X = ev.X, Y = ev.Y, Size = ev.Pass ? 1.2 : 2.0, Style = ev.Pass ? 2 : 3, Cr = ev.Pass ? 0.3f : 0.9f, Cg = ev.Pass ? 0.7f : 0.15f, Cb = 0.2f, LayerName = ev.Pass ? "商品煤达标" : "商品煤超标" });
+            drawn++; if (ev.X < gx0) gx0 = ev.X; if (ev.Y < gy0) gy0 = ev.Y; if (ev.X > gx1) gx1 = ev.X; if (ev.Y > gy1) gy1 = ev.Y;
+        }
+        if (drawn > 0) { RefreshScene(); if (gx1 > gx0) Viewport.FitBounds(new[] { gx0, gy0, gx1, gy1 }); }
+
         var seamParts = new List<string>();
         foreach (var s in r.BySeam) seamParts.Add($"{s.SeamCode}({s.Pass}/{s.Evaluated}·{s.PassPct:0.#}%)");
-        StatusMsg.Text = $"商品煤符合性（原煤 Ad≤{adMax:0.#}%·St≤{stMax:0.##}%·Qgr≥{qMin:0.#}MJ/kg）：达标 {r.Pass}/{r.Evaluated}（{r.PassPct:0.#}%）· 数据不足 {r.Insufficient} · 分煤层 " + string.Join(" ", seamParts);
+        StatusMsg.Text = $"商品煤符合性（原煤 Ad≤{adMax:0.#}%·St≤{stMax:0.##}%·Qgr≥{qMin:0.#}MJ/kg）：达标 {r.Pass}/{r.Evaluated}（{r.PassPct:0.#}%）· 数据不足 {r.Insufficient}"
+            + (drawn > 0 ? $"（{drawn} 上图·红叉超标/绿达标）" : "") + " · 分煤层 " + string.Join(" ", seamParts);
     }
 
     private static string CoalIndicator(string[] tk, int idx, string def)
@@ -8377,9 +8390,27 @@ public partial class MainWindow : Window
         string ind = CoalIndicator(tk, 1, "ad");
         var r = Data.CoalAnalytics.DetectOutliers(s, ind, useClean: false);
         if (r.N < 5) { StatusMsg.Text = $"煤质离群({ind})：样本不足(<5)"; return; }
+
+        // 上图定位: 离群样点按坐标画标记(偏高红/偏低蓝, 大小随严重度)——忠实「超标段带坐标可上图定位」。
+        var coords = Data.CoalAnalytics.OutlierCoords(r, s);
+        int drawn = 0; double gx0 = double.MaxValue, gy0 = double.MaxValue, gx1 = double.MinValue, gy1 = double.MinValue;
+        if (coords.Count > 0)
+        {
+            BeginChange();
+            foreach (var (x, y, kind, sev) in coords)
+            {
+                if (x == 0 && y == 0) continue;   // 无坐标样点跳过
+                bool hi = kind == "偏高";
+                _scene.Add(new CircleEntity { Cx = x, Cy = y, Radius = System.Math.Max(1.0 + sev * 0.5, 1.0), Segments = 20, Cr = hi ? 0.9f : 0.2f, Cg = 0.2f, Cb = hi ? 0.2f : 0.9f, LayerName = "煤质离群" });
+                drawn++; if (x < gx0) gx0 = x; if (y < gy0) gy0 = y; if (x > gx1) gx1 = x; if (y > gy1) gy1 = y;
+            }
+            if (drawn > 0) { RefreshScene(); if (gx1 > gx0) Viewport.FitBounds(new[] { gx0, gy0, gx1, gy1 }); }
+        }
+
         var top = new List<string>();
         foreach (var o in r.Outliers) { if (top.Count >= 5) break; top.Add($"{o.HoleId}/{o.SeamCode} {o.Value:0.##}({o.Kind}{o.Severity:0.#}IQR)"); }
-        StatusMsg.Text = $"煤质离群 QC（{ind}·Tukey 1.5×IQR）：{r.N}样 中位{r.Median:0.##} Q1{r.Q1:0.##}/Q3{r.Q3:0.##} 栅栏[{r.Lower:0.##},{r.Upper:0.##}] → 离群 {r.Outliers.Count} 段" + (top.Count > 0 ? "：" + string.Join(" · ", top) : "");
+        StatusMsg.Text = $"煤质离群 QC（{ind}·Tukey 1.5×IQR）：{r.N}样 中位{r.Median:0.##} Q1{r.Q1:0.##}/Q3{r.Q3:0.##} 栅栏[{r.Lower:0.##},{r.Upper:0.##}] → 离群 {r.Outliers.Count} 段"
+            + (drawn > 0 ? $"（{drawn} 上图定位·红高/蓝低）" : "") + (top.Count > 0 ? "：" + string.Join(" · ", top) : "");
     }
 
     // 灰分-发热量回归(忠实 CoalQualityAnalytics.AshCalorificRegression): 一元 OLS + r² + 残差 z-score 离群。

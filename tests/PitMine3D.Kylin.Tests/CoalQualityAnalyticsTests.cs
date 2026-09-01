@@ -118,4 +118,23 @@ public class CoalQualityAnalyticsTests
         Assert.Contains("类别,结论,评级", csv);
         Assert.Contains("煤质表征", csv);
     }
+
+    // 离群上图定位: 离群行按 Id 关联样点坐标。
+    static CoalSample SXY(long id, double x, double y, double ad)
+        => new(id, "H" + id, "3", x, y, 0, ad, null, 0.5, null, 25, null, 30, null);
+
+    [Fact]
+    public void OutlierCoords_joins_to_sample_locations()
+    {
+        var all = new List<CoalSample>
+        {
+            SXY(1, 1, 1, 15), SXY(2, 2, 2, 16), SXY(3, 3, 3, 15),
+            SXY(4, 4, 4, 16), SXY(5, 5, 5, 15), SXY(6, 6, 6, 16),
+            SXY(99, 42, 43, 99),   // 明显偏高离群
+        };
+        var r = CoalAnalytics.DetectOutliers(all, "ad", useClean: false);
+        var coords = CoalAnalytics.OutlierCoords(r, all);
+        Assert.Contains(coords, c => System.Math.Abs(c.x - 42) < 1e-9 && System.Math.Abs(c.y - 43) < 1e-9 && c.kind == "偏高");
+        Assert.Empty(CoalAnalytics.OutlierCoords(null!, all));
+    }
 }
