@@ -4460,15 +4460,16 @@ public partial class MainWindow : Window
         if (!r.Success) { StatusMsg.Text = $"约束三角网：点导入失败 {r.Error}"; return; }
 
         var pts2d = new List<(double x, double y)>();
-        foreach (var p in r.Points) pts2d.Add((p.x, p.y));
-        // 把约束线顶点并入点集，其相邻段成约束边
+        var pts3d = new List<(double x, double y, double z)>();
+        foreach (var p in r.Points) { pts2d.Add((p.x, p.y)); pts3d.Add((p.x, p.y, p.z)); }
+        // 把约束线顶点并入点集，其相邻段成约束边。约束线来自 2D 场景(无 z), 其 z 由 CSV 点云 IDW 插值(贴合面), 使 2.5D 面一致。
         var constraints = new List<(int u, int v)>();
         foreach (var pl in bkPolys)
         {
             int first = -1, prev = -1;
             foreach (var (vx, vy) in pl.Points)
             {
-                pts2d.Add((vx, vy)); int idx = pts2d.Count - 1;
+                pts2d.Add((vx, vy)); pts3d.Add((vx, vy, Contour.IdwAt(r.Points, vx, vy))); int idx = pts2d.Count - 1;
                 if (prev >= 0) constraints.Add((prev, idx));
                 if (first < 0) first = idx;
                 prev = idx;
@@ -4484,7 +4485,11 @@ public partial class MainWindow : Window
         BeginChange();
         foreach (var e in edges) _scene.Add(e);
         RefreshScene();
-        StatusMsg.Text = $"约束三角网：{pts2d.Count} 点 · {bkPolys.Count} 约束线 → {tris.Count} 三角 · {edges.Count} 边（约束段 {kept}/{constraints.Count} 已嵌入或分段）";
+        // 同 创建三角网: 装保留高程的 2.5D 面(约束线顶点 z 已 IDW 插值)导 OFF, 断层/山脊约束嵌入的可复用面。
+        var st = TinSurface.Describe(pts3d, tris);
+        var off = await SaveCsvAsync("导出约束三角网面(OFF)", "tin_constrained.off", MeshWeld.ToOff(pts3d, tris));
+        StatusMsg.Text = $"约束三角网：{pts2d.Count} 点 · {bkPolys.Count} 约束线 → {tris.Count} 三角 · {edges.Count} 边（约束段 {kept}/{constraints.Count} 已嵌入或分段）· XY 投影面积 {st.ProjectedAreaXY:0.#}"
+            + (off != null ? $" · 2.5D 面 OFF → {off}" : "");
     }
 
     // 约束段是否体现在网中(直边或经共线分段成链)——粗判：端点间存在一条沿线的边路径。这里简化为直边或任一端相连。
