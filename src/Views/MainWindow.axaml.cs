@@ -7091,7 +7091,9 @@ public partial class MainWindow : Window
         var db = EnsureGeoDb(); if (db == null) return;
         var q = Data.GeoDataQueries.GetCoalQualityStats(db.Connection);
         if (q.Samples == 0) { StatusMsg.Text = "煤质统计：无煤样数据"; return; }
-        StatusMsg.Text = $"煤质统计：{q.Samples} 样 / {q.Seams} 煤层 · 平均 灰分Ad {q.AvgAshPct:0.##}% · 挥发分Vdaf {q.AvgVolatilePct:0.##}% · 发热量Qnet {q.AvgCalorificMJ:0.##}MJ/kg · 全硫St {q.AvgSulfurPct:0.###}%";
+        // 灰分均匀性(变异系数)有评价才附加
+        string uni = q.AshUniformity.Length > 0 ? $" · 灰分CV {q.AshCvPct:0.#}%({q.AshUniformity})" : "";
+        StatusMsg.Text = $"煤质统计：{q.Samples} 样 / {q.Seams} 煤层 · 平均 灰分Ad {q.AvgAshPct:0.##}% · 挥发分Vdaf {q.AvgVolatilePct:0.##}% · 发热量Qnet {q.AvgCalorificMJ:0.##}MJ/kg · 全硫St {q.AvgSulfurPct:0.###}%{uni}";
     }
 
     // 商品煤符合性(CoalAnalytics)：逐化验段判 Ad≤/St≤/Q≥ → 达标率 + 按煤层 + 超标数。缺省 Ad≤30/St≤1/Qgr≥21

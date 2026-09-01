@@ -332,6 +332,22 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Coal_quality_stats_computes_ash_cv_and_uniformity()
+    {
+        // 灰分变异系数 CV=σ/均值×100 (样本 σ, n-1) + 均匀性评价档(忠实原)
+        using var db = GeoDatabase.OpenSeeded();
+        var q = GeoDataQueries.GetCoalQualityStats(db.Connection);
+        Assert.True(q.Samples > 2);
+        var vals = new System.Collections.Generic.List<double>();
+        using (var c = db.Connection.CreateCommand()) { c.CommandText = "SELECT ad_raw FROM coal_sample WHERE ad_raw IS NOT NULL"; using var rd = c.ExecuteReader(); while (rd.Read()) vals.Add(rd.GetDouble(0)); }
+        double mean = vals.Average();
+        double sd = System.Math.Sqrt(vals.Sum(v => (v - mean) * (v - mean)) / (vals.Count - 1));
+        Assert.Equal(sd / mean * 100, q.AshCvPct, 3);                  // CV 公式对拍
+        string expectedUni = q.AshCvPct < 15 ? "均匀,煤质稳定" : q.AshCvPct < 30 ? "较均匀" : "波动较大,须注意配采均衡";
+        Assert.Equal(expectedUni, q.AshUniformity);                    // 均匀性档一致
+    }
+
+    [Fact]
     public void Export_table_then_reimport_roundtrips()
     {
         using var db = GeoDatabase.OpenSeeded();

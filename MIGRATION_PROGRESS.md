@@ -1975,3 +1975,11 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - **修**: `GetProductionStats`+`ProductionStats` 加 AvgEfficiencyM3PerH(=总产量/总工时)+ PeakEfficiencyM3PerH(=逐记录 MAX(output_m3/work_hours), 忠实原 peakEff); `设备生产数据` 显示"台效 均X/峰Y m³/h"。+1 单测(均值=总产量/总工时 恒等; 峰值≥均值[比率加权均值≤最大比率])。1029 测全绿, 0 错, smoke 正常。
 
 **分析输出完整性透镜累计 5 处**(煤质 Mad/FCd · KPI 故障归因 · 故障 MTBF/MTTR · KPI OEE+作业率 · 生产台效均/峰)。产能峰值年/当前占峰比属 EquipmentCapabilityWindow GUI 图表(趋势图)——指标可算但主载体是图表, 命令行已有年度产量导出可支撑, 暂记录(如需可另补文本峰值年摘要)。本轮 1 修。
+
+## 一七〇、分析输出完整性续三 —— 煤质统计补灰分变异系数(均匀性评价)
+
+承 §一六七–一六九, 续查煤质统计:
+- **缺口**: 原 `CoalQualityAnalytics`(483-491)算**灰分变异系数 CV=σ/均值×100**(样本 σ, n-1)+ 均匀性评价(<15 均匀煤质稳定 / <30 较均匀 / else 波动大须注意配采均衡), Kylin `GetCoalQualityStats` 只有均值无变异性度量。
+- **修**: `GetCoalQualityStats`+`CoalQualityStats` 加 AshCvPct(SQL 取 SUM(ad²)→代码算样本方差 (Σx²−n·μ²)/(n−1))+ AshUniformity(评价档, 忠实原); `煤质统计` 显示"灰分CV X%(评价)"。+1 单测(独立取 ad_raw 算样本 CV 对拍 + 均匀性档一致)。1030 测全绿, 0 错, smoke 正常。
+
+**分析输出完整性透镜累计 6 处**(煤质 Mad/FCd · KPI 故障归因 · 故障 MTBF/MTTR · KPI OEE · 生产台效 · 煤质灰分 CV/均匀性)。本轮 1 修。数据面(7)+分析输出(6)=**13 处数据/分析补全**, 均"原版有、公式简单、数据齐"且以关系恒等/独立对拍验证。
