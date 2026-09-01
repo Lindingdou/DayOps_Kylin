@@ -2771,3 +2771,18 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(自造已知值)**: [ScatterPlotTests](tests/PitMine3D.Kylin.Tests/ScatterPlotTests.cs) +4—— 完美线 y=2x 三点: 3 叉标记·(5,10)→中心(20,10)·拟合线端 (0,0)→(40,20)·轴名与刻度俱在; 离群红叉更大且异色; y 全等但拟合 y=x 端点撑开 Y 量程使线不出框; 空/零宽返空。**build 0 错·单测 1308→1312**。
 
 **本会话第 58 功能**。三助手(折线 CurvePlot §247 · 类别柱 BarChartPlot §248 · 散点 ScatterPlot §249)补齐, "统计图受阻"边界彻底瓦解: 序列/分布/交会三型皆场景上屏, 唯饼图/热力图/箱线等仍走 CSV。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二五〇 命令级收敛复核（原版 200 按钮标签 × Kylin 全量比对）
+
+**继测试级 19/19 收敛(§249)后, 补命令级系统复核**: 从原版 9 模块 `*Plugin.cs` 提取**全部 200 个 `AddButton` 按钮标签**(BlockModel/GeoDataBase/MeshEdit/MineAss/Plan/PointCloud/Road/Task), 与 Kylin `MainWindow.axaml.cs` 全字符串比对。
+
+**流程(防别名噪声)**: (1) 整串精确差集 → 80 项"缺失"(多为别名); (2) 整串在 Kylin src 全域 0 命中过滤 → 13 项真候选; (3) 逐项核心词 + 分派项(`cmd == "..."`)验证。
+
+**结果三分**:
+- **别名覆盖(已实现, 换名)**: 体积算量→`体积计算`/算量/土方量 · 创建块体→`块体模型`/导入块体/地质体建模 · 属性赋值→`切换属性`/品位块模型(克里金赋值)/QualityVoxelInterp · 内排推进→`平行推进`/工作线推进/排土场按量推进 · 查询台阶平盘标高→`平盘标高清单`(BenchLevelInventory) · 斜坡道双线→`斜坡道`/螺旋坑线 · 坡度/坡向/曲率/粗糙度→点云面分析俱在。
+- **原生内核受阻(无托管源, 忠实不臆造)**: 布尔运算 交/差/并/补 —— 复核实现 `MeshOpsCapabilityImpl.StartIntersectMeshesInteractive → EngineInterop.StartIntersectMeshesCommand()` = **P/Invoke C++ 内核 CSG**, 无托管算法可移(臆造 managed CSG 既不忠实亦无法对原验证)。同 mesh 修复/分割地质体(内核聚类)。
+- **原版即桩(sample-UI, 无逻辑, 忠实不补)**: `工序定额`(ProcessQuotaWindow "样例(可编辑)", OnSave "持久化待接") · `质量标准`(QualityStandardWindow "样例", OnSave "持久化+喂装箱质量约束待接")——原版本身仅样例表单、持久化未接、无算法/无可验核, 故无验证条件可满足, 记录不补(同 SkeletonCommand 桩)。
+
+**结论**: 200 标签无一是"可实现+可验证+忠实却漏做"者——要么已覆盖(直/别名)、要么原生内核无源、要么原版即空桩。**命令级 + 测试级(19/19)双重收敛互证**, 远强于单一探针。这是本会话"复审自记边界"脉的收官式复核: 系统比对而非印象。**教训: 命令级全量标签比对是继测试枚举后第二个黄金收敛标准; 但差集须过别名噪声(整串0命中→核心词→分派项三级) + 逐项验证内核/桩性质(勿把 native/stub 误记为"可做漏做", 亦勿把别名误记为"缺失")**。见 [[unlock-blocked-insights]] [[faithfulness-only-original-commands]] [[pitmine3d-command-inventory]]。
