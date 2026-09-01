@@ -3234,3 +3234,14 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 - **AIChat** → 原 MockAiEngine(脚本对话树 DialogNodeType Text/Option/End)=**mock 演示助手**(罐装应答, 非真 AI), 交互式聊天窗口 → **记录**(demo/交互, 同 SampleTaskBoard 演示桩)。
 
 **结论**: 12 个原测试类中, **仅 ExtractCenterline 退化(已补 §79)**; 余全为完整实现(多带 Kylin 测试)或 mock 演示(AIChat 记录)。**退化命令角度对"有测试的原类"已穷尽**——第五次连续收敛确认。教训: **"有源"须验实现深度(§79 退化教训), 但逐一核后确认仅一处退化**——退化非普遍, 是个例。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二八〇 枚举值完整性角度 —— WeightMode 核实(HaulMetrics 覆盖 + 路网权重 2D 限)
+
+**枚举值完整性角度**(Kylin 枚举值少于原=缺模式): 提原域枚举核。多数为 TaskLib(SampleTaskBoard 演示桩)/SqlLib(DB 层内部)。唯一域候选 `WeightMode {Distance Time Fuel Cost}`(路网边权模式):
+
+- **HaulMetrics(坡阻行车时间/等效运距/循环时间公式)**: Kylin **已覆盖**——`HaulMetrics.TravelTimeMin/EquivalentLengthM` 用于 `运距指标`(读运输记录 CSV distanceM,gradePct,tons → 等效运距/循环时间/加权平均) + 车铲匹配(Erlang-C) + FleetOptimizer 循环时间。坡度相关运输指标功能在。
+- **WeightMode.Time/Fuel/Cost 接入寻径图权重**: Kylin 路网图由 **2D 折线**建(边无逐段坡度/Z), 无法算坡阻时间权 → 仅 Distance 权(2D 可行的唯一模式)。**属 2D 场景限**(已记录), 非独立缺口; 坡度相关运输量已由 运距指标(CSV 带 gradePct)提供。
+
+**结论**: 枚举值角度无新增可实现缺口——WeightMode 的公式层(HaulMetrics)已覆盖, 寻径权重集成受 2D 限记录。**第六次连续收敛确认**(类枚举≥80/方法级/退化命令再核/枚举值)。见 [[unlock-blocked-insights]]。
