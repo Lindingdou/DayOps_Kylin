@@ -1103,6 +1103,7 @@ public partial class MainWindow : Window
             if (cmd == "线落到面上" || cmd == "线落面" || cmd == "线投影到面") { await ProjectPolylinesToMeshAsync(); return; }
             if (cmd == "侧面三角网" || cmd == "侧面放样" || cmd == "放样侧面") { await SideSurfaceAsync(); return; }
             if (cmd == "道路横断面" || cmd == "路面加宽超高" || cmd == "弯道加宽") { RoadCrossSectionCmd(); return; }
+            if (cmd.StartsWith("道路设计参数") || cmd.StartsWith("最小平曲线半径") || cmd.StartsWith("平曲线半径") || cmd.StartsWith("道路设计校核")) { RoadDesignParamsCmd(cmd); return; }
             if (cmd == "路面生成" || cmd == "生成路面" || cmd == "中线外扩" || cmd.StartsWith("路面生成 ") || cmd.StartsWith("生成路面 ")) { RoadSurfaceCmd(cmd); return; }
             if (cmd == "纵坡分析" || cmd == "纵坡" || cmd == "坡度分档" || cmd == "限坡校核" || cmd.StartsWith("纵坡分析 ") || cmd.StartsWith("限坡校核 ")) { await GradeProfileAsync(cmd); return; }
             if (cmd == "竖曲线平滑" || cmd == "竖曲线" || cmd == "纵断面竖曲线" || cmd.StartsWith("竖曲线平滑 ") || cmd.StartsWith("竖曲线 ")) { await VerticalCurveAsync(cmd); return; }
@@ -7411,6 +7412,24 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"路面生成：中线 {center.Points.Count} 点 → 路带闭合多边形 {strip.Count} 顶点（路宽 {width:0.##}）";
     }
 
+    // 道路设计参数校核: 道路设计参数 <设计速度km/h> [最大超高% 默认6] [台阶高m [最大纵坡% 默认10]]
+    // → 最小平曲线半径 R=v²/(127(μ+e_max)) + (给台阶高/纵坡时)展线长=H/(grade/100)。忠实原 TransportConstraintSettings。
+    private void RoadDesignParamsCmd(string cmd)
+    {
+        var tk = cmd.Split(new[] { ' ', ',', '，', '/', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        if (tk.Length < 2 || !double.TryParse(tk[1], out double v) || v <= 0)
+        { StatusMsg.Text = "道路设计参数：用法 道路设计参数 <设计速度km/h> [最大超高% 默认6] [台阶高m [最大纵坡% 默认10]]（如 道路设计参数 25 6）"; return; }
+        double emax = 6; if (tk.Length >= 3 && double.TryParse(tk[2], out double e2) && e2 >= 0) emax = e2;
+        double Rmin = Cad.RoadCrossSection.MinCurveRadiusBySpeed(v, emax);
+        string extra = "";
+        if (tk.Length >= 4 && double.TryParse(tk[3], out double H) && H > 0)
+        {
+            double grade = 10; if (tk.Length >= 5 && double.TryParse(tk[4], out double g4) && g4 > 0) grade = g4;
+            extra = $" · 展线长(降{H:0.#}m@{grade:0.#}%纵坡)={Cad.RoadCrossSection.DevelopmentLengthM(H, grade):0.#}m";
+        }
+        StatusMsg.Text = $"道路设计参数：设计车速 {v:0.#}km/h · 最大超高 {emax:0.#}% · 最小平曲线半径 R_min={Rmin:0.#}m（R=v²/(127(μ0.15+e))）{extra}";
+    }
+
     private void RoadCrossSectionCmd()
     {
         PolylineEntity? center = null;
@@ -9420,7 +9439,7 @@ public partial class MainWindow : Window
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割","移除障碍物",
         // 块体/运输/路网
-        "块体模型","资源量","面约束块体","离散化模型","道路横断面","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道","直线斜坡道",
+        "块体模型","资源量","面约束块体","离散化模型","道路横断面","道路设计参数","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道","直线斜坡道",
         // 生产计划/投影
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)

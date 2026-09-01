@@ -36,6 +36,17 @@ public static class RoadCrossSection
         return Math.Clamp(e * 100.0, 0.0, maxSuperPct);
     }
 
+    /// <summary>按设计车速反算最小平曲线半径 m：R = v²/(127·(μ+e_max))(忠实原 MinCurveRadiusBySpeed, e_max=最大超高)。SuperelevationPct 之逆(超高饱和处)。</summary>
+    public static double MinCurveRadiusBySpeed(double designSpeedKmh, double maxSuperPct, double frictionMu = 0.15)
+    {
+        double denom = 127.0 * (frictionMu + maxSuperPct / 100.0);
+        return denom > 1e-6 ? designSpeedKmh * designSpeedKmh / denom : 0.0;
+    }
+
+    /// <summary>展线长预览 m：以最大纵坡 maxGradePct 下降 riseM 所需水平展线长 = rise/(grade/100)(忠实原 DevelopmentLengthPreview)。</summary>
+    public static double DevelopmentLengthM(double riseM, double maxGradePct)
+        => maxGradePct > 1e-6 ? riseM / (maxGradePct / 100.0) : 0.0;
+
     /// <summary>沿中线逐站算半径(三点曲率) → 路宽 + 超高 + 汇总。</summary>
     public static CrossSectionResult ComputeAlong(
         IReadOnlyList<(double X, double Y, double Z)> pts,

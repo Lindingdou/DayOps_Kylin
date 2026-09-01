@@ -66,4 +66,27 @@ public class RoadCrossSectionTests
         Assert.True(cs.MaxWideningM > 0);
         Assert.True(cs.WidenedLengthM > 0);
     }
+
+    [Fact]
+    public void MinCurveRadius_by_speed_known_value_and_super_inverse()
+    {
+        // R=v²/(127(μ+e_max)). v=25,μ=0.15,e_max=6% → 25²/(127·0.21)=625/26.67=23.44m。
+        double R = RoadCrossSection.MinCurveRadiusBySpeed(25, 6);
+        Assert.Equal(625.0 / (127.0 * 0.21), R, 4);
+        // 逆一致: 在 R_min 处, 超高应恰饱和到 e_max(SuperelevationPct 的逆)。
+        Assert.Equal(6.0, RoadCrossSection.SuperelevationPct(R, 25, 6), 3);
+        // 车速越高 R_min 越大; 超高越大 R_min 越小。
+        Assert.True(RoadCrossSection.MinCurveRadiusBySpeed(40, 6) > RoadCrossSection.MinCurveRadiusBySpeed(25, 6));
+        Assert.True(RoadCrossSection.MinCurveRadiusBySpeed(25, 8) < RoadCrossSection.MinCurveRadiusBySpeed(25, 4));
+    }
+
+    [Fact]
+    public void Development_length_is_rise_over_grade()
+    {
+        // 降 45m @ 9% 纵坡 → 展线长 45/0.09=500m。
+        Assert.Equal(500.0, RoadCrossSection.DevelopmentLengthM(45, 9), 6);
+        Assert.Equal(0, RoadCrossSection.DevelopmentLengthM(45, 0), 6);   // 零纵坡 → 0(不外推)
+        // 纵坡越缓展线越长。
+        Assert.True(RoadCrossSection.DevelopmentLengthM(45, 6) > RoadCrossSection.DevelopmentLengthM(45, 12));
+    }
 }

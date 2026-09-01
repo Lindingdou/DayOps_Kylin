@@ -2667,3 +2667,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [BenchParameterExtractorTests](tests/PitMine3D.Kylin.Tests/BenchParameterExtractorTests.cs) +2—— **正逆往返**: H15/α65/β45 反算 W 再正算还原 β=45(精确); W=H/tanβ−H/tanα 已知式; 钳位(β≥α→W=0·H≤0→0)·越缓目标越宽 W。**build 0 错·单测 1281→1283**。
 
 **本会话第 45 功能**。教训: **正算有→查逆算(设计反问题常成对)**: `β←(H,α,W)` 有了, `W←(H,α,β)` 是设计反问题(定目标帮坡角求平盘宽), 成对补齐。**正逆往返测试是最强验证**(forward∘inverse=identity)。这次**先 grep 后建**(吸取 §二三九), 无冗余。见 [[unlock-blocked-insights]]。
+
+## 二四一、道路设计参数: 最小平曲线半径 + 展线长(接原 TransportConstraintSettings)—— 角度⑨续(第 46 功能)
+
+**同"正算有→查逆算"**: Kylin `RoadCrossSection` 有超高正算 `SuperelevationPct`(e=V²/(127R)−μ, 从半径算超高), 缺**逆** `MinCurveRadiusBySpeed`(R=v²/(127(μ+e_max)), 从设计车速反算最小平曲线半径——道路布线核心约束) + `DevelopmentLengthPreview`(展线长=rise/纵坡, 以最大纵坡降台阶高的水平展线)。原在 `TransportConstraintSettings`。**grep 确认 Kylin 无**(127 只在 SuperelevationPct 正向)→真缺口。
+
+补 [RoadCrossSection](src/Cad/RoadCrossSection.cs): `MinCurveRadiusBySpeed(v, e_max, μ=0.15)` + `DevelopmentLengthM(rise, maxGrade)`(忠实原式)。命令 `道路设计参数 <设计速度> [最大超高%] [台阶高 [最大纵坡%]]`([MainWindow](src/Views/MainWindow.axaml.cs) `RoadDesignParamsCmd`) → R_min + 展线长 + 目录。
+
+**验证(已知值)**: [RoadCrossSectionTests](tests/PitMine3D.Kylin.Tests/RoadCrossSectionTests.cs) +2—— R_min=25²/(127·0.21)=23.44m; **逆一致: R_min 处超高恰饱和到 e_max**(SuperelevationPct(R_min)=6%, 正逆自洽); 车速↑R_min↑·超高↑R_min↓; 展线长 45m@9%=500m·零纵坡→0·越缓越长。**build 0 错·单测 1283→1285**。
+
+**本会话第 46 功能**。教训: **同一物理关系的正逆两式常分处**——超高正算在 RoadCrossSection, 半径反算在 TransportConstraintSettings(约束模型), 只移了正算。**逆一致测试**(R_min 处超高饱和 e_max)锁定正逆同源。角度⑨(正逆配对)连出 2 功能(平盘宽反算/最小平曲线半径)。见 [[unlock-blocked-insights]]。
