@@ -73,6 +73,30 @@ public class PmxExportServiceTests
     }
 
     [Fact]
+    public void Round_trip_preserves_arc_curve()
+    {
+        // CCW 半圆 P1(10,0) P2(0,10) P3(-10,0): 圆心(0,0) r=10, a0=0/a1=π。往返后三点精确还原(对称→角中点=几何中点)。
+        var arc = new ArcEntity { X1 = 10, Y1 = 0, X2 = 0, Y2 = 10, X3 = -10, Y3 = 0, LayerName = "L1" };
+        var r = RoundTrip(new System.Collections.Generic.List<SceneEntity> { arc });
+        Assert.Equal(1, r.Arcs);
+        var a = (ArcEntity)r.Entities.First(e => e is ArcEntity);
+        Assert.Equal(10, a.X1, 4); Assert.Equal(0, a.Y1, 4);
+        Assert.Equal(0, a.X2, 4); Assert.Equal(10, a.Y2, 4);
+        Assert.Equal(-10, a.X3, 4); Assert.Equal(0, a.Y3, 4);
+    }
+
+    [Fact]
+    public void Round_trip_arc_cw_preserves_curve_through_midpoint()
+    {
+        // CW 输入 P1(-10,0) P2(0,10) P3(10,0): 端点可交换但曲线恒等——重建仍过中点(0,10)、外接圆(0,0,10)。
+        var arc = new ArcEntity { X1 = -10, Y1 = 0, X2 = 0, Y2 = 10, X3 = 10, Y3 = 0, LayerName = "L1" };
+        var a = (ArcEntity)RoundTrip(new System.Collections.Generic.List<SceneEntity> { arc }).Entities.First(e => e is ArcEntity);
+        Assert.Equal(0, a.X2, 4); Assert.Equal(10, a.Y2, 4);                 // 过中点
+        Assert.Equal(10, System.Math.Abs(a.X1), 4); Assert.Equal(0, a.Y1, 4); // 端点在 (±10,0)
+        Assert.Equal(10, System.Math.Abs(a.X3), 4); Assert.Equal(0, a.Y3, 4);
+    }
+
+    [Fact]
     public void Header_magic_and_footer_are_well_formed()
     {
         var (bytes, count) = PmxExportService.Build(Sample());

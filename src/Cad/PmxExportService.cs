@@ -71,7 +71,19 @@ public static class PmxExportService
                         w.Write(Intern(t.Text)); w.Write(-1);   // textStrIdx, styleIdx=-1(默认宽度/倾斜; MVP 不出样式)
                     });
                     break;
-                // 圆弧(ArcEntity)/其它: MVP 暂不导出
+                case ArcEntity ar:   // 圆弧: 三点 → 外接圆心/半径/起终角(reader case 15 对称)。选 a0,a1 使 CCW(a0→a1)经中点。
+                {
+                    var cc = ArcMath.Circumcircle(ar.X1, ar.Y1, ar.X2, ar.Y2, ar.X3, ar.Y3);
+                    if (cc == null) { Ent(1, ar, w => { XY(w, ar.X1, ar.Y1); XY(w, ar.X3, ar.Y3); }); break; }   // 三点共线 → 退化直线(忠实 Tessellate)
+                    var (cx, cy, r) = cc.Value;
+                    double aS = Math.Atan2(ar.Y1 - cy, ar.X1 - cx), aM = Math.Atan2(ar.Y2 - cy, ar.X2 - cx), aE = Math.Atan2(ar.Y3 - cy, ar.X3 - cx);
+                    static double Sweep(double x, double y) { double s = y - x; while (s <= 0) s += 2 * Math.PI; while (s > 2 * Math.PI) s -= 2 * Math.PI; return s; }
+                    double a0, a1;
+                    if (Sweep(aS, aM) <= Sweep(aS, aE)) { a0 = aS; a1 = aE; } else { a0 = aE; a1 = aS; }   // 保 CCW 经中点(curve 恒等)
+                    Ent(15, ar, w => { XY(w, cx, cy); w.Write(r); w.Write(a0); w.Write(a1); });
+                    break;
+                }
+                // 其它复杂类型(MText/Hatch/标注/椭圆/样条): MVP 暂不导出
             }
         }
         byte[] entBytes;

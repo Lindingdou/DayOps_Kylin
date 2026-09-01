@@ -2595,3 +2595,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [PmbImportServiceTests](tests/PitMine3D.Kylin.Tests/PmbImportServiceTests.cs) +1—— MakePmb2(density[2.7,2.8]+grade_v[50,60]) → AllAttrs 含两属性全值, 选定 grade 与 AllAttrs 同源。**build 0 错·单测 1270→1271**。
 
 **本会话第 38 功能**。教训: **除"原版有 Kylin 缺", 还要查"Kylin 自陈暂未"**——grep Kylin 自身 `暂未/未实现/TODO/占位`(排除对原版桩的转述), 常是 reader/handler 只做了一半(PMB 扫了全属性却只留一份)。这是"未完成功能补全"最直接的一类(loop 主旨), 且多半底层数据已备(offsets 已扫), 补全成本低。区别于原版桩(忠实不做)。见 [[unlock-blocked-insights]]。
+
+## 二三四、PMX 圆弧导出(reader/writer 对称)—— Kylin 自身"MVP 暂不导出"补全(第 39 功能)
+
+**续"Kylin 自陈暂未"角度 + reader/writer 非对称检查**: PMX [reader](src/Cad/PmxImportService.cs) 处理类型码 {1 Line·2 Poly·3 Point·4 Text·7 Mesh·14 Circle·**15 Arc**}, 但 [writer](src/Cad/PmxExportService.cs) 只写 {1·2·14·4}, `ArcEntity` 标"MVP 暂不导出"——**非对称**: 场景含圆弧导 PMX 丢弧(导入能读弧、导出却丢), 往返有损。DXF 导入(全实体)/GeoTIFF(压缩变体记录)经查非缺口; 此为真非对称。
+
+补 [PmxExportService](src/Cad/PmxExportService.cs) `case ArcEntity`: 三点 → `ArcMath.Circumcircle` 圆心/半径 + 起终角, **选 a0/a1 使 CCW(a0→a1) 经中点 aM**(对齐 reader case 15 的 NormSweep 正向半程放中点约定)→ curve 恒等(CW 弧端点可交换但曲线同); 三点共线退化为直线(忠实 Tessellate)。
+
+**验证(已知值)**: [PmxExportServiceTests](tests/PitMine3D.Kylin.Tests/PmxExportServiceTests.cs) +2—— CCW 半圆 P1(10,0)P2(0,10)P3(-10,0)(圆心0,0/r10/a0=0,a1=π) 往返**三点精确还原**; CW 输入端点可交换但重建仍过中点(0,10)+端点在(±10,0)(曲线恒等)。**build 0 错·单测 1271→1273**。
+
+**本会话第 39 功能**。教训: **format reader/writer 要查对称性**——reader 处理的类型码 writer 是否全写(PMX reader 读弧 writer 不写=往返丢弧)。补对称时**角度/方向约定要对齐**(writer 选 a0/a1 匹配 reader 的 CCW-NormSweep-经中点), 往返测试(写→读)锁 curve 恒等。同"导入/导出成对往返测试是最强验证"(§二一〇 PMX 首建)。见 [[unlock-blocked-insights]]。
