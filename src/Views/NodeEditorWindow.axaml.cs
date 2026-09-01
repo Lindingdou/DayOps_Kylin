@@ -24,6 +24,7 @@ public partial class NodeEditorWindow : Window
 
     private Node? _dragNode;
     private Node? _selected;
+    private Connection? _selectedConn;
     private bool _dragSaved;
     private Point _dragOffset;
     private (int node, int port)? _pendingOut;
@@ -61,7 +62,16 @@ public partial class NodeEditorWindow : Window
 
     private void OnDeleteSelected(object? sender, RoutedEventArgs e)
     {
-        if (_selected == null) { Hint.Text = "先单击选中一个节点，再删除"; return; }
+        if (_selectedConn is { } conn)        // 选中的是连线 → 只断这一条(不删节点)
+        {
+            _undoRedo.SaveState();
+            _graph.Disconnect(conn.ToNode, conn.ToPort);
+            _selectedConn = null;
+            Hint.Text = "已断开连线";
+            Rebuild();
+            return;
+        }
+        if (_selected == null) { Hint.Text = "先单击选中节点或连线，再删除"; return; }
         _undoRedo.SaveState();                 // 改动前记录
         _graph.RemoveNode(_selected.Id);
         _selected = null; _pendingOut = null;
@@ -73,7 +83,7 @@ public partial class NodeEditorWindow : Window
     {
         if (!_undoRedo.CanUndo) { Hint.Text = "无可撤销"; return; }
         _undoRedo.Undo();
-        _selected = null; _pendingOut = null; _dragNode = null;
+        _selected = null; _selectedConn = null; _pendingOut = null; _dragNode = null;
         Hint.Text = "已撤销";
         Rebuild();
     }
@@ -82,7 +92,7 @@ public partial class NodeEditorWindow : Window
     {
         if (!_undoRedo.CanRedo) { Hint.Text = "无可重做"; return; }
         _undoRedo.Redo();
-        _selected = null; _pendingOut = null; _dragNode = null;
+        _selected = null; _selectedConn = null; _pendingOut = null; _dragNode = null;
         Hint.Text = "已重做";
         Rebuild();
     }
@@ -131,7 +141,7 @@ public partial class NodeEditorWindow : Window
             string json = System.IO.File.ReadAllText(files[0].Path.LocalPath);
             _undoRedo.SaveState();             // 载入可撤销
             _graph.LoadJson(json);
-            _selected = null; _pendingOut = null; _dragNode = null;
+            _selected = null; _selectedConn = null; _pendingOut = null; _dragNode = null;
             Hint.Text = $"已加载 {System.IO.Path.GetFileName(files[0].Path.LocalPath)}（{_graph.Nodes.Count} 节点）";
             Rebuild();
         }
@@ -196,7 +206,16 @@ public partial class NodeEditorWindow : Window
             if (from == null || to == null) continue;
             var a = OutPort(from, c.FromPort);
             var z = InPort(to, c.ToPort);
-            Canvas.Children.Add(new Line { StartPoint = a, EndPoint = z, Stroke = Brushes.SteelBlue, StrokeThickness = 2 });
+            bool sel = ReferenceEquals(c, _selectedConn);
+            var line = new Line
+            {
+                StartPoint = a, EndPoint = z,
+                Stroke = sel ? Brushes.DodgerBlue : Brushes.SteelBlue,
+                StrokeThickness = sel ? 4 : 2,
+                Tag = c
+            };
+            line.PointerPressed += OnConnectionPressed;
+            Canvas.Children.Add(line);
         }
 
         // 节点卡片 + 端口
@@ -258,12 +277,24 @@ public partial class NodeEditorWindow : Window
         }
     }
 
+    // 单击连线 → 选中(蓝粗高亮)，随后 Delete/删除 只断这一条
+    private void OnConnectionPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not Line line || line.Tag is not Connection c) return;
+        e.Handled = true;
+        _selectedConn = c;
+        _selected = null; _pendingOut = null;
+        Hint.Text = "已选中连线 → Delete/删除 断开";
+        Rebuild();
+    }
+
     private void OnNodePressed(object? sender, PointerPressedEventArgs e)
     {
         if (sender is not Border card || card.Tag is not Node n) return;
         e.Handled = true;
         _dragNode = n;
         _selected = n;                         // 单击=选中(供删除高亮)
+        _selectedConn = null;                  // 选节点即取消连线选中
         _dragSaved = false;
         var pos = e.GetPosition(Canvas);
         _dragOffset = new Point(pos.X - n.X, pos.Y - n.Y);
