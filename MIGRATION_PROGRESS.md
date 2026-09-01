@@ -1901,3 +1901,11 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - **slope_design(读最少 1)**: 原版仅 SlopeDesignService CRUD 检索(Get/All/CurrentDesigns), 无额外分析/报表; 安全系数是存储输入非计算(勿臆造 Bishop)。Kylin GetSlopeDesigns(All 排序)覆盖读侧——**无缺口**。
 
 **透镜结论**: 「数据源完整性」透镜找出 **1 真缺口(层位展点漏见煤点, 已修 §一五九)**, 系统确认**无死导入 + 其余表消费面与原版对齐**。判据固化: ①查每张导入表有无读消费(防死导入) ②查多源特性是否漏源(原 N 源 vs Kylin N−1) ③CSV 输入型特性不适用此透镜。本轮 0 新缺口(透镜已由上轮修复穷尽)。
+
+## 一六一、「CSV 导入列完整性」透镜 —— 煤质导入漏半个工业分析(水分+固定碳) · 修
+
+新透镜: 导入命令是否解析了 schema/原版的**全部列**? 漏列=导入静默丢字段, 下游(SQL查询/汇总)取不到。查 coal_sample(煤质化验, 列最多):
+- **缺口**: `ImportCoalSamples` 原只解析 15 列(ad/vdaf/std/qgr/qnet/caking/plastic_y/yield 等), **漏 mad_raw/mad_clean(水分)+fcd_raw/fcd_clean(固定碳)+true_density(真密度)+plastic_x_mm+char_residue+plastometric_curve**——而 schema(V005)全有这些列、原版 CoalQualityExcelIo 全导、且 Kylin 有**只读 SQL 查询**功能可 SELECT 任意列。**工业分析 M/A/V/FC 只载了 A/V 半套**(水分 Mad + 固定碳 FCd 恒 NULL), 用户导入完整化验 CSV 静默丢一半。
+- **修**: `ImportCoalSamples` 补全全部数值列(M/A/V/FC 原煤+浮煤 + 真密度 + 胶质 X + 焦渣) + 文本列(plastometric_curve); `GetCoalQualityBySeam` + `SeamQualityRow` 加 AvgMoisturePct(Mad)+AvgFixedCarbonPct(FCd), `分煤层煤质` 显示补全 **工业分析 M/A/V/FC 全列**(水/灰/挥/固碳 + 热)。+1 单测(导入 mad=8/fcd=47/真密度=1.45 → 查回入库 + 汇总呈现)。1018 测全绿, 0 错, smoke [GLINIT] 正常。
+
+**新透镜判据**: 命令在、数据源在, 还要查**每列是否解析**——schema 有列 + 原版导该列 + 有消费路径(分析/SQL查询)而 Kylin import 漏解析 = 真缺口(静默丢数据)。区别: schema 无该列 / 原版也不导 = 非缺口。本轮 1 修(煤质导入补全工业分析)。累计保真+数据完整审计 3 真 bug(估值半径/层位展点漏源/煤质导入漏列)。

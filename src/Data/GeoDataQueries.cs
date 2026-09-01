@@ -789,7 +789,9 @@ public static class GeoDataQueries
     }
 
     /// <summary>煤质化验 CSV 入库（忠实 CoalQualityExcelIo，CSV 替 Excel）：hole_id→borehole.id 查找，按 孔+煤层+起深 upsert。
-    /// 列: hole_id,seam_code,depth_from[,depth_to,sample_thickness,z_sample,apparent_density,ad_raw,ad_clean,std_raw,std_clean,qgr_d,qnet_ad,vdaf_raw,vdaf_clean,caking_g,plastic_y_mm,clean_coal_yield,coal_type]。</summary>
+    /// 全工业分析列(M/A/V/FC 原煤+浮煤): hole_id,seam_code,depth_from[,depth_to,sample_thickness,z_sample,apparent_density,true_density,
+    /// mad_raw,ad_raw,vdaf_raw,fcd_raw,mad_clean,ad_clean,vdaf_clean,fcd_clean,std_raw,std_clean,qgr_d,qnet_ad,
+    /// plastic_x_mm,plastic_y_mm,caking_g,char_residue_raw,char_residue_clean,clean_coal_yield,coal_type,plastometric_curve]。缺列留空。</summary>
     public static ImportOutcome ImportCoalSamples(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
     {
         int ins = 0, upd = 0, skip = 0, err = 0;
@@ -804,27 +806,33 @@ public static class GeoDataQueries
             object Txt(string k) => Get(k) is { Length: > 0 } s ? s : (object)System.DBNull.Value;
             bool exists;
             using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM coal_sample WHERE borehole_id=@b AND seam_code=@s AND depth_from=@d"; q.Parameters.AddWithValue("@b", bhId); q.Parameters.AddWithValue("@s", seam); q.Parameters.AddWithValue("@d", df); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
-            var cols = new[] { "depth_to", "sample_thickness", "z_sample", "apparent_density", "ad_raw", "ad_clean", "std_raw", "std_clean", "qgr_d", "qnet_ad", "vdaf_raw", "vdaf_clean", "caking_g", "plastic_y_mm", "clean_coal_yield" };
+            // 数值列: 工业分析 M/A/V/FC(原煤 raw + 浮煤 clean 全齐) + 密度(视/真) + 全硫 + 发热量 + 胶质层 X/Y + 粘结 G + 焦渣 + 浮煤回收率
+            var cols = new[] { "depth_to", "sample_thickness", "z_sample", "apparent_density", "true_density",
+                "mad_raw", "ad_raw", "vdaf_raw", "fcd_raw", "mad_clean", "ad_clean", "vdaf_clean", "fcd_clean",
+                "std_raw", "std_clean", "qgr_d", "qnet_ad", "plastic_x_mm", "plastic_y_mm", "caking_g",
+                "char_residue_raw", "char_residue_clean", "clean_coal_yield" };
+            var txtCols = new[] { "coal_type", "plastometric_curve" };   // 文本列
+            var allCols = new string[cols.Length + txtCols.Length];
+            System.Array.Copy(cols, allCols, cols.Length);
+            System.Array.Copy(txtCols, 0, allCols, cols.Length, txtCols.Length);
             using var cmd = conn.CreateCommand();
             if (exists)
             {
                 if (!overwrite) { skip++; continue; }
-                var set = new System.Text.StringBuilder();
-                foreach (var col in cols) set.Append($"{col}=@{col},");
-                set.Append("coal_type=@coal_type");
+                var set = string.Join(", ", System.Array.ConvertAll(allCols, c => $"{c}=@{c}"));
                 cmd.CommandText = $"UPDATE coal_sample SET {set} WHERE borehole_id=@b AND seam_code=@s AND depth_from=@d";
                 upd++;
             }
             else
             {
-                var names = "borehole_id, seam_code, depth_from, " + string.Join(", ", cols) + ", coal_type";
-                var vals = "@b, @s, @d, " + string.Join(", ", System.Array.ConvertAll(cols, c => "@" + c)) + ", @coal_type";
+                var names = "borehole_id, seam_code, depth_from, " + string.Join(", ", allCols);
+                var vals = "@b, @s, @d, " + string.Join(", ", System.Array.ConvertAll(allCols, c => "@" + c));
                 cmd.CommandText = $"INSERT INTO coal_sample ({names}) VALUES ({vals})";
                 ins++;
             }
             cmd.Parameters.AddWithValue("@b", bhId); cmd.Parameters.AddWithValue("@s", seam); cmd.Parameters.AddWithValue("@d", df);
             foreach (var col in cols) cmd.Parameters.AddWithValue("@" + col, Num(col));
-            cmd.Parameters.AddWithValue("@coal_type", Txt("coal_type"));
+            foreach (var col in txtCols) cmd.Parameters.AddWithValue("@" + col, Txt(col));
             try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
         }
         return new ImportOutcome(ins, upd, skip, err);
@@ -1066,18 +1074,21 @@ public static class GeoDataQueries
         return rows;
     }
 
-    public sealed record SeamQualityRow(string SeamCode, int Samples, double AvgAshPct, double AvgVolatilePct, double AvgCalorificMJ);
+    public sealed record SeamQualityRow(string SeamCode, int Samples, double AvgAshPct, double AvgVolatilePct, double AvgCalorificMJ,
+        double AvgMoisturePct = 0, double AvgFixedCarbonPct = 0);   // Mad 水分 + FCd 固定碳 —— 补全工业分析 M/A/V/FC
 
     /// <summary>分煤层煤质：各煤层 煤样数 / 平均 灰分Ad / 挥发分Vdaf / 发热量Qnet（coal_sample 按 seam_code 分组）。</summary>
     public static List<SeamQualityRow> GetCoalQualityBySeam(SqliteConnection conn)
     {
         var rows = new List<SeamQualityRow>();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = @"SELECT seam_code, COUNT(*), COALESCE(AVG(ad_raw),0), COALESCE(AVG(vdaf_raw),0), COALESCE(AVG(qnet_ad),0)
+        cmd.CommandText = @"SELECT seam_code, COUNT(*), COALESCE(AVG(ad_raw),0), COALESCE(AVG(vdaf_raw),0), COALESCE(AVG(qnet_ad),0),
+                                   COALESCE(AVG(mad_raw),0), COALESCE(AVG(fcd_raw),0)
                             FROM coal_sample WHERE seam_code IS NOT NULL AND ad_raw IS NOT NULL
                             GROUP BY seam_code ORDER BY seam_code";
         using var rd = cmd.ExecuteReader();
-        while (rd.Read()) rows.Add(new SeamQualityRow(rd.GetString(0), rd.GetInt32(1), rd.GetDouble(2), rd.GetDouble(3), rd.GetDouble(4)));
+        while (rd.Read()) rows.Add(new SeamQualityRow(rd.GetString(0), rd.GetInt32(1), rd.GetDouble(2), rd.GetDouble(3), rd.GetDouble(4),
+            rd.GetDouble(5), rd.GetDouble(6)));   // 水分 Mad + 固定碳 FCd
         return rows;
     }
 

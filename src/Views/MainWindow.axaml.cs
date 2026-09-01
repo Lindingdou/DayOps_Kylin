@@ -7488,7 +7488,13 @@ public partial class MainWindow : Window
         var rows = Data.GeoDataQueries.GetCoalQualityBySeam(db.Connection);
         if (rows.Count == 0) { StatusMsg.Text = "分煤层煤质：无煤样"; return; }
         var parts = new List<string>();
-        foreach (var r in rows) parts.Add($"{r.SeamCode}({r.Samples}样·灰{r.AvgAshPct:0.#}/挥{r.AvgVolatilePct:0.#}/热{r.AvgCalorificMJ:0.#})");
+        // 工业分析 M/A/V/FC 全列(水分/灰分/挥发/固定碳) + 发热量; 水分/固碳无数据时省略
+        foreach (var r in rows)
+        {
+            string mv = r.AvgMoisturePct > 0 ? $"水{r.AvgMoisturePct:0.#}/" : "";
+            string fc = r.AvgFixedCarbonPct > 0 ? $"/固碳{r.AvgFixedCarbonPct:0.#}" : "";
+            parts.Add($"{r.SeamCode}({r.Samples}样·{mv}灰{r.AvgAshPct:0.#}/挥{r.AvgVolatilePct:0.#}{fc}/热{r.AvgCalorificMJ:0.#})");
+        }
         StatusMsg.Text = $"分煤层煤质（{rows.Count} 层）：" + string.Join(" · ", parts);
     }
 

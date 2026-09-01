@@ -474,6 +474,39 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Coal_sample_import_loads_moisture_and_fixed_carbon()
+    {
+        // 补全工业分析: 导入应载 mad_raw(水分)+fcd_raw(固定碳)(此前 import 漏解析→恒 NULL), 分煤层汇总应呈现
+        using var db = GeoDatabase.OpenSeeded();
+        string hole, seam;
+        using (var q = db.Connection.CreateCommand()) { q.CommandText = "SELECT hole_id FROM borehole LIMIT 1"; hole = (string)q.ExecuteScalar(); }
+        using (var q = db.Connection.CreateCommand()) { q.CommandText = "SELECT code FROM coal_seam_def LIMIT 1"; seam = (string)q.ExecuteScalar(); }
+        var o = GeoDataQueries.ImportCoalSamples(db.Connection, new[]
+        {
+            (IReadOnlyDictionary<string,string>)new Dictionary<string,string>
+            { ["hole_id"]=hole, ["seam_code"]=seam, ["depth_from"]="999", ["ad_raw"]="15", ["vdaf_raw"]="30",
+              ["mad_raw"]="8", ["fcd_raw"]="47", ["true_density"]="1.45", ["qnet_ad"]="25" }
+        }, true);
+        Assert.True(o.Inserted == 1, $"煤样导入 ins={o.Inserted} err={o.Errors}");
+        // 直接查回确认 mad_raw/fcd_raw/true_density 已入库(修前这些列不在 INSERT→恒 NULL)
+        using (var q = db.Connection.CreateCommand())
+        {
+            q.CommandText = "SELECT mad_raw, fcd_raw, true_density FROM coal_sample WHERE seam_code=@s AND depth_from=999";
+            q.Parameters.AddWithValue("@s", seam);
+            using var rd = q.ExecuteReader();
+            Assert.True(rd.Read());
+            Assert.Equal(8, rd.GetDouble(0), 6);
+            Assert.Equal(47, rd.GetDouble(1), 6);
+            Assert.Equal(1.45, rd.GetDouble(2), 6);
+        }
+        // 分煤层汇总呈现水分+固定碳
+        var row = GeoDataQueries.GetCoalQualityBySeam(db.Connection).Find(r => r.SeamCode == seam);
+        Assert.NotNull(row);
+        Assert.True(row!.AvgMoisturePct > 0, "汇总含水分 Mad");
+        Assert.True(row.AvgFixedCarbonPct > 0, "汇总含固定碳 FCd");
+    }
+
+    [Fact]
     public void Kpi_trend_by_year_ratios_normalized()
     {
         using var db = GeoDatabase.OpenSeeded();
