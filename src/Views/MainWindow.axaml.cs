@@ -809,6 +809,7 @@ public partial class MainWindow : Window
             if (cmd == "筛选块体" || cmd == "块体筛选") { FilterBlocksCmd(); return; }
             if (cmd.StartsWith("表达式筛选块 ") || cmd.StartsWith("表达式筛选 ") || cmd.StartsWith("块体表达式 ") || cmd.StartsWith("按表达式筛选 ")) { BlockExpressionFilterCmd(cmd); return; }
             if (cmd.StartsWith("属性赋值 ") || cmd.StartsWith("公式赋值 ") || cmd.StartsWith("块体属性计算 ") || cmd.StartsWith("属性计算 ")) { BlockAttrAssignCmd(cmd); return; }
+            if (cmd.StartsWith("块体煤岩分类 ") || cmd.StartsWith("煤岩分类 ") || cmd.StartsWith("块体煤岩判别 ")) { BlockCoalRockCmd(cmd); return; }
             if (cmd == "面约束块体" || cmd == "曲面约束块体" || cmd == "网格约束块体" || cmd.StartsWith("面约束块体 ")) { await MeshConstrainBlocksAsync(cmd); return; }
             if (cmd == "离散化模型" || cmd == "离散化" || cmd == "体素化" || cmd == "模型体素化" || cmd.StartsWith("离散化模型 ") || cmd.StartsWith("离散化 ")) { await DiscretizeModelAsync(cmd); return; }
             if (cmd == "约束块体" || cmd == "块体约束") { ConstrainBlocksCmd(); return;}
@@ -5240,6 +5241,35 @@ public partial class MainWindow : Window
         double mn = double.MaxValue, mx = double.MinValue, sum = 0; foreach (var v in vals) { if (v < mn) mn = v; if (v > mx) mx = v; sum += v; }
         StatusMsg.Text = $"属性赋值：{name} = {expr} · {vals.Length} 块 · 值域[{mn:0.###},{mx:0.###}] 均{sum / vals.Length:0.###}"
             + (bad > 0 ? $" · {bad} 块无效(NaN/∞)→0" : "") + $" · 用「切换属性 {name}」显示";
+    }
+
+    // 块体煤岩分类(忠实原 CoalRockClassifier): 按类别码集判块体属煤/属岩/忽略(类别型模型: 品位值作岩性码)。
+    // 用法 块体煤岩分类 煤 <码...> [岩 <码...>] [容差 <t>]。与"品位≥限值=煤"互补(此对离散码)。
+    private void BlockCoalRockCmd(string cmd)
+    {
+        if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "块体煤岩分类：请先导入/生成块体"; return; }
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        var coal = new List<double>(); var rock = new List<double>(); double tol = 0.5; int mode = 0;
+        for (int i = 1; i < tk.Length; i++)
+        {
+            if (tk[i] == "煤" || tk[i] == "煤码") { mode = 1; continue; }
+            if (tk[i] == "岩" || tk[i] == "岩码") { mode = 2; continue; }
+            if (tk[i] == "容差" || tk[i] == "tol") { mode = 3; continue; }
+            if (double.TryParse(tk[i], out var v)) { if (mode == 1) coal.Add(v); else if (mode == 2) rock.Add(v); else if (mode == 3) tol = v; }
+        }
+        if (coal.Count == 0) { StatusMsg.Text = "块体煤岩分类：用法 块体煤岩分类 煤 <码...> [岩 <码...>] [容差 <t>]（按块体品位值作岩性类别码）"; return; }
+        var clf = new Cad.CoalRockClassifier { CoalCodes = coal.ToArray(), RockCodes = rock.ToArray(), Tol = tol };
+        int nc = 0, nr = 0, ni = 0; double coalVol = 0, rockVol = 0;
+        foreach (var b in _lastBlocks)
+        {
+            double vol = b.Size * b.Size * b.Size;
+            if (clf.IsCoal(b.Grade)) { nc++; coalVol += vol; }
+            else if (clf.IsRock(b.Grade)) { nr++; rockVol += vol; }
+            else ni++;
+        }
+        double sr = coalVol > 1e-9 ? rockVol / coalVol : 0;
+        StatusMsg.Text = $"块体煤岩分类(煤码[{string.Join(",", coal)}]{(rock.Count > 0 ? $"·岩码[{string.Join(",", rock)}]" : "·非煤即岩")}·容差{tol})："
+            + $"煤 {nc} 块({coalVol / 1e4:0.#}万m³)·岩 {nr} 块({rockVol / 1e4:0.#}万m³)·忽略 {ni} / 共 {_lastBlocks.Count} · 剥采比 {sr:0.##}";
     }
 
     // 筛选块体：只显示品位 ≥ 平均品位 的块(矿块)

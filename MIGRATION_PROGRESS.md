@@ -2992,3 +2992,15 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知图)**: [EdgeBetweennessTests](tests/PitMine3D.Kylin.Tests/EdgeBetweennessTests.cs) +2—— 链 0-1-2-3(边3/4/5)总里程12·端点源汇2对·均/最12; 两分量总里程5·可达4对(跨分量∞不计)·均2.5/最3。**build 0 错·单测 1354→1356**。
 
 **本会话第 71 功能**。教训: **第十角度=原版测试方法级复审**——文件级映射(§249 19/19)后, 逐测试文件看具体测的方法, 验 Kylin 覆盖每行为。RoadLib 8 测复审挖出统一运输指标(散在多命令未成一体)。方法级比文件级细一层。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二六五 块体煤岩判别器（类别码集）—— 第十一角度：分析类后缀枚举
+
+**第十一角度: 域类枚举扩到分析/分类后缀**(角度4 只 `*Engine/*Solver/*Builder/*Optimizer`)。枚举原版 `*Analyzer/*Classifier/*Detector/*Identifier/*Resolver/*Calculator/*Sampler`, 逐一对 Kylin: 多数覆盖(DepositAutoDetector→矿床识别·MineableAreaIdentifier→确定可采区域·BenchWidthIdentifier→采场参数识别·BenchAnalyzer/AdvancePlanner/RoadLayoutPlanner/ProgramEvaluator/StripRatioFieldSampler 皆有), 但 **`CoalRockClassifier`(BlockModelLib/Domain)Kylin 缺**——Kylin 判煤/岩用"品位≥限值"(连续品位), 原版另有**类别码集判别**(属性为岩性码而非品位, 多层煤/多层岩码 + 容差, 既非煤又非岩=忽略), 供**类别型块体模型**。
+
+**补** [CoalRockClassifier](src/Cad/CoalRockClassifier.cs)(忠实原): `IsCoal(v)`=v 容差内命中煤码; `IsRock(v)`=非煤 & (岩集空→非煤即岩 | 岩集非空→须命中岩码)。命令 `块体煤岩分类 煤 <码...> [岩 <码...>] [容差 <t>]`([MainWindow](src/Views/MainWindow.axaml.cs) `BlockCoalRockCmd`): 按块体品位作岩性码分煤/岩/忽略, 报各类块数+体积+剥采比。与"品位≥限值=煤"(连续)互补(此对离散码)。
+
+**验证(已知值)**: [CoalRockClassifierTests](tests/PitMine3D.Kylin.Tests/CoalRockClassifierTests.cs) +4—— 煤码{1,3,5}容差0.5: 命中/边界5.5/2 非煤; 岩集空→非煤即岩; 岩集{2}→值5 既非煤又非岩=忽略(双 false); 容差2 加宽。**build 0 错·单测 1356→1360**。
+
+**本会话第 72 功能**。教训: **第十一角度=域类枚举扩后缀**(角度4 的 Engine/Solver/Builder 之外, 加 Analyzer/Classifier/Detector/Identifier/Resolver/Sampler/Evaluator)——挖出 present-but-partial 判别器(Kylin 品位阈值 vs 原类别码集)。**判据: 域类枚举勿限一组后缀; 分类/判别类常有 Kylin 简化版缺的模式(连续 vs 离散)**。见 [[unlock-blocked-insights]]。
