@@ -5729,10 +5729,26 @@ public partial class MainWindow : Window
         else r = Cad.DriveSequence.SweepByDistance(cells, dirX, dirY, adv, density, 0, faceAngle);
         if (r.Periods.Count == 0) { StatusMsg.Text = "开采程序切分：分期失败(检查块体/步距或目标煤量>0)"; return; }
         var name = await SaveCsvAsync("导出分期量表", "drive_periods.csv", Cad.DriveSequence.ToBalanceCsv(r, density));
+        // 累计剥采比曲线上屏(已算未绘)：期号(X) vs 累计剥采比(Y)
+        if (r.Periods.Count >= 2)
+        {
+            double dvw = ViewportHost.Bounds.Width, dvh = ViewportHost.Bounds.Height;
+            var dp0 = Viewport.ScreenToWorld(dvw * 0.3, dvh * 0.85) ?? (0.0, 0.0);
+            var dp1 = Viewport.ScreenToWorld(dvw * 0.7, dvh * 0.4) ?? (100.0, 50.0);
+            double dw = System.Math.Abs(dp1.x - dp0.x), dh = System.Math.Abs(dp1.y - dp0.y);
+            if (dw < 1e-6) dw = 100; if (dh < 1e-6) dh = 50;
+            var dpts = r.Periods.Select(p => ((double)(p.Index + 1), p.CumStripRatio)).ToList();
+            BeginChange();
+            foreach (var de in Cad.CurvePlot.Build(dpts, System.Math.Min(dp0.x, dp1.x), System.Math.Min(dp0.y, dp1.y),
+                         dw, dh, System.Math.Max(dh * 0.05, 1e-3), "期", "累计剥采比"))
+            { de.LayerName = _layers.Current.Name; _scene.Add(de); }
+            RefreshScene();
+        }
         var head = string.Join(" ", r.Periods.Take(4).Select(p => $"期{p.Index + 1}(煤{p.CoalVolM3 / 1e4:0.#}/岩{p.RockVolM3 / 1e4:0.#}万m³·累计剥采比{p.CumStripRatio:0.##})"));
         string sbHint = faceAngle > 0 ? $"·坡面角{faceAngle:0.#}°退距" : "";
         string modeHint = (volMode ? $"{dirHint}·等煤量·目标{tgtWan:0.#}万m³/期" : $"{dirHint}·等距·步距{adv:0.#}m") + sbHint;
         StatusMsg.Text = $"开采程序切分({modeHint})：{r.Periods.Count} 期 · 总煤 {r.TotalCoalVolM3 / 1e4:0.#}万m³ · 总岩 {r.TotalRockVolM3 / 1e4:0.#}万m³ · 综合剥采比 {r.OverallStripRatio:0.##} · {head}"
+            + (r.Periods.Count >= 2 ? " · 累计剥采比曲线入场景" : "")
             + (name != null ? $" · 分期量表 → {name}(喂 剥采比均衡)" : "");
     }
 
