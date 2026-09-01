@@ -65,4 +65,26 @@ public class MeshDiagnoseTests
         Assert.Equal(1, d.DegenerateTriangles);
         Assert.Equal(1, d.TriangleCount);
     }
+
+    [Fact]
+    public void Isolated_vertex_detected()
+    {
+        // 第 4 点(0,0,5)不被任何三角引用 → 孤立点 1
+        var v = new List<(double, double, double)> { (0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 5) };
+        var t = new List<(int, int, int)> { (0, 1, 2) };
+        var d = MeshDiagnose.Analyze(v, t);
+        Assert.Equal(1, d.IsolatedVertices);
+        Assert.Equal(0, d.DuplicateVertices);
+    }
+
+    [Fact]
+    public void Duplicate_vertex_detected()
+    {
+        // 第 4 点与第 1 点坐标重合 → 重复点 1
+        var v = new List<(double, double, double)> { (0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 0) };
+        var t = new List<(int, int, int)> { (0, 1, 2), (3, 1, 2) };   // 两三角都被引用(无孤立)
+        var d = MeshDiagnose.Analyze(v, t);
+        Assert.Equal(1, d.DuplicateVertices);
+        Assert.Equal(0, d.IsolatedVertices);
+    }
 }

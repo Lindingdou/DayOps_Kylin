@@ -6,7 +6,8 @@ namespace PitMine3D.Kylin.Cad;
 /// <summary>网格诊断结果。</summary>
 public readonly record struct MeshDiagnoseResult(
     int TriangleCount, int EdgeCount, int BoundaryEdges, int NonManifoldEdges,
-    int DegenerateTriangles, int BoundaryLoops, bool IsClosed);
+    int DegenerateTriangles, int BoundaryLoops, bool IsClosed,
+    int IsolatedVertices = 0, int DuplicateVertices = 0);   // 孤立点(无三角引用) + 重复点(坐标重合), 忠实原 DIAGNOSE 4/5 项
 
 /// <summary>
 /// 网格拓扑诊断（对应 MeshEditLib DiagnoseReport）——按无向边的三角关联数判边界边(1)/非流形边(≥3)，
@@ -56,7 +57,28 @@ public static class MeshDiagnose
             loops = roots.Count;
         }
 
+        // 孤立点(无任何三角引用) + 重复点(坐标按 tol 量化重合), 忠实原 DIAGNOSE 孤立点/重复点检查
+        int isolated = 0, duplicate = 0;
+        if (verts != null && verts.Count > 0)
+        {
+            var referenced = new bool[verts.Count];
+            foreach (var (a, b, c) in tris)
+            {
+                if (a >= 0 && a < verts.Count) referenced[a] = true;
+                if (b >= 0 && b < verts.Count) referenced[b] = true;
+                if (c >= 0 && c < verts.Count) referenced[c] = true;
+            }
+            foreach (var f in referenced) if (!f) isolated++;
+            const double tol = 1e-6;
+            var seen = new HashSet<(long, long, long)>();
+            foreach (var v in verts)
+            {
+                var key = ((long)Math.Round(v.x / tol), (long)Math.Round(v.y / tol), (long)Math.Round(v.z / tol));
+                if (!seen.Add(key)) duplicate++;
+            }
+        }
+
         bool closed = boundary == 0 && nonMani == 0 && nt > 0;
-        return new MeshDiagnoseResult(nt, inc.Count, boundary, nonMani, degen, loops, closed);
+        return new MeshDiagnoseResult(nt, inc.Count, boundary, nonMani, degen, loops, closed, isolated, duplicate);
     }
 }
