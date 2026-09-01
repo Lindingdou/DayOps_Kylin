@@ -3161,3 +3161,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值, 忠实原 RoadCenterlineExtractorTests)**: [RoadCenterlineExtractorTests](tests/PitMine3D.Kylin.Tests/RoadCenterlineExtractorTests.cs) +8 —— 同高程对(距30∈[15,60])→1 条居中中线 Y≈15/Z≈100/长≈200; 立面对(Δz20>3)剔; 超距(80>60)剔; 过近(10<15)剔; 单闭合环→不自配对(0); 中段收窄(8<15)→断 2 段; 碎段(端点相接)→拼 1 连续(≈200m); 两级平盘(异高程)→2 中线。**build 0 错·单测 1381→1389**。
 
 **本会话第 79 功能**。教训: **第十六角度=原测试套交叉核**——原版给某类写了测试=它是真功能(非桩); Kylin 缺同名测试须核被测类是否已异名移植, 否则为真缺口。又证"命令看似已接线(ExtractCenterline 存在)但实为退化版"——须核实现深度非仅存在性。见 [[unlock-blocked-insights]] [[verify-seed-enum-values-before-filter]]。
+
+---
+
+## §二七五补 ExtendTriggerSettings —— 交叉核第二候选：交互式设置（记录，不实现）
+
+第十六角度(测试交叉核)第二个"Kylin 无源"候选 `ExtendTriggerSettings`(RoadLib/Evolution, 91 行)。核实为**交互式设置容器**: `SettingsKey="road.extend.trigger"`(持久化)+ Mode(AdvanceStep/TimeStep 触发时机)+ AdvanceStepM/TimeStepPeriods/AutoReclaimTemporary/UseAdvanceDir 等**自动延拓触发参数** + `ToEvolutionOptions()` 把匹配子集映射到 `RoadEvolutionOptions`。
+
+**判定=记录不实现**: (1)Kylin **已有** `RoadEvolutionOptions`(src/Cad/RoadEvolutionModel.cs, 忠实移植)且 `演化对比`(EvolutionCompareAsync)以其默认值运行——演化对比核心功能已在; (2)ExtendTriggerSettings 的增量=`延拓触发设置`**交互设置对话框**(§274 死按钮之一)的后端 + 自动延拓触发工作流(基于推进步/时段自动触发路网延拓); (3)`ToEvolutionOptions()` 映射为平凡字段拷贝, 无对话框则等同 Kylin 现用默认值(功能无增量)。属**交互式配置**(标准指令: 交互/配置→记录, 可验证功能→实现)。测试仅验其字段映射(纯函数), 无对话框/自动触发工作流则无用户可见功能增量。
+
+**教训**: 测试交叉核的"无源"候选须再分 (a)真算法缺口(RoadCenterlineExtractor→实现 §275) vs (b)交互配置后端(ExtendTriggerSettings→记录)。**有测试≠须实现**——须辨被测者是"域算法"还是"交互配置的平凡映射"。见 [[unlock-blocked-insights]] [[shell-completeness-priority]]。
