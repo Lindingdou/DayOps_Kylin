@@ -337,6 +337,27 @@ public static class GeoDataQueries
         return new BlastStats(events, totVol, totExp, overallUnit, totLen, locs, byMonth);
     }
 
+    public sealed record CumHoursRow(string EquipmentId, string Model, string Category, double CumulativeHours);
+    public sealed record CumHoursStats(int Equipment, double FleetTotalHours, IReadOnlyList<CumHoursRow> Top);
+
+    /// <summary>设备累计运行工时(忠实原 EquipmentService.CalculateCumulativeHours): 台账基准 cumulative_hours + 生产记录 work_hours 累加, 按总时降序(检修优先)。</summary>
+    public static CumHoursStats GetCumulativeHours(SqliteConnection conn, int topN = 8)
+    {
+        var all = new List<CumHoursRow>();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = @"SELECT e.equipment_id, COALESCE(e.model,''), COALESCE(e.category,''),
+                                COALESCE(e.cumulative_hours,0) + COALESCE((SELECT SUM(p.work_hours) FROM production_record p WHERE p.equipment_id = e.equipment_id),0) AS total
+                                FROM equipment e ORDER BY total DESC, e.equipment_id";
+            using var rd = cmd.ExecuteReader();
+            while (rd.Read()) all.Add(new CumHoursRow(rd.GetString(0), rd.GetString(1), rd.GetString(2), rd.GetDouble(3)));
+        }
+        double fleet = 0; foreach (var r in all) fleet += r.CumulativeHours;
+        var top = new List<CumHoursRow>();
+        for (int i = 0; i < all.Count && i < System.Math.Max(1, topN); i++) top.Add(all[i]);
+        return new CumHoursStats(all.Count, fleet, top);
+    }
+
     public sealed record SeamRow(string SeamCode, string Name, int SampleCount);
 
     /// <summary>煤层管理：各煤层定义 + 煤样计数。</summary>

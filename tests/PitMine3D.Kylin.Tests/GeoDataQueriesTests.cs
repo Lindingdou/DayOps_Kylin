@@ -9,6 +9,29 @@ namespace PitMine3D.Kylin.Tests;
 public class GeoDataQueriesTests
 {
     [Fact]
+    public void Cumulative_hours_base_plus_production_sum()
+    {
+        // 忠实原 CalculateCumulativeHours: 台账 cumulative_hours + Σ生产 work_hours。内存已知值验。
+        using var conn = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=:memory:");
+        conn.Open();
+        using (var c = conn.CreateCommand())
+        {
+            c.CommandText = @"CREATE TABLE equipment(equipment_id TEXT, model TEXT, category TEXT, cumulative_hours REAL);
+                              CREATE TABLE production_record(equipment_id TEXT, work_hours REAL);
+                              INSERT INTO equipment VALUES ('E1','M1','shovel',1000),('E2','M2','truck',0),('E3','M3','drill',NULL);
+                              INSERT INTO production_record VALUES ('E1',200),('E1',300),('E2',50);";
+            c.ExecuteNonQuery();
+        }
+        var s = GeoDataQueries.GetCumulativeHours(conn);
+        Assert.Equal(3, s.Equipment);
+        Assert.Equal("E1", s.Top[0].EquipmentId);                    // 降序: E1 最高
+        Assert.Equal(1500, s.Top[0].CumulativeHours, 4);             // 1000 + (200+300)
+        Assert.Equal(50, s.Top.First(r => r.EquipmentId == "E2").CumulativeHours, 4);   // 0 + 50
+        Assert.Equal(0, s.Top.First(r => r.EquipmentId == "E3").CumulativeHours, 4);    // NULL→0 + 无生产
+        Assert.Equal(1550, s.FleetTotalHours, 4);                    // 1500+50+0
+    }
+
+    [Fact]
     public void Blast_stats_aggregates_known_values()
     {
         // blast_event 非迁移种子(运行时导入), 故用内存表已知值验聚合 SQL(综合单耗=总炸药/总方量 · 逐月分组)。
