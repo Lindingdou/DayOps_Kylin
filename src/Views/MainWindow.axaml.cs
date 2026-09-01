@@ -5699,9 +5699,12 @@ public partial class MainWindow : Window
     private async Task DriveSequenceCmd(string cmd)
     {
         if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "开采程序切分：请先导入/生成块体"; return; }
-        double adv = 50;
         var tk = cmd.Split(new[] { ' ', ',', '，' }, System.StringSplitOptions.RemoveEmptyEntries);
-        if (tk.Length >= 2 && double.TryParse(tk[1], out var a) && a > 0) adv = a;
+        // 模式: "开采程序切分 量 <目标煤量万m³>" = 等煤量分期; 否则 "开采程序切分 [步距m]" = 等距。
+        bool volMode = tk.Length >= 3 && (tk[1] == "量" || tk[1] == "等煤量" || tk[1] == "煤量");
+        double adv = 50, tgtWan = 0;
+        if (volMode) { double.TryParse(tk[2], out tgtWan); if (tgtWan <= 0) { StatusMsg.Text = "开采程序切分：等煤量模式需 开采程序切分 量 <目标煤量万m³>"; return; } }
+        else if (tk.Length >= 2 && double.TryParse(tk[1], out var a) && a > 0) adv = a;
         // 推进方位: 选中工作线首末方向的法向; 无选中默认 +X。
         double dirX = 1, dirY = 0; string dirHint = "默认+X向";
         var line = _selected.OfType<PolylineEntity>().FirstOrDefault(p => p.Points.Count >= 2);
@@ -5709,11 +5712,13 @@ public partial class MainWindow : Window
         double gsum = 0; foreach (var b in _lastBlocks) gsum += b.Grade; double cutoff = gsum / _lastBlocks.Count;
         var cells = _lastBlocks.Select(b => new Cad.DriveSequence.Cell(b.X, b.Y, b.Size * b.Size * b.Size, b.Grade >= cutoff)).ToList();
         const double density = 1.3;
-        var r = Cad.DriveSequence.SweepByDistance(cells, dirX, dirY, adv, density);
-        if (r.Periods.Count == 0) { StatusMsg.Text = "开采程序切分：分期失败(检查块体/步距>0)"; return; }
+        var r = volMode ? Cad.DriveSequence.SweepByVolume(cells, dirX, dirY, 10.0, tgtWan * 1e4, density)
+                        : Cad.DriveSequence.SweepByDistance(cells, dirX, dirY, adv, density);
+        if (r.Periods.Count == 0) { StatusMsg.Text = "开采程序切分：分期失败(检查块体/步距或目标煤量>0)"; return; }
         var name = await SaveCsvAsync("导出分期量表", "drive_periods.csv", Cad.DriveSequence.ToBalanceCsv(r, density));
         var head = string.Join(" ", r.Periods.Take(4).Select(p => $"期{p.Index + 1}(煤{p.CoalVolM3 / 1e4:0.#}/岩{p.RockVolM3 / 1e4:0.#}万m³·累计剥采比{p.CumStripRatio:0.##})"));
-        StatusMsg.Text = $"开采程序切分({dirHint}·步距{adv:0.#}m)：{r.Periods.Count} 期 · 总煤 {r.TotalCoalVolM3 / 1e4:0.#}万m³ · 总岩 {r.TotalRockVolM3 / 1e4:0.#}万m³ · 综合剥采比 {r.OverallStripRatio:0.##} · {head}"
+        string modeHint = volMode ? $"{dirHint}·等煤量·目标{tgtWan:0.#}万m³/期" : $"{dirHint}·等距·步距{adv:0.#}m";
+        StatusMsg.Text = $"开采程序切分({modeHint})：{r.Periods.Count} 期 · 总煤 {r.TotalCoalVolM3 / 1e4:0.#}万m³ · 总岩 {r.TotalRockVolM3 / 1e4:0.#}万m³ · 综合剥采比 {r.OverallStripRatio:0.##} · {head}"
             + (name != null ? $" · 分期量表 → {name}(喂 剥采比均衡)" : "");
     }
 

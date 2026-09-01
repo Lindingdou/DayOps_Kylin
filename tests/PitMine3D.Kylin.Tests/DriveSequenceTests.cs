@@ -58,6 +58,26 @@ public class DriveSequenceTests
     }
 
     [Fact]
+    public void Volume_driven_cuts_periods_at_coal_target()
+    {
+        // 4 刀(X=5/15/25/35), 每刀 1 煤 + 1 岩(各 vol 1000)。sliceWidth=10。
+        var cells = new List<Cell>();
+        foreach (double cx in new[] { 5.0, 15.0, 25.0, 35.0 }) { cells.Add(new Cell(cx, 0, 1000, true)); cells.Add(new Cell(cx, 0, 1000, false)); }
+        // 目标煤量 2000 → 每期 2 刀(煤 2000) → 2 期。
+        var r = DriveSequence.SweepByVolume(cells, 1, 0, sliceWidth: 10, targetCoalVolM3: 2000, coalDensity: 1.3);
+        Assert.Equal(2, r.Periods.Count);
+        Assert.All(r.Periods, p => { Assert.Equal(2000, p.CoalVolM3, 4); Assert.Equal(2000, p.RockVolM3, 4); });
+        Assert.Equal(4000, r.TotalCoalVolM3, 4);
+        // 目标 1000 → 每刀一期 → 4 期各煤 1000。
+        var r2 = DriveSequence.SweepByVolume(cells, 1, 0, 10, 1000, 1.3);
+        Assert.Equal(4, r2.Periods.Count);
+        Assert.All(r2.Periods, p => Assert.Equal(1000, p.CoalVolM3, 4));
+        // 守卫: 零目标/零 sliceWidth/空 → 空。
+        Assert.Empty(DriveSequence.SweepByVolume(cells, 1, 0, 10, 0, 1.3).Periods);
+        Assert.Empty(DriveSequence.SweepByVolume(cells, 1, 0, 0, 2000, 1.3).Periods);
+    }
+
+    [Fact]
     public void Balance_csv_feeds_stripping_balance()
     {
         var r = DriveSequence.SweepByDistance(ThreeColumns(), 1, 0, 10, 1.3);

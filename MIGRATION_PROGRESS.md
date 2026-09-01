@@ -2696,6 +2696,8 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 
 **验证(自造已知值)**: [DriveSequenceTests](tests/PitMine3D.Kylin.Tests/DriveSequenceTests.cs) +3—— 3 列(每列 2 煤 8 岩)→3 期各煤2000/岩8000·总煤6000/岩24000·综合剥采比24000/(6000·1.3)·累计均质恒定; 方向(+Y 全落一期)/maxPeriods/空守卫; CSV 首期 1,0.26,0.8 喂均衡。**build 0 错·单测 1288→1291**。
 
+**续(第 50 功能): 等煤量分期(TemplateDrivingEngine volumeDriven 模式家族补齐)**。§二四三 补了距离驱动(等距分期), 原引擎另有**量驱动**(累计煤量达目标切期=等煤量分期, 恒定产量规划)。补 [DriveSequence](src/Cad/DriveSequence.cs) `SweepByVolume`(细分刀 sliceWidth → 顺推累计煤量, 达 targetCoalVolM3 切期, 刀粒度)。命令扩 `开采程序切分 量 <目标煤量万m³>`(等煤量)vs `开采程序切分 [步距]`(等距)。[DriveSequenceTests](tests/PitMine3D.Kylin.Tests/DriveSequenceTests.cs) +1: 4 刀(各煤1000)目标2000→2期各煤2000·目标1000→4期·零守卫。**单测 1294→1295**。教训: **移了引擎一个模式, 查它的模式家族(距离/量驱动成对, 同变差三型/坡道三式)**。
+
 **本会话第 48 功能**。教训: **报收敛(哪怕多探针 covered)后, 重跑"原版单测枚举"——覆盖变大后仍可能剩真切片**(TemplateDrivingEngine 藏在 Driving 引擎里, 主题/命令探针都漏, 但原版有单测=作者认定自足可验)。**大引擎取可验证核**(距离驱动直线, 自造 known-value)而非硬吞全 529 行(多段/退距/几何输出记录)。此切片闭合了既有两命令(平行推进 geo + 剥采比均衡 consume)间的缺环。见 [[unlock-blocked-insights]] [[faithfulness-only-original-commands]]。
 
 ## 二四四、运输道路布局求解(接原 RoadLayoutSolver 方案构建核)—— 原版单测枚举收官(第 49 功能)
