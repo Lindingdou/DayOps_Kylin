@@ -1101,6 +1101,7 @@ public partial class MainWindow : Window
             if (cmd == "定点回转" || cmd == "定点回转推进") { AdvanceCmd(AdvanceMode.FixedPivot, "定点回转"); return; }
             if (cmd == "动点回转" || cmd == "动点回转推进") { AdvanceCmd(AdvanceMode.MovingPivot, "动点回转"); return; }
             if (cmd == "螺旋斜坡道" || cmd == "螺旋坑线" || cmd == "螺旋中线") { SpiralRampCmd(); return; }
+            if (cmd == "直线斜坡道" || cmd == "直线坑线" || cmd == "直线中线" || cmd.StartsWith("直线斜坡道 ") || cmd.StartsWith("直线坑线 ")) { StraightRampCmd(cmd); return; }
             if (cmd == "折返斜坡道" || cmd == "折返坑线" || cmd == "折返中线") { SwitchbackRampCmd(); return; }
             if (cmd == "运距指标" || cmd == "循环时间" || cmd == "运距统计") { await HaulRecordMetricsAsync(); return; }
             if (cmd == "OD运距矩阵" || cmd == "OD矩阵" || cmd == "运距矩阵") { await OdMatrixAsync(); return; }
@@ -7450,6 +7451,24 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"折返斜坡道中线：3腿·腿长100·纵坡8%·回头R20 → {pts.Count} 点(橙, 已入场景; Z 待贴面重定)";
     }
 
+    // 直线斜坡道中线：从视图中心沿方位角匀降。"直线斜坡道 [纵坡% 长度 方位°]"(缺省 8%/200/0°)。
+    // 忠实原 StraightRampAutoRouter 的直线中线核(全套可行性路由=内核规模, 记录)。
+    private void StraightRampCmd(string cmd)
+    {
+        var (sx, sy) = ViewCenterWorld();
+        double az = 0, grade = 8, len = 200;
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        if (tk.Length >= 2) double.TryParse(tk[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out grade);
+        if (tk.Length >= 3) double.TryParse(tk[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out len);
+        if (tk.Length >= 4) double.TryParse(tk[3], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out az);
+        var pts = RampCenterlines.Straight(sx, sy, 0, az, grade, len);
+        if (pts.Count < 2) { StatusMsg.Text = "直线斜坡道：参数无效(纵坡/长度需>0)"; return; }
+        var pl = new PolylineEntity { Cr = 0.55f, Cg = 0.85f, Cb = 0.35f, LayerName = "直线斜坡道" };
+        foreach (var (x, y, _) in pts) pl.Points.Add((x, y));
+        BeginChange(); _scene.Add(pl); RefreshScene(); Viewport.ZoomExtents();
+        StatusMsg.Text = $"直线斜坡道中线：纵坡{grade:0.#}%·长{len:0.#}·方位{az:0.#}° → {pts.Count} 点(绿; 降 {(grade / 100 * len):0.#}m)";
+    }
+
     // 视图中心的世界坐标(生成体放置点)；取不到时退回原点
     private (double x, double y) ViewCenterWorld()
     {
@@ -9161,7 +9180,7 @@ public partial class MainWindow : Window
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割","移除障碍物",
         // 块体/运输/路网
-        "块体模型","资源量","面约束块体","离散化模型","道路横断面","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道",
+        "块体模型","资源量","面约束块体","离散化模型","道路横断面","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道","直线斜坡道",
         // 生产计划/投影
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)

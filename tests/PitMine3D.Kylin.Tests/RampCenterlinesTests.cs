@@ -60,4 +60,27 @@ public class RampCenterlinesTests
         Assert.Empty(RampCenterlines.Switchback(0, 0, 0, 0, +1, legs: 1, legLength: 100, gradePct: 8, curveGradePct: 4, radius: 20));
         Assert.Empty(RampCenterlines.Switchback(0, 0, 0, 0, +1, legs: 3, legLength: 0, gradePct: 8, curveGradePct: 4, radius: 20));
     }
+
+    [Fact]
+    public void Straight_declines_at_grade_along_azimuth()
+    {
+        // 起(0,0,100) 方位 0°(+X) 纵坡 10% 长 50, 步 10 → 6 点; 末 (50,0,95)(降 5m)。
+        var pts = RampCenterlines.Straight(0, 0, 100, azimuthDeg: 0, gradePct: 10, length: 50, stepM: 10);
+        Assert.Equal(6, pts.Count);
+        Assert.Equal((0.0, 0.0, 100.0), pts[0]);
+        var last = pts[^1];
+        Assert.Equal(50, last.X, 6); Assert.Equal(0, last.Y, 6); Assert.Equal(95, last.Z, 6);
+        // 中点 (20,0,98)
+        Assert.Equal(98, pts[2].Z, 6);
+        // 方位 90°(+Y): 末点在 Y 轴。
+        var ny = RampCenterlines.Straight(0, 0, 0, azimuthDeg: 90, gradePct: 8, length: 30, stepM: 30);
+        Assert.Equal(0, ny[^1].X, 6); Assert.Equal(30, ny[^1].Y, 6);
+    }
+
+    [Fact]
+    public void Straight_invalid_returns_empty()
+    {
+        Assert.Empty(RampCenterlines.Straight(0, 0, 0, 0, 8, length: 0));
+        Assert.Empty(RampCenterlines.Straight(0, 0, 0, 0, 8, length: 50, stepM: 0));
+    }
 }

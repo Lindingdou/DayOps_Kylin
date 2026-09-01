@@ -2499,3 +2499,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证**: [CoalQualityAnalyticsTests](tests/PitMine3D.Kylin.Tests/CoalQualityAnalyticsTests.cs) +1—— 6 正常+1 偏高(99)离群 → OutlierCoords 关联到 (42,43)·偏高; null 安全。**build 0 错·单测 1233→1234**。
 
 **本会话第 29 功能**。教训: **"算了没画"不止柱状/剖面, 还含"分析结果的空间定位"**——离群/超标/异常样点带坐标却只报文字, 上图定位(点/圆标记+FitBounds)是标准空间 QA, 2D 可画。分析命令复查问"结果有坐标吗?有则该上图"。见 [[unlock-blocked-insights]]。
+
+## 二二五、直线斜坡道中线 —— 补齐坑线中线家族(第 30 功能)
+
+**再分类续 + 家族补齐**: Kylin `RampCenterlines` 有 Spiral/Switchback, **缺 Straight**; 原 `StraightRampAutoRouter`(824 行)**0 引擎依赖**(纯), 我曾误记"引擎"。但 824 行是**全套可行性路由**(逐级可行性/缓坡段/回头平台判定, 需台阶线带 Z=内核规模)。**拆**: 直线**中线几何**(从起点沿方位角匀降)是清切片, 补; 全套路由器记录(大)。
+
+补 [src/Cad/RampCenterlines.cs](src/Cad/RampCenterlines.cs) `Straight`(起点+方位角+纵坡+长度→匀降折线, 与 Spiral/Switchback 同族)。命令 `直线斜坡道 [纵坡% 长度 方位°]`(视图中心生成绿中线)。坑线中线家族(螺旋/折返/直线)补齐。
+
+**验证(已知值)**: [RampCenterlinesTests](tests/PitMine3D.Kylin.Tests/RampCenterlinesTests.cs) +2—— 起(0,0,100)方位0°纵坡10%长50步10 → 6 点·末(50,0,95)降5m·中点z98 · 方位90°末点在Y轴 · 无效空。**build 0 错·单测 1234→1236**。
+
+**本会话第 30 功能**。教训: **大算法(824行路由器)里的"中线几何核"是清切片, 可与全套路由器分开移**——直线中线(匀降折线)是清几何, 全套可行性路由(逐级判定+3D台阶线)是内核规模; 拆核移、路由器记录, 补齐 Spiral/Switchback/Straight 家族。同 StandardLevelModel 拆"煤岩判定核(移)vs 配对归级(记录)"。见 [[unlock-blocked-insights]]。

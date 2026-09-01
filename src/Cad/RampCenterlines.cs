@@ -35,6 +35,26 @@ public static class RampCenterlines
         return pts;
     }
 
+    /// <summary>直线：从起点沿方位角直降, 按 gradePct 匀降 length 长度。gradePct 正=下降。忠实原 StraightRampAutoRouter 的直线中线核(全套可行性路由为内核规模, 不在此)。</summary>
+    public static List<(double X, double Y, double Z)> Straight(
+        double startX, double startY, double startZ,
+        double azimuthDeg, double gradePct, double length, double stepM = 8.0)
+    {
+        var pts = new List<(double, double, double)>();
+        if (length <= 1e-6 || stepM <= 1e-6) return pts;
+        double th = azimuthDeg * Math.PI / 180.0;
+        double hx = Math.Cos(th), hy = Math.Sin(th);
+        double g = gradePct / 100.0;
+        int n = Math.Max(1, (int)Math.Ceiling(length / stepM));
+        for (int i = 0; i <= n; i++)
+        {
+            double s = Math.Min(length, i * stepM);
+            pts.Add((startX + hx * s, startY + hy * s, startZ - g * s));
+            if (s >= length) break;
+        }
+        return pts;
+    }
+
     /// <summary>折返：直腿 + 180° 回头弧往返, 逐腿下降。turnSide +1=向左甩/-1=向右甩; legs≥2。</summary>
     public static List<(double X, double Y, double Z)> Switchback(
         double startX, double startY, double startZ,
