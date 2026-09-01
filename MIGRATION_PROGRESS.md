@@ -3142,3 +3142,22 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **这是最强收敛信号**: 历史上此角度挖出最大缺口(排产计划核心), 今复跑每个孤立标签皆已归账(真命令已移植 / 桩·native 已记录且有提示)。ribbon 命令维度**忠实完备**。
 
 **教训**: 决定性角度值得**周期性重跑**——上次挖出模块, 这次确认收敛(因核心已补 §66-69, 余为忠实桩)。孤立标签 ≠ 缺口: 须辨 (a)真命令漏接线(gap) vs (b)原版桩/native(忠实死按钮 + fallthrough)。见 [[unlock-blocked-insights]] [[faithfulness-only-original-commands]]。
+
+---
+
+## §二七五 道路中心线自动提取（RoadCenterlineExtractor）—— 第十六角度：原测试套交叉核
+
+**第十六角度: 原版测试类 × Kylin 测试类交叉核**。原 19 测试类 vs Kylin 207, 名差 12 个逐一核其被测类是否在 Kylin 有源: 10 个已移植(异名测试), **RoadCenterlineExtractor 真缺**。
+
+原 `PointCloudLib.RoadCenterline.RoadCenterlineExtractor`(523 行, **纯托管**仅 using System)——由台阶线**同高程配对 + 取中线 + 最小路宽闸门**自动提取道路中心线: 碎段拼接重建连续平盘边界→按弧长采样→均匀网格找对向邻线(同标高 Δz + 间距∈[W_min,W_max] + 近法向)→取中点串段→收窄断段→输出拼接→3D 去重→坡道端点焊接。命令 `提取道路中心线`(RoadLib「基础道路网络构建」组, 经 RoadCenterlineRunner), **下游 Kylin 已有的 结构路面(§70)/路况显示/路网预览/基础路网 全依赖它**("请先提取道路中心线")。
+
+**Kylin 原 `ExtractCenterline` 仅退化处理"恰好选中 2 条"手选双线中点**(RoadTools.Centerline), 缺原版的**多台阶线自动配对**(整层台阶线→自动出全部道路中线)。真功能缺口。
+
+**补**:
+- [RoadCenterlineExtractor](src/Cad/RoadCenterlineExtractor.cs)(新, 忠实逐行移植, 命名空间改 PitMine3D.Kylin.Cad; 算法零改动)。
+- [MainWindow](src/Views/MainWindow.axaml.cs) `ExtractCenterline` 增强: 恰好选 2 条→保留手选中点; 否则(选≥3 或未选→全场景折线)→`RoadCenterlineExtractor.Extract` 自动提取, 各中线入场景(黄色)。
+- **2D 记录**: Kylin 折线 `Points` 为 (x,y) 无 Z → 各点 Z=0, 高程闸门空转(已记录 2D 限制); 路宽/法向/收窄/拼接/去重逻辑照常有效(测试场景本就同 Z)。
+
+**验证(已知值, 忠实原 RoadCenterlineExtractorTests)**: [RoadCenterlineExtractorTests](tests/PitMine3D.Kylin.Tests/RoadCenterlineExtractorTests.cs) +8 —— 同高程对(距30∈[15,60])→1 条居中中线 Y≈15/Z≈100/长≈200; 立面对(Δz20>3)剔; 超距(80>60)剔; 过近(10<15)剔; 单闭合环→不自配对(0); 中段收窄(8<15)→断 2 段; 碎段(端点相接)→拼 1 连续(≈200m); 两级平盘(异高程)→2 中线。**build 0 错·单测 1381→1389**。
+
+**本会话第 79 功能**。教训: **第十六角度=原测试套交叉核**——原版给某类写了测试=它是真功能(非桩); Kylin 缺同名测试须核被测类是否已异名移植, 否则为真缺口。又证"命令看似已接线(ExtractCenterline 存在)但实为退化版"——须核实现深度非仅存在性。见 [[unlock-blocked-insights]] [[verify-seed-enum-values-before-filter]]。
