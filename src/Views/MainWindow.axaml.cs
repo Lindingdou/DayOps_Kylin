@@ -8937,9 +8937,17 @@ public partial class MainWindow : Window
         var hits = VirtualBorehole.Drill(qx, qy, seams);
         var inv = System.Globalization.CultureInfo.InvariantCulture;
         if (hits.Count == 0) { StatusMsg.Text = $"虚拟钻孔({qx.ToString("0.#", inv)},{qy.ToString("0.#", inv)})：未见煤(位置在煤层面覆盖外)"; return; }
+
+        // 2D 柱状预览(忠实原"出 2D 柱状预览"): 在钻孔位置画岩柱+煤层分色+深度刻度+煤层/厚度标注。
+        double dz = hits[0].RoofZ - hits[hits.Count - 1].FloorZ; if (dz <= 0) dz = 1;
+        double vScale = 1.0, colW = System.Math.Max(dz * 0.2, 5), colLbl = System.Math.Max(dz * 0.06, 1);
+        BeginChange();
+        foreach (var e in BoreholeRender.BuildVirtualColumn(hits, qx, qy, vScale, colW, colLbl)) { e.LayerName = "虚拟钻孔柱状"; _scene.Add(e); }
+        RefreshScene();
+
         var name = await SaveCsvAsync("导出虚拟钻孔", "virtual_borehole.csv", VirtualBorehole.ToCsv(hits));
         var top = hits[0];
-        StatusMsg.Text = $"虚拟钻孔({qx.ToString("0.#", inv)},{qy.ToString("0.#", inv)})：见 {hits.Count} 层 · 顶层 {top.SeamCode}(顶{top.RoofZ.ToString("0.#", inv)}/底{top.FloorZ.ToString("0.#", inv)}/厚{top.Thickness.ToString("0.##", inv)})"
+        StatusMsg.Text = $"虚拟钻孔({qx.ToString("0.#", inv)},{qy.ToString("0.#", inv)})：见 {hits.Count} 层 · 顶层 {top.SeamCode}(顶{top.RoofZ.ToString("0.#", inv)}/底{top.FloorZ.ToString("0.#", inv)}/厚{top.Thickness.ToString("0.##", inv)}) · 已绘柱状预览"
             + (name != null ? $" → {name}" : "");
     }
 

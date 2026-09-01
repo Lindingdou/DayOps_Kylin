@@ -1,5 +1,7 @@
 using System.Collections.Generic;
+using System.Linq;
 using PitMine3D.Kylin.Cad;
+using PitMine3D.Kylin.Cad.Draw;
 using Xunit;
 
 namespace PitMine3D.Kylin.Tests;
@@ -88,5 +90,34 @@ public class VirtualBoreholeTests
     {
         Assert.Empty(VirtualBorehole.Drill(0, 0, new List<VirtualBorehole.Seam>()));
         Assert.Empty(VirtualBorehole.Drill(0, 0, null!));
+    }
+
+    // ── 2D 柱状预览(BuildVirtualColumn) ──────────────────
+    [Fact]
+    public void VirtualColumn_maps_seam_elevations_to_depth_rects()
+    {
+        // 顶板最高者(z=100)作孔口(深度0)。煤3 顶100/底98 → 深度[0,2]; 煤5 顶90/底87 → 深度[10,13]。
+        var hits = new List<VirtualBorehole.SeamHit>
+        {
+            new("3", 100, 98, 2),
+            new("5", 90, 87, 3),
+        };
+        var ents = BoreholeRender.BuildVirtualColumn(hits, 0, 0, depthScale: 1, width: 10, labelH: 1);
+        var rects = ents.OfType<RectEntity>().ToList();
+        Assert.Equal(2, rects.Count);
+        // 煤3: (0,0)-(10,-2)
+        var r3 = rects[0];
+        Assert.Equal(0, r3.Y0, 6); Assert.Equal(-2, r3.Y1, 6); Assert.Equal(10, r3.X1, 6);
+        // 煤5: (0,-10)-(10,-13)
+        var r5 = rects[1];
+        Assert.Equal(-10, r5.Y0, 6); Assert.Equal(-13, r5.Y1, 6);
+        // 有岩柱中轴(竖线)
+        Assert.Contains(ents.OfType<LineEntity>(), l => System.Math.Abs(l.X0 - l.X1) < 1e-9 && System.Math.Abs(l.Y1 - (-13)) < 1e-6);
+    }
+
+    [Fact]
+    public void VirtualColumn_empty_safe()
+    {
+        Assert.Empty(BoreholeRender.BuildVirtualColumn(new List<VirtualBorehole.SeamHit>(), 0, 0, 1, 10));
     }
 }

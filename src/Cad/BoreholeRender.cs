@@ -64,4 +64,60 @@ public static class BoreholeRender
         }
         return list;
     }
+
+    /// <summary>
+    /// 虚拟钻孔单孔 2D 柱状图 —— 忠实原「虚拟钻孔 出 2D 柱状预览」/「原始钻孔柱状图」: 岩柱中轴 +
+    /// 每见煤层按顶/底板标高映射成深度矩形(按煤层稳定配色) + 深度刻度 + 煤层/厚度/底板标注。
+    /// hits 为 <see cref="VirtualBorehole.SeamHit"/>(顶/底板标高); 顶板最高者作孔口(深度 0)。纯逻辑、可单测。
+    /// </summary>
+    public static List<SceneEntity> BuildVirtualColumn(
+        IReadOnlyList<VirtualBorehole.SeamHit> hits, double x, double y, double depthScale, double width, double labelH = 0)
+    {
+        var list = new List<SceneEntity>();
+        if (hits == null || hits.Count == 0) return list;
+
+        double topZ = double.MinValue, botZ = double.MaxValue;
+        foreach (var h in hits) { if (h.RoofZ > topZ) topZ = h.RoofZ; if (h.FloorZ < botZ) botZ = h.FloorZ; }
+        double depth = topZ - botZ; if (depth <= 0) depth = 1;
+
+        list.Add(new LineEntity { X0 = x, Y0 = y, X1 = x, Y1 = y - depth * depthScale, Cr = 0.70f, Cg = 0.70f, Cb = 0.72f });   // 岩柱中轴
+
+        foreach (var h in hits)
+        {
+            var (r, g, b) = SeamColor(h.SeamCode);
+            double yTop = y - (topZ - h.RoofZ) * depthScale;    // 顶板对应深度
+            double yBot = y - (topZ - h.FloorZ) * depthScale;   // 底板对应深度
+            list.Add(new RectEntity { X0 = x, Y0 = yTop, X1 = x + width, Y1 = yBot, Cr = r, Cg = g, Cb = b });
+            if (labelH > 0)   // 煤层号 + 厚度(右侧)
+                list.Add(new TextEntity
+                {
+                    X = x + width + labelH * 0.5, Y = (yTop + yBot) * 0.5 - labelH * 0.4, Height = labelH,
+                    Text = $"{h.SeamCode} {h.Thickness:0.##}m", Cr = 0.2f, Cg = 0.2f, Cb = 0.2f,
+                });
+        }
+
+        if (labelH > 0)   // 深度刻度(左侧短横+深度值)
+        {
+            double step = MapDecor.NiceLength(depth / 5); if (step <= 0) step = depth;
+            for (double d = 0; d <= depth + 1e-9; d += step)
+            {
+                double yy = y - d * depthScale;
+                list.Add(new LineEntity { X0 = x - width * 0.35, Y0 = yy, X1 = x, Y1 = yy, Cr = 0.7f, Cg = 0.7f, Cb = 0.72f });
+                list.Add(new TextEntity { X = x - width * 0.35 - labelH * 2.5, Y = yy - labelH * 0.4, Height = labelH, Text = d.ToString("0", System.Globalization.CultureInfo.InvariantCulture), Cr = 0.7f, Cg = 0.7f, Cb = 0.72f });
+            }
+        }
+        return list;
+    }
+
+    /// <summary>煤层号 → 稳定配色(暗色系, 煤层观感)。</summary>
+    public static (float r, float g, float b) SeamColor(string seam)
+    {
+        var pal = new (float r, float g, float b)[]
+        {
+            (0.15f,0.15f,0.18f),(0.25f,0.20f,0.15f),(0.18f,0.22f,0.28f),(0.28f,0.24f,0.20f),(0.20f,0.18f,0.24f),(0.22f,0.26f,0.22f),
+        };
+        int h = 0;
+        foreach (char c in seam ?? "") h += c;
+        return pal[(seam == null || seam.Length == 0) ? 0 : System.Math.Abs(h) % pal.Length];
+    }
 }

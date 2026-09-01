@@ -2478,3 +2478,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [MeshVoxelizerTests](tests/PitMine3D.Kylin.Tests/MeshVoxelizerTests.cs) 4 例—— **10 立方体 @格 2 → 5×5×5=125 块**(格心 (1,3,5,7,9)³ 全在内) · @格 5 → 2³=8 块 · 格数过大守卫拒 · 退化/cellSize=0 安全。**build 0 错·单测 1227→1231**。
 
 **本会话第 27 功能**。教训: **命令 diff 的 ✗ 分类要复核"是标准几何还是真引擎"**——`离散化模型` 名义在"采矿模型"组像引擎, 实为纯体素化(GWN 内外判), 我初判"引擎记录"是**误分类**。判"引擎/native 受阻"前问"这操作的算法标准吗?有无已移基元支撑?"(WindingNumber 已移 → 体素化可做)。同 #13"别被'内核模块'标签吓退标准算法"。见 [[unlock-blocked-insights]]。
+
+## 二二三、虚拟钻孔 2D 柱状预览 —— present-but-shallow(算了没画, 第 28 功能)
+
+续 ✗ 再分类角度, 复查"钻孔/柱状"类: `原始钻孔柱状图`(单孔 2D 地层柱状图)Kylin **已有**(展绘钻孔 → `BoreholeRender.BuildColumns`)。但 **`虚拟钻孔`** 原描述"出 2D 柱状预览", Kylin `VirtualDrillAsync` **只出文字+CSV, 不画柱状** —— 典型 present-but-shallow(算了顶/底板但没画预览)。
+
+补 [src/Cad/BoreholeRender.cs](src/Cad/BoreholeRender.cs) `BuildVirtualColumn`(SeamHit 顶/底板标高 → 岩柱中轴 + 每煤层按标高映射深度矩形[稳定配色] + 深度刻度 + 煤层号/厚度标注; 顶板最高者作孔口深度0)。接入 `虚拟钻孔` 命令: 求交后在孔位画 2D 柱状预览(图层 虚拟钻孔柱状)。
+
+**验证(已知值)**: [VirtualBoreholeTests](tests/PitMine3D.Kylin.Tests/VirtualBoreholeTests.cs) +2—— 煤3(顶100/底98)→深度矩形[0,−2]、煤5(顶90/底87)→[−10,−13] + 岩柱中轴到 −13 · 空安全。**build 0 错·单测 1231→1233**。
+
+**本会话第 28 功能**。教训: **✗ 再分类要连"present-but-shallow 的命令"一起复查**——`虚拟钻孔`命令在且算对了(顶/底板求交), 但漏了原有的可视化产出(2D 柱状预览)。命令存在 ≠ 输出完整; 有数据+2D 可画的可视化(柱状/剖面/标注)常是"算了没画"的浅坑。见 [[unlock-blocked-insights]]。
