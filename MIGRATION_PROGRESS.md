@@ -2962,3 +2962,19 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: LongTermSchedulerTests +2(16 方案·推荐可行最高分·单方案退化 50 分) · ShortTermSchedulerTests +1(9 方案·推荐可行最高分)。归一 min-max、荐"可行优先最高分"逻辑与原一致。**build 0 错·单测 1347→1350**。
 
 **本会话第 68-69 功能**。规划模块至此收官: 中长远/短期 各 单方案排产(§259/260) + 多方案一键评分推荐(§68/69); 余动态模拟/出图=原版 Placeholder 桩或可视 refinement。**第九角度(孤儿标签)总产出: 图介数§258 + 规划四功能(§259/260/68/69)**——整规划子系统前八角度全漏, 靠孤儿标签挖出并完整补齐。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二六三 孤儿标签逐条路由复核收官（每条个别验证）
+
+**§261 三分 + §262/§70 复核后, 逐条查每个孤儿的实际工厂方法路由**（非凭标签所属模块臆断——§70 已证 结构路面 表面 MineAss 实则 RoadLib 托管）:
+
+- **native `IPitDesignCapability`(坑设计引擎, 交互编辑)**: 创建工作线/组合工作线/坑线落地/局部台阶/编辑台阶/动态调整/处理尖灭/外排放坡/平盘联络道 —— 逐条查得均 `Capabilities.TryGet<IPitDesignCapability>`, 真原生。
+- **`SkeletonCommand` 原版桩**: 最终并段/内排推进 —— 原版即"待实现"骨架, 忠实不补。
+- **配置对话框(非算法)**: 约束条件设置 → `ConstraintSettings`(运输约束: 卡车尺寸/限坡, Kylin 有 TransportConstraintSettings 模型被 ramp/断面用); 忠实不臆造 config-only 设置项。
+- **Kylin 反超**: 排土场容量校核(原 SkeletonCommand, Kylin `DumpCapacityAsync` 已实现填方体积) · 虚拟钻孔(原 Placeholder, Kylin 已实现)。
+- **别名接**: 转化为三角格网→创建三角网 · 确定开采程序→开采程序确定 · 运量驱动布线→运输布局方案。
+- **托管几何(已补)**: 结构路面(§70)。
+- **交互编辑器/原生显示**: 排土模板(模板编辑器) · 加载倾斜摄影(OSGB) · 影像底图(栅格叠加显示) · 点云管理/渲染配置/现状写实/补勘钻孔写实(3D 写实/渲染) · 增量增删边(交互图编辑) · 延拓触发设置(config)。
+
+**结论**: 孤儿标签逐条个别验证收官——托管可移者仅 结构路面(§70)一条(已补), 余为 native 坑设计引擎/原版桩/config/交互/原生显示/已覆盖。**教训: 孤儿"native"须逐条查工厂方法实际路由(TryGet<Capability> vs new 托管类 vs SkeletonCommand vs OpenWindow), 勿凭标签所属 Tab 臆断**——第九角度至此完全落地。见 [[unlock-blocked-insights]]。
