@@ -842,6 +842,7 @@ public partial class MainWindow : Window
             if (cmd == "煤质综合结论" || cmd == "煤质结论" || cmd == "综合结论" || cmd == "煤质分析结论" || cmd.StartsWith("煤质综合结论 ")) { await CoalConclusionsCmd(cmd); return; }
             if (cmd == "煤类反推" || cmd == "GB5751反推" || cmd == "煤类一致率" || cmd == "煤类校核" || cmd == "煤类反演" || cmd.StartsWith("煤类反推 ")) { await CoalTypeInferCmd(cmd); return; }
             if (cmd == "煤质审核" || cmd == "煤质数据审核" || cmd == "煤质质检" || cmd == "煤质数据质检" || cmd == "一键审核" || cmd.StartsWith("煤质审核 ")) { await CoalAuditCmd(cmd); return; }
+            if (cmd == "煤质三维插值" || cmd == "品位体素插值" || cmd == "煤质体素" || cmd == "三维插值" || cmd == "品位块模型" || cmd.StartsWith("煤质三维插值 ") || cmd.StartsWith("煤质体素 ")) { await QualityVoxelInterpCmd(cmd); return; }
             if (cmd == "交叉验证" || cmd == "估值交叉验证" || cmd == "留一验证" || cmd == "克里金交叉验证" || cmd.StartsWith("交叉验证 ") || cmd.StartsWith("估值交叉验证 ")) { await SpatialCvCmd(cmd); return; }
             if (cmd == "变差函数分析" || cmd == "实验变差" || cmd == "半变异分析" || cmd == "空间结构分析" || cmd.StartsWith("变差函数分析 ") || cmd.StartsWith("实验变差 ")) { await VariogramAnalysisCmd(cmd); return; }
             if (cmd == "导出离群" || cmd == "离群导出" || cmd.StartsWith("导出离群 ")) { await ExportOutliersAsync(cmd); return; }
@@ -8247,6 +8248,48 @@ public partial class MainWindow : Window
             + " · 工分自洽/测井一致需 Mad·FCd·测井厚(数据缺, 未审)";
     }
 
+    // 煤质三维插值(IDW 体素块模型)：DB 煤样(x,y,z=z_sample, 指标) → 3D IDW 体素场 → 导 CSV(块体模型) + 取密集 Z 切片上 2D 彩格。
+    // 忠实原 DefaultIdwInterpolation(CoalQualitySpatialWindow 插值引擎)。全 3D 显示受阻(2D 场景), 故导块模型 + Z 切片。
+    private async Task QualityVoxelInterpCmd(string cmd)
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var samples = Data.GeoDataQueries.GetCoalSamples(db.Connection);
+        if (samples.Count == 0) { StatusMsg.Text = "煤质三维插值：无煤样数据"; return; }
+        var tk = cmd.Split(new[] { ' ', ',' }, System.StringSplitOptions.RemoveEmptyEntries);
+        string ind = tk.Length >= 2 ? tk[1].ToLowerInvariant() : "ad";
+        double res = tk.Length >= 3 && double.TryParse(tk[2], out var rr) && rr > 0 ? rr : 0;
+        double? Val(Data.CoalSample s) => ind switch { "vdaf" => s.VdafRaw, "std" or "st" => s.StdRaw, "qnet" or "q" => s.QnetAd, _ => s.AdRaw };
+        var cps = new List<OrdinaryKriging.ControlPoint>();
+        foreach (var s in samples) if (s.Z is double z && Val(s) is double v && !(s.X == 0 && s.Y == 0)) cps.Add(new OrdinaryKriging.ControlPoint(s.X, s.Y, z, v));
+        if (cps.Count < 2) { StatusMsg.Text = $"煤质三维插值：有效样本不足(需 z_sample + {ind} 指标 + 坐标; 得 {cps.Count})"; return; }
+
+        double xn = double.MaxValue, yn = double.MaxValue, zn = double.MaxValue, xx = double.MinValue, yx = double.MinValue, zx = double.MinValue;
+        foreach (var p in cps) { xn = System.Math.Min(xn, p.X); xx = System.Math.Max(xx, p.X); yn = System.Math.Min(yn, p.Y); yx = System.Math.Max(yx, p.Y); zn = System.Math.Min(zn, p.Z); zx = System.Math.Max(zx, p.Z); }
+        if (res <= 0) res = System.Math.Max(1e-3, System.Math.Max(xx - xn, System.Math.Max(yx - yn, zx - zn)) / 15.0);   // 目标 ~15 格/轴
+        var vox = QualityVoxelInterp.Interpolate(cps, xn, yn, zn, xx, yx, zx, res);
+        if (vox.Count == 0) { StatusMsg.Text = $"煤质三维插值：体素过密或无支撑(试 煤质三维插值 {ind} <更大分辨率>)"; return; }
+
+        // 取体素最密的 Z 层上 2D 图(蓝低→红高)。
+        var byZ = new Dictionary<double, int>();
+        foreach (var v in vox) { byZ.TryGetValue(v.Z, out int n); byZ[v.Z] = n + 1; }
+        double bestZ = 0; int bestN = -1; foreach (var kv in byZ) if (kv.Value > bestN) { bestN = kv.Value; bestZ = kv.Key; }
+        var slice = QualityVoxelInterp.ZSlice(vox, bestZ, res * 0.5);
+        double vmin = double.MaxValue, vmax = double.MinValue; foreach (var v in slice) { vmin = System.Math.Min(vmin, v.Value); vmax = System.Math.Max(vmax, v.Value); }
+        double span = vmax - vmin > 1e-9 ? vmax - vmin : 1;
+        BeginChange();
+        foreach (var v in slice)
+        {
+            float t = (float)((v.Value - vmin) / span);   // 0=低 1=高
+            _scene.Add(new PointEntity { X = v.X, Y = v.Y, Size = System.Math.Max(res * 0.4, 0.8), Style = 4,
+                Cr = t, Cg = 0.15f, Cb = 1 - t, LayerName = $"煤质体素 Z={bestZ:0.#}" });
+        }
+        RefreshScene();
+        Viewport.FitBounds(new[] { xn, yn, xx, yx });
+        var name = await SaveCsvAsync("导出煤质体素", $"quality_voxels_{ind}.csv", QualityVoxelInterp.ToCsv(vox));
+        StatusMsg.Text = $"煤质三维插值(IDW·{ind})：{cps.Count} 样 → {vox.Count} 体素(分辨率 {res:0.##}·Z {zn:0.#}~{zx:0.#}) · Z={bestZ:0.#} 切片 {slice.Count} 格上图(蓝低→红高·{vmin:0.##}~{vmax:0.##})"
+            + (name != null ? $" · 块模型 CSV → {name}" : "") + " · 全 3D 显示受阻(2D 场景), 出块模型+Z 切片";
+    }
+
     private static string CoalIndicator(string[] tk, int idx, string def)
         => tk.Length > idx && (tk[idx] is "ad" or "std" or "vdaf" or "qgr" or "qnet") ? tk[idx] : def;
 
@@ -9304,7 +9347,7 @@ public partial class MainWindow : Window
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","机群驾驶舱","设备综合评分","数据看板","煤种分类","煤质数据健康度","分煤层煤质",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
         "产能分类对比","故障类型分布","分工序验收合格率","数据导出","数据字典","达成度评价","产量预测","时序预测","编组优化","智能编组优化","导出编组","导出预测",
-        "商品煤符合性","煤质达标","导出符合性","品位储量曲线","导出品位储量","分标高煤质","导出分标高","煤质离群","导出离群","洗选提质","导出洗选","用途适宜性","导出用途","灰分发热量回归","煤质综合结论","煤类反推","煤类一致率","煤质审核","交叉验证","变差函数分析",
+        "商品煤符合性","煤质达标","导出符合性","品位储量曲线","导出品位储量","分标高煤质","导出分标高","煤质离群","导出离群","洗选提质","导出洗选","用途适宜性","导出用途","灰分发热量回归","煤质综合结论","煤类反推","煤类一致率","煤质审核","煤质三维插值","品位块模型","交叉验证","变差函数分析",
         // TaskLib 自足计算
         "生产量核算","物料换算","采剥平衡","排土场按量推进","配煤核算","工序进度跟踪","编组产能","环节降效",
     };

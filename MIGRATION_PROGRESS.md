@@ -2565,3 +2565,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [CoalAuditTests](tests/PitMine3D.Kylin.Tests/CoalAuditTests.cs) +7—— St15/Ad70/Qnet60 越界=Error·浮煤灰22>原煤灰15=Error·反推 CY≠标注 QM=Warning·无区间跳过规则④·yield 120/−5 越界·34 正常+1 极端(Ad200)同层 3σ 命中且阈值提到 40(层 35<40)不统计·汇总错/警计数+CSV 行数。**build 0 错·单测 1254→1261**。
 
 **本会话第 35 功能**。教训: **DB 服务层(CRUD)里夹的"纯规则/纯逻辑"要逐条按 Kylin 数据模型核可支撑性**——7 规则里 5 条数据齐(移)、2 条缺字段(Mad/FCd/测井厚, 记录)。**逐规则拆 doable/blocked, 别整包判死也别整包硬吞**(同 §二二八 331/332/333 拆边界纪律)。DB 服务层"纯逻辑"(ResolveCoalType/RunAudit)连出两个功能, 印证 [[unlock-blocked-insights]] "算法在 CRUD 服务里"角度高产。见 [[faithfulness-only-original-commands]]。
+
+## 二三一、煤质三维体素插值(IDW 块模型)—— DB 服务层第三个纯算法(第 36 功能)
+
+**同脉络第三挖**: GeoDataBase 服务层 `DefaultIdwInterpolation`(CoalQualitySpatialWindow 的插值引擎, 类注"纯 C# 约 50 行")——把散点样本(x,y,z,值)按 **3D IDW** 插到规则**体素网格**, 搜索半径外(最近样本超半径)体素跳过不外插。Kylin 品位估值 `EstimateGradeAsync` **仅 2D(z=0 单层)**, 无三维体素场。**关键忠实细节**: 原 `DefaultIdwInterpolation` 半径语义与 `EstimationAlgorithms.IdwEstimate`(§二二七)**不同**——只判**最近点**是否入半径再取 k 最近(含半径外者), 非把全部点滤到半径内; 故按 DefaultIdwInterpolation **原样内联**, 不复用 §二二七 的 IdwEstimate。
+
+补 [src/Cad/QualityVoxelInterp.cs](src/Cad/QualityVoxelInterp.cs): `Interpolate(points, bbox, resolution, power, k, radius, maxVoxels)` 忠实原(3D 网格逐体素排序取 k 最近·最近超半径跳过·落样本上精确·1/d^p 加权·自动半径 2.5×平均点距≥1.5×步长)+ `ZSlice`(取 Z 切片)+ `ToCsv`(块体模型)。命令 `煤质三维插值`/`品位块模型`([MainWindow](src/Views/MainWindow.axaml.cs) `QualityVoxelInterpCmd`): DB 煤样(x,y,z=z_sample, 指标 ad/vdaf/std/qnet)→3D 体素场→**导块模型 CSV + 取最密 Z 切片上 2D 彩格(蓝低→红高)**。三路可发现 + 目录。**记录**: **全 3D 体素显示受阻**(2D 场景无 per-vertex Z), 故出块模型 CSV + Z 切片(忠实降级, 同其它 3D→2D)。
+
+**验证(已知值)**: [QualityVoxelInterpTests](tests/PitMine3D.Kylin.Tests/QualityVoxelInterpTests.cs) +6—— 四角线性场 V=x: 落样本精确(0/10)·中心等权=5·x=5 线=5·全 9 格有支撑; 半径 3 裁剩四角; 两层 z 分值 k=4 各层中心 5/105(z 维分层); 空点/过密(2001³)防爆空; k=2 挡远离群 999; CSV 头+行数。**build 0 错·单测 1261→1267**。
+
+**本会话第 36 功能**。教训: **同一 DB 服务层连出 3 纯算法(ResolveCoalType/RunAudit/DefaultIdwInterpolation)**——"算法藏在 CRUD 服务里"是本会话最高产角度。**同族不同实现要逐个核语义**: 两处 IDW(EstimationAlgorithms vs DefaultIdwInterpolation)半径语义不同, 忠实各自内联而非强复用(名同实异, 同"文件名≠类名/中文串≠token"的名字误导family)。**计算可做 + 显示受阻 → 出计算产物(CSV/切片)记录显示限**(忠实降级)。见 [[unlock-blocked-insights]]。
