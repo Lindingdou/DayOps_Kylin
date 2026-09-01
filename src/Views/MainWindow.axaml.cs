@@ -4629,7 +4629,7 @@ public partial class MainWindow : Window
         var r = PmbImportService.Load(files[0].Path.LocalPath, selectAttr);
         if (!r.Success) { StatusMsg.Text = $"导入 PMB：{r.Error}"; return; }
         if (r.Blocks.Count == 0) { StatusMsg.Text = "导入 PMB：无块"; return; }
-        _lastBlocks = r.Blocks; _blockAttrs = null;   // PMB 暂未持全属性
+        _lastBlocks = r.Blocks; _blockAttrs = r.AllAttrs.Count > 0 ? r.AllAttrs : null;   // 持全属性供无重导切换/属性报告(同 BLK)
         double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
         foreach (var b in r.Blocks) { if (b.X < minX) minX = b.X; if (b.Y < minY) minY = b.Y; if (b.X > maxX) maxX = b.X; if (b.Y > maxY) maxY = b.Y; }
         BeginChange();
@@ -4637,7 +4637,8 @@ public partial class MainWindow : Window
         RefreshScene();
         if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
         string attrs = r.AttrNames.Count > 0 ? string.Join("/", r.AttrNames) : "无";
-        StatusMsg.Text = $"导入 PMB：{r.Nx}×{r.Ny}×{r.Nz} 网格 · {r.Blocks.Count} 块 · 品位取「{r.UsedAttr}」 · 全属性[{attrs}]（改属性：导入PMB <属性名>）";
+        string swHint = _blockAttrs != null ? "切换免重导：切换属性 <属性名>" : "改属性：导入PMB <属性名>";
+        StatusMsg.Text = $"导入 PMB：{r.Nx}×{r.Ny}×{r.Nz} 网格 · {r.Blocks.Count} 块 · 品位取「{r.UsedAttr}」 · 全属性[{attrs}]（{swHint}）";
     }
 
     private async Task ImportBlockModelAsync()

@@ -54,6 +54,19 @@ public class PmbImportServiceTests
         Assert.Equal(60.0, sel.Blocks[1].Grade, 4);
     }
 
+    [Fact]
+    public void AllAttrs_holds_every_attribute_for_in_place_switch()
+    {
+        // PMB 持全属性(同 BLK): AllAttrs 应含 density[2.7,2.8] 与 grade_v[50,60], 供无重导切换/属性报告。
+        var r = PmbImportService.Parse(MakePmb2());
+        Assert.True(r.Success, r.Error);
+        Assert.Equal(2, r.AllAttrs.Count);
+        Assert.Equal(new[] { 2.7, 2.8 }, r.AllAttrs["density"]);
+        Assert.Equal(new[] { 50.0, 60.0 }, r.AllAttrs["grade_v"]);
+        // 选定属性的 grade 与 AllAttrs 一致(同一份数据)。
+        Assert.Equal(r.AllAttrs["density"][0], r.Blocks[0].Grade, 6);   // 缺省首属性 density
+    }
+
     // 构造最小 PMB v1: 2×2×1 网格(4 cell) + 1 属性(品位). origin(10,20,0) blockSize(2,2,2) grades[5,10,15,20]
     private static byte[] MakePmb(double[] grades)
     {

@@ -2585,3 +2585,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [TinSurfaceTests](tests/PitMine3D.Kylin.Tests/TinSurfaceTests.cs) +3—— 10×10 方(高程 0/0/5/5)→2 三角·XY 投影面积恒 100(与对角线无关)·z∈[0,5]; 空面安全; **点→ToOff→ParseOff 往返**保顶点/三角数 + (10,10)顶点 z=106 保真(非丢 0)+ 投影面积 400。**build 0 错·单测 1267→1270**。
 
 **本会话第 37 功能**。教训: **"computed-but-not-saved" 再添一形态——不只"算了没画/没上图", 还有"建了三角网却丢 Z、只画线框不出可复用面"**。查已移几何命令是否**产出可下游复用的产物**(OFF 面/实体), 而非止于屏上线框。此补打通"散点/等高线→2.5D 面→体/算量"链(原 QuickModelBuilder 的面构造那半, Kylin 此前只有"OFF 面→体"下半)。见 [[unlock-blocked-insights]] [[shell-completeness-priority]]。
+
+## 二三三、PMB 块体持全属性(无重导切换/属性报告)—— Kylin 自身"暂未"补全(第 38 功能)
+
+**新角度: 查 Kylin 自身的"暂未/未实现"标记**(非原版桩)。grep `TODO|未实现|暂不|占位` 排除"对原版桩的描述"后, 命中 [MainWindow](src/Views/MainWindow.axaml.cs):4632 `_blockAttrs = null; // PMB 暂未持全属性`——**Kylin 自陈未完成**: BLK 导入持全属性(`AllAttrs`)供**无重导切换活动属性**(`切换属性 <名>`)+ 属性报告, 但 PMB 导入置 `_blockAttrs=null`, 故 PMB 块体无法在位切换属性(须 `导入PMB <名>` 重导)。
+
+**关键: PMB reader 已扫全属性名+值偏移(attrValueOff), 只是仅读选定那份**——补易。改 [PmbImportService](src/Cad/PmbImportService.cs): Result 加 `AllAttrs` 字典; 追踪 `validAttrs`(valueCount==blockCount 的属性), 读**全部有效属性**逐块值入 AllAttrs(巨模型 值数>50M 跳过保内存, 仅读选定作品位——诚实降级); grade 直接取 AllAttrs 中选定份。[MainWindow](src/Views/MainWindow.axaml.cs): PMB 导入 `_blockAttrs = r.AllAttrs.Count>0 ? r.AllAttrs : null`(同 BLK), 状态行按是否持全属性给"切换免重导"/"重导改属性"提示。PMB 块体自此与 BLK 同享 `切换属性`/`属性报告`。
+
+**验证(已知值)**: [PmbImportServiceTests](tests/PitMine3D.Kylin.Tests/PmbImportServiceTests.cs) +1—— MakePmb2(density[2.7,2.8]+grade_v[50,60]) → AllAttrs 含两属性全值, 选定 grade 与 AllAttrs 同源。**build 0 错·单测 1270→1271**。
+
+**本会话第 38 功能**。教训: **除"原版有 Kylin 缺", 还要查"Kylin 自陈暂未"**——grep Kylin 自身 `暂未/未实现/TODO/占位`(排除对原版桩的转述), 常是 reader/handler 只做了一半(PMB 扫了全属性却只留一份)。这是"未完成功能补全"最直接的一类(loop 主旨), 且多半底层数据已备(offsets 已扫), 补全成本低。区别于原版桩(忠实不做)。见 [[unlock-blocked-insights]]。

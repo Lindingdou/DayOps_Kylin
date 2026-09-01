@@ -21,6 +21,7 @@ public static class PmbImportService
         public int Nx, Ny, Nz;
         public List<string> AttrNames = new();
         public string UsedAttr = "";
+        public Dictionary<string, double[]> AllAttrs = new();   // 全属性逐块值(供无重导切换活动属性/属性报告, 同 BLK)
     }
 
     public static Result Load(string path, string? selectAttr = null)
@@ -91,6 +92,7 @@ public static class PmbImportService
             if (storageMode == 0 && bc == blockCount && attrCount > 0 && attrCount <= 4096)   // Dense
             {
                 var attrValueOff = new List<long>();
+                int validAttrs = 0;
                 for (int a = 0; a < attrCount; a++)
                 {
                     int nameIdx = br.ReadInt32(); br.ReadByte(); br.ReadBytes(3);   // nameIdx, dataType, reserved
@@ -99,16 +101,31 @@ public static class PmbImportService
                     r.AttrNames.Add(name);
                     attrValueOff.Add(ms.Position);
                     if (valueCount != blockCount) break;                            // 布局异常, 止
+                    validAttrs++;
                     ms.Position += (long)valueCount * 8;                            // 跳到下一属性
                 }
                 int selIdx = 0;
                 if (selectAttr != null)
-                { int f = r.AttrNames.FindIndex(nm => string.Equals(nm, selectAttr, System.StringComparison.OrdinalIgnoreCase)); if (f >= 0) selIdx = f; }
-                if (selIdx < attrValueOff.Count)
+                { int f = r.AttrNames.FindIndex(nm => string.Equals(nm, selectAttr, System.StringComparison.OrdinalIgnoreCase)); if (f >= 0 && f < validAttrs) selIdx = f; }
+                if (validAttrs > 0)
                 {
-                    ms.Position = attrValueOff[selIdx];
-                    grade = new double[blockCount];
-                    for (long i = 0; i < blockCount; i++) grade[i] = br.ReadDouble();
+                    // 读全部有效属性 → AllAttrs(供无重导切换/属性报告, 同 BLK); 巨模型(值数>50M)跳过保内存, 仅读选定作品位。
+                    bool keepAll = (long)validAttrs * blockCount <= 50_000_000;
+                    if (keepAll)
+                        for (int a = 0; a < validAttrs; a++)
+                        {
+                            ms.Position = attrValueOff[a];
+                            var vals = new double[blockCount];
+                            for (long i = 0; i < blockCount; i++) vals[i] = br.ReadDouble();
+                            r.AllAttrs[r.AttrNames[a]] = vals;
+                        }
+                    if (keepAll) grade = r.AllAttrs[r.AttrNames[selIdx]];
+                    else
+                    {
+                        ms.Position = attrValueOff[selIdx];
+                        grade = new double[blockCount];
+                        for (long i = 0; i < blockCount; i++) grade[i] = br.ReadDouble();
+                    }
                     r.UsedAttr = r.AttrNames[selIdx];
                 }
             }
