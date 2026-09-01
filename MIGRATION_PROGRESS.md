@@ -2384,3 +2384,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [SpatialCrossValidationTests](tests/PitMine3D.Kylin.Tests/SpatialCrossValidationTests.cs) 6 例—— **常量场全方法零误差**(ME/MAE/RMSE=0)、**NN 留一手算误差**((0,0)V10/(1,0)V20/(5,0)(6,0)V99 → 误差[+10,−10,0,0] → ME=0/MAE=5/RMSE=√50)、点<4 空、OK 产标准化误差(MSE 有值)、光滑线性场 IDW 高 R²+低偏差、CSV 头部。**build 0 错·单测 1190→1196**。
 
 **本会话第 18 功能**。教训: **方法级完整度要遍历子系统的每个"纯 C#"引擎**——GeoDataBase 三个估值/分析引擎(CoalQualityAnalytics/CoalQualityEstimator/VirtualDrillEngine)逐个 method-diff, 挖出 灰分回归/综合结论/交叉验证 三处; 复用已移基元(OrdinaryKriging.EstimateAt)可低成本补高价值验证算法。**GeoDataBase 纯引擎方法级已核毕**。见 [[unlock-blocked-insights]]。
+
+## 二一四、中线交点分类(CenterlineJunctions)—— 全模块纯引擎清单续(第 19 功能)
+
+**元角度续**: 枚举全模块「纯 C#/无外部依赖」引擎(~40 个), 逐个 grep Kylin 覆盖。多数已移(名不同: StructurePavement→RoadSurface, ParametricCenterlines→RampCenterlines, PolylineMetrics→RoadEvolutionAnalyzer——**name-mismatch 假缺口**), 但 `RoadLib.Network.CenterlineJunctions` 是真缺口——Kylin 既有 `RoadNetwork` 拓扑报表**只数 度≥3 节点**, 无四型几何分类。
+
+忠实移植 [src/Cad/CenterlineJunctions.cs](src/Cad/CenterlineJunctions.cs): 把中线里【建网会打节点的位置】按四条建网规则分类——**X 十字**(两段平面内部真相交) · **T 丁字**(一线端点落另一线身上) · **半腰焊**(两段近贴但两脚在半腰) · **接缝**(端点碰端点); **就近合并**累计度数区分【真路口】(X/T/焊/≥3 汇合)与【接缝】(仅两线相接=一条路被打断的缝); 标【立交】(平面相交但高差超闸门, 建网不连通); `Nearest` 取捕捉点(真路口优先于接缝)。原用 SegmentGrid 粗筛, 此处**内联包围盒预筛**(结果一致)。命令 `中线交点 [容差m]`(场景中线→四型分类→按型配色画标记+分类计数)。
+
+**验证(已知值)**: [CenterlineJunctionsTests](tests/PitMine3D.Kylin.Tests/CenterlineJunctionsTests.cs) 7 例—— X 十字内部交(5,5)/立交高差标记/T 端点落身/接缝非真路口(度2)/**三线汇合就近合并成 1 个 3 度真路口**(非 3 接缝, MergedCount=2)/Nearest 真路口优先于接缝+半径外 null/空退化安全。**build 0 错·单测 1196→1203**。
+
+**本会话第 19 功能**。教训: **全模块纯引擎清单交叉核对时, name-mismatch 假缺口成批**(StructurePavement/ParametricCenterlines/PolylineMetrics 都是改名已移)——grep 类名 ✗ 只是线索, 须回读确认语义(RoadSurface=结构路面 ribbon 已覆盖); 真缺口 CenterlineJunctions 与既有 RoadNetwork(只数度)**互补**(四型分类 vs 度计数)。**2D 场景限制**: Z=0 故不判立交(需 3D 中线), 但四型平面分类完整可用, 已记录。见 [[unlock-blocked-insights]]。

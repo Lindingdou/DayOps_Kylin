@@ -956,6 +956,7 @@ public partial class MainWindow : Window
             if (cmd == "导出PLY" || cmd == "导出网格PLY" || cmd == "网格导出PLY") { await ExportMeshAsync("ply"); return; }
             if (cmd == "导出STL" || cmd == "导出网格STL" || cmd == "网格导出STL") { await ExportMeshAsync("stl"); return; }
             if (cmd == "中心线管理" || cmd == "边状态" || cmd == "路网拓扑" || cmd == "中线管理") { RoadNetworkReportCmd(); return; }
+            if (cmd == "中线交点" || cmd == "交点分类" || cmd == "路网交点" || cmd == "中线交点分类" || cmd.StartsWith("中线交点 ") || cmd.StartsWith("交点分类 ")) { CenterlineJunctionsCmd(cmd); return; }
             if (cmd == "排土场容量校核" || cmd == "容量校核" || cmd == "排土容量") { await DumpCapacityAsync(); return; }
             if (cmd == "生产量核算" || cmd == "任务量汇总" || cmd == "分账合计" || cmd == "生产任务量") { await ProductionQuantityAsync(); return; }
             if (cmd == "采剥平衡" || cmd == "采剥平衡分析" || cmd == "剥采平衡" || cmd == "物料平衡") { await StripBalanceAsync(); return; }
@@ -2489,6 +2490,40 @@ public partial class MainWindow : Window
             foreach (var (v, w) in adj[u]) if (v > u) { edges++; totLen += w; }
         }
         StatusMsg.Text = $"中心线管理/边状态：{polys.Count} 中线 · 节点 {nodes.Count} · 边 {edges}(总长 {totLen:0.#}) · 断头 {deadEnds} · 交叉 {junctions} · 孤立 {isolated}（增删边/改状态需交互 UI）";
+    }
+
+    // 中线交点分类(忠实 CenterlineJunctions): 场景中线(多段线) → X十字/T丁字/半腰焊/接缝/汇合口 四型分类 →
+    // 按型配色画交点标记 + 分类计数。2D 场景 Z=0 故不判立交(需 3D 中线, 记录)。"中线交点 [容差m]"。
+    private void CenterlineJunctionsCmd(string cmd)
+    {
+        var lines = new List<double[]>();
+        foreach (var e in _scene.Entities)
+            if (e is PolylineEntity pl && pl.Points.Count >= 2)
+            {
+                var arr = new double[pl.Points.Count * 3];
+                for (int i = 0; i < pl.Points.Count; i++) { arr[i * 3] = pl.Points[i].x; arr[i * 3 + 1] = pl.Points[i].y; arr[i * 3 + 2] = 0; }
+                lines.Add(arr);
+            }
+        if (lines.Count < 2) { StatusMsg.Text = "中线交点：场景需 ≥2 条中线(多段线)"; return; }
+        double tol = Cad.CenterlineJunctions.DefaultContactTolM;
+        int sp = cmd.IndexOf(' ');
+        if (sp >= 0 && double.TryParse(cmd.Substring(sp + 1).Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double t) && t > 0) tol = t;
+        var set = Cad.CenterlineJunctions.Build(lines, tol);
+        if (set.Count == 0) { StatusMsg.Text = $"中线交点：未发现交点(容差 {tol:0.#}m)"; return; }
+        BeginChange();
+        foreach (var j in set.All)
+        {
+            (float r, float g, float b) = j.Kind switch
+            {
+                JunctionKind.Cross => (1f, 0.2f, 0.2f),      // 红
+                JunctionKind.Tee => (1f, 0.6f, 0.1f),        // 橙
+                JunctionKind.MidWeld => (1f, 0.9f, 0.2f),    // 黄
+                _ => j.LineCount >= 3 ? (0.2f, 0.8f, 0.3f) : (0.6f, 0.6f, 0.6f),  // 汇合绿 / 接缝灰
+            };
+            _scene.Add(new CircleEntity { Cx = j.X, Cy = j.Y, Radius = tol * 0.4, Cr = r, Cg = g, Cb = b, LayerName = "中线交点" });
+        }
+        RefreshScene();
+        StatusMsg.Text = "中线交点：" + set.Summary + $"（容差 {tol:0.#}m; 红X/橙T/黄焊/绿汇合/灰缝; 2D 场景无高差, 立交需 3D 中线）";
     }
 
     // 快速建模：选顶面 + 底面 OFF → 各提最大边界环 → 侧壁放样(SideSurface.Loft) → 顶+底+侧 焊成闭合体。
@@ -8884,7 +8919,7 @@ public partial class MainWindow : Window
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割","移除障碍物",
         // 块体/运输/路网
-        "块体模型","资源量","道路横断面","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","演化对比","螺旋斜坡道","折返斜坡道",
+        "块体模型","资源量","道路横断面","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","中线交点","演化对比","螺旋斜坡道","折返斜坡道",
         // 生产计划/投影
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
