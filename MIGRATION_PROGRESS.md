@@ -2414,3 +2414,15 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [RoadTopologyTests](tests/PitMine3D.Kylin.Tests/RoadTopologyTests.cs) 8 例—— 简单路径=1 孤立段(两端悬挂)、Y 型 3 支线+1 丁字、十字=多岔、**双路口间干线**(30m·节点序[0,1,2,3])、全接缝三角=孤立环(IsLoop)、连通片计数、DescribeDelta 列变化("路口 0→1")+ 无变化空串、空安全。**build 0 错·单测 1209→1217**。
 
 **本会话第 21 功能**。教训: **分析/报表引擎按 0-引擎依赖逐个 method-diff**——多数覆盖或渲染(文档子系统), 但偶有**碎边级 vs 路段级**这种"present-but-shallow"缺口(既有只做低阶计数, 缺高阶抽象)。构建于**既有 Kylin 输出**(RoadNetwork.Build)之上可低成本落地, 富图模型专属字段(装卸点/人工改判/可通行)缺则记录。与 §二一四 中线交点(交点分类)互补=路网拓扑全景。见 [[unlock-blocked-insights]]。
+
+## 二一七、网格自交诊断(MeshDiagnose SelfIntersect)—— 全插件命令 diff + 受阻复评(第 22 功能)
+
+**全插件 AddButton 命令 diff 角度**: 提原 9 插件全部 `AddButton("名")`(225 条), 逐条 grep Kylin。真 ✗ 86 条经回读分类: 多数覆盖(别名/name-mismatch: 结构路面→RoadSurface、多段线嵌入三角网→Delaunay 约束、闭合线裁剪→LineClip)、**原版 SkeletonCommand 桩(最终并段/分帮扩帮桩等=`[骨架]…待实现`, 忠实**不移**)**、交互对话框(局部台阶/平盘联络道)、引擎/3D/native(排产/坑线/倾斜摄影)。唯 `格网质量检测` 深挖出真缺口。
+
+原 `格网质量检测` = `DiagnoseReport.ParseSafe`(解 **PMDR native 二进制**, 诊断本身 native)。Kylin `MeshDiagnose`(托管重实现)已覆盖 PMDR 的 边界边/非流形/退化/孤立/重复, **唯缺 `SelfIntersect`(自交三角)**。补 [src/Cad/MeshDiagnose.cs](src/Cad/MeshDiagnose.cs): 横切另一**非相邻(不共顶点)**三角计数, 复用既有 `MeshIntersect.TrianglesIntersect`(tri-tri, 新暴露 public), **均匀网格 broad-phase**(AABB 落格 + 去重对), 超 6 万三角返 -1(交 native/BVH)。接入 `网格诊断` 命令输出。
+
+**受阻复评(硬教训)**: 原命令注释曾写"自相交属鲁棒难题受阻记录"——**错**: 混淆了自交**检测**(=tri-tri 测试, Kylin 早有 MeshIntersect, 可托管)与自交**消解**(需鲁棒谓词+重网格, CGAL 级难题, 真受阻)。检测可做, 已补; 消解仍记录。同 #latent≠永久受阻。
+
+**验证(已知值)**: [MeshDiagnoseTests](tests/PitMine3D.Kylin.Tests/MeshDiagnoseTests.cs) +2 例—— 竖立三角穿平面三角内部(无共顶点)=自交 2 · 共边相邻/相隔远/闭合四面体=自交 0。**build 0 错·单测 1217→1219**。
+
+**本会话第 22 功能**。教训: **全插件 `AddButton` 命令 diff 是命令级最全核对**——但 ✗ 须回读三分: ①别名覆盖 ②原版 SkeletonCommand/PlaceholderCommand 桩(忠实不移, 13 个) ③交互/引擎/native。桩命令的识别(`SkeletonCommand`/`PlaceholderCommand`)防了"实现原版根本没实现的东西"。且 **native 二进制诊断(PMDR)的托管重实现要 method(字段)级对齐**——缺的那项(自交检测)复评发现是"检测可做≠消解受阻"。见 [[unlock-blocked-insights]] [[faithfulness-only-original-commands]]。

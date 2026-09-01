@@ -3601,9 +3601,10 @@ public partial class MainWindow : Window
         var (verts, tris) = MeshMetrics.ParseOff(text);
         if (tris.Count == 0) { StatusMsg.Text = "网格诊断：未解析到三角网格"; return; }
         var d = MeshDiagnose.Analyze(verts, tris);
-        // 孤立点/重复点有则附加(忠实原 DIAGNOSE 孤立点/重复点项; 自相交属鲁棒难题受阻记录)
+        // 孤立点/重复点有则附加; 自交三角(横切非相邻三角=原 PMDR SelfIntersect, 检测=tri-tri 测试可托管, 区别于自交"消解"的鲁棒难题)。
         string vtx = (d.IsolatedVertices > 0 || d.DuplicateVertices > 0) ? $" · 孤立点 {d.IsolatedVertices} · 重复点 {d.DuplicateVertices}" : "";
-        StatusMsg.Text = $"网格诊断：{d.TriangleCount} 三角 · {d.EdgeCount} 边 · 边界边 {d.BoundaryEdges} · 非流形边 {d.NonManifoldEdges} · 退化三角 {d.DegenerateTriangles} · 洞 {d.BoundaryLoops}{vtx} · {(d.IsClosed ? "闭合(水密)" : "非闭合")}";
+        string si = d.SelfIntersectTriangles < 0 ? " · 自交未检(网格过大)" : d.SelfIntersectTriangles > 0 ? $" · 自交三角 {d.SelfIntersectTriangles}" : "";
+        StatusMsg.Text = $"网格诊断：{d.TriangleCount} 三角 · {d.EdgeCount} 边 · 边界边 {d.BoundaryEdges} · 非流形边 {d.NonManifoldEdges} · 退化三角 {d.DegenerateTriangles} · 洞 {d.BoundaryLoops}{vtx}{si} · {(d.IsClosed ? "闭合(水密)" : "非闭合")}";
     }
 
     // 网格度量：OFF 网格 → 表面积/体积/包围盒 报表

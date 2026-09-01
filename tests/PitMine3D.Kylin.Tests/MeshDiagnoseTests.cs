@@ -87,4 +87,38 @@ public class MeshDiagnoseTests
         Assert.Equal(1, d.DuplicateVertices);
         Assert.Equal(0, d.IsolatedVertices);
     }
+
+    // ── 自交三角(横切非相邻三角) ──────────────────────────
+    [Fact]
+    public void Crossing_triangles_are_self_intersecting()
+    {
+        // A 在 z=0 平面; B 竖立穿过 A 内部(一顶点在下、两顶点在上, 无共享顶点) → 两三角自交。
+        var v = new List<(double, double, double)>
+        {
+            (0, 0, 0), (2, 0, 0), (0, 2, 0),                 // A: 0,1,2
+            (0.5, 0.5, -1), (1.0, 0.5, 1), (0.5, 1.0, 1),    // B: 3,4,5
+        };
+        var t = new List<(int, int, int)> { (0, 1, 2), (3, 4, 5) };
+        var d = MeshDiagnose.Analyze(v, t);
+        Assert.Equal(2, d.SelfIntersectTriangles);
+    }
+
+    [Fact]
+    public void Adjacent_and_separated_triangles_have_no_self_intersection()
+    {
+        // 共对角边的两三角(相邻) → 不算自交。
+        var quad = new List<(double, double, double)> { (0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0) };
+        var qt = new List<(int, int, int)> { (0, 1, 2), (0, 2, 3) };
+        Assert.Equal(0, MeshDiagnose.Analyze(quad, qt).SelfIntersectTriangles);
+
+        // 相隔很远的两三角 → 无自交。
+        var far = new List<(double, double, double)> { (0, 0, 0), (1, 0, 0), (0, 1, 0), (100, 100, 0), (101, 100, 0), (100, 101, 0) };
+        var ft = new List<(int, int, int)> { (0, 1, 2), (3, 4, 5) };
+        Assert.Equal(0, MeshDiagnose.Analyze(far, ft).SelfIntersectTriangles);
+
+        // 闭合四面体(面仅共边/顶点) → 无自交。
+        var tv = new List<(double, double, double)> { (0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1) };
+        var tt = new List<(int, int, int)> { (0, 2, 1), (0, 1, 3), (0, 3, 2), (1, 2, 3) };
+        Assert.Equal(0, MeshDiagnose.Analyze(tv, tt).SelfIntersectTriangles);
+    }
 }

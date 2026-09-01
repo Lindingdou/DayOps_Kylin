@@ -42,6 +42,12 @@ public static class MeshIntersect
                 Math.Max(A.x, Math.Max(B.x, C.x)), Math.Max(A.y, Math.Max(B.y, C.y)), Math.Max(A.z, Math.Max(B.z, C.z)));
     }
 
+    /// <summary>两三角是否横切相交(有实交段)。供网格自交诊断复用; 共面/仅触边不算。</summary>
+    public static bool TrianglesIntersect(
+        (double x, double y, double z) a0, (double x, double y, double z) a1, (double x, double y, double z) a2,
+        (double x, double y, double z) b0, (double x, double y, double z) b1, (double x, double y, double z) b2)
+        => TriTri(a0, a1, a2, b0, b1, b2, out _);
+
     // 三角 A(a0,a1,a2) ∩ 三角 B(b0,b1,b2) → 交段。无交/共面/退化 → false。
     private static bool TriTri(
         (double x, double y, double z) a0, (double x, double y, double z) a1, (double x, double y, double z) a2,
