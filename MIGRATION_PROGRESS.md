@@ -2624,4 +2624,6 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 
 **验证(已知值)**: [GeoDataQueriesTests](tests/PitMine3D.Kylin.Tests/GeoDataQueriesTests.cs) +1—— **blast_event 非迁移种子(运行时导入), 故用内存表已知值验聚合 SQL**: 3 事件→方量30000/炸药6500/综合单耗6500÷30000/孔进尺3000/2区; 逐月 2023-01(2次/方量15000/AVG单耗0.25)与 2023-02。**build 0 错·单测 1274→1275**。
 
-**本会话第 41 功能**。教训: **枚举种子全表查"有数据无命令"是独立高产角度**——51 表里 5 张零引用。**但要核可验证性: 表数据在迁移种子里吗?** blast_event 只运行时导入、迁移种子无→`OpenSeeded` 测不到→改**内存表已知值验聚合 SQL**(更强的 known-value)。补前仍守忠实(原有 BlastService 才补, 非臆造)。余 long_term_metric/daily_mine_summary/shift_calendar/workforce_monthly 待逐个核原服务+可验证性。见 [[unlock-blocked-insights]]。
+**本会话第 41 功能**。教训: **枚举种子全表查"有数据无命令"是独立高产角度**——51 表里 5 张零引用。**但要核可验证性: 表数据在迁移种子里吗?** blast_event 只运行时导入、迁移种子无→`OpenSeeded` 测不到→改**内存表已知值验聚合 SQL**(更强的 known-value)。补前仍守忠实(原有 BlastService.GetMonthlyAggregate 真聚合方法才补, 非臆造)。见 [[unlock-blocked-insights]]。
+
+**边界记录(忠实): 余 4 张未接表 = 原版 CRUD-only 或空数据, 不臆造分析**。逐个核余下零引用表: `workforce_monthly`(39 行真数据, 有预算效率列) `WorkforceService` = **纯 CRUD**(Get/ByYear/All/Upsert, 无 aggregate) · `long_term_metric`(4510) `LongTermService` = 纯 CRUD(Query, 无 aggregate) · `daily_mine_summary`(31 行**全零**, DailyMineService 纯 CRUD) · `shift_calendar`(93, 班次日历=参考数据)。**判据分野**: blast_event 有 `GetMonthlyAggregate` 真分析方法→移(功能41); 这 4 张原版**只 CRUD 存取 + 数据网格显示**、无分析方法→给它们造分析=**发明原版没有的**(违忠实), 且 Kylin 命令架构非通用数据网格。daily 全零更无值。→ 记录, 不补。**教训: "有数据无命令"要再分野——原版有分析方法(移) vs 原版仅 CRUD/网格显示(记录, 勿臆造分析)**。见 [[faithfulness-only-original-commands]]。
