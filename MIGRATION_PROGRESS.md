@@ -2605,3 +2605,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [PmxExportServiceTests](tests/PitMine3D.Kylin.Tests/PmxExportServiceTests.cs) +2—— CCW 半圆 P1(10,0)P2(0,10)P3(-10,0)(圆心0,0/r10/a0=0,a1=π) 往返**三点精确还原**; CW 输入端点可交换但重建仍过中点(0,10)+端点在(±10,0)(曲线恒等)。**build 0 错·单测 1271→1273**。
 
 **本会话第 39 功能**。教训: **format reader/writer 要查对称性**——reader 处理的类型码 writer 是否全写(PMX reader 读弧 writer 不写=往返丢弧)。补对称时**角度/方向约定要对齐**(writer 选 a0/a1 匹配 reader 的 CCW-NormSweep-经中点), 往返测试(写→读)锁 curve 恒等。同"导入/导出成对往返测试是最强验证"(§二一〇 PMX 首建)。见 [[unlock-blocked-insights]]。
+
+## 二三五、煤质均值贴国标等级(灰/硫/发热量) + 接线 FindGradeLevel —— 看板 KPI 分级 + tested-but-unwired(第 40 功能)
+
+**角度: 原分析窗口逐指标核 + tested-but-unwired**: 逐项对原 `CoalQualityDashboardWindow` 的 5 KPI 卡——avg Ad/S/Vdaf/Q/G 各**带国标等级标注**(`GradeAsh(avgAd)`/`GradeSulfur`/`GradeQnet`, 经 `CoalReferenceService.FindLevel` 查 coal_grade_rule)。Kylin `煤质统计` 只报**均值裸数**(灰分Ad 22.5% …), **无等级**(低灰/中灰/高灰); `煤质分级` 命令只**显示规则字典**不套到数据。且我 §二二九 建的 `CoalTypeInference.FindGradeLevel`(单指标区间分级)**有单测但没接线**——正是此用。
+
+**数据已备**: coal_grade_rule 已种子(ash/sulfur/qnet 各 5 级, 开区间 NULL=±∞)。补 [GeoDataQueries](src/Data/GeoDataQueries.cs) `GetGradeRulesByType(conn, type)`——**保 nullable 边界**(区别既有 `GetCoalGradeRules` 的 COALESCE(...,0) 丢开区间)。[CoalQualityStatsCmd](src/Views/MainWindow.axaml.cs): avg Ad→ash · avg Qnet→qnet · avg St→sulfur 各经 `FindGradeLevel` 贴级(如 "灰分Ad 22.5%(中灰)"), 忠实原看板 GradeAsh/Sulfur/Qnet 标注; Vdaf 无分级规则(同原, 不臆造)。
+
+**验证(种子集成)**: [GeoDataQueriesTests](tests/PitMine3D.Kylin.Tests/GeoDataQueriesTests.cs) +1(对 `GeoDatabase.OpenSeeded` 真种子)—— ash 规则首级开下界/末级开上界 nullable 保真(非 COALESCE 0); Ad 5/22.5/45 落三个不同等级且皆非空(开区间+分级自洽); sulfur/qnet 亦可分级。**build 0 错·单测 1273→1274**。
+
+**本会话第 40 功能**。教训: **逐分析窗口核每个 KPI 卡的"值+等级/分类"双层**——Kylin 常有值(均值)缺分类标注(国标等级); 且**接线已测未用的能力**(FindGradeLevel §二二九 建+测但只 ResolveCoalType 接了线)。**nullable DB 列勿 COALESCE 成 0**(丢开区间语义)——分级/分类的 ±∞ 边界要 `IsDBNull` 读。见 [[unlock-blocked-insights]] [[verify-seed-enum-values-before-filter]]。

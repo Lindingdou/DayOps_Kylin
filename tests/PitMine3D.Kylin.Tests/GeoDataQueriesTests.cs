@@ -9,6 +9,25 @@ namespace PitMine3D.Kylin.Tests;
 public class GeoDataQueriesTests
 {
     [Fact]
+    public void Grade_rules_by_type_preserve_open_bounds_and_classify()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var ash = GeoDataQueries.GetGradeRulesByType(db.Connection, "ash");
+        Assert.True(ash.Count >= 3);
+        Assert.Null(ash[0].ValueMin);      // 首级开下界 −∞(nullable 保真, 非 COALESCE 成 0)
+        Assert.Null(ash[^1].ValueMax);     // 末级开上界 +∞
+        // 不同量级的均值应落不同等级(5=特低/22.5=中/45=高), 且皆非空——验开区间+分级自洽。
+        var g5 = CoalTypeInference.FindGradeLevel(5, ash);
+        var g225 = CoalTypeInference.FindGradeLevel(22.5, ash);
+        var g45 = CoalTypeInference.FindGradeLevel(45, ash);
+        Assert.NotNull(g5); Assert.NotNull(g225); Assert.NotNull(g45);
+        Assert.NotEqual(g5, g225); Assert.NotEqual(g225, g45);
+        // sulfur/qnet 规则同样可读可分级。
+        Assert.NotNull(CoalTypeInference.FindGradeLevel(1.5, GeoDataQueries.GetGradeRulesByType(db.Connection, "sulfur")));
+        Assert.NotNull(CoalTypeInference.FindGradeLevel(22, GeoDataQueries.GetGradeRulesByType(db.Connection, "qnet")));
+    }
+
+    [Fact]
     public void Data_dictionary_lists_tables_and_columns()
     {
         using var db = GeoDatabase.OpenSeeded();

@@ -706,6 +706,19 @@ public static class GeoDataQueries
         return rows;
     }
 
+    /// <summary>某指标(ash/sulfur/qnet)的分级规则(保留 NULL=±∞ 开区间)供 <see cref="CoalTypeInference.FindGradeLevel"/> 给均值贴等级。</summary>
+    public static List<CoalTypeInference.GradeRule> GetGradeRulesByType(SqliteConnection conn, string ruleType)
+    {
+        var rows = new List<CoalTypeInference.GradeRule>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT COALESCE(level_name,''), value_min, value_max FROM coal_grade_rule WHERE rule_type=@t ORDER BY COALESCE(sort_order,0)";
+        cmd.Parameters.AddWithValue("@t", ruleType);
+        using var rd = cmd.ExecuteReader();
+        static double? Nd(SqliteDataReader r, int i) => r.IsDBNull(i) ? (double?)null : r.GetDouble(i);
+        while (rd.Read()) rows.Add(new CoalTypeInference.GradeRule(rd.GetString(0), Nd(rd, 1), Nd(rd, 2)));
+        return rows;
+    }
+
     /// <summary>把一张表整表导出为 CSV 文本(表头 + 数据行, 逗号分隔, 值内含逗号/引号/换行则加引号转义)。可单测。</summary>
     public static string ExportTableToCsv(SqliteConnection conn, string tableName)
     {
