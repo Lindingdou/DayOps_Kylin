@@ -7113,7 +7113,10 @@ public partial class MainWindow : Window
         if (q.Samples == 0) { StatusMsg.Text = "煤质统计：无煤样数据"; return; }
         // 灰分均匀性(变异系数)有评价才附加
         string uni = q.AshUniformity.Length > 0 ? $" · 灰分CV {q.AshCvPct:0.#}%({q.AshUniformity})" : "";
-        StatusMsg.Text = $"煤质统计：{q.Samples} 样 / {q.Seams} 煤层 · 平均 灰分Ad {q.AvgAshPct:0.##}% · 挥发分Vdaf {q.AvgVolatilePct:0.##}% · 发热量Qnet {q.AvgCalorificMJ:0.##}MJ/kg · 全硫St {q.AvgSulfurPct:0.###}%{uni}";
+        // 灰分纵向趋势(有高程样本才附加)
+        var vt = Data.GeoDataQueries.GetAshVerticalTrend(db.Connection);
+        string vtStr = vt.Samples >= 3 ? $" · {vt.Label}(浅{vt.ShallowAshPct:0.#}→深{vt.DeepAshPct:0.#}%)" : "";
+        StatusMsg.Text = $"煤质统计：{q.Samples} 样 / {q.Seams} 煤层 · 平均 灰分Ad {q.AvgAshPct:0.##}% · 挥发分Vdaf {q.AvgVolatilePct:0.##}% · 发热量Qnet {q.AvgCalorificMJ:0.##}MJ/kg · 全硫St {q.AvgSulfurPct:0.###}%{uni}{vtStr}";
     }
 
     // 煤质数据健康度(忠实原数据看板): 样品数/煤类标注率/化验孔覆盖/工分自洽率

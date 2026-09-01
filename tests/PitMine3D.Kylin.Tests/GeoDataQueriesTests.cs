@@ -493,6 +493,23 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Ash_vertical_trend_label_consistent_with_diff()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        string hole, seam;
+        using (var q = db.Connection.CreateCommand()) { q.CommandText = "SELECT hole_id FROM borehole LIMIT 1"; hole = (string)q.ExecuteScalar(); }
+        using (var q = db.Connection.CreateCommand()) { q.CommandText = "SELECT code FROM coal_seam_def LIMIT 1"; seam = (string)q.ExecuteScalar(); }
+        System.Func<string, string, string, IReadOnlyDictionary<string, string>> row = (dep, z, ad) =>
+            new Dictionary<string, string> { ["hole_id"] = hole, ["seam_code"] = seam, ["depth_from"] = dep, ["z_sample"] = z, ["ad_raw"] = ad };
+        GeoDataQueries.ImportCoalSamples(db.Connection, new[] { row("801", "1000", "10"), row("802", "500", "18"), row("803", "100", "26") }, true);
+        var vt = GeoDataQueries.GetAshVerticalTrend(db.Connection);
+        Assert.True(vt.Samples >= 3);
+        Assert.Equal(vt.DeepAshPct - vt.ShallowAshPct, vt.DiffPct, 4);   // d = 深 − 浅
+        string expected = System.Math.Abs(vt.DiffPct) < 3 ? "灰分纵向较稳定" : vt.DiffPct > 0 ? "灰分向深部增高" : "灰分向浅部增高";
+        Assert.Equal(expected, vt.Label);                                // 标签与 d 一致
+    }
+
+    [Fact]
     public void Fleet_cockpit_lights_partition_and_watch_consistent()
     {
         // 机群驾驶舱: 红绿灯划分完备(绿+黄+红=在评数) + 需关注=黄+红 + OEE/瓶颈达标率∈[0,100] + 可解锁≥0

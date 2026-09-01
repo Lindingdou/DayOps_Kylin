@@ -628,6 +628,29 @@ public static class GeoDataQueries
             selfTotal > 0 ? selfOk * 100.0 / selfTotal : 0, selfOk, selfTotal);
     }
 
+    public sealed record AshVerticalTrend(int Samples, double ShallowAshPct, double DeepAshPct, double DiffPct, string Label);
+
+    /// <summary>灰分纵向趋势（忠实原 CoalQualityBoreholeColumnWindow）：按样品高程降序取浅/深三分位灰分均值,
+    /// 差 |d|&lt;3 判较稳定, d&gt;0 向深部增高, d&lt;0 向浅部增高。反映灰分随埋深变化。</summary>
+    public static AshVerticalTrend GetAshVerticalTrend(SqliteConnection conn)
+    {
+        var zt = new List<(double z, double ad)>();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT z_sample, ad_raw FROM coal_sample WHERE z_sample IS NOT NULL AND ad_raw IS NOT NULL ORDER BY z_sample DESC";
+            using var rd = cmd.ExecuteReader();
+            while (rd.Read()) zt.Add((rd.GetDouble(0), rd.GetDouble(1)));
+        }
+        int n = zt.Count;
+        if (n < 3) return new AshVerticalTrend(n, 0, 0, 0, "样本不足");
+        int k = System.Math.Max(1, n / 3);
+        double shallow = 0; for (int i = 0; i < k; i++) shallow += zt[i].ad; shallow /= k;          // 高程高=浅部
+        double deep = 0; for (int i = n - k; i < n; i++) deep += zt[i].ad; deep /= k;               // 高程低=深部
+        double d = deep - shallow;
+        string label = System.Math.Abs(d) < 3 ? "灰分纵向较稳定" : d > 0 ? "灰分向深部增高" : "灰分向浅部增高";
+        return new AshVerticalTrend(n, shallow, deep, d, label);
+    }
+
     public sealed record SeamBenchRow(string SeamCode, double BenchHeight, double SlopeAngle, double BermWidth, double MinThick);
 
     /// <summary>煤层台阶参数：各煤层 台阶高/坡角/平台宽/最小可采厚。</summary>
