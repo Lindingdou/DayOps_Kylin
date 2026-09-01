@@ -816,6 +816,7 @@ public partial class MainWindow : Window
             if (cmd == "设备综合评分" || cmd == "设备评分" || cmd == "综合评分" || cmd == "设备排名评分") { EquipmentScoreCmd(); return; }
             if (cmd == "钻孔管理" || cmd == "钻孔统计" || cmd == "钻孔信息") { BoreholeStatsCmd(); return; }
             if (cmd == "煤质统计" || cmd == "煤质数据管理" || cmd == "煤质分析" || cmd == "质量·配煤分析" || cmd == "配煤分析") { CoalQualityStatsCmd(); return; }
+            if (cmd == "煤质数据健康度" || cmd == "数据健康度" || cmd == "煤质健康度" || cmd == "煤质数据体检") { CoalDataHealthCmd(); return; }
             if (cmd == "商品煤符合性" || cmd == "煤质达标" || cmd == "商品煤达标" || cmd.StartsWith("商品煤符合性 ") || cmd.StartsWith("煤质达标 ")) { CoalComplianceCmd(cmd); return; }
             if (cmd == "导出符合性" || cmd == "符合性导出" || cmd == "导出超标段") { await ExportComplianceAsync(cmd); return; }
             if (cmd == "品位储量曲线" || cmd == "品位-储量曲线" || cmd == "灰分储量曲线" || cmd.StartsWith("品位储量曲线 ")) { GradeTonnageCmd(cmd); return; }
@@ -7110,6 +7111,18 @@ public partial class MainWindow : Window
         // 灰分均匀性(变异系数)有评价才附加
         string uni = q.AshUniformity.Length > 0 ? $" · 灰分CV {q.AshCvPct:0.#}%({q.AshUniformity})" : "";
         StatusMsg.Text = $"煤质统计：{q.Samples} 样 / {q.Seams} 煤层 · 平均 灰分Ad {q.AvgAshPct:0.##}% · 挥发分Vdaf {q.AvgVolatilePct:0.##}% · 发热量Qnet {q.AvgCalorificMJ:0.##}MJ/kg · 全硫St {q.AvgSulfurPct:0.###}%{uni}";
+    }
+
+    // 煤质数据健康度(忠实原数据看板): 样品数/煤类标注率/化验孔覆盖/工分自洽率
+    private void CoalDataHealthCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var h = Data.GeoDataQueries.GetCoalDataHealth(db.Connection);
+        if (h.TotalSamples == 0) { StatusMsg.Text = "煤质数据健康度：无煤样"; return; }
+        string self = h.SelfEvaluableCount > 0
+            ? $" · 工分自洽率 {h.SelfConsistencyPct:0.#}%({h.SelfConsistentCount}/{h.SelfEvaluableCount})"
+            : " · 工分自洽率 —(缺 M/A/V/FC 齐全样本)";
+        StatusMsg.Text = $"煤质数据健康度：样品 {h.TotalSamples} · 煤类标注率 {h.CoalTypeCoveragePct:0.#}% · 化验孔覆盖 {h.HolesWithSamples}/{h.TotalHoles}={h.HoleCoveragePct:0.#}%{self}";
     }
 
     // 商品煤符合性(CoalAnalytics)：逐化验段判 Ad≤/St≤/Q≥ → 达标率 + 按煤层 + 超标数。缺省 Ad≤30/St≤1/Qgr≥21

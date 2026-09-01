@@ -496,6 +496,36 @@ public static class GeoDataQueries
         return rows;
     }
 
+    public sealed record CoalDataHealth(int TotalSamples, double CoalTypeCoveragePct,
+        int HolesWithSamples, int TotalHoles, double HoleCoveragePct,
+        double SelfConsistencyPct, int SelfConsistentCount, int SelfEvaluableCount);
+
+    /// <summary>煤质数据健康度（忠实原 CoalQualityDashboardWindow「数据健康度」）：样品数 / 煤类标注率 /
+    /// 化验孔覆盖率 / 工分自洽率(M+A+V+FC≈100±3, 仅四项齐全样本)。数值数据质量指标。</summary>
+    public static CoalDataHealth GetCoalDataHealth(SqliteConnection conn)
+    {
+        int total = (int)Scalar(conn, "SELECT COUNT(*) FROM coal_sample");
+        int withType = (int)Scalar(conn, "SELECT COUNT(*) FROM coal_sample WHERE coal_type IS NOT NULL AND TRIM(coal_type) <> ''");
+        int holesWithSamples = (int)Scalar(conn, "SELECT COUNT(DISTINCT borehole_id) FROM coal_sample WHERE borehole_id IS NOT NULL");
+        int totalHoles = (int)Scalar(conn, "SELECT COUNT(*) FROM borehole");
+        int selfOk = 0, selfTotal = 0;   // 工分自洽: M+A+V+FC≈100(±3)
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = @"SELECT mad_raw, ad_raw, vdaf_raw, fcd_raw FROM coal_sample
+                                WHERE mad_raw IS NOT NULL AND ad_raw IS NOT NULL AND vdaf_raw IS NOT NULL AND fcd_raw IS NOT NULL";
+            using var rd = cmd.ExecuteReader();
+            while (rd.Read())
+            {
+                selfTotal++;
+                double sum = rd.GetDouble(0) + rd.GetDouble(1) + rd.GetDouble(2) + rd.GetDouble(3);
+                if (System.Math.Abs(sum - 100) <= 3) selfOk++;
+            }
+        }
+        return new CoalDataHealth(total, total > 0 ? withType * 100.0 / total : 0,
+            holesWithSamples, totalHoles, totalHoles > 0 ? holesWithSamples * 100.0 / totalHoles : 0,
+            selfTotal > 0 ? selfOk * 100.0 / selfTotal : 0, selfOk, selfTotal);
+    }
+
     public sealed record SeamBenchRow(string SeamCode, double BenchHeight, double SlopeAngle, double BermWidth, double MinThick);
 
     /// <summary>煤层台阶参数：各煤层 台阶高/坡角/平台宽/最小可采厚。</summary>
@@ -1000,6 +1030,13 @@ public static class GeoDataQueries
             using (var q = conn.CreateCommand()) { q.CommandText = "SELECT id FROM borehole WHERE hole_id=@h"; q.Parameters.AddWithValue("@h", hole); var o = q.ExecuteScalar(); if (o == null || o is System.DBNull) { err++; continue; } bhId = System.Convert.ToInt64(o); }
             object Num(string k) => ParseD(Get(k), out double v) ? v : (object)System.DBNull.Value;
             object Txt(string k) => Get(k) is { Length: > 0 } s ? s : (object)System.DBNull.Value;
+            // coal_type→coal_classification(code) 有外键: 非有效码则置 NULL(无损降级, 免整行 FK 失败——用户填煤种中文名/未知码不丢整条化验)
+            object FkTxt(string k, string tbl, string pcol)
+            {
+                string v = Get(k); if (v.Length == 0) return System.DBNull.Value;
+                using var q = conn.CreateCommand(); q.CommandText = $"SELECT 1 FROM {tbl} WHERE {pcol}=@v LIMIT 1"; q.Parameters.AddWithValue("@v", v);
+                return q.ExecuteScalar() != null ? (object)v : System.DBNull.Value;
+            }
             bool exists;
             using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM coal_sample WHERE borehole_id=@b AND seam_code=@s AND depth_from=@d"; q.Parameters.AddWithValue("@b", bhId); q.Parameters.AddWithValue("@s", seam); q.Parameters.AddWithValue("@d", df); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
             // 数值列: 工业分析 M/A/V/FC(原煤 raw + 浮煤 clean 全齐) + 密度(视/真) + 全硫 + 发热量 + 胶质层 X/Y + 粘结 G + 焦渣 + 浮煤回收率
@@ -1028,7 +1065,7 @@ public static class GeoDataQueries
             }
             cmd.Parameters.AddWithValue("@b", bhId); cmd.Parameters.AddWithValue("@s", seam); cmd.Parameters.AddWithValue("@d", df);
             foreach (var col in cols) cmd.Parameters.AddWithValue("@" + col, Num(col));
-            foreach (var col in txtCols) cmd.Parameters.AddWithValue("@" + col, Txt(col));
+            foreach (var col in txtCols) cmd.Parameters.AddWithValue("@" + col, col == "coal_type" ? FkTxt("coal_type", "coal_classification", "code") : Txt(col));
             try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
         }
         return new ImportOutcome(ins, upd, skip, err);

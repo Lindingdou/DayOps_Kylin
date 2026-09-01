@@ -2042,3 +2042,11 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - **验证**: +4 单测(熵权和=1 + 离散维权重>均匀维 + m<3 等权 + Composite 加权和; 设备评分降序 + 五维归一[0,1] + 综合≤1)。**双查**无既有评分命令(方案综合对比是方案不是设备)。1046 测全绿, 0 错, smoke 正常。雷达图受阻记录。
 
 **受阻复评透镜连续产出**: Weibull(§一七七)+ 设备综合评分(本轮)——皆"原以为图表受阻, 实则数值内核可做"。**判据固化**: 受阻的分析/仪表盘项, 先拆"数值指标(可做)vs 图形载体(受阻)"; 多数含可做数值核。本轮 1 补(受阻转可做, 熵权 MCDM 算法)。见 [[unlock-blocked-insights]]。
+
+## 一七九、煤质数据健康度(仪表盘数值核)+ 煤质导入 coal_type FK 陷阱修
+
+- **煤质数据健康度 · 补**(续受阻仪表盘复评): 原 CoalQualityDashboardWindow「数据健康度」的数值核可做。`GetCoalDataHealth`——样品总数 / 煤类标注率(coal_type 非空%) / 化验孔覆盖(distinct borehole/总孔%) / **工分自洽率**(M+A+V+FC≈100±3, 仅四项齐全样本; 因 §一六一 补 Mad/FCd 导入才可算)。新命令「煤质数据健康度」。
+- **★煤质导入 coal_type FK 陷阱 · 真 bug 修**: `coal_sample.coal_type` 有**外键→coal_classification(code)**。`ImportCoalSamples` 原直插 coal_type(Txt), 用户填**煤种中文名/未知码**(如"气煤"非 code)→ **整行 FK 失败, 丢整条化验**! 修: `FkTxt` 父表校验, 非有效码置 NULL(无损降级)。同设备 model / 路况 truck_model / 边坡 side_type 的约束三防。测试即由此暴露(气煤 err=1)。
+- **验证**: +1 单测(导入 M+A+V+FC=100 样本[coal_type=气煤经 FK-safe→NULL 但样本入库]→ 自洽率含之 + 标注率/孔覆盖对拍)。1047 测全绿, 0 错, smoke 正常。
+
+**教训**: 导入的 FK 陷阱要**逐 FK 列查**——coal_sample 有 3 个 FK(borehole_id/seam_code/coal_type), coal_type 此前漏做 FK-safe(前几轮只修了 equipment/haul_road 的 FK)。**凡 import 写带 FK 的表, 每个 FK 列都要父表校验降级**。本轮 1 补(数据健康度)+ 1 真 bug 修(coal_type FK)。

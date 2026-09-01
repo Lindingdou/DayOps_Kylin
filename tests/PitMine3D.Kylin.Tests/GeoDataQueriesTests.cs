@@ -450,6 +450,35 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Coal_data_health_coverage_and_self_consistency()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        string hole, seam;
+        using (var q = db.Connection.CreateCommand()) { q.CommandText = "SELECT hole_id FROM borehole LIMIT 1"; hole = (string)q.ExecuteScalar(); }
+        using (var q = db.Connection.CreateCommand()) { q.CommandText = "SELECT code FROM coal_seam_def LIMIT 1"; seam = (string)q.ExecuteScalar(); }
+        // M+A+V+FC = 5+15+30+50 = 100 → 自洽
+        var io = GeoDataQueries.ImportCoalSamples(db.Connection, new[]
+        {
+            (IReadOnlyDictionary<string,string>)new Dictionary<string,string>
+            { ["hole_id"]=hole, ["seam_code"]=seam, ["depth_from"]="888", ["mad_raw"]="5", ["ad_raw"]="15", ["vdaf_raw"]="30", ["fcd_raw"]="50", ["coal_type"]="气煤" }
+        }, true);
+        Assert.True(io.Inserted + io.Updated >= 1, $"煤样导入 ins={io.Inserted} upd={io.Updated} err={io.Errors}");
+        double? mad;
+        using (var c = db.Connection.CreateCommand()) { c.CommandText = "SELECT mad_raw FROM coal_sample WHERE seam_code=@s AND depth_from=888"; c.Parameters.AddWithValue("@s", seam); var o = c.ExecuteScalar(); mad = o == null || o is System.DBNull ? (double?)null : System.Convert.ToDouble(o); }
+        Assert.True(mad.HasValue, $"mad_raw 应入库 (实际 {(mad?.ToString() ?? "NULL")})");
+        var h = GeoDataQueries.GetCoalDataHealth(db.Connection);
+        Assert.True(h.TotalSamples > 0);
+        Assert.InRange(h.HoleCoveragePct, 0, 100);
+        Assert.True(h.SelfEvaluableCount >= 1, "导入样本四项齐全→可评自洽");
+        Assert.True(h.SelfConsistentCount >= 1, "M+A+V+FC=100 应判自洽");
+        int total, withType;
+        using (var c = db.Connection.CreateCommand()) { c.CommandText = "SELECT COUNT(*) FROM coal_sample"; total = System.Convert.ToInt32(c.ExecuteScalar()); }
+        using (var c = db.Connection.CreateCommand()) { c.CommandText = "SELECT COUNT(*) FROM coal_sample WHERE coal_type IS NOT NULL AND TRIM(coal_type)<>''"; withType = System.Convert.ToInt32(c.ExecuteScalar()); }
+        Assert.Equal(total, h.TotalSamples);
+        Assert.Equal(withType * 100.0 / total, h.CoalTypeCoveragePct, 4);   // 标注率对拍
+    }
+
+    [Fact]
     public void Export_table_then_reimport_roundtrips()
     {
         using var db = GeoDatabase.OpenSeeded();
