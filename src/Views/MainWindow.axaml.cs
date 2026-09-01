@@ -958,6 +958,7 @@ public partial class MainWindow : Window
             if (cmd == "导出STL" || cmd == "导出网格STL" || cmd == "网格导出STL") { await ExportMeshAsync("stl"); return; }
             if (cmd == "中心线管理" || cmd == "边状态" || cmd == "路网拓扑" || cmd == "中线管理") { RoadNetworkReportCmd(); return; }
             if (cmd == "中线交点" || cmd == "交点分类" || cmd == "路网交点" || cmd == "中线交点分类" || cmd.StartsWith("中线交点 ") || cmd.StartsWith("交点分类 ")) { CenterlineJunctionsCmd(cmd); return; }
+            if (cmd == "路段分类" || cmd == "路网拓扑分类" || cmd == "路段拓扑" || cmd == "干线支线") { RoadTopologyCmd(); return; }
             if (cmd == "排土场容量校核" || cmd == "容量校核" || cmd == "排土容量") { await DumpCapacityAsync(); return; }
             if (cmd == "生产量核算" || cmd == "任务量汇总" || cmd == "分账合计" || cmd == "生产任务量") { await ProductionQuantityAsync(); return; }
             if (cmd == "采剥平衡" || cmd == "采剥平衡分析" || cmd == "剥采平衡" || cmd == "物料平衡") { await StripBalanceAsync(); return; }
@@ -2574,6 +2575,35 @@ public partial class MainWindow : Window
         }
         RefreshScene();
         StatusMsg.Text = "中线交点：" + set.Summary + $"（容差 {tol:0.#}m; 红X/橙T/黄焊/绿汇合/灰缝; 2D 场景无高差, 立交需 3D 中线）";
+    }
+
+    // 路段分类(忠实 RoadTopology R-T1/R-T2/R-T3): 场景中线建路网 → 碎边压成路段 →
+    // 节点 5 类(度数) + 路段 3 类(干线/支线/孤立段) → 按类配色画路段 + 计数。装卸点/人工改判/可通行需富图模型(记录)。
+    private void RoadTopologyCmd()
+    {
+        var polys = new List<System.Collections.Generic.IReadOnlyList<(double x, double y)>>();
+        foreach (var e in _scene.Entities)
+            if (e is PolylineEntity pl && pl.Points.Count >= 2) polys.Add(pl.Points);
+        if (polys.Count == 0) { StatusMsg.Text = "路段分类：场景无中线(多段线)"; return; }
+        double tol = System.Math.Max(1e-6, SnapTolWorld(_lastPointer) * 0.5);
+        var (nodes, adj) = Cad.RoadNetwork.Build(polys, tol);
+        var r = Cad.RoadTopology.Analyze(nodes, adj);
+        if (r.Segments.Count == 0) { StatusMsg.Text = "路段分类：未识别路段"; return; }
+        BeginChange();
+        foreach (var s in r.Segments)
+        {
+            (float cr, float cg, float cb) = s.Class switch
+            {
+                RoadSegmentClass.Trunk => (0.2f, 0.8f, 0.3f),   // 干线绿
+                RoadSegmentClass.Spur => (1f, 0.6f, 0.1f),      // 支线橙
+                _ => (0.6f, 0.6f, 0.6f),                        // 孤立段灰
+            };
+            var pl = new PolylineEntity { Cr = cr, Cg = cg, Cb = cb, LayerName = "路段分类" };
+            foreach (int ni in s.NodePath) if (ni >= 0 && ni < nodes.Count) pl.Points.Add(nodes[ni]);
+            if (pl.Points.Count >= 2) _scene.Add(pl);
+        }
+        RefreshScene();
+        StatusMsg.Text = "路段分类：" + r.Summary + "（绿干线/橙支线/灰孤立段; 装卸点/人工改判/可通行过滤需富图模型）";
     }
 
     // 快速建模：选顶面 + 底面 OFF → 各提最大边界环 → 侧壁放样(SideSurface.Loft) → 顶+底+侧 焊成闭合体。
@@ -8969,7 +8999,7 @@ public partial class MainWindow : Window
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割","移除障碍物",
         // 块体/运输/路网
-        "块体模型","资源量","道路横断面","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","中线交点","演化对比","螺旋斜坡道","折返斜坡道",
+        "块体模型","资源量","道路横断面","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道",
         // 生产计划/投影
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)

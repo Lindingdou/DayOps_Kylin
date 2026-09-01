@@ -2404,3 +2404,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [TrendBenchIntegratorTests](tests/PitMine3D.Kylin.Tests/TrendBenchIntegratorTests.cs) 6 例—— 竖直趋势穿三级(标高 100/110/120 压平)、**同级两段压平+断头接平成一条(4 点, SourceCount=2)**、无交点降级、无效趋势降级、ExtractPlatformLevels 降序聚级(120.5/110/100)、AlongTrend 只计趋势穿过的级。**build 0 错·单测 1203→1209**。
 
 **本会话第 20 功能**。至此本会话续作(元角度: 逐子目录+全模块纯引擎清单)连补 **9 功能(12–20)**: 快速选择/平盘标高清单/现状参数提取/标注台阶标高/参数校核/煤质分析补全(灰分回归+综合结论)/空间交叉验证/中线交点分类/趋势整合台阶。单测 1010→1209。教训: **"读毕"的目录仍会漏——MineAssLib/Driving 出了 TautString 后又漏 TrendBenchIntegrator; 全模块纯引擎清单(注 纯C#/无依赖)逐个 grep+回读, 是比"逐目录读"更硬的收敛判据**。见 [[unlock-blocked-insights]]。
+
+## 二一六、路段分类拓扑(RoadTopology R-T1/R-T2/R-T3)—— 分析引擎 method-diff 续(第 21 功能)
+
+**分析/报表引擎 method-diff 角度**: 枚举全模块 Analytics/Report/Metrics/Indicator 引擎(0 引擎依赖者), 逐个核 Kylin 覆盖。多覆盖(HaulMetrics 5/5、BlockReportGenerator→Statistics.Describe、ContourEngine/BenchAnalyzer 全), 报表引擎的 HTML/PDF 渲染属文档子系统(记录), 但 `RoadLib.Network.RoadTopology` 是真缺口——Kylin RoadNetworkReportCmd 只做**碎边级**度数计数, 无**路段级**分类。
+
+忠实移植核 [src/Cad/RoadTopology.cs](src/Cad/RoadTopology.cs)(构建于 Kylin `RoadNetwork.Build` 的 (nodes,adj)): **R-T1** 节点按度数 5 类(孤立0/端点1/接缝2/丁字3/多岔≥4, 只有度≠2 是真节点); **R-T2** 碎边压成**路段**(两真节点间顺接缝串边); **R-T3** 路段 3 类(干线=两端都通/支线=一端悬挂/孤立段=两端悬挂, 悬挂=度≤1) + 连通片(并查集) + `DescribeDelta`(两次拓扑增量, 增删边回显)。命令 `路段分类`(场景中线→路段级分类→按类配色画+计数)。**记录(需更富图模型, Kylin 邻接表无)**: 装卸点类型(源汇作端点)、人工改判(R-T7)、可通行过滤(passableOnly)。
+
+**验证(已知值)**: [RoadTopologyTests](tests/PitMine3D.Kylin.Tests/RoadTopologyTests.cs) 8 例—— 简单路径=1 孤立段(两端悬挂)、Y 型 3 支线+1 丁字、十字=多岔、**双路口间干线**(30m·节点序[0,1,2,3])、全接缝三角=孤立环(IsLoop)、连通片计数、DescribeDelta 列变化("路口 0→1")+ 无变化空串、空安全。**build 0 错·单测 1209→1217**。
+
+**本会话第 21 功能**。教训: **分析/报表引擎按 0-引擎依赖逐个 method-diff**——多数覆盖或渲染(文档子系统), 但偶有**碎边级 vs 路段级**这种"present-but-shallow"缺口(既有只做低阶计数, 缺高阶抽象)。构建于**既有 Kylin 输出**(RoadNetwork.Build)之上可低成本落地, 富图模型专属字段(装卸点/人工改判/可通行)缺则记录。与 §二一四 中线交点(交点分类)互补=路网拓扑全景。见 [[unlock-blocked-insights]]。
