@@ -2817,3 +2817,18 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **TDM 家族纠错(重要)**: 早记"KDF/TDM 无样本不可验"=**误记**。复核: Kylin **已有** `TdmImportService`(.3dm 二进制网格 394 行+测) · `.3ds` 折线(ImportTdmStringEditable+测) · KDF 读写对(+测)——全用**合成字节夹具**已验(格式源码可见即可合成, 同 PMB/blast/工分)。唯 **`.3dp` 工程包**未做: 实为 **Microsoft CAB 归档**, 原版靠 Windows `expand.exe` 解包(内含 .3dm/.3ds 转交已有 reader, 纯编排)——Kylin 无 expand.exe, 托管 CAB+LZX 解压 .NET 无内置且无样本, **=环境阻**(非"无样本", 非缺算法)。
 
 **三收敛角度互证**(测试 19/19 · 命令 200 标签 · 格式 Reader/Writer 全对)一致指向: 可实现+可验证+忠实者已尽, 余为 native 引擎/系统工具依赖。**教训: "无样本"非真阻(格式源可见即可合成验); 逐条复核 blocked 记录仍是富矿——本轮又纠 PMxx"无源"、KDF/TDM"无样本"两误记, 并精确定位 .3dp 真阻(CAB/expand.exe)**。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二五三 块体属性赋值（公式模式）—— 补原 ExpressionEngine 值求值 + 纠"受数据模型限"误记
+
+**第四收敛角度(域引擎类枚举)挖出**: 枚举原版 `*Engine/*Solver/*Generator/*Builder` 域类比对, 逢 `ExpressionEngine`(BlockModelLib/Expression)。Kylin `BlockExpression` 只是其**谓词子集**(X/Y/Z/Grade/Size + 比较/布尔 → 供筛选/删除), 头注自记"多属性 CellData 公式赋值受数据模型限, 记录"。**复核纠误**: 原 ExpressionEngine 另一用途「**属性赋值 公式模式**」(算 double 值赋新属性)——Kylin **`_blockAttrs`(Dictionary<string,double[]>)本就持多属性**(BLK/PMB 导入填, 切换属性 已用), 数据模型**支持**, 记"受限"过悲观。
+
+**补** [BlockAttrExpression](src/Cad/BlockAttrExpression.cs)(忠实原 ExpressionEngine 值求值, 与 BlockExpression 谓词互补):
+- 文法 expr(+−)→term(*/%)→unary(±)→primary(num/ident/ident(args)/(expr)); AST(Num/Var/Neg/Bin/Func) + `IBlockExprContext`/`MutableBlockExprContext`。
+- 14 内置函数: min/max/abs/sqrt/exp/log/sin/cos/tan/floor/ceil/round + clamp(v,lo,hi) + if(c,a,b)(c>0取a)。除零/模零→NaN(不抛), 未定义变量→0(容错, 同原 v1)。
+- 命令 `属性赋值 <名> = <表达式>`([MainWindow](src/Views/MainWindow.axaml.cs) `BlockAttrAssignCmd`): 逐块建 context(x/y/z/grade/size/i/j/k/nx/ny/nz/sx/sy/sz + 已有属性列)→求值→存 `_blockAttrs[名]`(NaN/∞→0)。即可「切换属性 <名>」配色显示。+ 目录 + 分派。
+
+**验证(已知值)**: [BlockAttrExpressionTests](tests/PitMine3D.Kylin.Tests/BlockAttrExpressionTests.cs) +6—— 运算优先级/括号/%/一元−; 属性公式(grade·体积·密度、埋深1000−z、未定义→0); 14 函数逐一(min/max/abs/sqrt/floor/ceil/round 银行家舍入/exp/log); clamp 上下夹 + if 条件; 除零/模零→NaN 不抛; 语法错抛。**build 0 错·单测 1316→1322**。
+
+**本会话第 60 功能**。教训: **第四收敛角度=域引擎类(*Engine/*Solver)枚举**——继测试/命令/格式三角度, 域算法类枚举挖出 present-but-partial(Kylin 有谓词子集缺值模式)。又一"受数据模型限"误记被纠(`_blockAttrs` 本支持多属性)。**"受限/blocked"记录逐条复核仍是富矿, 第 N 次证明我的记录不可靠**。见 [[unlock-blocked-insights]]。

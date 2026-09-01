@@ -808,6 +808,7 @@ public partial class MainWindow : Window
             if (cmd == "切换属性" || cmd.StartsWith("切换属性 ") || cmd == "切换品位属性" || cmd.StartsWith("切换品位属性 ") || cmd == "切换活动属性" || cmd.StartsWith("切换活动属性 ")) { SwitchGradeAttrCmd(cmd); return; }
             if (cmd == "筛选块体" || cmd == "块体筛选") { FilterBlocksCmd(); return; }
             if (cmd.StartsWith("表达式筛选块 ") || cmd.StartsWith("表达式筛选 ") || cmd.StartsWith("块体表达式 ") || cmd.StartsWith("按表达式筛选 ")) { BlockExpressionFilterCmd(cmd); return; }
+            if (cmd.StartsWith("属性赋值 ") || cmd.StartsWith("公式赋值 ") || cmd.StartsWith("块体属性计算 ") || cmd.StartsWith("属性计算 ")) { BlockAttrAssignCmd(cmd); return; }
             if (cmd == "面约束块体" || cmd == "曲面约束块体" || cmd == "网格约束块体" || cmd.StartsWith("面约束块体 ")) { await MeshConstrainBlocksAsync(cmd); return; }
             if (cmd == "离散化模型" || cmd == "离散化" || cmd == "体素化" || cmd == "模型体素化" || cmd.StartsWith("离散化模型 ") || cmd.StartsWith("离散化 ")) { await DiscretizeModelAsync(cmd); return; }
             if (cmd == "约束块体" || cmd == "块体约束") { ConstrainBlocksCmd(); return;}
@@ -5114,6 +5115,47 @@ public partial class MainWindow : Window
         }
         BeginChange(); RenderBlocks(_lastBlocks); RefreshScene();
         StatusMsg.Text = $"切换属性→「{name}」：{_lastBlocks.Count} 块重配色 · 值域[{gmin:0.###},{gmax:0.###}] 均{gsum / _lastBlocks.Count:0.###}";
+    }
+
+    // 属性赋值(公式模式)：忠实原 ExpressionEngine「属性赋值 公式」——按表达式逐块算新属性存入 _blockAttrs。
+    // 用法：属性赋值 <名> = <表达式>。变量: x/y/z/grade(品位)/size(尺寸)/i/j/k/nx/ny/nz/sx/sy/sz + 已有属性名。
+    // 函数: min/max/abs/sqrt/exp/log/sin/cos/tan/floor/ceil/round/clamp(v,lo,hi)/if(c,a,b)。
+    private void BlockAttrAssignCmd(string cmd)
+    {
+        if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "属性赋值：请先导入/生成块体"; return; }
+        int eq = cmd.IndexOf('=');
+        if (eq < 0) { StatusMsg.Text = "属性赋值：用法 属性赋值 <新属性名> = <表达式>（变量 x/y/z/grade/size/i/j/k/nx/ny/nz + 已有属性; 函数 min/max/abs/sqrt/exp/log/sin/cos/tan/floor/ceil/round/clamp/if）"; return; }
+        string head = cmd.Substring(0, eq).Trim(), expr = cmd.Substring(eq + 1).Trim();
+        var hp = head.Split(new[] { ' ', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        string name = hp.Length >= 2 ? hp[^1] : "attr";
+        Cad.BlockAttrExpression compiled;
+        try { compiled = Cad.BlockAttrExpression.Compile(expr); }
+        catch (System.Exception ex) { StatusMsg.Text = $"属性赋值：表达式错误 {ex.Message}"; return; }
+        // 重建网格算 i/j/k/nx/ny/nz
+        double size = _lastBlocks[0].Size > 0 ? _lastBlocks[0].Size : 1;
+        double minX = double.MaxValue, minY = double.MaxValue, minZ = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue, maxZ = double.MinValue;
+        foreach (var b in _lastBlocks) { if (b.X < minX) minX = b.X; if (b.X > maxX) maxX = b.X; if (b.Y < minY) minY = b.Y; if (b.Y > maxY) maxY = b.Y; if (b.Z < minZ) minZ = b.Z; if (b.Z > maxZ) maxZ = b.Z; }
+        int nx = (int)System.Math.Round((maxX - minX) / size) + 1, ny = (int)System.Math.Round((maxY - minY) / size) + 1, nz = (int)System.Math.Round((maxZ - minZ) / size) + 1;
+        var vals = new double[_lastBlocks.Count];
+        var ctx = new Cad.MutableBlockExprContext();
+        int bad = 0;
+        for (int bi = 0; bi < _lastBlocks.Count; bi++)
+        {
+            var b = _lastBlocks[bi];
+            ctx.Set("x", b.X); ctx.Set("y", b.Y); ctx.Set("z", b.Z); ctx.Set("高程", b.Z); ctx.Set("标高", b.Z);
+            ctx.Set("grade", b.Grade); ctx.Set("品位", b.Grade); ctx.Set("值", b.Grade); ctx.Set("size", b.Size); ctx.Set("尺寸", b.Size);
+            ctx.Set("i", System.Math.Round((b.X - minX) / size)); ctx.Set("j", System.Math.Round((b.Y - minY) / size)); ctx.Set("k", System.Math.Round((b.Z - minZ) / size));
+            ctx.Set("nx", nx); ctx.Set("ny", ny); ctx.Set("nz", nz); ctx.Set("sx", size); ctx.Set("sy", size); ctx.Set("sz", size);
+            if (_blockAttrs != null) foreach (var kv in _blockAttrs) if (bi < kv.Value.Length) ctx.Set(kv.Key, kv.Value[bi]);
+            double v = compiled.Evaluate(ctx);
+            if (double.IsNaN(v) || double.IsInfinity(v)) { bad++; v = 0; }
+            vals[bi] = v;
+        }
+        _blockAttrs ??= new System.Collections.Generic.Dictionary<string, double[]>();
+        _blockAttrs[name] = vals;
+        double mn = double.MaxValue, mx = double.MinValue, sum = 0; foreach (var v in vals) { if (v < mn) mn = v; if (v > mx) mx = v; sum += v; }
+        StatusMsg.Text = $"属性赋值：{name} = {expr} · {vals.Length} 块 · 值域[{mn:0.###},{mx:0.###}] 均{sum / vals.Length:0.###}"
+            + (bad > 0 ? $" · {bad} 块无效(NaN/∞)→0" : "") + $" · 用「切换属性 {name}」显示";
     }
 
     // 筛选块体：只显示品位 ≥ 平均品位 的块(矿块)
@@ -9658,7 +9700,7 @@ public partial class MainWindow : Window
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割","移除障碍物",
         // 块体/运输/路网
-        "块体模型","导出PMB","资源量","面约束块体","离散化模型","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道","直线斜坡道",
+        "块体模型","导出PMB","属性赋值","资源量","面约束块体","离散化模型","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道","直线斜坡道",
         // 生产计划/投影
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","开采程序切分","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
