@@ -8402,8 +8402,8 @@ public partial class MainWindow : Window
         { e.LayerName = _layers.Current.Name; _scene.Add(e); }
         RefreshScene();
         var name = await SaveCsvAsync("导出分煤层煤质", $"coal_stats_by_seam_{ind}.csv", Data.CoalAnalytics.StatsBySeamToCsv(rows));
-        var head = string.Join(" · ", rows.Take(4).Select(r => $"{r.SeamCode}[{r.Min:0.#}~{r.Max:0.#}]中{r.Median:0.#}"));
-        StatusMsg.Text = $"分煤层煤质({ind}·五数概括)：{rows.Count} 煤层 · {head} · 箱线入场景" + (name != null ? $" · CSV → {name}" : "");
+        var head = string.Join(" · ", rows.Take(4).Select(r => $"{r.SeamCode}[{r.Min:0.#}~{r.Max:0.#}]中{r.Median:0.#}({r.SampleLevel})"));
+        StatusMsg.Text = $"分煤层煤质({ind}·五数概括+样本充分度)：{rows.Count} 煤层 · {head} · 箱线入场景" + (name != null ? $" · CSV → {name}" : "");
     }
 
     private void CoalQualityStatsCmd()

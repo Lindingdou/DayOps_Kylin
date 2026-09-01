@@ -30,10 +30,22 @@ public class CoalStatsBySeamTests
         var b = rows.Single(r => r.SeamCode == "B");
         Assert.Equal(2, b.N);
         Assert.Equal(5, b.Min, 6); Assert.Equal(15, b.Max, 6); Assert.Equal(10, b.Mean, 6);
-        // CSV 头 + 每层一行
+        Assert.Equal("不足", a.SampleLevel);   // 5 样 < 20 → 不足
+        // CSV 头(含评级) + 每层一行
         var csv = CoalAnalytics.StatsBySeamToCsv(rows);
-        Assert.Contains("煤层,样本,均值,标准差,Min,P25,P50,P75,Max", csv);
+        Assert.Contains("煤层,样本,均值,标准差,Min,P25,P50,P75,Max,评级", csv);
         Assert.Equal(1 + 2, csv.Trim().Split('\n').Length);
+    }
+
+    [Fact]
+    public void SampleAdequacy_thresholds_50_20()
+    {
+        Assert.Equal("充分", CoalAnalytics.SampleAdequacy(50));
+        Assert.Equal("充分", CoalAnalytics.SampleAdequacy(80));
+        Assert.Equal("紧张", CoalAnalytics.SampleAdequacy(20));
+        Assert.Equal("紧张", CoalAnalytics.SampleAdequacy(49));
+        Assert.Equal("不足", CoalAnalytics.SampleAdequacy(19));
+        Assert.Equal("不足", CoalAnalytics.SampleAdequacy(0));
     }
 
     [Fact]
