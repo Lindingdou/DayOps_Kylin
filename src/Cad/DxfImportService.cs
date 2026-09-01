@@ -14,9 +14,10 @@ namespace PitMine3D.Kylin.Cad;
 /// DXF 导入 —— 用 ACadSharp（纯托管、跨平台）读 .dxf，把实体几何提取成线段（交错 P3_C3），
 /// 供 <c>GlRenderer.Upload</c> 直接上屏。对应 Windows 版 DwgDxfImportService 的托管读取路径。
 ///
-/// 覆盖：Line / LwPolyline / Polyline2D / Polyline3D / Circle / Arc（圆、弧按分段折线近似）。
-/// 说明：最终架构里几何应交 C++ 内核（AcDb）渲染；此托管提取用于骨架阶段先"能打开图纸看"，
-/// 待内核接入后由内核渲染路径取代。颜色暂用统一色，按图层/ACI 上色为后续项。
+/// 覆盖(LoadEntities 可编辑路径)：Line / LwPolyline(含 bulge→弧) / Polyline2D/3D / 原生 Circle/Arc /
+///   Point / Text / MText / Ellipse / Spline / Insert(块展开) / Leader / MLine / MultiLeader / Dimension /
+///   Solid / Face3D / Mesh / PolyfaceMesh / Hatch(边界环) / Ray / XLine —— 按图层/ACI/真彩上色。
+/// 说明：最终架构里几何可交 C++ 内核（AcDb）渲染；此托管提取（ACadSharp）已能完整打开并编辑图纸。
 /// </summary>
 public static class DxfImportService
 {
