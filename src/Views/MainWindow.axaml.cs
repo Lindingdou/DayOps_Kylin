@@ -7669,7 +7669,12 @@ public partial class MainWindow : Window
         if (cls.Count == 0) { StatusMsg.Text = "煤种分类：无分类数据"; return; }
         var parts = new List<string>();
         foreach (var c in cls) parts.Add($"{c.Code} {c.NameCn}(Vdaf {c.VdafMin:0.#}~{c.VdafMax:0.#}%)");
-        StatusMsg.Text = $"煤种分类（{cls.Count} 种）：" + string.Join(" · ", parts);
+        // 实际样本煤种分布(忠实原「煤类饼」的量化)
+        var dist = Data.GeoDataQueries.GetCoalTypeDistribution(db.Connection);
+        string distStr = dist.Count > 0
+            ? " · 样本分布 " + string.Join("/", dist.ConvertAll(d => $"{d.CoalType}{d.Samples}({d.SharePct:0.#}%)"))
+            : "";
+        StatusMsg.Text = $"煤种分类（{cls.Count} 种）：" + string.Join(" · ", parts) + distStr;
     }
 
     private void SeamBenchParamsCmd()

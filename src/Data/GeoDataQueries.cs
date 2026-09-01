@@ -395,6 +395,25 @@ public static class GeoDataQueries
         return rows;
     }
 
+    public sealed record CoalTypeShareRow(string CoalType, int Samples, double SharePct);
+
+    /// <summary>煤种分布(忠实原「煤类饼」的量化)：coal_sample 按实际 coal_type 分组计样本数 + 占比, 降序。</summary>
+    public static List<CoalTypeShareRow> GetCoalTypeDistribution(SqliteConnection conn)
+    {
+        var raw = new List<(string t, int n)>();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = @"SELECT COALESCE(NULLIF(TRIM(coal_type),''),'(未定)'), COUNT(*)
+                                FROM coal_sample GROUP BY COALESCE(NULLIF(TRIM(coal_type),''),'(未定)') ORDER BY COUNT(*) DESC";
+            using var rd = cmd.ExecuteReader();
+            while (rd.Read()) raw.Add((rd.GetString(0), rd.GetInt32(1)));
+        }
+        int tot = 0; foreach (var r in raw) tot += r.n;
+        var rows = new List<CoalTypeShareRow>();
+        foreach (var r in raw) rows.Add(new CoalTypeShareRow(r.t, r.n, tot > 0 ? r.n * 100.0 / tot : 0));
+        return rows;
+    }
+
     public sealed record SeamBenchRow(string SeamCode, double BenchHeight, double SlopeAngle, double BermWidth, double MinThick);
 
     /// <summary>煤层台阶参数：各煤层 台阶高/坡角/平台宽/最小可采厚。</summary>

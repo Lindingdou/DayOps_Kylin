@@ -415,6 +415,22 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Coal_type_distribution_counts_shares_descending()
+    {
+        // 煤种分布(原煤类饼量化): 按样本数降序 + 占比和=100 + 总数=coal_sample 计数
+        using var db = GeoDatabase.OpenSeeded();
+        var dist = GeoDataQueries.GetCoalTypeDistribution(db.Connection);
+        Assert.NotEmpty(dist);
+        for (int i = 1; i < dist.Count; i++) Assert.True(dist[i].Samples <= dist[i - 1].Samples, "按样本数降序");
+        double totShare = 0; int totN = 0;
+        foreach (var d in dist) { totShare += d.SharePct; totN += d.Samples; }
+        Assert.Equal(100, totShare, 2);
+        int expected;
+        using (var c = db.Connection.CreateCommand()) { c.CommandText = "SELECT COUNT(*) FROM coal_sample"; expected = System.Convert.ToInt32(c.ExecuteScalar()); }
+        Assert.Equal(expected, totN);   // 每样本恰归一种(含'(未定)')
+    }
+
+    [Fact]
     public void Export_table_then_reimport_roundtrips()
     {
         using var db = GeoDatabase.OpenSeeded();
