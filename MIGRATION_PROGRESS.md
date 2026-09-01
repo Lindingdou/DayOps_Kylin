@@ -3220,3 +3220,17 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 - **RoadGraphSerializer**(114, RoadGraph↔JSON): **架构冗余非缺口**——Kylin 路网按需从场景折线 `RoadNetwork.Build` 重建(折线本身随 .pmx 持久化), 不单独建持久 RoadGraph 对象, 且无几何外的图属性(节点类型/边状态)可序列化(那些 Kylin 按需 CenterlineJunctions 分类)。
 
 **结论**: 算法前沿下探至 80 行仍收敛——全 Modules ≥80 行纯托管类**全归账**(覆盖 / 记录 native·格式·交互·不可验证 / 架构冗余)。本会话两真获(§79 RoadCenterlineExtractor + §80 RoadNetworkConnector)后, 穷举类枚举确认无更多可实现+可验证的大中算法缺口。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二七九 退化命令再核（原测试类逐一验实现深度）—— 收敛确认
+
+**§79 教训延伸**: ExtractCenterline 曾"有源但退化"(2 线中点替代 523 行配对法)。故对测试交叉核的**全部原测试类**逐一验 Kylin 是否为**完整实现**(非退化):
+
+- **PathSolver**(Yen K最短路) → Kylin `RoadNetwork.KShortestPaths`+`DijkstraExcluding`(真 Yen 算法) ✓
+- **ProfileSmoother**(竖曲线平滑) → Kylin `RoadVerticalCurve`(抛物线竖曲线+半径 clamp)+`RoadVerticalCurveTests` ✓
+- **KdfRoundtrip** → Kylin `KdfExportService`/`KdfImportService`+`KdfExport/ImportTests`(往返) ✓
+- **DriveTemplateEngine** → DriveSequence+测试 ✓ · **ParameterExtractor** → BenchParameterVerifier+测试 ✓ · **TransportIndicators** → §71 ✓ · **RegionClip** → ClipPolygon(工具) ✓ · **BenchTemplateResolver** → BenchParameterExtractor ✓ · **PortModel** → 节点编辑器 ✓
+- **AIChat** → 原 MockAiEngine(脚本对话树 DialogNodeType Text/Option/End)=**mock 演示助手**(罐装应答, 非真 AI), 交互式聊天窗口 → **记录**(demo/交互, 同 SampleTaskBoard 演示桩)。
+
+**结论**: 12 个原测试类中, **仅 ExtractCenterline 退化(已补 §79)**; 余全为完整实现(多带 Kylin 测试)或 mock 演示(AIChat 记录)。**退化命令角度对"有测试的原类"已穷尽**——第五次连续收敛确认。教训: **"有源"须验实现深度(§79 退化教训), 但逐一核后确认仅一处退化**——退化非普遍, 是个例。见 [[unlock-blocked-insights]]。
