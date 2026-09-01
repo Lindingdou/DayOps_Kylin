@@ -49,6 +49,19 @@ public class ShortTermSchedulerTests
     }
 
     [Fact]
+    public void GenerateVariants_nine_and_compare_recommends()
+    {
+        var basis = new ShortTermPlan { AnnualCoalTargetWanT = 1000 };
+        var variants = ShortTermScheduler.GenerateVariants(basis, ShortTermScheduler.DefaultDispatches(), ShortTermScheduler.DefaultCalendars());
+        Assert.Equal(9, variants.Count);        // 3 组织 × 3 工作历
+        var results = variants.Select(v => v.Result!).ToList();
+        var best = ShortTermComparer.Score(results);
+        Assert.NotNull(best);
+        Assert.All(results, x => Assert.InRange(x.CompositeScore, 0, 100));
+        if (best!.Ok) Assert.DoesNotContain(results, x => x.Ok && x.CompositeScore > best.CompositeScore);
+    }
+
+    [Fact]
     public void Concentrated_dispatch_has_higher_output_cv_than_balanced()
     {
         var bal = new ShortTermPlan { Dispatch = DispatchStrategy.Balanced, MonthlyCoalCeilingWanT = 0 };

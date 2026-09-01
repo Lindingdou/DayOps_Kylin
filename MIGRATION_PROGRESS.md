@@ -2948,3 +2948,17 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
   - 规划可视(中长远规划动态模拟/短期进度计划动态模拟/进度计划方案出图): 排产核已补(§259/260), 动态模拟/出图=可视 refinement, 记录。
 
 **教训**: **第九角度=孤儿标签(XAML `Tag=` 无 `cmd==` 分派)是最大盲区**——前八角度全漏(整串命令比对被 XAML 标签骗过)。全量三分后: 真缺者补(规划两块)、别名接、余为 SampleTaskBoard 桩/原生 IPitDesignCapability/OSGB 渲染, 忠实记录。**判据: XAML Tag 全量 × dispatch 串比对(排除 ActivateDrawTool 路由), 逐孤儿查 Placeholder/OpenWindow(样例)/Capability(原生)/真算法**。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二六二 规划一键编制多方案对比（中长远 + 短期）—— 规划模块收官
+
+**补两 Scheduler 的「一键编制」主路径**(§259/260 只补单方案): 原 AutoCompose = 正交派生多方案 → Comparer 综合评分 → 荐最优。
+- **中长远(§68)**: [LongTermScheduler](src/Cad/LongTermScheduler.cs) `GenerateVariants`(4 工作线×4 方向=16 方案) + `LongTermComparer.Score`(六指标 min-max 归一×权重 稳产0.18/削峰0.22/早达产0.15/内排0.15/NPV0.18/均衡0.12, 荐可行最高分) + `DecisionWeights`/CompositeScore。
+- **短期(本节)**: [ShortTermScheduler](src/Cad/ShortTermScheduler.cs) `GenerateVariants`(3 作业组织×3 工作历=9 方案) + `ShortTermComparer.Score`(五指标: 完成偏差 low/月产均衡 high/利用率贴 90% high/峰月 low/推进 high, 权重 0.28/0.22/0.18/0.16/0.16)。
+
+命令加 `一键`/`多方案`/`对比` 模式: 生成全方案→评分→推荐 + 前三 + 评分柱上屏 + CSV(方案/综合分/各指标/可行)。
+
+**验证(已知值)**: LongTermSchedulerTests +2(16 方案·推荐可行最高分·单方案退化 50 分) · ShortTermSchedulerTests +1(9 方案·推荐可行最高分)。归一 min-max、荐"可行优先最高分"逻辑与原一致。**build 0 错·单测 1347→1350**。
+
+**本会话第 68-69 功能**。规划模块至此收官: 中长远/短期 各 单方案排产(§259/260) + 多方案一键评分推荐(§68/69); 余动态模拟/出图=原版 Placeholder 桩或可视 refinement。**第九角度(孤儿标签)总产出: 图介数§258 + 规划四功能(§259/260/68/69)**——整规划子系统前八角度全漏, 靠孤儿标签挖出并完整补齐。见 [[unlock-blocked-insights]]。

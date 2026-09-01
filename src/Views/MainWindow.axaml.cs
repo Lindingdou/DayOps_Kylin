@@ -5967,6 +5967,21 @@ public partial class MainWindow : Window
         if (tk.Length > 2 && double.TryParse(tk[2], out var br) && br > 0) p.BaseRatio = br;
         if (tk.Length > 3) p.Dispatch = tk[3].Contains("集中") ? Cad.DispatchStrategy.Concentrated : tk[3].Contains("多面") ? Cad.DispatchStrategy.MultiFace : Cad.DispatchStrategy.Balanced;
         if (tk.Length > 4) p.Calendar = tk[4].Contains("抢产") ? Cad.CalendarScenario.Push : tk[4].Contains("保守") ? Cad.CalendarScenario.Conservative : Cad.CalendarScenario.Standard;
+        // 一键编制: 作业组织×工作历 9 方案 → 综合评分 → 荐最优
+        if (tk.Any(t => t == "一键" || t == "多方案" || t == "对比" || t == "自动"))
+        {
+            var variants = Cad.ShortTermScheduler.GenerateVariants(p, Cad.ShortTermScheduler.DefaultDispatches(), Cad.ShortTermScheduler.DefaultCalendars());
+            var results = variants.Select(v => v.Result!).ToList();
+            var best = Cad.ShortTermComparer.Score(results);
+            var ranked = results.OrderByDescending(x => x.CompositeScore).ToList();
+            DrawCategoryBars(ranked.Select(x => (x.Name, x.CompositeScore)).ToList(), "综合分");
+            var nm = await SaveCsvAsync("导出短期多方案", "short_term_variants.csv",
+                "方案,综合分,完成率%,均剥采比,峰月煤,设备利用%,均衡,可行\n" +
+                string.Join("", ranked.Select(x => $"{x.Name},{x.CompositeScore:0},{x.CompletionRatePct:0.#},{x.AvgRatio:0.##},{x.PeakMonthCoalWanT:0.#},{x.AvgEquipUtilPct:0},{x.BalanceCoef:0.##},{(x.Ok ? "是" : "否")}\n")));
+            StatusMsg.Text = $"短期一键编制({variants.Count} 方案·作业组织×工作历)：推荐【{best?.Name ?? "无"}】综合 {best?.CompositeScore:0}分(完成 {best?.CompletionRatePct:0.#}%·利用 {best?.AvgEquipUtilPct:0}%·{(best?.Ok == true ? "可行" : "不达标")}) · 前三 " + string.Join(" | ", ranked.Take(3).Select(x => $"{x.Name} {x.CompositeScore:0}分")) + " · 评分柱入场景"
+                + (nm != null ? $" · CSV → {nm}" : "");
+            return;
+        }
         Cad.ShortTermScheduler.Schedule(p);
         var r = p.Result!;
         DrawCategoryBars(p.Months.Select(m => ($"{m.Month}月", m.CoalWanT)).ToList(), "月煤万t");   // 月产柱

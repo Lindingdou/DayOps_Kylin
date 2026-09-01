@@ -42,8 +42,21 @@ public sealed class ShortTermPlan
     public double BalanceSum => OutputSmooth + RatioSmooth + EquipSmooth;
     public List<string> Faces = new();             // 作业面(按次序)
 
+    public string Name = "基准";
     public List<MonthPeriod> Months { get; } = new();
     public ShortTermResult? Result { get; set; }
+
+    /// <summary>拷贝标量参数(新 Months/Result), 供多方案派生。</summary>
+    public ShortTermPlan Clone() => new()
+    {
+        PlanYear = PlanYear, AnnualCoalTargetWanT = AnnualCoalTargetWanT, BaseRatio = BaseRatio, StartMonth = StartMonth, MonthCount = MonthCount,
+        MonthlyCoalCeilingWanT = MonthlyCoalCeilingWanT, MonthlyStripCeilingWanM3 = MonthlyStripCeilingWanM3, RatioCeiling = RatioCeiling,
+        CompletionTolerancePct = CompletionTolerancePct, BenchHeightM = BenchHeightM, WorkLineLenM = WorkLineLenM, Dispatch = Dispatch, Calendar = Calendar,
+        StandardWorkdays = StandardWorkdays, EquipmentCount = EquipmentCount, EquipmentAvailabilityPct = EquipmentAvailabilityPct,
+        EquipMonthlyCapacityWanM3 = EquipMonthlyCapacityWanM3, WinterMonthsCsv = WinterMonthsCsv, WinterDeratePct = WinterDeratePct,
+        MaintenanceDeratePct = MaintenanceDeratePct, MaintenanceMonth = MaintenanceMonth,
+        OutputSmooth = OutputSmooth, RatioSmooth = RatioSmooth, EquipSmooth = EquipSmooth, Faces = new List<string>(Faces), Name = Name,
+    };
 
     public HashSet<int> WinterMonths()
     {
@@ -73,7 +86,49 @@ public sealed class MonthPeriod
 
 public sealed record ShortTermResult(double TotalCoalWanT, double TotalStripWanM3, double CompletionRatePct,
     double AvgRatio, double PeakMonthCoalWanT, string PeakMonthLabel, double OutputCv, double RatioCv,
-    double AvgEquipUtilPct, double AdvanceTotalM, double BalanceCoef, bool Ok);
+    double AvgEquipUtilPct, double AdvanceTotalM, double BalanceCoef, bool Ok)
+{
+    public double CompositeScore { get; set; }
+    public string Name { get; set; } = "";
+}
+
+/// <summary>短期方案决策权重(忠实原默认)。</summary>
+public sealed record ShortTermWeights(double Completion = 0.28, double OutputBalance = 0.22, double EquipUtil = 0.18,
+    double PeakShaving = 0.16, double AdvanceAttain = 0.16)
+{
+    public double Sum => Completion + OutputBalance + EquipUtil + PeakShaving + AdvanceAttain;
+}
+
+/// <summary>短期多方案对比 —— 忠实原 ShortTermComparer.Score(五指标归一×权重; 设备利用率目标 90%)。</summary>
+public static class ShortTermComparer
+{
+    public const double UtilTarget = 90;
+    private static double NormHigh(double[] a, int i) { double mn = a.Min(), mx = a.Max(); return mx > mn + 1e-9 ? (a[i] - mn) / (mx - mn) : 0.5; }
+    private static double NormLow(double[] a, int i) { double mn = a.Min(), mx = a.Max(); return mx > mn + 1e-9 ? (mx - a[i]) / (mx - mn) : 0.5; }
+
+    public static ShortTermResult? Score(IReadOnlyList<ShortTermResult> results, ShortTermWeights? weights = null)
+    {
+        var r = results.Where(x => x != null).ToList();
+        if (r.Count == 0) return null;
+        var w = weights ?? new ShortTermWeights();
+        double wsum = w.Sum <= 0 ? 1 : w.Sum;
+        double[] compDev = r.Select(x => Math.Abs(x.CompletionRatePct - 100)).ToArray();
+        double[] bal = r.Select(x => x.BalanceCoef).ToArray();
+        double[] utilFit = r.Select(x => -Math.Abs(x.AvgEquipUtilPct - UtilTarget)).ToArray();
+        double[] peak = r.Select(x => x.PeakMonthCoalWanT).ToArray();
+        double[] adv = r.Select(x => x.AdvanceTotalM).ToArray();
+        ShortTermResult? best = null; double bestScore = -1;
+        for (int i = 0; i < r.Count; i++)
+        {
+            double s = NormLow(compDev, i) * w.Completion + NormHigh(bal, i) * w.OutputBalance + NormHigh(utilFit, i) * w.EquipUtil
+                     + NormLow(peak, i) * w.PeakShaving + NormHigh(adv, i) * w.AdvanceAttain;
+            r[i].CompositeScore = Math.Round(s / wsum * 100, 0);
+            if (r[i].Ok && r[i].CompositeScore > bestScore) { bestScore = r[i].CompositeScore; best = r[i]; }
+        }
+        if (best == null) foreach (var x in r) if (x.CompositeScore > bestScore) { bestScore = x.CompositeScore; best = x; }
+        return best;
+    }
+}
 
 public static class ShortTermScheduler
 {
@@ -206,5 +261,31 @@ public static class ShortTermScheduler
         double mean = a.Average();
         if (mean <= 1e-9) return 0;
         return Math.Sqrt(a.Select(x => (x - mean) * (x - mean)).Average()) / mean;
+    }
+
+    public readonly record struct DispatchSpec(string Label, DispatchStrategy Strategy);
+    public readonly record struct CalendarSpec(string Label, CalendarScenario Scenario);
+
+    public static List<DispatchSpec> DefaultDispatches() => new()
+    { new("均衡型", DispatchStrategy.Balanced), new("多面展开", DispatchStrategy.MultiFace), new("集中强采", DispatchStrategy.Concentrated) };
+
+    public static List<CalendarSpec> DefaultCalendars() => new()
+    { new("标准", CalendarScenario.Standard), new("抢产", CalendarScenario.Push), new("保守", CalendarScenario.Conservative) };
+
+    /// <summary>作业组织 × 工作历 正交派生多套月度计划, 各独立排产。忠实原 GenerateVariants。</summary>
+    public static List<ShortTermPlan> GenerateVariants(ShortTermPlan basePlan,
+        IReadOnlyList<DispatchSpec> dispatches, IReadOnlyList<CalendarSpec> calendars)
+    {
+        var result = new List<ShortTermPlan>();
+        foreach (var d in dispatches)
+            foreach (var c in calendars)
+            {
+                var v = basePlan.Clone();
+                v.Name = $"{d.Label}·{c.Label}"; v.Dispatch = d.Strategy; v.Calendar = c.Scenario;
+                Schedule(v);
+                if (v.Result != null) v.Result.Name = v.Name;
+                result.Add(v);
+            }
+        return result;
     }
 }
