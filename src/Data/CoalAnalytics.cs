@@ -596,6 +596,35 @@ public static class CoalAnalytics
         return d < 1e-12 ? null : System.Math.Max(-1, System.Math.Min(1, sxy / d));
     }
 
+    /// <summary>分煤层煤质箱线统计(忠实原 CoalQualityStatsWindow 每煤层五数概括): 煤层→n/均值/标准差/Min/P25/中位/P75/Max。</summary>
+    public sealed record SeamBox(string SeamCode, int N, double Mean, double Std, double Min, double P25, double Median, double P75, double Max);
+
+    /// <summary>按煤层分组算指标(ad/vdaf/std/qnet)五数概括。缺该指标的样本跳过; 按煤层码升序。</summary>
+    public static List<SeamBox> StatsBySeam(IReadOnlyList<CoalSample> samples, string indicator)
+    {
+        double? Val(CoalSample s) => indicator?.ToLowerInvariant() switch
+        { "vdaf" => s.VdafRaw, "std" or "st" => s.StdRaw, "qnet" or "q" => s.QnetAd, _ => s.AdRaw };
+        var outp = new List<SeamBox>();
+        foreach (var g in samples.Where(s => Val(s) is not null).GroupBy(s => s.SeamCode ?? "").OrderBy(g => g.Key, System.StringComparer.Ordinal))
+        {
+            var vals = g.Select(s => Val(s)!.Value).ToList();
+            var d = Cad.Statistics.Describe(vals, System.Math.Min(20, System.Math.Max(1, vals.Count)));
+            outp.Add(new SeamBox(g.Key, d.Count, d.Mean, d.Std, d.Min, d.Q1, d.Median, d.Q3, d.Max));
+        }
+        return outp;
+    }
+
+    /// <summary>分煤层箱线 → CSV(煤层,样本,均值,标准差,Min,P25,P50,P75,Max)。</summary>
+    public static string StatsBySeamToCsv(IReadOnlyList<SeamBox> rows)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("煤层,样本,均值,标准差,Min,P25,P50,P75,Max\n");
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        foreach (var r in rows)
+            sb.Append($"{r.SeamCode},{r.N},{r.Mean.ToString("0.###", inv)},{r.Std.ToString("0.###", inv)},{r.Min.ToString("0.###", inv)},{r.P25.ToString("0.###", inv)},{r.Median.ToString("0.###", inv)},{r.P75.ToString("0.###", inv)},{r.Max.ToString("0.###", inv)}\n");
+        return sb.ToString();
+    }
+
     /// <summary>化验点平面覆盖(忠实原 空间分布窗 ComputeArea/UpdateCoverageInfo): 点数 + XY 外接矩形范围 + 面积(km²=外接矩形/1e6)。空/单点面积 0。</summary>
     public sealed record XyCoverageResult(int N, double MinX, double MaxX, double MinY, double MaxY, double AreaKm2);
     public static XyCoverageResult XyCoverage(IEnumerable<(double x, double y)> pts)

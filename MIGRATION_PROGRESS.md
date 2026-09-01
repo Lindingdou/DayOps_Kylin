@@ -2851,3 +2851,18 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 - **SceneExport(DXF/DWG, ACadSharp)**: **8/8 全覆盖** + 多行文字→MText(高保真, 甚超 PMX)。
 
 **教训**: **注释即"记录", 过期注释诱发再误判**——逐条复核自标限制是第五角度(继测试/命令/格式/引擎), 又纠 4 过期注释、挖 1 真可做(正多边形导出)。**导出实体覆盖(第六角度)= 枚举场景实体 × 各导出器 case**, 确认 PMX/DXF 皆 8/8。至此**六收敛角度**互证。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二五五 分煤层煤质箱线（DB 聚合 present-but-partial）+ 箱线图 BoxPlot（第四类图）
+
+**第八角度(DB 聚合命令 present-but-partial)续挖**: 原 `CoalQualityStatsWindow` 出**每煤层五数概括**(样本/均值/标准差/Min/P25/P50/P75/Max + 评级 + 箱线图 + CSV)。Kylin `煤质统计`(DB) 只出**全局均值**(灰/挥/热/硫+CV+粘结G); `质量统计`(CSV) 有分组分位数但吃用户 CSV 非库。⇒ **库直出分煤层箱线缺**。
+
+**补**:
+- [CoalAnalytics](src/Data/CoalAnalytics.cs) `StatsBySeam(samples, ind)` 纯核: 按煤层分组 → `Statistics.Describe` 五数概括(n/均值/标准差/Min/P25/中位/P75/Max), 缺指标样本跳、煤层码升序; `StatsBySeamToCsv`。
+- [BoxPlot](src/Cad/BoxPlot.cs)(第四类图, 与 CurvePlot/BarChartPlot/ScatterPlot 并列): 每类别 Q1–Q3 箱 + 中位横线 + Min/Max 须端帽, 全局共享 Y 量程; 空/零尺寸/退化安全。
+- 命令 `分煤层煤质 [ad|vdaf|std|qnet]`([MainWindow](src/Views/MainWindow.axaml.cs) `CoalStatsBySeamCmd`): 库样本→StatsBySeam→箱线图上屏 + CSV + 状态行五数摘要。+ 目录 + 分派。
+
+**验证(已知值)**: [CoalStatsBySeamTests](tests/PitMine3D.Kylin.Tests/CoalStatsBySeamTests.cs) +2(A{10..50}→min10/max50/中位30/均30·B{5,15}→均10·缺指标跳·CSV 头+行) · [BoxPlotTests](tests/PitMine3D.Kylin.Tests/BoxPlotTests.cs) +2(共享量程须/中位线/类别轴名/空零). **build 0 错·单测 1325→1329**。
+
+**本会话第 62 功能**。教训: **第八角度(DB 聚合 present-but-partial)连出两功能**(§二五四 化验覆盖 · §二五五 分煤层箱线)——原分析窗常出比 Kylin 命令更细的**分组/分位/覆盖**统计, 逐窗对指标即挖。四类图(折线/柱/散点/箱线)补齐, 统计可视基本全谱。见 [[unlock-blocked-insights]]。

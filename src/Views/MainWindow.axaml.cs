@@ -838,6 +838,7 @@ public partial class MainWindow : Window
             if (cmd == "设备综合评分" || cmd == "设备评分" || cmd == "综合评分" || cmd == "设备排名评分") { EquipmentScoreCmd(); return; }
             if (cmd == "钻孔管理" || cmd == "钻孔统计" || cmd == "钻孔信息") { BoreholeStatsCmd(); return; }
             if (cmd == "煤质统计" || cmd == "煤质数据管理" || cmd == "煤质分析" || cmd == "质量·配煤分析" || cmd == "配煤分析") { CoalQualityStatsCmd(); return; }
+            if (cmd == "分煤层煤质" || cmd == "煤质箱线" || cmd == "分层煤质统计" || cmd.StartsWith("分煤层煤质 ") || cmd.StartsWith("煤质箱线 ")) { await CoalStatsBySeamCmd(cmd); return; }
             if (cmd == "煤质数据健康度" || cmd == "数据健康度" || cmd == "煤质健康度" || cmd == "煤质数据体检") { CoalDataHealthCmd(); return; }
             if (cmd == "商品煤符合性" || cmd == "煤质达标" || cmd == "商品煤达标" || cmd.StartsWith("商品煤符合性 ") || cmd.StartsWith("煤质达标 ")) { CoalComplianceCmd(cmd); return; }
             if (cmd == "导出符合性" || cmd == "符合性导出" || cmd == "导出超标段") { await ExportComplianceAsync(cmd); return; }
@@ -8378,6 +8379,33 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"钻孔管理：{b.Holes} 孔 · 总进尺 {b.TotalDepthM:0.#}m（均 {b.AvgDepthM:0.#}m）· 见煤结果 {b.SeamResults} · 类别: " + string.Join(" / ", cats);
     }
 
+    // 分煤层煤质箱线(忠实原 CoalQualityStatsWindow 每煤层五数概括): 库样本→按煤层五数概括 + 箱线图上屏 + CSV。
+    // 用法 分煤层煤质 [ad|vdaf|std|qnet]。
+    private async Task CoalStatsBySeamCmd(string cmd)
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var samples = Data.GeoDataQueries.GetCoalSamples(db.Connection);
+        if (samples.Count == 0) { StatusMsg.Text = "分煤层煤质：无煤样数据"; return; }
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        string ind = CoalIndicator(tk, 1, "ad");
+        var rows = Data.CoalAnalytics.StatsBySeam(samples, ind);
+        if (rows.Count == 0) { StatusMsg.Text = $"分煤层煤质({ind})：无有效样(缺该指标)"; return; }
+        // 箱线图上屏(视口中部)
+        double vw = ViewportHost.Bounds.Width, vh = ViewportHost.Bounds.Height;
+        var p0 = Viewport.ScreenToWorld(vw * 0.3, vh * 0.85) ?? (0.0, 0.0);
+        var p1 = Viewport.ScreenToWorld(vw * 0.7, vh * 0.4) ?? (100.0, 50.0);
+        double w = System.Math.Abs(p1.x - p0.x), h = System.Math.Abs(p1.y - p0.y);
+        if (w < 1e-6) w = 100; if (h < 1e-6) h = 50;
+        var boxes = rows.Select(r => (r.SeamCode, r.Min, r.P25, r.Median, r.P75, r.Max)).ToList();
+        BeginChange();
+        foreach (var e in Cad.BoxPlot.Build(boxes, System.Math.Min(p0.x, p1.x), System.Math.Min(p0.y, p1.y), w, h, System.Math.Max(h * 0.05, 1e-3), ind))
+        { e.LayerName = _layers.Current.Name; _scene.Add(e); }
+        RefreshScene();
+        var name = await SaveCsvAsync("导出分煤层煤质", $"coal_stats_by_seam_{ind}.csv", Data.CoalAnalytics.StatsBySeamToCsv(rows));
+        var head = string.Join(" · ", rows.Take(4).Select(r => $"{r.SeamCode}[{r.Min:0.#}~{r.Max:0.#}]中{r.Median:0.#}"));
+        StatusMsg.Text = $"分煤层煤质({ind}·五数概括)：{rows.Count} 煤层 · {head} · 箱线入场景" + (name != null ? $" · CSV → {name}" : "");
+    }
+
     private void CoalQualityStatsCmd()
     {
         var db = EnsureGeoDb(); if (db == null) return;
@@ -9709,7 +9737,7 @@ public partial class MainWindow : Window
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","机群驾驶舱","设备综合评分","数据看板","煤种分类","煤质数据健康度","分煤层煤质",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
         "产能分类对比","故障类型分布","分工序验收合格率","数据导出","数据字典","达成度评价","产量预测","时序预测","编组优化","智能编组优化","导出编组","导出预测",
-        "商品煤符合性","煤质达标","导出符合性","品位储量曲线","导出品位储量","分标高煤质","导出分标高","煤质离群","导出离群","洗选提质","导出洗选","用途适宜性","导出用途","灰分发热量回归","煤质综合结论","煤类反推","煤类一致率","煤质审核","测井一致","工分自洽","煤质三维插值","品位块模型","交叉验证","变差函数分析",
+        "商品煤符合性","煤质达标","导出符合性","品位储量曲线","导出品位储量","分标高煤质","导出分标高","煤质离群","导出离群","洗选提质","导出洗选","用途适宜性","导出用途","灰分发热量回归","煤质综合结论","煤类反推","煤类一致率","煤质审核","测井一致","工分自洽","分煤层煤质","煤质三维插值","品位块模型","交叉验证","变差函数分析",
         // TaskLib 自足计算
         "生产量核算","物料换算","采剥平衡","排土场按量推进","配煤核算","工序进度跟踪","编组产能","环节降效",
     };
