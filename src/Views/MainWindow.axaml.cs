@@ -985,6 +985,7 @@ public partial class MainWindow : Window
             if (cmd == "导出STL" || cmd == "导出网格STL" || cmd == "网格导出STL") { await ExportMeshAsync("stl"); return; }
             if (cmd == "中心线管理" || cmd == "边状态" || cmd == "路网拓扑" || cmd == "中线管理") { RoadNetworkReportCmd(); return; }
             if (cmd == "瓶颈段分析" || cmd == "瓶颈段" || cmd == "关键路段" || cmd == "路段介数" || cmd == "路网瓶颈") { RoadBottleneckCmd(); return; }
+            if (cmd == "结构路面" || cmd == "路面带" || cmd == "结构路面带" || cmd.StartsWith("结构路面 ")) { StructurePavementCmd(cmd); return; }
             if (cmd == "中线交点" || cmd == "交点分类" || cmd == "路网交点" || cmd == "中线交点分类" || cmd.StartsWith("中线交点 ") || cmd.StartsWith("交点分类 ")) { CenterlineJunctionsCmd(cmd); return; }
             if (cmd == "路段分类" || cmd == "路网拓扑分类" || cmd == "路段拓扑" || cmd == "干线支线") { RoadTopologyCmd(); return; }
             if (cmd == "排土场容量校核" || cmd == "容量校核" || cmd == "排土容量") { await DumpCapacityAsync(); return; }
@@ -2639,6 +2640,29 @@ public partial class MainWindow : Window
         RefreshScene();
         var head = string.Join(" · ", bw.Take(topN).Where(e => e.Betweenness > 0).Select((e, i) => $"#{i + 1} 介数{e.Betweenness}(长{e.LengthM:0.#}m)"));
         StatusMsg.Text = $"瓶颈段分析(介数核·{(ends.Count >= 2 ? $"{ends.Count} 端点源汇" : "全节点")})：{bw.Count} 边 · 前 {topN} 高流量段红粗上屏 · {head}（车道/陡坡加权待边属性）";
+    }
+
+    // 结构路面(忠实原 StructurePavement): 场景中线(多段线)按路宽等宽外扩成闭合结构路面带 ribbon 入场景。
+    // 用法 结构路面 [路宽m 默认20]。
+    private void StructurePavementCmd(string cmd)
+    {
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        double width = 20; if (tk.Length > 1 && double.TryParse(tk[1], out var wv) && wv > 0) width = wv;
+        var lines = new List<System.Collections.Generic.IReadOnlyList<(double x, double y)>>();
+        foreach (var e in _scene.Entities)
+            if (e is PolylineEntity pl && pl.Points.Count >= 2) lines.Add(pl.Points);
+        if (lines.Count == 0) { StatusMsg.Text = "结构路面：场景无中线（多段线）"; return; }
+        var ribbons = Cad.StructurePavement.BuildRibbons(lines, width);
+        if (ribbons.Count == 0) { StatusMsg.Text = "结构路面：无有效中线(≥2 点)"; return; }
+        BeginChange();
+        foreach (var rib in ribbons)
+        {
+            var poly = new PolylineEntity { Closed = true, Cr = 0.55f, Cg = 0.55f, Cb = 0.6f, LayerName = "结构路面" };
+            poly.Points.AddRange(rib);
+            _scene.Add(poly);
+        }
+        RefreshScene();
+        StatusMsg.Text = $"结构路面(路宽 {width:0.#}m·半宽外扩)：{ribbons.Count} 条中线 → 闭合结构路面带入场景（层「结构路面」）";
     }
 
     // 中线交点分类(忠实 CenterlineJunctions): 场景中线(多段线) → X十字/T丁字/半腰焊/接缝/汇合口 四型分类 →
@@ -9902,7 +9926,7 @@ public partial class MainWindow : Window
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割","移除障碍物",
         // 块体/运输/路网
-        "块体模型","导出PMB","属性赋值","资源量","面约束块体","离散化模型","中长远进度计划","短期生产计划","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","瓶颈段分析","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道","直线斜坡道",
+        "块体模型","导出PMB","属性赋值","资源量","面约束块体","离散化模型","中长远进度计划","短期生产计划","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","瓶颈段分析","结构路面","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道","直线斜坡道",
         // 生产计划/投影
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","开采程序切分","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
