@@ -191,4 +191,40 @@ public class NodeGraphTests
         Assert.Equal(2, g.Nodes.Count);          // 节点保留
         Assert.False(g.Disconnect(circle.Id, 1));// 已无连线 → false
     }
+
+    [Fact]
+    public void Json_roundtrip_preserves_graph_and_values()
+    {
+        // 存: Number(5)→Circle半径 + Point(3,4,0)→Circle圆心 + Circle→Bake，各参数值/连线入盘
+        var g = new NodeGraph();
+        var num = g.AddNode(NodeKind.Number, 10, 20); num.Value = 5.0;
+        var pt = g.AddNode(NodeKind.Point, 10, 80); pt.Value = new Vec3(3, 4, 0);
+        var circle = g.AddNode(NodeKind.Circle, 200, 40);
+        var bake = g.AddNode(NodeKind.Bake, 400, 40);
+        g.Connect(pt.Id, 0, circle.Id, 0);       // 点 → 圆心
+        g.Connect(num.Id, 0, circle.Id, 1);      // 数字 → 半径
+        g.Connect(circle.Id, 0, bake.Id, 0);     // 圆 → 烘焙
+        string json = g.ToJson();
+
+        var g2 = new NodeGraph();
+        g2.LoadJson(json);
+        Assert.Equal(4, g2.Nodes.Count);
+        Assert.Equal(3, g2.Connections.Count);
+        // 端到端：读盘后烘焙仍出 圆心(3,4)/半径5 的圆
+        var e = Assert.IsType<CircleEntity>(Assert.Single(g2.EvaluateBakes()));
+        Assert.Equal(5.0, e.Radius, 6);
+        Assert.Equal(3, e.Cx, 6); Assert.Equal(4, e.Cy, 6);
+        // 位置也保真
+        var loadedNum = g2.Nodes.Find(n => n.Kind == NodeKind.Number)!;
+        Assert.Equal(10, loadedNum.X); Assert.Equal(20, loadedNum.Y);
+    }
+
+    [Fact]
+    public void LoadJson_ignores_malformed_input()
+    {
+        var g = new NodeGraph();
+        g.AddNode(NodeKind.Number, 0, 0);
+        g.LoadJson("{ this is not valid json");   // 非法 → 不抛, 保留当前图(忠实原: 加载失败不动现图)
+        Assert.Single(g.Nodes);
+    }
 }

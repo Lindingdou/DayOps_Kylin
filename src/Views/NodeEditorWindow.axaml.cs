@@ -97,6 +97,47 @@ public partial class NodeEditorWindow : Window
         Hint.Text = $"已烘焙 {geoms.Count} 个几何到主场景";
     }
 
+    // 保存节点图 → JSON 文件（忠实原 保存节点图）
+    private async void OnSaveGraph(object? sender, RoutedEventArgs e)
+    {
+        var file = await StorageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
+        {
+            Title = "保存节点图",
+            DefaultExtension = "json",
+            SuggestedFileName = "graph.json",
+            FileTypeChoices = new[] { new Avalonia.Platform.Storage.FilePickerFileType("节点图 JSON") { Patterns = new[] { "*.json" } } }
+        });
+        if (file == null) return;
+        try
+        {
+            System.IO.File.WriteAllText(file.Path.LocalPath, _graph.ToJson());
+            Hint.Text = $"已保存 {System.IO.Path.GetFileName(file.Path.LocalPath)}";
+        }
+        catch (Exception ex) { Hint.Text = $"保存失败：{ex.Message}"; }
+    }
+
+    // 加载节点图 ← JSON 文件（忠实原 加载节点图：读盘前存撤销点，失败不动现图）
+    private async void OnLoadGraph(object? sender, RoutedEventArgs e)
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new Avalonia.Platform.Storage.FilePickerOpenOptions
+        {
+            Title = "加载节点图",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new Avalonia.Platform.Storage.FilePickerFileType("节点图 JSON") { Patterns = new[] { "*.json" } } }
+        });
+        if (files.Count == 0) return;
+        try
+        {
+            string json = System.IO.File.ReadAllText(files[0].Path.LocalPath);
+            _undoRedo.SaveState();             // 载入可撤销
+            _graph.LoadJson(json);
+            _selected = null; _pendingOut = null; _dragNode = null;
+            Hint.Text = $"已加载 {System.IO.Path.GetFileName(files[0].Path.LocalPath)}（{_graph.Nodes.Count} 节点）";
+            Rebuild();
+        }
+        catch (Exception ex) { Hint.Text = $"加载失败：{ex.Message}"; }
+    }
+
     // 参数节点值编辑（双击）：Number/String/Bool/Point → 弹出 TextBox 改值
     private void EditParamValue(Node n)
     {
@@ -123,35 +164,9 @@ public partial class NodeEditorWindow : Window
         tb.Focus();
     }
 
-    private static string ValueText(Node n) => n.Kind switch
-    {
-        NodeKind.Number => n.Value is double d ? d.ToString(System.Globalization.CultureInfo.InvariantCulture) : "0",
-        NodeKind.String => n.Value as string ?? "",
-        NodeKind.Bool => n.Value is bool b && b ? "true" : "false",
-        NodeKind.Point => n.Value is Vec3 v ? $"{v.X},{v.Y},{v.Z}" : "0,0,0",
-        _ => ""
-    };
-
-    private static void ApplyValue(Node n, string text)
-    {
-        text = text.Trim();
-        switch (n.Kind)
-        {
-            case NodeKind.Number:
-                if (double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double d)) n.Value = d;
-                break;
-            case NodeKind.String: n.Value = text; break;
-            case NodeKind.Bool: n.Value = text.Equals("true", StringComparison.OrdinalIgnoreCase) || text == "1"; break;
-            case NodeKind.Point:
-                var parts = text.Split(',');
-                double px = 0, py = 0, pz = 0;
-                if (parts.Length >= 1) double.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out px);
-                if (parts.Length >= 2) double.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out py);
-                if (parts.Length >= 3) double.TryParse(parts[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out pz);
-                n.Value = new Vec3(px, py, pz);
-                break;
-        }
-    }
+    // 值编解码统一走 NodeGraph 规范实现（UI 卡片显示/内联编辑 与 JSON 存盘 同一套）
+    private static string ValueText(Node n) => NodeGraph.EncodeValue(n);
+    private static void ApplyValue(Node n, string text) => NodeGraph.DecodeValueInto(n, text);
 
     private void OnAddNode(object? sender, RoutedEventArgs e)
     {

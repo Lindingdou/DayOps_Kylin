@@ -3090,3 +3090,20 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **build 0 错·单测 1371→1379**(+8)。
 
 **本会话第 77 功能**。教训: **第十五角度=最新构件深查**——刚建的构件("增/拖/连"够演示但未必够用)最易漏结构操作(删/断/撤销)。又证**忠实是双向的**: 原几何节点求值是桩(TODO C++), Kylin 实现托管几何=超出原桩但属标准 native→managed 等价(非无源臆造); 缺口只认原**已实现且带测**者(RemoveNode/undo)。见 [[unlock-blocked-insights]] [[faithfulness-only-original-commands]]。
+
+---
+
+## §二七二 节点图 保存/加载 JSON（第十五角度续 —— 持久化完整性）
+
+**第十五角度续**(最新构件深查)。原节点编辑器 `OnSaveClick`/`OnLoadClick` 把图**存/取 JSON**(SaveFileDialog "保存节点图" → `JsonSerializer.Serialize(snapshot)`; OpenFileDialog "加载节点图" → `Deserialize<GraphSnapshot>` → SaveState+RestoreSnapshot, 失败弹错不动现图)。Kylin 刚补撤销/重做(§271)但**仍无存/取**——图关窗即失。
+
+**补**:
+- [NodeGraph](src/Nodes/NodeGraph.cs) `ToJson()`/`LoadJson(json)` —— 用 JSON 友好 DTO(节点 Id/Kind/X/Y + **值以规范字符串编码**; 连线 4 元组)。Kylin 快照含 `object?`(Vec3/double/…)不宜直序列化, 故 DTO 存字符串值, 几何默认值由 `Spec(kind)` 定不入盘。`LoadJson` 清空→按类型建点→解码值→按旧ID映射重连; **JSON 非法则捕获不抛、不动现图**(忠实原加载失败保留现图)。
+- **值编解码归一**: 抽 `NodeGraph.EncodeValue`/`DecodeValueInto` 为规范实现, UI 卡片显示/内联编辑(ValueText/ApplyValue 改为委托)与 JSON 存盘**同一套**, 杜绝双份漂移。
+- [NodeEditorWindow](src/Views/NodeEditorWindow.axaml.cs) 工具栏 保存/加载 + Avalonia StorageProvider 文件对话框(`*.json`); 加载前 `SaveState`(可撤销), 失败提示不动现图。
+
+**忠实边界**: 盘上格式为 Kylin 原生(int Id + NodeKind 枚举 + 字符串值), 非与原(Guid+TypeName+EditableValue)字节一致——跨平台不同模型无法字节对齐, 移植的是**功能**(存/取节点图), 非文件格式。
+
+**验证(已知值)**: [NodeGraphTests](tests/PitMine3D.Kylin.Tests/NodeGraphTests.cs) +2 —— Point(3,4)+Number(5)→Circle→Bake 存 JSON→新图 LoadJson→4 节点/3 连线, 端到端烘焙仍出 圆心(3,4)/半径5, 位置(10,20)保真; 非法 JSON→保留现图不抛。**build 0 错·单测 1379→1381**。
+
+**本会话第 78 功能**。节点编辑器至此**结构操作 + 撤销/重做 + 持久化**齐全, 与原对齐(几何求值 Kylin 反超原桩)。教训: 最新构件深查须覆盖**持久化**(存/取)——"能编辑不能存"是常见半成品。见 [[unlock-blocked-insights]]。

@@ -23,6 +23,8 @@
             <Button Content="删除" Click="OnDeleteSelected" Margin="8,0,0,0" ToolTip.Tip="删除选中节点（Delete）" />
             <Button Content="撤销" Click="OnUndo" ToolTip.Tip="撤销（Ctrl+Z）" />
             <Button Content="重做" Click="OnRedo" ToolTip.Tip="重做（Ctrl+Y）" />
+            <Button Content="保存" Click="OnSaveGraph" Margin="8,0,0,0" ToolTip.Tip="保存节点图为 JSON" />
+            <Button Content="加载" Click="OnLoadGraph" ToolTip.Tip="从 JSON 加载节点图" />
             <TextBlock x:Name="Hint" Text="拖拽移动 · 点绿输出口再点橙输入口连线 · 双击参数节点改值 · 单击选中后 Delete 删除"
                        VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#8A929C" FontSize="12" />
         </StackPanel>

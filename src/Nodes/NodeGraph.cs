@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Text.Json;
 using PitMine3D.Kylin.Cad.Draw;
 
 namespace PitMine3D.Kylin.Nodes;
@@ -210,6 +212,76 @@ public sealed class NodeGraph
         foreach (var n in Nodes)
             if (n.Kind == NodeKind.Bake && Evaluate(n.Id) is SceneEntity se) outp.Add(se);
         return outp;
+    }
+
+    // ─────────────────────────── 值编解码（参数节点值 ↔ 字符串，UI 与 JSON 共用） ───────────────────────────
+
+    private static readonly CultureInfo CI = CultureInfo.InvariantCulture;
+
+    /// <summary>参数节点值 → 字符串（几何/烘焙节点返回空串）。UI 卡片显示、JSON 存盘共用此规范编码。</summary>
+    public static string EncodeValue(Node n) => n.Kind switch
+    {
+        NodeKind.Number => (n.Value is double d ? d : 0).ToString(CI),
+        NodeKind.String => n.Value as string ?? "",
+        NodeKind.Bool => n.Value is bool b && b ? "true" : "false",
+        NodeKind.Point => n.Value is Vec3 v ? $"{v.X.ToString(CI)},{v.Y.ToString(CI)},{v.Z.ToString(CI)}" : "0,0,0",
+        _ => ""
+    };
+
+    /// <summary>字符串 → 写入参数节点值（几何/烘焙节点忽略）。UI 编辑提交、JSON 读盘共用。</summary>
+    public static void DecodeValueInto(Node n, string text)
+    {
+        text = text?.Trim() ?? "";
+        switch (n.Kind)
+        {
+            case NodeKind.Number:
+                n.Value = double.TryParse(text, NumberStyles.Float, CI, out var d) ? d : 0.0; break;
+            case NodeKind.String: n.Value = text; break;
+            case NodeKind.Bool: n.Value = text.Equals("true", StringComparison.OrdinalIgnoreCase) || text == "1"; break;
+            case NodeKind.Point:
+                var p = text.Split(',');
+                double x = 0, y = 0, z = 0;
+                if (p.Length >= 1) double.TryParse(p[0], NumberStyles.Float, CI, out x);
+                if (p.Length >= 2) double.TryParse(p[1], NumberStyles.Float, CI, out y);
+                if (p.Length >= 3) double.TryParse(p[2], NumberStyles.Float, CI, out z);
+                n.Value = new Vec3(x, y, z); break;
+        }
+    }
+
+    // ─────────────────────────── 存/取（节点图 ↔ JSON，忠实原 保存/加载节点图） ───────────────────────────
+
+    private sealed class NodeJson { public int Id { get; set; } public NodeKind Kind { get; set; } public double X { get; set; } public double Y { get; set; } public string Value { get; set; } = ""; }
+    private sealed class ConnJson { public int FromNode { get; set; } public int FromPort { get; set; } public int ToNode { get; set; } public int ToPort { get; set; } }
+    private sealed class GraphJson { public List<NodeJson> Nodes { get; set; } = new(); public List<ConnJson> Connections { get; set; } = new(); }
+
+    /// <summary>序列化整图为 JSON（节点 类型/位置/值 + 连线）。忠实原 保存节点图；值以规范字符串编码，几何默认值由 <see cref="Spec"/> 定，无需入盘。</summary>
+    public string ToJson()
+    {
+        var dto = new GraphJson();
+        foreach (var n in Nodes) dto.Nodes.Add(new NodeJson { Id = n.Id, Kind = n.Kind, X = n.X, Y = n.Y, Value = EncodeValue(n) });
+        foreach (var c in Connections) dto.Connections.Add(new ConnJson { FromNode = c.FromNode, FromPort = c.FromPort, ToNode = c.ToNode, ToPort = c.ToPort });
+        return JsonSerializer.Serialize(dto, new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    /// <summary>从 JSON 重建整图（清空→按 类型/位置 建点→解码值→按旧ID映射重连）。忠实原 加载节点图。JSON 非法则不动现图(不抛)。</summary>
+    public void LoadJson(string json)
+    {
+        GraphJson? dto;
+        try { dto = JsonSerializer.Deserialize<GraphJson>(json); }
+        catch (JsonException) { return; }
+        if (dto == null) return;
+        Nodes.Clear();
+        Connections.Clear();
+        var idMap = new Dictionary<int, int>();
+        foreach (var nj in dto.Nodes)
+        {
+            var node = AddNode(nj.Kind, nj.X, nj.Y);
+            DecodeValueInto(node, nj.Value);
+            idMap[nj.Id] = node.Id;
+        }
+        foreach (var cj in dto.Connections)
+            if (idMap.TryGetValue(cj.FromNode, out var f) && idMap.TryGetValue(cj.ToNode, out var t))
+                Connect(f, cj.FromPort, t, cj.ToPort);
     }
 
     private static double AsD(object? o, double def) => o switch { double d => d, int i => i, float f => f, _ => def };
