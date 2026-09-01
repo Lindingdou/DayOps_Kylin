@@ -493,6 +493,20 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Fleet_cockpit_lights_partition_and_watch_consistent()
+    {
+        // 机群驾驶舱: 红绿灯划分完备(绿+黄+红=在评数) + 需关注=黄+红 + OEE/瓶颈达标率∈[0,100] + 可解锁≥0
+        using var db = GeoDatabase.OpenSeeded();
+        var c = GeoDataQueries.GetFleetCockpit(db.Connection);
+        Assert.True(c.WithKpi > 0);
+        Assert.Equal(c.WithKpi, c.Green + c.Yellow + c.Red);
+        Assert.Equal(c.Yellow + c.Red, c.Watch.Count);
+        Assert.InRange(c.AvgOeePct, 0, 100);
+        Assert.InRange(c.BottleneckPassPct, 0, 100);
+        Assert.True(c.UnlockWanM3 >= 0);
+    }
+
+    [Fact]
     public void Export_table_then_reimport_roundtrips()
     {
         using var db = GeoDatabase.OpenSeeded();

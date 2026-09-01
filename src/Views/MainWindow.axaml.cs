@@ -856,6 +856,7 @@ public partial class MainWindow : Window
             if (cmd.StartsWith("虚拟钻孔 ") || cmd.StartsWith("虚拟钻探 ") || cmd.StartsWith("模拟钻孔 ")) { await VirtualDrillAsync(cmd); return; }
             if (cmd == "层位求交" || cmd == "顶底板求交" || cmd == "煤层高程" || cmd.StartsWith("层位求交 ") || cmd.StartsWith("顶底板求交 ") || cmd.StartsWith("煤层高程 ")) { SeamIntersectCmd(cmd); return; }
             if (cmd == "机群总览" || cmd == "设备总览" || cmd == "机群") { FleetOverviewCmd(); return; }
+            if (cmd == "机群驾驶舱" || cmd == "领导驾驶舱" || cmd == "驾驶舱" || cmd == "机群健康度") { FleetCockpitCmd(); return; }
             if (cmd == "数据看板" || cmd == "看板" || cmd == "调度态势看板" || cmd == "态势看板") { DataBoardCmd(); return; }
             if (cmd == "煤种分类" || cmd == "煤类分类" || cmd == "煤炭分类") { CoalClassificationCmd(); return; }
             if (cmd == "煤层台阶参数" || cmd == "台阶参数" || cmd == "煤层参数") { SeamBenchParamsCmd(); return; }
@@ -7681,6 +7682,18 @@ public partial class MainWindow : Window
         var st = new List<string>(); foreach (var c in f.ByStatus) st.Add($"{c.Category} {c.Count}");
         var md = new List<string>(); foreach (var c in f.ByModel) md.Add($"{c.Category} {c.Count}");
         StatusMsg.Text = $"机群总览：共 {f.Total} 台 · 状态[{string.Join(" / ", st)}] · 型号[{string.Join(" / ", md)}]";
+    }
+
+    // 机群领导驾驶舱: 健康度红绿灯 + 平均OEE + 可解锁产能 + 产能瓶颈 + 需关注设备(前几台)
+    private void FleetCockpitCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var c = Data.GeoDataQueries.GetFleetCockpit(db.Connection);
+        if (c.WithKpi == 0) { StatusMsg.Text = "机群驾驶舱：无 KPI 数据的设备"; return; }
+        var watch = new List<string>();
+        foreach (var w in c.Watch) { watch.Add($"{w.Icon}{w.EquipmentId} {w.Issue}"); if (watch.Count >= 3) break; }
+        string watchStr = watch.Count > 0 ? " · 需关注 " + string.Join(" ; ", watch) : "";
+        StatusMsg.Text = $"机群驾驶舱：{c.WithKpi}台在评 · 🟢{c.Green}/🟡{c.Yellow}/🔴{c.Red} · 平均OEE {c.AvgOeePct:0.#}% · 瓶颈【{c.BottleneckCategory}】达标率{c.BottleneckPassPct:0.#}% · 可解锁 {c.UnlockWanM3:0.#}万m³/年{watchStr}";
     }
 
     private void DataBoardCmd()

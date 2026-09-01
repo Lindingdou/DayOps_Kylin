@@ -482,6 +482,89 @@ public static class GeoDataQueries
         return new FleetOverview(total, byStatus, byModel);
     }
 
+    public sealed record FleetWatchRow(string EquipmentId, string Icon, string Issue);
+    public sealed record FleetCockpit(int WithKpi, int Green, int Yellow, int Red, double AvgOeePct,
+        double UnlockWanM3, double FleetCapWanM3, string BottleneckCategory, double BottleneckPassPct,
+        IReadOnlyList<FleetWatchRow> Watch);
+
+    /// <summary>机群领导驾驶舱（忠实原 EquipmentFleetCockpitWindow）：健康度红绿灯 / 平均OEE / 可解锁产能(补各机最短板) /
+    /// 产能瓶颈(按可用率达标率最低的类别) / 需关注设备清单。全数据驱动(KPI+产能+役龄), 无需调度引擎。</summary>
+    public static FleetCockpit GetFleetCockpit(SqliteConnection conn)
+    {
+        // 逐设备 KPI 均值(归一 0..1)
+        var kpi = new Dictionary<string, (double a, double r, double u)>();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT equipment_id, AVG(availability), AVG(actual_run_rate), AVG(utilization_rate) FROM equipment_kpi_monthly WHERE equipment_id IS NOT NULL GROUP BY equipment_id";
+            using var rd = cmd.ExecuteReader();
+            while (rd.Read())
+            {
+                double a = rd.GetDouble(1), r = rd.GetDouble(2), u = rd.GetDouble(3);
+                kpi[rd.GetString(0)] = (a > 1 ? a / 100 : a, r > 1 ? r / 100 : r, u > 1 ? u / 100 : u);
+            }
+        }
+        var cap = new Dictionary<string, double>();   // 万m³(capacity_monthly 总产/1e4)
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT equipment_id, COALESCE(SUM(output_m3),0)/1e4 FROM capacity_monthly WHERE equipment_id IS NOT NULL GROUP BY equipment_id";
+            using var rd = cmd.ExecuteReader();
+            while (rd.Read()) cap[rd.GetString(0)] = rd.GetDouble(1);
+        }
+        var meta = new Dictionary<string, (int? year, string cat)>();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT equipment_id, commission_year, COALESCE(category,'(未分类)') FROM equipment WHERE equipment_id IS NOT NULL";
+            using var rd = cmd.ExecuteReader();
+            while (rd.Read()) meta[rd.GetString(0)] = (rd.IsDBNull(1) ? (int?)null : rd.GetInt32(1), rd.GetString(2));
+        }
+        int curYear = System.DateTime.Now.Year;
+        int withKpi = 0, green = 0, yellow = 0, red = 0, passA = 0;
+        double oeeSum = 0, unlock = 0, fleetCap = 0;
+        var byCatPassA = new Dictionary<string, (int pass, int n)>();
+        var watch = new List<FleetWatchRow>();
+        foreach (var kv in kpi)
+        {
+            var (A, R, U) = kv.Value;
+            if (A <= 0) continue;
+            withKpi++;
+            double oee = A * R * U; oeeSum += oee;
+            if (A >= 0.90) passA++;
+            meta.TryGetValue(kv.Key, out var m);
+            int? sy = m.year.HasValue ? curYear - m.year.Value : (int?)null;
+            bool aged = sy.HasValue && sy.Value >= 15;
+            double c = cap.TryGetValue(kv.Key, out var cc) ? cc : 0;
+            double theo = oee > 1e-6 ? c / oee : 0;
+            double lA = theo * (1 - A), lR = theo * A * (1 - R), lU = theo * A * R * (1 - U);
+            double maxLoss = System.Math.Max(lA, System.Math.Max(lR, lU));
+            unlock += maxLoss; fleetCap += c;
+            string cat = m.cat ?? "(未分类)";
+            var bc = byCatPassA.TryGetValue(cat, out var v) ? v : (0, 0);
+            byCatPassA[cat] = (bc.Item1 + (A >= 0.90 ? 1 : 0), bc.Item2 + 1);
+            string icon; int sev;
+            if (A < 0.80 || (sy.HasValue && sy.Value >= 20 && A < 0.85)) { red++; sev = 2; icon = "🔴"; }
+            else if (A < 0.86 || aged) { yellow++; sev = 1; icon = "🟡"; }
+            else { green++; sev = 0; icon = "🟢"; }
+            if (sev >= 1)
+            {
+                string issue = A < 0.80 ? $"可用率低({A * 100:F0}%),建议纳入大修/更新"
+                    : (sy.HasValue && sy.Value >= 20) ? $"服役{sy}年老龄化、可用率{A * 100:F0}%"
+                    : aged ? $"服役{sy}年,关注可靠性" : $"可用率偏低({A * 100:F0}%),加强检修";
+                if (maxLoss > 1) { string sb = lA >= maxLoss - 1e-9 ? "可用率" : lR >= maxLoss - 1e-9 ? "作业率" : "利用率"; issue += $" · 补{sb}可解锁{maxLoss:F0}万m³/年"; }
+                watch.Add(new FleetWatchRow(kv.Key, icon, issue));
+            }
+        }
+        // 瓶颈: 可用率达标率最低的类别
+        string neck = "(无)"; double neckPass = 100;
+        foreach (var kv in byCatPassA)
+        {
+            double pass = kv.Value.n > 0 ? kv.Value.pass * 100.0 / kv.Value.n : 100;
+            if (pass < neckPass) { neckPass = pass; neck = kv.Key; }
+        }
+        watch.Sort((a, b) => string.CompareOrdinal(a.Icon, b.Icon) != 0 ? string.CompareOrdinal(b.Icon, a.Icon) : 0);   // 🔴 先于 🟡
+        return new FleetCockpit(withKpi, green, yellow, red, withKpi > 0 ? oeeSum / withKpi * 100 : 0,
+            unlock, fleetCap, byCatPassA.Count > 0 ? neck : "(无)", byCatPassA.Count > 0 ? neckPass : 0, watch);
+    }
+
     public sealed record CoalClassRow(string Code, string NameCn, double VdafMin, double VdafMax);
 
     /// <summary>煤种分类：各煤种 代码/名称/挥发分区间(Vdaf)。</summary>
