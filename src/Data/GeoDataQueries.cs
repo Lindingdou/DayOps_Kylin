@@ -285,7 +285,8 @@ public static class GeoDataQueries
     }
 
     public sealed record CoalQualityStats(int Samples, int Seams, double AvgAshPct, double AvgVolatilePct, double AvgCalorificMJ, double AvgSulfurPct,
-        double AshCvPct = 0, string AshUniformity = "");   // 灰分变异系数 CV + 均匀性评价(忠实原 CoalQualityAnalytics)
+        double AshCvPct = 0, string AshUniformity = "",   // 灰分变异系数 CV + 均匀性评价(忠实原 CoalQualityAnalytics)
+        double AvgCakingG = 0, int CakingN = 0);          // 平均粘结指数 G + 有 G 的样本数(第 5 KPI, 忠实原看板)
 
     /// <summary>煤质统计：样本数 / 煤层数 / 平均 灰分Ad / 挥发分Vdaf / 发热量Qnet / 全硫St + 灰分变异系数(均匀性)。</summary>
     public static CoalQualityStats GetCoalQualityStats(SqliteConnection conn)
@@ -293,7 +294,8 @@ public static class GeoDataQueries
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"SELECT COUNT(*), COUNT(DISTINCT seam_code),
                             COALESCE(AVG(ad_raw),0), COALESCE(AVG(vdaf_raw),0),
-                            COALESCE(AVG(qnet_ad),0), COALESCE(AVG(std_raw),0), COALESCE(SUM(ad_raw*ad_raw),0)
+                            COALESCE(AVG(qnet_ad),0), COALESCE(AVG(std_raw),0), COALESCE(SUM(ad_raw*ad_raw),0),
+                            COALESCE(AVG(caking_g),0), COUNT(caking_g)
                             FROM coal_sample WHERE ad_raw IS NOT NULL";
         using var rd = cmd.ExecuteReader();
         rd.Read();
@@ -302,7 +304,8 @@ public static class GeoDataQueries
         double sampleVar = n > 1 ? System.Math.Max(0, (sumSq - n * avgAd * avgAd) / (n - 1)) : 0;
         double cv = avgAd > 1e-9 ? System.Math.Sqrt(sampleVar) / avgAd * 100 : 0;
         string uni = n <= 2 ? "" : cv < 15 ? "均匀,煤质稳定" : cv < 30 ? "较均匀" : "波动较大,须注意配采均衡";
-        return new CoalQualityStats(rd.GetInt32(0), rd.GetInt32(1), rd.GetDouble(2), rd.GetDouble(3), rd.GetDouble(4), rd.GetDouble(5), cv, uni);
+        return new CoalQualityStats(rd.GetInt32(0), rd.GetInt32(1), rd.GetDouble(2), rd.GetDouble(3), rd.GetDouble(4), rd.GetDouble(5), cv, uni,
+            rd.GetDouble(7), rd.GetInt32(8));
     }
 
     public sealed record SeamRow(string SeamCode, string Name, int SampleCount);

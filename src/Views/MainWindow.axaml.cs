@@ -8134,7 +8134,9 @@ public partial class MainWindow : Window
         // 均值贴国标等级(读种子 coal_grade_rule → FindGradeLevel), 忠实原看板 KPI 的 GradeAsh/GradeSulfur/GradeQnet 标注。Vdaf 无分级规则(同原, 只标基)。
         string GL(double v, string type) { var lvl = Data.CoalTypeInference.FindGradeLevel(v, Data.GeoDataQueries.GetGradeRulesByType(db.Connection, type)); return lvl != null ? $"({lvl})" : ""; }
         string adG = GL(q.AvgAshPct, "ash"), stG = GL(q.AvgSulfurPct, "sulfur"), qG = GL(q.AvgCalorificMJ, "qnet");
-        StatusMsg.Text = $"煤质统计：{q.Samples} 样 / {q.Seams} 煤层 · 平均 灰分Ad {q.AvgAshPct:0.##}%{adG} · 挥发分Vdaf {q.AvgVolatilePct:0.##}% · 发热量Qnet {q.AvgCalorificMJ:0.##}MJ/kg{qG} · 全硫St {q.AvgSulfurPct:0.###}%{stG}{uni}{vtStr}";
+        // 第 5 KPI: 平均粘结指数 G + 强/中/弱粘结(忠实原看板 kpiG, 阈值 ≥65 强/≥35 中/else 弱)。仅有 G 样本才附加。
+        string gStr = q.CakingN > 0 ? $" · 粘结G {q.AvgCakingG:0.#}({(q.AvgCakingG >= 65 ? "强粘结" : q.AvgCakingG >= 35 ? "中粘结" : "弱粘结")})" : "";
+        StatusMsg.Text = $"煤质统计：{q.Samples} 样 / {q.Seams} 煤层 · 平均 灰分Ad {q.AvgAshPct:0.##}%{adG} · 挥发分Vdaf {q.AvgVolatilePct:0.##}% · 发热量Qnet {q.AvgCalorificMJ:0.##}MJ/kg{qG} · 全硫St {q.AvgSulfurPct:0.###}%{stG}{gStr}{uni}{vtStr}";
     }
 
     // 煤质数据健康度(忠实原数据看板): 样品数/煤类标注率/化验孔覆盖/工分自洽率

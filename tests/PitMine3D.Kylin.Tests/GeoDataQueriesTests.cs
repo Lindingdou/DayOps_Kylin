@@ -127,6 +127,9 @@ public class GeoDataQueriesTests
         Assert.True(q.Seams > 0, "煤层数");
         Assert.InRange(q.AvgAshPct, 0, 100);                   // 灰分百分比合理
         Assert.True(q.AvgCalorificMJ > 0, "发热量");
+        // 第 5 KPI: 平均粘结指数 G 已算(种子煤样带 caking_g)。
+        Assert.True(q.CakingN > 0, $"有 G 样本数 {q.CakingN}");
+        Assert.InRange(q.AvgCakingG, 0, 100);                  // 粘结指数 G∈[0,100]
     }
 
     [Fact]
