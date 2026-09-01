@@ -5715,8 +5715,16 @@ public partial class MainWindow : Window
         double gsum = 0; foreach (var b in _lastBlocks) gsum += b.Grade; double cutoff = gsum / _lastBlocks.Count;
         var cells = _lastBlocks.Select(b => new Cad.DriveSequence.Cell(b.X, b.Y, b.Z, b.Size * b.Size * b.Size, b.Grade >= cutoff)).ToList();
         const double density = 1.3;
-        var r = volMode ? Cad.DriveSequence.SweepByVolume(cells, dirX, dirY, 10.0, tgtWan * 1e4, density, 0, faceAngle)
-                        : Cad.DriveSequence.SweepByDistance(cells, dirX, dirY, adv, density, 0, faceAngle);
+        double cellSize = _lastBlocks[0].Size > 0 ? _lastBlocks[0].Size : 10;
+        Cad.DriveSequence.DriveResult r;
+        if (volMode) r = Cad.DriveSequence.SweepByVolume(cells, dirX, dirY, 10.0, tgtWan * 1e4, density, 0, faceAngle);
+        else if (line != null && line.Points.Count > 2)   // 弯工作线 → 多段投影(沿线各段法向)
+        {
+            var wl = line.Points.Select(pt => (pt.Item1, pt.Item2)).ToList();
+            r = Cad.DriveSequence.SweepAlongWorkLine(wl, cells, adv, density, cellSize, 0, faceAngle);
+            dirHint = $"沿弯工作线({line.Points.Count}点)";
+        }
+        else r = Cad.DriveSequence.SweepByDistance(cells, dirX, dirY, adv, density, 0, faceAngle);
         if (r.Periods.Count == 0) { StatusMsg.Text = "开采程序切分：分期失败(检查块体/步距或目标煤量>0)"; return; }
         var name = await SaveCsvAsync("导出分期量表", "drive_periods.csv", Cad.DriveSequence.ToBalanceCsv(r, density));
         var head = string.Join(" ", r.Periods.Take(4).Select(p => $"期{p.Index + 1}(煤{p.CoalVolM3 / 1e4:0.#}/岩{p.RockVolM3 / 1e4:0.#}万m³·累计剥采比{p.CumStripRatio:0.##})"));

@@ -130,6 +130,74 @@ public static class DriveSequence
         return new DriveResult(periods, totC, totR, totC > 1e-9 ? totR / (totC * coalDensity) : 0);
     }
 
+    /// <summary>
+    /// 沿(可弯)工作线多段推进分期(忠实原多段投影): 每格投影到最近工作线段的法向(=推进方向)得推进位置 a0(取 |a0| 最小段,
+    /// 横向容差 latTol=cellSizeM 收角点), 按步距分期。工作线直线时等价 <see cref="SweepByDistance"/>(法向=段切向+90°, 工作线走向定推进侧)。
+    /// </summary>
+    public static DriveResult SweepAlongWorkLine(IReadOnlyList<(double x, double y)> workLine, IReadOnlyList<Cell> cells,
+        double advancePerPeriod, double coalDensity, double cellSizeM, int maxPeriods = 0,
+        double faceAngleDeg = 0, double benchHeightM = 0, double bermWidthM = 0)
+    {
+        if (cells == null || cells.Count == 0 || workLine == null || workLine.Count < 2 || advancePerPeriod <= 0 || coalDensity <= 0)
+            return new DriveResult(Array.Empty<PeriodTally>(), 0, 0, 0);
+        int nSeg = workLine.Count - 1;
+        var mx = new double[nSeg]; var my = new double[nSeg];
+        var tx = new double[nSeg]; var ty = new double[nSeg];   // 切向(单位)
+        var nnx = new double[nSeg]; var nny = new double[nSeg]; // 法向 = 切向 +90°: (x,y)→(−y,x)
+        var half = new double[nSeg];
+        double latTol = Math.Max(1e-9, cellSizeM);
+        for (int s = 0; s < nSeg; s++)
+        {
+            var a = workLine[s]; var b = workLine[s + 1];
+            double dx = b.x - a.x, dy = b.y - a.y, len = Math.Sqrt(dx * dx + dy * dy);
+            mx[s] = (a.x + b.x) / 2; my[s] = (a.y + b.y) / 2; half[s] = len / 2;
+            if (len < 1e-9) { tx[s] = 1; ty[s] = 0; nnx[s] = 0; nny[s] = 1; }
+            else { tx[s] = dx / len; ty[s] = dy / len; nnx[s] = -ty[s]; nny[s] = tx[s]; }
+        }
+        bool setback = faceAngleDeg > 0;
+        double floorZ = double.MaxValue;
+        if (setback) foreach (var c in cells) if (c.Z < floorZ) floorZ = c.Z;
+
+        var adj = new double[cells.Count]; var okc = new bool[cells.Count];
+        double sMin = double.MaxValue;
+        for (int i = 0; i < cells.Count; i++)
+        {
+            var c = cells[i];
+            int best = -1; double bestPerp = double.MaxValue, bestA0 = 0;
+            for (int s = 0; s < nSeg; s++)
+            {
+                double rx = c.X - mx[s], ry = c.Y - my[s];
+                if (Math.Abs(rx * tx[s] + ry * ty[s]) > half[s] + latTol) continue;   // 越出段沿程(容 latTol)
+                double a0 = rx * nnx[s] + ry * nny[s];
+                if (Math.Abs(a0) < bestPerp) { bestPerp = Math.Abs(a0); best = s; bestA0 = a0; }
+            }
+            if (best < 0) { okc[i] = false; continue; }
+            adj[i] = bestA0 + (setback ? BenchOffset(c.Z - floorZ, benchHeightM, bermWidthM, faceAngleDeg) : 0);
+            okc[i] = true; if (adj[i] < sMin) sMin = adj[i];
+        }
+
+        var coalByP = new Dictionary<int, double>();
+        var rockByP = new Dictionary<int, double>();
+        int maxP = -1;
+        for (int i = 0; i < cells.Count; i++)
+        {
+            if (!okc[i]) continue;
+            int p = (int)((adj[i] - sMin) / advancePerPeriod); if (p < 0) p = 0;
+            if (maxPeriods > 0 && p >= maxPeriods) continue;
+            if (cells[i].IsCoal) coalByP[p] = coalByP.GetValueOrDefault(p) + cells[i].VolM3;
+            else rockByP[p] = rockByP.GetValueOrDefault(p) + cells[i].VolM3;
+            if (p > maxP) maxP = p;
+        }
+        var periods = new List<PeriodTally>(); double cumC = 0, cumR = 0;
+        for (int p = 0; p <= maxP; p++)
+        {
+            double cv = coalByP.GetValueOrDefault(p), rv = rockByP.GetValueOrDefault(p);
+            cumC += cv; cumR += rv;
+            periods.Add(new PeriodTally(p, cv, rv, cumC, cumR, cumC > 1e-9 ? cumR / (cumC * coalDensity) : 0));
+        }
+        return new DriveResult(periods, cumC, cumR, cumC > 1e-9 ? cumR / (cumC * coalDensity) : 0);
+    }
+
     /// <summary>分期量表 → CSV(采出量万t, 剥离量万m³)——直接可喂 剥采比均衡。</summary>
     public static string ToBalanceCsv(DriveResult r, double coalDensity)
     {

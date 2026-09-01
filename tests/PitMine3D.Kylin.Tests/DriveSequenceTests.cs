@@ -89,6 +89,42 @@ public class DriveSequenceTests
     }
 
     [Fact]
+    public void Workline_straight_equivalent_to_single_direction()
+    {
+        // 直工作线 (0,0)→(0,10) 法向 =(−1,0)。沿线扫应等价 SweepByDistance(dir=−1,0)。
+        var cells = new List<Cell> { new(-5, 5, 0, 1000, true), new(-15, 5, 0, 1000, false), new(-25, 5, 0, 1000, true) };
+        var wl = new List<(double, double)> { (0, 0), (0, 10) };
+        var a = DriveSequence.SweepAlongWorkLine(wl, cells, 10, 1.3, cellSizeM: 10);
+        var b = DriveSequence.SweepByDistance(cells, -1, 0, 10, 1.3);
+        Assert.Equal(b.Periods.Count, a.Periods.Count);
+        for (int i = 0; i < a.Periods.Count; i++)
+        {
+            Assert.Equal(b.Periods[i].CoalVolM3, a.Periods[i].CoalVolM3, 4);
+            Assert.Equal(b.Periods[i].RockVolM3, a.Periods[i].RockVolM3, 4);
+        }
+    }
+
+    [Fact]
+    public void Workline_L_shape_projects_cells_onto_correct_segment()
+    {
+        // L 形工作线 (0,0)→(0,10)→(20,10)。seg0 竖(法向−X), seg1 横(法向+Y)。cellSize=1 收角。
+        var wl = new List<(double, double)> { (0, 0), (0, 10), (20, 10) };
+        // 前于 seg0(左侧)a0=5/15; 前于 seg1(上方)a0=5/15。步距10,sMin=5 → 期0/1。
+        var cells = new List<Cell>
+        {
+            new(-5, 5, 0, 1000, true),   new(-15, 5, 0, 1000, true),    // seg0 前: a0=5(期0)/15(期1)
+            new(10, 15, 0, 1000, false), new(10, 25, 0, 1000, false),   // seg1 前: a0=5(期0)/15(期1)
+        };
+        var r = DriveSequence.SweepAlongWorkLine(wl, cells, 10, 1.3, cellSizeM: 1);
+        Assert.Equal(2, r.Periods.Count);
+        // 期0: seg0 的 (−5,5) 煤 + seg1 的 (10,15) 岩 → 煤1000/岩1000。
+        Assert.Equal(1000, r.Periods[0].CoalVolM3, 4);
+        Assert.Equal(1000, r.Periods[0].RockVolM3, 4);
+        Assert.Equal(1000, r.Periods[1].CoalVolM3, 4);
+        Assert.Equal(1000, r.Periods[1].RockVolM3, 4);
+    }
+
+    [Fact]
     public void Bench_offset_known_values()
     {
         Assert.Equal(0, DriveSequence.BenchOffset(0, 0, 0, 45), 6);
