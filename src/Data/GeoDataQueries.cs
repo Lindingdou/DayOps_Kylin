@@ -358,6 +358,23 @@ public static class GeoDataQueries
         return new CumHoursStats(all.Count, fleet, top);
     }
 
+    public sealed record KpiModelRow(string Model, int Units, double AvgAvailPct, double AvgRunRatePct, double AvgUtilPct, int MonthRecords);
+
+    /// <summary>分机型 KPI(忠实原 KpiService.ByModelMonthly 的机型聚合, 这里再滚到机型总均): 各型号 台数 + 平均 可用率/作业率/利用率, 按可用率降序(选型/淘汰参考)。</summary>
+    public static List<KpiModelRow> GetKpiByModel(SqliteConnection conn)
+    {
+        var rows = new List<KpiModelRow>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"SELECT COALESCE(NULLIF(TRIM(e.model),''),'(未知型号)'), COUNT(DISTINCT k.equipment_id),
+                            COALESCE(AVG(k.availability),0), COALESCE(AVG(k.actual_run_rate),0), COALESCE(AVG(k.utilization_rate),0), COUNT(*)
+                            FROM equipment_kpi_monthly k JOIN equipment e ON e.equipment_id = k.equipment_id
+                            GROUP BY COALESCE(NULLIF(TRIM(e.model),''),'(未知型号)') ORDER BY AVG(k.availability) DESC, 1";
+        using var rd = cmd.ExecuteReader();
+        static double P(double v) => v <= 1.0 ? v * 100 : v;   // <=1 视为比率 ×100(同 GetKpiStats 约定)
+        while (rd.Read()) rows.Add(new KpiModelRow(rd.GetString(0), rd.GetInt32(1), P(rd.GetDouble(2)), P(rd.GetDouble(3)), P(rd.GetDouble(4)), rd.GetInt32(5)));
+        return rows;
+    }
+
     public sealed record SeamRow(string SeamCode, string Name, int SampleCount);
 
     /// <summary>煤层管理：各煤层定义 + 煤样计数。</summary>

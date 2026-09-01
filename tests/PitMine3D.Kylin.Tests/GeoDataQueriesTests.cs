@@ -9,6 +9,29 @@ namespace PitMine3D.Kylin.Tests;
 public class GeoDataQueriesTests
 {
     [Fact]
+    public void Kpi_by_model_averages_and_ranks()
+    {
+        // 忠实原 ByModelMonthly 机型聚合(再滚机型总均)。内存已知值: MA 两台均可用 0.85, MB 一台 0.6。
+        using var conn = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=:memory:");
+        conn.Open();
+        using (var c = conn.CreateCommand())
+        {
+            c.CommandText = @"CREATE TABLE equipment(equipment_id TEXT, model TEXT);
+                              CREATE TABLE equipment_kpi_monthly(equipment_id TEXT, availability REAL, actual_run_rate REAL, utilization_rate REAL);
+                              INSERT INTO equipment VALUES ('A1','MA'),('A2','MA'),('B1','MB');
+                              INSERT INTO equipment_kpi_monthly VALUES ('A1',0.9,0.8,0.7),('A2',0.8,0.8,0.7),('B1',0.6,0.5,0.4);";
+            c.ExecuteNonQuery();
+        }
+        var rows = GeoDataQueries.GetKpiByModel(conn);
+        Assert.Equal(2, rows.Count);
+        Assert.Equal("MA", rows[0].Model);            // MA 可用 0.85 > MB 0.6 → 降序首
+        Assert.Equal(85, rows[0].AvgAvailPct, 4);     // (0.9+0.8)/2 ×100(比率→%)
+        Assert.Equal(2, rows[0].Units);               // A1,A2
+        Assert.Equal(60, rows[1].AvgAvailPct, 4);     // MB 0.6 ×100
+        Assert.Equal(1, rows[1].Units);
+    }
+
+    [Fact]
     public void Cumulative_hours_base_plus_production_sum()
     {
         // 忠实原 CalculateCumulativeHours: 台账 cumulative_hours + Σ生产 work_hours。内存已知值验。

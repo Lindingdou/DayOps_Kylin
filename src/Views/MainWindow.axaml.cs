@@ -830,6 +830,7 @@ public partial class MainWindow : Window
             if (cmd == "故障分析" || cmd == "设备状态·故障报修" || cmd == "故障报修" || cmd == "设备状态") { FaultStatsCmd(); return; }
             if (cmd == "爆破分析" || cmd == "爆破统计" || cmd == "爆破数据" || cmd == "钻爆分析") { BlastStatsCmd(); return; }
             if (cmd == "设备累计工时" || cmd == "累计运行小时" || cmd == "累计工时" || cmd == "设备工时") { CumulativeHoursCmd(); return; }
+            if (cmd == "机型KPI" || cmd == "型号KPI" || cmd == "分机型KPI" || cmd == "机型可用率") { KpiByModelCmd(); return; }
             if (cmd == "KPI分析" || cmd == "KPI" || cmd == "设备KPI") { KpiStatsCmd(); return; }
             if (cmd == "设备综合评分" || cmd == "设备评分" || cmd == "综合评分" || cmd == "设备排名评分") { EquipmentScoreCmd(); return; }
             if (cmd == "钻孔管理" || cmd == "钻孔统计" || cmd == "钻孔信息") { BoreholeStatsCmd(); return; }
@@ -8114,6 +8115,17 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"设备累计工时({s.Equipment} 台·基准+生产工时累加)：机队合计 {s.FleetTotalHours / 1e4:0.#} 万h · 最高(检修优先) " + string.Join(" · ", parts);
     }
 
+    // 分机型 KPI：各型号平均 可用率/作业率/利用率(忠实原 KpiService.ByModelMonthly 机型聚合), 降序=选型/淘汰参考。
+    private void KpiByModelCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var rows = Data.GeoDataQueries.GetKpiByModel(db.Connection);
+        if (rows.Count == 0) { StatusMsg.Text = "机型KPI：无 KPI 数据"; return; }
+        var parts = new List<string>();
+        foreach (var r in rows) { parts.Add($"{r.Model}({r.Units}台 可用{r.AvgAvailPct:0.#}%/作业{r.AvgRunRatePct:0.#}%/利用{r.AvgUtilPct:0.#}%)"); if (parts.Count >= 6) break; }
+        StatusMsg.Text = $"机型KPI({rows.Count} 型号·按可用率降序)：" + string.Join(" · ", parts);
+    }
+
     private void KpiStatsCmd()
     {
         var db = EnsureGeoDb(); if (db == null) return;
@@ -9383,7 +9395,7 @@ public partial class MainWindow : Window
         // 生产计划/投影
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
-        "设备台账","生产数据","产能分析","故障分析","爆破分析","设备累计工时","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","层位求交","导入生产记录","导入月度产能","导入故障记录","导入月度KPI","导入设备台账","导入煤质","导入观测点","导入月度计划","导入见煤成果","导入路况","导入边坡","导入模板","导出分析",
+        "设备台账","生产数据","产能分析","故障分析","爆破分析","设备累计工时","KPI分析","机型KPI","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","层位求交","导入生产记录","导入月度产能","导入故障记录","导入月度KPI","导入设备台账","导入煤质","导入观测点","导入月度计划","导入见煤成果","导入路况","导入边坡","导入模板","导出分析",
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","机群驾驶舱","设备综合评分","数据看板","煤种分类","煤质数据健康度","分煤层煤质",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
         "产能分类对比","故障类型分布","分工序验收合格率","数据导出","数据字典","达成度评价","产量预测","时序预测","编组优化","智能编组优化","导出编组","导出预测",

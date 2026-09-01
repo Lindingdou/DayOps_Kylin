@@ -2637,3 +2637,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [GeoDataQueriesTests](tests/PitMine3D.Kylin.Tests/GeoDataQueriesTests.cs) +1(内存表)—— E1 base1000+生产(200+300)=1500·E2 0+50·E3 NULL→0+无生产=0; 降序 E1 首; 机队合计 1550。**build 0 错·单测 1275→1276**。
 
 **本会话第 42 功能**。教训: **服务层不只查"整个表未接", 还要逐个核"服务的每个 analysis 方法是否都接了线"**——BlastService 两个方法(CRUD 查询 + GetMonthlyAggregate), EquipmentService 混 CRUD + CalculateCumulativeHours; 聚合方法散落在 CRUD 服务里易漏。同 present-but-shallow 的方法级(node-editor/CoalAnalytics), 但这里是 DB 服务的聚合方法。见 [[unlock-blocked-insights]]。
+
+## 二三八、分机型 KPI(接原 KpiService.ByModelMonthly)—— 服务聚合方法扫尾(第 43 功能)
+
+**服务聚合方法扫描收官**: 全 GeoDataBase 服务的 analysis 方法末一个 `KpiService.ByModelMonthly`——按**机型**聚合 KPI(AVG plan/work/fault/idle/delay hours)。Kylin `KPI分析` 只**总均**, 无机型维。补机型级 KPI 比较(选型/淘汰参考)。
+
+补 [GeoDataQueries](src/Data/GeoDataQueries.cs) `GetKpiByModel`: `equipment_kpi_monthly JOIN equipment GROUP BY model` → 各型号 台数 + 平均 可用率/作业率/利用率(比率 ≤1 则 ×100, 同 GetKpiStats 约定), 按可用率降序。命令 `机型KPI`/`型号KPI`([MainWindow](src/Views/MainWindow.axaml.cs) `KpiByModelCmd`) + 目录。**忠实**: 原 ByModelMonthly 出机型×月, 这里再滚机型总均(同数据标准 rollup, 非臆造)。
+
+**验证(已知值)**: [GeoDataQueriesTests](tests/PitMine3D.Kylin.Tests/GeoDataQueriesTests.cs) +1(内存表)—— MA 两台(可用 0.9/0.8)均 85%·2 台; MB 一台 60%; 降序 MA 首。**build 0 错·单测 1276→1277**。
+
+**本会话第 43 功能**。**服务聚合方法全扫毕**: BlastService.GetMonthlyAggregate(§二三六)·EquipmentService.CalculateCumulativeHours(§二三七)·KpiService.ByModelMonthly(本节)三个真缺口补齐; FaultService.GetPareto/Coal-Seam StatsBySeam/Production MonthlyByYear 早覆盖; CRUD-only 服务(Workforce/LongTerm/DailyMine)记录不臆造。**角度⑦(枚举表)+其精化(逐服务聚合方法)共出 3 功能, 收敛**。见 [[unlock-blocked-insights]]。
