@@ -624,20 +624,44 @@ public static class GeoDataQueries
     public static List<IReadOnlyDictionary<string, string>> ParseCsv(string text)
     {
         var outRows = new List<IReadOnlyDictionary<string, string>>();
-        if (text == null) return outRows;
-        var lines = text.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
+        if (string.IsNullOrEmpty(text)) return outRows;
         string[]? headers = null;
-        foreach (var raw in lines)
+        foreach (var cells in SplitCsvRecords(text))   // 尊重引号: 引号内逗号/换行/转义 "" 皆字面(与导出 CsvCell 对称, 修往返破损)
         {
-            var ln = raw.Trim();
-            if (ln.Length == 0 || ln.StartsWith("#")) continue;
-            var cells = ln.Split(new[] { ',', '\t' }, System.StringSplitOptions.None);
-            if (headers == null) { headers = System.Array.ConvertAll(cells, s => s.Trim().Trim('﻿', '*', '"')); continue; }
+            if (cells.Count == 0 || (cells.Count == 1 && cells[0].Trim().Length == 0)) continue;   // 空行
+            if (cells[0].TrimStart().StartsWith("#")) continue;                                     // 注释行
+            if (headers == null) { headers = System.Array.ConvertAll(cells.ToArray(), s => s.Trim().Trim('﻿', '*', '"')); continue; }
             var d = new Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase);
-            for (int c = 0; c < headers.Length && c < cells.Length; c++) d[headers[c]] = cells[c].Trim().Trim('"');
+            for (int c = 0; c < headers.Length && c < cells.Count; c++) d[headers[c]] = cells[c].Trim();
             outRows.Add(d);
         }
         return outRows;
+    }
+
+    /// <summary>RFC-4180 CSV 记录切分：尊重双引号(引号内 , \t \n \r 皆字面; "" 为转义引号); 逗号/制表分列, 换行分记录。</summary>
+    private static List<List<string>> SplitCsvRecords(string text)
+    {
+        var records = new List<List<string>>();
+        var field = new System.Text.StringBuilder();
+        var row = new List<string>();
+        bool inQuotes = false, any = false;
+        int i = 0, n = text.Length;
+        while (i < n)
+        {
+            char ch = text[i];
+            if (inQuotes)
+            {
+                if (ch == '"') { if (i + 1 < n && text[i + 1] == '"') { field.Append('"'); i += 2; continue; } inQuotes = false; i++; continue; }
+                field.Append(ch); i++; continue;
+            }
+            if (ch == '"') { inQuotes = true; any = true; i++; continue; }
+            if (ch == ',' || ch == '\t') { row.Add(field.ToString()); field.Clear(); any = true; i++; continue; }
+            if (ch == '\r') { i++; continue; }
+            if (ch == '\n') { row.Add(field.ToString()); field.Clear(); records.Add(row); row = new List<string>(); any = false; i++; continue; }
+            field.Append(ch); any = true; i++;
+        }
+        if (any || field.Length > 0 || row.Count > 0) { row.Add(field.ToString()); records.Add(row); }   // 末记录(无尾换行)
+        return records;
     }
 
     /// <summary>导入模板（表头 + 一行示例）。key ∈ 生产记录/月度产能/故障记录/月度KPI/设备台账/煤质化验/观测点/月度计划/见煤成果。未知返 null。</summary>

@@ -233,6 +233,33 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void ParseCsv_quoted_field_keeps_embedded_comma()
+    {
+        // 引号内逗号不分列(此前朴素 Split 会破; 与导出 CsvCell 加引号对称)
+        var rows = GeoDataQueries.ParseCsv("id,val\n1,\"a,b,c\"\n");
+        Assert.Single(rows);
+        Assert.Equal("a,b,c", rows[0]["val"]);
+    }
+
+    [Fact]
+    public void ParseCsv_escaped_double_quote_becomes_literal()
+    {
+        // "" → 字面引号(RFC-4180)
+        var rows = GeoDataQueries.ParseCsv("id,val\n1,\"say \"\"hi\"\"\"\n");
+        Assert.Single(rows);
+        Assert.Equal("say \"hi\"", rows[0]["val"]);
+    }
+
+    [Fact]
+    public void ParseCsv_quoted_field_keeps_embedded_newline()
+    {
+        // 引号内换行不分记录 → 仍是一行两列
+        var rows = GeoDataQueries.ParseCsv("id,val\n1,\"line1\nline2\"\n");
+        Assert.Single(rows);
+        Assert.Equal("line1\nline2", rows[0]["val"]);
+    }
+
+    [Fact]
     public void Export_table_then_reimport_roundtrips()
     {
         using var db = GeoDatabase.OpenSeeded();
