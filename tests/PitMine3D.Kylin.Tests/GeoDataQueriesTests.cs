@@ -404,6 +404,17 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Production_by_shift_computes_efficiency()
+    {
+        // 班次台效 = 产量/工时 (供班次生产率对比)
+        using var db = GeoDatabase.OpenSeeded();
+        var rows = GeoDataQueries.GetProductionByShift(db.Connection);
+        Assert.NotEmpty(rows);
+        foreach (var r in rows)
+            if (r.WorkHours > 0) Assert.Equal(r.OutputM3 / r.WorkHours, r.EfficiencyM3PerH, 4);
+    }
+
+    [Fact]
     public void Export_table_then_reimport_roundtrips()
     {
         using var db = GeoDatabase.OpenSeeded();

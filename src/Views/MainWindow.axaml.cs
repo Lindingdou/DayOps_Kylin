@@ -7426,7 +7426,7 @@ public partial class MainWindow : Window
         var rows = Data.GeoDataQueries.GetProductionByShift(db.Connection);
         if (rows.Count == 0) { StatusMsg.Text = "班次产量对比：无生产记录"; return; }
         var parts = new List<string>();
-        foreach (var r in rows) parts.Add($"{r.Shift}班({r.Records}条·{r.OutputM3 / 1e4:0.##}万m³·作业率{r.UtilizationPct:0.#}%)");
+        foreach (var r in rows) parts.Add($"{r.Shift}班({r.Records}条·{r.OutputM3 / 1e4:0.##}万m³·作业率{r.UtilizationPct:0.#}%·台效{r.EfficiencyM3PerH:0.#}m³/h)");
         StatusMsg.Text = $"班次产量对比：" + string.Join(" · ", parts);
     }
 

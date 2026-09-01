@@ -567,9 +567,10 @@ public static class GeoDataQueries
         return rows;
     }
 
-    public sealed record ShiftOutputRow(string Shift, int Records, double OutputM3, double WorkHours, double UtilizationPct);
+    public sealed record ShiftOutputRow(string Shift, int Records, double OutputM3, double WorkHours, double UtilizationPct,
+        double EfficiencyM3PerH = 0);   // 班次台效(产量/工时) —— 供班次生产率对比
 
-    /// <summary>班次产量对比：各班次 记录数/产量/工时/作业率（production_record 按 shift 分组）。</summary>
+    /// <summary>班次产量对比：各班次 记录数/产量/工时/作业率/台效（production_record 按 shift 分组）。</summary>
     public static List<ShiftOutputRow> GetProductionByShift(SqliteConnection conn)
     {
         var rows = new List<ShiftOutputRow>();
@@ -580,9 +581,10 @@ public static class GeoDataQueries
         using var rd = cmd.ExecuteReader();
         while (rd.Read())
         {
-            double wh = rd.GetDouble(3), fh = rd.GetDouble(4);
+            double outp = rd.GetDouble(2), wh = rd.GetDouble(3), fh = rd.GetDouble(4);
             double util = (wh + fh) > 1e-9 ? wh / (wh + fh) * 100 : 0;
-            rows.Add(new ShiftOutputRow(rd.GetString(0), rd.GetInt32(1), rd.GetDouble(2), wh, util));
+            double eff = wh > 1e-9 ? outp / wh : 0;   // 班次台效 = 产量/工时 (m³/h)
+            rows.Add(new ShiftOutputRow(rd.GetString(0), rd.GetInt32(1), outp, wh, util, eff));
         }
         return rows;
     }
