@@ -1851,3 +1851,12 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - **克里金变差函数(OrdinaryKriging)**: 球状 γ(h)=`Nugget+(Sill−Nugget)(1.5t−0.5t³)` 与原版 EstimationAlgorithms.Gamma("Spherical") **逐项精确一致**; 原版自动拟合 `FitSpherical` 默认也是球状 → Kylin FitVariogram 球状**忠实**。原版另有指数/高斯模型, 但**仅经 GUI VariogramEditor 手选**(对话框受阻), 非自动路径; Kylin 自动球状即忠实默认。判**忠实**。
 
 **本轮审计小结**: 1 真 bug 修复(品位估值半径裁剪)+ 2 项复核(地形 IDW 合理 / 克里金球状忠实)。保真度审计方向有效(揪出真实空间范围偏差), 遵循"对拍原版托管数值行为"手法。
+
+## 一五五、保真度审计续二 —— 储量/台阶距/两期算量(2 忠实 + 1 低影响记录)
+
+沿"对拍原版托管数值行为"审计三项核心矿业计算:
+- **储量/资源量 `BlockModel.Resource`**: 原版 BlockReportGenerator 实为**统计报表**(体积/属性直方图), 剥采比走**规划侧煤岩分类器**(DepositAutoDetector), 均非"grade≥cutoff"的通用储量算。Kylin 的 `Resource(cutoff,density)` 是**自建的通用块模型储量算**(无冲突原版), 公式内部自洽(ore=Σvol[grade≥cut], strip=废/矿[体积比], avg=Σ(grade·vol)/ore)。**一处观察**: `metal=Σ(grade·vol)` 省了密度(常规"金属量"=品位×吨位=品位×体积×密度); 但此为煤矿 app("金属量"本非煤业概念, 且该值仅用于算平均品位), 无原版对应公式故非保真 bug, 记录备考。**判: 无 bug**。
+- **台阶距 `BenchLines.BenchDistance`**: `W + H/tan(α·π/180)` 与原版 `benchH/Math.Tan(a·π/180)`(BenchFaceExtractor:67 / DumpStripDialog:1473 / SeamOutcropBandExtractor:84)+ 平盘宽(StandardLevelModel:182"平盘宽+坡面投影")**逐项精确一致**。**判: 忠实**。
+- **两期算量 `TerrainAnalysis.TwoEpochVolume`**: 两面各 IDW 到**合并包围盒**网格逐格作差。原版 **C2C 明确排除不重叠区**("两期不重叠处已排除在统计与着色外", C2cResultWindow:40)。Kylin 在仅一面有数据处**外推另一面**→非重叠区有伪方量。**但**: ①同范围测量(常态, 如同一采坑前后期)重叠≈并集, 影响可忽略(现有测同范围, 加掩不变); ②原版**栅格算量的 compute 源未能在托管码定位**(VolumeReportGenerator 仅 PDF 排版, compute 疑 native/对话框)→ 栅格重叠裁剪系由 C2C 原则**推断非确证**; ③忠实修法=对 3 个算量法(总/分标高/分块)统一按数据支撑半径掩非重叠格, 但需保证守恒一致。**判: 真实但低影响 + 原栅格行为未确证 → 记录, 不冒险改已测算量**(遵"不满足验证先记录")。
+
+**本轮**: 0 修 + 2 忠实确认(台阶距/储量结构) + 1 低影响记录(两期算量非重叠外推)。保真审计有时确认忠实——诚实记录, 不制造改动。
