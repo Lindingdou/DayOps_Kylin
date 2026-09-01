@@ -2332,3 +2332,15 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [BenchLevelInventoryTests](tests/PitMine3D.Kylin.Tests/BenchLevelInventoryTests.cs) 10 例—— 三级高→低(标高/序/顶底/级间距中位/离散)、坡顶坡底同标高合并为一级、一级平盘打断成多线仍算一级(按标高不按线数)、**链式吞并防护(2×容差跨度限)**、斜线剔除+坡面线提示、碎线/无效剔除、平面长度仅 XY(忽略 Z)、空/全斜线降级 Ok=false、报表含个数与表头、CSV 分组喂料端到端。**build 0 错·单测 1145→1155**。
 
 **本会话第 13 功能**。教训: **Platform 层的具体纯算法(非接口)是可移可验的富矿**——一个 Platform 程序集扫出 2 个真功能(QSELECT + 平盘标高清单)。**算法保真 + 输入源按 2D 场景约束适配(CSV 代活图取线)**是既忠实又可验的通路, 与既往 CSV 替 DM8 同型。见 [[unlock-blocked-insights]]。
+
+## 二〇九、现状台阶参数提取(ParameterExtractor 件二)—— PlanLib.ShortTerm 纯算法(第 14 功能)
+
+**新线索来自 `测试实验/param_extract`**(一个 console 驱动器, 引用 `PlanLib.ShortTerm.ParameterExtractor`/`LandformClassifier`)——顺藤查 PlanLib/ShortTerm(52 文件, 大排产引擎, 记为无头不可验), 但其中夹带**小而纯的几何/分类算子**(件一/件二: 采场排土场自动识别与参数校核), 明言"纯 C# 栅格管线, 无内核依赖"。交叉核对 Kylin 已有: LandformClassifier→已移(RasterMorphology), MineableAreaIdentifier→已移, RegionGeometry→已移(RegionBool), BenchWidthIdentifier→已移(平盘宽度识别); **ParameterExtractor→无(缺)**, BenchElevationAnnotator→无(缺)。
+
+补 `ParameterExtractor`(件二·提取): [src/Cad/BenchParameterExtractor.cs](src/Cad/BenchParameterExtractor.cs) 与原版逐字一致。从坡顶/坡底台阶线**逐顶点最近邻**反推现状台阶参数——坡面=每坡顶顶点找下方(Δz∈窗口)最近坡底顶点→(H,run,α); 平盘=每坡底顶点找≈同标高(±0.6·中位H)最近坡顶顶点→W(**重合点守卫**防退化输入把 W 算成 0); median 聚合 + IQR 报离散; 台阶数=坡顶标高聚类; β 推导(atan(H/(H/tanα+W)), 内联原 BenchTemplateResolver 单式) + β 实量(最高坡顶→最低坡底); 采深=Zmax−Zmin。**与 Kylin 既有 BenchAnalyzer 区别**: 后者吃剖面一维断面, 本类吃平面台阶线二维最近邻——不同算法。命令 `现状参数提取 [最小落差 最大落差]`(CSV role,lineId,x,y,z → 反推 → 画坡顶红/坡底蓝 + 存报表)。
+
+**名冲突辨析**: Kylin 旧「现场参数提取」= BenchWidthAsync(BenchWidthIdentifier, 出达标平盘**区域**), ≠ 原 ParameterExtractor(出台阶**参数值** H/α/W/β)。故本功能用 `现状参数提取/台阶参数反推` 另立, 不夺旧名。
+
+**验证(已知值)**: [BenchParameterExtractorTests](tests/PitMine3D.Kylin.Tests/BenchParameterExtractorTests.cs) 8 例—— 两级台阶 H=10/α=45°/W=5/β≈33.69°/实量β≈38.66°/采深20/齐整(合成台阶闭式核验)、单级告警无平盘、台阶高不齐告警、缺坡顶或坡底降级、坡面配对遵守 Δz 窗口、**重合点守卫保平盘宽非 0**、CSV 按 role+lineId 分组、报表含头部指标。**build 0 错·单测 1155→1163**。
+
+**本会话第 14 功能**。教训: **`测试实验/` 的 console 驱动器是发现 module 内深埋纯算子的线索**——顺 `param_extract` 引用挖出 PlanLib.ShortTerm 的件一/件二簇, 大引擎虽不可验但其中的**纯几何算子可单独移可验**(6 个里 4 个先前已移, 补 1 个, 余 BenchElevationAnnotator)。判"大引擎不可移"别一刀切, 内部纯算子要逐个看。见 [[unlock-blocked-insights]]。
