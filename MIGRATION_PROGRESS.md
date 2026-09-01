@@ -2558,7 +2558,15 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 
 **同脉络续挖**: 反推所在的 DB 服务层(`CoalQualityService`)另有 **`RunAudit`——"7 类规则一键审核"**(GeoDataBasePlugin 明列), 规则逻辑是**纯的**(写库仅落 finding)。逐规则对 Kylin 数据模型核可支撑性:
 - **可做(数据齐)**: ② 物理范围(St∈[0,10]·Ad∈[0,60]·Qnet≤50) · ③ 原煤vs浮煤(浮煤灰>原煤灰=物理不可能) · ④ 煤类反推≠标注(复用 §二二九 `CoalTypeInference`) · ⑤ 同层离群(Ad 3σ, 层样本≥30 才统计) · ⑦ 浮煤回收率∈[0,100]。
-- **数据缺, 记录不做**: ① 工分自洽(M+A+V+FC≈100 需 **Mad 水分/FCd 固定碳**, Kylin `CoalSample`/`coal_sample` 无此列) · ⑥ 钻探-测井煤厚一致(需 drill/log 分列厚度)。
+- **数据缺, 记录不做**: ① 工分自洽(M+A+V+FC≈100 需 **Mad 水分/FCd 固定碳**, Kylin `CoalSample`/`coal_sample` 无此列)。~~⑥ 钻探-测井煤厚一致~~ **→ 实为误记, 已补(见 §二四五)**: `borehole_seam_result` 本有 `drill_seam_thickness`/`log_seam_thickness`(317 行俱全), 我未查就记"数据缺"。
+
+## 二四五、测井一致审核(钻探vs测井煤厚)—— 纠正误记为"数据缺"(第 54 功能)
+
+**"记录为数据缺"也要复查数据在不在(同 §二二九 煤种分类误记"已覆盖")**: §二三〇 我把 RunAudit 规则6(钻探-测井煤厚一致)记为"数据缺, 不做"——**未查就记**。实则 `borehole_seam_result` 有 `drill_seam_thickness`+`log_seam_thickness`+`drill/log_end_depth`(**317 行俱全**)。忠实补 [CoalAudit](src/Data/CoalAudit.cs) `CheckDrillLogConsistency`(厚煤层≥3.5m 看相对误差>20%错/>10%警; 薄煤层看绝对>0.5m错/>0.25m警) + [GeoDataQueries](src/Data/GeoDataQueries.cs) `GetDrillLogRows`(join borehole 取 hole_id) + 命令 `测井一致`([MainWindow](src/Views/MainWindow.axaml.cs) `DrillLogConsistencyCmd`, 不一致率+导 CSV)+ 目录。煤质审核状态行更正为"测井一致见「测井一致」命令"。
+
+**验证(已知值)**: [CoalAuditTests](tests/PitMine3D.Kylin.Tests/CoalAuditTests.cs) +1—— 厚10/10一致→无·10/8(相对20%=阈值不>20)→警·10/7(30%>20)→错·薄1/1.2(0.2<0.25)→无·1/1.4→警·1/1.6→错·缺→跳: 共 4 项(2错2警)。**build 0 错·单测 1300→1301**。
+
+**本会话第 54 功能**。教训: **"记录为数据缺/受阻"务必先查数据/实现在不在**——这是本会话第 3 次"未查就记"被纠(煤种分类误记已覆盖 §229·测井一致误记数据缺 §245·多段/退距误记复杂 §51/52)。**任何"记录"前, grep/PRAGMA 查证据**(表列/公式/实现), 别凭印象。见 [[unlock-blocked-insights]] [[verify-seed-enum-values-before-filter]]。
 
 补 [src/Data/CoalAudit.cs](src/Data/CoalAudit.cs): `Run(samples, ranges, minSeamForOutlier=30)` 纯逻辑跑 5 规则→`Finding(样本id/类别/严重度/消息)` + 分类计数汇总 + `ToCsv`。命令 `煤质审核`/`一键审核`([MainWindow](src/Views/MainWindow.axaml.cs) `CoalAuditCmd`): DB 样本+区间→审核 + **有错样红/仅警样橙上图(按样聚合取最重级)** + 导出 + 状态行报分类计数 & 明示"工分自洽/测井一致数据缺未审"。与既有 `煤质离群`(专项 3σ)/`煤类反推`(专项)互补=统一一键 QC 卷。
 

@@ -88,6 +88,28 @@ public class CoalAuditTests
     }
 
     [Fact]
+    public void Drill_log_consistency_thick_relative_thin_absolute()
+    {
+        var rows = new List<CoalAudit.DrillLogRow>
+        {
+            new("H1", "4-1", 10.0, 10.0),   // 厚, 一致 → 无
+            new("H2", "4-1", 10.0, 8.0),    // 厚, 差2/10=20%(=阈值, 不>20) → 警(>10%)
+            new("H3", "4-1", 10.0, 7.0),    // 厚, 差3/10=30%>20% → 错
+            new("H4", "9",   1.0, 1.2),     // 薄, 差0.2<0.25 → 无
+            new("H5", "9",   1.0, 1.4),     // 薄, 差0.4>0.25 → 警
+            new("H6", "9",   1.0, 1.6),     // 薄, 差0.6>0.5 → 错
+            new("H7", "9",   1.0, null),    // 缺 → 跳
+        };
+        var f = CoalAudit.CheckDrillLogConsistency(rows);
+        Assert.Equal(4, f.Count);                       // H2 警·H3 错·H5 警·H6 错(H1/H4 一致·H7 缺)
+        Assert.Equal(2, f.Count(x => x.Severity == CoalAudit.Severity.Error));    // H3,H6
+        Assert.Equal(2, f.Count(x => x.Severity == CoalAudit.Severity.Warning));  // H2,H5
+        Assert.All(f, x => Assert.Equal("测井一致", x.Category));
+        Assert.Contains(f, x => x.HoleId == "H3");
+        Assert.DoesNotContain(f, x => x.HoleId == "H1" || x.HoleId == "H4" || x.HoleId == "H7");
+    }
+
+    [Fact]
     public void Summary_counts_by_category_and_severity()
     {
         var s = new List<CoalSample>

@@ -375,6 +375,20 @@ public static class GeoDataQueries
         return rows;
     }
 
+    /// <summary>钻探-测井煤厚对比行(borehole_seam_result JOIN borehole 取 hole_id)供 <see cref="CoalAudit.CheckDrillLogConsistency"/>。</summary>
+    public static List<CoalAudit.DrillLogRow> GetDrillLogRows(SqliteConnection conn)
+    {
+        var rows = new List<CoalAudit.DrillLogRow>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"SELECT COALESCE(b.hole_id,''), COALESCE(r.seam_code,''), r.drill_seam_thickness, r.log_seam_thickness
+                            FROM borehole_seam_result r LEFT JOIN borehole b ON b.id = r.borehole_id
+                            WHERE r.drill_seam_thickness IS NOT NULL AND r.log_seam_thickness IS NOT NULL";
+        using var rd = cmd.ExecuteReader();
+        static double? Nd(SqliteDataReader r, int i) => r.IsDBNull(i) ? (double?)null : r.GetDouble(i);
+        while (rd.Read()) rows.Add(new CoalAudit.DrillLogRow(rd.GetString(0), rd.GetString(1), Nd(rd, 2), Nd(rd, 3)));
+        return rows;
+    }
+
     public sealed record SeamRow(string SeamCode, string Name, int SampleCount);
 
     /// <summary>煤层管理：各煤层定义 + 煤样计数。</summary>

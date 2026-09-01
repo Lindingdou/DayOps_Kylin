@@ -86,6 +86,35 @@ public static class CoalAudit
         return new AuditSummary(samples.Count, f.Count, err, warn, byCat, f);
     }
 
+    /// <summary>一条钻探-测井煤厚对比行(来自 borehole_seam_result)。</summary>
+    public sealed record DrillLogRow(string HoleId, string SeamCode, double? DrillThicknessM, double? LogThicknessM);
+
+    /// <summary>
+    /// 钻探-测井煤厚一致性审核(忠实原 RunAudit 规则6): 厚煤层(≥3.5m)看相对误差(>20%错/>10%警),
+    /// 薄煤层(&lt;3.5m)看绝对误差(>0.5m 错/>0.25m 警)。两者都缺则跳过。
+    /// </summary>
+    public static List<Finding> CheckDrillLogConsistency(IEnumerable<DrillLogRow> rows)
+    {
+        var f = new List<Finding>();
+        foreach (var r in rows)
+        {
+            if (r.DrillThicknessM is not double d || r.LogThicknessM is not double l) continue;
+            double diff = Math.Abs(d - l), thick = Math.Max(d, l);
+            if (thick >= 3.5)   // 厚煤层: 相对误差
+            {
+                double rel = thick > 1e-9 ? diff / thick * 100 : 0;
+                if (rel > 20) f.Add(new Finding(0, r.HoleId, r.SeamCode, "测井一致", Severity.Error, $"钻探{d:0.##}/测井{l:0.##}m 差{diff:0.##}m(相对{rel:0.#}%>20%)"));
+                else if (rel > 10) f.Add(new Finding(0, r.HoleId, r.SeamCode, "测井一致", Severity.Warning, $"钻探{d:0.##}/测井{l:0.##}m 差{diff:0.##}m(相对{rel:0.#}%>10%)"));
+            }
+            else                // 薄煤层: 绝对误差
+            {
+                if (diff > 0.5) f.Add(new Finding(0, r.HoleId, r.SeamCode, "测井一致", Severity.Error, $"钻探{d:0.##}/测井{l:0.##}m 差{diff:0.##}m(>0.5m)"));
+                else if (diff > 0.25) f.Add(new Finding(0, r.HoleId, r.SeamCode, "测井一致", Severity.Warning, $"钻探{d:0.##}/测井{l:0.##}m 差{diff:0.##}m(>0.25m)"));
+            }
+        }
+        return f;
+    }
+
     /// <summary>findings → CSV。</summary>
     public static string ToCsv(AuditSummary a)
     {
