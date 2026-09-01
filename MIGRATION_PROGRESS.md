@@ -2397,7 +2397,7 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 
 ## 二一五、趋势整合现状台阶(TrendBenchIntegrator)—— MineAssLib/Driving 续挖(第 20 功能)
 
-纯引擎清单剩余 ✗ 逐个核实: RoadClipRegion(DTO)/RoadSkeletonExtractor(点云路提取, 覆盖)/RoadConditionSymbology(=纵坡分析分档着色覆盖)/WorkLineProjector·UnitGraph·Incline*·StraightRamp*·TerrainRamp*(引擎中间层/native 斜面) 皆记录, 但 **`MineAssLib/Driving/TrendBenchIntegrator` 是真缺口**(该目录曾出 TautString 月度剥离, "读毕"又漏一处)。
+纯引擎清单剩余 ✗ 逐个核实: RoadClipRegion(DTO)/RoadConditionSymbology(=纵坡分析分档着色覆盖)/WorkLineProjector·UnitGraph·Incline*·StraightRamp*·TerrainRamp*(引擎中间层/native 斜面) 皆记录; **RoadSkeletonExtractor(875 行)记录为大子系统**——与 Kylin 既有「提取道路中心线」(RoadTools.Centerline: 两路边→中线, 简单法)**是不同方法**(骨架法: 台阶线当挡墙栅格化→DEM→可行驶坡度掩膜→**Zhang-Suen 细化骨架**→走廊图路由), 非覆盖; 但 875 行含**真图纸调校的走廊宽闸门/毛刺修剪阈值**, 端到端本机无真实地形不可验(Zhang-Suen 核虽标准, 但无掩膜生产者则为死码), 属多 tick 专项非清切片, 记录不移(同坑线内核/排产引擎边界)。真缺口 **`MineAssLib/Driving/TrendBenchIntegrator`**(该目录曾出 TautString 月度剥离, "读毕"又漏一处)。
 
 忠实移植 [src/Cad/TrendBenchIntegrator.cs](src/Cad/TrendBenchIntegrator.cs)(245 行, 0 引擎依赖): 用一条趋势线沿其方向整合现状台阶——趋势∩各台阶线(2D 求交)→ 交点取该台阶**整条代表标高**(=平盘水平, 比交点一点稳)→ 按标高 1D 聚级(带宽≈台阶高/2)→ 每级把源台阶段**压平到 z_k** + 贪心**断头接平**成一条规整线; 另 ExtractPlatformLevels/AlongTrend 出平盘标高序列(降序)。高程分布皆来自现状真值, 不放坡造假。命令 `趋势整合台阶 [聚级带宽m]`(选中趋势多段线 + 台阶线 CSV → 规整线按级配色入场景)。
 
