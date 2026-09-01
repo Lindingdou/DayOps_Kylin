@@ -8,6 +8,27 @@ namespace PitMine3D.Kylin.Tests;
 /// <summary>煤质深度分析回归（忠实移植 CoalQualityAnalytics 商品煤符合性核）。</summary>
 public class CoalAnalyticsTests
 {
+    [Fact]
+    public void XyCoverage_bbox_extent_and_area_km2()
+    {
+        // 点 (0,0)(2000,0)(0,1000) → 外接矩形 2000×1000 m = 2e6 m² = 2 km²
+        var cov = CoalAnalytics.XyCoverage(new[] { (0.0, 0.0), (2000.0, 0.0), (0.0, 1000.0) });
+        Assert.Equal(3, cov.N);
+        Assert.Equal(0, cov.MinX, 6); Assert.Equal(2000, cov.MaxX, 6);
+        Assert.Equal(0, cov.MinY, 6); Assert.Equal(1000, cov.MaxY, 6);
+        Assert.Equal(2.0, cov.AreaKm2, 6);
+    }
+
+    [Fact]
+    public void XyCoverage_empty_and_single_point_area_zero()
+    {
+        Assert.Equal(0, CoalAnalytics.XyCoverage(System.Array.Empty<(double, double)>()).N);
+        var one = CoalAnalytics.XyCoverage(new[] { (5.0, 7.0) });
+        Assert.Equal(1, one.N);
+        Assert.Equal(0.0, one.AreaKm2, 9);   // 单点无面积
+        Assert.Equal(5, one.MinX, 6); Assert.Equal(5, one.MaxX, 6);
+    }
+
     private static CoalSample S(long id, string seam, double? ad, double? st, double? qgr, double? vdaf = 30)
         => new(id, "H" + id, seam, 0, 0, 0, ad, null, st, null, qgr, null, vdaf, null);
 

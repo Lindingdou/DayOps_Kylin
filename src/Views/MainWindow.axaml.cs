@@ -8590,7 +8590,8 @@ public partial class MainWindow : Window
         RefreshScene();
         Viewport.FitBounds(new[] { xn, yn, xx, yx });
         var name = await SaveCsvAsync("导出煤质体素", $"quality_voxels_{ind}.csv", QualityVoxelInterp.ToCsv(vox));
-        StatusMsg.Text = $"煤质三维插值(IDW·{ind})：{cps.Count} 样 → {vox.Count} 体素(分辨率 {res:0.##}·Z {zn:0.#}~{zx:0.#}) · Z={bestZ:0.#} 切片 {slice.Count} 格上图(蓝低→红高·{vmin:0.##}~{vmax:0.##})"
+        var cov = Data.CoalAnalytics.XyCoverage(cps.Select(p => (p.X, p.Y)));   // 化验平面覆盖(忠实原 空间分布 覆盖信息)
+        StatusMsg.Text = $"煤质三维插值(IDW·{ind})：{cps.Count} 样 → {vox.Count} 体素(分辨率 {res:0.##}·Z {zn:0.#}~{zx:0.#}) · 化验覆盖 {cov.MaxX - cov.MinX:0.#}×{cov.MaxY - cov.MinY:0.#}m={cov.AreaKm2:0.###}km² · Z={bestZ:0.#} 切片 {slice.Count} 格上图(蓝低→红高·{vmin:0.##}~{vmax:0.##})"
             + (name != null ? $" · 块模型 CSV → {name}" : "") + " · 全 3D 显示受阻(2D 场景), 出块模型+Z 切片";
     }
 

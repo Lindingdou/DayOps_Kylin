@@ -595,4 +595,15 @@ public static class CoalAnalytics
         double d = System.Math.Sqrt(sx * sy);
         return d < 1e-12 ? null : System.Math.Max(-1, System.Math.Min(1, sxy / d));
     }
+
+    /// <summary>化验点平面覆盖(忠实原 空间分布窗 ComputeArea/UpdateCoverageInfo): 点数 + XY 外接矩形范围 + 面积(km²=外接矩形/1e6)。空/单点面积 0。</summary>
+    public sealed record XyCoverageResult(int N, double MinX, double MaxX, double MinY, double MaxY, double AreaKm2);
+    public static XyCoverageResult XyCoverage(IEnumerable<(double x, double y)> pts)
+    {
+        int n = 0; double minX = double.MaxValue, maxX = double.MinValue, minY = double.MaxValue, maxY = double.MinValue;
+        foreach (var (x, y) in pts) { n++; if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
+        if (n == 0) return new XyCoverageResult(0, 0, 0, 0, 0, 0);
+        double area = n < 2 ? 0 : (maxX - minX) * (maxY - minY) / 1e6;
+        return new XyCoverageResult(n, minX, maxX, minY, maxY, area);
+    }
 }
