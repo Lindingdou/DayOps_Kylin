@@ -755,6 +755,7 @@ public partial class MainWindow : Window
             if (cmd == "导入月度产能" || cmd == "月度产能导入" || cmd == "导入产能") { await ImportCsvToDbAsync("导入月度产能", "equipment_id,year,month,output_m3", rs => Data.GeoDataQueries.ImportCapacityMonthly(EnsureGeoDb()!.Connection, rs, true)); return; }
             if (cmd == "导入故障记录" || cmd == "故障记录导入" || cmd == "导入故障") { await ImportCsvToDbAsync("导入故障记录", "equipment_id,date,fault_type[,shift,duration_hours,description,is_resolved,repair_team]", rs => Data.GeoDataQueries.ImportFaultEvents(EnsureGeoDb()!.Connection, rs)); return; }
             if (cmd == "导入爆破记录" || cmd == "爆破记录导入" || cmd == "导入爆破" || cmd == "导入爆破事件") { await ImportCsvToDbAsync("导入爆破记录", "blast_date[,location_code,drill_id,material,diameter_mm,hole_count,total_hole_length_m,explosive_kg,blast_volume_m3,unit_consumption_kg_m3]", rs => Data.GeoDataQueries.ImportBlastEvents(EnsureGeoDb()!.Connection, rs)); return; }
+            if (cmd == "导入设备型号" || cmd == "设备型号导入" || cmd == "导入机型" || cmd == "导入型号") { await ImportCsvToDbAsync("导入设备型号", "model,category[,working_weight_t,power_kw,bucket_m3,load_t,dimensions_lwh,drill_diameter_mm,tire_spec,std_daily_cap_wan_m3]", rs => Data.GeoDataQueries.ImportEquipmentModels(EnsureGeoDb()!.Connection, rs)); return; }
             if (cmd == "导入KPI" || cmd == "导入月度KPI" || cmd == "KPI导入" || cmd == "导入可用率") { await ImportCsvToDbAsync("导入月度KPI", "equipment_id,year,month,plan_hours,work_hours,fault_hours,availability,actual_run_rate,utilization_rate", rs => Data.GeoDataQueries.ImportKpiMonthly(EnsureGeoDb()!.Connection, rs, true)); return; }
             if (cmd == "导入设备台账" || cmd == "设备台账导入" || cmd == "导入设备") { await ImportCsvToDbAsync("导入设备台账", "equipment_id,category[,model,manufacturer,origin,status]", rs => Data.GeoDataQueries.ImportEquipmentLedger(EnsureGeoDb()!.Connection, rs, true)); return; }
             if (cmd == "导入煤质" || cmd == "煤质导入" || cmd == "导入煤质化验" || cmd == "煤质数据导入") { await ImportCsvToDbAsync("导入煤质化验", "hole_id,seam_code,depth_from[,ad_raw,std_raw,qgr_d,vdaf_raw,sample_thickness,apparent_density,coal_type,…]", rs => Data.GeoDataQueries.ImportCoalSamples(EnsureGeoDb()!.Connection, rs, true)); return; }
@@ -10059,7 +10060,7 @@ public partial class MainWindow : Window
         // 生产计划/投影
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","开采程序切分","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
-        "设备台账","生产数据","产能分析","故障分析","爆破分析","设备累计工时","KPI分析","机型KPI","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","层位求交","导入生产记录","导入月度产能","导入故障记录","导入爆破记录","导入月度KPI","导入设备台账","导入煤质","导入观测点","导入月度计划","导入见煤成果","导入路况","导入边坡","导入模板","导出分析",
+        "设备台账","生产数据","产能分析","故障分析","爆破分析","设备累计工时","KPI分析","机型KPI","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","层位求交","导入生产记录","导入月度产能","导入故障记录","导入爆破记录","导入月度KPI","导入设备台账","导入设备型号","导入煤质","导入观测点","导入月度计划","导入见煤成果","导入路况","导入边坡","导入模板","导出分析",
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","机群驾驶舱","设备综合评分","数据看板","煤种分类","煤质数据健康度","分煤层煤质",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
         "产能分类对比","故障类型分布","设备因素分析","效能提升模拟","分工序验收合格率","数据导出","数据字典","达成度评价","产量预测","时序预测","编组优化","智能编组优化","导出编组","导出预测",

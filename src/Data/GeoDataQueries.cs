@@ -1250,6 +1250,32 @@ public static class GeoDataQueries
         return new ImportOutcome(ins, 0, 0, err);
     }
 
+    /// <summary>设备型号 CSV 入库(按 model 主键 upsert; 供机型 KPI/FleetOptimizer 规格)。必填 model,category。
+    /// 列: model,category[,working_weight_t,power_kw,bucket_m3,load_t,dimensions_lwh,drill_diameter_mm,tire_spec,std_daily_cap_wan_m3]。</summary>
+    public static ImportOutcome ImportEquipmentModels(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows)
+    {
+        int ins = 0, err = 0;
+        foreach (var row in rows)
+        {
+            string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
+            string model = Get("model"), cat = Get("category");
+            if (model.Length == 0 || cat.Length == 0) { err++; continue; }
+            ParseD(Get("working_weight_t"), out double ww); ParseD(Get("power_kw"), out double pw);
+            ParseD(Get("bucket_m3"), out double bk); ParseD(Get("load_t"), out double ld);
+            ParseD(Get("drill_diameter_mm"), out double dd); ParseD(Get("std_daily_cap_wan_m3"), out double cap);
+            object Null(string s) => s is { Length: > 0 } ? s : (object)System.DBNull.Value;
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "INSERT OR REPLACE INTO equipment_model (model, category, working_weight_t, power_kw, bucket_m3, load_t, dimensions_lwh, drill_diameter_mm, tire_spec, std_daily_cap_wan_m3) VALUES (@m,@c,@ww,@pw,@bk,@ld,@dim,@dd,@tire,@cap)";
+            cmd.Parameters.AddWithValue("@m", model); cmd.Parameters.AddWithValue("@c", cat);
+            cmd.Parameters.AddWithValue("@ww", ww); cmd.Parameters.AddWithValue("@pw", pw);
+            cmd.Parameters.AddWithValue("@bk", bk); cmd.Parameters.AddWithValue("@ld", ld);
+            cmd.Parameters.AddWithValue("@dim", Null(Get("dimensions_lwh"))); cmd.Parameters.AddWithValue("@dd", dd);
+            cmd.Parameters.AddWithValue("@tire", Null(Get("tire_spec"))); cmd.Parameters.AddWithValue("@cap", cap);
+            try { cmd.ExecuteNonQuery(); ins++; } catch { err++; }
+        }
+        return new ImportOutcome(ins, 0, 0, err);
+    }
+
     /// <summary>月度可用率 KPI CSV 入库（忠实 KpiMonthlySpec）：按 设备+年+月 键 upsert。列: equipment_id,year,month,plan_hours,work_hours,fault_hours,availability,actual_run_rate,utilization_rate。</summary>
     public static ImportOutcome ImportKpiMonthly(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
     {
