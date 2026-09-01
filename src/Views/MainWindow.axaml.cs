@@ -1052,7 +1052,8 @@ public partial class MainWindow : Window
             if (cmd == "注册") { StatusMsg.Text = "注册/授权：需接入国产数据库(达梦)授权系统（记录待做）"; return; }
             if (cmd == "删除") { DeleteSelected(); return; }
             if (cmd == "全部选择") { SelectAll(); return; }
-            if (cmd == "快速选择" || cmd == "选择类似") { SelectSimilar(); return; }
+            if (cmd == "选择类似" || cmd == "选类似" || cmd == "同类选择") { SelectSimilar(); return; }
+            if (cmd == "快速选择" || cmd == "QSELECT" || cmd == "条件选择" || cmd.StartsWith("快速选择 ") || cmd.StartsWith("QSELECT ") || cmd.StartsWith("条件选择 ")) { QuickSelectCmd(cmd); return; }
             if (cmd == "最后") { SelectLast(); return; }
             if (cmd == "上次") { SelectPrevious(); return; }
             if (cmd == "取消选择" || cmd == "全部取消选择" || cmd == "清除选择") { DeselectAll(); return; }
@@ -5856,8 +5857,116 @@ public partial class MainWindow : Window
         _selected.Clear();
         _selected.AddRange(matched);
         HighlightSelection();
-        StatusMsg.Text = $"快速选择：{_selected.Count} 个（类型 {string.Join("/", types)}）";
+        StatusMsg.Text = $"选择类似：{_selected.Count} 个（类型 {string.Join("/", types)}）";
     }
+
+    // 快速选择(QSELECT) —— 忠实原 QuickSelectFilter: 按 类型/特性/运算符/值 过滤, 支持 排除/追加/当前选择集内。
+    // 语法: 快速选择 <类型|*> [<特性> <运算符> <值>] [排除] [追加] [当前]
+    //   例: 快速选择 圆 半径 > 5        · 快速选择 * 图层 = 煤层        · 快速选择 多段线 是否闭合 = 是
+    //       快速选择 文字 内容 * 标高*   · 快速选择 点                     (选中全部点)
+    private void QuickSelectCmd(string cmd)
+    {
+        var toks = cmd.Split(new[] { ' ', '\t' }, System.StringSplitOptions.RemoveEmptyEntries).ToList();
+        toks.RemoveAt(0);   // 去掉"快速选择"
+
+        // 标志(位置无关): 排除 / 追加 / 当前(选择集内)
+        var crit = new QuickSelectCriteria();
+        bool Take(params string[] al) { for (int i = 0; i < toks.Count; i++) if (al.Contains(toks[i])) { toks.RemoveAt(i); return true; } return false; }
+        if (Take("排除", "排除模式", "exclude")) crit.ApplyMode = QuickSelectApplyMode.Exclude;
+        if (Take("追加", "并入", "append")) crit.AppendToCurrentSelection = true;
+        if (Take("当前", "当前选择集", "选择集内", "选集内")) crit.Scope = QuickSelectScope.CurrentSelection;
+
+        if (toks.Count == 0)
+        {
+            StatusMsg.Text = "快速选择：语法 快速选择 <类型|*> [<特性> <运算符> <值>] [排除][追加][当前]；"
+                           + "例 “快速选择 圆 半径 > 5”“快速选择 * 图层 = 煤层”。选中所有同类请用 选择类似。";
+            return;
+        }
+
+        // ① 类型(先决条件)
+        string t0 = toks[0];
+        crit.TypeId = (t0 is "*" or "所有" or "全部" or "全部图元" or "任意") ? (int?)null : QsTypeId(t0);
+        if (t0 is not ("*" or "所有" or "全部" or "全部图元" or "任意") && crit.TypeId is null)
+        { StatusMsg.Text = $"快速选择：未识别对象类型「{t0}」(可用 直线/圆/圆弧/多段线/矩形/正多边形/文字/点，或 * 表示所有)。"; return; }
+
+        // ② 特性 / 运算符 / 值 (缺省=只按类型选全部)
+        if (toks.Count == 1)
+        {
+            crit.Operator = QuickSelectOperator.All;
+        }
+        else if (toks.Count >= 3)
+        {
+            string propTok = toks[1], opTok = toks[2];
+            string val = toks.Count > 3 ? string.Join(" ", toks.Skip(3)) : "";
+            string? key = QsPropKey(crit.TypeId, propTok);
+            if (key is null) { StatusMsg.Text = $"快速选择：类型「{t0}」下未识别特性「{propTok}」。"; return; }
+            var op = QsOperator(opTok);
+            if (op is null) { StatusMsg.Text = $"快速选择：未识别运算符「{opTok}」(可用 = <> > < >= <= *)。"; return; }
+            crit.PropertyKey = key; crit.Operator = op.Value; crit.Value = val;
+        }
+        else
+        { StatusMsg.Text = "快速选择：特性筛选需 <特性> <运算符> <值> 三项(或只给类型选全部)。"; return; }
+
+        // ③ 候选集(整图 / 当前选择集内) → 快照 → 过滤
+        var pool = crit.Scope == QuickSelectScope.CurrentSelection
+            ? _selected.ToList()
+            : _scene.Entities.ToList();
+        if (pool.Count == 0) { StatusMsg.Text = "快速选择：候选为空(当前选择集内筛需先有选择)。"; return; }
+        var snaps = QuickSelectSnapshot.FromScene(pool);
+        var res = QuickSelectFilter.Apply(snaps, crit);
+
+        // ④ 命中回映到实体(Handle=下标)，过滤锁定/关闭图层，落选择集
+        SaveSel();
+        var hit = new List<SceneEntity>();
+        foreach (var h in res.Handles)
+        {
+            var en = pool[(int)h];
+            if (_layers.IsSelectable(en.LayerName)) hit.Add(en);
+        }
+        if (!res.AppendToCurrentSelection) _selected.Clear();
+        foreach (var en in hit) if (!_selected.Contains(en)) _selected.Add(en);
+        HighlightSelection();
+        StatusMsg.Text = QuickSelectFilter.Describe(crit, hit.Count, res.Examined);
+    }
+
+    // 类型中文名 → 目录类型 id(含 Kylin 别名); 未识别返回 null。
+    private static int? QsTypeId(string name) => name switch
+    {
+        "直线" or "线" => QuickSelectCatalog.TypeLine,
+        "圆" => QuickSelectCatalog.TypeCircle,
+        "圆弧" or "弧" => QuickSelectCatalog.TypeArc,
+        "多段线" or "多线" => QuickSelectCatalog.TypePolyline,
+        "矩形" => QuickSelectCatalog.TypeRectangle,
+        "多边形" or "正多边形" => QuickSelectCatalog.TypePolygon,
+        "文字" or "单行文字" or "文本" => QuickSelectCatalog.TypeText,
+        "点" => QuickSelectCatalog.TypePoint,
+        _ => null,
+    };
+
+    // 特性 token → 目录键: 先试直接键(radius/layer…), 再按该类型下 DisplayName 匹配(图层/颜色/半径/内容…)。
+    private static string? QsPropKey(int? typeId, string tok)
+    {
+        if (QuickSelectCatalog.Find(tok) is not null) return tok;                 // 直接键
+        foreach (var p in QuickSelectCatalog.PropertiesFor(typeId))
+            if (string.Equals(p.DisplayName, tok, System.StringComparison.OrdinalIgnoreCase)
+                || string.Equals(p.DisplayName.Replace(" ", ""), tok, System.StringComparison.OrdinalIgnoreCase))
+                return p.Key;
+        return null;
+    }
+
+    // 运算符 token → 枚举; 未识别返回 null。
+    private static QuickSelectOperator? QsOperator(string tok) => tok switch
+    {
+        "=" or "==" or "等于" => QuickSelectOperator.Equals,
+        "<>" or "!=" or "≠" or "不等于" or "不等" => QuickSelectOperator.NotEquals,
+        ">" or "大于" => QuickSelectOperator.Greater,
+        "<" or "小于" => QuickSelectOperator.Less,
+        ">=" or "≥" or "大于等于" or "不小于" => QuickSelectOperator.GreaterOrEqual,
+        "<=" or "≤" or "小于等于" or "不大于" => QuickSelectOperator.LessOrEqual,
+        "*" or "通配" or "like" or "匹配" => QuickSelectOperator.Wildcard,
+        "全部" or "所有" or "all" => QuickSelectOperator.All,
+        _ => null,
+    };
 
     // 对象树选中类型 → 高亮该类型几何；选根/无 → 清除
     private void OnObjectTreeSelect(object? sender, SelectionChangedEventArgs e)
@@ -8472,7 +8581,7 @@ public partial class MainWindow : Window
         "线性标注","对齐标注","半径标注","连续标注","标注样式",
         "距离","面积","角度",
         "剪切","复制到剪贴板","粘贴","基点粘贴","原坐标粘贴",
-        "快速选择","全部选择","反选","取消选择","创建选择集","特性",
+        "快速选择","选择类似","全部选择","反选","取消选择","创建选择集","特性",
         // 线编辑
         "加密多段线","简化","平滑","样条平滑","抽稀等值线","两线交点","闭合多段线","删除重复点","删除重复线","连接多段线","组合工作线",
         // 网格/建模

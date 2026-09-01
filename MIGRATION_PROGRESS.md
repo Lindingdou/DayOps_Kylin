@@ -2310,3 +2310,15 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(往返, 强)**: [PmxExportServiceTests](tests/PitMine3D.Kylin.Tests/PmxExportServiceTests.cs) 4 例—— Kylin 实体 → PmxExportService 写 → **PmxImportService 读** → 往返一致(计数·线几何+色·多段线闭合·圆·文字位置/高/转/文本)+ Header magic 'PMX1'/Footer magicEnd '1XMP' 校验。**导入+导出互为验证**(两者同规格, 往返恒等)。**build 0 错·单测 1115→1119**。
 
 **本会话第 11 功能**。PMX 工程互操作**读写双向完备**(读原版工程 + 存回原版格式)。教训: 导入/导出成对时, **往返测试(写→读→恒等)是最强验证**——两者互验, 无需外部样本(真实样本另做 skip-if-absent 端到端验)。见 [[unlock-blocked-insights]]。
+
+## 二〇七、快速选择(QSELECT)—— 补齐真过滤核, 修正命令误绑(第 12 功能)
+
+**新扫区 `Platform/`**(前仅扫 Modules + Host, 新发现平台层 3 工程)。`Platform/PitMine.Platform` 多为插件契约接口(不可移, Kylin 另有架构), 但含**具体纯算法**类。逐文件读出两处真功能, 本 tick 补第一处。
+
+忠实移植原 `PitMine.Platform.Selection`(三文件): [src/Cad/QuickSelect.cs](src/Cad/QuickSelect.cs) = 枚举/特性/快照/条件/结果(Model) + 类型↔特性表(Catalog) + **纯过滤核**(Filter, 原明言"不碰 P/Invoke、不碰 UI，可脱 GUI 单测")。含: 按量级放大的相对数值容差(native `to_wstring` 只留 6 位, 1e-9 卡不中)、手写双指针回溯通配(* / ?, 不走 Regex 防注入/灾难回溯)、JSON 摊平(数组拆下标/嵌套拆点号)、`Describe` 落历史。类型 id 沿用原 AcDbEntityType 枚举值。Kylin 侧加 `QuickSelectSnapshot`: 2D 场景实体 → EntitySnapshot(类型/图层/色打包 0xRRGGBB/线宽/Extended 全填, Handle=下标)。
+
+**修正命令误绑(name-collision 盲点)**: 原 Kylin 把字符串 `快速选择` 误绑到 `SelectSimilar()`——但 AutoCAD 里 **快速选择(QSELECT, 条件对话框) ≠ 选择类似(SELECTSIMILAR, 选同类)** 是两条命令。现: `选择类似`→SelectSimilar(选同类, 原逻辑不变), `快速选择/条件选择/QSELECT [<类型|*> <特性> <运算符> <值> [排除][追加][当前]]`→新 `QuickSelectCmd`(真条件过滤: 类型先决条件 + 特性/运算符/值 + Include/Exclude/Append/范围, 命中回映实体, 过滤锁定/关闭图层落选择集)。例 `快速选择 圆 半径 > 5`、`快速选择 * 图层 = 煤层`、`快速选择 文字 内容 * 标高*`。
+
+**验证(已知值 + 端到端)**: [QuickSelectTests](tests/PitMine3D.Kylin.Tests/QuickSelectTests.cs) 26 例(含 Theory)—— 通配 13 例、数值量级容差、布尔/文本、JSON 摊平(数组+嵌套+坏 JSON 空字典不抛)、目录(null 只给通用特性/圆含半径/文本无 ></通配裁剪/Find/SourceOf)、**核心正确点**「圆+半径>5+排除」= 半径≤5 的圆(下标 0)绝不扫入线/文字(类型先决条件, 非全盘取反)、按图层跨类型选、只给类型选全部、文本通配、多段线布尔闭合、快照类型/色打包/Extended、取不到值恒不匹配、null/空候选安全。**build 0 错·单测 1119→1145**。
+
+**本会话第 12 功能**。教训: **③ present-but-shallow/name-collision 盲点复现**——字符串命令存在(`快速选择`)但绑的是粗替身(SelectSimilar), 真 QSELECT(条件过滤)未实现; 判"已有此命令"前必看它绑到什么。**扫区要含 `Platform/`, 不止 Modules + Host**。平台层接口多不可移, 但夹带的具体纯算法(QuickSelectFilter/BenchLevelInventory)可移可验。见 [[unlock-blocked-insights]]。**待补第二处: `Platform/.../Geometry/BenchLevelInventory`(平盘标高清单纯算法, 需 3D 线; 算法可单测, 活场景取线受 2D 限, 下 tick)**。
