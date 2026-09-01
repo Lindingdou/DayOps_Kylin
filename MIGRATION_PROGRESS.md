@@ -2759,3 +2759,15 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(自造已知值)**: [BarChartPlotTests](tests/PitMine3D.Kylin.Tests/BarChartPlotTests.cs) +3—— QM40/CY20/SM10: 最高条顶达图顶(y=20)·CY 高=20/40*20=10·类别与值轴名标签俱在·全零不除零 NaN·空/零宽返空。4 命令复用已测助手(无新逻辑)。**build 0 错·单测 1305→1308**。
 
 **本会话第 57 功能**。教训: 折线(CurvePlot)+ 类别柱(BarChartPlot) 两助手补齐后, "统计图受阻"边界基本瓦解——凡 (x,y) 序列或 (类别,值) 分布皆可场景上屏, 唯饼图/热力图等特殊型仍走 CSV。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二四九 散点图 ScatterPlot（灰分-发热量回归交会图上屏）+ LAS/工序柱补
+
+**第三类图(散点)**: `灰分发热量回归` 算了斜率/截距/R²/残差离群, 结果**本就暴露 `Points`(原始 Ad,Cal 对)+`Suspects`**, 却只 CSV+状态行——典型交会图已算未绘。补 [ScatterPlot](src/Cad/ScatterPlot.cs)(与 CurvePlot/BarChartPlot 并列第三类: 点标记(叉)+可选拟合直线+离群红叉高亮+框+四角刻度+轴名; 拟合线端点纳入 Y 量程保同框; 空/零尺寸安全)。`AshCalorificRegressionCmd` 把 `r.Points`+拟合 (Slope,Intercept)+`Suspects` 高亮喂 ScatterPlot 上屏。
+
+**顺带**(§248 助手复用): `LAS 分类统计`(各类点数柱)· `工序进度跟踪`(各工序达成%柱) 亦上屏。
+
+**验证(自造已知值)**: [ScatterPlotTests](tests/PitMine3D.Kylin.Tests/ScatterPlotTests.cs) +4—— 完美线 y=2x 三点: 3 叉标记·(5,10)→中心(20,10)·拟合线端 (0,0)→(40,20)·轴名与刻度俱在; 离群红叉更大且异色; y 全等但拟合 y=x 端点撑开 Y 量程使线不出框; 空/零宽返空。**build 0 错·单测 1308→1312**。
+
+**本会话第 58 功能**。三助手(折线 CurvePlot §247 · 类别柱 BarChartPlot §248 · 散点 ScatterPlot §249)补齐, "统计图受阻"边界彻底瓦解: 序列/分布/交会三型皆场景上屏, 唯饼图/热力图/箱线等仍走 CSV。见 [[unlock-blocked-insights]]。

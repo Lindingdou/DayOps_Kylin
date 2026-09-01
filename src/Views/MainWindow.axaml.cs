@@ -8872,7 +8872,19 @@ public partial class MainWindow : Window
             foreach (var su in r.Suspects) sb.AppendLine($",{su.HoleId},{su.SeamCode},{su.Ad:0.##},{su.Cal:0.###},{su.ZScore:0.##}");
         }
         var saved = await SaveCsvAsync("灰分发热量回归", "灰分发热量回归.csv", sb.ToString());
-        StatusMsg.Text = $"灰分-发热量回归({r.YName})：{r.N}样 · {r.YName}={r.Intercept:0.#}{(r.Slope >= 0 ? "+" : "")}{r.Slope:0.###}·Ad · R²={r.R2:0.###}(相关{(r.R2 >= 0.5 ? "强" : r.R2 >= 0.25 ? "中" : "弱")}) · 残差离群 {r.Suspects.Count} 段"
+        // 交会散点图上屏(已算未绘)：Ad(X) vs 发热量(Y) 点 + 拟合线 + 残差离群红叉
+        double svw = ViewportHost.Bounds.Width, svh = ViewportHost.Bounds.Height;
+        var sp0 = Viewport.ScreenToWorld(svw * 0.3, svh * 0.85) ?? (0.0, 0.0);
+        var sp1 = Viewport.ScreenToWorld(svw * 0.7, svh * 0.4) ?? (100.0, 50.0);
+        double sw = System.Math.Abs(sp1.x - sp0.x), sh = System.Math.Abs(sp1.y - sp0.y);
+        if (sw < 1e-6) sw = 100; if (sh < 1e-6) sh = 50;
+        var hi = r.Suspects.Select(su => (su.Ad, su.Cal)).ToList();
+        BeginChange();
+        foreach (var se in Cad.ScatterPlot.Build(r.Points, System.Math.Min(sp0.x, sp1.x), System.Math.Min(sp0.y, sp1.y),
+                     sw, sh, System.Math.Max(sh * 0.05, 1e-3), "Ad%", r.YName, (r.Slope, r.Intercept), hi))
+        { se.LayerName = _layers.Current.Name; _scene.Add(se); }
+        RefreshScene();
+        StatusMsg.Text = $"灰分-发热量回归({r.YName})：{r.N}样 · {r.YName}={r.Intercept:0.#}{(r.Slope >= 0 ? "+" : "")}{r.Slope:0.###}·Ad · R²={r.R2:0.###}(相关{(r.R2 >= 0.5 ? "强" : r.R2 >= 0.25 ? "中" : "弱")}) · 残差离群 {r.Suspects.Count} 段 · 交会散点入场景"
                        + (saved != null ? $" · 存 {saved}" : "");
     }
 
