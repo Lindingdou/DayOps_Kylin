@@ -1843,3 +1843,11 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - **验证**: +6 单测(MaskByRadius 远格 NaN/近格保留、AutoRadius=2.5×spacing、空点集/0 半径 noop、BuildCells 跳 NaN、Range/CountValid 忽略 NaN、全 NaN→(0,0)); build 0 错; **1016 测全绿**; smoke [GLINIT] 正常。commit 见下。
 
 **这是真实保真 bug**(非同质命令核对): 估值输出的**空间范围**此前偏大(全格 vs 薄带), 现与原版一致。
+
+## 一五四、保真度审计续 —— 地形插值 + 克里金变差函数(两项复核: 一忠实一合理)
+
+承 §一五三 半径裁剪修复, 复核相邻算法:
+- **地形插值(等高线/曲率/糙度, GridFromPoints 全局 IDW)**: 与品位**不同**——高程是连续场, 全局 IDW **在数据包围盒内**插值是标准做法(GridFromPoints 网格范围=点集 min/max, 不外推出包围盒); 原版散点→等高线走 mesh/内核路径(无托管对照)。判**合理**, 不套半径裁剪(否则断裂连续地形面)。
+- **克里金变差函数(OrdinaryKriging)**: 球状 γ(h)=`Nugget+(Sill−Nugget)(1.5t−0.5t³)` 与原版 EstimationAlgorithms.Gamma("Spherical") **逐项精确一致**; 原版自动拟合 `FitSpherical` 默认也是球状 → Kylin FitVariogram 球状**忠实**。原版另有指数/高斯模型, 但**仅经 GUI VariogramEditor 手选**(对话框受阻), 非自动路径; Kylin 自动球状即忠实默认。判**忠实**。
+
+**本轮审计小结**: 1 真 bug 修复(品位估值半径裁剪)+ 2 项复核(地形 IDW 合理 / 克里金球状忠实)。保真度审计方向有效(揪出真实空间范围偏差), 遵循"对拍原版托管数值行为"手法。
