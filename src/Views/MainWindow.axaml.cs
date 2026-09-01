@@ -828,6 +828,8 @@ public partial class MainWindow : Window
             if (cmd == "品位储量曲线" || cmd == "品位-储量曲线" || cmd == "灰分储量曲线" || cmd.StartsWith("品位储量曲线 ")) { GradeTonnageCmd(cmd); return; }
             if (cmd == "分标高煤质" || cmd == "标高煤质" || cmd.StartsWith("分标高煤质 ")) { CoalByElevationCmd(cmd); return; }
             if (cmd == "煤质离群" || cmd == "离群质检" || cmd == "煤质异常" || cmd.StartsWith("煤质离群 ")) { CoalOutlierCmd(cmd); return; }
+            if (cmd == "灰分发热量回归" || cmd == "灰分回归" || cmd == "煤质回归" || cmd == "灰热回归" || cmd.StartsWith("灰分发热量回归 ") || cmd.StartsWith("煤质回归 ")) { await AshCalorificRegressionCmd(cmd); return; }
+            if (cmd == "煤质综合结论" || cmd == "煤质结论" || cmd == "综合结论" || cmd == "煤质分析结论" || cmd.StartsWith("煤质综合结论 ")) { await CoalConclusionsCmd(cmd); return; }
             if (cmd == "导出离群" || cmd == "离群导出" || cmd.StartsWith("导出离群 ")) { await ExportOutliersAsync(cmd); return; }
             if (cmd == "导出品位储量" || cmd == "品位储量导出" || cmd.StartsWith("导出品位储量 ")) { await ExportGradeTonnageAsync(cmd); return; }
             if (cmd == "导出分标高" || cmd == "分标高导出" || cmd.StartsWith("导出分标高 ")) { await ExportElevationAsync(cmd); return; }
@@ -8180,6 +8182,49 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"煤质离群 QC（{ind}·Tukey 1.5×IQR）：{r.N}样 中位{r.Median:0.##} Q1{r.Q1:0.##}/Q3{r.Q3:0.##} 栅栏[{r.Lower:0.##},{r.Upper:0.##}] → 离群 {r.Outliers.Count} 段" + (top.Count > 0 ? "：" + string.Join(" · ", top) : "");
     }
 
+    // 灰分-发热量回归(忠实 CoalQualityAnalytics.AshCalorificRegression): 一元 OLS + r² + 残差 z-score 离群。
+    private async Task AshCalorificRegressionCmd(string cmd)
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var s = Data.GeoDataQueries.GetCoalSamples(db.Connection);
+        if (s.Count == 0) { StatusMsg.Text = "灰分发热量回归：无煤样"; return; }
+        var kind = cmd.ToLowerInvariant().Contains("net") ? Data.CalorificKind.Qnet : Data.CalorificKind.Qgr;
+        var r = Data.CoalAnalytics.AshCalorificRegression(s, kind);
+        if (r.N < 5) { StatusMsg.Text = $"灰分发热量回归：有效样本不足(<5, 需同时有 Ad+{r.YName})"; return; }
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("灰分-发热量回归");
+        sb.AppendLine($"样本数,{r.N}");
+        sb.AppendLine($"斜率(每%灰),{r.Slope:0.####}");
+        sb.AppendLine($"截距,{r.Intercept:0.###}");
+        sb.AppendLine($"R²,{r.R2:0.####}");
+        sb.AppendLine($"灰分范围(%),{r.XMin:0.##}~{r.XMax:0.##}");
+        sb.AppendLine();
+        sb.AppendLine($"Ad(%),{r.YName}");
+        foreach (var (ad, cal) in r.Points) sb.AppendLine($"{ad:0.##},{cal:0.###}");
+        if (r.Suspects.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("残差离群(|z|≥2.5),孔号,煤层,Ad,发热量,z");
+            foreach (var su in r.Suspects) sb.AppendLine($",{su.HoleId},{su.SeamCode},{su.Ad:0.##},{su.Cal:0.###},{su.ZScore:0.##}");
+        }
+        var saved = await SaveCsvAsync("灰分发热量回归", "灰分发热量回归.csv", sb.ToString());
+        StatusMsg.Text = $"灰分-发热量回归({r.YName})：{r.N}样 · {r.YName}={r.Intercept:0.#}{(r.Slope >= 0 ? "+" : "")}{r.Slope:0.###}·Ad · R²={r.R2:0.###}(相关{(r.R2 >= 0.5 ? "强" : r.R2 >= 0.25 ? "中" : "弱")}) · 残差离群 {r.Suspects.Count} 段"
+                       + (saved != null ? $" · 存 {saved}" : "");
+    }
+
+    // 煤质综合结论(忠实 CoalQualityAnalytics.OverallConclusions): 表征/煤层对比/均匀/相关/洗选/用途/数据质量 七类可读结论。
+    private async Task CoalConclusionsCmd(string cmd)
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var s = Data.GeoDataQueries.GetCoalSamples(db.Connection);
+        if (s.Count == 0) { StatusMsg.Text = "煤质综合结论：无煤样"; return; }
+        var kind = cmd.ToLowerInvariant().Contains("net") ? Data.CalorificKind.Qnet : Data.CalorificKind.Qgr;
+        var cs = Data.CoalAnalytics.OverallConclusions(s, kind);
+        var saved = await SaveCsvAsync("煤质综合结论", "煤质综合结论.csv", Data.CoalAnalytics.ConclusionsToCsv(cs));
+        var repr = cs.FirstOrDefault(c => c.Category == "煤质表征")?.Text ?? cs.FirstOrDefault()?.Text ?? "";
+        StatusMsg.Text = $"煤质综合结论：{cs.Count} 条 · {repr}" + (saved != null ? $" · 存 {saved}" : "");
+    }
+
     // 洗选提质：成对原煤↔浮煤 → 降灰率/脱硫率/回收率
     private void CoalWashingCmd()
     {
@@ -8814,7 +8859,7 @@ public partial class MainWindow : Window
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","机群驾驶舱","设备综合评分","数据看板","煤种分类","煤质数据健康度","分煤层煤质",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
         "产能分类对比","故障类型分布","分工序验收合格率","数据导出","数据字典","达成度评价","产量预测","时序预测","编组优化","智能编组优化","导出编组","导出预测",
-        "商品煤符合性","煤质达标","导出符合性","品位储量曲线","导出品位储量","分标高煤质","导出分标高","煤质离群","导出离群","洗选提质","导出洗选","用途适宜性","导出用途",
+        "商品煤符合性","煤质达标","导出符合性","品位储量曲线","导出品位储量","分标高煤质","导出分标高","煤质离群","导出离群","洗选提质","导出洗选","用途适宜性","导出用途","灰分发热量回归","煤质综合结论",
         // TaskLib 自足计算
         "生产量核算","物料换算","采剥平衡","排土场按量推进","配煤核算","工序进度跟踪","编组产能","环节降效",
     };

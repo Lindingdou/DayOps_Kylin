@@ -385,4 +385,202 @@ public static class CoalAnalytics
         if (lo == hi) return sorted[lo];
         return sorted[lo] + (rank - lo) * (sorted[hi] - sorted[lo]);
     }
+
+    // ═══════════════════════ 灰分-发热量回归 + 综合结论（忠实 CoalQualityAnalytics 纯 C# 引擎）═══════════════════════
+
+    public sealed record RegressionResult(
+        string XName, string YName, int N, double Slope, double Intercept, double R2,
+        double XMin, double XMax,
+        IReadOnlyList<(double Ad, double Cal)> Points,
+        IReadOnlyList<(long Id, string HoleId, string SeamCode, double Ad, double Cal, double ZScore)> Suspects);
+
+    /// <summary>灰分(Ad)→发热量 一元线性回归(OLS) + r² + 残差 z-score 离群(|z|≥2.5)。样本&lt;5 返回空回归。忠实原 AshCalorificRegression。</summary>
+    public static RegressionResult AshCalorificRegression(IReadOnlyList<CoalSample> all, CalorificKind cal = CalorificKind.Qgr)
+    {
+        string yn = cal == CalorificKind.Qgr ? "Qgr,d" : "Qnet,ad";
+        var data = (all ?? new List<CoalSample>())
+            .Select(r => (r, x: r.AdRaw, y: Cal(r, cal)))
+            .Where(t => t.x.HasValue && t.y.HasValue)
+            .Select(t => (t.r, x: t.x!.Value, y: t.y!.Value))
+            .ToList();
+        if (data.Count < 5)
+            return new RegressionResult("Ad", yn, data.Count, 0, 0, 0, 0, 0,
+                new List<(double, double)>(), new List<(long, string, string, double, double, double)>());
+
+        int n = data.Count;
+        double mx = data.Average(t => t.x), my = data.Average(t => t.y);
+        double sxx = data.Sum(t => (t.x - mx) * (t.x - mx));
+        double sxy = data.Sum(t => (t.x - mx) * (t.y - my));
+        double syy = data.Sum(t => (t.y - my) * (t.y - my));
+        double b = sxx > 1e-9 ? sxy / sxx : 0;
+        double a = my - b * mx;
+        double r2 = sxx > 1e-9 && syy > 1e-9 ? (sxy * sxy) / (sxx * syy) : 0;
+
+        var resid = data.Select(t => t.y - (a + b * t.x)).ToList();
+        double rmean = resid.Average();
+        double rsd = System.Math.Sqrt(resid.Sum(e => (e - rmean) * (e - rmean)) / System.Math.Max(1, n - 1));
+        if (rsd < 1e-9) rsd = 1;
+
+        var suspects = new List<(long, string, string, double, double, double)>();
+        for (int i = 0; i < n; i++)
+        {
+            double z = (resid[i] - rmean) / rsd;
+            if (System.Math.Abs(z) >= 2.5)
+                suspects.Add((data[i].r.Id, data[i].r.HoleId, data[i].r.SeamCode, data[i].x, data[i].y, z));
+        }
+        suspects.Sort((p, q) => System.Math.Abs(q.Item6).CompareTo(System.Math.Abs(p.Item6)));
+
+        return new RegressionResult("Ad", yn, n, b, a, r2,
+            data.Min(t => t.x), data.Max(t => t.x),
+            data.Select(t => (t.x, t.y)).ToList(), suspects);
+    }
+
+    public enum Verdict { Good, Neutral, Warn }
+    public sealed record Conclusion(string Category, string Text, Verdict Level);
+
+    /// <summary>综合分析结论：把描述统计综合成 表征/煤层优劣/变异/相关/洗选/用途/数据质量 的可读结论。忠实原 OverallConclusions(无参考字典→AshWord/SulfurWord 兜底)。</summary>
+    public static IReadOnlyList<Conclusion> OverallConclusions(IReadOnlyList<CoalSample> all, CalorificKind cal = CalorificKind.Qgr)
+    {
+        var outl = new List<Conclusion>();
+        if (all == null || all.Count == 0) { outl.Add(new("数据", "库内无煤质数据。", Verdict.Warn)); return outl; }
+
+        double? ad = AvgN(all.Select(s => s.AdRaw));
+        double? st = AvgN(all.Select(s => s.StdRaw));
+        double? vd = AvgN(all.Select(s => s.VdafRaw));
+        double? q = AvgN(all.Select(s => Cal(s, cal)));
+        double? gi = AvgN(all.Select(s => s.CakingG));
+        string calTag = cal == CalorificKind.Qgr ? "Qgr,d" : "Qnet,ad";
+
+        // ① 煤质表征
+        string adL = ad.HasValue ? AshWord(ad.Value) : "";
+        string stL = st.HasValue ? SulfurWord(st.Value) : "";
+        string rank = !vd.HasValue ? "" : vd.Value >= 37 ? "、高挥发分(煤化程度低,近气/长焰煤)" : vd.Value >= 28 ? "、中高挥发分" : vd.Value >= 20 ? "、中挥发分" : "、低挥发分(煤化程度高)";
+        var typeTop = all.Where(s => !string.IsNullOrEmpty(s.CoalType)).GroupBy(s => s.CoalType!).OrderByDescending(g => g.Count()).FirstOrDefault();
+        int typedN = all.Count(s => s.CoalType != null);
+        outl.Add(new("煤质表征",
+            $"本矿煤总体属【{adL}{stL}】煤{rank}；均值 Ad={Fmt(ad)}% · St,d={Fmt(st, 2)}% · {calTag}={Fmt(q)}MJ/kg · Vdaf={Fmt(vd)}%" +
+            (gi.HasValue ? $" · G={Fmt(gi)}" : "") +
+            (typeTop != null ? $"；煤类以 {typeTop.Key} 为主({typeTop.Count()}/{typedN}段)。" : "；煤类多数未标注。"),
+            Verdict.Neutral));
+
+        // ② 煤层间优劣
+        var seams = all.GroupBy(s => s.SeamCode)
+            .Select(g => (Seam: g.Key, Ad: AvgN(g.Select(s => s.AdRaw)), St: AvgN(g.Select(s => s.StdRaw))))
+            .Where(t => t.Ad.HasValue).ToList();
+        if (seams.Count >= 2)
+        {
+            var hiAsh = seams.OrderByDescending(t => t.Ad).First();
+            var loAsh = seams.OrderBy(t => t.Ad).First();
+            var hiS = seams.Where(t => t.St.HasValue).OrderByDescending(t => t.St).FirstOrDefault();
+            string s2 = $"{loAsh.Seam}煤灰分最低({Fmt(loAsh.Ad)}%,质量最优)、{hiAsh.Seam}煤最高({Fmt(hiAsh.Ad)}%)";
+            if (hiS.Seam != null) s2 += $"；{hiS.Seam}煤硫分最高({Fmt(hiS.St, 2)}%)";
+            outl.Add(new("煤层对比", s2 + "。", Verdict.Neutral));
+        }
+
+        // ③ 变异性
+        var adVals = all.Select(s => s.AdRaw).Where(v => v.HasValue).Select(v => v!.Value).ToList();
+        if (adVals.Count > 2 && ad is > 0)
+        {
+            double sd = System.Math.Sqrt(adVals.Sum(v => (v - ad.Value) * (v - ad.Value)) / (adVals.Count - 1));
+            double cv = sd / ad.Value * 100;
+            string uni = cv < 15 ? "均匀,煤质稳定" : cv < 30 ? "较均匀" : "波动较大,须注意配采均衡";
+            outl.Add(new("均匀性", $"灰分变异系数 CV={cv:F0}%,{uni}(σ={sd:F1}%)。", cv < 30 ? Verdict.Good : Verdict.Warn));
+        }
+
+        // ④ 相关性
+        var corr = StrongestCorrelation(all);
+        if (corr != null) outl.Add(new("相关性", corr, Verdict.Neutral));
+
+        // ⑤ 洗选可选性
+        var washRows = WashingBySeam(all, withOverall: true);
+        var wash = washRows.FirstOrDefault(w => w.SeamCode == "全矿") ?? washRows.FirstOrDefault();
+        if (wash != null && wash.DeAshPct.HasValue)
+        {
+            double de = wash.DeAshPct.Value;
+            string sel = de >= 60 ? "易选" : de >= 40 ? "中等可选" : de >= 20 ? "较难选" : "难选";
+            string txt = $"原煤经洗选平均降灰 {de:F0}%(浮煤灰 {Fmt(wash.AdClean)}%)";
+            if (wash.DeSulfurPct.HasValue) txt += $"、脱硫 {wash.DeSulfurPct:F0}%";
+            if (wash.YieldMean.HasValue) txt += $"、浮煤回收 {wash.YieldMean:F0}%";
+            txt += $",可选性属【{sel}】。";
+            outl.Add(new("洗选提质", txt, de >= 40 ? Verdict.Good : Verdict.Warn));
+        }
+
+        // ⑥ 用途建议
+        outl.Add(new("用途建议", UtilizationVerdictText(ad, st, q, vd, gi), Verdict.Neutral));
+
+        // ⑦ 数据质量
+        int n = all.Count;
+        int adN = all.Count(s => s.AdRaw.HasValue), stN = all.Count(s => s.StdRaw.HasValue), qN = all.Count(s => s.QgrD.HasValue);
+        outl.Add(new("数据质量",
+            $"共 {n} 段化验：灰分 {adN * 100 / n}%、全硫 {stN * 100 / n}%、发热量(Qgr) {qN * 100 / n}% 覆盖" +
+            (qN < n * 0.5 ? "；发热量样本偏少,热值结论供参考,以灰/硫为主。" : "。"),
+            qN < n * 0.3 ? Verdict.Warn : Verdict.Good));
+
+        return outl;
+    }
+
+    /// <summary>综合结论 → CSV(类别,结论,评级)。</summary>
+    public static string ConclusionsToCsv(IReadOnlyList<Conclusion> cs)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("类别,结论,评级\n");
+        foreach (var c in cs)
+            sb.Append($"{Csv(c.Category)},{Csv(c.Text)},{(c.Level == Verdict.Good ? "优" : c.Level == Verdict.Warn ? "注意" : "中性")}\n");
+        return sb.ToString();
+    }
+
+    private static double? AvgN(IEnumerable<double?> xs)
+    { var v = xs.Where(x => x.HasValue).Select(x => x!.Value).ToList(); return v.Count > 0 ? v.Average() : null; }
+    private static string Fmt(double? v, int dec = 1) => v.HasValue ? v.Value.ToString("F" + dec, Inv) : "—";
+    private static string AshWord(double a) => a <= 10 ? "特低灰" : a <= 16 ? "低灰" : a <= 29 ? "中灰" : a <= 40 ? "富灰" : "高灰";
+    private static string SulfurWord(double s) => s <= 0.5 ? "特低硫" : s <= 1.0 ? "低硫" : s <= 2.0 ? "中硫" : s <= 3.0 ? "中高硫" : "高硫";
+
+    private static string UtilizationVerdictText(double? ad, double? st, double? q, double? vd, double? gi)
+    {
+        var parts = new List<string>();
+        bool steamOk = (q is null or >= 21) && (ad is null or <= 29);
+        parts.Add(steamOk ? "适宜作动力煤/民用煤" : "灰分偏高,动力用宜先洗选降灰");
+        if (st is > 2.0) parts.Add("硫分偏高,须配洗/掺烧降硫以满足环保限值");
+        else if (st is > 1.0) parts.Add("中硫,关注 SO₂ 排放");
+        else if (st.HasValue) parts.Add("低硫,环保友好");
+        if (gi is > 50 && vd is >= 20 and <= 37) parts.Add("粘结性较好,可部分配焦");
+        else if (gi is < 35 and > 0) parts.Add("粘结性弱,不宜单独炼焦");
+        return string.Join("；", parts) + "。";
+    }
+
+    private static string? StrongestCorrelation(IReadOnlyList<CoalSample> all)
+    {
+        var pairs = new (string A, string B, System.Func<CoalSample, double?> Ga, System.Func<CoalSample, double?> Gb)[]
+        {
+            ("灰分", "发热量", s => s.AdRaw, s => s.QgrD),
+            ("灰分", "全硫", s => s.AdRaw, s => s.StdRaw),
+            ("灰分", "挥发分", s => s.AdRaw, s => s.VdafRaw),
+            ("挥发分", "发热量", s => s.VdafRaw, s => s.QgrD),
+        };
+        string? best = null; double bestAbs = 0.35;   // 只报中等以上相关
+        foreach (var p in pairs)
+        {
+            var xs = new List<double>(); var ys = new List<double>();
+            foreach (var s in all) { var a = p.Ga(s); var b = p.Gb(s); if (a.HasValue && b.HasValue) { xs.Add(a.Value); ys.Add(b.Value); } }
+            var r = Pearson(xs, ys);
+            if (r.HasValue && System.Math.Abs(r.Value) > bestAbs)
+            {
+                bestAbs = System.Math.Abs(r.Value);
+                string dir = r.Value > 0 ? "正" : "负";
+                string note = p.A == "灰分" && p.B == "发热量" ? "(灰分越高发热量越低,符合规律)" : "";
+                best = $"{p.A}与{p.B}呈{dir}相关(r={r.Value:F2}){note}。";
+            }
+        }
+        return best;
+    }
+
+    private static double? Pearson(List<double> xs, List<double> ys)
+    {
+        int n = xs.Count;
+        if (n < 5) return null;
+        double mx = xs.Average(), my = ys.Average(), sxy = 0, sx = 0, sy = 0;
+        for (int i = 0; i < n; i++) { double dx = xs[i] - mx, dy = ys[i] - my; sxy += dx * dy; sx += dx * dx; sy += dy * dy; }
+        double d = System.Math.Sqrt(sx * sy);
+        return d < 1e-12 ? null : System.Math.Max(-1, System.Math.Min(1, sxy / d));
+    }
 }

@@ -2364,3 +2364,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [BenchParameterVerifierTests](tests/PitMine3D.Kylin.Tests/BenchParameterVerifierTests.cs) 11 例—— Norm 五档与原版一致、实测=规范全 pass、偏差>15% 警戒边界(16.67% warn / 12.5% pass)、排土场基准、稳定性 F 阈值(陡坡<1.3 警/缓坡≥1.3 合格)、无摩擦角或 β=0 不算 F、设计覆盖、Worst 聚合、null 安全、报表头部、提取告警流入校核。**build 0 错·单测 1171→1182**。
 
 **本会话第 16 功能**。至此 **PlanLib.ShortTerm 件一(采场排土场识别)+ 件二(参数提取+校核)整套到位**。教训: **判"依赖大引擎不可移"前, 看原算法有没有自带兜底路径**——ParameterVerifier 表面依赖 GeoDataBase 验收引擎+模板库, 但原代码 try/catch 全带本地兜底(Norm+FallbackStatus), 那条兜底分支正是无库环境(=Kylin)的忠实全貌, 可完整移可验; 只有库精细档(StandardMin/Max)不可得需记录。见 [[unlock-blocked-insights]]。
+
+## 二一二、煤质深度分析补全(灰分-发热量回归 + 综合结论)—— present-but-shallow(第 17 功能)
+
+**元角度: 逐子目录核实"真读过"**。前称"全模块读毕"曾被证不实(ShortTerm/Platform 都漏)。系统枚举各模块子目录, 逐个 robust ls+读——`GeoDataBase/Domain/Services/Geology/CoalQualityAnalytics.cs`("煤质深度分析引擎, 纯 C#, 无外部依赖")对比 Kylin `CoalAnalytics`: **8 方法里 6 已移, 2 缺**——`AshCalorificRegression`(灰分-发热量回归)/`OverallConclusions`(综合结论)。典型 present-but-shallow: 子系统已移大半, 剩两处纯统计缺口。
+
+忠实补入 [src/Data/CoalAnalytics.cs](src/Data/CoalAnalytics.cs): ①**灰分-发热量回归**——一元 OLS(β=Sxy/Sxx, α, r²) + 残差 z-score 离群(|z|≥2.5, 按 |z| 降序); ②**综合结论**——七类可读结论(煤质表征/煤层对比/均匀性/相关性/洗选提质/用途建议/数据质量), 含 Pearson 最强相关挑选、AshWord/SulfurWord 分级(原走参考字典 `_ref.FindLevel`, **无字典→本类兜底 AshWord/SulfurWord**, 即原版自带回退, 忠实)、UtilizationVerdictText 用途判据。命令 `灰分发热量回归`/`煤质综合结论`(GetCoalSamples→算→状态+CSV)。
+
+**验证(已知值)**: [CoalQualityAnalyticsTests](tests/PitMine3D.Kylin.Tests/CoalQualityAnalyticsTests.cs) 8 例—— **Cal=30−0.5·Ad 精确线性 → 斜率−0.5/截距30/r²=1/无离群**、残差离群 z≥2.5 标记(OUT 点)、样本<5 空回归、七类结论齐全、表征含"中灰"(均值Ad=21)+煤层对比"3煤最低/5煤最高"、灰分-发热量负相关检出、空输入安全、CSV 头部。**build 0 错·单测 1182→1190**。
+
+**本会话第 17 功能**。教训: **"全模块读毕"要按子目录逐个核实, 别信笼统断言**——GeoDataBase/Domain/Services/Geology 此前没单独读过; 一个"纯 C# 无外部依赖"分析引擎移了 6/8 方法, 剩 2 处纯统计(回归/结论)正是 present-but-shallow 典型。**元角度: 枚举全部子目录 → 逐个 ls+读, 对已移子系统查方法级完整度**(类比 node-editor 4/11、CoalAnalytics 6/8)。见 [[unlock-blocked-insights]]。
