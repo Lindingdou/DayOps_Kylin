@@ -3107,3 +3107,20 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [NodeGraphTests](tests/PitMine3D.Kylin.Tests/NodeGraphTests.cs) +2 —— Point(3,4)+Number(5)→Circle→Bake 存 JSON→新图 LoadJson→4 节点/3 连线, 端到端烘焙仍出 圆心(3,4)/半径5, 位置(10,20)保真; 非法 JSON→保留现图不抛。**build 0 错·单测 1379→1381**。
 
 **本会话第 78 功能**。节点编辑器至此**结构操作 + 撤销/重做 + 持久化**齐全, 与原对齐(几何求值 Kylin 反超原桩)。教训: 最新构件深查须覆盖**持久化**(存/取)——"能编辑不能存"是常见半成品。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二七三 节点编辑器 收官复核 + 邻近组件成熟度确认（第十五角度收束）
+
+节点编辑器补齐(§271 撤销/重做/删除节点/断开连线 + §272 JSON 存取 + 连线单击断开 UI)后, 与原对齐: **增/删节点·连/断线·拖拽·求值(11类)·烘焙到场景·撤销重做·JSON存取·参数值编辑**。
+
+**邻近"近期构件"深查(第十五角度扫尾), 均成熟无缺**:
+- **对象管理器**(ObjectTree): 右键菜单齐全(特性/快速选择/全选·复制/剪切/粘贴/删除·隐藏对象/隐藏同层/结束隐藏·测距/测角/面积·2D/3D/范围缩放/网格)。树按实体类型分组(+ 独立图层管理器补图层维度), 属设计选择非缺口。
+- **图层管理器**(LayerTable): New/Get/EnsureImported/SetCurrent/CycleCurrent/Remove/Rename/AllOn/Isolate/Restore/Reset + Layer(Visible/Frozen/Locked/Color/Shown/Selectable)——完整。
+- **文件管理器**(CadFileBrowser): 目录列可导入文件(ListDxf/ListImportable), 双击导入, 功能完整。
+
+**记录(视图层导航便利, 不可单测 → 记录不实现)**: 节点画布 缩放/平移(原 OnMouseWheel)、框选多选、画布右键菜单——纯视口变换/交互, 无域逻辑可验证; 忠实按"无法验证先记录"处理(同 3D 显示/交互式项)。原几何节点求值本身是桩(`// TODO: C++ bridge`), Kylin 已以托管几何超出之。
+
+**对象捕捉(osnap 端点/中点/圆心/交点/垂足…)**: 原 PitMine3D **未实现**(grep 空), Kylin 亦无——**非缺口**(忠实=不臆造原没有的)。
+
+**教训**: 第十五角度(最新构件深查)找到节点编辑器这一真缺口(刚建"增/拖/连"缺删/撤销/存取), 补齐后邻近组件(对象/图层/文件管理器)经查均成熟; osnap 双方皆无属非缺口。**"刚做完"的构件必单独深查其 CRUD/持久化/撤销全套; 但成熟组件勿为求变而 UI churn**。见 [[unlock-blocked-insights]] [[shell-completeness-priority]]。
