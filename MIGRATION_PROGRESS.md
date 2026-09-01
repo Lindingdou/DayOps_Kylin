@@ -3004,3 +3004,20 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [CoalRockClassifierTests](tests/PitMine3D.Kylin.Tests/CoalRockClassifierTests.cs) +4—— 煤码{1,3,5}容差0.5: 命中/边界5.5/2 非煤; 岩集空→非煤即岩; 岩集{2}→值5 既非煤又非岩=忽略(双 false); 容差2 加宽。**build 0 错·单测 1356→1360**。
 
 **本会话第 72 功能**。教训: **第十一角度=域类枚举扩后缀**(角度4 的 Engine/Solver/Builder 之外, 加 Analyzer/Classifier/Detector/Identifier/Resolver/Sampler/Evaluator)——挖出 present-but-partial 判别器(Kylin 品位阈值 vs 原类别码集)。**判据: 域类枚举勿限一组后缀; 分类/判别类常有 Kylin 简化版缺的模式(连续 vs 离散)**。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二六六 采场/排土场自动识别（LandformClassifier 栅格极性分类）—— 第十一角度续
+
+**第十一角度(分析类枚举)续挖最大单项**: 原 `PlanLib.ShortTerm.LandformClassifier`(550 行栅格管线)Kylin 缺——从坡顶/坡底台阶线自动圈定 **采场/外排土场/内排土场**。Kylin 有 RasterMorphology 原语 + BenchWidthIdentifier(平盘宽区域)但**无采排极性分类**。
+
+**补** [LandformClassifier](src/Cad/LandformClassifier.cs)(忠实全移, 自包含):
+① 足迹 = 台阶线加密栅格化 + 闭运算桥接 + 填洞;
+② DEM(多源 BFS 最近种子高程) → 中尺度 BoxBlur(40m, summed-area table) + 趋势面 BoxBlur(600m); 残差 = 平滑现状 − 趋势; 极性: 凹(残差&lt;−ε)=采场·凸(&gt;+ε)=排土(ε=min(2,0.25T), T=max(6,0.5·std));
+③ 闭运算并块(140m) + 连通域(8-连通) + 绝对面积(minAreaHa) & 相对面积(20%最大块)双过滤 + Moore 外轮廓 + DP 简化;
+④ 内/外排: 排土块外环带(120m)平均残差&lt;−0.5T(被坑壁围)=内排;
++ 成对台阶线过滤(剔孤立线)+ CarveForeignHoles(异类嵌洞开通道保区域互不相交)。命令 `采场排土场识别 [栅格m]`([MainWindow](src/Views/MainWindow.axaml.cs) `LandformClassifyAsync`): 台阶线 CSV(lineId,x,y,z)→分类→采场红/外排棕/内排橙 区域多边形上屏 + 计数。
+
+**验证(已知值+集成)**: [LandformClassifierTests](tests/PitMine3D.Kylin.Tests/LandformClassifierTests.cs) +5—— Components(分离块+minCells)·FillHoles(环填洞)·Simplify(共线→首末)·空输入不抛; **集成: 碗地形(中心60边100)台阶线→识别出采场(pit)**。**build 0 错·单测 1360→1365**。
+
+**本会话第 73 功能**(最大单项, 550 行栅格管线机械移植)。教训: **§52 "高估复杂度"再验——550 行看着吓人, 实为自包含纯栅格算子(Dilate/Erode/Close/FillHoles/BoxBlur/Components/TraceBoundary/DP/环带残差), 逐个机械移植即成**。InternalsVisibleTo 让内部算子逐个已知值验 + 碗地形集成验。见 [[unlock-blocked-insights]]。

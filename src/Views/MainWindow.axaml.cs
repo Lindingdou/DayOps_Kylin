@@ -1110,6 +1110,7 @@ public partial class MainWindow : Window
             if (cmd == "区域重叠检测" || cmd == "区域重叠" || cmd == "重叠检测") { CheckRegionOverlap(); return; }
             if (cmd == "平盘宽度识别" || cmd == "现场参数提取" || cmd == "平盘识别" || cmd == "采场参数识别") { await BenchWidthAsync(); return; }
             if (cmd == "确定可采区域" || cmd == "可采区域" || cmd == "可采区域识别") { await MineableAreaAsync(); return; }
+            if (cmd == "采场排土场识别" || cmd == "采场识别" || cmd == "排土场识别" || cmd == "地貌分类" || cmd == "采排识别" || cmd.StartsWith("采场排土场识别 ")) { await LandformClassifyAsync(cmd); return; }
             if (cmd == "点落到面上" || cmd == "点落面" || cmd == "点投影到面") { await ProjectPointsToMeshAsync(); return; }
             if (cmd == "网格交线" || cmd == "两网交线" || cmd == "面交线" || cmd == "求交线") { await MeshIntersectionAsync(); return; }
             if (cmd == "网格剖面" || cmd == "三角网剖面" || cmd == "面剖面" || cmd == "曲面剖面") { await MeshSectionAsync(); return; }
@@ -3421,6 +3422,52 @@ public partial class MainWindow : Window
     }
 
     // 确定可采区域：选煤层底板 OFF + 台阶线 CSV(lineId,x,y,z) → 找采煤台阶+可采面积+上覆揭露量 报表
+    // 采场/排土场自动识别(忠实原 LandformClassifier): 台阶线 CSV(lineId,x,y,z) → 栅格极性分类 →
+    // 采场(凹)/外排/内排 区域多边形上屏(红/棕/橙) + 计数。纯栅格, 无内核。用法 采场排土场识别 [栅格m 默认5]。
+    private async Task LandformClassifyAsync(string cmd)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        double cell = 5; if (tk.Length > 1 && double.TryParse(tk[1], out var cv) && cv > 0) cell = cv;
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "采场/排土场识别：选台阶线 CSV (lineId,x,y,z)", AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("台阶线 CSV") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (files.Count == 0) return;
+        string[] rows;
+        try { rows = System.IO.File.ReadAllLines(files[0].Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"采场排土场识别：读取失败 {ex.Message}"; return; }
+        var groups = new Dictionary<string, List<double>>(); var order = new List<string>();
+        foreach (var raw in rows)
+        {
+            var s = raw.Trim(); if (s.Length == 0 || s.StartsWith("#")) continue;
+            var t = s.Split(new[] { ',', '\t', ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
+            if (t.Length < 4) continue;
+            if (!double.TryParse(t[1], System.Globalization.NumberStyles.Float, inv, out double x)) continue;
+            if (!double.TryParse(t[2], System.Globalization.NumberStyles.Float, inv, out double y)) continue;
+            if (!double.TryParse(t[3], System.Globalization.NumberStyles.Float, inv, out double z)) continue;
+            string id = t[0]; if (!groups.TryGetValue(id, out var list)) { list = new(); groups[id] = list; order.Add(id); }
+            list.Add(x); list.Add(y); list.Add(z);
+        }
+        if (order.Count == 0) { StatusMsg.Text = "采场排土场识别：未解析到台阶线(lineId,x,y,z)"; return; }
+        var lines = order.Select(id => groups[id].ToArray()).ToList();
+        var r = Cad.LandformClassifier.Classify(lines, cellSize: cell);
+        if (!r.Ok) { StatusMsg.Text = $"采场排土场识别：{r.Message}"; return; }
+        BeginChange();
+        foreach (var reg in r.Regions)
+        {
+            var poly = new PolylineEntity { Closed = true, LayerName = reg.Category == "pit" ? "采场" : reg.Category == "internal_dump" ? "内排土场" : "外排土场" };
+            (poly.Cr, poly.Cg, poly.Cb) = reg.Category == "pit" ? (0.9f, 0.25f, 0.2f) : reg.Category == "internal_dump" ? (0.95f, 0.6f, 0.2f) : (0.6f, 0.45f, 0.3f);
+            for (int i = 0; i + 2 < reg.PolygonXyz.Length; i += 3) poly.Points.Add((reg.PolygonXyz[i], reg.PolygonXyz[i + 1]));
+            if (poly.Points.Count >= 3) _scene.Add(poly);
+        }
+        RefreshScene();
+        int np = r.Regions.Count(z => z.Category == "pit"), no = r.Regions.Count(z => z.Category == "external_dump"), ni = r.Regions.Count(z => z.Category == "internal_dump");
+        double pitHa = r.Regions.Where(z => z.Category == "pit").Sum(z => z.AreaHa);
+        StatusMsg.Text = $"采场/排土场识别(栅格 {cell:0.#}m·极性分类)：采场 {np} 块({pitHa:0.#}ha,红) · 外排 {no} 块(棕) · 内排 {ni} 块(橙) · 共 {r.Regions.Count} 区域入场景";
+    }
+
     private async Task MineableAreaAsync()
     {
         var mf = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
@@ -9979,7 +10026,7 @@ public partial class MainWindow : Window
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割","移除障碍物",
         // 块体/运输/路网
-        "块体模型","导出PMB","属性赋值","资源量","面约束块体","离散化模型","中长远进度计划","短期生产计划","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","瓶颈段分析","路网运输指标","结构路面","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道","直线斜坡道",
+        "块体模型","导出PMB","属性赋值","资源量","面约束块体","离散化模型","采场排土场识别","中长远进度计划","短期生产计划","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","瓶颈段分析","路网运输指标","结构路面","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道","直线斜坡道",
         // 生产计划/投影
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","开采程序切分","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
