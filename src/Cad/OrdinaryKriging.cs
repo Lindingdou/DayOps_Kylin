@@ -45,7 +45,7 @@ public static class OrdinaryKriging
     public static (Variogram best, double sseSph, double sseExp, double sseGauss) SelectVariogramModel(
         IReadOnlyList<ControlPoint> pts, double maxLag = 0, int lagCount = 12)
     {
-        var baseVg = FitVariogram(pts);
+        var baseVg = FitSpherical(pts, maxLag, lagCount);   // LSQ 拟合(忠实原 FitSpherical), 优于矩法启发式作基准
         var exp = ExperimentalVariogram(pts, maxLag, lagCount);
         double Sse(VariogramModel m)
         {
@@ -238,6 +238,55 @@ public static class OrdinaryKriging
         range = Math.Max(bw, Math.Min(maxLag, range));
         double nugget = cn[0] > 0 ? Math.Min(0.5 * sill, 0.5 * (sg[0] / cn[0])) : 0.1 * sill;
         return new Variogram(nugget, sill, range);
+    }
+
+    /// <summary>
+    /// 球状变差函数最小二乘拟合(忠实移植原 EstimationAlgorithms.FitSpherical)——在 nugget/sill/range 粗网格上
+    /// 扫最小「点对数加权」残差平方和 Σ cnt·(γ_model(h)−γ_exp(h))²; 选最小者。简单稳健, 不需外部数值优化库。
+    /// 区别于 <see cref="FitVariogram"/>(矩法启发式: sill=样本方差·range=首达 0.95sill 的滞后·nugget 由首箱估):
+    /// 此法真按 LSQ 拟合实验 γ(h), 更贴合空间相关结构。网格: nugget∈[0,0.3·maxG](7)·sill∈(nug,1.5·max(maxG,方差)](10)·range∈(0,maxH](12)。
+    /// </summary>
+    public static Variogram FitSpherical(IReadOnlyList<VariogramLag> exp, double sampleVariance)
+    {
+        var data = new List<VariogramLag>();
+        foreach (var b in exp) if (b.Count > 0) data.Add(b);
+        double sv = sampleVariance > 1e-9 ? sampleVariance : 1;
+        if (data.Count < 3) return new Variogram(0, sv, 100);   // 忠实原: 数据不足退 nugget0/sill=方差/range100
+
+        double maxH = 0, maxG = 0;
+        foreach (var b in data) { if (b.H > maxH) maxH = b.H; if (b.Gamma > maxG) maxG = b.Gamma; }
+        double sillUpper = Math.Max(maxG, sv) * 1.5;
+
+        double bestNug = 0, bestSill = maxG > 0 ? maxG : sv, bestRange = maxH * 0.5, bestErr = double.MaxValue;
+        for (int n = 0; n <= 6; n++)                            // nugget ∈ [0, 0.3·maxG]
+        {
+            double nug = (maxG * 0.3) * n / 6.0;
+            for (int s = 1; s <= 10; s++)                       // sill ∈ (nug, sillUpper]
+            {
+                double sill = nug + (sillUpper - nug) * s / 10.0;
+                if (sill <= nug) continue;
+                for (int r = 1; r <= 12; r++)                   // range ∈ (0, maxH]
+                {
+                    double range = maxH * r / 12.0;
+                    if (range <= 0) continue;
+                    var vg = new Variogram(nug, sill, range);
+                    double err = 0; int cnt = 0;
+                    foreach (var b in data) { double d = vg.Gamma(b.H) - b.Gamma; err += d * d * b.Count; cnt += b.Count; }  // 点对数加权
+                    if (cnt > 0) err /= cnt;
+                    if (err < bestErr) { bestErr = err; bestNug = nug; bestSill = sill; bestRange = range; }
+                }
+            }
+        }
+        return new Variogram(bestNug, bestSill, bestRange);
+    }
+
+    /// <summary>便捷重载: 从控制点自动算实验变差 + 样本方差, 再 LSQ 拟合球状模型。</summary>
+    public static Variogram FitSpherical(IReadOnlyList<ControlPoint> pts, double maxLag = 0, int lagCount = 12)
+    {
+        if (pts.Count == 0) return new Variogram(0, 1, 100);
+        double mean = pts.Average(q => q.V);
+        double variance = pts.Count > 1 ? pts.Sum(q => (q.V - mean) * (q.V - mean)) / (pts.Count - 1) : 1;
+        return FitSpherical(ExperimentalVariogram(pts, maxLag, lagCount), variance);
     }
 
     /// <summary>实验(经验)变差函数的一个滞后 bin: 滞后中心 H · 半变异 γ(h) · 点对数。</summary>

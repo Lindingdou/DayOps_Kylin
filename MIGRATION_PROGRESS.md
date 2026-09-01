@@ -2529,3 +2529,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [OrdinaryKrigingTests](tests/PitMine3D.Kylin.Tests/OrdinaryKrigingTests.cs) +6—— 零距离精确/单点回值; 四点等距值10/20/30/40→均25; 两点(0,0,0)&(100@10,0) 查(2,0,0) power1→20 精确, power2→5.882(近点更压倒), 平滑100→47(趋均值50); 半径外/邻域不足/空→null; maxSamples=2 只取最近两点不被远离群 999 污染。**build 0 错·单测 1238→1244**(既有估值不受影响)。
 
 **本会话第 32 功能**。教训: **"命令已在"≠"算法已全"**——`IDW估值` 命令存在且能出图(固定 power=2), 但原算法是可配幂次的一等估值器; 逐个已移植命令核对其底层算法深度(present-but-shallow), 而非只看命令名 diff。IDW 是克里金的标准同伴(无需变差函数、快速稳健), 补齐后估值家族(OK/UK/SK/IDW/NN/MA)对齐原六法。见 [[unlock-blocked-insights]]。
+
+## 二二八、球状变差 LSQ 拟合 FitSpherical(网格搜索最小二乘)—— 拟合器"简化替身"深挖(第 33 功能)
+
+**同文件续挖(present-but-shallow 最隐蔽变体)**: 顺 IDW 同一原文件 `EstimationAlgorithms.cs`, 其类头自陈提供 **`VariogramFitter 最小二乘拟合 Spherical 模型参数`**。原 `FitSpherical(exp, sampleVariance)` 在 **nugget/sill/range 粗网格(7×10×12)** 上扫**点对数加权残差平方和** Σ cnt·(γ_model(h)−γ_exp(h))², 取最小——真 LSQ 拟合。Kylin `FitVariogram` 是**矩法启发式替身**: sill=样本方差·range=实验变差首达 0.95sill 的滞后·nugget 由首箱估——**一遍矩估计, 非按 SSE 拟合**。同名功能(拟合球状变差)但底层是更简算法。
+
+补 [src/Cad/OrdinaryKriging.cs](src/Cad/OrdinaryKriging.cs): `FitSpherical(IReadOnlyList<VariogramLag> exp, double sampleVariance)` 忠实原网格搜索(nugget∈[0,0.3·maxG]·sill∈(nug,1.5·max(maxG,方差)]·range∈(0,maxH], 点对数加权 SSE 取最小; <3 非空箱退 nugget0/sill=方差/range100) + 便捷重载 `FitSpherical(pts)`(自算实验变差+样本方差)。**`SelectVariogramModel` 基准拟合改用 `FitSpherical`**(此前用矩法 `FitVariogram`)——三型选型建于真 LSQ 拟合之上, `变差函数分析` 命令报的最佳模型+SSE 更实。**稳妥边界**: 默认逐格克里金仍用快 `FitVariogram`(矩法, 保既有克里金值测试不动——同 §二二六"默认值保向后兼容"纪律); LSQ 拟合器作为一等方法提供并用于模型选型。
+
+**验证(已知值)**: [OrdinaryKrigingTests](tests/PitMine3D.Kylin.Tests/OrdinaryKrigingTests.cs) +3—— 造 γ(nugget0,sill10,range60) 精确取样的实验变差 → FitSpherical 网格分辨率内还原(range∈[50,70]·nugget≤2·sill∈[8,13]) **且加权 SSE < 故意错变差(5,20,10)**(证真在最小化 SSE); <3 非空箱退兜底(nugget0/sill=方差7/range100); 点集重载出合法参(sill>0·range>0·nugget∈[0,sill]·默认球状)。**build 0 错·单测 1244→1247**(SelectVariogramModel 换基准拟合无回归——全 1247 绿)。
+
+**本会话第 33 功能**。教训: **同一原文件挖到一个"简化替身"后, 通读该文件其余 public 算法**——IDW 之外, 同文件的 VariogramFitter(LSQ)亦被 Kylin 矩法启发式替身顶替。"拟合/估值/求解"这类词的同名方法, 底层算法可能是**降级替身**(矩法 vs 网格搜索 LSQ)。**改核心拟合器守稳妥**: 新增真 LSQ 器 + 只在模型选型路径切换(改善用户可见分析), 默认克里金保矩法快拟合不动, 避免波及既有克里金值测试。见 [[unlock-blocked-insights]] (H)。

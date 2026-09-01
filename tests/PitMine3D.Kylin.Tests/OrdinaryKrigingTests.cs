@@ -257,6 +257,57 @@ public class OrdinaryKrigingTests
         Assert.NotNull(OrdinaryKriging.IdwEstimate(two, 0.5, 0, 0, radius: 100, minSamples: 2)); // 恰够
     }
 
+    // ── 球状变差 LSQ 拟合 FitSpherical（忠实原 VariogramFitter 网格搜索, 区别于矩法 FitVariogram）──
+    private static double WeightedSse(System.Collections.Generic.List<OrdinaryKriging.VariogramLag> lags, OrdinaryKriging.Variogram vg)
+    {
+        double err = 0; int cnt = 0;
+        foreach (var b in lags) { double d = vg.Gamma(b.H) - b.Gamma; err += d * d * b.Count; cnt += b.Count; }
+        return cnt > 0 ? err / cnt : 0;
+    }
+
+    [Fact]
+    public void FitSpherical_recovers_planted_structure_and_beats_wrong_guess()
+    {
+        // 造一份"实验变差"= 真球状模型 γ(nugget0,sill10,range60) 在 12 个滞后中心的精确取样。
+        var truth = new OrdinaryKriging.Variogram(0, 10, 60);
+        var lags = new System.Collections.Generic.List<OrdinaryKriging.VariogramLag>();
+        for (int i = 0; i < 12; i++) { double h = (i + 0.5) * 10; lags.Add(new OrdinaryKriging.VariogramLag(h, truth.Gamma(h), 10)); }
+        var fit = OrdinaryKriging.FitSpherical(lags, sampleVariance: 10);
+        // 网格分辨率内还原: range≈60(±一格), nugget 小, sill≈10。
+        Assert.InRange(fit.Range, 50, 70);
+        Assert.InRange(fit.Nugget, 0, 2);
+        Assert.InRange(fit.Sill, 8, 13);
+        // 关键: 拟合确实最小化加权 SSE —— 优于一个故意错的变差。
+        var wrong = new OrdinaryKriging.Variogram(5, 20, 10);
+        Assert.True(WeightedSse(lags, fit) < WeightedSse(lags, wrong));
+    }
+
+    [Fact]
+    public void FitSpherical_degenerate_falls_back()
+    {
+        // <3 非空箱 → 退 nugget0/sill=方差/range100(忠实原 FitSpherical 兜底)。
+        var lags = new System.Collections.Generic.List<OrdinaryKriging.VariogramLag>
+        {
+            new(5, 3, 4), new(15, 0, 0), new(25, 0, 0),   // 只有 1 个非空箱
+        };
+        var fit = OrdinaryKriging.FitSpherical(lags, sampleVariance: 7);
+        Assert.Equal(0, fit.Nugget, 6);
+        Assert.Equal(7, fit.Sill, 6);
+        Assert.Equal(100, fit.Range, 6);
+    }
+
+    [Fact]
+    public void FitSpherical_from_points_returns_valid_params()
+    {
+        var pts = new List<CP>();
+        for (int x = 0; x < 6; x++) for (int y = 0; y < 6; y++) pts.Add(new(x * 10, y * 10, 0, 10 + x * 10));   // 线性场
+        var fit = OrdinaryKriging.FitSpherical(pts);
+        Assert.True(fit.Sill > 0);
+        Assert.True(fit.Range > 0);
+        Assert.InRange(fit.Nugget, 0, fit.Sill);
+        Assert.Equal(OrdinaryKriging.VariogramModel.Spherical, fit.Model);
+    }
+
     [Fact]
     public void Idw_maxSamples_caps_neighbourhood()
     {
