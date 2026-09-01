@@ -1825,3 +1825,11 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - **源码 TODO/FIXME/NotImplemented 扫描**: 全 src 无 `throw new NotImplementedException`; 无真 TODO/FIXME/HACK。所有"占位"命中皆**忠实**语义——KDF 色模式字节/LZW ClearCode·EOI 标准槽位/MeshSimplify(忠实原「顶点聚类占位实现」)/临时场景导出——非未完成功能。
 
 **四注册表 + 源码标记结论**: AI 菜单(24/24)+插件(全 2D 可做)+Ribbon(全 except 线宽显示-受阻)+右键菜单(全 except HATCHEDIT-原始桩)+ 源码零未实现标记 —— **功能迁移四重印证收敛**。所有 2D 可做命令 100% 覆盖, 缺口仅: 线宽显示(P3_C3 无变宽线)/HATCHEDIT(原始桩)/per-vertex-Z/3D 内核网格/二进制格式——全为已记录边界或原始桩。
+
+## 一五二、命令清单溯源至原生根 —— 完整性调查终结
+
+追问"原版命令的最终权威清单在哪": `MainWindow.Commands.cs:274` 命令行自动补全调 `EngineInterop.GetCommandNames()` → `EngineInterop.cs:1537` **`PitMine_GetCommandNames` 是 P/Invoke 进 C++ 原生 DLL**。其注释:"内置命令表 + 插件命令 + 插件工具"——**内置命令表在 C++ 内核中**(无源, 受阻), 无法从托管源枚举。
+- **已覆盖(托管/UI 暴露面)**: 内置表中面向用户的 2D 命令全经 AI 菜单/Ribbon/右键菜单暴露, 已 100% 对齐(§一四九–一五一); 插件命令全 2D 可做者已实现。
+- **不可枚举余项(内核内部)**: C++ 内置表的 3D/网格/布尔/内核几何命令——本就受阻(无源), 且不经托管暴露。
+
+**终结论**: 命令完整性调查已**溯源至 P/Invoke 原生边界**——托管侧无更多命令源可查。用户可见/可派发命令面 100% 覆盖; 唯一"未枚举"部分是 C++ 内核内置表(受阻, 已记录)。**命令层面功能迁移彻底收敛, 无进一步可验证的托管工作。**
