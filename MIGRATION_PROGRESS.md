@@ -2276,3 +2276,11 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **sweep 收敛**: 自足几何/地质切片 7 真缺口全在**采矿域几何/地质模块**(RoadLayout/BlockModelLib.Domain/MineAssLib.Driving/MeshEditLib)——robust 逐文件读挖出; **通用/数据模块**(PointCloudLib native·RoadLib·GeoDataBase)robust 读**确认覆盖/native/DB**, 无新切片。余待读 SqlLib(SQL 覆盖)/SeamOutcrop 余(3D 着色阻·Refiner 我露头线覆盖)/CurrentState 余(创建三角网覆盖·config·display)——皆低产。见 [[unlock-blocked-insights]]。
 
 **TaskLib robust 读补(收官最后一个"lump 为引擎"的模块)**: 逐文件读 TaskLib(非 Engine/Sim/Zoning 引擎核)——8 自足切片(TaskQuantity/MaterialFlow/MaterialSpec/SinkNode…)已移; `CapacityFromEquipment`(面日能力=编组班产×工时, FleetMatcher 解)= Kylin **FleetMatch/FleetCycle 覆盖**; `RegionAdvanceAzimuth`= **AdvancePlanner 覆盖**; `ShiftZoneGeometry`(点在区)= 多边形判覆盖; **Report* 子系统**(自定义报表模板 + 指标库 + HTML/PDF/Word 渲染)= **大 UI/文档导出子系统**(Kylin 有 导出分析 CSV; 全报表引擎需文档库+模板 UI, **记录为大功能边界**, 非 loop-tick 切片); 余 Day/Month/Shift/Dispatch/Gantt = 排产引擎/显示。**无新自足算法切片**。至此**全 9 模块 + 全子目录 robust 逐文件读毕**。
+
+## 二〇三、区域生长分割(RegionGrow)—— 复评"变体敏感"记录, 曲率随 PCA 免费得
+
+复评记录项"点云分割变体敏感"(memory): region-grow 曾判受阻的唯一卡点=需逐点**曲率**做种子排序, 而 Kylin `PointNormals` 只出法向。**复评发现: 曲率 = λmin/Σλ, 与法向同出一次 PCA(JacobiEigen3)** —— 卡点消解。且 Kylin 已托管重实现 Euclidean 分割(`PointCluster`), region-grow(按光滑度)是**互补的另一标准变体**(非冗余: 距离聚 vs 光滑度聚)。
+
+**移植** [src/Cad/RegionGrow.cs](src/Cad/RegionGrow.cs): 逐点 PCA(k 近邻, 复用 JacobiEigen3)得法向+曲率; 曲率升序取种子(最平处起); BFS 生长——邻点法向夹角<平滑阈并入、邻点曲率<阈再作新种子(过折棱不再扩); 丢小区+紧凑重编号。命令 `区域生长分割 [平滑角°]`(点 CSV→按光滑度分区, 各区 hue 异色/折棱/小区灰) + 目录(并补登 分割点云)。**区别 分割点云(欧氏=按距离)**: 本命令按表面光滑度, 台阶面/平盘/坡面在折棱处法向突变而分开。验证 [RegionGrowTests](tests/PitMine3D.Kylin.Tests/RegionGrowTests.cs) 4 例已知值(平面单区·陡折棱[113°夹角]分两面且 A/B 深处异区·极缓弯[4°]仍一区·点太少 0 区)。**build 0 错·单测 1101→1105**。
+
+**教训**: "变体敏感"记录不等于永久受阻——region-grow 是**标准算法**(PCL RegionGrowing), 卡点(曲率)其实随现有 PCA 免费得; Kylin 已做 Euclidean 一变体, 补 region-grow 是一致的(标准重实现, 文档标"与 native 具体变体可能不同")。**本会话第 8 个功能**(7 缺口 + region-grow)。判据仍守: 参数(平滑角/曲率阈)与结果确定对应=可验; 非"需鲁棒谓词"的真受阻类(mesh 布尔)。见 [[unlock-blocked-insights]]。

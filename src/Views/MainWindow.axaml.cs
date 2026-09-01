@@ -910,6 +910,7 @@ public partial class MainWindow : Window
             if (cmd == "车铲匹配" || cmd == "配车匹配" || cmd == "车铲配比") { await FleetMatchAsync(); return; }
             if (cmd == "点云质量统计" || cmd == "点云统计" || cmd == "点云质量") { await PointCloudStatsAsync(); return; }
             if (cmd == "分割点云" || cmd == "点云分割" || cmd == "欧氏聚类" || cmd == "点云聚类" || cmd.StartsWith("分割点云 ")) { await SegmentCloudAsync(cmd); return; }
+            if (cmd == "区域生长分割" || cmd == "区域生长" || cmd == "光滑度分割" || cmd.StartsWith("区域生长分割 ")) { await RegionGrowAsync(cmd); return; }
             if (cmd == "点云高程着色" || cmd == "高程着色" || cmd == "点云着色") { await ElevationColorAsync(); return; }
             if (cmd == "色带" || cmd == "配色方案" || cmd.StartsWith("色带 ") || cmd.StartsWith("配色方案 ")) { SetColormapCmd(cmd); return; }
             if (cmd == "图例" || cmd == "色带图例" || cmd.StartsWith("图例 ")) { PlaceLegend(cmd); return; }   // 图例 [min max]
@@ -3652,6 +3653,38 @@ public partial class MainWindow : Window
         RefreshScene();
         Viewport.FitBounds(r.Bounds);
         StatusMsg.Text = $"分割点云(欧氏聚类, radius {radius:0.##})：{nc} 簇 · {r.Points.Count} 点（各簇异色, 灰=小簇/噪点）";
+    }
+
+    // 区域生长分割：高程点 CSV → 按表面光滑度(逐点 PCA 法向+曲率)区域生长 → 各区异色, 折棱/小区归灰。
+    // 区别 分割点云(欧氏=按距离)：本命令按【表面光滑度】分, 台阶面/平盘/坡面在折棱处法向突变而分开。用法 "区域生长分割 [平滑角°]"。
+    private async Task RegionGrowAsync(string cmd)
+    {
+        var tk = cmd.Split(new[] { ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
+        double smooth = 15.0;   // 平滑角阈 °
+        if (tk.Length >= 2 && double.TryParse(tk[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double sm) && sm > 0) smooth = sm;
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "区域生长分割：选点 CSV (x,y,z)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("点云 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success || r.Points.Count < 3) { StatusMsg.Text = "区域生长分割：需 ≥3 点(x,y,z)"; return; }
+        var seg = Cad.RegionGrow.Segment(r.Points, k: 16, smoothnessDeg: smooth, curvatureThreshold: 0.1, minSize: 10);
+        BeginChange();
+        for (int i = 0; i < r.Points.Count; i++)
+        {
+            float cr, cg, cb;
+            if (seg.Label[i] < 0) { cr = cg = cb = 0.5f; }                   // 折棱/小区 灰
+            else { var (hr, hg, hb) = HueColor(seg.Label[i]); cr = hr; cg = hg; cb = hb; }
+            var pe = new PointEntity { X = r.Points[i].x, Y = r.Points[i].y, Cr = cr, Cg = cg, Cb = cb };
+            AssignLayer(pe); pe.Cr = cr; pe.Cg = cg; pe.Cb = cb;
+            _scene.Add(pe);
+        }
+        RefreshScene();
+        Viewport.FitBounds(r.Bounds);
+        StatusMsg.Text = $"区域生长分割(平滑阈 {smooth:0.#}°)：{seg.RegionCount} 区(按表面光滑度) · {r.Points.Count} 点（各区异色, 灰=折棱/小区; 区别 分割点云=按距离）";
     }
 
     // 簇 id → 循环色(黄金角 hue)
@@ -8374,7 +8407,7 @@ public partial class MainWindow : Window
         "网格度量","网格诊断","创建三角网","约束三角网","裁剪三角网","网格焊接","网格边界","网格交线","网格剖面","网格光顺","合并三角网","固化成体","侧面三角网","台阶面提取","煤岩台阶判定","煤层露头线","更新煤层面","立方体","球体","圆柱","体素格网体积","实体转块体",
         // 区域/地形/点云
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
-        "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪",
+        "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割",
         // 块体/运输/路网
         "块体模型","资源量","道路横断面","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","演化对比","螺旋斜坡道","折返斜坡道",
         // 生产计划/投影
