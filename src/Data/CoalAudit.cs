@@ -12,8 +12,10 @@ namespace PitMine3D.Kylin.Data;
 //    ④ 煤类反推: GB/T 5751 反推 ≠ 标注                    (Warning, 复用 CoalTypeInference)
 //    ⑤ 同层离群: 同煤层 A_d 3σ(该层样本≥30 方启用)        (Warning)
 //    ⑦ 浮煤回收率: yield∈[0,100]                          (Error)
-//  数据不支撑者记录不做: ① 工分自洽(M+A+V+FC≈100 需 Mad/FCd, CoalSample 无) · ⑥ 钻探-测井煤厚一致(需 drill/log 厚度)。
-//  纯逻辑、可单测(给定样本→findings)。审核只读, 不写库。
+//  另二规则以独立方法覆盖(数据来自 borehole_seam_result / coal_sample, 见下):
+//    ① 工分自洽: 原煤 M+A+V+FC≈100 (CheckProximateConsistency, coal_sample.mad/ad/vdaf/fcd_raw)
+//    ⑥ 钻探-测井煤厚一致 (CheckDrillLogConsistency, borehole_seam_result.drill/log_seam_thickness)
+//  ⇒ 原 RunAudit 全 7 规则均已覆盖。纯逻辑、可单测(给定样本→findings)。审核只读, 不写库。
 // ─────────────────────────────────────────────────────────────────────────────
 
 public static class CoalAudit

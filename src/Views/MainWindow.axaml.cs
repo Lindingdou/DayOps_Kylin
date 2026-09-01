@@ -8730,7 +8730,19 @@ public partial class MainWindow : Window
         var r = Data.CoalAnalytics.GradeTonnage(s, ind, useClean: false);
         if (r.Curve.Count == 0) { StatusMsg.Text = $"品位储量曲线({ind})：无有效样(缺厚度)"; return; }
         var mid = r.Curve[r.Curve.Count / 2];
-        StatusMsg.Text = $"品位-储量曲线（{ind}·{(r.BelowCutoff ? "累计≤" : "累计≥")}·质量代理{(r.DensityUsed ? "厚×密度" : "厚度")}）：{r.N} 样·总质量 {r.TotalMass:0.#} · 中点限值 {mid.Cutoff:0.##}→累计 {mid.CumMassPct:0.#}%(均值 {mid.CumMeanGrade:0.##})";
+        // 曲线上屏(已算未绘)：限值(X) → 累计质量%(Y) 折线入场景
+        double gvw = ViewportHost.Bounds.Width, gvh = ViewportHost.Bounds.Height;
+        var gp0 = Viewport.ScreenToWorld(gvw * 0.3, gvh * 0.85) ?? (0.0, 0.0);
+        var gp1 = Viewport.ScreenToWorld(gvw * 0.7, gvh * 0.4) ?? (100.0, 50.0);
+        double gw = System.Math.Abs(gp1.x - gp0.x), gh = System.Math.Abs(gp1.y - gp0.y);
+        if (gw < 1e-6) gw = 100; if (gh < 1e-6) gh = 50;
+        var gpts = r.Curve.Select(p => (p.Cutoff, p.CumMassPct)).ToList();
+        BeginChange();
+        foreach (var ge in Cad.CurvePlot.Build(gpts, System.Math.Min(gp0.x, gp1.x), System.Math.Min(gp0.y, gp1.y),
+                     gw, gh, System.Math.Max(gh * 0.05, 1e-3), ind, "累计%"))
+        { ge.LayerName = _layers.Current.Name; _scene.Add(ge); }
+        RefreshScene();
+        StatusMsg.Text = $"品位-储量曲线（{ind}·{(r.BelowCutoff ? "累计≤" : "累计≥")}·质量代理{(r.DensityUsed ? "厚×密度" : "厚度")}）：{r.N} 样·总质量 {r.TotalMass:0.#} · 中点限值 {mid.Cutoff:0.##}→累计 {mid.CumMassPct:0.#}%(均值 {mid.CumMeanGrade:0.##}) · 曲线入场景";
     }
 
     // 分标高煤质：按标高带厚度加权均值

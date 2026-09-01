@@ -2731,3 +2731,17 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **续(第 53 功能): 布局方案加权评分 + 目标(复评§244 记的"简化推荐"→原 Score 是干净式)**。§244 我用"基建最小"简化推荐; 复评原 `Score` 是**干净加权式**: 不可行=0, 否则 wCapex·(100/(1+capexKm)) + wUtil·(利用率·100), 权重按目标(均衡0.6/0.4·最小运输功1.0/0·默认最小成本0.8/0.2)。补 `RoadLayoutSolver.ScoreOf` + `Solve` 加 objective 参 + `LayoutScheme.Score` + 推荐=最高分。命令加目标参 + 报各方案分。[RoadLayoutSolverTests](tests/PitMine3D.Kylin.Tests/RoadLayoutSolverTests.cs) +1: 默认权重 capexKm0.5→capexScore66.67·util80→分69.33·均衡目标权重不同分不同·不可行=0·推荐=最高分。**单测 1299→1300**。教训: 同 DriveSequence, **移引擎核后复评自记的"简化"——原式常干净可移可验**(第 4 个连出: §50/51/52/53)。
 
 **本会话第 49 功能**。**原版单测枚举全收官**: 19 个 `*Tests.cs` 全部映射 Kylin 功能(17 早覆盖 + DriveTemplateEngine§二四三 + RoadLayoutSolver 本节)。**这是最精确的收敛证据**——作者自定的全部自足可验切片均已移/覆盖, 远强于主题/命令探针的"covered 感"。两个"藏在大引擎里的纯核"(距离驱动切期 + 布局方案构建)靠单测枚举挖出, 用 CSV/available 输入喂可验证核 + 记录引擎细化(候选生成/退距/几何输出)。见 [[unlock-blocked-insights]] [[faithfulness-only-original-commands]]。
+
+---
+
+## §二四七 品位-储量曲线上屏（已算未绘的统计图 → 场景折线）+ 通用 CurvePlot
+
+**复审自记的"统计图=OxyPlot 受阻"边界**: 早先把统计类图表(非空间图)一律记为"数值核已做, 绘图=OxyPlot 图窗受阻"。但 Kylin 场景**本能画图**——直方图(`HistogramPlot` 竖条入场景)、剥采比 VP 曲线、钻孔柱状图均已上屏。查 `GradeTonnageCmd`([MainWindow](src/Views/MainWindow.axaml.cs)): `品位-储量曲线` 的 `r.Curve`(限值→累计质量%)**算了却只把中点值写状态行, 曲线本身未绘**——典型"已算未绘"缺口, 且与"能画直方图却记曲线受阻"自相矛盾。
+
+**补**: 通用 [CurvePlot](src/Cad/CurvePlot.cs)(与 HistogramPlot 同风格): 一串 (x,y) → 自动量程归一化到图区矩形, 画折线 + 外框 + 四角刻度 + 轴名; 空/单点/退化范围安全返回。`GradeTonnageCmd` 把 `r.Curve` 的 (Cutoff, CumMassPct) 喂 `CurvePlot.Build` 上屏(与直方图同位: 视口 0.3–0.7 宽 · 0.85–0.4 高), 状态行加"曲线入场景"。CurvePlot 通用, 亦可供剥采比/趋势等其他"已算未绘"曲线复用。
+
+**验证(自造已知值)**: [CurvePlotTests](tests/PitMine3D.Kylin.Tests/CurvePlotTests.cs) +3—— 三点 X∈[0,10]·Y∈[20,100] 图区 40×20: 首段起(0,0)·末段终(40,20)·中点(5,60)→(20,10) 精确; 六标签(轴名+四角刻度)俱在; 折线2段+框4段=6线; Y 全等退化不产 NaN; 空/零宽返空。**build 0 错·单测 1302→1305**。
+
+**顺手修** [CoalAudit](src/Data/CoalAudit.cs) 头注**过期自相矛盾**: 注仍写"① 工分自洽/⑥ 测井一致 数据不支撑记录不做", 但同文件下方 `CheckProximateConsistency`/`CheckDrillLogConsistency` 已实现二者(§二四五/二四六)——改注为"另二规则以独立方法覆盖 ⇒ 原 7 规则全覆盖"。
+
+**本会话第 56 功能**。教训: **"统计图受阻"是又一条误记**——场景能画线/框/字即能画统计折线, 非只空间图。复审边界时, "受阻"标签若与已交付能力(能画直方图)冲突, 多半是误记。这是"复审自记边界"续脉: 记录 0-for-N 可靠, 边界与既有能力矛盾者优先复核。见 [[unlock-blocked-insights]]。
