@@ -4438,8 +4438,10 @@ public partial class MainWindow : Window
 
         var (scored, best) = ProgramComparer.Score(plans);
         var ranked = scored.OrderByDescending(s => s.CompositeScore).ToList();
+        // 方案综合评分柱状图上屏(决策支持可视, 已算未绘)
+        DrawCategoryBars(ranked.Select(s => (s.Name, s.CompositeScore)).ToList(), "综合分");
         string report = $"方案综合对比：{plans.Count} 套 · 推荐【{best}】 | " +
-            string.Join(" · ", ranked.Select(s => $"{s.Name} {s.CompositeScore:0}分"));
+            string.Join(" · ", ranked.Select(s => $"{s.Name} {s.CompositeScore:0}分")) + " · 评分柱入场景";
         StatusMsg.Text = report;
     }
 
@@ -5848,7 +5850,9 @@ public partial class MainWindow : Window
         if (variants.Count == 0) { StatusMsg.Text = "派生计划方案：未派生出可行方案"; return; }
         var ranked = variants.OrderByDescending(v => v.r.Npv).ToList();
         var top = ranked.Take(3).Select(v => $"{v.label}(NPV {v.r.Npv:0}·剥采比{v.r.ProductionRatioPeak:0.##}·均衡{v.r.ReserveBalanceCoef:0.##})");
-        StatusMsg.Text = $"派生计划方案：{variants.Count} 方案 · 推荐 {ranked[0].label} · 前三: " + string.Join(" | ", top);
+        // 各方案 NPV 柱状图上屏(决策支持, 已算未绘)
+        DrawCategoryBars(ranked.Select(v => (v.label, v.r.Npv)).ToList(), "NPV");
+        StatusMsg.Text = $"派生计划方案：{variants.Count} 方案 · 推荐 {ranked[0].label} · 前三: " + string.Join(" | ", top) + " · NPV柱入场景";
     }
 
     // 组合工作线：合并选中的多段线（端点相接连成一条）
