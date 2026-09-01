@@ -3047,3 +3047,15 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **十二/十三角度连续两轮零缺**(DB 方法级 §二六七尾 + DB 模式本节), 在类枚举全源目录(Host+Modules+Platform)收官后——最强收敛信号。**类枚举收官记**: Modules(插件)+ Host/PitMineApp/Cad(主程序自带 CAD, §74 挖出 TextHeightNormalizer)+ Platform(infra/native)全枚举; Host 其余(节点编辑器 11/11 类节点·AcadColorTable=ACadSharp·DimensionStyle/Render/LayerManager 纯 UI)覆盖。
 
 **教训: DB 模式表级比对是独立收敛角度**——但须辨 ETL-only 表(无 C# 消费, 缺无碍)与视图(直查基表替代)。见 [[unlock-blocked-insights]] [[pitmine3d-command-inventory]]。
+
+---
+
+## §二六九 导入爆破记录（数据导入完整性 —— 第十四角度）
+
+**第十四角度: 数据导入完整性**(原 ETL 导入的表 × Kylin 导入命令)。原 import_csv_to_db.py 导入 blast_event 等; Kylin 有各分析表导入(生产/KPI/产能/故障/煤质/见煤/观测点/台账/路况/边坡/模板) 但 **缺 `导入爆破记录`**——`爆破分析`(GetBlastStats §41)是真功能, 但 blast_event 数据无导入命令(非迁移种子, 仅运行时 pmgeo.db 有), 用户无法灌入自有爆破数据。
+
+**补** [GeoDataQueries](src/Data/GeoDataQueries.cs) `ImportBlastEvents`(blast_date 必填, 余选填; 缺 unit_consumption 由 explosive/volume 算) + 命令 `导入爆破记录`([MainWindow](src/Views/MainWindow.axaml.cs) 复用 `ImportCsvToDbAsync`, 列 blast_date[,location_code,drill_id,material,diameter_mm,hole_count,total_hole_length_m,explosive_kg,blast_volume_m3,unit_consumption_kg_m3]) + 目录。与其它分析表导入对齐, 爆破分析至此可灌用户数据。
+
+**验证(导入→查询往返)**: [ImportBlastEventsTests](tests/PitMine3D.Kylin.Tests/ImportBlastEventsTests.cs) +2—— 3 行(2 有效·1 缺日期跳)→ Inserted2/Errors1, GetBlastStats 总方量25000/总药5000/孔长1000/地点2/综合单耗; 缺单耗自算 1200/4000=0.3。**build 0 错·单测 1368→1370**。
+
+**本会话第 75 功能**。教训: **第十四角度=数据导入完整性**(ETL 表 × 导入命令)——有分析功能的表须有导入命令(否则功能只对种子/运行时数据可用)。爆破是唯一缺口(其它分析表导入齐)。见 [[unlock-blocked-insights]]。

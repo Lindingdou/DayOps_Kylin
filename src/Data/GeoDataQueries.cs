@@ -1217,6 +1217,39 @@ public static class GeoDataQueries
         return new ImportOutcome(ins, 0, 0, err);
     }
 
+    /// <summary>爆破事件 CSV 入库。必填 blast_date; 余选填。缺 unit_consumption_kg_m3 时由 explosive_kg/blast_volume_m3 计算。
+    /// 列: blast_date[,blast_time,drill_id,location_code,material,diameter_mm,hole_count,total_hole_length_m,explosive_kg,blast_volume_m3,unit_consumption_kg_m3]。</summary>
+    public static ImportOutcome ImportBlastEvents(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows)
+    {
+        int ins = 0, err = 0;
+        foreach (var row in rows)
+        {
+            string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
+            string date = Get("blast_date"); if (date.Length == 0) date = Get("date");
+            if (date.Length == 0) { err++; continue; }
+            ParseD(Get("diameter_mm"), out double dia);
+            ParseD(Get("total_hole_length_m"), out double thl);
+            ParseD(Get("explosive_kg"), out double exp);
+            ParseD(Get("blast_volume_m3"), out double vol);
+            ParseD(Get("unit_consumption_kg_m3"), out double unit);
+            if (unit <= 1e-9 && vol > 1e-9) unit = exp / vol;   // 缺单耗则算
+            int holes = int.TryParse(Get("hole_count"), out var hn) ? hn : 0;
+            object Null(string s) => s is { Length: > 0 } ? s : (object)System.DBNull.Value;
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "INSERT INTO blast_event (blast_date, blast_time, drill_id, location_code, material, diameter_mm, hole_count, total_hole_length_m, explosive_kg, blast_volume_m3, unit_consumption_kg_m3) VALUES (@d,@t,@dr,@loc,@m,@dia,@hc,@thl,@exp,@vol,@unit)";
+            cmd.Parameters.AddWithValue("@d", date);
+            cmd.Parameters.AddWithValue("@t", Null(Get("blast_time")));
+            cmd.Parameters.AddWithValue("@dr", Null(Get("drill_id")));
+            cmd.Parameters.AddWithValue("@loc", Null(Get("location_code")));
+            cmd.Parameters.AddWithValue("@m", Null(Get("material")));
+            cmd.Parameters.AddWithValue("@dia", dia); cmd.Parameters.AddWithValue("@hc", holes);
+            cmd.Parameters.AddWithValue("@thl", thl); cmd.Parameters.AddWithValue("@exp", exp);
+            cmd.Parameters.AddWithValue("@vol", vol); cmd.Parameters.AddWithValue("@unit", unit);
+            try { cmd.ExecuteNonQuery(); ins++; } catch { err++; }
+        }
+        return new ImportOutcome(ins, 0, 0, err);
+    }
+
     /// <summary>月度可用率 KPI CSV 入库（忠实 KpiMonthlySpec）：按 设备+年+月 键 upsert。列: equipment_id,year,month,plan_hours,work_hours,fault_hours,availability,actual_run_rate,utilization_rate。</summary>
     public static ImportOutcome ImportKpiMonthly(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
     {
