@@ -2176,4 +2176,6 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - **RoadCutFillCalculator(路面挖填 RS17)**: 算法可移植(路面网格栅格化逐格 z_road−z_ground 积分, footprint/uncovered 分列——与我 grade MaskByRadius 同"不出数据支撑外造值"纪律), 但**核心数学与 Kylin 两期算量重叠**(网格+双面+带符号 dz), 且原版唯一调用者用 **native 坑线内核**产出 deck 网格 → 独立命令价值边际。**跳过免冗余**(采区划分回退教训)。
 - **VolumeDeviation(方量偏差)**: est vs actual 单元方量对账, 输入为**受阻计划引擎**(UnitPlanEngine)单元, 计算本身琐碎 → 边际, 记录。
 
-**结论**: 逐模块 diff 既**证实**大模块(Mesh/PointCloud/Road/Block/Geo)覆盖, 又**发现** 6 主题透镜漏掉的 1 处真几何缺口(竖曲线)。教训: 收敛感≠收敛, 系统性模块 diff 是主题透镜之外的一层。见 [[unlock-blocked-insights]] [[faithfulness-only-original-commands]]。
+**9 模块 diff 收官(TaskLib/PlanLib 补扫)**: TaskLib(82)/PlanLib(68) 多为排产/调度/仿真**引擎**(Sim*·*ScheduleResult·Zone*·MonthlyStrip*); 自足切片(TaskQuantity 生产量核算·MaterialFlow 物料流·MaterialSpec·LinkDerate·CoalQuality·SinkNode 等 8+)**早已移植**; **剥采比**核心指标全覆盖(BlockModel·PitDepthSolver·VpBalanceSolver·GeoDataQueries); `WorkWindowCalc` 系 DayCapacityBudget 容量引擎内部助手(依赖受阻的班次日历配置)→ 引擎内部, 记录。
+
+**结论**: 逐模块 diff 既**证实**全部 9 大模块(Mesh/PointCloud/Road/Block/Geo/Sql/MineAss/Task/Plan)覆盖或边界已录, 又**发现** 6 主题透镜漏掉的 1 处真几何缺口(竖曲线)。教训: 收敛感≠收敛, 系统性模块 diff 是主题透镜之外的一层。见 [[unlock-blocked-insights]] [[faithfulness-only-original-commands]]。
