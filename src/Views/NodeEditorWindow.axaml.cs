@@ -19,9 +19,12 @@ public partial class NodeEditorWindow : Window
     private sealed record PortRef(int NodeId, int Port, bool IsInput);
 
     private readonly NodeGraph _graph = new();
+    private readonly NodeGraphUndoRedo _undoRedo;
     private const double NodeW = 120, TitleH = 26, RowH = 18, PortR = 5;
 
     private Node? _dragNode;
+    private Node? _selected;
+    private bool _dragSaved;
     private Point _dragOffset;
     private (int node, int port)? _pendingOut;
     private readonly Action<System.Collections.Generic.List<SceneEntity>>? _onBake;
@@ -36,6 +39,7 @@ public partial class NodeEditorWindow : Window
 
         Canvas.PointerMoved += OnCanvasMoved;
         Canvas.PointerReleased += OnCanvasReleased;
+        KeyDown += OnKeyDown;
 
         // 预置演示：数字(50) → 圆半径 → 烘焙
         var num = _graph.AddNode(NodeKind.Number, 60, 90); num.Value = 50.0;
@@ -43,6 +47,43 @@ public partial class NodeEditorWindow : Window
         var bake = _graph.AddNode(NodeKind.Bake, 540, 110);
         _graph.Connect(num.Id, 0, circle.Id, 1);       // 数字 → 半径
         _graph.Connect(circle.Id, 0, bake.Id, 0);      // 圆 → 烘焙
+        _undoRedo = new NodeGraphUndoRedo(_graph);      // 演示图作基线，之后的改动方可撤销
+        Rebuild();
+    }
+
+    // 键盘：Delete 删除选中，Ctrl+Z 撤销，Ctrl+Y 重做
+    private void OnKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Delete) { OnDeleteSelected(null, null!); e.Handled = true; }
+        else if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.Z) { OnUndo(null, null!); e.Handled = true; }
+        else if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.Y) { OnRedo(null, null!); e.Handled = true; }
+    }
+
+    private void OnDeleteSelected(object? sender, RoutedEventArgs e)
+    {
+        if (_selected == null) { Hint.Text = "先单击选中一个节点，再删除"; return; }
+        _undoRedo.SaveState();                 // 改动前记录
+        _graph.RemoveNode(_selected.Id);
+        _selected = null; _pendingOut = null;
+        Hint.Text = "已删除节点";
+        Rebuild();
+    }
+
+    private void OnUndo(object? sender, RoutedEventArgs e)
+    {
+        if (!_undoRedo.CanUndo) { Hint.Text = "无可撤销"; return; }
+        _undoRedo.Undo();
+        _selected = null; _pendingOut = null; _dragNode = null;
+        Hint.Text = "已撤销";
+        Rebuild();
+    }
+
+    private void OnRedo(object? sender, RoutedEventArgs e)
+    {
+        if (!_undoRedo.CanRedo) { Hint.Text = "无可重做"; return; }
+        _undoRedo.Redo();
+        _selected = null; _pendingOut = null; _dragNode = null;
+        Hint.Text = "已重做";
         Rebuild();
     }
 
@@ -66,8 +107,12 @@ public partial class NodeEditorWindow : Window
             Watermark = n.Kind switch { NodeKind.Point => "x,y[,z]", NodeKind.Bool => "true/false", _ => "值" }
         };
         Canvas.SetLeft(tb, n.X); Canvas.SetTop(tb, n.Y + TitleH);
+        bool committed = false;
         void Commit()
         {
+            if (committed) return;             // Enter+失焦双触发保护，避免重复入撤销栈
+            committed = true;
+            _undoRedo.SaveState();             // 改动前记录
             ApplyValue(n, tb.Text ?? "");
             if (Canvas.Children.Contains(tb)) Canvas.Children.Remove(tb);
             Rebuild();
@@ -114,6 +159,7 @@ public partial class NodeEditorWindow : Window
         {
             double x = 40 + (_graph.Nodes.Count * 26) % 320;
             double y = 60 + (_graph.Nodes.Count * 22) % 320;
+            _undoRedo.SaveState();             // 改动前记录
             _graph.AddNode(kind, x, y);
             Rebuild();
         }
@@ -148,8 +194,8 @@ public partial class NodeEditorWindow : Window
                 Width = NodeW,
                 Height = NodeHeight(n),
                 Background = n.Kind == NodeKind.Bake ? new SolidColorBrush(Color.Parse("#E8F5E9")) : Brushes.White,
-                BorderBrush = Brushes.SlateGray,
-                BorderThickness = new Thickness(1),
+                BorderBrush = ReferenceEquals(n, _selected) ? Brushes.DodgerBlue : Brushes.SlateGray,
+                BorderThickness = new Thickness(ReferenceEquals(n, _selected) ? 2 : 1),
                 CornerRadius = new CornerRadius(6),
                 Tag = n,
                 Child = new TextBlock { Text = label, Margin = new Thickness(8, 5, 6, 0), FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis }
@@ -191,6 +237,7 @@ public partial class NodeEditorWindow : Window
         }
         else if (_pendingOut is { } o)
         {
+            _undoRedo.SaveState();             // 改动前记录
             if (_graph.Connect(o.node, o.port, pr.NodeId, pr.Port)) { Hint.Text = "已连线"; Rebuild(); }
             _pendingOut = null;
         }
@@ -201,14 +248,18 @@ public partial class NodeEditorWindow : Window
         if (sender is not Border card || card.Tag is not Node n) return;
         e.Handled = true;
         _dragNode = n;
+        _selected = n;                         // 单击=选中(供删除高亮)
+        _dragSaved = false;
         var pos = e.GetPosition(Canvas);
         _dragOffset = new Point(pos.X - n.X, pos.Y - n.Y);
         e.Pointer.Capture(Canvas);
+        Rebuild();                             // 刷新选中高亮
     }
 
     private void OnCanvasMoved(object? sender, PointerEventArgs e)
     {
         if (_dragNode == null) return;
+        if (!_dragSaved) { _undoRedo.SaveState(); _dragSaved = true; }   // 真正移动才入撤销栈(一次拖拽一步)
         var pos = e.GetPosition(Canvas);
         _dragNode.X = pos.X - _dragOffset.X;
         _dragNode.Y = pos.Y - _dragOffset.Y;
@@ -218,6 +269,7 @@ public partial class NodeEditorWindow : Window
     private void OnCanvasReleased(object? sender, PointerReleasedEventArgs e)
     {
         _dragNode = null;
+        _dragSaved = false;
         e.Pointer.Capture(null);
     }
 }

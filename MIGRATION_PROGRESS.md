@@ -3059,3 +3059,34 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(导入→查询往返)**: [ImportBlastEventsTests](tests/PitMine3D.Kylin.Tests/ImportBlastEventsTests.cs) +2—— 3 行(2 有效·1 缺日期跳)→ Inserted2/Errors1, GetBlastStats 总方量25000/总药5000/孔长1000/地点2/综合单耗; 缺单耗自算 1200/4000=0.3。**build 0 错·单测 1368→1370**。
 
 **本会话第 75 功能**。教训: **第十四角度=数据导入完整性**(ETL 表 × 导入命令)——有分析功能的表须有导入命令(否则功能只对种子/运行时数据可用)。爆破是唯一缺口(其它分析表导入齐)。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二七〇 导入设备型号（数据导入完整性续 —— 第十四角度收官）
+
+**第十四角度续**。`equipment_model`(机型库)被 机型KPI/`FleetOptimizer`(车队配比 §35)读, 但**仅迁移种子, 无导入命令**——用户无法登记自有机型。补 [GeoDataQueries](src/Data/GeoDataQueries.cs) `ImportEquipmentModels`(model+category 必填, 余选填; 按 model 主键 `INSERT OR REPLACE` upsert) + 命令 `导入设备型号`([MainWindow](src/Views/MainWindow.axaml.cs) 复用 `ImportCsvToDbAsync`, 列 model,category[,working_weight_t,power_kw,bucket_m3,load_t,dimensions_lwh,drill_diameter_mm,tire_spec,std_daily_cap_wan_m3]) + 目录。
+
+**验证(已知值)**: [ImportEquipmentModelsTests](tests/PitMine3D.Kylin.Tests/ImportEquipmentModelsTests.cs) —— 缺 model/category 跳过; upsert 覆盖同型号。**build 0 错·单测 1370→1371**。
+
+**本会话第 76 功能**。至此**数据导入完整性角度收官**: 有分析功能的表(生产/KPI/产能/故障/煤质/见煤/观测/台账/路况/边坡/模板/爆破/机型)导入命令齐全; 余 ETL 表(daily_mine_summary/long_term_metric 无 Kylin 读者、shift/dispatch/workforce 背桩)无需导入。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二七一 节点编辑器 撤销/重做/删除（第十五角度：最新构件深查 —— 结构操作完整性）
+
+**第十五角度: 最新构件深查**。近两 commit 刚建节点编辑器(节点图模型 + 画布 增/拖/连)。查其是否**结构操作完整**: 原 `NodeGraph` 有 `RemoveNode`/`Disconnect`/`DeleteSelectedConnections` + `NodeGraphUndoRedo`(快照栈撤销/重做, 带专测 NodeGraphUndoRedoTests); Kylin `NodeGraph` **仅 AddNode/Connect/Find/Evaluate**——**能加不能删, 无撤销/重做**。这是真·可验证·忠实缺口(原实现非桩)。
+
+**先辨忠实边界**: 原几何节点 `Evaluate` 是**桩**(`// TODO: C++ bridge` → `return (ulong)0`), Kylin 反而实产托管几何(标准 native→managed 等价, §节点求值已完成)——故求值层 Kylin ≥ 原, 非缺口。缺口在**图结构操作 + 撤销/重做**(原已实现且带测)。`DeleteSelectedConnections`/`ClearSelection` 依赖 `ConnectionModel.IsSelected`(UI 选择态), Kylin 无头模型不背, 属视图层——只移植模型级操作。
+
+**补**:
+- [NodeGraph](src/Nodes/NodeGraph.cs) `RemoveNode(id)`(删节点+触及连线)、`Disconnect(toNode,toPort)`(输入口独占故唯一定位)、`CaptureState()`/`RestoreState(snap)`(整图快照/重建, 忠实原: 节点重建ID可变+连线按旧ID映射重连=值等价)。
+- [NodeGraphUndoRedo](src/Nodes/NodeGraphUndoRedo.cs)(新) —— 忠实原快照栈协议: `SaveState` 改动**前**调用(压撤销栈+清重做栈)、`Undo`(当前压重做栈→弹撤销栈还原)、`Redo`(对称)、`CanUndo`/`CanRedo`, `_isRestoring` 守卫防还原期自污染。
+- [NodeEditorWindow](src/Views/NodeEditorWindow.axaml.cs) 接线: 单击选中(蓝框高亮)、工具栏 删除/撤销/重做 + 键 Delete/Ctrl+Z/Ctrl+Y; 每次改动(增/连/删/改值/拖拽)前 `SaveState`(拖拽仅真移动时一次, 改值 Enter+失焦双触发守卫)。
+
+**验证(已知值)**:
+- [NodeGraphTests](tests/PitMine3D.Kylin.Tests/NodeGraphTests.cs) +2 —— RemoveNode 删节点+连线/不存在→false; Disconnect 清输入口连线/节点留/再断→false。
+- [NodeGraphUndoRedoTests](tests/PitMine3D.Kylin.Tests/NodeGraphUndoRedoTests.cs) +6 —— 新控制器不可撤/重; 加节点撤销→空/重做→现; 连线撤销(节点留)/重做(按旧ID映射重连); 撤销还原参数值; 撤销后新 SaveState 清重做栈; 端到端 Number(5)→Circle→Bake 撤销→空烘焙/重做→半径5等价。
+
+**build 0 错·单测 1371→1379**(+8)。
+
+**本会话第 77 功能**。教训: **第十五角度=最新构件深查**——刚建的构件("增/拖/连"够演示但未必够用)最易漏结构操作(删/断/撤销)。又证**忠实是双向的**: 原几何节点求值是桩(TODO C++), Kylin 实现托管几何=超出原桩但属标准 native→managed 等价(非无源臆造); 缺口只认原**已实现且带测**者(RemoveNode/undo)。见 [[unlock-blocked-insights]] [[faithfulness-only-original-commands]]。

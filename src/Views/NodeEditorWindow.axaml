@@ -20,7 +20,10 @@
             <Button Content="烘焙" Tag="Bake" Click="OnAddNode" />
             <Button Content="▶ 求值到场景" Click="OnBakeToScene" Background="#2E7D32" Foreground="White" Margin="8,0,0,0"
                     ToolTip.Tip="求值所有 烘焙 节点，把产出的几何加入主绘图场景" />
-            <TextBlock x:Name="Hint" Text="拖拽移动 · 点绿输出口再点橙输入口连线 · 双击参数节点改值"
+            <Button Content="删除" Click="OnDeleteSelected" Margin="8,0,0,0" ToolTip.Tip="删除选中节点（Delete）" />
+            <Button Content="撤销" Click="OnUndo" ToolTip.Tip="撤销（Ctrl+Z）" />
+            <Button Content="重做" Click="OnRedo" ToolTip.Tip="重做（Ctrl+Y）" />
+            <TextBlock x:Name="Hint" Text="拖拽移动 · 点绿输出口再点橙输入口连线 · 双击参数节点改值 · 单击选中后 Delete 删除"
                        VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#8A929C" FontSize="12" />
         </StackPanel>
         <Border Grid.Row="1" Background="#FFFFFF" BorderBrush="#E3E6EA" BorderThickness="1" Margin="8,0,8,8">

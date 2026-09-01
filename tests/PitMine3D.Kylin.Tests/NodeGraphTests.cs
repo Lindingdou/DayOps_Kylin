@@ -160,4 +160,35 @@ public class NodeGraphTests
         g.Connect(b.Id, 0, a.Id, 0);             // 成环
         Assert.Null(g.Evaluate(a.Id));           // 环 → null，不死循环
     }
+
+    [Fact]
+    public void RemoveNode_drops_node_and_its_connections()
+    {
+        var g = new NodeGraph();
+        var num = g.AddNode(NodeKind.Number, 0, 0);
+        var circle = g.AddNode(NodeKind.Circle, 100, 0);
+        g.Connect(num.Id, 0, circle.Id, 1);
+        Assert.Single(g.Connections);
+
+        Assert.True(g.RemoveNode(num.Id));
+        Assert.Single(g.Nodes);                  // 仅剩圆
+        Assert.Equal(circle.Id, g.Nodes[0].Id);
+        Assert.Empty(g.Connections);             // 触及 num 的连线一并删除
+        Assert.False(g.RemoveNode(999));         // 不存在 → false
+    }
+
+    [Fact]
+    public void Disconnect_clears_input_port_connection()
+    {
+        var g = new NodeGraph();
+        var num = g.AddNode(NodeKind.Number, 0, 0);
+        var circle = g.AddNode(NodeKind.Circle, 100, 0);
+        g.Connect(num.Id, 0, circle.Id, 1);
+        Assert.Single(g.Connections);
+
+        Assert.True(g.Disconnect(circle.Id, 1));
+        Assert.Empty(g.Connections);
+        Assert.Equal(2, g.Nodes.Count);          // 节点保留
+        Assert.False(g.Disconnect(circle.Id, 1));// 已无连线 → false
+    }
 }

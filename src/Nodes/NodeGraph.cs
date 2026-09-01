@@ -70,7 +70,58 @@ public sealed class NodeGraph
         return true;
     }
 
+    /// <summary>删除节点及其所有连线（忠实原 NodeGraph.RemoveNode：一并清掉以该节点为源或目标的连线）。</summary>
+    public bool RemoveNode(int id)
+    {
+        var n = Find(id);
+        if (n == null) return false;
+        Connections.RemoveAll(c => c.FromNode == id || c.ToNode == id);
+        Nodes.Remove(n);
+        return true;
+    }
+
+    /// <summary>断开指定输入口上的连线（忠实原 NodeGraph.Disconnect；输入口独占，故 (节点,口) 唯一定位）。返回是否有连线被移除。</summary>
+    public bool Disconnect(int toNode, int toPort)
+        => Connections.RemoveAll(c => c.ToNode == toNode && c.ToPort == toPort) > 0;
+
     public Node? Find(int id) => Nodes.Find(n => n.Id == id);
+
+    // ─────────────────────────── 快照（撤销/重做用） ───────────────────────────
+
+    /// <summary>抓取当前图的完整快照（节点位置/值/默认值 + 连线），供 <see cref="NodeGraphUndoRedo"/> 存栈。忠实原 CaptureSnapshot。</summary>
+    public GraphSnapshot CaptureState()
+    {
+        var snap = new GraphSnapshot();
+        foreach (var n in Nodes)
+            snap.Nodes.Add(new NodeSnapshot
+            {
+                Id = n.Id, Kind = n.Kind, Title = n.Title, X = n.X, Y = n.Y,
+                InputCount = n.InputCount, OutputCount = n.OutputCount,
+                Value = n.Value, InputDefaults = (object?[])n.InputDefaults.Clone()
+            });
+        foreach (var c in Connections)
+            snap.Connections.Add(new Connection { FromNode = c.FromNode, FromPort = c.FromPort, ToNode = c.ToNode, ToPort = c.ToPort });
+        return snap;
+    }
+
+    /// <summary>从快照重建整图（清空→重建节点→按旧ID映射重建连线）。忠实原 RestoreSnapshot：节点新建(ID可变)，连线按映射重连=值等价。</summary>
+    public void RestoreState(GraphSnapshot snap)
+    {
+        Nodes.Clear();
+        Connections.Clear();
+        var idMap = new Dictionary<int, int>();
+        foreach (var ns in snap.Nodes)
+        {
+            var node = AddNode(ns.Kind, ns.X, ns.Y);   // 新 Id（忠实原：重建即新实例）
+            node.Value = ns.Value;
+            for (int i = 0; i < ns.InputDefaults.Length && i < node.InputDefaults.Length; i++)
+                node.InputDefaults[i] = ns.InputDefaults[i];   // 恢复各输入口默认值
+            idMap[ns.Id] = node.Id;
+        }
+        foreach (var cs in snap.Connections)
+            if (idMap.TryGetValue(cs.FromNode, out var f) && idMap.TryGetValue(cs.ToNode, out var t))
+                Connect(f, cs.FromPort, t, cs.ToPort);
+    }
 
     // ─────────────────────────── 求值 ───────────────────────────
 
