@@ -2744,4 +2744,6 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 
 **顺手修** [CoalAudit](src/Data/CoalAudit.cs) 头注**过期自相矛盾**: 注仍写"① 工分自洽/⑥ 测井一致 数据不支撑记录不做", 但同文件下方 `CheckProximateConsistency`/`CheckDrillLogConsistency` 已实现二者(§二四五/二四六)——改注为"另二规则以独立方法覆盖 ⇒ 原 7 规则全覆盖"。
 
+**续(同脉复用 CurvePlot)**: `CoalByElevationCmd`(分标高煤质)亦"已算未绘"——按标高带算厚度加权均值 `bands`(ZLow/ZHigh/WeightedMean/N)只拼成文本状态行。补: (WeightedMean, 带标高中点) 喂 `CurvePlot.Build` 上屏(轴名 品位/标高)=竖向剖面曲线; `ByElevation` 已按标高升序且跳空带, 折线沿 Y 单调不锯齿。复用已测 CurvePlot(无新逻辑, 单测仍 1305)。
+
 **本会话第 56 功能**。教训: **"统计图受阻"是又一条误记**——场景能画线/框/字即能画统计折线, 非只空间图。复审边界时, "受阻"标签若与已交付能力(能画直方图)冲突, 多半是误记。这是"复审自记边界"续脉: 记录 0-for-N 可靠, 边界与既有能力矛盾者优先复核。见 [[unlock-blocked-insights]]。

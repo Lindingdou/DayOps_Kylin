@@ -8758,7 +8758,19 @@ public partial class MainWindow : Window
         if (bands.Count == 0) { StatusMsg.Text = $"分标高煤质({ind})：无有效样(缺标高/厚度)"; return; }
         var parts = new List<string>();
         foreach (var b in bands) parts.Add($"[{b.ZLow:0}~{b.ZHigh:0}]{b.WeightedMean:0.##}({b.N})");
-        StatusMsg.Text = $"分标高煤质（{ind}·带高{band:0}m·厚度加权均值）：" + string.Join(" ", parts);
+        // 竖向剖面曲线上屏(已算未绘)：品位(X) vs 标高中点(Y) —— 带中点连线
+        double evw = ViewportHost.Bounds.Width, evh = ViewportHost.Bounds.Height;
+        var ep0 = Viewport.ScreenToWorld(evw * 0.3, evh * 0.85) ?? (0.0, 0.0);
+        var ep1 = Viewport.ScreenToWorld(evw * 0.7, evh * 0.4) ?? (100.0, 50.0);
+        double ew = System.Math.Abs(ep1.x - ep0.x), eh = System.Math.Abs(ep1.y - ep0.y);
+        if (ew < 1e-6) ew = 100; if (eh < 1e-6) eh = 50;
+        var epts = bands.Select(b => (b.WeightedMean, (b.ZLow + b.ZHigh) / 2)).ToList();
+        BeginChange();
+        foreach (var ee in Cad.CurvePlot.Build(epts, System.Math.Min(ep0.x, ep1.x), System.Math.Min(ep0.y, ep1.y),
+                     ew, eh, System.Math.Max(eh * 0.05, 1e-3), ind, "标高"))
+        { ee.LayerName = _layers.Current.Name; _scene.Add(ee); }
+        RefreshScene();
+        StatusMsg.Text = $"分标高煤质（{ind}·带高{band:0}m·厚度加权均值）：" + string.Join(" ", parts) + " · 剖面入场景";
     }
 
     // 煤质离群 QC：Tukey IQR 1.5×IQR 栅栏
