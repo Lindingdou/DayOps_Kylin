@@ -1136,7 +1136,8 @@ public partial class MainWindow : Window
                 return;
             }
             if (ActivateDrawTool(cmd)) return;
-            StatusMsg.Text = $"命令: {cmd}";
+            // 兜底: 未匹配命令(含未移植子系统的受阻功能按钮)——给诚实提示, 而非旧的模糊"命令: X"回显
+            StatusMsg.Text = $"「{cmd}」暂未实现——属未移植子系统（排产计划/生产调度/坑线采剥内核/倾斜摄影等），或命令名有误";
             CommandInput.Text = cmd;
             CommandInput.CaretIndex = cmd.Length;
         }
