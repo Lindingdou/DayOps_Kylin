@@ -9002,9 +9002,24 @@ public partial class MainWindow : Window
         var db = EnsureGeoDb(); if (db == null) return;
         var slopes = Data.GeoDataQueries.GetSlopeDesigns(db.Connection);
         if (slopes.Count == 0) { StatusMsg.Text = "边坡设计：无边坡数据"; return; }
+        // 校核: 无黏聚力安全系数 F=tanφ/tanβ(忠实原 CohesionlessFactorOfSafety), β=帮别对应帮坡角, φ=内摩擦角; 规范 F≥1.30。
         var parts = new List<string>();
-        foreach (var s in slopes) parts.Add($"{s.Side}(工作帮{s.WorkingAngle:0.#}°/最终帮{s.FinalAngle:0.#}°/深{s.MaxDepth:0.#}m/安全系数{s.SafetyFactor:0.##})");
-        StatusMsg.Text = $"边坡设计（{slopes.Count} 帮）：" + string.Join(" · ", parts);
+        int unsafeN = 0;
+        foreach (var s in slopes)
+        {
+            bool working = string.Equals(s.SideType, "working", System.StringComparison.OrdinalIgnoreCase);
+            double beta = working ? (s.WorkingAngle > 0 ? s.WorkingAngle : s.FinalAngle) : (s.FinalAngle > 0 ? s.FinalAngle : s.WorkingAngle);
+            string fStr = "";
+            if (s.FrictionAngle > 0 && beta > 0)
+            {
+                double f = Cad.SlopeStability.CohesionlessFoS(beta, s.FrictionAngle);
+                bool ok = Cad.SlopeStability.IsSafe(f);
+                if (!ok) unsafeN++;
+                fStr = $"/校核F={f:0.##}({(ok ? "✓" : "⚠<1.30")})";
+            }
+            parts.Add($"{s.Side}(工作帮{s.WorkingAngle:0.#}°/最终帮{s.FinalAngle:0.#}°/深{s.MaxDepth:0.#}m/设计F{s.SafetyFactor:0.##}{fStr})");
+        }
+        StatusMsg.Text = $"边坡设计（{slopes.Count} 帮{(unsafeN > 0 ? $"·⚠{unsafeN}帮校核F<1.30" : "")}）：" + string.Join(" · ", parts);
     }
 
     private void FleetOverviewCmd()

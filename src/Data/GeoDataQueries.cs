@@ -527,17 +527,20 @@ public static class GeoDataQueries
         return rows;
     }
 
-    public sealed record SlopeDesignRow(string Side, double WorkingAngle, double FinalAngle, double MaxDepth, double SafetyFactor);
+    public sealed record SlopeDesignRow(string Side, double WorkingAngle, double FinalAngle, double MaxDepth, double SafetyFactor,
+        string SideType = "", double FrictionAngle = 0, double Cohesion = 0);
 
-    /// <summary>边坡设计：各帮 工作帮坡角/最终帮坡角/最大深度/安全系数。</summary>
+    /// <summary>边坡设计：各帮 工作帮坡角/最终帮坡角/最大深度/安全系数 + 帮别/内摩擦角/黏聚力(供边坡安全系数校核)。</summary>
     public static List<SlopeDesignRow> GetSlopeDesigns(SqliteConnection conn)
     {
         var rows = new List<SlopeDesignRow>();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"SELECT COALESCE(side_name,''), COALESCE(working_slope_angle_deg,0), COALESCE(final_slope_angle_deg,0),
-                            COALESCE(max_depth_m,0), COALESCE(safety_factor,0) FROM slope_design ORDER BY side_name";
+                            COALESCE(max_depth_m,0), COALESCE(safety_factor,0), COALESCE(side_type,''),
+                            COALESCE(friction_angle_deg,0), COALESCE(cohesion_kpa,0) FROM slope_design ORDER BY side_name";
         using var rd = cmd.ExecuteReader();
-        while (rd.Read()) rows.Add(new SlopeDesignRow(rd.GetString(0), rd.GetDouble(1), rd.GetDouble(2), rd.GetDouble(3), rd.GetDouble(4)));
+        while (rd.Read()) rows.Add(new SlopeDesignRow(rd.GetString(0), rd.GetDouble(1), rd.GetDouble(2), rd.GetDouble(3), rd.GetDouble(4),
+            rd.GetString(5), rd.GetDouble(6), rd.GetDouble(7)));
         return rows;
     }
 
