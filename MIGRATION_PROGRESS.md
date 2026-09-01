@@ -2179,3 +2179,12 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 **9 模块 diff 收官(TaskLib/PlanLib 补扫)**: TaskLib(82)/PlanLib(68) 多为排产/调度/仿真**引擎**(Sim*·*ScheduleResult·Zone*·MonthlyStrip*); 自足切片(TaskQuantity 生产量核算·MaterialFlow 物料流·MaterialSpec·LinkDerate·CoalQuality·SinkNode 等 8+)**早已移植**; **剥采比**核心指标全覆盖(BlockModel·PitDepthSolver·VpBalanceSolver·GeoDataQueries); `WorkWindowCalc` 系 DayCapacityBudget 容量引擎内部助手(依赖受阻的班次日历配置)→ 引擎内部, 记录。
 
 **结论**: 逐模块 diff 既**证实**全部 9 大模块(Mesh/PointCloud/Road/Block/Geo/Sql/MineAss/Task/Plan)覆盖或边界已录, 又**发现** 6 主题透镜漏掉的 1 处真几何缺口(竖曲线)。教训: 收敛感≠收敛, 系统性模块 diff 是主题透镜之外的一层。见 [[unlock-blocked-insights]] [[faithfulness-only-original-commands]]。
+
+## 一九三、作者标注切片扫描(第二独立收敛信号) —— 确认竖曲线为唯一干净缺口
+
+**新法**: 原版作者在**自足可移植算法**上自注 `纯几何 / 可单测 / 零 UI 依赖 / 无宿主依赖`(竖曲线即此类)。用 Grep(UTF-8, 原文件 Read 可正常解码)全库搜这些标注→精确列出作者认定的独立切片, diff Kylin:
+- **已覆盖**: HaulMetrics(运距/时间坡阻模型 `src/Cad/HaulMetrics.cs`) · TransportIndicators(运输指标) · BenchElevationAnnotator(标注台阶标高) · WorkingFaceLineFitter · DepositAutoDetector · PolylineMetrics(演化对比) · RoadGraph/RoadTopology(路网) · CenterlineJunctions/Pick/Inventory(中线管理) · SectionBuilder(剖面) · GeomMeasure(鞋带面积)。
+- **引擎流水线几何步(非独立命令, 记录)**: EngineeringPosition/EpConnector/BenchFaceBuilder/BenchLineReplacer(创建工程位置多步引擎⑦台阶面) · InclineSurfaceBuilder/InclineConstraint(量驱动斜面引擎第3步) · TemplateDrivingEngine(逐刀/逐期位置线) · UnitGraph(建图) · TrendBenchIntegrator · WorkLineProjector · SimSolidBuilder/UnitSolidStage(推演层体三角化)——皆多阶段引擎的**中间几何层**, 输入为引擎中间态、输出喂下一步, 非独立特性(区别竖曲线: 完整算法·零引擎依赖·输入自然[中线]·普适意义)。
+- **借鉴后跳过 · TaskZoneSplitter(采掘单元→任务区域)**: 是完整几何算法(前脸/坡底线+推进宽+各份量→二分求宽切条, 鞋带面积, 非线性面积-宽), 但**依赖 `DumpStripPlanner.ProjectOnto/AdvanceDirs`**(排土条带规划器几何)——而 Kylin 无 DumpStripPlanner(排土条带按 §一九一 系受阻排土规划引擎按钮), 且本质=**排土条带同款"按量沿推进切条"**、输入份额来自受阻排产引擎。→ 与受阻 排土规划 几何纠缠 + 输入为调度上下文 + 独立价值人为, 记录(非干净切片)。
+
+**结论**: 两条**独立**系统扫描(§一九二 模块标识符 diff + §一九三 作者标注切片扫描)**双双收敛于同一结论**: 竖曲线是唯一干净的可移植独立切片(已补), 其余 `纯几何` 类要么已覆盖、要么是受阻引擎的流水线几何步。这比单一主题透镜的"收敛感"强得多。见 [[unlock-blocked-insights]]。
