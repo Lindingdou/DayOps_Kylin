@@ -747,6 +747,7 @@ public partial class MainWindow : Window
             if (cmd == "重做") { DoRedo(); return; }
             if (cmd == "导入") { await ImportDxfAsync(); return; }
             if (cmd == "导入PMX" || cmd == "导入原版工程" || cmd == "打开原版工程" || cmd == "PitMine工程") { await PmxImportAsync(); return; }
+            if (cmd == "导出PMX" || cmd == "导出原版工程" || cmd == "另存为PMX" || cmd == "保存为PMX") { await PmxExportAsync(); return; }
             if (cmd == "导入点") { await ImportPointsAsync(); return; }
             if (cmd == "导入模板" || cmd.StartsWith("导入模板 ") || cmd == "下载模板") { await ExportImportTemplateAsync(cmd); return; }
             if (cmd == "导出分析" || cmd.StartsWith("导出分析 ")) { await ExportAnalysisAsync(cmd); return; }
@@ -1460,6 +1461,21 @@ public partial class MainWindow : Window
         PopulateDrawingLayers();
         string fn = System.IO.Path.GetFileName(files[0].Path.LocalPath);
         StatusMsg.Text = $"导入 PitMine 工程 {fn}：{r.Entities.Count} 可编辑实体（{r.Summary}）· {r.LayerNames.Count} 图层";
+    }
+
+    // 导出 PitMine 工程(.pmx 原版二进制)：场景实体 → 原版可打开的 .pmx(反向互操作)。核心: 线/点/多段线/文字/圆/矩形。
+    private async Task PmxExportAsync()
+    {
+        if (_scene.Entities.Count == 0) { StatusMsg.Text = "导出PMX：场景为空"; return; }
+        var file = await StorageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
+        {
+            Title = "导出 PitMine 工程(.pmx 原版二进制)", DefaultExtension = "pmx", SuggestedFileName = "export.pmx",
+            FileTypeChoices = new[] { new Avalonia.Platform.Storage.FilePickerFileType("PitMine 工程 (PMX)") { Patterns = new[] { "*.pmx" } } }
+        });
+        if (file == null) return;
+        if (Cad.PmxExportService.SaveToFile(file.Path.LocalPath, _scene.Entities, out string err, out int n))
+            StatusMsg.Text = $"导出 PitMine 工程：{n} 实体 → {System.IO.Path.GetFileName(file.Path.LocalPath)}（原版二进制 .pmx；线/点/多段线/文字/圆/矩形；圆弧·正多边形暂不导出）";
+        else StatusMsg.Text = $"导出PMX：写出失败 {err}";
     }
 
     // 点数据导入：CSV/TXT/XYZ/PTS → 可编辑的点实体（进入绘制场景，可选中/编辑/删除）
@@ -8440,7 +8456,7 @@ public partial class MainWindow : Window
     private static readonly string[] CommandCatalog =
     {
         // 文件/绘制/修改
-        "新建","打开","保存","另存为","导入","导入PMX","选项",
+        "新建","打开","保存","另存为","导入","导入PMX","导出PMX","选项",
         "点","直线","多段线","滑动多段线","圆","矩形","正多边形","文字","多行文字","圆弧","图案填充","填充十字",
         "复制","移动","旋转","偏移","修剪","延伸","打断","分解","删除","撤销","重做",
         // 对象捕捉

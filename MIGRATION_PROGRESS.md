@@ -2302,3 +2302,11 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(强)**: [PmxImportServiceTests](tests/PitMine3D.Kylin.Tests/PmxImportServiceTests.cs) 6 例—— 4 合成档往返(按规格构档→读→核线/点/多段线闭合/圆几何+TrueColor 绿) + 2 **真实原版样本**(桌面 untitled.pmx 98KB / 现状.pmx 363KB, skip-if-absent, 本机读出实体>0)。**build 0 错·单测 1109→1115**。
 
 **本会话第 10 功能**。教训: **robust 逐文件读要含 app 层(Host/PitMineApp), 不止域 Modules**——工程文件格式(.pmx)在 app 层。managed 二进制格式(规格在代码)≠native PMxx(无源), 可移。见 [[unlock-blocked-insights]]。
+
+## 二〇六、导出 PitMine 工程(.pmx)—— 完成 PMX 互操作往返(第 11 功能)
+
+承 §二〇五 导入, 补**导出**(反向互操作: Kylin 场景 → 原版可打开的二进制 .pmx)。[src/Cad/PmxExportService.cs](src/Cad/PmxExportService.cs) 与导入同规格逆向写: 串表(去重 intern)+图层+空样式段+实体段+Header/Footer(**CRC32 IEEE** 正确算, 供原版校验); 映射 Kylin→PMX 线1/点3/多段线2(闭合)/文字4/圆14/矩形→闭合多段线; TrueColor 精确; 圆弧(3点↔圆心角)/正多边形 MVP 暂不导。命令 `导出PMX`(场景→存 .pmx)+ 目录。
+
+**验证(往返, 强)**: [PmxExportServiceTests](tests/PitMine3D.Kylin.Tests/PmxExportServiceTests.cs) 4 例—— Kylin 实体 → PmxExportService 写 → **PmxImportService 读** → 往返一致(计数·线几何+色·多段线闭合·圆·文字位置/高/转/文本)+ Header magic 'PMX1'/Footer magicEnd '1XMP' 校验。**导入+导出互为验证**(两者同规格, 往返恒等)。**build 0 错·单测 1115→1119**。
+
+**本会话第 11 功能**。PMX 工程互操作**读写双向完备**(读原版工程 + 存回原版格式)。教训: 导入/导出成对时, **往返测试(写→读→恒等)是最强验证**——两者互验, 无需外部样本(真实样本另做 skip-if-absent 端到端验)。见 [[unlock-blocked-insights]]。
