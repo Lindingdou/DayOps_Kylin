@@ -1074,6 +1074,7 @@ public partial class MainWindow : Window
             if (cmd == "纵坡分析" || cmd == "纵坡" || cmd == "坡度分档" || cmd == "限坡校核" || cmd.StartsWith("纵坡分析 ") || cmd.StartsWith("限坡校核 ")) { await GradeProfileAsync(cmd); return; }
             if (cmd == "竖曲线平滑" || cmd == "竖曲线" || cmd == "纵断面竖曲线" || cmd.StartsWith("竖曲线平滑 ") || cmd.StartsWith("竖曲线 ")) { await VerticalCurveAsync(cmd); return; }
             if (cmd == "线形处理" || cmd == "线形" || cmd == "中线线形" || cmd == "线形后处理" || cmd.StartsWith("线形处理 ")) { await LineFormAsync(cmd); return; }
+            if (cmd == "台阶面提取" || cmd == "坡面提取" || cmd == "台阶坡面" || cmd == "台阶面" || cmd.StartsWith("台阶面提取 ")) { await BenchFaceExtractAsync(cmd); return; }
             if (cmd == "平行推进" || cmd == "开采程序确定" || cmd == "工作线推进") { AdvanceCmd(AdvanceMode.Parallel, "平行推进"); return; }
             if (cmd == "定点回转" || cmd == "定点回转推进") { AdvanceCmd(AdvanceMode.FixedPivot, "定点回转"); return; }
             if (cmd == "动点回转" || cmd == "动点回转推进") { AdvanceCmd(AdvanceMode.MovingPivot, "动点回转"); return; }
@@ -1743,6 +1744,53 @@ public partial class MainWindow : Window
         RefreshScene();
         if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
         StatusMsg.Text = $"网格边界：{loops.Count} 环 · {totPts} 点(投影 XY 作闭合折线入场景)";
+    }
+
+    // 台阶面提取：OFF 现状面 → 按坡度切台阶坡面(连通域分片) → 每片坡顶线(青)/坡底线(橙)入场景 + 台阶高/坡度/面积汇总。
+    // 比 坡顶底线(仅平陡散断棱边)完整: 分片 + 有序上下沿 + 每片指标。忠实原 BenchFaceExtractor。用法 "台阶面提取 [坡度阈值°]"。
+    private async Task BenchFaceExtractAsync(string cmd)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        double slopeDeg = 20.0;   // 判为坡面的最小坡度(默认 20°, 按实际图纸调)
+        if (tk.Length >= 2 && double.TryParse(tk[1], System.Globalization.NumberStyles.Float, inv, out double sd) && sd > 0) slopeDeg = sd;
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        { Title = "台阶面提取：选 OFF 现状面", AllowMultiple = false, FileTypeFilter = new[] { new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } } } });
+        if (files.Count == 0) return;
+        string text;
+        try { text = System.IO.File.ReadAllText(files[0].Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"台阶面提取：读取失败 {ex.Message}"; return; }
+        var (verts, tris) = MeshMetrics.ParseOff(text);
+        if (tris.Count == 0) { StatusMsg.Text = "台阶面提取：未解析到三角网格"; return; }
+        var vf = new double[verts.Count * 3];
+        for (int i = 0; i < verts.Count; i++) { vf[i * 3] = verts[i].x; vf[i * 3 + 1] = verts[i].y; vf[i * 3 + 2] = verts[i].z; }
+        var tf = new int[tris.Count * 3];
+        for (int i = 0; i < tris.Count; i++) { tf[i * 3] = tris[i].a; tf[i * 3 + 1] = tris[i].b; tf[i * 3 + 2] = tris[i].c; }
+        var r = Cad.BenchFaceExtractor.Extract(vf, tf, new Cad.BenchFaceExtractor.Options { MinSlopeDeg = slopeDeg });
+        if (!r.Ok) { StatusMsg.Text = $"台阶面提取：{r.Message}"; return; }
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        BeginChange();
+        void AddRail(double[] xyz, float cr, float cg, float cb)
+        {
+            if (xyz.Length < 6) return;
+            var pl = new PolylineEntity { Cr = cr, Cg = cg, Cb = cb, LayerName = "台阶坡面" };
+            for (int i = 0; i + 2 < xyz.Length; i += 3)
+            {
+                double x = xyz[i], y = xyz[i + 1];
+                pl.Points.Add((x, y));
+                if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y;
+            }
+            _scene.Add(pl);
+        }
+        foreach (var f in r.Faces)
+        {
+            AddRail(f.CrestXyz, 0.1f, 0.8f, 0.9f);    // 坡顶线 青
+            AddRail(f.ToeXyz, 0.95f, 0.55f, 0.1f);    // 坡底线 橙
+        }
+        RefreshScene();
+        if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
+        string warn = r.Warnings.Count > 0 ? " · " + string.Join(" ", r.Warnings) : "";
+        StatusMsg.Text = $"台阶面提取(阈值{slopeDeg.ToString("0.#", inv)}°)：{r.Message} 青=坡顶线/橙=坡底线{warn}";
     }
 
     // 环节降效产能（TaskLib 降效切片）：给采/运/排降效% → 用默认编组解 τ_L/T_c/MF → 采装面/排土面能力系数 + 降后产能。
@@ -8131,7 +8179,7 @@ public partial class MainWindow : Window
         // 线编辑
         "加密多段线","简化","平滑","样条平滑","抽稀等值线","两线交点","闭合多段线","删除重复点","删除重复线","连接多段线","组合工作线",
         // 网格/建模
-        "网格度量","网格诊断","创建三角网","约束三角网","裁剪三角网","网格焊接","网格边界","网格交线","网格剖面","网格光顺","合并三角网","固化成体","侧面三角网","立方体","球体","圆柱","体素格网体积","实体转块体",
+        "网格度量","网格诊断","创建三角网","约束三角网","裁剪三角网","网格焊接","网格边界","网格交线","网格剖面","网格光顺","合并三角网","固化成体","侧面三角网","台阶面提取","立方体","球体","圆柱","体素格网体积","实体转块体",
         // 区域/地形/点云
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪",

@@ -2212,3 +2212,13 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - 验证: [CenterlineLineFormTests](tests/PitMine3D.Kylin.Tests/CenterlineLineFormTests.cs) 10 例已知值(直角转角圆弧点落 R=15 圆·紧转角 clamp 到 R=5 计违规·限坡 α 缩放命中总高差·展线不足标志·弯道折减≤直线·合成坡度反推·竖曲线复用保端点)。**build 0 错·单测 1060→1070**。
 
 **教训(硬)**: **系统扫描的每一项要单独核实语义, 别按名字前缀归堆**——`CenterlineLineForm` 与 `CenterlineInventory` 同前缀但一个是线形设计器、一个是中线管理。"五法收敛"的方法没错, 但我执行方法四时凭前缀把 LineForm 误并入已覆盖桶 → 漏掉真缺口。**收敛结论要靠逐项核实支撑, 名字聚类是陷阱(同 [[unlock-blocked-insights]] 文件名≠类名、中文串≠英文token 一类)**。补救法: **回到已产出真缺口的目录(RoadLayout)做针对性复扫**——竖曲线在此, 线形处理亦在此。见 [[unlock-blocked-insights]]。
+
+## 一九六、台阶面提取(BenchFaceExtractor) —— "present but shallow" 深度缺口 + 纠正"坡顶底线 native 阻"记录
+
+**顺着"名字前缀陷阱"纪律复查被我按前缀归堆的其余组**: `Centerline*` 余项(LayerDiff=增量落地/SetCodec=base64存档/Inventory=管理)确系管理/IO(covered); 但查 `Bench*` 组的 `BenchFaceExtractor` —— **真缺口**。
+
+**present-but-shallow(深度)缺口**: Kylin 早有 `CrestToe.cs`(坡顶底线命令, ~40 行)——但它只出**平陡分界的散断棱边**(edge soup, 无序)。原版 `BenchFaceExtractor`(500 行, BlockModelLib.Domain, 有独立 test)**完整得多**: ①按坡度分陡/缓 + **闭运算**(补等高线 TIN 空洞平三角) ②陡三角**连通域分片**→独立台阶坡面 + **高程带再切**(多级坑壁粘连) ③每片**指标**(三维/投影面积·台阶高·平均坡度[由面积比反算]·水平投影宽) + **有序坡顶/坡底线**(按走向轴投影分上下沿, 抗碎边界) + 采场环裁剪。这是 node-editor 式"命令在但底层浅"缺口。
+
+**移植** [src/Cad/BenchFaceExtractor.cs](src/Cad/BenchFaceExtractor.cs) 忠实全移 + 命令 `台阶面提取`(OFF 现状面→每片坡顶线[青]/坡底线[橙]入场景 + `r.Message`台阶高/坡度范围汇总) + 面编辑菜单项 + 命令目录。**非冗余**: 与 CrestToe 互补——CrestToe 出散断棱边, 台阶面提取出分片+有序上下沿+每片指标(真正的 3D 表面台阶分析, 区别 BenchAnalyzer 的 2D 剖面法)。验证 [BenchFaceExtractorTests](tests/PitMine3D.Kylin.Tests/BenchFaceExtractorTests.cs) 6 例已知值(单台阶: 台阶高10·坡度63.43°·投影宽5·坡顶落 x20z10/坡底 x25z0·采场环外排除·面积/台阶高下限丢弃)。**build 0 错·单测 1070→1076**。
+
+**纠正记录**: [[unlock-blocked-insights]] 曾记"坡顶底线(native PMTB)阻"——BenchFaceExtractor 证明**表面法(现状面 TIN 按坡度)的坡顶底线是纯托管可做且更完整的**(native PMTB 点云栅格化路径另论)。**本会话三真缺口**(竖曲线/线形处理/台阶面提取)均在"名字前缀归堆"被自查纠错后挖出——收敛没到, 是我扫描执行有归堆盲区。见 [[unlock-blocked-insights]]。
