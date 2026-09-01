@@ -2468,3 +2468,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证**: [TerrainAnalysisTests](tests/PitMine3D.Kylin.Tests/TerrainAnalysisTests.cs) +1—— 10×10 方形=100 · 三角(0,0)(4,0)(0,3)=6 · <3点=0。**build 0 错·单测 1226→1227**。
 
 **本会话第 26 功能**。教训: **PMxx 字段 diff 要覆盖每个模块的 native 结果族, 别只做一个模块**——MeshEditLib 的 PMxx 做了, PointCloudLib 的 CloudOpResult 族漏了; 补做挖出 圈范围算量 的深度+投影面积两字段。**命令级"覆盖"仍要字段级复核**(圈范围算量在, 但缺 Depth/Area 两输出)。见 [[unlock-blocked-insights]]。
+
+## 二二二、离散化模型(封闭网体素化成块体)—— 命令 ✗ 误分类纠正(第 27 功能)
+
+**纠正命令 diff 的误分类**: `离散化模型` 曾在全插件 ✗ 里被我归"块体/地质引擎"(记录), **实为标准几何操作**——原描述"把采矿模型体素化成块体:选封闭三角网体"。是**体素化**(voxelize), 非 native 引擎; 且 Kylin 刚好有精确基元 `WindingNumberTester.IsInsideClosed`(GWN)。`固化成体`(反向)Kylin 已有(SolidifyAsync); `离散化`(正向)缺。
+
+忠实补 [src/Cad/MeshVoxelizer.cs](src/Cad/MeshVoxelizer.cs): 封闭三角网包围盒内布规则格, 格心落**闭合网内**(GWN)保留成块体; 复用 WindingNumberTester; 格数上限守卫(超则拒, 提示加大块尺寸)。命令 `离散化模型 [块尺寸]`(选封闭 OFF → 先诊断闭合性 → 体素化 → 产块体模型入 `_lastBlocks` 供资源量/剥采比复用; 缺省块尺寸=包围盒对角 1/40)。
+
+**验证(已知值)**: [MeshVoxelizerTests](tests/PitMine3D.Kylin.Tests/MeshVoxelizerTests.cs) 4 例—— **10 立方体 @格 2 → 5×5×5=125 块**(格心 (1,3,5,7,9)³ 全在内) · @格 5 → 2³=8 块 · 格数过大守卫拒 · 退化/cellSize=0 安全。**build 0 错·单测 1227→1231**。
+
+**本会话第 27 功能**。教训: **命令 diff 的 ✗ 分类要复核"是标准几何还是真引擎"**——`离散化模型` 名义在"采矿模型"组像引擎, 实为纯体素化(GWN 内外判), 我初判"引擎记录"是**误分类**。判"引擎/native 受阻"前问"这操作的算法标准吗?有无已移基元支撑?"(WindingNumber 已移 → 体素化可做)。同 #13"别被'内核模块'标签吓退标准算法"。见 [[unlock-blocked-insights]]。

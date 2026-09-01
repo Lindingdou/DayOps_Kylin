@@ -807,6 +807,7 @@ public partial class MainWindow : Window
             if (cmd == "筛选块体" || cmd == "块体筛选") { FilterBlocksCmd(); return; }
             if (cmd.StartsWith("表达式筛选块 ") || cmd.StartsWith("表达式筛选 ") || cmd.StartsWith("块体表达式 ") || cmd.StartsWith("按表达式筛选 ")) { BlockExpressionFilterCmd(cmd); return; }
             if (cmd == "面约束块体" || cmd == "曲面约束块体" || cmd == "网格约束块体" || cmd.StartsWith("面约束块体 ")) { await MeshConstrainBlocksAsync(cmd); return; }
+            if (cmd == "离散化模型" || cmd == "离散化" || cmd == "体素化" || cmd == "模型体素化" || cmd.StartsWith("离散化模型 ") || cmd.StartsWith("离散化 ")) { await DiscretizeModelAsync(cmd); return; }
             if (cmd == "约束块体" || cmd == "块体约束") { ConstrainBlocksCmd(); return;}
             if (cmd == "删除块体" || cmd == "清除块体") { DeleteBlocksCmd(); return; }
             if (cmd == "切面剖切" || cmd == "块体剖切" || cmd == "切面") { SectionBlocksCmd(); return; }
@@ -5096,6 +5097,45 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"面约束块体({modeCn})：{sub.Count}/{_lastBlocks.Count} 块满足（余隐去; 约束网格 {mt.Count} 三角）";
     }
 
+    // 离散化模型(忠实 BlockModelLib「离散化模型」): 把封闭三角网体素化成块体——格心落闭合网内(GWN)保留成块。
+    // "离散化模型 [块尺寸]"(缺省按包围盒对角 1/40 自动)。产出块体模型入 _lastBlocks(供资源量/剥采比复用)。
+    private async Task DiscretizeModelAsync(string cmd)
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "离散化模型：选封闭三角网体 OFF",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("网格 (OFF)") { Patterns = new[] { "*.off" } } }
+        });
+        if (files.Count == 0) return;
+        string text;
+        try { text = System.IO.File.ReadAllText(files[0].Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"离散化模型：读取失败 {ex.Message}"; return; }
+        var (mv, mt) = MeshMetrics.ParseOff(text);
+        if (mt.Count == 0) { StatusMsg.Text = "离散化模型：未解析到三角网"; return; }
+        var diag = MeshDiagnose.Analyze(mv, mt);
+        if (!diag.IsClosed) { StatusMsg.Text = "离散化模型：需封闭(水密)三角网体——当前非闭合(边界边/非流形)，GWN 内外判不可靠"; return; }
+
+        double bx0 = double.MaxValue, by0 = double.MaxValue, bz0 = double.MaxValue, bx1 = double.MinValue, by1 = double.MinValue, bz1 = double.MinValue;
+        foreach (var p in mv) { if (p.x < bx0) bx0 = p.x; if (p.y < by0) by0 = p.y; if (p.z < bz0) bz0 = p.z; if (p.x > bx1) bx1 = p.x; if (p.y > by1) by1 = p.y; if (p.z > bz1) bz1 = p.z; }
+        double bdiag = System.Math.Sqrt((bx1 - bx0) * (bx1 - bx0) + (by1 - by0) * (by1 - by0) + (bz1 - bz0) * (bz1 - bz0));
+        double cell = 0; int sp = cmd.IndexOf(' ');
+        if (sp >= 0) double.TryParse(cmd.Substring(sp + 1).Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out cell);
+        if (cell <= 0) cell = System.Math.Max(bdiag / 40.0, 1e-6);
+
+        var (fv, ft) = Cad.MeshContainment.Flatten(mv, mt);
+        var r = Cad.MeshVoxelizer.Voxelize(fv, ft, cell);
+        if (r.TooLarge) { StatusMsg.Text = $"离散化模型：格数过大({r.Nx}×{r.Ny}×{r.Nz})，请加大块尺寸(如 “离散化模型 {bdiag / 20:0.#}”)"; return; }
+        if (r.Centers.Count == 0) { StatusMsg.Text = "离散化模型：无格心落在体内(检查闭合性/块尺寸)"; return; }
+
+        var blocks = new List<BlockModel.Block>(r.Centers.Count);
+        foreach (var c in r.Centers) blocks.Add(new BlockModel.Block { X = c.x, Y = c.y, Z = c.z, Size = cell, Grade = 0 });
+        _lastBlocks = blocks; _blockAttrs = null;
+        BeginChange(); RenderBlocks(blocks); RefreshScene();
+        Viewport.ZoomExtents();
+        StatusMsg.Text = $"离散化模型：{blocks.Count} 块（块尺寸 {cell:0.##}m · 格网 {r.Nx}×{r.Ny}×{r.Nz} · 体积≈{blocks.Count * cell * cell * cell:0.#}m³）";
+    }
+
     // 删除块体：移除全部块体方块 + 清工作集
     private void DeleteBlocksCmd()
     {
@@ -9082,7 +9122,7 @@ public partial class MainWindow : Window
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割","移除障碍物",
         // 块体/运输/路网
-        "块体模型","资源量","面约束块体","道路横断面","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道",
+        "块体模型","资源量","面约束块体","离散化模型","道路横断面","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道",
         // 生产计划/投影
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
