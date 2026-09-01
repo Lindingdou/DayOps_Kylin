@@ -2519,3 +2519,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [OrdinaryKrigingTests](tests/PitMine3D.Kylin.Tests/OrdinaryKrigingTests.cs) +2—— nugget0/sill10/range100 @h=50: 球状6.875·指数7.7687·高斯5.2763; 球状 h≥range=sill 而指数/高斯渐近<sill; 默认型=球状(向后兼容); SelectVariogramModel 选出型 SSE 三者最小。**build 0 错·单测 1236→1238**(既有克里金测试不受影响——默认球状保底)。
 
 **本会话第 31 功能**。教训: **枚举/switch 的"算法模型家族"要逐型核**——原 `Gamma` switch 三型, Kylin 只球状; 补齐指数/高斯 + 自动选型。**加模型字段用默认值保向后兼容**(既有球状路径不变), 避免改动波及既有克里金测试。同"算法变体 enum 值级 diff"(SurfaceUpdate/MeshContainment), 但这里是 γ(h) 数学模型族。见 [[unlock-blocked-insights]]。
+
+## 二二七、反距离权重 IDW 一等估值器(可配幂次/邻域/平滑)—— 估值家族"命令在但算法浅"(第 32 功能)
+
+**估值家族 diff**: 原 `EstimationAlgorithms.IdwEstimator` 是**一等、用户可选**的估值算法(与克里金并列, 见 `KrigingViewModel`/`QuickEstimateViewModel` 的 "IDW" 选项), 带 **可配幂次 power·搜索半径·邻域 [minSamples,maxSamples]·平滑项 smoothing·3D 距离·零距离精确插值**。Kylin `IDW估值` 命令**已在**(分派 815 行), 但底层走 `Contour.GridFromPoints`——**固定 power=2 的 2D 网格填充**, 无可配幂次/邻域/平滑。属"命令在但算法浅"(present-but-shallow), 非缺命令。
+
+补 [src/Cad/OrdinaryKriging.cs](src/Cad/OrdinaryKriging.cs): `IdwEstimate(points,x,y,z, power, radius, minSamples, maxSamples, smoothing)`——忠实原 `IdwEstimate`: 3D 距离半径裁剪 → 排序裁到 maxSamples 后比 minSamples(忠实原序) → 零距离(d<1e-9)精确返回样本值 → `w=1/(d+smoothing)^power` 加权均值; 邻域不足/权和≤0 返回 null。并入克里金家族(与 OK/UK/SK 同 `ControlPoint` 结构、同 nullable 约定)。UI 端 [MainWindow](src/Views/MainWindow.axaml.cs): 新 `BuildIdwGrid`(逐格 IdwEstimate, 取代固定 power=2 路径), `EstimateGradeAsync` 加 `idwPower` 参; 分派 `IDW估值 <幂次>`/`快速估值 <幂次>` 解析可选幂次(Kylin 命令行 idiom 对应原对话框 power 字段), 状态行报幂次+邻域均样本数。
+
+**验证(已知值)**: [OrdinaryKrigingTests](tests/PitMine3D.Kylin.Tests/OrdinaryKrigingTests.cs) +6—— 零距离精确/单点回值; 四点等距值10/20/30/40→均25; 两点(0,0,0)&(100@10,0) 查(2,0,0) power1→20 精确, power2→5.882(近点更压倒), 平滑100→47(趋均值50); 半径外/邻域不足/空→null; maxSamples=2 只取最近两点不被远离群 999 污染。**build 0 错·单测 1238→1244**(既有估值不受影响)。
+
+**本会话第 32 功能**。教训: **"命令已在"≠"算法已全"**——`IDW估值` 命令存在且能出图(固定 power=2), 但原算法是可配幂次的一等估值器; 逐个已移植命令核对其底层算法深度(present-but-shallow), 而非只看命令名 diff。IDW 是克里金的标准同伴(无需变差函数、快速稳健), 补齐后估值家族(OK/UK/SK/IDW/NN/MA)对齐原六法。见 [[unlock-blocked-insights]]。

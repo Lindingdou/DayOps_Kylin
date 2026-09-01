@@ -812,7 +812,14 @@ public partial class MainWindow : Window
             if (cmd == "删除块体" || cmd == "清除块体") { DeleteBlocksCmd(); return; }
             if (cmd == "切面剖切" || cmd == "块体剖切" || cmd == "切面") { SectionBlocksCmd(); return; }
             if (cmd == "克里金估值" || cmd == "OK估值" || cmd == "克里金") { await EstimateGradeAsync("OK"); return; }
-            if (cmd == "快速估值" || cmd == "品位估值" || cmd == "IDW估值" || cmd == "空间分布") { await EstimateGradeAsync("IDW"); return; }
+            if (cmd == "快速估值" || cmd == "品位估值" || cmd == "IDW估值" || cmd == "空间分布"
+                || cmd.StartsWith("IDW估值 ") || cmd.StartsWith("快速估值 ") || cmd.StartsWith("品位估值 "))
+            {
+                double pw = 2.0;
+                var sp = cmd.Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
+                if (sp.Length >= 2 && double.TryParse(sp[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var p) && p > 0) pw = p;
+                await EstimateGradeAsync("IDW", pw); return;
+            }
             if (cmd == "泛克里金" || cmd == "UK估值" || cmd == "泛克里金估值" || cmd == "趋势克里金") { await EstimateGradeAsync("UK"); return; }
             if (cmd == "最近邻估值" || cmd == "NN估值" || cmd == "邻近估值") { await EstimateGradeAsync("NN"); return; }
             if (cmd == "移动平均估值" || cmd == "MA估值" || cmd == "均值估值") { await EstimateGradeAsync("MA"); return; }
@@ -5459,7 +5466,7 @@ public partial class MainWindow : Window
     }
 
     // 快速估值：品位样本 CSV(x,y,品位) → IDW/克里金 网格 → 品位配色估值面
-    private async Task EstimateGradeAsync(string method = "IDW")
+    private async Task EstimateGradeAsync(string method = "IDW", double idwPower = 2.0)
     {
         string mode = method switch { "OK" => "克里金估值", "UK" => "泛克里金", "SK" => "简单克里金", "NN" => "最近邻估值", "MA" => "移动平均估值", _ => "快速估值(IDW)" };
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
@@ -5489,7 +5496,8 @@ public partial class MainWindow : Window
         }
         else
         {
-            grid = Contour.GridFromPoints(r.Points, n, n, out gx0, out gy0, out gdx, out gdy);
+            grid = BuildIdwGrid(r.Points, n, n, idwPower, out gx0, out gy0, out gdx, out gdy, out int idwUsed);
+            extra = $" · IDW 幂次 {idwPower:0.##} · 邻域均 {idwUsed} 样本(可配: IDW估值 <幂次>)";
         }
         // 忠实原「搜索半径外不赋值」: 半径内无样本的单元置 NaN, 不向无数据支撑区外推(免 IDW/NN 全格铺满误导)
         double radius = System.Math.Max(Contour.AutoRadius(r.Points), 1.5 * System.Math.Max(gdx, gdy));
@@ -5528,6 +5536,26 @@ public partial class MainWindow : Window
             }
         avgVar = varCnt > 0 ? varSum / varCnt : 0;
         return idw;
+    }
+
+    // IDW 网格：逐格 OrdinaryKriging.IdwEstimate(可配幂次/邻域[1,12], 3D 距离, 半径外 null)估值; null 留兜底值交 MaskByRadius 裁。
+    // 忠实原 EstimationAlgorithms.IdwEstimate(power 可变), 取代此前固定 power=2 的 Contour.GridFromPoints。out usedAvg = 平均实用样本数。
+    private static double[,] BuildIdwGrid(IReadOnlyList<(double x, double y, double z)> pts, int nx, int ny, double power,
+        out double x0, out double y0, out double dx, out double dy, out int usedAvg)
+    {
+        var grid = Contour.GridFromPoints(pts, nx, ny, out x0, out y0, out dx, out dy);   // 布局 + 半径外兜底
+        nx = grid.GetLength(0); ny = grid.GetLength(1);
+        var cps = new List<OrdinaryKriging.ControlPoint>(pts.Count);
+        foreach (var p in pts) cps.Add(new OrdinaryKriging.ControlPoint(p.x, p.y, 0, p.z));
+        long usedSum = 0; int cnt = 0;
+        for (int i = 0; i < nx; i++)
+            for (int j = 0; j < ny; j++)
+            {
+                var e = OrdinaryKriging.IdwEstimate(cps, x0 + i * dx, y0 + j * dy, 0, power, 0, 1, 12, 0);
+                if (e != null) { grid[i, j] = e.Value.est; usedSum += e.Value.used; cnt++; }
+            }
+        usedAvg = cnt > 0 ? (int)(usedSum / cnt) : 0;
+        return grid;
     }
 
     // 境界圈定：散点 CSV → 凸包 → 闭合边界多段线

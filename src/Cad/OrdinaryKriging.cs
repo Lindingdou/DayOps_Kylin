@@ -81,6 +81,43 @@ public static class OrdinaryKriging
     }
 
     /// <summary>
+    /// 反距离权重 IDW 估值（忠实移植原 EstimationAlgorithms.IdwEstimate）——克里金家族里快速稳健的同伴, 无需变差函数。
+    /// 3D 距离; 可配幂次 power; 搜索半径 radius(≤0 自动); 邻域 [minSamples,maxSamples]; 平滑项 smoothing → w=1/(d+smoothing)^power。
+    /// 零距离样本精确返回其值; 邻域不足(<minSamples)或权和≤0 返回 null(不赋值)。返回(估计值, 实用样本数)。
+    /// </summary>
+    public static (double est, int used)? IdwEstimate(
+        IReadOnlyList<ControlPoint> points, double x, double y, double z,
+        double power = 2.0, double radius = 0, int minSamples = 1, int maxSamples = 12, double smoothing = 0.0)
+    {
+        if (points.Count == 0) return null;
+        if (radius <= 0) radius = AutoRadius(points);
+        int need = Math.Max(1, minSamples);
+        double r2 = radius * radius;
+        var hits = new List<(double d, double v)>();
+        foreach (var pt in points)
+        {
+            double dx = pt.X - x, dy = pt.Y - y, dz = pt.Z - z;
+            double d2 = dx * dx + dy * dy + dz * dz;
+            if (d2 <= r2) hits.Add((Math.Sqrt(d2), pt.V));
+        }
+        hits.Sort((a, b) => a.d.CompareTo(b.d));
+        int cap = Math.Min(Math.Max(1, maxSamples), hits.Count);   // 裁到 maxSamples 后再比 minSamples(忠实原序)
+        if (cap < need) return null;
+
+        double wSum = 0, vSum = 0;
+        for (int i = 0; i < cap; i++)
+        {
+            var (dist, v) = hits[i];
+            if (dist < 1e-9) return (v, 1);                        // 零距离精确插值(避免除零)
+            double w = 1.0 / Math.Pow(dist + smoothing, power);
+            wSum += w;
+            vSum += w * v;
+        }
+        if (wSum <= 0) return null;
+        return (vSum / wSum, cap);
+    }
+
+    /// <summary>
     /// 简单克里金 SK（已知均值 mean, 无 Σw=1 约束）在 (x,y,z) 估值。忠实原 CoalQualityEstimator 的 SK 核。
     /// 区别于 OK：**数据稀疏区回归全局均值 mean**(OK 保持局部)。mean 默认样本均值。半径外 null。
     /// </summary>

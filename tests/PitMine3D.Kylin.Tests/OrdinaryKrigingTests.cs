@@ -196,4 +196,76 @@ public class OrdinaryKrigingTests
         // <2 点 → 全 0 箱, 不崩
         Assert.All(OrdinaryKriging.ExperimentalVariogram(new List<CP> { new(0, 0, 0, 1) }, 10, 5), b => Assert.Equal(0, b.Count));
     }
+
+    // ── 反距离权重 IDW（克里金家族的无变差函数同伴）──
+    [Fact]
+    public void Idw_exact_at_control_point_and_single_point()
+    {
+        var one = new List<CP> { new(0, 0, 0, 42) };
+        var at = OrdinaryKriging.IdwEstimate(one, 0, 0, 0, radius: 100);
+        Assert.NotNull(at);
+        Assert.Equal(42, at!.Value.est, 6);
+        Assert.Equal(1, at.Value.used);                      // 零距离 → 精确, 用 1 点
+        // 单点邻域: 任意查询点都回该点值
+        var off = OrdinaryKriging.IdwEstimate(one, 5, 5, 0, radius: 100);
+        Assert.Equal(42, off!.Value.est, 6);
+    }
+
+    [Fact]
+    public void Idw_symmetric_neighbours_equal_weight_average()
+    {
+        // 四点等距(10)围绕原点, 值 10/20/30/40 → 权重相等 → 均值 25。
+        var pts = new List<CP> { new(10, 0, 0, 10), new(-10, 0, 0, 20), new(0, 10, 0, 30), new(0, -10, 0, 40) };
+        var e = OrdinaryKriging.IdwEstimate(pts, 0, 0, 0, power: 2, radius: 100);
+        Assert.NotNull(e);
+        Assert.Equal(25.0, e!.Value.est, 6);
+        Assert.Equal(4, e.Value.used);
+    }
+
+    [Fact]
+    public void Idw_known_two_point_value_and_power_sharpens()
+    {
+        // (0,0,0,0) 与 (10,0,0,100), 查询 (2,0,0)。power=1: w=1/d → est=(0.5·0+0.125·100)/0.625=20。
+        var pts = new List<CP> { new(0, 0, 0, 0), new(10, 0, 0, 100) };
+        var p1 = OrdinaryKriging.IdwEstimate(pts, 2, 0, 0, power: 1, radius: 100, smoothing: 0);
+        Assert.Equal(20.0, p1!.Value.est, 6);
+        // power=2: 近点(值0)权重更压倒 → 估计更低(≈5.88)。
+        var p2 = OrdinaryKriging.IdwEstimate(pts, 2, 0, 0, power: 2, radius: 100, smoothing: 0);
+        Assert.True(p2!.Value.est < p1.Value.est);
+        Assert.Equal(1.5625 / 0.265625, p2.Value.est, 6);
+    }
+
+    [Fact]
+    public void Idw_smoothing_flattens_toward_mean()
+    {
+        // 同两点, 查询 (2,0,0) power=2。smoothing 大 → 权重趋等 → 估计从 5.88 拉向中值。
+        var pts = new List<CP> { new(0, 0, 0, 0), new(10, 0, 0, 100) };
+        var sharp = OrdinaryKriging.IdwEstimate(pts, 2, 0, 0, power: 2, radius: 100, smoothing: 0);
+        var flat = OrdinaryKriging.IdwEstimate(pts, 2, 0, 0, power: 2, radius: 100, smoothing: 100);
+        Assert.True(flat!.Value.est > sharp!.Value.est);
+        Assert.InRange(flat.Value.est, 45, 50);              // 趋近两点均值 50
+    }
+
+    [Fact]
+    public void Idw_radius_and_minSamples_and_empty_guard()
+    {
+        Assert.Null(OrdinaryKriging.IdwEstimate(new List<CP>(), 0, 0, 0));                       // 空
+        var one = new List<CP> { new(0, 0, 0, 5) };
+        Assert.Null(OrdinaryKriging.IdwEstimate(one, 100, 100, 0, radius: 5));                   // 半径外 → null
+        var two = new List<CP> { new(0, 0, 0, 5), new(1, 0, 0, 7) };
+        Assert.Null(OrdinaryKriging.IdwEstimate(two, 0.5, 0, 0, radius: 100, minSamples: 3));    // 邻域不足 → null
+        Assert.NotNull(OrdinaryKriging.IdwEstimate(two, 0.5, 0, 0, radius: 100, minSamples: 2)); // 恰够
+    }
+
+    [Fact]
+    public void Idw_maxSamples_caps_neighbourhood()
+    {
+        // 远处放一堆离群高值点; maxSamples=2 只取最近两个(值 10/12) → 估计落在 10~12, 不被远点污染。
+        var pts = new List<CP> { new(0, 0, 0, 10), new(2, 0, 0, 12) };
+        for (int i = 0; i < 20; i++) pts.Add(new CP(50 + i, 50, 0, 999));
+        var e = OrdinaryKriging.IdwEstimate(pts, 1, 0, 0, power: 2, radius: 1000, maxSamples: 2);
+        Assert.NotNull(e);
+        Assert.Equal(2, e!.Value.used);
+        Assert.InRange(e.Value.est, 10, 12);
+    }
 }
