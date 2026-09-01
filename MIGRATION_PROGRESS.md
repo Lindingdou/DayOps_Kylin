@@ -1818,3 +1818,10 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - **视图**: 3DORBIT/GIZMO/PAN/ZOOMEXTENTS → 全在 ✓。
 
 **三注册表交叉结论**: AI 菜单(24/24) + 插件命令(全 2D 可做) + Ribbon(全 except LineWeightDisplay-受阻) —— **三个独立权威来源一致确认: 所有 2D 可做命令 100% 覆盖**, 唯一缺口(线宽显示开关)为已记录 P3_C3 架构边界。功能收敛**三重印证**。
+
+## 一五一、第四命令表(右键菜单)+ 源码标记双清 —— 收敛四重印证
+
+- **右键上下文菜单(MainWindow.ContextMenu.cs)**: 除已覆盖的 DIST/MANG/PAN, 唯一新项 **HATCHEDIT** —— 但原版该项自身是**桩**(ContextMenu.cs:1032 `"编辑填充（待引擎实现 HATCHEDIT 命令）"`), 属未实现原始桩(忠实性类别②, 不实现)。Kylin 已有填充**创建**(图案填充/填充十字/条带填充), 编辑桩不补。
+- **源码 TODO/FIXME/NotImplemented 扫描**: 全 src 无 `throw new NotImplementedException`; 无真 TODO/FIXME/HACK。所有"占位"命中皆**忠实**语义——KDF 色模式字节/LZW ClearCode·EOI 标准槽位/MeshSimplify(忠实原「顶点聚类占位实现」)/临时场景导出——非未完成功能。
+
+**四注册表 + 源码标记结论**: AI 菜单(24/24)+插件(全 2D 可做)+Ribbon(全 except 线宽显示-受阻)+右键菜单(全 except HATCHEDIT-原始桩)+ 源码零未实现标记 —— **功能迁移四重印证收敛**。所有 2D 可做命令 100% 覆盖, 缺口仅: 线宽显示(P3_C3 无变宽线)/HATCHEDIT(原始桩)/per-vertex-Z/3D 内核网格/二进制格式——全为已记录边界或原始桩。
