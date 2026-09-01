@@ -798,6 +798,7 @@ public partial class MainWindow : Window
             if (cmd == "导入BLK" || cmd == "加载BLK" || cmd == "BLK导入" || cmd == "导入八叉树块体" || cmd.StartsWith("导入BLK ")) { await LoadBlkAsync(cmd); return; }
             if (cmd == "资源量估算" || cmd == "剥采比" || cmd == "资源量") { ResourceReport(null); return; }
             if (cmd == "导出块体" || cmd == "块体导出") { await ExportBlocksAsync(); return; }
+            if (cmd == "导出PMB" || cmd == "PMB导出" || cmd == "导出块体模型文件" || cmd == "块体模型另存") { await PmbExportAsync(); return; }
             if (cmd == "输出报告" || cmd == "资源量报告" || cmd == "块体报告") { await ExportResourceReportAsync(); return; }
             if (cmd == "属性统计" || cmd == "品位统计" || cmd == "直方图" || cmd == "统计报告") { await GradeStatsAsync(); return; }
             if (cmd == "属性报告" || cmd == "块体属性报告" || cmd == "多属性统计" || cmd == "多属性报告") { await BlockAttrReportAsync(); return; }
@@ -1510,6 +1511,27 @@ public partial class MainWindow : Window
         if (Cad.PmxExportService.SaveToFile(file.Path.LocalPath, _scene.Entities, out string err, out int n))
             StatusMsg.Text = $"导出 PitMine 工程：{n} 实体 → {System.IO.Path.GetFileName(file.Path.LocalPath)}（原版二进制 .pmx；线/点/多段线/文字/圆/矩形；圆弧·正多边形暂不导出）";
         else StatusMsg.Text = $"导出PMX：写出失败 {err}";
+    }
+
+    // 导出 PMB 块体模型文件(原版 .pmb 二进制, 与 导入块体模型文件 成读写对):
+    // 从最近块体重建规则网格 + 全属性(x-fastest) → PmbExportService.ToBytes → 写文件。往返可经导入还原。
+    private async Task PmbExportAsync()
+    {
+        if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "导出PMB：请先导入/生成块体"; return; }
+        var file = await StorageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
+        {
+            Title = "导出块体模型(.pmb 原版二进制)", DefaultExtension = "pmb", SuggestedFileName = "block_model.pmb",
+            FileTypeChoices = new[] { new Avalonia.Platform.Storage.FilePickerFileType("PitMine 块体模型 (PMB)") { Patterns = new[] { "*.pmb" } } }
+        });
+        if (file == null) return;
+        try
+        {
+            var (grid, attrs) = Cad.PmbExportService.FromBlocks(_lastBlocks, _blockAttrs);
+            var bytes = Cad.PmbExportService.ToBytes(grid, attrs, System.IO.Path.GetFileNameWithoutExtension(file.Path.LocalPath));
+            System.IO.File.WriteAllBytes(file.Path.LocalPath, bytes);
+            StatusMsg.Text = $"导出块体模型：{grid.Nx}×{grid.Ny}×{grid.Nz}={(long)grid.Nx * grid.Ny * grid.Nz} 块 · {attrs.Count} 属性[{string.Join("/", attrs.ConvertAll(a => a.name))}] → {System.IO.Path.GetFileName(file.Path.LocalPath)}（原版 .pmb 二进制, 可回导）";
+        }
+        catch (System.Exception ex) { StatusMsg.Text = $"导出PMB：失败 {ex.Message}"; }
     }
 
     // 点数据导入：CSV/TXT/XYZ/PTS → 可编辑的点实体（进入绘制场景，可选中/编辑/删除）
@@ -9632,7 +9654,7 @@ public partial class MainWindow : Window
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割","移除障碍物",
         // 块体/运输/路网
-        "块体模型","资源量","面约束块体","离散化模型","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道","直线斜坡道",
+        "块体模型","导出PMB","资源量","面约束块体","离散化模型","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道","直线斜坡道",
         // 生产计划/投影
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","开采程序切分","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)

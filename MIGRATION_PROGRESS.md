@@ -2786,3 +2786,20 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 - **原版即桩(sample-UI, 无逻辑, 忠实不补)**: `工序定额`(ProcessQuotaWindow "样例(可编辑)", OnSave "持久化待接") · `质量标准`(QualityStandardWindow "样例", OnSave "持久化+喂装箱质量约束待接")——原版本身仅样例表单、持久化未接、无算法/无可验核, 故无验证条件可满足, 记录不补(同 SkeletonCommand 桩)。
 
 **结论**: 200 标签无一是"可实现+可验证+忠实却漏做"者——要么已覆盖(直/别名)、要么原生内核无源、要么原版即空桩。**命令级 + 测试级(19/19)双重收敛互证**, 远强于单一探针。这是本会话"复审自记边界"脉的收官式复核: 系统比对而非印象。**教训: 命令级全量标签比对是继测试枚举后第二个黄金收敛标准; 但差集须过别名噪声(整串0命中→核心词→分派项三级) + 逐项验证内核/桩性质(勿把 native/stub 误记为"可做漏做", 亦勿把别名误记为"缺失")**。见 [[unlock-blocked-insights]] [[faithfulness-only-original-commands]] [[pitmine3d-command-inventory]]。
+
+---
+
+## §二五一 PMB 块体模型导出（读写对补齐——原版 PmbmWriter 的忠实反向）
+
+**读写不对称角度**: Kylin 有 `PmbImportService`(读 PMB)却无导出——查原版 `Modules/BlockModelLib/Format/PmbmWriter.cs` **确有**(+`ExportBlockModelDialog`), 故 PMB 导出是原版真功能, 且格式**源码可见**(PmbmFormat 全字段布局)、Kylin 读端已解析 ⇒ 可实现 + 忠实 + **往返可验**(写→读还原网格+全属性=最强验证)。
+
+**补** [PmbExportService](src/Cad/PmbExportService.cs):
+- `ToBytes(Grid, attrs, name)` 纯序列化, 忠实原布局: Header('PMB1'/version1/fileSize/段表偏移32) + 段表(24B/项) + Strings 名池 + GridSpec(**全字段**: nameIdx/descIdx/origin/blockSize/dims/rotation/storageMode/subBlockDepthMax/subMinSize/reserved) + Blocks(Dense storageMode0 + blockCount + 逐属性 nameStrIdx/dataType/valueCount/double[] x-fastest) + Footer(activeCount + **IEEE CRC32** 覆盖[0,fileSize-16) + magicEnd 'PMB1'逆序)。
+- `FromBlocks(blocks, extraAttrs)` 从 Kylin 块体列表**按各块中心算 i/j/k 归位**重建规则网格 + grade(+全属性)x-fastest 数组(与输入顺序无关, 稳健)。
+- 命令 `导出PMB`/`导出块体模型文件`([MainWindow](src/Views/MainWindow.axaml.cs) `PmbExportAsync`): 最近块体 + `_blockAttrs` → 重建 → 写 .pmb; + 目录 + 分派。
+
+**忠实取舍**: Kylin grade-only 数据模型无 PropertySchema(11)/DisplayStyle(16) 可忠实填, 故略去该二段(Kylin 读端不需; 写臆造默认色/类型反不忠实)——记录此限, 非 schema 缺。
+
+**验证(写→读往返)**: [PmbExportServiceTests](tests/PitMine3D.Kylin.Tests/PmbExportServiceTests.cs) +4—— 2×2×2 双属性 ToBytes→Parse: 维度/cell中心(origin+(i+.5)*size)/品位/全属性数组精确还原; FromBlocks 乱序4块→网格序 x-fastest 正确且往返还原品位序; 仅几何(无属性)可解品位0; 属性长度不符抛异常。**build 0 错·单测 1312→1316**。
+
+**本会话第 59 功能**。教训: **读写不对称是可靠富矿——有 Reader 先问"原版有无对应 Writer?"(PmbmWriter 确在), 有则格式已知(读端即规格)+往返自验**。同 KdfImport/KdfExport 已成对; PMB 补齐后块体模型可存原生格式回导。见 [[unlock-blocked-insights]]。
