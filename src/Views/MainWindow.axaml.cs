@@ -1078,6 +1078,7 @@ public partial class MainWindow : Window
             if (cmd == "台阶面提取" || cmd == "坡面提取" || cmd == "台阶坡面" || cmd == "台阶面" || cmd.StartsWith("台阶面提取 ")) { await BenchFaceExtractAsync(cmd); return; }
             if (cmd == "煤岩台阶判定" || cmd == "煤岩判定" || cmd == "台阶煤岩" || cmd.StartsWith("煤岩台阶判定 ")) { await BenchCoalCmd(cmd); return; }
             if (cmd == "煤层露头线" || cmd == "露头线" || cmd == "煤层露头" || cmd == "露头线提取" || cmd.StartsWith("煤层露头线 ")) { await SeamOutcropCmd(cmd); return; }
+            if (cmd == "更新煤层面" || cmd == "更新现状面" || cmd == "煤层面更新" || cmd.StartsWith("更新煤层面 ")) { await SurfaceUpdateCmd(cmd); return; }
             if (cmd == "平行推进" || cmd == "开采程序确定" || cmd == "工作线推进") { AdvanceCmd(AdvanceMode.Parallel, "平行推进"); return; }
             if (cmd == "定点回转" || cmd == "定点回转推进") { AdvanceCmd(AdvanceMode.FixedPivot, "定点回转"); return; }
             if (cmd == "动点回转" || cmd == "动点回转推进") { AdvanceCmd(AdvanceMode.MovingPivot, "动点回转"); return; }
@@ -1928,6 +1929,50 @@ public partial class MainWindow : Window
         if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
         if (seamsOut == 0) { StatusMsg.Text = "煤层露头线：无一层与现状面相交(整层已采完/尚未揭露, 或 XY 范围不重叠)"; return; }
         StatusMsg.Text = $"煤层露头线({seamsOut}/{seams.Count} 层出露)：坡顶 {totCrest} 条({crestLen.ToString("0", inv)}m)/坡底 {totToe} 条({toeLen.ToString("0", inv)}m) · 青=坡顶线(顶板露头)/橙=坡底线(底板露头)";
+    }
+
+    // 更新煤层面/现状面：目标 OFF + 观测点 CSV(x,y,z) + 影响半径 → 半径内顶点 smoothstep 羽化 + IDW 拟合观测点
+    // → 报受影响顶点/位移/净体积/影响片区 + 观测点入场景 + 导出更新后 OFF。忠实原 SurfaceUpdateEngine 默认(IDW)路径。
+    private async Task SurfaceUpdateCmd(string cmd)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        double radius = 80.0;
+        if (tk.Length >= 2 && double.TryParse(tk[1], System.Globalization.NumberStyles.Float, inv, out double rad) && rad > 0) radius = rad;
+        var f1 = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        { Title = "更新煤层面：选目标面 OFF", AllowMultiple = false, FileTypeFilter = new[] { new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } } } });
+        if (f1.Count == 0) return;
+        string text;
+        try { text = System.IO.File.ReadAllText(f1[0].Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"更新煤层面：读取失败 {ex.Message}"; return; }
+        var (verts, tris) = MeshMetrics.ParseOff(text);
+        if (tris.Count == 0) { StatusMsg.Text = "更新煤层面：未解析到三角网格"; return; }
+        var f2 = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        { Title = "更新煤层面：选观测点 CSV (x,y,z)", AllowMultiple = false, FileTypeFilter = new[] { new FilePickerFileType("点 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } } });
+        if (f2.Count == 0) return;
+        var pr = PointDataImportService.Load(f2[0].Path.LocalPath);
+        if (!pr.Success || pr.Points.Count == 0) { StatusMsg.Text = "更新煤层面：观测点为空"; return; }
+        var obs = new List<(double, double, double)>();
+        foreach (var p in pr.Points) obs.Add((p.x, p.y, p.z));
+        var vf = new double[verts.Count * 3];
+        for (int i = 0; i < verts.Count; i++) { vf[i * 3] = verts[i].x; vf[i * 3 + 1] = verts[i].y; vf[i * 3 + 2] = verts[i].z; }
+        var tf = new int[tris.Count * 3];
+        for (int i = 0; i < tris.Count; i++) { tf[i * 3] = tris[i].a; tf[i * 3 + 1] = tris[i].b; tf[i * 3 + 2] = tris[i].c; }
+        var res = Cad.SurfaceUpdate.Evaluate(vf, tf, obs, new Cad.SurfaceUpdate.Options { InfluenceRadius = radius });
+        BeginChange();
+        foreach (var o in obs) { var pt = new PointEntity { X = o.Item1, Y = o.Item2 }; AssignLayer(pt); _scene.Add(pt); }
+        RefreshScene();
+        if (pr.Bounds != null && pr.Bounds.Length == 4) Viewport.FitBounds(pr.Bounds);
+        string offName = null;
+        if (res.Any)
+        {
+            var newVerts = new List<(double x, double y, double z)>(verts.Count);
+            for (int i = 0; i < verts.Count; i++) newVerts.Add((verts[i].x, verts[i].y, res.NewZ[i]));
+            offName = await SaveCsvAsync("导出更新后煤层面", "surface_updated.off", MeshWeld.ToOff(newVerts, tris));
+        }
+        string cl = res.Clusters.Count > 0 ? $" · {res.Clusters.Count} 影响片区" : "";
+        StatusMsg.Text = $"更新煤层面(R={radius.ToString("0.#", inv)}m·IDW)：{res.Message}{cl} · 抬升≤{res.MaxDisp.ToString("0.##", inv)}m/下沉≤{(-res.MinDisp).ToString("0.##", inv)}m · 净体积 {res.NetVolume.ToString("0", inv)}m³（观测点已入场景）"
+            + (offName != null ? $" → {offName}" : "");
     }
 
     // 环节降效产能（TaskLib 降效切片）：给采/运/排降效% → 用默认编组解 τ_L/T_c/MF → 采装面/排土面能力系数 + 降后产能。
@@ -8316,7 +8361,7 @@ public partial class MainWindow : Window
         // 线编辑
         "加密多段线","简化","平滑","样条平滑","抽稀等值线","两线交点","闭合多段线","删除重复点","删除重复线","连接多段线","组合工作线",
         // 网格/建模
-        "网格度量","网格诊断","创建三角网","约束三角网","裁剪三角网","网格焊接","网格边界","网格交线","网格剖面","网格光顺","合并三角网","固化成体","侧面三角网","台阶面提取","煤岩台阶判定","煤层露头线","立方体","球体","圆柱","体素格网体积","实体转块体",
+        "网格度量","网格诊断","创建三角网","约束三角网","裁剪三角网","网格焊接","网格边界","网格交线","网格剖面","网格光顺","合并三角网","固化成体","侧面三角网","台阶面提取","煤岩台阶判定","煤层露头线","更新煤层面","立方体","球体","圆柱","体素格网体积","实体转块体",
         // 区域/地形/点云
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪",

@@ -2257,3 +2257,11 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 **移植** [src/Cad/TautString.cs](src/Cad/TautString.cs) 忠实全移: 下包络 lo(必须剥)与上包络 hi(能力)之间求【单调不减·增量最平】累计剥离曲线(漏斗法 O(T²)); 对**任意凸代价同时最优**(最小方差/峰值/相邻月跳动一次全拿, 拉绳经典性质); 前提"剥离只能提前不能推后"(R37, sMin 从 0 起); 转折点标 触底(露煤紧迫)/触顶(能力吃紧)。命令 `月度剥离均衡`(CSV 期号/累计必剥/累计能力 → 均衡累计曲线青 + lo/hi 包络灰入场景, X=期号 Y=累计 + CV/关键月) + 目录; 区别既有 `剥采比均衡`(VP 比值)。验证 [TautStringTests](tests/PitMine3D.Kylin.Tests/TautStringTests.cs) 6 例已知值(线性恒速率无内折·陡约束触底折 c=[0,12.5,25,30]·走廊内单调·拉绳CV<照lo走CV·能力压顶带超前储备·倒挂不可行)。**build 0 错·单测 1086→1092**。
 
 **本会话第 6 真缺口**——robust 逐文件读法(纠正 grep 过滤盲区)立即在"已 grep 过"的目录再挖出一个。**印证: 之前所有"grep 过滤"式复扫都可能漏, 该目录逐文件读法继续**。见 [[unlock-blocked-insights]]。
+
+## 二〇一、更新煤层面(SurfaceUpdateEngine 羽化局部更新)—— robust 读 MeshEditLib, 第 7 缺口
+
+robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提取/参数验收 已覆盖, 余规划引擎)、MeshEditLib(Contour/Delaunay/Estimation/Boundary/Weld/Merge/Section/Solidify/QuickModel 皆覆盖, *Report=native PMxx)后, 在 MeshEditLib/ModelUpdate 挖出 `SurfaceUpdateEngine`——**更新煤层面/现状面**, Kylin 无(命令不存在)。
+
+**移植(拆可验证核)** [src/Cad/SurfaceUpdate.cs](src/Cad/SurfaceUpdate.cs): `Evaluate` 核心=用观测点(现状见煤/补勘顶底板)**局部羽化更新**目标三角网顶点 Z——影响半径 R 内顶点按到最近观测 smoothstep 羽化(内 1→边界 0)、区内目标值 IDW 拟合观测点、newZ=vz+w·(est−vz), 区外不动; 附影响片区(影响圈搭接<2R 并查集归片)+ 位移/面积/净体积统计。命令 `更新煤层面`(目标 OFF + 观测点 CSV + 半径 → 观测点入场景 + 位移/净体积/片区汇总 + **导出更新后 OFF**) + 面编辑菜单 + 目录。验证 [SurfaceUpdateTests](tests/PitMine3D.Kylin.Tests/SurfaceUpdateTests.cs) 6 例已知值(单观测 smoothstep 羽化 newZ=w·5·落点=5·区外不动·落观测点取其值·分离/搭接观测点 2/1 片区·下沉净体积负)。**build 0 错·单测 1092→1098**。
+
+**拆核记录**: 原 520 行 SurfaceUpdateEngine 中——①**Evaluate 羽化更新核**(默认 IDW)已移可验; ②**多算法 NN/MA/OK/SK/UK** 待后续(Kylin Estimation 亦 IDW 基, 点式多算法 API 未暴露); ③**三维分级色带 overlay** 走 native PMBI, 2D 场景受阻, 未移(此出更新后 Z + 数值统计替代)。**本会话第 7 真缺口**。见 [[unlock-blocked-insights]]。

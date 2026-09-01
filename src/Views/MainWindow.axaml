@@ -498,6 +498,7 @@
                                                     <MenuItem Header="台阶面提取(坡顶/坡底线)" Tag="台阶面提取" Click="OnRibbonCommand" />
                                                     <MenuItem Header="煤岩台阶判定(坡顶线→煤/岩)" Tag="煤岩台阶判定" Click="OnRibbonCommand" />
                                                     <MenuItem Header="煤层露头线(现状面∩顶/底板)" Tag="煤层露头线" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="更新煤层面(观测点局部更新)" Tag="更新煤层面" Click="OnRibbonCommand" />
                                                     <MenuItem Header="合并三角网" Tag="合并三角网" Click="OnRibbonCommand" />
                                                     <MenuItem Header="侧面三角网" Tag="侧面三角网" Click="OnRibbonCommand" />
                                                 </MenuFlyout>
