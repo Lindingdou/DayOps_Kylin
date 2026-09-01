@@ -127,8 +127,8 @@
                                         <Button Classes="ribbon-btn small" Tag="打断" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_break}" /><TextBlock Text="打断" /></StackPanel></Button>
                                         <Button Classes="ribbon-btn small" Tag="分解" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_explode}" /><TextBlock Text="分解" /></StackPanel></Button>
                                         <Button Classes="ribbon-btn small" Tag="删除" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_delete}" /><TextBlock Text="删除" /></StackPanel></Button>
-                                        <Button Classes="ribbon-btn small" Tag="撤销" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="撤销" /></StackPanel></Button>
-                                        <Button Classes="ribbon-btn small" Tag="重做" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="重做" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="撤销" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_undo}" /><TextBlock Text="撤销" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="重做" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_redo}" /><TextBlock Text="重做" /></StackPanel></Button>
                                     </WrapPanel>
                                 </DockPanel>
                             </Border>
@@ -138,9 +138,9 @@
                                 <DockPanel>
                                     <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="注释" />
                                     <WrapPanel Orientation="Vertical" MaxHeight="72">
-                                        <Button Classes="ribbon-btn small" Tag="对齐标注" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="对齐标注" /></StackPanel></Button>
-                                        <Button Classes="ribbon-btn small" Tag="半径标注" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="半径标注" /></StackPanel></Button>
-                                        <Button Classes="ribbon-btn small" Tag="连续标注" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="连续标注" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="对齐标注" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_linear_dimension}" /><TextBlock Text="对齐标注" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="半径标注" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_radial_dimension}" /><TextBlock Text="半径标注" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="连续标注" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_continuous_dimension}" /><TextBlock Text="连续标注" /></StackPanel></Button>
                                     </WrapPanel>
                                 </DockPanel>
                             </Border>
@@ -150,9 +150,9 @@
                                 <DockPanel>
                                     <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="测量" />
                                     <WrapPanel Orientation="Vertical" MaxHeight="72">
-                                        <Button Classes="ribbon-btn small" Tag="距离" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="距离" /></StackPanel></Button>
-                                        <Button Classes="ribbon-btn small" Tag="面积" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="面积" /></StackPanel></Button>
-                                        <Button Classes="ribbon-btn small" Tag="角度" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="角度" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="距离" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_measure}" /><TextBlock Text="距离" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="面积" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_measure_area}" /><TextBlock Text="面积" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="角度" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_measure_angle}" /><TextBlock Text="角度" /></StackPanel></Button>
                                     </WrapPanel>
                                 </DockPanel>
                             </Border>
@@ -162,10 +162,10 @@
                                 <DockPanel>
                                     <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="剪贴板" />
                                     <WrapPanel Orientation="Vertical" MaxHeight="72">
-                                        <Button Classes="ribbon-btn small" Tag="剪切" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="剪切" /></StackPanel></Button>
-                                        <Button Classes="ribbon-btn small" Tag="复制到剪贴板" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="复制" /></StackPanel></Button>
-                                        <Button Classes="ribbon-btn small" Tag="粘贴" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="粘贴" /></StackPanel></Button>
-                                        <Button Classes="ribbon-btn small" Tag="基点粘贴" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="基点粘贴" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="剪切" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_cut}" /><TextBlock Text="剪切" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="复制到剪贴板" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_copy}" /><TextBlock Text="复制" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="粘贴" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_paste}" /><TextBlock Text="粘贴" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="基点粘贴" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_paste_base}" /><TextBlock Text="基点粘贴" /></StackPanel></Button>
                                     </WrapPanel>
                                 </DockPanel>
                             </Border>
@@ -189,7 +189,7 @@
                                                 <ComboBoxItem>坡顶线</ComboBoxItem>
                                             </ComboBox>
                                             <WrapPanel Orientation="Horizontal" Margin="0,3,0,0">
-                                                <Button Classes="ribbon-btn small" Tag="全开" Click="OnRibbonCommand" MinWidth="46"><StackPanel Orientation="Horizontal"><TextBlock Text="全开" /></StackPanel></Button>
+                                                <Button Classes="ribbon-btn small" Tag="全开" Click="OnRibbonCommand" MinWidth="46"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_show_all}" /><TextBlock Text="全开" /></StackPanel></Button>
                                                 <Button Classes="ribbon-btn small" Tag="冻结" Click="OnRibbonCommand" MinWidth="46"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_frozen}" /><TextBlock Text="冻结" /></StackPanel></Button>
                                                 <Button Classes="ribbon-btn small" Tag="锁定" Click="OnRibbonCommand" MinWidth="46"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_locked}" /><TextBlock Text="锁定" /></StackPanel></Button>
                                             </WrapPanel>
@@ -247,9 +247,9 @@
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_quick_select}" /><TextBlock Text="快速&#x0a;选择" /></StackPanel>
                                         </Button>
                                         <WrapPanel Orientation="Vertical" MaxHeight="72">
-                                            <Button Classes="ribbon-btn small" Tag="全部选择" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="全部选择" /></StackPanel></Button>
-                                            <Button Classes="ribbon-btn small" Tag="最后" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="最后" /></StackPanel></Button>
-                                            <Button Classes="ribbon-btn small" Tag="上次" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><TextBlock Text="上次" /></StackPanel></Button>
+                                            <Button Classes="ribbon-btn small" Tag="全部选择" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_select_all}" /><TextBlock Text="全部选择" /></StackPanel></Button>
+                                            <Button Classes="ribbon-btn small" Tag="最后" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_select_last}" /><TextBlock Text="最后" /></StackPanel></Button>
+                                            <Button Classes="ribbon-btn small" Tag="上次" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_select_previous}" /><TextBlock Text="上次" /></StackPanel></Button>
                                         </WrapPanel>
                                     </StackPanel>
                                 </DockPanel>

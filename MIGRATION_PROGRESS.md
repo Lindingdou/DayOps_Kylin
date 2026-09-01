@@ -2118,3 +2118,16 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - 复用既有图标资源(equip_cockpit/equip_capability/coal_data, 已验证存在), tooltip 说明。0 错, 1050 测, smoke [GLINIT] 无 XAML/资源错。
 
 **★可发现性三路闭合**: 新增主命令现三路齐全——① 命令行 dispatch ② CommandCatalog 自动补全 ③ Ribbon 功能区按钮。**加主命令四步**: dispatch + handler + CommandCatalog + Ribbon 按钮(有图标)。承你的右键菜单反馈, 本会话补齐了新命令的 UI 可达性(右键置顶 + 目录 + ribbon)。本轮 3 命令入 ribbon。
+
+## 一八八、Home 功能区图标补齐 —— 16 按钮缺图标补全(用户反馈)
+
+用户反馈"home部分的图标还不完整"(截图: 撤销/重做/标注/测量/剪贴板/选择等只有文字无图标)。查出 **16 个 ribbon 按钮有 TextBlock 无 Image**, 而对应图标**在 IconDict.axaml 中早已定义、只是没接**:
+- 修改组: 撤销 icon_undo / 重做 icon_redo
+- 注释组: 对齐标注 icon_linear_dimension / 半径标注 icon_radial_dimension / 连续标注 icon_continuous_dimension
+- 测量组: 距离 icon_measure / 面积 icon_measure_area / 角度 icon_measure_angle
+- 剪贴板组: 剪切 icon_cut / 复制 icon_copy / 粘贴 icon_paste / 基点粘贴 icon_paste_base
+- 图层组: 全开 icon_show_all
+- 选择组: 全部选择 icon_select_all / 最后 icon_select_last / 上次 icon_select_previous
+- 全部复用既有 DrawingImage 资源(16 key 均已确认定义于 IconDict.axaml)。build 0 错; 复扫剩余无图标 ribbon 按钮 = **0**。
+
+**教训**: ribbon 按钮加了 Tag+Click 但漏 `<Image Source>` → 只显文字。图标资源齐全但没接线。加 ribbon 按钮须含 Image(图标)。按用户"后续集中测试"要求, 本轮 XAML 纯图标接线(无逻辑改, 不影响 1050 单测), build 验证编译 + 图标 key 存在性核验 + 零遗留扫描。本轮补 16 图标。
