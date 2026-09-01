@@ -2050,3 +2050,12 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - **验证**: +1 单测(导入 M+A+V+FC=100 样本[coal_type=气煤经 FK-safe→NULL 但样本入库]→ 自洽率含之 + 标注率/孔覆盖对拍)。1047 测全绿, 0 错, smoke 正常。
 
 **教训**: 导入的 FK 陷阱要**逐 FK 列查**——coal_sample 有 3 个 FK(borehole_id/seam_code/coal_type), coal_type 此前漏做 FK-safe(前几轮只修了 equipment/haul_road 的 FK)。**凡 import 写带 FK 的表, 每个 FK 列都要父表校验降级**。本轮 1 补(数据健康度)+ 1 真 bug 修(coal_type FK)。
+
+## 一八〇、导入 FK 陷阱系统审计闭环 —— 可空 FK 全 FK-safe, NOT NULL 键正确失败
+
+承 §一七九 coal_type 遗漏, 系统枚举各可导入表全部 FK 列 + 可空性:
+- **可空 FK 元数据列(4, 全已 FK-safe 降级)**: coal_sample.coal_type→coal_classification / equipment.model→equipment_model / equipment.operating_area→mine_location / haul_road.primary_truck_model→equipment_model。非有效码置 NULL, 不丢整行。
+- **NOT NULL FK 键(正确失败, 不可降级)**: coal_sample/coal_observation_point/borehole_seam_result 的 **seam_code**→coal_seam_def(NOT NULL); equipment_kpi_monthly/production_record/fault_event/capacity_monthly 的 **equipment_id**→equipment(NOT NULL); coal_sample.borehole_id(import 由 hole_id 查找, 查不到 skip)。这些是必填键——引用不存在的父(煤层/设备)本就不该插入, 整行失败(err++)是**正确引用完整性**(不可 NULL 降级, 违 NOT NULL)。
+- monthly_plan/slope_design: 无 FK。
+
+**FK 陷阱审计闭环判据**: import 写带 FK 表, 逐 FK 列查可空性——**可空**列→父校验 NULL 降级(免丢整行元数据); **NOT NULL 键**→失败即正确(引用完整性)。全部覆盖, 无遗漏。本轮 0 修(审计确认闭环), 承 §一七九 修的 coal_type 是最后一个可空 FK 遗漏。
