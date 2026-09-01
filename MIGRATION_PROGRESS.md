@@ -2615,3 +2615,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(种子集成)**: [GeoDataQueriesTests](tests/PitMine3D.Kylin.Tests/GeoDataQueriesTests.cs) +1(对 `GeoDatabase.OpenSeeded` 真种子)—— ash 规则首级开下界/末级开上界 nullable 保真(非 COALESCE 0); Ad 5/22.5/45 落三个不同等级且皆非空(开区间+分级自洽); sulfur/qnet 亦可分级。**build 0 错·单测 1273→1274**。
 
 **本会话第 40 功能**。教训: **逐分析窗口核每个 KPI 卡的"值+等级/分类"双层**——Kylin 常有值(均值)缺分类标注(国标等级); 且**接线已测未用的能力**(FindGradeLevel §二二九 建+测但只 ResolveCoalType 接了线)。**nullable DB 列勿 COALESCE 成 0**(丢开区间语义)——分级/分类的 ±∞ 边界要 `IsDBNull` 读。见 [[unlock-blocked-insights]] [[verify-seed-enum-values-before-filter]]。
+
+## 二三六、爆破分析(surface 未暴露的 blast_event 表)—— "数据在库未接命令"角度(第 41 功能)
+
+**新角度: 枚举种子库全表 → 找有数据但 Kylin 无查询/命令的表**。列 51 表逐个 grep src 引用, 发现 `blast_event`(469 行)/`long_term_metric`(4510)/`daily_mine_summary`(31)/`shift_calendar`(93)/`workforce_monthly`(39) **零 src 引用**——有数据未接。`blast_event` 是操作日志(同 fault_event/production_record, Kylin 有 故障分析/生产数据), 且原有 `BlastService.GetMonthlyAggregate`——故 `爆破分析` 与之平行, 是真缺口。
+
+补 [GeoDataQueries](src/Data/GeoDataQueries.cs) `GetBlastStats`: 总次数/爆破方量/炸药量/**综合单耗(总炸药÷总方量, 体积加权)**/孔进尺/区数 + **逐月聚合**(忠实原 `GetMonthlyAggregate`: 年月 GROUP, SUM 方量/炸药, AVG 单耗, COUNT)。命令 `爆破分析`/`爆破统计`([MainWindow](src/Views/MainWindow.axaml.cs) `BlastStatsCmd`, 平行 FaultStatsCmd) + 目录。
+
+**验证(已知值)**: [GeoDataQueriesTests](tests/PitMine3D.Kylin.Tests/GeoDataQueriesTests.cs) +1—— **blast_event 非迁移种子(运行时导入), 故用内存表已知值验聚合 SQL**: 3 事件→方量30000/炸药6500/综合单耗6500÷30000/孔进尺3000/2区; 逐月 2023-01(2次/方量15000/AVG单耗0.25)与 2023-02。**build 0 错·单测 1274→1275**。
+
+**本会话第 41 功能**。教训: **枚举种子全表查"有数据无命令"是独立高产角度**——51 表里 5 张零引用。**但要核可验证性: 表数据在迁移种子里吗?** blast_event 只运行时导入、迁移种子无→`OpenSeeded` 测不到→改**内存表已知值验聚合 SQL**(更强的 known-value)。补前仍守忠实(原有 BlastService 才补, 非臆造)。余 long_term_metric/daily_mine_summary/shift_calendar/workforce_monthly 待逐个核原服务+可验证性。见 [[unlock-blocked-insights]]。

@@ -308,6 +308,35 @@ public static class GeoDataQueries
             rd.GetDouble(7), rd.GetInt32(8));
     }
 
+    public sealed record BlastMonthRow(int Year, int Month, int Count, double VolumeM3, double ExplosiveKg, double AvgUnitKgM3);
+    public sealed record BlastStats(int Events, double TotalVolumeM3, double TotalExplosiveKg, double OverallUnitKgM3,
+        double TotalHoleLengthM, int Locations, IReadOnlyList<BlastMonthRow> ByMonth);
+
+    /// <summary>爆破统计：总次数/爆破方量/炸药量/综合单耗(总炸药÷总方量, 体积加权) + 孔进尺 + 逐月聚合(忠实原 BlastService.GetMonthlyAggregate)。</summary>
+    public static BlastStats GetBlastStats(SqliteConnection conn)
+    {
+        int events = 0, locs = 0; double totVol = 0, totExp = 0, totLen = 0;
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = @"SELECT COUNT(*), COALESCE(SUM(blast_volume_m3),0), COALESCE(SUM(explosive_kg),0),
+                                COALESCE(SUM(total_hole_length_m),0), COUNT(DISTINCT location_code) FROM blast_event";
+            using var rd = cmd.ExecuteReader();
+            if (rd.Read()) { events = rd.GetInt32(0); totVol = rd.GetDouble(1); totExp = rd.GetDouble(2); totLen = rd.GetDouble(3); locs = rd.GetInt32(4); }
+        }
+        double overallUnit = totVol > 1e-9 ? totExp / totVol : 0;   // 综合单耗(体积加权, 优于逐事件 AVG)
+        var byMonth = new List<BlastMonthRow>();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = @"SELECT CAST(SUBSTR(blast_date,1,4) AS INTEGER), CAST(SUBSTR(blast_date,6,2) AS INTEGER),
+                                COUNT(*), COALESCE(SUM(blast_volume_m3),0), COALESCE(SUM(explosive_kg),0), COALESCE(AVG(unit_consumption_kg_m3),0)
+                                FROM blast_event WHERE blast_date IS NOT NULL AND LENGTH(blast_date)>=7
+                                GROUP BY 1,2 ORDER BY 1,2";
+            using var rd = cmd.ExecuteReader();
+            while (rd.Read()) byMonth.Add(new BlastMonthRow(rd.GetInt32(0), rd.GetInt32(1), rd.GetInt32(2), rd.GetDouble(3), rd.GetDouble(4), rd.GetDouble(5)));
+        }
+        return new BlastStats(events, totVol, totExp, overallUnit, totLen, locs, byMonth);
+    }
+
     public sealed record SeamRow(string SeamCode, string Name, int SampleCount);
 
     /// <summary>煤层管理：各煤层定义 + 煤样计数。</summary>

@@ -9,6 +9,35 @@ namespace PitMine3D.Kylin.Tests;
 public class GeoDataQueriesTests
 {
     [Fact]
+    public void Blast_stats_aggregates_known_values()
+    {
+        // blast_event 非迁移种子(运行时导入), 故用内存表已知值验聚合 SQL(综合单耗=总炸药/总方量 · 逐月分组)。
+        using var conn = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=:memory:");
+        conn.Open();
+        using (var c = conn.CreateCommand())
+        {
+            c.CommandText = @"CREATE TABLE blast_event(id INTEGER, blast_date TEXT, location_code TEXT, hole_count INT,
+                              total_hole_length_m REAL, explosive_kg REAL, blast_volume_m3 REAL, unit_consumption_kg_m3 REAL);
+                              INSERT INTO blast_event VALUES
+                              (1,'2023-01-05','A',100,1000,2000,10000,0.2),
+                              (2,'2023-01-20','B',80,800,1500,5000,0.3),
+                              (3,'2023-02-10','A',120,1200,3000,15000,0.2);";
+            c.ExecuteNonQuery();
+        }
+        var b = GeoDataQueries.GetBlastStats(conn);
+        Assert.Equal(3, b.Events);
+        Assert.Equal(30000, b.TotalVolumeM3, 4);              // 10000+5000+15000
+        Assert.Equal(6500, b.TotalExplosiveKg, 4);            // 2000+1500+3000
+        Assert.Equal(6500.0 / 30000, b.OverallUnitKgM3, 6);   // 综合单耗(体积加权)
+        Assert.Equal(3000, b.TotalHoleLengthM, 4);            // 1000+800+1200
+        Assert.Equal(2, b.Locations);                         // A,B
+        Assert.Equal(2, b.ByMonth.Count);                     // 2023-01 / 2023-02
+        var jan = b.ByMonth.First(m => m.Month == 1);
+        Assert.Equal(2, jan.Count); Assert.Equal(15000, jan.VolumeM3, 4);
+        Assert.Equal(0.25, jan.AvgUnitKgM3, 6);               // 逐事件 AVG(0.2,0.3)(忠实原 GetMonthlyAggregate)
+    }
+
+    [Fact]
     public void Grade_rules_by_type_preserve_open_bounds_and_classify()
     {
         using var db = GeoDatabase.OpenSeeded();

@@ -828,6 +828,7 @@ public partial class MainWindow : Window
             if (cmd == "设备生产数据" || cmd == "生产数据" || cmd == "设备数据分析") { ProductionStatsCmd(); return; }
             if (cmd == "产能分析" || cmd == "设备能力" || cmd == "能力分析" || cmd == "产能") { CapacityRankingCmd(); return; }
             if (cmd == "故障分析" || cmd == "设备状态·故障报修" || cmd == "故障报修" || cmd == "设备状态") { FaultStatsCmd(); return; }
+            if (cmd == "爆破分析" || cmd == "爆破统计" || cmd == "爆破数据" || cmd == "钻爆分析") { BlastStatsCmd(); return; }
             if (cmd == "KPI分析" || cmd == "KPI" || cmd == "设备KPI") { KpiStatsCmd(); return; }
             if (cmd == "设备综合评分" || cmd == "设备评分" || cmd == "综合评分" || cmd == "设备排名评分") { EquipmentScoreCmd(); return; }
             if (cmd == "钻孔管理" || cmd == "钻孔统计" || cmd == "钻孔信息") { BoreholeStatsCmd(); return; }
@@ -8090,6 +8091,17 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"故障分析：{f.Events} 起 · 累计停机 {f.DowntimeHours:0.#}h · 未修复 {f.Unresolved} · 最多「{f.TopType}」×{f.TopTypeCount}{rel}{wb}{oh}";
     }
 
+    // 爆破分析：blast_event 聚合 —— 总次数/方量/炸药/综合单耗/孔进尺 + 逐月(忠实原 BlastService.GetMonthlyAggregate)。
+    private void BlastStatsCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var b = Data.GeoDataQueries.GetBlastStats(db.Connection);
+        if (b.Events == 0) { StatusMsg.Text = "爆破分析：无爆破数据"; return; }
+        var recent = new List<string>();
+        for (int i = b.ByMonth.Count - 1; i >= 0 && recent.Count < 3; i--) { var m = b.ByMonth[i]; recent.Insert(0, $"{m.Year}-{m.Month:00}({m.Count}次/{m.VolumeM3 / 1e4:0.#}万m³/单耗{m.AvgUnitKgM3:0.###})"); }
+        StatusMsg.Text = $"爆破分析：{b.Events} 次 · 总方量 {b.TotalVolumeM3 / 1e4:0.#} 万m³ · 炸药 {b.TotalExplosiveKg / 1000:0.#} t · 综合单耗 {b.OverallUnitKgM3:0.###} kg/m³ · 孔进尺 {b.TotalHoleLengthM / 1000.0:0.#} km · {b.Locations} 区 · {b.ByMonth.Count} 月 · 近期 " + string.Join(" ", recent);
+    }
+
     private void KpiStatsCmd()
     {
         var db = EnsureGeoDb(); if (db == null) return;
@@ -9359,7 +9371,7 @@ public partial class MainWindow : Window
         // 生产计划/投影
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
-        "设备台账","生产数据","产能分析","故障分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","层位求交","导入生产记录","导入月度产能","导入故障记录","导入月度KPI","导入设备台账","导入煤质","导入观测点","导入月度计划","导入见煤成果","导入路况","导入边坡","导入模板","导出分析",
+        "设备台账","生产数据","产能分析","故障分析","爆破分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","层位求交","导入生产记录","导入月度产能","导入故障记录","导入月度KPI","导入设备台账","导入煤质","导入观测点","导入月度计划","导入见煤成果","导入路况","导入边坡","导入模板","导出分析",
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","机群驾驶舱","设备综合评分","数据看板","煤种分类","煤质数据健康度","分煤层煤质",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
         "产能分类对比","故障类型分布","分工序验收合格率","数据导出","数据字典","达成度评价","产量预测","时序预测","编组优化","智能编组优化","导出编组","导出预测",
