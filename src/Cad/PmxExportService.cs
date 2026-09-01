@@ -9,7 +9,8 @@ namespace PitMine3D.Kylin.Cad;
 /// <summary>
 /// 写原版 PitMine 工程文件 .pmx(私有二进制)——反向互操作: 把 Kylin 场景实体存成原版可打开的工程。
 /// 与 <see cref="PmxImportService"/> 同规格(PmxFormat): Header('PMX1') + 段表(Strings/Layers/TextStyles/Entities) + Footer(CRC32)。
-/// 映射 Kylin→PMX: 线1/点3/多段线2(闭合)/文字4/圆14/圆弧15(3点↔外接圆心角); 矩形·正多边形→闭合多段线2。MText/Hatch/标注/椭圆/样条 暂不导出(记录)。
+/// 映射 Kylin→PMX: 线1/点3/多段线2(闭合)/文字4/圆14/圆弧15(3点↔外接圆心角); 矩形·正多边形→闭合多段线2。
+/// Kylin 2D 场景全 8 类实体(Line/Point/Polyline/Rect/Circle/Arc/Text/Polygon)均已导出; MText/Hatch/椭圆/样条 系原版实体, Kylin 未建模故无从导(非导出缺)。
 /// TrueColor 精确; 图层名成串表。纯逻辑、可单测(与 PmxImportService 往返)。
 /// </summary>
 public static class PmxExportService
