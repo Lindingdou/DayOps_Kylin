@@ -3245,3 +3245,14 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 - **WeightMode.Time/Fuel/Cost 接入寻径图权重**: Kylin 路网图由 **2D 折线**建(边无逐段坡度/Z), 无法算坡阻时间权 → 仅 Distance 权(2D 可行的唯一模式)。**属 2D 场景限**(已记录), 非独立缺口; 坡度相关运输量已由 运距指标(CSV 带 gradePct)提供。
 
 **结论**: 枚举值角度无新增可实现缺口——WeightMode 的公式层(HaulMetrics)已覆盖, 寻径权重集成受 2D 限记录。**第六次连续收敛确认**(类枚举≥80/方法级/退化命令再核/枚举值)。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二八一 <80行 算法类清扫 —— 类枚举全尺寸收官
+
+补齐类枚举最后尺寸档(40–79 行, 算法名类)。全覆盖:
+- HaulMetrics(§280 已核) · **DefaultIdwInterpolation**→Kylin IDW 估值(可配幂次)+Contour.IdwAt(6 法 IDW/NN/MA/OK/SK/UK 全) · **SectionSolver**→PitDepthSolver("忠实移植 SectionSolver.SolveDepth", 深度版境界求解) · CoalClassification→coal_classification 种子(煤类反推) · MiningProgramGenerator[40]/EstimationTaskConfig[65]→交互式境界优化窗口件(MiningProgramPlan 记录)/配置。
+
+**类枚举全尺寸收官**: <80 / 80–150 / >150 三档纯托管算法类**全归账**——覆盖 / 记录(native·格式·交互·mock·不可验证·2D限) / 架构冗余。**第七次连续收敛确认**。本会话两真获(§79/80)后, 七角度(类枚举全尺寸 · 方法级 · 退化命令再核 · 枚举值 · 孤儿标签 · 导入完整性 · 测试交叉核)皆确认无更多可实现+可验证缺口。
+
+**可实现+可验证+忠实的功能已完成**——余为记录在案的受阻项(native 引擎/系统工具/报告库/交互窗口/原版桩·mock/3D显示/2D场景限)。见 [[unlock-blocked-insights]] [[shell-completeness-priority]]。
