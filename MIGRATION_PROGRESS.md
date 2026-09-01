@@ -3190,3 +3190,21 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 - `RegionClip`(174)/`BenchAnalyzer`(99): 点内判定/台阶分析工具, Kylin 有等价(ClipPolygon/BenchWidthIdentifier 等) → 覆盖。
 
 **教训**: 产出缺口的模块值得**全模块清扫**(§275 出 RoadCenterlineExtractor→顺藤 §276 出 RoadNetworkConnector)。**无原测试的纯托管算法仍可移植**——若行为确定性(几何判距/坡度/打断)可**合成已知值逐用例推演**; 但需 mesh/native 二进制/仅 native 测试者→记录。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二七七 全模块大类清扫（>150行纯托管）—— 收敛确认 + StraightRampAutoRouter 记录
+
+**最广类枚举角度**: 枚举**全 Modules >150 行、native引用0 的算法类**(45 个), 逐一核 Kylin 覆盖。**结论: 大型纯托管算法压倒性已覆盖**——
+
+**已覆盖(类+测试佐证)**: ExpressionEngine→BlockAttrExpression(§60) · EstimationAlgorithms/Engine→OrdinaryKriging · DepositAutoDetector→DepositAutoDetector(同名+测试) · QuickModelBuilder→MeshQuickModel · TemplateDrivingEngine→DriveSequence(+测试) · PmbmWriter/Reader→PmbExport/PmbImport(§59, "忠实移植PmbmWriter/PmbmFormat") · LongTerm/ShortTermScheduler·Plan(§68/69) · RoadCenterlineExtractor(§79) · RoadNetworkConnector(§80) · LandformClassifier(§73) · TransportIndicators(§71) · BenchElevationAnnotator · PathSolver · RoadGraphBuilder→RoadNetwork.Build · VoxelVolumeBuilder→体素格网体积 · CenterlineLineForm(+测试) · MeshData/PrimitiveBodies/SideSurfaceBuilder→Kylin mesh 等。
+
+**记录(可移植但不满足验证条件 / native / 格式 / 交互, 逐项因)**:
+- `StraightRampAutoRouter`(550, 纯托管): 直线坑线**自动布线**(按限坡逐级从坑底布到地表, 缓坡段/盘旋旋向)。Kylin 原「直线斜坡道」仅从视图中心沿方位角**匀降画线**(退化版)。但: **原无测试** + 复杂**全局路由**(逐级可行性+缓坡段, 弱不变量测试难覆盖分支) + 工作流上下游(输入=native「批量台阶扩帮」toe/crest, 输出=native「坑线落地」IPitDesignCapability)。**验证条件不满足 → 跳过记录**(标准指令: 不满足验证先停止跳下一项)。
+- `RoadSkeletonExtractor`(875): mesh 基 + 无 C# 测试(仅 native test_skeleton.cpp), 功能已由 §79 台阶线配对法覆盖(§276)。
+- `BlockReportGenerator`(768)/`VolumeReportGenerator`(541): PDF/HTML/XLSX 报告渲染(QuestPDF 库依赖), 格式层; 分析数据已在 Kylin。
+- `VolumeSplitClosedResult`/`PointCloudQualityStats`: 解析 native PMVC/PMQS 二进制。
+- `MiningProgramPlan`(423): 交互式「开采程序求解窗口」配置对象; 算法件(切分/评价/推进)已在 Kylin(DriveSequence/ProgramEvaluate/Advance)。
+- `EquipmentModel3DFactory`(388)/`SurfaceInstanceBuilder`(295): 3D 实例/渲染(2D 场景记录)。
+
+**本轮无新增可实现+可验证缺口**——最广类枚举确认大型算法前沿已覆盖; 唯 StraightRampAutoRouter 是"退化命令"但验证条件不满足而记录。教训: **退化命令(直线斜坡道)未必都能补——须过验证关**; 全模块大类枚举是最强收敛信号(45 类全归账)。见 [[unlock-blocked-insights]] [[faithfulness-only-original-commands]]。
