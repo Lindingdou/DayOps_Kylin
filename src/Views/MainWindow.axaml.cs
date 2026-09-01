@@ -5759,9 +5759,10 @@ public partial class MainWindow : Window
             cands.Add(new Cad.RoadLayoutSolver.RampCand(f, t2, len, feas, p.Length >= 5 ? p[4].Trim() : "几何不可行"));
         }
         if (cands.Count == 0) { StatusMsg.Text = "运输布局方案：候选 CSV 无有效行(需 fromLevel,toLevel,lengthM[,geomFeasible,note])"; return; }
-        var r = Cad.RoadLayoutSolver.Solve(cands, demand, perLane, unitCost);
-        var parts = r.Schemes.Select(s => $"{s.Name.Split('·')[0]}({s.TotalLanes}车道/{s.Lines.Count}线·{(s.Feasible ? "可行" : "✗" + s.Violations.Count + "违规")}·基建{s.TotalCapexProxyM:0}m·运营{s.TotalHaulCostYuan / 1e4:0.#}万元)");
-        StatusMsg.Text = $"运输布局方案({cands.Count} 候选·需求 {demand:0}t/期·单车道 {perLane:0}t)：推荐「{r.Recommended?.Name ?? "无可行方案"}」 · " + string.Join(" | ", parts);
+        string? obj = tk.Length >= 5 && (tk[4] == "均衡" || tk[4] == "最小运输功" || tk[4] == "最小成本") ? tk[4] : null;
+        var r = Cad.RoadLayoutSolver.Solve(cands, demand, perLane, unitCost, obj);
+        var parts = r.Schemes.Select(s => $"{s.Name.Split('·')[0]}({s.TotalLanes}车道/{s.Lines.Count}线·{(s.Feasible ? $"可行 {s.Score:0.#}分" : "✗" + s.Violations.Count + "违规")}·基建{s.TotalCapexProxyM:0}m·运营{s.TotalHaulCostYuan / 1e4:0.#}万元)");
+        StatusMsg.Text = $"运输布局方案({cands.Count} 候选·需求 {demand:0}t/期·单车道 {perLane:0}t·目标{obj ?? "最小成本"})：推荐「{r.Recommended?.Name ?? "无可行方案"}」 · " + string.Join(" | ", parts);
     }
 
     // 派生计划方案：块体→场→按不同采区数/推进方位派生多方案→逐一评价→按 NPV 排名 报表

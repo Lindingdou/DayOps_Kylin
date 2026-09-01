@@ -20,12 +20,22 @@ public static class RoadLayoutSolver
     public sealed record RoadLine(string Id, int LaneCount, double CapacityTons, double AssignedTons, double Utilization, double LengthM);
 
     public sealed record LayoutScheme(string Name, IReadOnlyList<RoadLine> Lines, bool Feasible,
-        IReadOnlyList<string> Violations, double TotalHaulCostYuan, double TotalCapexProxyM, double TotalLanes);
+        IReadOnlyList<string> Violations, double TotalHaulCostYuan, double TotalCapexProxyM, double TotalLanes, double Score = 0);
 
     public sealed record LayoutResult(bool Success, IReadOnlyList<LayoutScheme> Schemes, LayoutScheme? Recommended);
 
-    /// <summary>三方案求解。demandTons=每期需求 t; perLaneTons=单车道运力 t/期; haulUnitCost=运输单价 元/(t·km)。</summary>
-    public static LayoutResult Solve(IReadOnlyList<RampCand> candidates, double demandTons, double perLaneTons, double haulUnitCost)
+    /// <summary>方案评分 0~100(忠实原 Score): 不可行=0; 否则 wCapex·(100/(1+capexKm)) + wUtil·(利用率·100)。objective 定权重。</summary>
+    public static double ScoreOf(LayoutScheme s, string? objective = null)
+    {
+        if (!s.Feasible) return 0;
+        (double wCapex, double wUtil) = objective switch { "均衡" => (0.6, 0.4), "最小运输功" => (1.0, 0.0), _ => (0.8, 0.2) };
+        double capexKm = s.TotalCapexProxyM / 1000.0;
+        double avgUtil = s.Lines.Count > 0 ? s.Lines.Average(l => l.Utilization) : 0;
+        return wCapex * (100.0 / (1.0 + capexKm)) + wUtil * (avgUtil * 100.0);
+    }
+
+    /// <summary>三方案求解。demandTons=每期需求 t; perLaneTons=单车道运力 t/期; haulUnitCost=运输单价 元/(t·km); objective=目标(均衡/最小运输功/默认最小成本)。</summary>
+    public static LayoutResult Solve(IReadOnlyList<RampCand> candidates, double demandTons, double perLaneTons, double haulUnitCost, string? objective = null)
     {
         if (candidates == null || candidates.Count == 0) return new LayoutResult(false, Array.Empty<LayoutScheme>(), null);
         var schemes = new List<LayoutScheme>
@@ -34,11 +44,10 @@ public static class RoadLayoutSolver
             BuildScheme(candidates, demandTons, perLaneTons, haulUnitCost, "方案2·均衡(多线窄路)", 1, forceSingle: false),
             BuildScheme(candidates, demandTons, perLaneTons, haulUnitCost, "方案3·单线(基线)", int.MaxValue, forceSingle: true),
         };
-        // 推荐: 可行方案中基建代理(总展线长)最小者; 无可行则运力最大者。
-        var feasible = schemes.Where(s => s.Feasible).ToList();
-        LayoutScheme? rec = feasible.Count > 0
-            ? feasible.OrderBy(s => s.TotalCapexProxyM).ThenByDescending(s => s.Lines.Sum(l => l.Utilization)).First()
-            : schemes.OrderByDescending(s => s.Lines.Sum(l => l.CapacityTons)).FirstOrDefault();
+        for (int i = 0; i < schemes.Count; i++) schemes[i] = schemes[i] with { Score = ScoreOf(schemes[i], objective) };
+        // 推荐: 得分最高的可行方案(忠实原按 Score 选优); 无可行则运力最大者。
+        LayoutScheme? rec = schemes.Where(s => s.Feasible).OrderByDescending(s => s.Score).FirstOrDefault()
+            ?? schemes.OrderByDescending(s => s.Lines.Sum(l => l.CapacityTons)).FirstOrDefault();
         return new LayoutResult(true, schemes, rec);
     }
 

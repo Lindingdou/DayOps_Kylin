@@ -2712,4 +2712,6 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 
 **验证(已知值)**: [RoadLayoutSolverTests](tests/PitMine3D.Kylin.Tests/RoadLayoutSolverTests.cs) +3—— 需求800/单车道1000→总车道1·利用率0.8·运营800(=800×0.5×2)·三方案皆可行; 需求3500→总车道4·紧凑2线×2车道·单线4车道皆≤上限可行; 几何不可行候选→全方案✗带原因·需求6000→单线6车道>上限✗而紧凑3线可行·空候选→不成功。**build 0 错·单测 1291→1294**。
 
+**续(第 53 功能): 布局方案加权评分 + 目标(复评§244 记的"简化推荐"→原 Score 是干净式)**。§244 我用"基建最小"简化推荐; 复评原 `Score` 是**干净加权式**: 不可行=0, 否则 wCapex·(100/(1+capexKm)) + wUtil·(利用率·100), 权重按目标(均衡0.6/0.4·最小运输功1.0/0·默认最小成本0.8/0.2)。补 `RoadLayoutSolver.ScoreOf` + `Solve` 加 objective 参 + `LayoutScheme.Score` + 推荐=最高分。命令加目标参 + 报各方案分。[RoadLayoutSolverTests](tests/PitMine3D.Kylin.Tests/RoadLayoutSolverTests.cs) +1: 默认权重 capexKm0.5→capexScore66.67·util80→分69.33·均衡目标权重不同分不同·不可行=0·推荐=最高分。**单测 1299→1300**。教训: 同 DriveSequence, **移引擎核后复评自记的"简化"——原式常干净可移可验**(第 4 个连出: §50/51/52/53)。
+
 **本会话第 49 功能**。**原版单测枚举全收官**: 19 个 `*Tests.cs` 全部映射 Kylin 功能(17 早覆盖 + DriveTemplateEngine§二四三 + RoadLayoutSolver 本节)。**这是最精确的收敛证据**——作者自定的全部自足可验切片均已移/覆盖, 远强于主题/命令探针的"covered 感"。两个"藏在大引擎里的纯核"(距离驱动切期 + 布局方案构建)靠单测枚举挖出, 用 CSV/available 输入喂可验证核 + 记录引擎细化(候选生成/退距/几何输出)。见 [[unlock-blocked-insights]] [[faithfulness-only-original-commands]]。

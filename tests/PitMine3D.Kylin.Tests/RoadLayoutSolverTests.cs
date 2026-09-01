@@ -42,6 +42,25 @@ public class RoadLayoutSolverTests
     }
 
     [Fact]
+    public void Score_weighted_by_objective_and_gates_infeasible()
+    {
+        // 单候选(展线500,可行) 需求800/单车道1000 → 紧凑方案 1线1车道·利用率0.8·capex500m。
+        var r = RoadLayoutSolver.Solve(new[] { new RC(100, 50, 500, true, "") }, 800, 1000, 2);
+        var s = r.Schemes[0];
+        // 默认权重(0.8,0.2): capexKm=0.5 → capexScore=100/1.5=66.67; utilScore=0.8·100=80。Score=0.8·66.67+0.2·80=69.33。
+        Assert.Equal(0.8 * (100.0 / 1.5) + 0.2 * 80.0, s.Score, 4);
+        // 均衡目标(0.6,0.4)权重不同 → 分不同。
+        var bal = RoadLayoutSolver.Solve(new[] { new RC(100, 50, 500, true, "") }, 800, 1000, 2, objective: "均衡");
+        Assert.Equal(0.6 * (100.0 / 1.5) + 0.4 * 80.0, bal.Schemes[0].Score, 4);
+        // 不可行方案 Score=0。
+        var bad = RoadLayoutSolver.Solve(new[] { new RC(100, 0, 500, false, "坡度超限") }, 800, 1000, 2);
+        Assert.All(bad.Schemes, sc => Assert.Equal(0, sc.Score, 6));
+        // 推荐 = 最高分可行方案。
+        Assert.NotNull(r.Recommended);
+        Assert.Equal(r.Schemes.Where(x => x.Feasible).Max(x => x.Score), r.Recommended!.Score, 6);
+    }
+
+    [Fact]
     public void Infeasible_geometry_and_lane_overflow_and_empty()
     {
         // 几何不可行候选 → 全方案不可行, 违规带原因。
