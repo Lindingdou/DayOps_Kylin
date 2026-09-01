@@ -136,4 +136,29 @@ public class BenchParameterExtractorTests
         Assert.Contains("台阶高中位(m),10", csv);
         Assert.Contains("坡面采样,坡顶标高", csv);
     }
+
+    [Fact]
+    public void SolveBerm_is_inverse_of_overall_angle()
+    {
+        // 往返: 反算 W 使整体帮坡角=β, 再正算应还原 β。H=15,α=65°,目标 β=45°。
+        double H = 15, alpha = 65, beta = 45;
+        double W = BPE.SolveBermForOverallAngle(H, alpha, beta);
+        Assert.True(W > 0);
+        Assert.Equal(beta, BPE.OverallSlopeAngleDeg(H, alpha, W), 4);   // 正逆互反
+        // 已知式 W = H/tanβ − H/tanα。
+        double expect = H / System.Math.Tan(beta * System.Math.PI / 180) - H / System.Math.Tan(alpha * System.Math.PI / 180);
+        Assert.Equal(expect, W, 6);
+    }
+
+    [Fact]
+    public void SolveBerm_clamps_and_guards()
+    {
+        // 目标 β ≥ 坡面角 α → 无需平盘, W 钳 0。
+        Assert.Equal(0, BPE.SolveBermForOverallAngle(15, 45, 60), 6);   // β60>α45
+        Assert.Equal(0, BPE.SolveBermForOverallAngle(15, 45, 45), 6);   // β=α → W=0
+        // H≤0 → 0。
+        Assert.Equal(0, BPE.SolveBermForOverallAngle(0, 65, 45), 6);
+        // 越缓的目标 β 需越宽的 W。
+        Assert.True(BPE.SolveBermForOverallAngle(15, 65, 30) > BPE.SolveBermForOverallAngle(15, 65, 45));
+    }
 }

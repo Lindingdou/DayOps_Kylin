@@ -2657,3 +2657,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [SlopeStabilityTests](tests/PitMine3D.Kylin.Tests/SlopeStabilityTests.cs) +4(直测既有方法)—— φ=β→F=1(临界)·β45°/φ30°→F=tan30<1(不稳)·陡坡降 F/高摩擦升 F·平坡→+∞·阈值 1.30(β20/φ35→F1.92 安全, β40/φ35→F0.83 不安全)。**build 0 错·单测 1277→1281**。
 
 **本会话第 44 功能**。教训: **"值 present 算法缺"跨域复现**——煤质(均值缺等级 §二三五)、边坡(显示 stored F 缺算 F)。**但补前必双查 Kylin 已有无该式**——本次 `CohesionlessFactorOfSafety` **早在 BenchParameterVerifier 里**(该式服务台阶参数校核), 边坡命令只是没接它; 我却先新建 SlopeStability.cs 重复(第 N 次冗余教训, 见 [[unlock-blocked-insights]] ortho/MeshHoleFill/采区划分), 双查后删除改复用。**真缺口不是"公式", 是"边坡命令没调该公式"**——补接线, 非补公式。查"显示 stored 值"的命令是否也算/校核那个值; 但先 grep 公式名确认没现成。见 [[unlock-blocked-insights]]。
+
+## 二四〇、帮坡角反算平盘宽 SolveBermForOverallAngle —— 正逆配对补齐(第 45 功能)
+
+**吸取 §二三九 教训: 先 grep 确认没现成再补**。同 `BenchTemplateResolver` 里 `CohesionlessFactorOfSafety` 邻座另有 `SolveBermForOverallAngle`(W = H/tanβ − H/tanα, 给目标整体帮坡角 β 反求平盘宽)——是 Kylin 已有 `OverallSlopeAngleDeg`(正算 β←W)的**逆**。**grep `SolveBerm/target overall/H/tan−H/tan/反算平盘` 确认 Kylin 无**(BenchWidthIdentifier 是栅格圈区, 非解析逆)→ 真缺口。
+
+补 [BenchParameterExtractor](src/Cad/BenchParameterExtractor.cs) `SolveBermForOverallAngle(H, α, targetβ)`(与 `OverallSlopeAngleDeg` 正逆配对同处), 忠实原式(钳 ≥0, H≤0 或 tan≤0 返 0)。命令 `平盘宽反算 <H> <α> <β>`([MainWindow](src/Views/MainWindow.axaml.cs) `BermForAngleCmd`, 带回代校核 + β≥α 无需平盘提示) + 三别名。
+
+**验证(已知值)**: [BenchParameterExtractorTests](tests/PitMine3D.Kylin.Tests/BenchParameterExtractorTests.cs) +2—— **正逆往返**: H15/α65/β45 反算 W 再正算还原 β=45(精确); W=H/tanβ−H/tanα 已知式; 钳位(β≥α→W=0·H≤0→0)·越缓目标越宽 W。**build 0 错·单测 1281→1283**。
+
+**本会话第 45 功能**。教训: **正算有→查逆算(设计反问题常成对)**: `β←(H,α,W)` 有了, `W←(H,α,β)` 是设计反问题(定目标帮坡角求平盘宽), 成对补齐。**正逆往返测试是最强验证**(forward∘inverse=identity)。这次**先 grep 后建**(吸取 §二三九), 无冗余。见 [[unlock-blocked-insights]]。

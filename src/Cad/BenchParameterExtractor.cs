@@ -234,6 +234,16 @@ public sealed class BenchParameterExtractor
         return Math.Atan(benchHeight / run) * 180.0 / Math.PI;
     }
 
+    /// <summary>帮坡角反算平盘宽: 给 H/α 与目标整体帮坡角 β, 求 W = H/tanβ − H/tanα(钳 ≥0)。<see cref="OverallSlopeAngleDeg"/> 的逆。忠实原 BenchTemplateResolver.SolveBermForOverallAngle。</summary>
+    public static double SolveBermForOverallAngle(double benchHeight, double faceAngleDeg, double targetOverallAngleDeg)
+    {
+        if (benchHeight <= 0) return 0;
+        double tanf = Math.Tan(faceAngleDeg * Math.PI / 180.0);
+        double tanb = Math.Tan(targetOverallAngleDeg * Math.PI / 180.0);
+        if (tanf <= 1e-9 || tanb <= 1e-9) return 0;
+        return Math.Max(0.0, benchHeight / tanb - benchHeight / tanf);
+    }
+
     private static void Flatten(List<Line> set, out double[] xs, out double[] ys, out double[] zs)
     {
         int n = set.Sum(l => l.Xyz.Length / 3);

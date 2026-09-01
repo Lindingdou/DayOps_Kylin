@@ -775,6 +775,7 @@ public partial class MainWindow : Window
             if (cmd == "现状参数提取" || cmd == "台阶参数反推" || cmd == "现状台阶参数" || cmd == "参数反推" || cmd.StartsWith("现状参数提取 ") || cmd.StartsWith("台阶参数反推 ")) { await BenchParameterExtractAsync(cmd); return; }
             if (cmd == "标注台阶标高" || cmd == "台阶标高标注" || cmd == "标高标注" || cmd.StartsWith("标注台阶标高 ") || cmd.StartsWith("台阶标高标注 ")) { await BenchElevationAnnotateAsync(cmd); return; }
             if (cmd == "参数校核" || cmd == "台阶参数校核" || cmd == "现状参数校核" || cmd.StartsWith("参数校核 ") || cmd.StartsWith("台阶参数校核 ")) { await BenchParameterVerifyAsync(cmd); return; }
+            if (cmd.StartsWith("平盘宽反算") || cmd.StartsWith("反算平盘宽") || cmd.StartsWith("帮坡角反算")) { BermForAngleCmd(cmd); return; }
             if (cmd == "趋势整合台阶" || cmd == "趋势整合" || cmd == "整合台阶" || cmd == "趋势规整台阶" || cmd.StartsWith("趋势整合台阶 ") || cmd.StartsWith("趋势整合 ")) { await TrendIntegrateAsync(cmd); return; }
             if (cmd == "坡向着色" || cmd == "坡向") { await ShadeTinAsync("坡向着色", "按朝向 HSV 配色", TerrainAnalysis.BuildAspectMap); return; }
             if (cmd == "高程着色" || cmd == "分色显示" || cmd == "高程分带") { await ShadeTinAsync("高程着色", "低绿→中黄→高棕", TerrainAnalysis.BuildElevationMap); return; }
@@ -1725,6 +1726,19 @@ public partial class MainWindow : Window
 
         var saved = await SaveCsvAsync("平盘标高清单", "平盘标高清单.csv", BenchLevelInventory.BuildReport(res, System.IO.Path.GetFileName(files[0].Path.LocalPath)));
         StatusMsg.Text = res.Message + (saved != null ? $" · 清单已存 {saved}" : "");
+    }
+
+    // 帮坡角反算平盘宽: 平盘宽反算 <台阶高H> <坡面角α°> <目标整体帮坡角β°> → W=H/tanβ−H/tanα(忠实原 SolveBermForOverallAngle, OverallSlopeAngleDeg 的逆)。
+    private void BermForAngleCmd(string cmd)
+    {
+        var tk = cmd.Split(new[] { ' ', ',', '，', '/', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        if (tk.Length < 4 || !double.TryParse(tk[1], out double H) || !double.TryParse(tk[2], out double a) || !double.TryParse(tk[3], out double b))
+        { StatusMsg.Text = "平盘宽反算：用法 平盘宽反算 <台阶高H> <坡面角α°> <目标整体帮坡角β°>（如 平盘宽反算 15 65 45）"; return; }
+        if (H <= 0 || a <= 0 || a >= 90 || b <= 0 || b >= 90) { StatusMsg.Text = "平盘宽反算：需 H>0 且 0<α,β<90°"; return; }
+        double W = Cad.BenchParameterExtractor.SolveBermForOverallAngle(H, a, b);
+        double check = Cad.BenchParameterExtractor.OverallSlopeAngleDeg(H, a, W);   // 回代校核(W 代回正式应得 β)
+        string note = W <= 1e-9 ? $"（目标 β={b:0.#}° ≥ 坡面角 α={a:0.#}°, 无需平盘 W=0; 欲更缓需 β<α）" : $"（回代β={check:0.#}°）";
+        StatusMsg.Text = $"平盘宽反算：台阶高 {H:0.#}m · 坡面角 {a:0.#}° · 目标整体帮坡角 {b:0.#}° → 需平盘宽 W={W:0.##}m {note}";
     }
 
     // 现状台阶参数提取(忠实 ParameterExtractor 件二·提取): 坡顶/坡底台阶线 CSV(role,lineId,x,y,z) →
