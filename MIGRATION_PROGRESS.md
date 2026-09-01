@@ -2321,4 +2321,14 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 
 **验证(已知值 + 端到端)**: [QuickSelectTests](tests/PitMine3D.Kylin.Tests/QuickSelectTests.cs) 26 例(含 Theory)—— 通配 13 例、数值量级容差、布尔/文本、JSON 摊平(数组+嵌套+坏 JSON 空字典不抛)、目录(null 只给通用特性/圆含半径/文本无 ></通配裁剪/Find/SourceOf)、**核心正确点**「圆+半径>5+排除」= 半径≤5 的圆(下标 0)绝不扫入线/文字(类型先决条件, 非全盘取反)、按图层跨类型选、只给类型选全部、文本通配、多段线布尔闭合、快照类型/色打包/Extended、取不到值恒不匹配、null/空候选安全。**build 0 错·单测 1119→1145**。
 
-**本会话第 12 功能**。教训: **③ present-but-shallow/name-collision 盲点复现**——字符串命令存在(`快速选择`)但绑的是粗替身(SelectSimilar), 真 QSELECT(条件过滤)未实现; 判"已有此命令"前必看它绑到什么。**扫区要含 `Platform/`, 不止 Modules + Host**。平台层接口多不可移, 但夹带的具体纯算法(QuickSelectFilter/BenchLevelInventory)可移可验。见 [[unlock-blocked-insights]]。**待补第二处: `Platform/.../Geometry/BenchLevelInventory`(平盘标高清单纯算法, 需 3D 线; 算法可单测, 活场景取线受 2D 限, 下 tick)**。
+**本会话第 12 功能**。教训: **③ present-but-shallow/name-collision 盲点复现**——字符串命令存在(`快速选择`)但绑的是粗替身(SelectSimilar), 真 QSELECT(条件过滤)未实现; 判"已有此命令"前必看它绑到什么。**扫区要含 `Platform/`, 不止 Modules + Host**。平台层接口多不可移, 但夹带的具体纯算法(QuickSelectFilter/BenchLevelInventory)可移可验。见 [[unlock-blocked-insights]]。
+
+## 二〇八、平盘标高清单(BenchLevelInventory)—— Platform 层第二处纯算法(第 13 功能)
+
+承 §二〇七, 补 `Platform/PitMine.Platform/Geometry/BenchLevelInventory` —— [src/Cad/BenchLevelInventory.cs](src/Cad/BenchLevelInventory.cs) 与原版逐字一致。把一批台阶线(坡顶/坡底近似等高的多段线)**按标高归并成平盘标高级**: 逐线取代表标高(顶点 Z 中位数, 个别歪点不带偏)+ 平面(仅 XY)长度; 剔斜线(起伏>容差=坡面/出入沟)、碎线、无效; **标高一维聚类**(升序扫描, 间隙>容差断新级, 再限本级跨度 ≤2×容差防链式吞并); 落级(高→低)给标高/线数/平面长度/级间距中位+四分位距; 体检提示(只 1 级/疑混入地形等高线/级间距不齐/疑漏平盘)。答案 = 设计里有几个平盘标高。
+
+**2D 场景适配**: Kylin 场景实体无逐点 Z, 活图取线拿不到标高 → 命令侧由 **CSV(lineId,x,y,z[,layer])** 喂料(`ParseCsv` 按 lineId 分组连线, 表头/注释/空行跳过), 算法本身不变。命令 `平盘标高清单 [合并容差m]`: 选 CSV → 归级 → 画各线(投影 XY, 按级红→蓝配色)+ 逐级标高标注 + 存清单 CSV(`BuildReport`)。忠实原 CSV 报表口径。
+
+**验证(已知值)**: [BenchLevelInventoryTests](tests/PitMine3D.Kylin.Tests/BenchLevelInventoryTests.cs) 10 例—— 三级高→低(标高/序/顶底/级间距中位/离散)、坡顶坡底同标高合并为一级、一级平盘打断成多线仍算一级(按标高不按线数)、**链式吞并防护(2×容差跨度限)**、斜线剔除+坡面线提示、碎线/无效剔除、平面长度仅 XY(忽略 Z)、空/全斜线降级 Ok=false、报表含个数与表头、CSV 分组喂料端到端。**build 0 错·单测 1145→1155**。
+
+**本会话第 13 功能**。教训: **Platform 层的具体纯算法(非接口)是可移可验的富矿**——一个 Platform 程序集扫出 2 个真功能(QSELECT + 平盘标高清单)。**算法保真 + 输入源按 2D 场景约束适配(CSV 代活图取线)**是既忠实又可验的通路, 与既往 CSV 替 DM8 同型。见 [[unlock-blocked-insights]]。

@@ -771,6 +771,7 @@ public partial class MainWindow : Window
             if (cmd == "示例三角网" || cmd == "三角网示例") { GenerateSampleTrimesh(); return; }
             if (cmd == "坡度着色" || cmd == "三角网着色" || cmd == "坡度") { await ShadeTinAsync("坡度着色", "绿=平 → 红=陡", TerrainAnalysis.BuildSlopeMap); return; }
             if (cmd == "坡顶底线" || cmd == "坡顶坡底线" || cmd == "断棱线提取" || cmd == "坡顶底线提取" || cmd.StartsWith("坡顶底线 ")) { await CrestToeAsync(cmd); return; }
+            if (cmd == "平盘标高清单" || cmd == "平盘清单" || cmd == "标高清单" || cmd == "平盘标高统计" || cmd.StartsWith("平盘标高清单 ") || cmd.StartsWith("平盘清单 ")) { await BenchLevelInventoryAsync(cmd); return; }
             if (cmd == "坡向着色" || cmd == "坡向") { await ShadeTinAsync("坡向着色", "按朝向 HSV 配色", TerrainAnalysis.BuildAspectMap); return; }
             if (cmd == "高程着色" || cmd == "分色显示" || cmd == "高程分带") { await ShadeTinAsync("高程着色", "低绿→中黄→高棕", TerrainAnalysis.BuildElevationMap); return; }
             if (cmd == "体积计算" || cmd == "算量" || cmd == "土方量") { await VolumeAsync(); return; }
@@ -1627,6 +1628,77 @@ public partial class MainWindow : Window
         Viewport.FitBounds(r.Bounds);
         string how = interval > 1e-9 ? $"等高距 {interval:0.##}" : "auto";
         StatusMsg.Text = $"等高线：{r.Points.Count} 点 → {contourLevels.Count} 层({how}) · {segCount} 段 + 高程标注（z {zmin:0.#}~{zmax:0.#}）";
+    }
+
+    // 平盘标高清单(忠实 BenchLevelInventory): 台阶线 CSV(lineId,x,y,z[,layer]) → 按标高归级 →
+    // 画各线(投影 XY, 按级配色) + 逐级标高标注 + 存清单 CSV。场景 2D 无逐点 Z, 故由 CSV 提供标高。
+    // "平盘标高清单 [合并容差m]" 指定同级合并容差(缺省 0.5)。
+    private async Task BenchLevelInventoryAsync(string cmd)
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "平盘标高清单：选台阶线 CSV (lineId,x,y,z[,layer])",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("台阶线 (CSV/TXT)") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (files.Count == 0) return;
+        string text;
+        try { text = System.IO.File.ReadAllText(files[0].Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"平盘标高清单：读文件失败 {ex.Message}"; return; }
+
+        var lines = BenchLevelInventory.ParseCsv(text);
+        if (lines.Count == 0) { StatusMsg.Text = "平盘标高清单：CSV 没解析出线(需 lineId,x,y,z 四列; 同 lineId 连成一条线)"; return; }
+
+        var opt = new BenchLevelInventory.Options();
+        int sp = cmd.IndexOf(' ');
+        if (sp >= 0 && double.TryParse(cmd.Substring(sp + 1).Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double tol) && tol > 0)
+            opt.MergeTolM = tol;
+
+        var res = BenchLevelInventory.Build(lines, opt);
+        if (!res.Ok) { StatusMsg.Text = $"平盘标高清单：{res.Message}"; return; }
+
+        // 句柄 → 级序(1..N) 映射, 供画线配色。
+        var lvOf = new Dictionary<ulong, int>();
+        foreach (var lv in res.Levels) foreach (var h in lv.Handles) lvOf[h] = lv.Index;
+        int nLv = res.LevelCount;
+
+        double bx0 = double.MaxValue, by0 = double.MaxValue, bx1 = double.MinValue, by1 = double.MinValue;
+        BeginChange();
+        foreach (var sl in lines)
+        {
+            int npt = sl.Xyz.Length / 3;
+            if (npt < 2 || !lvOf.TryGetValue(sl.Handle, out int lvi)) continue;   // 未入级(斜线/碎线/无效)不画
+            float t = nLv > 1 ? (float)(lvi - 1) / (nLv - 1) : 0f;                // 级序→色(高级红, 低级蓝)
+            var pl = new PolylineEntity { Cr = 1 - t, Cg = 0.45f, Cb = t, LayerName = "平盘标高" };
+            for (int i = 0; i < npt; i++)
+            {
+                double x = sl.Xyz[i * 3], y = sl.Xyz[i * 3 + 1];
+                pl.Points.Add((x, y));
+                if (x < bx0) bx0 = x; if (y < by0) by0 = y; if (x > bx1) bx1 = x; if (y > by1) by1 = y;
+            }
+            _scene.Add(pl);
+        }
+        // 逐级一个标高标注(该级首条线的中点)。
+        double labelH = System.Math.Max((bx1 - bx0) / 60.0, 1e-3);
+        foreach (var lv in res.Levels)
+        {
+            if (lv.Handles.Count == 0) continue;
+            var first = lines.FirstOrDefault(l => l.Handle == lv.Handles[0]);
+            if (first == null || first.Xyz.Length < 6) continue;
+            int mid = (first.Xyz.Length / 3) / 2;
+            float t = nLv > 1 ? (float)(lv.Index - 1) / (nLv - 1) : 0f;
+            _scene.Add(new TextEntity
+            {
+                X = first.Xyz[mid * 3], Y = first.Xyz[mid * 3 + 1], Height = labelH,
+                Text = lv.Elevation.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture),
+                Cr = 1 - t, Cg = 0.45f, Cb = t, LayerName = "平盘标高"
+            });
+        }
+        RefreshScene();
+        if (bx1 > bx0) Viewport.FitBounds(new[] { bx0, by0, bx1, by1 });
+
+        var saved = await SaveCsvAsync("平盘标高清单", "平盘标高清单.csv", BenchLevelInventory.BuildReport(res, System.IO.Path.GetFileName(files[0].Path.LocalPath)));
+        StatusMsg.Text = res.Message + (saved != null ? $" · 清单已存 {saved}" : "");
     }
 
     // 煤厚分析等厚线(原 ThicknessSurfaceBuilder「煤厚分析面」的平面等厚线): 观测/见煤点 CSV → 取每行前 3 个
@@ -8592,7 +8664,7 @@ public partial class MainWindow : Window
         // 块体/运输/路网
         "块体模型","资源量","道路横断面","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","演化对比","螺旋斜坡道","折返斜坡道",
         // 生产计划/投影
-        "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","平盘宽度识别","确定可采区域","点落到面上","线落到面上",
+        "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","平盘宽度识别","平盘标高清单","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
         "设备台账","生产数据","产能分析","故障分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","层位求交","导入生产记录","导入月度产能","导入故障记录","导入月度KPI","导入设备台账","导入煤质","导入观测点","导入月度计划","导入见煤成果","导入路况","导入边坡","导入模板","导出分析",
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","机群驾驶舱","设备综合评分","数据看板","煤种分类","煤质数据健康度","分煤层煤质",
