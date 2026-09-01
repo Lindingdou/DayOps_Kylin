@@ -1073,6 +1073,7 @@ public partial class MainWindow : Window
             if (cmd == "路面生成" || cmd == "生成路面" || cmd == "中线外扩" || cmd.StartsWith("路面生成 ") || cmd.StartsWith("生成路面 ")) { RoadSurfaceCmd(cmd); return; }
             if (cmd == "纵坡分析" || cmd == "纵坡" || cmd == "坡度分档" || cmd == "限坡校核" || cmd.StartsWith("纵坡分析 ") || cmd.StartsWith("限坡校核 ")) { await GradeProfileAsync(cmd); return; }
             if (cmd == "竖曲线平滑" || cmd == "竖曲线" || cmd == "纵断面竖曲线" || cmd.StartsWith("竖曲线平滑 ") || cmd.StartsWith("竖曲线 ")) { await VerticalCurveAsync(cmd); return; }
+            if (cmd == "线形处理" || cmd == "线形" || cmd == "中线线形" || cmd == "线形后处理" || cmd.StartsWith("线形处理 ")) { await LineFormAsync(cmd); return; }
             if (cmd == "平行推进" || cmd == "开采程序确定" || cmd == "工作线推进") { AdvanceCmd(AdvanceMode.Parallel, "平行推进"); return; }
             if (cmd == "定点回转" || cmd == "定点回转推进") { AdvanceCmd(AdvanceMode.FixedPivot, "定点回转"); return; }
             if (cmd == "动点回转" || cmd == "动点回转推进") { AdvanceCmd(AdvanceMode.MovingPivot, "动点回转"); return; }
@@ -6425,6 +6426,41 @@ public partial class MainWindow : Window
             + $"纵断面 {s.Count}→{p.Count} 点（灰=原/青=平滑；X=里程 Y=标高）";
     }
 
+    // 线形处理：3D 中线 CSV → GBJ22-87 线形后处理(①转角圆弧化 R≥rMin ②分段限坡纵断面[弯道折减+合成坡度]
+    // ③变坡点竖曲线) → 原/处理后平面线形入场景(灰/青) + 平曲线半径/纵坡/合成坡度/竖曲线 校核。忠实原 CenterlineLineForm。
+    private async Task LineFormAsync(string cmd)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        double rMin = 15.0;     // 最小平曲线半径 m（露天矿运输道路典型）
+        double maxGrade = 8.0;  // 直线段限坡 %
+        if (tk.Length >= 2 && double.TryParse(tk[1], System.Globalization.NumberStyles.Float, inv, out double v1) && v1 > 0) rMin = v1;
+        if (tk.Length >= 3 && double.TryParse(tk[2], System.Globalization.NumberStyles.Float, inv, out double v2) && v2 > 0) maxGrade = v2;
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        { Title = "线形处理：选 3D 中线 CSV (x,y,z 有序)", AllowMultiple = false, FileTypeFilter = new[] { new FilePickerFileType("3D 线 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } } });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success || r.Points.Count < 3) { StatusMsg.Text = "线形处理：需 ≥3 个有序 3D 点(x,y,z)"; return; }
+        var pts = new List<(double, double, double)>();
+        foreach (var p in r.Points) pts.Add((p.x, p.y, p.z));
+        // 弯道纵坡按 0.75×直线折减、竖曲线 R=500·触发 0.5%（露天矿运输道路典型；手拾档不内移→centroids=null,offset=0）
+        var lf = Cad.CenterlineLineForm.Apply(pts, null, 0, rMin, maxGrade, maxGrade * 0.75, 0, 0, 0.5, 500, 0);
+        BeginChange();
+        for (int i = 1; i < pts.Count; i++)   // 原折线(灰)
+            _scene.Add(new LineEntity { X0 = pts[i - 1].Item1, Y0 = pts[i - 1].Item2, X1 = pts[i].Item1, Y1 = pts[i].Item2, Cr = 0.6f, Cg = 0.6f, Cb = 0.6f, LayerName = "线形" });
+        var L = lf.Line;
+        for (int i = 1; i < L.Count; i++)     // 处理后线形(青, 转角已圆弧化)
+            _scene.Add(new LineEntity { X0 = L[i - 1].X, Y0 = L[i - 1].Y, X1 = L[i].X, Y1 = L[i].Y, Cr = 0.1f, Cg = 0.8f, Cb = 0.9f, LayerName = "线形" });
+        RefreshScene();
+        if (r.Bounds != null && r.Bounds.Length == 4) Viewport.FitBounds(r.Bounds);
+        string warn = lf.GradeExceedsLimit ? " · ⚠展线不足(限坡内 descend 不满总高差, 须增长展线)" : "";
+        StatusMsg.Text = $"线形处理(R_min={rMin.ToString("0.#", inv)}m·限坡{maxGrade.ToString("0.#", inv)}%)："
+            + $"最小平曲线半径 {lf.MinRadiusM.ToString("0.#", inv)}m · 半径不达标 {lf.Violations} 处 · "
+            + $"直线纵坡≤{lf.MaxGradeUsedPct.ToString("0.##", inv)}%·弯道≤{lf.CurveGradeUsedPct.ToString("0.##", inv)}%·合成 {lf.ResultantGradePct.ToString("0.##", inv)}%{warn} · "
+            + $"竖曲线 {lf.VerticalCurveCount}处(最小R {lf.MinVerticalRadiusAchievedM.ToString("0.#", inv)}m·不达标{lf.VerticalCurveViolations}) · "
+            + $"{pts.Count}→{L.Count}点（灰=原/青=圆弧化线形）";
+    }
+
     // 路面生成：中线多段线 + 路宽 → 等宽双侧外扩成闭合路带多边形。忠实原「中心线按路宽外扩生成路面」。
     private void RoadSurfaceCmd(string cmd)
     {
@@ -8100,7 +8136,7 @@ public partial class MainWindow : Window
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪",
         // 块体/运输/路网
-        "块体模型","资源量","道路横断面","路面生成","纵坡分析","竖曲线平滑","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","演化对比","螺旋斜坡道","折返斜坡道",
+        "块体模型","资源量","道路横断面","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","演化对比","螺旋斜坡道","折返斜坡道",
         // 生产计划/投影
         "境界圈定","剥采比均衡","方案综合对比","开采程序确定","平盘宽度识别","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)

@@ -2198,3 +2198,17 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 **四法收敛**: §一九二 模块标识符 diff · §一九三 作者标注切片 · §一九四a 分析窗口指标 · §一九四b 原版 242 单测枚举——**四条独立系统方法一致指向**: 竖曲线是唯一干净可移植独立切片(已补), 余皆已覆盖或受阻引擎(流水线几何步/调度/计划/native)纠缠。原版**自己的测试**(最精确信号)把 ProfileSmoother 列为可测切片、印证本法命中真缺口, 且未暴露其他 Kylin 缺的独立算法。功能面收敛已达**四重独立证据**。见 [[unlock-blocked-insights]]。
 
 **§一九四c 非几何"计算核"子扫(补 242 单测里几何滤网漏掉的 calc)**: 筛 `Kernel/Calc/Cost/Reserve/Caliber/Derate/Blend` 名 diff Kylin: **CapacityCaliber(年/月产能口径)已覆盖**(V050_fix_capacity_annual_to_monthly.sql 正是此修); 余 4 皆引擎/显示/配置边界, 记录——`PreparedReserve`(备采储量**回写**=PlanLib.ShortTerm 计划引擎) · `WeatherDerate`(TaskLib 产能引擎域) · `ProductionCostBook`(成本常量统一口径 MU14=配置一致性, 非新功能; 剥离成本算已在 PanelSplit) · `LabelDeCollide`(作业铭牌避让=受阻 sim 显示; 移到 Kylin 标注属发明原版没有的用途)。→ 至此原版 242 单测按 几何名 + 计算核名 + 全表 三重扫尽, **无 Kylin 缺失的干净独立算法**(竖曲线是唯一, 已补)。**五角度收敛**(四法 + 计算核子扫), 见 [[unlock-blocked-insights]]。
+
+## 一九五、修正"五法收敛"的一处分类错误 —— 线形处理(CenterlineLineForm 完整①②③)
+
+**自查纠错**: §一九四b 扫 242 单测时, 见 `CenterlineLineForm` 与 `CenterlineInventory/Pick/Junction` 同前缀, **误归为"中线管理(已覆盖)"**——实则 `CenterlineLineForm` 是**道路线形设计器**(非中线管理): GBJ22-87 三阶段 `Apply`, 原版自注"纯几何、不依赖引擎、可单测", 有独立 `CenterlineLineFormTests`。我上会话只移了它内部调用的**阶段③**(ProfileSmoother=竖曲线), **①②是真缺口**。经"在出竖曲线的同目录 RoadLayout 再针对性扫一遍"抓出。
+
+**补全 · 线形处理(完整①②③)** [src/Cad/CenterlineLineForm.cs](src/Cad/CenterlineLineForm.cs) 忠实移植:
+- **①转角圆弧化**: 内移偏置(朝形心, offset>0 时)+ 转角插圆弧(R≥rMin, 切线 T=R·tan(δ/2), 段长放不下则 clamp 降 R 计违规), 逐段打直线/圆曲线标记。
+- **②分段限坡纵断面**: 直线段≤i_max、圆曲线段≤弯道折减 curveCap(且合成坡度 √(纵²+超高²)≤上限反推 curveCap), α=ΔH/Σ(L·cap) 缩放各段纵坡命中总高差; α>1 报"展线不足"。
+- **③竖曲线**: **复用 [RoadVerticalCurve](src/Cad/RoadVerticalCurve.cs)**(=原 ProfileSmoother, 上会话已移)+ 最小坡长校核。
+- 命令 `线形处理`(3D 中线 CSV→原/圆弧化平面线形入场景[灰/青]+平曲线半径/纵坡/合成坡度/竖曲线校核汇总) + 三路可发现(命令行别名/目录/RoadLib Ribbon 按钮 + 专属图标 `mineass_line_form`)。
+- **非冗余**: 与竖曲线平滑互补——竖曲线=仅③(纵), 线形处理=①②③全(平+纵); 原版本就二者分开各有独立 test。
+- 验证: [CenterlineLineFormTests](tests/PitMine3D.Kylin.Tests/CenterlineLineFormTests.cs) 10 例已知值(直角转角圆弧点落 R=15 圆·紧转角 clamp 到 R=5 计违规·限坡 α 缩放命中总高差·展线不足标志·弯道折减≤直线·合成坡度反推·竖曲线复用保端点)。**build 0 错·单测 1060→1070**。
+
+**教训(硬)**: **系统扫描的每一项要单独核实语义, 别按名字前缀归堆**——`CenterlineLineForm` 与 `CenterlineInventory` 同前缀但一个是线形设计器、一个是中线管理。"五法收敛"的方法没错, 但我执行方法四时凭前缀把 LineForm 误并入已覆盖桶 → 漏掉真缺口。**收敛结论要靠逐项核实支撑, 名字聚类是陷阱(同 [[unlock-blocked-insights]] 文件名≠类名、中文串≠英文token 一类)**。补救法: **回到已产出真缺口的目录(RoadLayout)做针对性复扫**——竖曲线在此, 线形处理亦在此。见 [[unlock-blocked-insights]]。

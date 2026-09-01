@@ -377,6 +377,26 @@
     </DrawingImage>
 
     <!-- 螺旋坑线：坑的同心环 + 盘旋下降的坡道弧 + 下行箭头 —— 与 mineass_road_straight（一条直腿）区分 -->
+    <DrawingImage x:Key="mineass_line_form">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 原折线(灰): 尖角转折 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF94A3B8" Thickness="1.4"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M6,26 L6,8 L26,8"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 圆弧化线形(青): 转角以圆弧顺接(平曲线 R) -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF22D3EE" Thickness="2.6" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M6,26 L6,15 Q6,8 13,8 L26,8"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 转角点标记 -->
+                <GeometryDrawing Brush="#FFF59E0B">
+                    <GeometryDrawing.Geometry><EllipseGeometry RadiusX="1.8" RadiusY="1.8" Center="6,8"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
     <DrawingImage x:Key="mineass_vertical_curve">
         <DrawingImage.Drawing>
             <DrawingGroup>
