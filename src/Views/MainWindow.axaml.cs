@@ -1896,8 +1896,8 @@ public partial class MainWindow : Window
         var seams = VirtualBorehole.SeamsFromHorizonPoints(
             System.Linq.Enumerable.Select(hp, p => (p.SeamCode, p.IsRoof, p.X, p.Y, p.Z)));
         double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
-        int totCrest = 0, totToe = 0, seamsOut = 0;
-        double crestLen = 0, toeLen = 0;
+        int totCrest = 0, totToe = 0, seamsOut = 0, totBands = 0;
+        double crestLen = 0, toeLen = 0, bandSpMin = double.MaxValue, bandSpMax = double.MinValue;
         BeginChange();
         void AddLine(double[] xyz, float cr, float cg, float cb)
         {
@@ -1924,11 +1924,19 @@ public partial class MainWindow : Window
             seamsOut++;
             foreach (var l in res.CrestLines) { AddLine(l.Xyz, 0.1f, 0.8f, 0.9f); totCrest++; crestLen += l.PlanLengthM; }
             foreach (var l in res.ToeLines) { AddLine(l.Xyz, 0.95f, 0.55f, 0.1f); totToe++; toeLen += l.PlanLengthM; }
+            // 坡顶↔坡底按并行性配成露头带(=该层的出露条带); 煤厚由本层顶/底板均高差估
+            double mr = 0, mf = 0;
+            foreach (var p in sm.RoofPoints) mr += p.z; if (sm.RoofPoints.Count > 0) mr /= sm.RoofPoints.Count;
+            foreach (var p in sm.FloorPoints) mf += p.z; if (sm.FloorPoints.Count > 0) mf /= sm.FloorPoints.Count;
+            double thick = System.Math.Max(0.5, mr - mf);
+            var bands = SeamOutcropLineExtractor.PairIntoBands(res.CrestLines, res.ToeLines, thick, out _);
+            foreach (var bd in bands) { totBands++; if (bd.MedianSpacingM < bandSpMin) bandSpMin = bd.MedianSpacingM; if (bd.MedianSpacingM > bandSpMax) bandSpMax = bd.MedianSpacingM; }
         }
         RefreshScene();
         if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
         if (seamsOut == 0) { StatusMsg.Text = "煤层露头线：无一层与现状面相交(整层已采完/尚未揭露, 或 XY 范围不重叠)"; return; }
-        StatusMsg.Text = $"煤层露头线({seamsOut}/{seams.Count} 层出露)：坡顶 {totCrest} 条({crestLen.ToString("0", inv)}m)/坡底 {totToe} 条({toeLen.ToString("0", inv)}m) · 青=坡顶线(顶板露头)/橙=坡底线(底板露头)";
+        string bandTxt = totBands > 0 ? $" · 露头带 {totBands} 条(带宽 {bandSpMin.ToString("0.#", inv)}~{bandSpMax.ToString("0.#", inv)}m=煤厚/tan坡)" : "";
+        StatusMsg.Text = $"煤层露头线({seamsOut}/{seams.Count} 层出露)：坡顶 {totCrest} 条({crestLen.ToString("0", inv)}m)/坡底 {totToe} 条({toeLen.ToString("0", inv)}m){bandTxt} · 青=坡顶线(顶板露头)/橙=坡底线(底板露头)";
     }
 
     // 更新煤层面/现状面：目标 OFF + 观测点 CSV(x,y,z) + 影响半径 → 半径内顶点 smoothstep 羽化 + IDW 拟合观测点
