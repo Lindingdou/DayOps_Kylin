@@ -765,7 +765,7 @@ public partial class MainWindow : Window
             if (cmd == "展绘钻孔" || cmd == "钻孔柱状图" || cmd == "导入钻孔数据" || cmd == "原始钻孔柱状图") { await ImportBoreholesAsync(); return; }
             if (cmd == "煤厚分析" || cmd == "煤层厚度分析" || cmd == "煤厚") { await CoalThicknessAsync(); return; }
             if (cmd == "等高线" || cmd == "等高线生产" || cmd == "等值线" || cmd.StartsWith("等高线 ") || cmd.StartsWith("等值线 ")) { await ContourFromCsvAsync(cmd); return; }
-            if (cmd == "创建三角网" || cmd == "三角网" || cmd == "2.5D TIN" || cmd == "2.5DTIN") { await CreateTinAsync(); return; }
+            if (cmd == "创建三角网" || cmd == "三角网" || cmd == "2.5D TIN" || cmd == "2.5DTIN" || cmd == "转化为三角格网" || cmd == "转三角网") { await CreateTinAsync(); return; }
             if (cmd == "约束三角网" || cmd == "约束Delaunay" || cmd == "约束剖分" || cmd == "breakline三角网") { await CreateConstrainedTinAsync(); return; }
             if (cmd == "裁剪三角网" || cmd == "三角网裁剪" || cmd == "边界三角网") { await CreateClippedTinAsync(); return; }
             if (cmd == "示例三角网" || cmd == "三角网示例") { GenerateSampleTrimesh(); return; }
