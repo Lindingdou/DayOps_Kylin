@@ -4,15 +4,14 @@ using System.Collections.Generic;
 namespace PitMine3D.Kylin.Cad;
 
 /// <summary>
-/// 开采程序逐期切分 —— 忠实移植原 MineAssLib TemplateDrivingEngine 的「距离驱动」核(可验证切片)：
-/// 沿推进方向把块体逐格投影到推进轴 → 按推进步距 advancePerPeriod 分期 → 逐期煤/岩体积 + 累计剥采比。
-/// 生成的分期量表正是 <see cref="TautString"/>(剥采比均衡)的输入(闭合"块体→分期→均衡"环)。
-/// 平面近似(陡帮 α→90° 台阶退距≈0, 与原测试 α=89° 一致); 缓帮台阶退距(s=a0+(cz−floorZ)/tanα)属工程细化, 记录。
-/// 纯逻辑、可单测。
+/// 开采程序逐期切分 —— 忠实移植原 MineAssLib TemplateDrivingEngine 的距离/量驱动核 + 台阶退距。
+/// 沿推进方向把块体逐格投影到推进轴(可选加台阶退距: 高处的格因帮坡后退) → 按步距(等距)或累计煤量(等煤量)分期
+/// → 逐期煤/岩体积 + 累计剥采比。生成的分期量表正是 <see cref="TautString"/>(剥采比均衡)的输入(闭合"块体→分期→均衡"环)。
+/// 纯逻辑、可单测。faceAngleDeg≤0 时退化为平面(陡帮/垂直, 无退距)。
 /// </summary>
 public static class DriveSequence
 {
-    public readonly record struct Cell(double X, double Y, double VolM3, bool IsCoal);
+    public readonly record struct Cell(double X, double Y, double Z, double VolM3, bool IsCoal);
 
     public sealed record PeriodTally(int Index, double CoalVolM3, double RockVolM3,
         double CumCoalVolM3, double CumRockVolM3, double CumStripRatio);
@@ -21,31 +20,62 @@ public static class DriveSequence
         double TotalCoalVolM3, double TotalRockVolM3, double OverallStripRatio);
 
     /// <summary>
-    /// 按推进步距分期。dir=推进方位(未归一化); advancePerPeriod=每期推进距 m; coalDensity=煤密度 t/m³(算剥采比 m³/t)。
-    /// maxPeriods&gt;0 则只取前若干期。累计剥采比 = 累计岩量 / (累计煤量·密度)。
+    /// 台阶剖面在高出底基准 h 处沿推进方向的水平退距(忠实原 BenchOffset)。
+    /// benchHeightM≤0 = 单斜面 h/tanα; 否则逐台阶(坡面 benchH/tanα + 平盘 bermW)+ 余高 hr/tanα。α 钳 [1,89]°。
+    /// </summary>
+    public static double BenchOffset(double h, double benchHeightM, double bermWidthM, double faceAngleDeg)
+    {
+        if (h <= 0) return 0;
+        double a = Math.Max(1.0, Math.Min(89.0, faceAngleDeg));
+        double tanFace = Math.Tan(a * Math.PI / 180.0);
+        if (tanFace <= 1e-9) return 0;
+        if (benchHeightM <= 0) return h / tanFace;
+        int nb = (int)(h / benchHeightM);
+        double hr = h - nb * benchHeightM;
+        return nb * (benchHeightM / tanFace + Math.Max(0.0, bermWidthM)) + hr / tanFace;
+    }
+
+    // 各格投影到推进轴 + 可选台阶退距 → 调整后位置 adj[i]; 出 sMin。setback 时用最低格作底基准。
+    private static (double[] adj, double sMin) Project(IReadOnlyList<Cell> cells, double ux, double uy,
+        bool setback, double benchHeightM, double bermWidthM, double faceAngleDeg)
+    {
+        double floorZ = double.MaxValue;
+        if (setback) foreach (var c in cells) if (c.Z < floorZ) floorZ = c.Z;
+        var adj = new double[cells.Count];
+        double sMin = double.MaxValue;
+        for (int i = 0; i < cells.Count; i++)
+        {
+            var c = cells[i];
+            double s = c.X * ux + c.Y * uy + (setback ? BenchOffset(c.Z - floorZ, benchHeightM, bermWidthM, faceAngleDeg) : 0);
+            adj[i] = s; if (s < sMin) sMin = s;
+        }
+        return (adj, sMin);
+    }
+
+    /// <summary>
+    /// 按推进步距分期(等距)。dir=推进方位; advancePerPeriod=每期推进距 m; coalDensity=煤密度 t/m³。
+    /// faceAngleDeg&gt;0 时加台阶退距(benchHeightM/bermWidthM 定台阶剖面); ≤0 = 平面。maxPeriods&gt;0 只取前若干期。
     /// </summary>
     public static DriveResult SweepByDistance(IReadOnlyList<Cell> cells, double dirX, double dirY,
-        double advancePerPeriod, double coalDensity, int maxPeriods = 0)
+        double advancePerPeriod, double coalDensity, int maxPeriods = 0,
+        double faceAngleDeg = 0, double benchHeightM = 0, double bermWidthM = 0)
     {
         double dl = Math.Sqrt(dirX * dirX + dirY * dirY);
         if (cells == null || cells.Count == 0 || dl < 1e-9 || advancePerPeriod <= 0 || coalDensity <= 0)
             return new DriveResult(Array.Empty<PeriodTally>(), 0, 0, 0);
         double ux = dirX / dl, uy = dirY / dl;
-
-        double sMin = double.MaxValue;
-        foreach (var c in cells) { double s = c.X * ux + c.Y * uy; if (s < sMin) sMin = s; }
+        var (adj, sMin) = Project(cells, ux, uy, faceAngleDeg > 0, benchHeightM, bermWidthM, faceAngleDeg);
 
         var coalByP = new Dictionary<int, double>();
         var rockByP = new Dictionary<int, double>();
         int maxP = -1;
-        foreach (var c in cells)
+        for (int i = 0; i < cells.Count; i++)
         {
-            double s = c.X * ux + c.Y * uy - sMin;
-            int p = (int)(s / advancePerPeriod);
+            int p = (int)((adj[i] - sMin) / advancePerPeriod);
             if (p < 0) p = 0;
             if (maxPeriods > 0 && p >= maxPeriods) continue;
-            if (c.IsCoal) coalByP[p] = coalByP.GetValueOrDefault(p) + c.VolM3;
-            else rockByP[p] = rockByP.GetValueOrDefault(p) + c.VolM3;
+            if (cells[i].IsCoal) coalByP[p] = coalByP.GetValueOrDefault(p) + cells[i].VolM3;
+            else rockByP[p] = rockByP.GetValueOrDefault(p) + cells[i].VolM3;
             if (p > maxP) maxP = p;
         }
 
@@ -55,33 +85,32 @@ public static class DriveSequence
         {
             double cv = coalByP.GetValueOrDefault(p), rv = rockByP.GetValueOrDefault(p);
             cumC += cv; cumR += rv;
-            double cumSR = cumC > 1e-9 ? cumR / (cumC * coalDensity) : 0;
-            periods.Add(new PeriodTally(p, cv, rv, cumC, cumR, cumSR));
+            periods.Add(new PeriodTally(p, cv, rv, cumC, cumR, cumC > 1e-9 ? cumR / (cumC * coalDensity) : 0));
         }
-        double overallSR = cumC > 1e-9 ? cumR / (cumC * coalDensity) : 0;
-        return new DriveResult(periods, cumC, cumR, overallSR);
+        return new DriveResult(periods, cumC, cumR, cumC > 1e-9 ? cumR / (cumC * coalDensity) : 0);
     }
 
     /// <summary>
-    /// 按煤量分期(等煤量, 忠实原 TemplateDrivingEngine volumeDriven 模式): 逐格投影推进轴 → 细分刀(sliceWidth) →
-    /// 顺推累计煤量, 每达 targetCoalVolM3 切一期(刀粒度, 每期≈目标煤量)。适合恒定产量规划。返回逐期煤/岩 + 累计剥采比。
+    /// 按煤量分期(等煤量, 恒定产量规划): 细分刀(sliceWidth) → 顺推累计煤量, 每达 targetCoalVolM3 切一期(刀粒度)。
+    /// faceAngleDeg&gt;0 时同样加台阶退距。
     /// </summary>
     public static DriveResult SweepByVolume(IReadOnlyList<Cell> cells, double dirX, double dirY,
-        double sliceWidth, double targetCoalVolM3, double coalDensity, int maxPeriods = 0)
+        double sliceWidth, double targetCoalVolM3, double coalDensity, int maxPeriods = 0,
+        double faceAngleDeg = 0, double benchHeightM = 0, double bermWidthM = 0)
     {
         double dl = Math.Sqrt(dirX * dirX + dirY * dirY);
         if (cells == null || cells.Count == 0 || dl < 1e-9 || sliceWidth <= 0 || targetCoalVolM3 <= 0 || coalDensity <= 0)
             return new DriveResult(Array.Empty<PeriodTally>(), 0, 0, 0);
         double ux = dirX / dl, uy = dirY / dl;
-        double sMin = double.MaxValue, sMax = double.MinValue;
-        foreach (var c in cells) { double s = c.X * ux + c.Y * uy; if (s < sMin) sMin = s; if (s > sMax) sMax = s; }
+        var (adj, sMin) = Project(cells, ux, uy, faceAngleDeg > 0, benchHeightM, bermWidthM, faceAngleDeg);
+        double sMax = double.MinValue; foreach (var s in adj) if (s > sMax) sMax = s;
         int nBins = (int)((sMax - sMin) / sliceWidth) + 1;
         var coalBin = new double[nBins]; var rockBin = new double[nBins];
-        foreach (var c in cells)
+        for (int i = 0; i < cells.Count; i++)
         {
-            int bi = (int)((c.X * ux + c.Y * uy - sMin) / sliceWidth);
+            int bi = (int)((adj[i] - sMin) / sliceWidth);
             if (bi < 0) bi = 0; if (bi >= nBins) bi = nBins - 1;
-            if (c.IsCoal) coalBin[bi] += c.VolM3; else rockBin[bi] += c.VolM3;
+            if (cells[i].IsCoal) coalBin[bi] += cells[i].VolM3; else rockBin[bi] += cells[i].VolM3;
         }
         var periods = new List<PeriodTally>();
         double pc = 0, pr = 0, cumC = 0, cumR = 0;

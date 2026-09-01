@@ -15,8 +15,8 @@ public class DriveSequenceTests
         var cells = new List<Cell>();
         foreach (double cx in new[] { 5.0, 15.0, 25.0 })
         {
-            for (int k = 0; k < 2; k++) cells.Add(new Cell(cx, 0, 1000, true));    // 2 煤
-            for (int k = 0; k < 8; k++) cells.Add(new Cell(cx, 0, 1000, false));   // 8 岩
+            for (int k = 0; k < 2; k++) cells.Add(new Cell(cx, 0, 0, 1000, true));    // 2 煤
+            for (int k = 0; k < 8; k++) cells.Add(new Cell(cx, 0, 0, 1000, false));   // 8 岩
         }
         return cells;
     }
@@ -62,7 +62,7 @@ public class DriveSequenceTests
     {
         // 4 刀(X=5/15/25/35), 每刀 1 煤 + 1 岩(各 vol 1000)。sliceWidth=10。
         var cells = new List<Cell>();
-        foreach (double cx in new[] { 5.0, 15.0, 25.0, 35.0 }) { cells.Add(new Cell(cx, 0, 1000, true)); cells.Add(new Cell(cx, 0, 1000, false)); }
+        foreach (double cx in new[] { 5.0, 15.0, 25.0, 35.0 }) { cells.Add(new Cell(cx, 0, 0, 1000, true)); cells.Add(new Cell(cx, 0, 0, 1000, false)); }
         // 目标煤量 2000 → 每期 2 刀(煤 2000) → 2 期。
         var r = DriveSequence.SweepByVolume(cells, 1, 0, sliceWidth: 10, targetCoalVolM3: 2000, coalDensity: 1.3);
         Assert.Equal(2, r.Periods.Count);
@@ -86,5 +86,30 @@ public class DriveSequenceTests
         Assert.Equal(1 + 3, csv.Trim().Split('\n').Length);     // 头 + 3 期
         // 首期 采出 = 2000·1.3/1e4 = 0.26 万t, 剥离 = 8000/1e4 = 0.8 万m³。
         Assert.Contains("1,0.26,0.8", csv);
+    }
+
+    [Fact]
+    public void Bench_offset_known_values()
+    {
+        Assert.Equal(0, DriveSequence.BenchOffset(0, 0, 0, 45), 6);
+        Assert.Equal(30, DriveSequence.BenchOffset(30, 0, 0, 45), 4);   // 单斜面 h/tan45=h
+        Assert.Equal(30 / System.Math.Tan(60 * System.Math.PI / 180), DriveSequence.BenchOffset(30, 0, 0, 60), 4);
+        Assert.Equal(40, DriveSequence.BenchOffset(30, 15, 5, 45), 4);  // 2 台阶: 2×(15/1+5)=40
+        Assert.Equal(25, DriveSequence.BenchOffset(20, 15, 5, 45), 4);  // 1 台阶(20)+余5: (15+5)+5=25
+    }
+
+    [Fact]
+    public void Setback_shifts_high_cells_to_later_periods()
+    {
+        // 同 XY(X=0) 两格: 底 Z=0 / 高 Z=30。
+        var cells = new List<Cell> { new(0, 0, 0, 1000, true), new(0, 0, 30, 1000, true) };
+        // 无退距(faceAngle=0): 两格同 X=0 → 同期 0。
+        Assert.Single(DriveSequence.SweepByDistance(cells, 1, 0, 10, 1.3).Periods);
+        // 有退距(45° 单斜面): 高格退距 30 → 期 3(底格期0)。
+        var sb = DriveSequence.SweepByDistance(cells, 1, 0, 10, 1.3, faceAngleDeg: 45);
+        Assert.Equal(4, sb.Periods.Count);                     // 期 0..3
+        Assert.Equal(1000, sb.Periods[0].CoalVolM3, 4);        // 底格
+        Assert.Equal(0, sb.Periods[1].CoalVolM3, 4);           // 空期(退距拉开)
+        Assert.Equal(1000, sb.Periods[3].CoalVolM3, 4);        // 高格
     }
 }
