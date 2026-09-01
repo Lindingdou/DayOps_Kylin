@@ -4983,6 +4983,23 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"属性统计(品位)：{Statistics.SummaryLine(s)} · 20 桶直方图（柱状图入场景）" + (name != null ? $" · CSV → {name}" : "");
     }
 
+    // 类别柱状图入场景助手: 把 (类别,值) 序列以 BarChartPlot 画到视口中部(0.3–0.7 宽·0.85–0.4 高)。
+    // 与直方图/曲线上屏同位同风格; 供煤类分布/设备分类等类别分布可视化复用。
+    private void DrawCategoryBars(IReadOnlyList<(string label, double value)> items, string valueName)
+    {
+        if (items == null || items.Count == 0) return;
+        double vw = ViewportHost.Bounds.Width, vh = ViewportHost.Bounds.Height;
+        var p0 = Viewport.ScreenToWorld(vw * 0.3, vh * 0.85) ?? (0.0, 0.0);
+        var p1 = Viewport.ScreenToWorld(vw * 0.7, vh * 0.4) ?? (100.0, 50.0);
+        double w = System.Math.Abs(p1.x - p0.x), h = System.Math.Abs(p1.y - p0.y);
+        if (w < 1e-6) w = 100; if (h < 1e-6) h = 50;
+        BeginChange();
+        foreach (var e in Cad.BarChartPlot.Build(items, System.Math.Min(p0.x, p1.x), System.Math.Min(p0.y, p1.y),
+                     w, h, System.Math.Max(h * 0.05, 1e-3), valueName))
+        { e.LayerName = _layers.Current.Name; _scene.Add(e); }
+        RefreshScene();
+    }
+
     // 块体多属性统计报告(原 BlockReportGenerator「每属性 min/max/mean/std/count+直方图」表格部分):
     // 对持有的全属性各算 min/max/mean/std/Q1/median/Q3 → CSV。仅 BLK 导入持全属性。
     private async Task BlockAttrReportAsync()
@@ -8187,7 +8204,10 @@ public partial class MainWindow : Window
         var r = Data.GeoDataQueries.GetEquipmentRoster(db.Connection);
         var parts = new List<string>();
         foreach (var c in r.ByCategory) parts.Add($"{c.Category} {c.Count}");
-        StatusMsg.Text = $"设备台账：共 {r.Total} 台（在役 {r.InService}）· 分类: " + string.Join(" / ", parts);
+        if (r.ByCategory.Count > 0)
+            DrawCategoryBars(r.ByCategory.Select(c => (c.Category, (double)c.Count)).ToList(), "台数");
+        StatusMsg.Text = $"设备台账：共 {r.Total} 台（在役 {r.InService}）· 分类: " + string.Join(" / ", parts)
+            + (r.ByCategory.Count > 0 ? " · 分类柱入场景" : "");
     }
 
     private void ProductionStatsCmd()
@@ -8995,7 +9015,8 @@ public partial class MainWindow : Window
         if (rows.Count == 0) { StatusMsg.Text = "产能分类对比：无产能数据"; return; }
         var parts = new List<string>();
         foreach (var r in rows) parts.Add($"{r.Category}({r.Units}台·{r.TotalOutputM3 / 1e4:0.#}万m³·{r.SharePct:0.#}%)");
-        StatusMsg.Text = $"产能分类对比：" + string.Join(" · ", parts);
+        DrawCategoryBars(rows.Select(r => (r.Category, r.TotalOutputM3 / 1e4)).ToList(), "万m³");
+        StatusMsg.Text = $"产能分类对比：" + string.Join(" · ", parts) + " · 分类柱入场景";
     }
 
     private void FaultByTypeCmd()
@@ -9007,7 +9028,8 @@ public partial class MainWindow : Window
         foreach (var r in rows) parts.Add($"{r.FaultType}({r.Events}次·{r.DowntimeHours:0.#}h·{r.DowntimeSharePct:0.#}%·累计{r.CumulativeSharePct:0.#}%)");
         // 帕累托 80/20: 前几类累计占 80% 停机
         int vital = 0; foreach (var r in rows) { vital++; if (r.CumulativeSharePct >= 80) break; }
-        StatusMsg.Text = $"故障类型分布(帕累托 前{vital}/{rows.Count}类占80%停机)：" + string.Join(" · ", parts);
+        DrawCategoryBars(rows.Select(r => (r.FaultType, r.DowntimeHours)).ToList(), "停机h");
+        StatusMsg.Text = $"故障类型分布(帕累托 前{vital}/{rows.Count}类占80%停机)：" + string.Join(" · ", parts) + " · 帕累托柱入场景";
     }
 
     private void AcceptanceByPhaseCmd()
@@ -9249,7 +9271,11 @@ public partial class MainWindow : Window
         string distStr = dist.Count > 0
             ? " · 样本分布 " + string.Join("/", dist.ConvertAll(d => $"{d.CoalType}{d.Samples}({d.SharePct:0.#}%)"))
             : "";
-        StatusMsg.Text = $"煤种分类（{cls.Count} 种）：" + string.Join(" · ", parts) + distStr;
+        // 煤类分布柱状图上屏(忠实原「煤类饼」量化)：类别→占比%
+        if (dist.Count > 0)
+            DrawCategoryBars(dist.Select(d => (d.CoalType, d.SharePct)).ToList(), "占比%");
+        StatusMsg.Text = $"煤种分类（{cls.Count} 种）：" + string.Join(" · ", parts) + distStr
+            + (dist.Count > 0 ? " · 煤类分布柱入场景" : "");
     }
 
     private void SeamBenchParamsCmd()

@@ -2747,3 +2747,15 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **续(同脉复用 CurvePlot)**: `CoalByElevationCmd`(分标高煤质)亦"已算未绘"——按标高带算厚度加权均值 `bands`(ZLow/ZHigh/WeightedMean/N)只拼成文本状态行。补: (WeightedMean, 带标高中点) 喂 `CurvePlot.Build` 上屏(轴名 品位/标高)=竖向剖面曲线; `ByElevation` 已按标高升序且跳空带, 折线沿 Y 单调不锯齿。复用已测 CurvePlot(无新逻辑, 单测仍 1305)。
 
 **本会话第 56 功能**。教训: **"统计图受阻"是又一条误记**——场景能画线/框/字即能画统计折线, 非只空间图。复审边界时, "受阻"标签若与已交付能力(能画直方图)冲突, 多半是误记。这是"复审自记边界"续脉: 记录 0-for-N 可靠, 边界与既有能力矛盾者优先复核。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二四八 类别柱状图 BarChartPlot（煤类分布/设备分类/产能/故障帕累托 上屏）
+
+**续"统计图能画"复审**: 除折线(§247)外, 大量**类别分布**只拼文本状态行——原版以「煤类饼/分类柱」呈现。场景能画柱(直方图已证), 类别柱只差一个通用助手。补 [BarChartPlot](src/Cad/BarChartPlot.cs)(与 HistogramPlot 互补: 任意 (类别,值) → 等宽竖条 ∝ 值/最大 + 类别标签(条下)/数值(条顶)+值轴; 空/零尺寸/全零安全) + [MainWindow](src/Views/MainWindow.axaml.cs) `DrawCategoryBars` 助手(视口中部同位, 复用 4 处)。
+
+**已算未绘→上屏的 4 命令**: `煤种分类`(煤类样本占比%, 忠实原「煤类饼」量化)· `设备台账`(分类台数)· `产能分类对比`(各类万m³)· `故障类型分布`(各类停机h, 帕累托——rows 已按停机降序)。
+
+**验证(自造已知值)**: [BarChartPlotTests](tests/PitMine3D.Kylin.Tests/BarChartPlotTests.cs) +3—— QM40/CY20/SM10: 最高条顶达图顶(y=20)·CY 高=20/40*20=10·类别与值轴名标签俱在·全零不除零 NaN·空/零宽返空。4 命令复用已测助手(无新逻辑)。**build 0 错·单测 1305→1308**。
+
+**本会话第 57 功能**。教训: 折线(CurvePlot)+ 类别柱(BarChartPlot) 两助手补齐后, "统计图受阻"边界基本瓦解——凡 (x,y) 序列或 (类别,值) 分布皆可场景上屏, 唯饼图/热力图等特殊型仍走 CSV。见 [[unlock-blocked-insights]]。
