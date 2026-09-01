@@ -2607,7 +2607,7 @@ public partial class MainWindow : Window
             if (e is PolylineEntity pl && pl.Points.Count >= 2) polys.Add(pl.Points);
         if (polys.Count == 0) { StatusMsg.Text = "中心线管理：场景无中线（多段线）"; return; }
         double tol = System.Math.Max(1e-6, SnapTolWorld(_lastPointer) * 0.5);
-        var (nodes, adj) = Cad.RoadNetwork.Build(polys, tol);
+        var (nodes, adj) = Cad.RoadNetwork.BuildNoded(polys, tol);
         int edges = 0, deadEnds = 0, junctions = 0, isolated = 0;
         double totLen = 0;
         for (int u = 0; u < adj.Count; u++)
@@ -2629,7 +2629,7 @@ public partial class MainWindow : Window
             if (e is PolylineEntity pl && pl.Points.Count >= 2) polys.Add(pl.Points);
         if (polys.Count == 0) { StatusMsg.Text = "瓶颈段分析：场景无中线（多段线）"; return; }
         double tol = System.Math.Max(1e-6, SnapTolWorld(_lastPointer) * 0.5);
-        var (nodes, adj) = Cad.RoadNetwork.Build(polys, tol);
+        var (nodes, adj) = Cad.RoadNetwork.BuildNoded(polys, tol);
         if (nodes.Count < 2) { StatusMsg.Text = "瓶颈段分析：路网节点不足"; return; }
         var ends = Cad.RoadNetwork.DanglingEndpoints(adj);
         System.Collections.Generic.IReadOnlyList<int> srcs;
@@ -2659,7 +2659,7 @@ public partial class MainWindow : Window
             if (e is PolylineEntity pl && pl.Points.Count >= 2) polys.Add(pl.Points);
         if (polys.Count == 0) { StatusMsg.Text = "路网运输指标：场景无中线（多段线）"; return; }
         double tol = System.Math.Max(1e-6, SnapTolWorld(_lastPointer) * 0.5);
-        var (nodes, adj) = Cad.RoadNetwork.Build(polys, tol);
+        var (nodes, adj) = Cad.RoadNetwork.BuildNoded(polys, tol);
         if (nodes.Count < 2) { StatusMsg.Text = "路网运输指标：路网节点不足"; return; }
         var ends = Cad.RoadNetwork.DanglingEndpoints(adj);
         System.Collections.Generic.IReadOnlyList<int> srcs;
@@ -2738,7 +2738,7 @@ public partial class MainWindow : Window
             if (e is PolylineEntity pl && pl.Points.Count >= 2) polys.Add(pl.Points);
         if (polys.Count == 0) { StatusMsg.Text = "路段分类：场景无中线(多段线)"; return; }
         double tol = System.Math.Max(1e-6, SnapTolWorld(_lastPointer) * 0.5);
-        var (nodes, adj) = Cad.RoadNetwork.Build(polys, tol);
+        var (nodes, adj) = Cad.RoadNetwork.BuildNoded(polys, tol);
         var r = Cad.RoadTopology.Analyze(nodes, adj);
         if (r.Segments.Count == 0) { StatusMsg.Text = "路段分类：未识别路段"; return; }
         BeginChange();
@@ -3330,7 +3330,7 @@ public partial class MainWindow : Window
         }
         if (pts.Count < 2) { StatusMsg.Text = "OD 运距矩阵：需 ≥2 个 OD 点(x,y[,name])"; return; }
         double tol = SnapTolWorld(_lastPointer);
-        var (nodes, adj) = RoadNetwork.Build(polys, tol > 0 ? tol : 1e-6);
+        var (nodes, adj) = RoadNetwork.BuildNoded(polys, tol > 0 ? tol : 1e-6);
         var idx = new int[pts.Count];
         for (int i = 0; i < pts.Count; i++) idx[i] = RoadNetwork.NearestNode(nodes, pts[i].x, pts[i].y);
         // 逐源单源最短距 → 矩阵
@@ -5173,7 +5173,7 @@ public partial class MainWindow : Window
         if (files.Count == 0) return;
 
         double tol = System.Math.Max(1e-6, SnapTolWorld(_lastPointer) * 0.5);
-        var (nodes, adj) = RoadNetwork.Build(polys, tol);
+        var (nodes, adj) = RoadNetwork.BuildNoded(polys, tol);
         double totalTon = 0, totalTonDist = 0; int ok = 0, skip = 0;
         foreach (var raw in System.IO.File.ReadAllLines(files[0].Path.LocalPath))
         {
@@ -6371,7 +6371,7 @@ public partial class MainWindow : Window
         if (polys.Count == 0) { StatusMsg.Text = "寻径：场景无路（多段线）"; return; }
 
         double tol = System.Math.Max(1e-6, SnapTolWorld(_lastPointer) * 0.5);
-        var (nodes, adj) = RoadNetwork.Build(polys, tol);
+        var (nodes, adj) = RoadNetwork.BuildNoded(polys, tol);
         int s = RoadNetwork.NearestNode(nodes, a.x, a.y);
         int g = RoadNetwork.NearestNode(nodes, b.x, b.y);
         var path = RoadNetwork.Dijkstra(adj, s, g);
@@ -6407,7 +6407,7 @@ public partial class MainWindow : Window
             if (e is PolylineEntity pl && pl.Points.Count >= 2) polys.Add(pl.Points);
         if (polys.Count == 0) { StatusMsg.Text = "备选路径：场景无路（多段线）"; return; }
         double tol = System.Math.Max(1e-6, SnapTolWorld(_lastPointer) * 0.5);
-        var (nodes, adj) = RoadNetwork.Build(polys, tol);
+        var (nodes, adj) = RoadNetwork.BuildNoded(polys, tol);
         int s = RoadNetwork.NearestNode(nodes, a.x, a.y);
         int g = RoadNetwork.NearestNode(nodes, b.x, b.y);
         const int K = 3;
@@ -6438,7 +6438,7 @@ public partial class MainWindow : Window
         foreach (var e in _scene.Entities) if (e is PolylineEntity pl && pl.Points.Count >= 2) polys.Add(pl.Points);
         if (polys.Count == 0) { StatusMsg.Text = "路网构建：场景无路（多段线）"; return; }
         double tol = System.Math.Max(1e-6, SnapTolWorld(_lastPointer) * 0.5);
-        var (nodes, adj) = RoadNetwork.Build(polys, tol);
+        var (nodes, adj) = RoadNetwork.BuildNoded(polys, tol);
         int edges = 0; for (int i = 0; i < adj.Count; i++) edges += adj[i].Count; edges /= 2;   // 无向
         RoadConnectivity.Components(adj, out int comps);
         double markSize = tol > 0 ? tol * 1.5 : 1.0;
@@ -6458,7 +6458,7 @@ public partial class MainWindow : Window
             if (e is PolylineEntity pl && pl.Points.Count >= 2) polys.Add(pl.Points);
         if (polys.Count == 0) { StatusMsg.Text = "路网校验：场景无路（多段线）"; return; }
         double tol = System.Math.Max(1e-6, SnapTolWorld(_lastPointer) * 0.5);
-        var (nodes, adj) = RoadNetwork.Build(polys, tol);
+        var (nodes, adj) = RoadNetwork.BuildNoded(polys, tol);
         RoadConnectivity.Components(adj, out int comps);
         if (comps <= 1) { StatusMsg.Text = $"路网校验：连通(1 片, {nodes.Count} 节点)——网络完整"; return; }
         // maxGap 按包围盒对角取, 尺度稳健

@@ -3271,3 +3271,15 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(合成已知值 + 收敛)**: [AdaptiveVoxelTests](tests/PitMine3D.Kylin.Tests/AdaptiveVoxelTests.cs) +7 —— 半空间占比=0.5(精确) · 全内/全外/N=1 二值 · 实心 cell→1 满叶子 · 空→0 叶子 · 半边界 cell 细分总体积≈半(3.8~4.2) · depth0=均匀(=中心数×格体积) · **球 r=5: 自适应体积∈(490,555)、出边界百分比块、且不劣于均匀**(|自适应−解析|≤|均匀−解析|, 证无偏更准)。**build 0 错·单测 1396→1403**。
 
 **本会话第 81 功能**。教训: **"已覆盖"标记(尤其关键字匹配)须周期性验实现深度**——VoxelVolumeBuilder 曾标覆盖(体素命令在)但实为均匀退化, 缺子块精度核。第八次复核不是确认收敛而是**再破**——meta 教训"收敛claim 不可靠"再验。见 [[unlock-blocked-insights]] [[faithfulness-only-original-commands]]。
+
+---
+
+## §二八三 路网交叉口打断 noding（RoadGraphBuilder 退化补全）—— 再核破收敛(其二)
+
+续 §282：继续再核 §277 标"覆盖"的 keyword-matched 类。`RoadGraphBuilder`(443)之前只验了 K最短路(Yen)在, **未验建图核**——发现 **Kylin `RoadNetwork.Build` 仅按折线顶点连边, 不打断跨段交叉**：两路 X 十字相交(交点非顶点)→**路由不连通**(真实路网满是跨段交叉, 此为路由正确性缺陷)。原 `RoadGraphBuilder.NodePolylines` 做 X/T 交叉 noding(Z 闸门区分平交/立交)。
+
+**补 §82 [RoadNetwork](src/Cad/RoadNetwork.cs)** `NodePolylines`(忠实原, 两两段内部交点为断点, 复用已有 `PolylineIntersect.SegSeg`; 交点落端点不断交顶点合并; X 两线各断/T 干线断支线端点并) + `SplitPolyline` + `BuildNoded`(=noding 后 Build)。**2D 记录**: 无逐点 Z, 平面相交一律打断(原 Z 闸门区分立交, Kylin 2D 无法区分, 记录)。**接线**: MainWindow 10 处路由/拓扑 `RoadNetwork.Build(polys)` → `BuildNoded(polys)`(寻径/OD/瓶颈/指标/中心线管理), 使 X/T 交叉真正连通; Build 保留(向后兼容, 现有测试不破)。
+
+**验证(合成已知值 + 退化对照)**: [RoadNodingTests](tests/PitMine3D.Kylin.Tests/RoadNodingTests.cs) +5 —— X 十字→断 4 段 + BuildNoded 连通; **未 noding 的 Build→X 不连通(证退化存在)**; T 丁字→断 3 段 + 连通; 平行→不断 + 正确不连; 端点相接→不双断 + 连通。**build 0 错·单测 1403→1408**。
+
+**本会话第 82 功能**。教训: **§277"覆盖"标记(关键字匹配的 keyword-matched 类)系统性不可靠**——两轮再核(§81 VoxelVolumeBuilder 均匀退化 + §82 RoadGraphBuilder noding 退化)皆破"收敛", 各挖真缺(§81 体素精度 + §82 路由正确性)。**meta 教训"收敛claim 不可靠"第 N 次验证; keyword-match 覆盖 ≠ 实现深度, 须逐一验建图/精度核心**。见 [[unlock-blocked-insights]] [[faithfulness-only-original-commands]]。

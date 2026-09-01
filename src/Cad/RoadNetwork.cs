@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace PitMine3D.Kylin.Cad;
 
@@ -37,6 +38,92 @@ public static class RoadNetwork
             }
         return (nodes, adj);
     }
+
+    /// <summary>
+    /// 交叉口打断（noding）——忠实原 RoadGraphBuilder.NodePolylines：把两两折线段的<b>内部</b>交点作为断点，
+    /// 在各自折线上插点并打断成子段（X 十字：两线各断；T 丁字：被搭线在交点处断，搭线端点靠顶点吸附并入）。
+    /// 交点落段端点(容差内)不打断，交给建图时的顶点合并。<b>2D 场景</b>：无逐点 Z，平面相交一律打断
+    /// （原有 Z 闸门区分平交/立交；Kylin 2D 无法区分立体交叉，已记录）。
+    /// </summary>
+    public static List<IReadOnlyList<(double x, double y)>> NodePolylines(
+        IEnumerable<IReadOnlyList<(double x, double y)>> polys, double tol)
+    {
+        var lines = polys.Where(p => p != null && p.Count >= 2).ToList();
+        int n = lines.Count;
+        double tol2 = Math.Max(tol, 1e-9) * Math.Max(tol, 1e-9);
+        var breaks = new List<(int seg, double x, double y)>[n];
+        for (int i = 0; i < n; i++) breaks[i] = new List<(int, double, double)>();
+
+        void AddBreak(int li, int seg, (double x, double y) p)
+        {
+            var a = lines[li][seg]; var b = lines[li][seg + 1];
+            if (D2(p, a) <= tol2 || D2(p, b) <= tol2) return;              // 落端点 → 交顶点合并处理
+            foreach (var br in breaks[li]) if (br.seg == seg && D2((br.x, br.y), p) <= tol2) return; // 去重
+            breaks[li].Add((seg, p.x, p.y));
+        }
+
+        for (int i = 0; i < n; i++)
+            for (int j = i + 1; j < n; j++)
+                for (int si = 0; si + 1 < lines[i].Count; si++)
+                    for (int sj = 0; sj + 1 < lines[j].Count; sj++)
+                    {
+                        var hit = PolylineIntersect.SegSeg(lines[i][si], lines[i][si + 1], lines[j][sj], lines[j][sj + 1]);
+                        if (hit is { } p) { AddBreak(i, si, p); AddBreak(j, sj, p); }
+                    }
+
+        var result = new List<IReadOnlyList<(double x, double y)>>();
+        for (int i = 0; i < n; i++)
+        {
+            if (breaks[i].Count == 0) { result.Add(lines[i]); continue; }
+            result.AddRange(SplitPolyline(lines[i], breaks[i], tol2));
+        }
+        return result;
+    }
+
+    private static List<IReadOnlyList<(double x, double y)>> SplitPolyline(
+        IReadOnlyList<(double x, double y)> line, List<(int seg, double x, double y)> brk, double tol2)
+    {
+        // 组装插入断点后的顶点序列（带"是否断点"标记），断点处切分。
+        var verts = new List<(double x, double y)>();
+        var isCut = new List<bool>();
+        void Push((double x, double y) p, bool cut)
+        {
+            if (verts.Count > 0 && D2(verts[verts.Count - 1], p) <= tol2) { if (cut) isCut[isCut.Count - 1] = true; return; }
+            verts.Add(p); isCut.Add(cut);
+        }
+        Push(line[0], false);
+        for (int s = 0; s + 1 < line.Count; s++)
+        {
+            var a = line[s]; var b = line[s + 1];
+            double dx = b.x - a.x, dy = b.y - a.y, L2 = dx * dx + dy * dy;
+            var pts = brk.Where(br => br.seg == s).Select(br => (br.x, br.y)).ToList();
+            pts.Sort((p, q) =>
+            {
+                double tp = L2 < 1e-12 ? 0 : ((p.x - a.x) * dx + (p.y - a.y) * dy);
+                double tq = L2 < 1e-12 ? 0 : ((q.x - a.x) * dx + (q.y - a.y) * dy);
+                return tp.CompareTo(tq);
+            });
+            foreach (var p in pts) Push(p, true);
+            Push(b, false);
+        }
+        var outp = new List<IReadOnlyList<(double x, double y)>>();
+        var cur = new List<(double x, double y)> { verts[0] };
+        for (int k = 1; k < verts.Count; k++)
+        {
+            cur.Add(verts[k]);
+            if (isCut[k] && k < verts.Count - 1) { outp.Add(cur); cur = new List<(double x, double y)> { verts[k] }; }
+        }
+        if (cur.Count >= 2) outp.Add(cur);
+        return outp;
+    }
+
+    /// <summary>先 noding(交叉打断) 再建图 —— 路网寻径/拓扑的正确入口：使 X/T 交叉真正连通(否则跨段交叉不连)。</summary>
+    public static (List<(double x, double y)> nodes, List<List<(int to, double w)>> adj) BuildNoded(
+        IEnumerable<IReadOnlyList<(double x, double y)>> polys, double tol)
+        => Build(NodePolylines(polys, tol), tol);
+
+    private static double D2((double x, double y) a, (double x, double y) b)
+    { double dx = a.x - b.x, dy = a.y - b.y; return dx * dx + dy * dy; }
 
     /// <summary>Dijkstra 最短路，返回节点索引路径；不可达返回空。</summary>
     public static List<int> Dijkstra(List<List<(int to, double w)>> adj, int start, int goal)
