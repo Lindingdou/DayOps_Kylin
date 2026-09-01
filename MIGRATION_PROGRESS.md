@@ -3171,3 +3171,22 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **判定=记录不实现**: (1)Kylin **已有** `RoadEvolutionOptions`(src/Cad/RoadEvolutionModel.cs, 忠实移植)且 `演化对比`(EvolutionCompareAsync)以其默认值运行——演化对比核心功能已在; (2)ExtendTriggerSettings 的增量=`延拓触发设置`**交互设置对话框**(§274 死按钮之一)的后端 + 自动延拓触发工作流(基于推进步/时段自动触发路网延拓); (3)`ToEvolutionOptions()` 映射为平凡字段拷贝, 无对话框则等同 Kylin 现用默认值(功能无增量)。属**交互式配置**(标准指令: 交互/配置→记录, 可验证功能→实现)。测试仅验其字段映射(纯函数), 无对话框/自动触发工作流则无用户可见功能增量。
 
 **教训**: 测试交叉核的"无源"候选须再分 (a)真算法缺口(RoadCenterlineExtractor→实现 §275) vs (b)交互配置后端(ExtendTriggerSettings→记录)。**有测试≠须实现**——须辨被测者是"域算法"还是"交互配置的平凡映射"。见 [[unlock-blocked-insights]] [[shell-completeness-priority]]。
+
+---
+
+## §二七六 道路网连通增强（RoadNetworkConnector）+ PointCloudLib 模块清扫
+
+**第十六角度续: 清扫 PointCloudLib 全模块**（刚产出 §275 的模块, 逐一核 >80 行实质类）。
+
+**补 §80 [RoadNetworkConnector](src/Cad/RoadNetworkConnector.cs)**(365 行, 纯托管, 仅 System)——道路网连通增强: ① union-find 焊接相距≤SnapTol 的近失端点到质心; ② 桥接悬空断头(落线段中部则**打断成 T 形节点**), 坡度闸门(自动线跨台阶面不连, 手动线免限); ③ 手动补充线宽容半径(60 vs 25)+ 可选按 TIN 铺贴(IRoadZSampler)。**Kylin 原仅 CenterlineJunctions 分类 + BuildRoadNetworkCmd 报连通片数, 无主动连通增强(焊接/桥接)**——真缺口。命令 `路网连通增强`(选≥2 中线否则全场景 → 连通后替换原线)。2D 场景 Z=0(焊接/坡度退化为平面判距, 已记录)。
+
+**验证(合成已知值, 逐用例按算法推演)**: [RoadNetworkConnectorTests](tests/PitMine3D.Kylin.Tests/RoadNetworkConnectorTests.cs) +7 —— 端点相距2≤SnapTol4→焊2端点0桥接; 相距10∈(4,25]→桥1段(3线); 50>25→不连; 支线落干线中部20→桥1段+打断1处(4线); 平距10但坡78.7°>14°→自动线拒连; 手选双线间距40(自动25够不着/手动60可连)→桥1段; 空输入→空。**build 0 错·单测 1389→1396**。原无 C# 测试(仅 native test_skeleton.cpp), 逐行忠实移植 + 合成已知值(端点距/坡度/T打断为确定性几何, 可推演)。
+
+**PointCloudLib 清扫记录(不实现, 各有因)**:
+- `RoadSkeletonExtractor`(875 行): **mesh 基**道路骨架提取(需 TIN verts/tris), 原**无 C# 测试**(仅 native test_skeleton.cpp)——不可验证参照; 且功能(提取道路中心线)已由 §275 台阶线配对法覆盖 → **记录**(不可验证的替代算法)。
+- `VolumeReportGenerator`(541 行): 分析部分(按标高带/按连通块)Kylin 已移植; 余为 PDF/XLSX 文件导出(格式层, Kylin 出 CSV 等价) → **记录**(格式-only)。
+- `VolumeSplitClosedResult`(252)/`PointCloudQualityStats`(168): **解析 native PMVC/PMQS 二进制** → 记录(native 结果解析器, Kylin 无内核不产该二进制)。
+- `MeshZSampler`(206): mesh 取 Z(3D 铺贴), Kylin 2D 场景 → 记录(接口已在 RoadNetworkConnector 备, draping 可选空转)。
+- `RegionClip`(174)/`BenchAnalyzer`(99): 点内判定/台阶分析工具, Kylin 有等价(ClipPolygon/BenchWidthIdentifier 等) → 覆盖。
+
+**教训**: 产出缺口的模块值得**全模块清扫**(§275 出 RoadCenterlineExtractor→顺藤 §276 出 RoadNetworkConnector)。**无原测试的纯托管算法仍可移植**——若行为确定性(几何判距/坡度/打断)可**合成已知值逐用例推演**; 但需 mesh/native 二进制/仅 native 测试者→记录。见 [[unlock-blocked-insights]]。

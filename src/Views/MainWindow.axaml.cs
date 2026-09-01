@@ -785,6 +785,7 @@ public partial class MainWindow : Window
             if (cmd == "两期点云算量" || cmd == "两期算量" || cmd == "两期土方") { await TwoEpochVolumeAsync(); return; }
             if (cmd == "圈范围算量" || cmd == "圈量" || cmd.StartsWith("圈范围算量 ")) { await BoundaryVolumeAsync(cmd); return; }
             if (cmd == "提取道路中心线" || cmd == "道路中线" || cmd == "提取道路中线") { ExtractCenterline(); return; }
+            if (cmd == "路网连通增强" || cmd == "连通增强" || cmd == "路网桥接" || cmd == "路网连通") { RoadConnectCmd(); return; }
             if (cmd == "点对点寻径" || cmd == "寻径" || cmd == "点对点寻路") { StartPathfind(); return; }
             if (cmd == "备选路径" || cmd == "K最短路" || cmd == "备用路径") { StartKPathfind(); return; }
             if (cmd == "路网校验" || cmd == "连通性诊断" || cmd == "路网体检") { ValidateRoadNetwork(); return; }
@@ -4790,6 +4791,45 @@ public partial class MainWindow : Window
         }
         RefreshScene();
         StatusMsg.Text = "自动" + res.Summary;
+    }
+
+    // 路网连通增强(忠实原 RoadNetworkConnector): 场景中线(多段线) → 焊接近失端点 + 桥接悬空断头(落线段中部则打断成T)
+    // → 用连通后的折线集替换原线。源=选中折线(≥2)否则全场景折线。2D 场景 Z=0(高程闸门/焊接退化为平面判距)。
+    private void RoadConnectCmd()
+    {
+        var src = _selected.FindAll(e => e is PolylineEntity);
+        if (src.Count < 2)
+        {
+            src = new System.Collections.Generic.List<SceneEntity>();
+            foreach (var e in _scene.Entities)
+                if (e is PolylineEntity pl && pl.Points.Count >= 2) src.Add(e);
+        }
+        if (src.Count < 2) { StatusMsg.Text = "路网连通增强：请选≥2 条中线，或场景中先有路网中线"; return; }
+
+        var lines = new System.Collections.Generic.List<double[]>();
+        foreach (var e in src)
+        {
+            if (e is not PolylineEntity pl || pl.Points.Count < 2) continue;
+            var flat = new double[pl.Points.Count * 3];
+            for (int i = 0; i < pl.Points.Count; i++)
+            { flat[3 * i] = pl.Points[i].x; flat[3 * i + 1] = pl.Points[i].y; flat[3 * i + 2] = 0.0; }
+            lines.Add(flat);
+        }
+        var res = Cad.RoadNetworkConnector.Connect(lines, null, new Cad.RoadConnectOptions());
+        if (res.Lines.Count == 0) { StatusMsg.Text = "路网连通增强：无输出（中线退化？）"; return; }
+
+        BeginChange();
+        foreach (var e in src) _scene.Remove(e);             // 移除原线
+        foreach (var cl in res.Lines)                        // 加入连通后的线
+        {
+            var poly = new PolylineEntity { Cr = 0.95f, Cg = 0.85f, Cb = 0.30f };
+            for (int i = 0; i < cl.Length / 3; i++) poly.Points.Add((cl[3 * i], cl[3 * i + 1]));
+            AssignLayer(poly); poly.Cr = 0.95f; poly.Cg = 0.85f; poly.Cb = 0.30f;
+            _scene.Add(poly);
+        }
+        _selected.Clear();
+        RefreshScene();
+        StatusMsg.Text = res.Summary;
     }
 
     // 排土条带：选中闭合多段线内按间距生成平行线条带
@@ -10094,7 +10134,7 @@ public partial class MainWindow : Window
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割","移除障碍物",
         // 块体/运输/路网
-        "块体模型","导出PMB","属性赋值","字高归一化","资源量","面约束块体","离散化模型","采场排土场识别","中长远进度计划","短期生产计划","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","瓶颈段分析","路网运输指标","结构路面","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道","直线斜坡道",
+        "块体模型","导出PMB","属性赋值","字高归一化","资源量","面约束块体","离散化模型","采场排土场识别","中长远进度计划","短期生产计划","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","瓶颈段分析","路网运输指标","结构路面","中线交点","路段分类","演化对比","提取道路中心线","路网连通增强","螺旋斜坡道","折返斜坡道","直线斜坡道",
         // 生产计划/投影
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","开采程序切分","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
