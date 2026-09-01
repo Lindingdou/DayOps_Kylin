@@ -3021,3 +3021,15 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值+集成)**: [LandformClassifierTests](tests/PitMine3D.Kylin.Tests/LandformClassifierTests.cs) +5—— Components(分离块+minCells)·FillHoles(环填洞)·Simplify(共线→首末)·空输入不抛; **集成: 碗地形(中心60边100)台阶线→识别出采场(pit)**。**build 0 错·单测 1360→1365**。
 
 **本会话第 73 功能**(最大单项, 550 行栅格管线机械移植)。教训: **§52 "高估复杂度"再验——550 行看着吓人, 实为自包含纯栅格算子(Dilate/Erode/Close/FillHoles/BoxBlur/Components/TraceBoundary/DP/环带残差), 逐个机械移植即成**。InternalsVisibleTo 让内部算子逐个已知值验 + 碗地形集成验。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二六七 文字高度归一化（Host/Cad 目录 —— Modules 之外的算法）
+
+**第十二角度: 枚举 Host/PitMineApp/Cad/(Modules 之外的 app 自带 CAD 算法)**。前番类枚举只覆 Modules; Host/Cad 有导入/导出/UndoRedo/FileTree/属性 基础设施——多覆盖(格式服务/文件树/属性), 但挖出 **`TextHeightNormalizer`** Kylin 缺: 修正导入 DXF 里"文字高度相对图幅异常巨大/缺失"(paper-space 当 model-space、mm 当 m、占位值)。
+
+**补** [TextHeightNormalizer](src/Cad/TextHeightNormalizer.cs)(忠实全移): ① 几何算图幅对角线 D; ② 扫文字高度挑正常范围 [D·0.0001, D·0.05] 取中位数 typical; ③ 逐文字 高度&gt;D·0.05(离群)或≤0(缺失)→typical, 其余原样; 全异常时 typical 兜底 D·0.005。命令 `字高归一化`([MainWindow](src/Views/MainWindow.axaml.cs) `TextHeightNormalizeCmd`): 场景几何算图幅→归一文字高度→报修正条数。
+
+**验证(已知值)**: [TextHeightNormalizerTests](tests/PitMine3D.Kylin.Tests/TextHeightNormalizerTests.cs) +3—— 图幅1000² D≈1414: 正常{4,5,6}中位5, 591离群/0缺失→5(修正2条)、正常原样; 全异常→兜底 D·0.005; 无几何→正数原样非正给1。**build 0 错·单测 1365→1368**。
+
+**本会话第 74 功能**。教训: **第十二角度=Host/App 自带 Cad 目录(Modules 之外)**——类枚举须含 app 主程序的 Cad/ 子目录, 非仅插件 Modules。又证"声明收敛后仍有盲区"(此前claim class-level 完整, 漏了 Host/Cad)。见 [[unlock-blocked-insights]]。

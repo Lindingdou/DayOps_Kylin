@@ -1164,6 +1164,7 @@ public partial class MainWindow : Window
             if (cmd == "调用选择集") { RecallSelSet(); return; }
             if (cmd == "刷新") { Regen(); return; }
             if (cmd == "特性" || cmd == "属性" || cmd.StartsWith("特性 ") || cmd.StartsWith("属性 ")) { PropertiesCmd(cmd); return; }
+            if (cmd == "字高归一化" || cmd == "字高归一" || cmd == "文字高度归一化" || cmd == "修正字高") { TextHeightNormalizeCmd(); return; }
             if (cmd == "清理标记" || cmd == "清除标记") { ClrMark(); return; }
             if (cmd == "修剪" || cmd == "延伸") { StartTrim(); return; }
             if (cmd == "圆TTR" || cmd == "圆(切切半径)") { StartTTR(); return; }
@@ -5317,6 +5318,33 @@ public partial class MainWindow : Window
         double sr = coalVol > 1e-9 ? rockVol / coalVol : 0;
         StatusMsg.Text = $"块体煤岩分类(煤码[{string.Join(",", coal)}]{(rock.Count > 0 ? $"·岩码[{string.Join(",", rock)}]" : "·非煤即岩")}·容差{tol})："
             + $"煤 {nc} 块({coalVol / 1e4:0.#}万m³)·岩 {nr} 块({rockVol / 1e4:0.#}万m³)·忽略 {ni} / 共 {_lastBlocks.Count} · 剥采比 {sr:0.##}";
+    }
+
+    // 字高归一化(忠实原 TextHeightNormalizer): 修正导入文字里相对图幅异常巨大/缺失的字高(逐实体离群修正)。
+    private void TextHeightNormalizeCmd()
+    {
+        var texts = _scene.Entities.OfType<TextEntity>().ToList();
+        if (texts.Count == 0) { StatusMsg.Text = "字高归一化：场景无文字"; return; }
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue; bool any = false;
+        void Acc(double x, double y) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; any = true; }
+        foreach (var e in _scene.Entities)
+            switch (e)
+            {
+                case LineEntity l: Acc(l.X0, l.Y0); Acc(l.X1, l.Y1); break;
+                case PolylineEntity pl: foreach (var p in pl.Points) Acc(p.Item1, p.Item2); break;
+                case RectEntity rc: Acc(rc.X0, rc.Y0); Acc(rc.X1, rc.Y1); break;
+                case CircleEntity c: Acc(c.Cx - c.Radius, c.Cy - c.Radius); Acc(c.Cx + c.Radius, c.Cy + c.Radius); break;
+                case ArcEntity a: Acc(a.X1, a.Y1); Acc(a.X2, a.Y2); Acc(a.X3, a.Y3); break;
+                case PointEntity pt: Acc(pt.X, pt.Y); break;
+                case PolygonEntity pg: Acc(pg.Cx - pg.Radius, pg.Cy - pg.Radius); Acc(pg.Cx + pg.Radius, pg.Cy + pg.Radius); break;
+            }
+        double w = any ? maxX - minX : 0, h = any ? maxY - minY : 0;
+        var norm = new Cad.TextHeightNormalizer(w, h, texts.Select(t => t.Height));
+        if (!norm.IsActive) { StatusMsg.Text = "字高归一化：无有效图幅几何(需线/多段线等参照)"; return; }
+        BeginChange();
+        foreach (var t in texts) t.Height = norm.Correct(t.Height);
+        RefreshScene();
+        StatusMsg.Text = $"字高归一化：{texts.Count} 文字 · 图幅对角线 {norm.Diagonal:0.#} · 典型字高 {norm.TypicalHeight:0.##} · 修正 {norm.CorrectedCount} 条(离群/缺失→典型)";
     }
 
     // 筛选块体：只显示品位 ≥ 平均品位 的块(矿块)
@@ -10026,7 +10054,7 @@ public partial class MainWindow : Window
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割","移除障碍物",
         // 块体/运输/路网
-        "块体模型","导出PMB","属性赋值","资源量","面约束块体","离散化模型","采场排土场识别","中长远进度计划","短期生产计划","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","瓶颈段分析","路网运输指标","结构路面","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道","直线斜坡道",
+        "块体模型","导出PMB","属性赋值","字高归一化","资源量","面约束块体","离散化模型","采场排土场识别","中长远进度计划","短期生产计划","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","瓶颈段分析","路网运输指标","结构路面","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道","直线斜坡道",
         // 生产计划/投影
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","开采程序切分","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
