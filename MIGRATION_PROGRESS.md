@@ -1882,3 +1882,12 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - **Yen K 最短路 `RoadNetwork.KShortestPaths`**: 逐点核验**算法正确**——① 候选集 B 声明在 kk 循环外(跨轮持久, Yen 要求); ② 边移除遍历**全部 A 路径**中同 root 者(非仅 A[kk-1], 这是 Yen 最常见错点, Kylin 正确); ③ root 中间节点排除(除 spur); ④ 候选对 A(seen)与 B 双重去重; ⑤ 每轮从 B 取最小权入 A。4 测覆盖(菱形 2 路排序/K=1/不连通空/中路 3 路升序 20-22-24)。**正确+忠实**。
 
 **★双轴收敛确认**: 本会话保真度审计累计 **10 核心算法**(估值半径[修]/地形插值/克里金/储量/台阶距/两期算量[记]/编组 ErlangC+DP/时序预测/煤质分析/Yen K短路)——**1 真 bug 修复(估值半径) + 8 忠实/正确确认 + 1 低影响记录**。命令完整性(四表+源码+P/Invoke 根)与算法保真度(10 算法逐公式核验)**双轴均收敛**: 早期各揪出真问题(命令冗余采区划分[修] / 估值半径[修]), 后续系统核验多为确认忠实。memory 标"忠实移植"的算法经独立核验**确属忠实**。可验证范围内功能与保真双达成。本轮 0 修 + 1 正确确认。
+
+## 一五九、保真度审计续六(闭合) —— 层位展点漏第二数据源(见煤点)真缺口 · 修
+
+审完剩余 3 算法, 前 2 忠实, 第 3 揪出真缺口:
+- **RoadCrossSection(超高加宽)**: ε=车道数·轴距²/(2R) + e=clamp(V²/(127R)−μ, 0, 上限) 与原 MineAssLibPlugin:4049-4050 **逐字一致**。忠实(且原版真有此功能, 非发明——MineAssLib 坑线横断面阶段④)。
+- **SlopeEstimator(工作帮坡角)**: 中心化 LSQ 拟合平面 z'=a·x'+b·y' + 沿推进方向坡度 atan(|a·dx+b·dy|)·180/π 与原 WorkingSlopeEstimator:45/61/62 **一致**。忠实。
+- **★HorizonPointBuilder(层位展点)真缺口·修**: 原版**双源**展点(①borehole_seam_result 顶=底+采用厚度 ②coal_observation_point 见煤点 顶=底+见煤厚度), Kylin `GetHorizonPoints` **只读源①漏源②**——而 Kylin **有「导入见煤点」命令**(§758→ImportObservationPoints 填 coal_observation_point)且该表建表存在, 用户导入见煤点后**层位展点/层位求交却不展绘**(种子该表 0 行故此前测未覆盖)。修: `GetHorizonPoints` union 源② coal_observation_point(底=floor_elevation, 顶=底+seam_thickness), 忠实原双源。+1 单测(导入见煤点→GetHorizonPoints 含其底 99999/顶 100006)。1017 测全绿, 0 错, smoke [GLINIT] 正常。
+
+**保真轴闭合**: 累计 **13 核心算法审计——2 真 bug 修(估值半径/层位展点漏源) + 10 忠实/正确确认 + 1 低影响记录**。判据: 命令有但**数据源不全**也是真缺口(尤其原多源 Kylin 单源, 且另有导入命令能填空表)——种子空表掩盖, 靠"原用几个源"对拍揪出。本轮 1 修 + 2 忠实确认。

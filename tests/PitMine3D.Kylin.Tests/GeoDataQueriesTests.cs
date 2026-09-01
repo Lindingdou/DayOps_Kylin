@@ -454,6 +454,26 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Horizon_points_include_coal_observation_points()
+    {
+        // 忠实原双源展点：见煤点 coal_observation_point 也应参与层位展点(底=floor_elevation, 顶=底+见煤厚度)
+        using var db = GeoDatabase.OpenSeeded();
+        int before = GeoDataQueries.GetHorizonPoints(db.Connection).Count;
+        string seam;
+        using (var q = db.Connection.CreateCommand()) { q.CommandText = "SELECT code FROM coal_seam_def LIMIT 1"; seam = (string)q.ExecuteScalar(); }
+        var o = GeoDataQueries.ImportObservationPoints(db.Connection, new[]
+        {
+            (IReadOnlyDictionary<string,string>)new Dictionary<string,string>
+            { ["point_id"]="CJD_T1", ["seam_code"]=seam, ["x"]="500000", ["y"]="4000000", ["seam_thickness"]="7", ["floor_elevation"]="99999" }
+        }, true);
+        Assert.True(o.Inserted == 1, $"见煤点导入 ins={o.Inserted} err={o.Errors}");
+        var pts = GeoDataQueries.GetHorizonPoints(db.Connection);
+        Assert.Equal(before + 2, pts.Count);                                              // 见煤点贡献 底+顶 两点
+        Assert.Contains(pts, p => !p.IsRoof && System.Math.Abs(p.Z - 99999) < 1e-6);      // 底=floor_elevation
+        Assert.Contains(pts, p => p.IsRoof && System.Math.Abs(p.Z - (99999 + 7)) < 1e-6); // 顶=底+见煤厚度
+    }
+
+    [Fact]
     public void Kpi_trend_by_year_ratios_normalized()
     {
         using var db = GeoDatabase.OpenSeeded();

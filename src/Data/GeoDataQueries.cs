@@ -960,22 +960,42 @@ public static class GeoDataQueries
 
     public sealed record HorizonPoint(string SeamCode, bool IsRoof, double X, double Y, double Z);
 
-    /// <summary>层位展点（忠实 HorizonPointBuilder）：borehole_seam_result join 孔位 → 分煤层 底板(floor_elevation)/顶板(底+采用厚度) 高程点。</summary>
+    /// <summary>层位展点（忠实 HorizonPointBuilder 双源）：① borehole_seam_result join 孔位(底=floor_elevation, 顶=底+采用厚度)
+    /// ② coal_observation_point 见煤点(自带 x/y; 底=floor_elevation, 顶=底+见煤厚度 seam_thickness)。分煤层顶/底板高程点。</summary>
     public static List<HorizonPoint> GetHorizonPoints(SqliteConnection conn, bool includeRoof = true, bool includeFloor = true)
     {
         var pts = new List<HorizonPoint>();
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = @"SELECT sr.seam_code, b.x, b.y, sr.floor_elevation, sr.adopted_thickness
-                            FROM borehole_seam_result sr JOIN borehole b ON b.id = sr.borehole_id
-                            WHERE sr.seam_code IS NOT NULL AND sr.floor_elevation IS NOT NULL";
-        using var rd = cmd.ExecuteReader();
-        while (rd.Read())
+        // ① 钻孔见煤成果 borehole_seam_result(join 孔位取 x/y)
+        using (var cmd = conn.CreateCommand())
         {
-            string seam = rd.GetString(0);
-            double x = rd.GetDouble(1), y = rd.GetDouble(2), floor = rd.GetDouble(3);
-            double? thick = rd.IsDBNull(4) ? (double?)null : rd.GetDouble(4);
-            if (includeFloor) pts.Add(new HorizonPoint(seam, false, x, y, floor));
-            if (includeRoof && thick is > 0) pts.Add(new HorizonPoint(seam, true, x, y, floor + thick.Value));
+            cmd.CommandText = @"SELECT sr.seam_code, b.x, b.y, sr.floor_elevation, sr.adopted_thickness
+                                FROM borehole_seam_result sr JOIN borehole b ON b.id = sr.borehole_id
+                                WHERE sr.seam_code IS NOT NULL AND sr.floor_elevation IS NOT NULL";
+            using var rd = cmd.ExecuteReader();
+            while (rd.Read())
+            {
+                string seam = rd.GetString(0);
+                double x = rd.GetDouble(1), y = rd.GetDouble(2), floor = rd.GetDouble(3);
+                double? thick = rd.IsDBNull(4) ? (double?)null : rd.GetDouble(4);
+                if (includeFloor) pts.Add(new HorizonPoint(seam, false, x, y, floor));
+                if (includeRoof && thick is > 0) pts.Add(new HorizonPoint(seam, true, x, y, floor + thick.Value));
+            }
+        }
+        // ② 见煤点 coal_observation_point(自带 x/y; 顶=底+见煤厚度)——忠实原双源展点(导入见煤点后可展绘)
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = @"SELECT seam_code, x, y, floor_elevation, seam_thickness
+                                FROM coal_observation_point
+                                WHERE seam_code IS NOT NULL AND floor_elevation IS NOT NULL";
+            using var rd = cmd.ExecuteReader();
+            while (rd.Read())
+            {
+                string seam = rd.GetString(0);
+                double x = rd.GetDouble(1), y = rd.GetDouble(2), floor = rd.GetDouble(3);
+                double? thick = rd.IsDBNull(4) ? (double?)null : rd.GetDouble(4);
+                if (includeFloor) pts.Add(new HorizonPoint(seam, false, x, y, floor));
+                if (includeRoof && thick is > 0) pts.Add(new HorizonPoint(seam, true, x, y, floor + thick.Value));
+            }
         }
         return pts;
     }
