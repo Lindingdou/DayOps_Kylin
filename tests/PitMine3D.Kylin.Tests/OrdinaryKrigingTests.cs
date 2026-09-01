@@ -157,6 +157,36 @@ public class OrdinaryKrigingTests
     }
 
     [Fact]
+    public void Variogram_models_known_gamma()
+    {
+        // nugget0/sill10/range100 at h=50: 球状 6.875 · 指数 10(1−e^−1.5)=7.7687 · 高斯 10(1−e^−0.75)=5.2763。
+        var sph = new OrdinaryKriging.Variogram(0, 10, 100);   // 默认球状(向后兼容)
+        Assert.Equal(OrdinaryKriging.VariogramModel.Spherical, sph.Model);
+        Assert.Equal(6.875, sph.Gamma(50), 4);
+        var exp = new OrdinaryKriging.Variogram(0, 10, 100, OrdinaryKriging.VariogramModel.Exponential);
+        Assert.Equal(7.7687, exp.Gamma(50), 3);
+        var gau = new OrdinaryKriging.Variogram(0, 10, 100, OrdinaryKriging.VariogramModel.Gaussian);
+        Assert.Equal(5.2763, gau.Gamma(50), 3);
+        // 球状 h≥range → sill(其它型渐近, h=range 仍<sill)。
+        Assert.Equal(10, sph.Gamma(100), 6);
+        Assert.True(exp.Gamma(100) < 10 && gau.Gamma(100) < 10);
+    }
+
+    [Fact]
+    public void SelectVariogramModel_returns_valid_model_and_finite_sse()
+    {
+        var pts = new List<CP>();
+        for (int x = 0; x < 6; x++) for (int y = 0; y < 6; y++) pts.Add(new(x, y, 0, x + y));
+        var (best, sSph, sExp, sGau) = OrdinaryKriging.SelectVariogramModel(pts);
+        Assert.True(sSph >= 0 && sExp >= 0 && sGau >= 0);
+        Assert.Contains(best.Model, new[] { OrdinaryKriging.VariogramModel.Spherical, OrdinaryKriging.VariogramModel.Exponential, OrdinaryKriging.VariogramModel.Gaussian });
+        // 选出的模型 SSE 应是三者最小。
+        double min = System.Math.Min(sSph, System.Math.Min(sExp, sGau));
+        double chosen = best.Model == OrdinaryKriging.VariogramModel.Spherical ? sSph : best.Model == OrdinaryKriging.VariogramModel.Exponential ? sExp : sGau;
+        Assert.Equal(min, chosen, 6);
+    }
+
+    [Fact]
     public void ExperimentalVariogram_auto_maxlag_and_degenerate_safe()
     {
         var pts = new List<CP> { new(0, 0, 0, 1), new(5, 0, 0, 2), new(10, 0, 0, 3) };

@@ -2509,3 +2509,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [RampCenterlinesTests](tests/PitMine3D.Kylin.Tests/RampCenterlinesTests.cs) +2—— 起(0,0,100)方位0°纵坡10%长50步10 → 6 点·末(50,0,95)降5m·中点z98 · 方位90°末点在Y轴 · 无效空。**build 0 错·单测 1234→1236**。
 
 **本会话第 30 功能**。教训: **大算法(824行路由器)里的"中线几何核"是清切片, 可与全套路由器分开移**——直线中线(匀降折线)是清几何, 全套可行性路由(逐级判定+3D台阶线)是内核规模; 拆核移、路由器记录, 补齐 Spiral/Switchback/Straight 家族。同 StandardLevelModel 拆"煤岩判定核(移)vs 配对归级(记录)"。见 [[unlock-blocked-insights]]。
+
+## 二二六、变差函数三模型 + 自动选型 —— 模型家族补齐(第 31 功能)
+
+**模型家族 diff**: 原 `EstimationAlgorithms.Gamma(modelType,...)` 支持 **球状/指数/高斯** 三型变差函数; Kylin `OrdinaryKriging.Variogram` **仅球状**。不同矿床空间相关形状各异, 三型是标准地统计选项。
+
+补 [src/Cad/OrdinaryKriging.cs](src/Cad/OrdinaryKriging.cs): `VariogramModel` 枚举 + `Variogram` 加 `Model` 字段(**默认球状, 向后兼容——既有构造/FitVariogram/克里金不变**) + `Gamma` 按型分支(指数 1−e^(−3h/a)·高斯 1−e^(−3(h/a)²), 忠实原公式); `SelectVariogramModel`(FitVariogram 估 nugget/sill/range → 三型各评对实验 γ(h) 残差平方和 → 取最小)。命令 `变差函数分析` 改报最佳模型 + 三型 SSE。
+
+**验证(已知值)**: [OrdinaryKrigingTests](tests/PitMine3D.Kylin.Tests/OrdinaryKrigingTests.cs) +2—— nugget0/sill10/range100 @h=50: 球状6.875·指数7.7687·高斯5.2763; 球状 h≥range=sill 而指数/高斯渐近<sill; 默认型=球状(向后兼容); SelectVariogramModel 选出型 SSE 三者最小。**build 0 错·单测 1236→1238**(既有克里金测试不受影响——默认球状保底)。
+
+**本会话第 31 功能**。教训: **枚举/switch 的"算法模型家族"要逐型核**——原 `Gamma` switch 三型, Kylin 只球状; 补齐指数/高斯 + 自动选型。**加模型字段用默认值保向后兼容**(既有球状路径不变), 避免改动波及既有克里金测试。同"算法变体 enum 值级 diff"(SurfaceUpdate/MeshContainment), 但这里是 γ(h) 数学模型族。见 [[unlock-blocked-insights]]。

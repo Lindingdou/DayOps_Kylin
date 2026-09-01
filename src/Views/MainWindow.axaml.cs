@@ -8529,20 +8529,25 @@ public partial class MainWindow : Window
         if (cps.Count < 3) { StatusMsg.Text = $"变差函数分析({label})：有效点不足(<3)"; return; }
 
         var exp = Cad.OrdinaryKriging.ExperimentalVariogram(cps);
-        var vg = Cad.OrdinaryKriging.FitVariogram(cps);
+        var (vg, sSph, sExp, sGau) = Cad.OrdinaryKriging.SelectVariogramModel(cps);   // 三型自动选优
+        string modelCn = vg.Model switch { Cad.OrdinaryKriging.VariogramModel.Exponential => "指数", Cad.OrdinaryKriging.VariogramModel.Gaussian => "高斯", _ => "球状" };
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine("变差函数分析(实验半变异 + 球状拟合)");
+        sb.AppendLine("变差函数分析(实验半变异 + 三型自动选优拟合)");
         sb.AppendLine($"指标,{label}");
         sb.AppendLine($"控制点,{cps.Count}");
+        sb.AppendLine($"最佳模型,{modelCn}");
         sb.AppendLine($"块金Nugget,{vg.Nugget:0.####}");
         sb.AppendLine($"基台Sill,{vg.Sill:0.####}");
         sb.AppendLine($"变程Range,{vg.Range:0.##}");
+        sb.AppendLine($"残差SSE-球状,{sSph:0.####}");
+        sb.AppendLine($"残差SSE-指数,{sExp:0.####}");
+        sb.AppendLine($"残差SSE-高斯,{sGau:0.####}");
         sb.AppendLine();
         sb.AppendLine("滞后H,实验γ(h),点对数,拟合γ(h)");
         foreach (var b in exp) sb.AppendLine($"{b.H:0.##},{b.Gamma:0.####},{b.Count},{vg.Gamma(b.H):0.####}");
         var saved = await SaveCsvAsync("变差函数分析", "变差函数分析.csv", sb.ToString());
         int filled = exp.Count(b => b.Count > 0);
-        StatusMsg.Text = $"变差函数分析({label})：{cps.Count}点 · 球状 块金{vg.Nugget:0.##}/基台{vg.Sill:0.##}/变程{vg.Range:0.#} · {filled}/{exp.Count}有效滞后箱"
+        StatusMsg.Text = $"变差函数分析({label})：{cps.Count}点 · 最佳{modelCn}模型 块金{vg.Nugget:0.##}/基台{vg.Sill:0.##}/变程{vg.Range:0.#} · {filled}/{exp.Count}有效滞后箱(SSE 球{sSph:0.#}/指{sExp:0.#}/高{sGau:0.#})"
                        + (saved != null ? $" · 存 {saved}" : "");
     }
 

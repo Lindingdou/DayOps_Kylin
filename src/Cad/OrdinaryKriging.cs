@@ -13,16 +13,51 @@ public static class OrdinaryKriging
 {
     public readonly record struct ControlPoint(double X, double Y, double Z, double V);
 
-    public sealed record Variogram(double Nugget, double Sill, double Range)
+    /// <summary>变差函数模型(忠实原 EstimationAlgorithms.Gamma 三型)。</summary>
+    public enum VariogramModel { Spherical, Exponential, Gaussian }
+
+    public sealed record Variogram(double Nugget, double Sill, double Range, VariogramModel Model = VariogramModel.Spherical)
     {
-        /// <summary>球状模型 γ(h)。</summary>
+        /// <summary>模型 γ(h)。Spherical: h≥range 即 sill; Exponential/Gaussian: 3·range 实用变程渐近。忠实原三型公式。</summary>
         public double Gamma(double h)
         {
             if (h <= 1e-9) return 0;
-            if (h >= Range) return Sill;
-            double t = h / Range;
-            return Nugget + (Sill - Nugget) * (1.5 * t - 0.5 * t * t * t);
+            double c = Sill - Nugget;
+            switch (Model)
+            {
+                case VariogramModel.Exponential:
+                    return Nugget + c * (1.0 - Math.Exp(-3.0 * h / Range));
+                case VariogramModel.Gaussian:
+                    double tg = h / Range;
+                    return Nugget + c * (1.0 - Math.Exp(-3.0 * tg * tg));
+                default:   // Spherical
+                    if (h >= Range) return Sill;
+                    double t = h / Range;
+                    return Nugget + c * (1.5 * t - 0.5 * t * t * t);
+            }
         }
+    }
+
+    /// <summary>
+    /// 挑最佳变差函数模型: 用 <see cref="FitVariogram"/> 估 nugget/sill/range, 再让三型各评对实验 γ(h) 的残差平方和,
+    /// 取最小者。返回(最佳模型 vg, 三型 SSE[球/指数/高斯])。不同矿床空间相关形状各异, 自动选型比固定球状更贴。
+    /// </summary>
+    public static (Variogram best, double sseSph, double sseExp, double sseGauss) SelectVariogramModel(
+        IReadOnlyList<ControlPoint> pts, double maxLag = 0, int lagCount = 12)
+    {
+        var baseVg = FitVariogram(pts);
+        var exp = ExperimentalVariogram(pts, maxLag, lagCount);
+        double Sse(VariogramModel m)
+        {
+            var v = baseVg with { Model = m };
+            double s = 0; int n = 0;
+            foreach (var lag in exp) if (lag.Count > 0) { double d = v.Gamma(lag.H) - lag.Gamma; s += d * d; n++; }
+            return n > 0 ? s : double.MaxValue;
+        }
+        double sph = Sse(VariogramModel.Spherical), ex = Sse(VariogramModel.Exponential), ga = Sse(VariogramModel.Gaussian);
+        var bestM = (sph <= ex && sph <= ga) ? VariogramModel.Spherical
+                  : (ex <= ga) ? VariogramModel.Exponential : VariogramModel.Gaussian;
+        return (baseVg with { Model = bestM }, sph, ex, ga);
     }
 
     /// <summary>在目标点 (x,y,z) 估值。k=最大邻数, radius=搜索半径(≤0 自动)。半径外返回 null。</summary>
