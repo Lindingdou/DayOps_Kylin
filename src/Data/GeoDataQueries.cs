@@ -389,6 +389,20 @@ public static class GeoDataQueries
         return rows;
     }
 
+    /// <summary>工业分析行(coal_sample mad/ad/vdaf/fcd raw + hole_id)供 <see cref="CoalAudit.CheckProximateConsistency"/>。四项俱全者才返回。</summary>
+    public static List<CoalAudit.ProximateRow> GetProximateRows(SqliteConnection conn)
+    {
+        var rows = new List<CoalAudit.ProximateRow>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"SELECT COALESCE(b.hole_id,''), COALESCE(cs.seam_code,''), cs.mad_raw, cs.ad_raw, cs.vdaf_raw, cs.fcd_raw
+                            FROM coal_sample cs LEFT JOIN borehole b ON b.id = cs.borehole_id
+                            WHERE cs.mad_raw IS NOT NULL AND cs.ad_raw IS NOT NULL AND cs.vdaf_raw IS NOT NULL AND cs.fcd_raw IS NOT NULL";
+        using var rd = cmd.ExecuteReader();
+        static double? Nd(SqliteDataReader r, int i) => r.IsDBNull(i) ? (double?)null : r.GetDouble(i);
+        while (rd.Read()) rows.Add(new CoalAudit.ProximateRow(rd.GetString(0), rd.GetString(1), Nd(rd, 2), Nd(rd, 3), Nd(rd, 4), Nd(rd, 5)));
+        return rows;
+    }
+
     public sealed record SeamRow(string SeamCode, string Name, int SampleCount);
 
     /// <summary>煤层管理：各煤层定义 + 煤样计数。</summary>

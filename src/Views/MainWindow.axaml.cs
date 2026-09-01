@@ -847,6 +847,7 @@ public partial class MainWindow : Window
             if (cmd == "煤类反推" || cmd == "GB5751反推" || cmd == "煤类一致率" || cmd == "煤类校核" || cmd == "煤类反演" || cmd.StartsWith("煤类反推 ")) { await CoalTypeInferCmd(cmd); return; }
             if (cmd == "煤质审核" || cmd == "煤质数据审核" || cmd == "煤质质检" || cmd == "煤质数据质检" || cmd == "一键审核" || cmd.StartsWith("煤质审核 ")) { await CoalAuditCmd(cmd); return; }
             if (cmd == "测井一致" || cmd == "钻测一致" || cmd == "钻探测井一致" || cmd == "煤厚一致性") { await DrillLogConsistencyCmd(); return; }
+            if (cmd == "工分自洽" || cmd == "工业分析自洽" || cmd == "工分校核" || cmd == "MAVFC") { await ProximateConsistencyCmd(); return; }
             if (cmd == "煤质三维插值" || cmd == "品位体素插值" || cmd == "煤质体素" || cmd == "三维插值" || cmd == "品位块模型" || cmd.StartsWith("煤质三维插值 ") || cmd.StartsWith("煤质体素 ")) { await QualityVoxelInterpCmd(cmd); return; }
             if (cmd == "交叉验证" || cmd == "估值交叉验证" || cmd == "留一验证" || cmd == "克里金交叉验证" || cmd.StartsWith("交叉验证 ") || cmd.StartsWith("估值交叉验证 ")) { await SpatialCvCmd(cmd); return; }
             if (cmd == "变差函数分析" || cmd == "实验变差" || cmd == "半变异分析" || cmd == "空间结构分析" || cmd.StartsWith("变差函数分析 ") || cmd.StartsWith("实验变差 ")) { await VariogramAnalysisCmd(cmd); return; }
@@ -8409,7 +8410,22 @@ public partial class MainWindow : Window
         var name = await SaveCsvAsync("导出煤质审核", "coal_audit.csv", Data.CoalAudit.ToCsv(a));
         StatusMsg.Text = $"煤质审核({samples.Count} 样·5 类规则)：{a.Findings} 项问题（错 {a.Errors}·警 {a.Warnings}）· 分类 [{cat}]"
             + (drawn > 0 ? $"（{drawn} 样上图·红错/橙警）" : "") + (name != null ? $" · CSV → {name}" : "")
-            + " · 工分自洽需 Mad·FCd(数据缺, 未审); 测井一致见「测井一致」命令";
+            + " · 工分自洽见「工分自洽」命令; 测井一致见「测井一致」命令";
+    }
+
+    // 工分自洽: coal_sample 原煤 M+A+V+FC≈100% 审核(忠实原 RunAudit 规则1)。四项俱全者才审。
+    private async Task ProximateConsistencyCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var rows = Data.GeoDataQueries.GetProximateRows(db.Connection);
+        if (rows.Count == 0) { StatusMsg.Text = "工分自洽：无 M+A+V+FC 四项俱全的煤样(需 mad/ad/vdaf/fcd 齐)"; return; }
+        var f = Data.CoalAudit.CheckProximateConsistency(rows);
+        int err = f.Count(x => x.Severity == Data.CoalAudit.Severity.Error), warn = f.Count(x => x.Severity == Data.CoalAudit.Severity.Warning);
+        var sb = new System.Text.StringBuilder(); sb.Append("hole_id,seam,severity,message\n");
+        foreach (var x in f) sb.Append($"{x.HoleId},{x.SeamCode},{x.Severity},{x.Message}\n");
+        var name = f.Count > 0 ? await SaveCsvAsync("导出工分自洽", "proximate_consistency.csv", sb.ToString()) : null;
+        StatusMsg.Text = $"工分自洽(原煤 M+A+V+FC≈100%·{rows.Count} 样)：{f.Count} 不自洽（错 {err}·警 {warn}）· 自洽率 {100.0 * (rows.Count - f.Count) / rows.Count:0.#}%"
+            + (name != null ? $" · CSV → {name}" : "");
     }
 
     // 测井一致: borehole_seam_result 钻探 vs 测井煤厚一致性(忠实原 RunAudit 规则6, 厚层相对/薄层绝对误差) + 导 CSV。
@@ -9542,7 +9558,7 @@ public partial class MainWindow : Window
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","机群驾驶舱","设备综合评分","数据看板","煤种分类","煤质数据健康度","分煤层煤质",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
         "产能分类对比","故障类型分布","分工序验收合格率","数据导出","数据字典","达成度评价","产量预测","时序预测","编组优化","智能编组优化","导出编组","导出预测",
-        "商品煤符合性","煤质达标","导出符合性","品位储量曲线","导出品位储量","分标高煤质","导出分标高","煤质离群","导出离群","洗选提质","导出洗选","用途适宜性","导出用途","灰分发热量回归","煤质综合结论","煤类反推","煤类一致率","煤质审核","测井一致","煤质三维插值","品位块模型","交叉验证","变差函数分析",
+        "商品煤符合性","煤质达标","导出符合性","品位储量曲线","导出品位储量","分标高煤质","导出分标高","煤质离群","导出离群","洗选提质","导出洗选","用途适宜性","导出用途","灰分发热量回归","煤质综合结论","煤类反推","煤类一致率","煤质审核","测井一致","工分自洽","煤质三维插值","品位块模型","交叉验证","变差函数分析",
         // TaskLib 自足计算
         "生产量核算","物料换算","采剥平衡","排土场按量推进","配煤核算","工序进度跟踪","编组产能","环节降效",
     };

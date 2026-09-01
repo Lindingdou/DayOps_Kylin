@@ -115,6 +115,25 @@ public static class CoalAudit
         return f;
     }
 
+    /// <summary>一条工业分析行(来自 coal_sample 的 mad/ad/vdaf/fcd)。</summary>
+    public sealed record ProximateRow(string HoleId, string SeamCode, double? Mad, double? Ad, double? Vdaf, double? Fcd);
+
+    /// <summary>
+    /// 工业分析自洽审核(忠实原 RunAudit 规则1): 原煤 M+A+V+FC 应≈100%。|sum−100|>3% 错, >1% 警。四项任一缺则跳。
+    /// </summary>
+    public static List<Finding> CheckProximateConsistency(IEnumerable<ProximateRow> rows)
+    {
+        var f = new List<Finding>();
+        foreach (var r in rows)
+        {
+            if (r.Mad is not double m || r.Ad is not double a || r.Vdaf is not double v || r.Fcd is not double fc) continue;
+            double sum = m + a + v + fc, diff = Math.Abs(sum - 100);
+            if (diff > 3) f.Add(new Finding(0, r.HoleId, r.SeamCode, "工分自洽", Severity.Error, $"原煤 M+A+V+FC={sum:0.##}%,偏离100%达{diff:0.##}%"));
+            else if (diff > 1) f.Add(new Finding(0, r.HoleId, r.SeamCode, "工分自洽", Severity.Warning, $"原煤 M+A+V+FC={sum:0.##}%,偏离100%达{diff:0.##}%"));
+        }
+        return f;
+    }
+
     /// <summary>findings → CSV。</summary>
     public static string ToCsv(AuditSummary a)
     {

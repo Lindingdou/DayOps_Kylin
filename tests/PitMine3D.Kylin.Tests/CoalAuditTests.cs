@@ -88,6 +88,25 @@ public class CoalAuditTests
     }
 
     [Fact]
+    public void Proximate_consistency_M_A_V_FC_sum_to_100()
+    {
+        var rows = new List<CoalAudit.ProximateRow>
+        {
+            new("H1", "4-1", 8.0, 20.0, 30.0, 42.0),    // 和100.0 → 无(偏差0)
+            new("H2", "4-1", 8.0, 20.0, 30.0, 44.0),    // 和102.0 → 偏2%>1 → 警
+            new("H3", "4-1", 8.0, 20.0, 30.0, 46.0),    // 和104.0 → 偏4%>3 → 错
+            new("H4", "4-1", 8.0, 20.0, 30.0, null),    // 缺 FC → 跳
+        };
+        var f = CoalAudit.CheckProximateConsistency(rows);
+        Assert.Equal(2, f.Count);                       // H2 警·H3 错(H1 自洽·H4 缺)
+        Assert.Single(f.Where(x => x.Severity == CoalAudit.Severity.Error));    // H3
+        Assert.Single(f.Where(x => x.Severity == CoalAudit.Severity.Warning));  // H2
+        Assert.All(f, x => Assert.Equal("工分自洽", x.Category));
+        Assert.Contains(f, x => x.HoleId == "H3");
+        Assert.DoesNotContain(f, x => x.HoleId == "H1" || x.HoleId == "H4");
+    }
+
+    [Fact]
     public void Drill_log_consistency_thick_relative_thin_absolute()
     {
         var rows = new List<CoalAudit.DrillLogRow>
