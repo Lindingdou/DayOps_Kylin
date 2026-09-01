@@ -2438,3 +2438,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 补 [src/Cad/MeshMetrics.cs](src/Cad/MeshMetrics.cs) `HullAreaXY`(复用 GeomHull.ConvexHull + 鞋带公式), 接入 `网格度量` 命令输出。**验证**: [MeshMetricsTests](tests/PitMine3D.Kylin.Tests/MeshMetricsTests.cs) +1—— 10×10 方形足迹(+内部点不改凸包)=100 · 退化<3点=0。**build 0 错·单测 1219→1220**。
 
 **本会话第 23 功能**。教训: **PMxx native 结果解析器是"字段级 present-but-shallow"的系统靶场**——每个 report record 的字段=native 引擎产出的完整量, Kylin 托管重实现要逐字段对齐(缺项=补, 如自交/足迹; 内核级项如布尔/非流形拆分=记录)。这是比"类在就算覆盖"更细的一层核对。见 [[unlock-blocked-insights]]。
+
+## 二一九、面约束块体(MeshContainmentTester 4 模式)—— 算法模式 enum 值级 diff(第 24 功能)
+
+**算法/模式 enum 值级 diff 角度**: 枚举原全部 `enum *Mode/*Method/*Kind`(算法变体), 查 Kylin 是否实现全部值(同 SurfaceUpdate NN/IDW/OK/SK/UK 补全)。多数是排产/引擎 enum(记录), 但 `BlockModelLib.MeshContainmentTester :: MeshConstraintMode` 是真缺口——Kylin「约束块体」仅 **2D 闭合多段线内**一种, 原有 **4 模式**(相对开放曲面 上/下、相对闭合网格 内/外)。
+
+忠实移植 [src/Cad/MeshContainment.cs](src/Cad/MeshContainment.cs): 4 模式复用已移基元——面高程 `MineableAreaIdentifier.SampleMeshZ`(点落三角重心插值 Z, 面外 null)判上/下; 闭合内外 `WindingNumberTester.IsInsideClosed`(GWN)判内/外; `Flatten` 把 (verts,tris) 摊平。命令 `面约束块体 上|下|内|外`(选 OFF 约束网格 → 过滤 _lastBlocks 块心 → RenderBlocks 留满足)。典型: 保留地表以下且煤层底板以上=可采带。区别既有 2D 约束块体。
+
+**验证(已知值)**: [MeshContainmentTests](tests/PitMine3D.Kylin.Tests/MeshContainmentTests.cs) 4 例—— 平面 z=5 上/下(面外不留) · 四面体质心内/远点外 · KeepIndices 过滤点表(下留 0/2, 面外弃) · 闭合内过滤。**build 0 错·单测 1220→1224**。
+
+**本会话第 24 功能**。教训: **算法/模式 enum 逐值核对是第四层 diff**(类→命令→PMxx字段→enum值)——原 `enum *Mode` 的每个值=一个算法变体, Kylin 实现该 enum 但可能只覆盖部分值(present-but-shallow by variant, 同 SurfaceUpdate/更新煤层面多算法)。缺的变体常可复用已移基元低成本补(SampleMeshZ+WindingNumber)。见 [[unlock-blocked-insights]]。

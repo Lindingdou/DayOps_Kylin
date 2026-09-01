@@ -806,7 +806,8 @@ public partial class MainWindow : Window
             if (cmd == "切换属性" || cmd.StartsWith("切换属性 ") || cmd == "切换品位属性" || cmd.StartsWith("切换品位属性 ") || cmd == "切换活动属性" || cmd.StartsWith("切换活动属性 ")) { SwitchGradeAttrCmd(cmd); return; }
             if (cmd == "筛选块体" || cmd == "块体筛选") { FilterBlocksCmd(); return; }
             if (cmd.StartsWith("表达式筛选块 ") || cmd.StartsWith("表达式筛选 ") || cmd.StartsWith("块体表达式 ") || cmd.StartsWith("按表达式筛选 ")) { BlockExpressionFilterCmd(cmd); return; }
-            if (cmd == "约束块体" || cmd == "块体约束") { ConstrainBlocksCmd(); return; }
+            if (cmd == "面约束块体" || cmd == "曲面约束块体" || cmd == "网格约束块体" || cmd.StartsWith("面约束块体 ")) { await MeshConstrainBlocksAsync(cmd); return; }
+            if (cmd == "约束块体" || cmd == "块体约束") { ConstrainBlocksCmd(); return;}
             if (cmd == "删除块体" || cmd == "清除块体") { DeleteBlocksCmd(); return; }
             if (cmd == "切面剖切" || cmd == "块体剖切" || cmd == "切面") { SectionBlocksCmd(); return; }
             if (cmd == "克里金估值" || cmd == "OK估值" || cmd == "克里金") { await EstimateGradeAsync("OK"); return; }
@@ -5062,6 +5063,38 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"约束块体：边界内 {sub.Count}/{_lastBlocks.Count} 块（块体着色 恢复全显）";
     }
 
+    // 面约束块体(忠实 MeshContainmentTester 4 模式): 用一张 3D 网格约束块体——相对开放曲面 上/下, 或相对闭合网格 内/外。
+    // 区别于「约束块体」(仅 2D 闭合多段线内)。"面约束块体 上|下|内|外"(缺省 下=保留曲面以下, 如地表下)。
+    private async Task MeshConstrainBlocksAsync(string cmd)
+    {
+        if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "面约束块体：请先导入块体模型"; return; }
+        var mode = Cad.MeshConstraintMode.KeepBelowSurface; string modeCn = "曲面以下";
+        if (cmd.Contains("上")) { mode = Cad.MeshConstraintMode.KeepAboveSurface; modeCn = "曲面以上"; }
+        else if (cmd.Contains("内")) { mode = Cad.MeshConstraintMode.KeepInsideClosed; modeCn = "闭合内"; }
+        else if (cmd.Contains("外")) { mode = Cad.MeshConstraintMode.KeepOutsideClosed; modeCn = "闭合外"; }
+
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = $"面约束块体({modeCn})：选约束网格 OFF",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("网格 (OFF)") { Patterns = new[] { "*.off" } } }
+        });
+        if (files.Count == 0) return;
+        string text;
+        try { text = System.IO.File.ReadAllText(files[0].Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"面约束块体：读取失败 {ex.Message}"; return; }
+        var (mv, mt) = MeshMetrics.ParseOff(text);
+        if (mt.Count == 0) { StatusMsg.Text = "面约束块体：未解析到网格三角"; return; }
+
+        var (fv, ft) = Cad.MeshContainment.Flatten(mv, mt);
+        var centers = _lastBlocks.Select(b => (b.X, b.Y, b.Z)).ToList();
+        var keepIdx = Cad.MeshContainment.KeepIndices(fv, ft, centers, mode);
+        if (keepIdx.Count == 0) { StatusMsg.Text = $"面约束块体({modeCn})：无块体满足约束"; return; }
+        var sub = keepIdx.Select(i => _lastBlocks[i]).ToList();
+        BeginChange(); RenderBlocks(sub); RefreshScene();
+        StatusMsg.Text = $"面约束块体({modeCn})：{sub.Count}/{_lastBlocks.Count} 块满足（余隐去; 约束网格 {mt.Count} 三角）";
+    }
+
     // 删除块体：移除全部块体方块 + 清工作集
     private void DeleteBlocksCmd()
     {
@@ -9000,7 +9033,7 @@ public partial class MainWindow : Window
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割","移除障碍物",
         // 块体/运输/路网
-        "块体模型","资源量","道路横断面","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道",
+        "块体模型","资源量","面约束块体","道路横断面","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道",
         // 生产计划/投影
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
