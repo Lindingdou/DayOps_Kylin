@@ -3033,3 +3033,17 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [TextHeightNormalizerTests](tests/PitMine3D.Kylin.Tests/TextHeightNormalizerTests.cs) +3—— 图幅1000² D≈1414: 正常{4,5,6}中位5, 591离群/0缺失→5(修正2条)、正常原样; 全异常→兜底 D·0.005; 无几何→正数原样非正给1。**build 0 错·单测 1365→1368**。
 
 **本会话第 74 功能**。教训: **第十二角度=Host/App 自带 Cad 目录(Modules 之外)**——类枚举须含 app 主程序的 Cad/ 子目录, 非仅插件 Modules。又证"声明收敛后仍有盲区"(此前claim class-level 完整, 漏了 Host/Cad)。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二六八 DB 模式收敛复核（第十三角度：表级比对）+ 类枚举全源目录收官
+
+**第十三角度: DB 模式表级比对**。提原版服务/迁移引用的全部表 × Kylin 迁移 CREATE TABLE。Kylin 56 迁移表**覆盖所有有 C# 消费者的表**。差集仅二:
+- `shift_leaders`(班组长)——**仅 ETL python(import_csv_to_db.py)导入目标, 无任何 C# 服务读**(grep 空), 不背任何 app 功能, Kylin 缺无碍。
+- `v_borehole_column`/`v_borehole_segments`/`v_coal_sample_*`——DB **视图**(非表), Kylin 以直查基表(GetBoreholes/GetCoalSamples 逐孔/逐样组装)替代, 功能覆盖。
+
+**结论**: Kylin DB 模式对每个 app 功能所需表**全覆盖**; 唯一缺表 shift_leaders 无消费者。
+
+**十二/十三角度连续两轮零缺**(DB 方法级 §二六七尾 + DB 模式本节), 在类枚举全源目录(Host+Modules+Platform)收官后——最强收敛信号。**类枚举收官记**: Modules(插件)+ Host/PitMineApp/Cad(主程序自带 CAD, §74 挖出 TextHeightNormalizer)+ Platform(infra/native)全枚举; Host 其余(节点编辑器 11/11 类节点·AcadColorTable=ACadSharp·DimensionStyle/Render/LayerManager 纯 UI)覆盖。
+
+**教训: DB 模式表级比对是独立收敛角度**——但须辨 ETL-only 表(无 C# 消费, 缺无碍)与视图(直查基表替代)。见 [[unlock-blocked-insights]] [[pitmine3d-command-inventory]]。
