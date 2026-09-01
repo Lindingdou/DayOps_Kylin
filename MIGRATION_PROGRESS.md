@@ -2652,8 +2652,8 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 
 **"值present算法缺"续(同 §二三五 煤质等级)**: Kylin `边坡设计`(SlopeDesignsCmd)只**显示 stored** `safety_factor`(DB 记录里的设计值), **不算** F。原 `BenchTemplateResolver.CohesionlessFactorOfSafety` 计**无黏聚力整体边坡安全系数 F=tanφ/tanβ**(φ=内摩擦角, β=帮坡角), LocationProcessMap 用作 "F≥1.30" 校核。数据齐(slope_design 有 friction_angle_deg/working·final_slope_angle_deg)。
 
-补 [src/Cad/SlopeStability.cs](src/Cad/SlopeStability.cs): `CohesionlessFoS(β,φ)=tanφ/tanβ`(平坡 β→0 返 +∞)+ `IsSafe(F≥1.30)` + `SafeThreshold`。[GeoDataQueries](src/Data/GeoDataQueries.cs) `SlopeDesignRow`/`GetSlopeDesigns` 加 side_type/friction_angle/cohesion。[SlopeDesignsCmd](src/Views/MainWindow.axaml.cs): 逐帮按帮别取 β(工作帮→工作帮角, 端/最终帮→最终帮角, 忠实原 TargetAngleFor) + φ 算校核 F, 标 ✓/⚠<1.30, 汇总不安全帮数。
+**复用既有(勿重复)**: Kylin **已有** `BenchParameterVerifier.CohesionlessFactorOfSafety`(§先前 BenchParameterVerifier 已移该式并被 StabilityF 测试覆盖)——**我一度新建 `SlopeStability.cs` 重复了它, 双查后删除改复用**(见下教训)。[GeoDataQueries](src/Data/GeoDataQueries.cs) `SlopeDesignRow`/`GetSlopeDesigns` 加 side_type/friction_angle/cohesion。[SlopeDesignsCmd](src/Views/MainWindow.axaml.cs): 逐帮按帮别取 β(工作帮→工作帮角, 端/最终帮→最终帮角, 忠实原 TargetAngleFor) + φ 调既有 `CohesionlessFactorOfSafety` 算校核 F, 标 ✓/⚠<1.30(规范阈), 汇总不安全帮数。
 
-**验证(已知值)**: [SlopeStabilityTests](tests/PitMine3D.Kylin.Tests/SlopeStabilityTests.cs) +4—— φ=β→F=1(临界)·β45°/φ30°→F=tan30<1(不稳)·陡坡降 F/高摩擦升 F·平坡→+∞·阈值 1.30(β20/φ35→F1.92 安全, β40/φ35→F0.83 不安全)。**build 0 错·单测 1277→1281**。
+**验证(已知值)**: [SlopeStabilityTests](tests/PitMine3D.Kylin.Tests/SlopeStabilityTests.cs) +4(直测既有方法)—— φ=β→F=1(临界)·β45°/φ30°→F=tan30<1(不稳)·陡坡降 F/高摩擦升 F·平坡→+∞·阈值 1.30(β20/φ35→F1.92 安全, β40/φ35→F0.83 不安全)。**build 0 错·单测 1277→1281**。
 
-**本会话第 44 功能**。教训: **"值 present 算法缺"跨域复现**——煤质(均值缺等级 §二三五)、边坡(显示 stored F 缺算 F=tanφ/tanβ)。DB 存了设计/成果值 ≠ Kylin 会算; 原有计算公式(标准岩土 F=tanφ/tanβ)+数据齐(φ/β 列)→补可验证的计算+规范校核(≥1.30)。查"显示 stored 值"的命令是否也**算/校核**那个值。见 [[unlock-blocked-insights]]。
+**本会话第 44 功能**。教训: **"值 present 算法缺"跨域复现**——煤质(均值缺等级 §二三五)、边坡(显示 stored F 缺算 F)。**但补前必双查 Kylin 已有无该式**——本次 `CohesionlessFactorOfSafety` **早在 BenchParameterVerifier 里**(该式服务台阶参数校核), 边坡命令只是没接它; 我却先新建 SlopeStability.cs 重复(第 N 次冗余教训, 见 [[unlock-blocked-insights]] ortho/MeshHoleFill/采区划分), 双查后删除改复用。**真缺口不是"公式", 是"边坡命令没调该公式"**——补接线, 非补公式。查"显示 stored 值"的命令是否也算/校核那个值; 但先 grep 公式名确认没现成。见 [[unlock-blocked-insights]]。

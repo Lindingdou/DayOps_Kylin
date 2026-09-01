@@ -9012,8 +9012,8 @@ public partial class MainWindow : Window
             string fStr = "";
             if (s.FrictionAngle > 0 && beta > 0)
             {
-                double f = Cad.SlopeStability.CohesionlessFoS(beta, s.FrictionAngle);
-                bool ok = Cad.SlopeStability.IsSafe(f);
+                double f = Cad.BenchParameterVerifier.CohesionlessFactorOfSafety(beta, s.FrictionAngle);   // 复用既有(勿重复), 忠实原 CohesionlessFactorOfSafety
+                bool ok = f >= 1.30;                                                                       // 规范整体边坡安全阈 F≥1.30
                 if (!ok) unsafeN++;
                 fStr = $"/校核F={f:0.##}({(ok ? "✓" : "⚠<1.30")})";
             }
