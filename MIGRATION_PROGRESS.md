@@ -2292,3 +2292,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **移植** [src/Cad/ProgressiveMorphFilter.cs](src/Cad/ProgressiveMorphFilter.cs): 栅格取每格最低点为初始面; 窗口渐增(1,3,7,15…≤maxWindow)的形态学**开运算**(先腐蚀 min 后膨胀 max)逐尺度削物体; 高程差>阈 dh_k=min(dhMax, dh0+slope·Δwindow·cell) 的格降到开运算面(阈随窗口增长→缓变地形保留、突变物体削去); 末逐点判 z−裸地面>dhMax=非地面。命令 `移除障碍物 [格边] [高差阈]`(点 CSV→地面棕/非地面红两色入场景+计数) + 目录。**比 地面点滤波稳健且另出障碍点云**。验证 [ProgressiveMorphFilterTests](tests/PitMine3D.Kylin.Tests/ProgressiveMorphFilterTests.cs) 4 例已知值(高出地面判非地面·孤立物体[其下无地面]被开运算削去=9点非地面·缓坡0.15<容差0.3全保留·空输入空)。**build 0 错·单测 1105→1109**。
 
 **本会话第 9 个功能**。present-but-shallow 判据: "已有同名命令"要查①是否真同一算法(剔除障碍别名实为去尖刺≠PMF)②深度(地面点滤波 crude vs PMF)。原 native 的标准算法(PMF)可托管重实现(同 Euclidean/region-grow)。见 [[unlock-blocked-insights]]。
+
+## 二〇五、导入 PitMine 工程(.pmx 原版二进制)—— 新扫区 Host/PitMineApp/Cad, 工程互操作(第 10 功能)
+
+**新扫区**: 之前 robust 逐文件读只覆盖 Modules(域插件), 未读 **Host/PitMineApp/Cad**(app 层)。逐文件读 Host/Cad: Export(KDF 已移)/FileTree(文件管理器已有)/Import(格式 reader 已移)/**Pmx(工程格式, 未移)**/NodeEditor(已移)。→ `Pmx/` 是原版**工程文件 .pmx** 的 I/O(PmxReader/Writer/Format/Tables, **managed 二进制, 规格在代码里——非 native PMxx**)。Kylin 的 `.pmx` 是自己的**文本**格式(SceneIO), **读不了原版二进制 .pmx** → 工程互操作缺口(在 Kylin 打开原版工程)。
+
+**移植(核心 MVP)** [src/Cad/PmxImportService.cs](src/Cad/PmxImportService.cs): 按 PmxFormat 规格读 Header('PMX1' 32B)+段表(Strings/Layers/TextStyles/Entities)+每实体 recordLen(权威, 可跳未知类型)。核心实体→Kylin 实体: 线/点/多段线(闭合)/文字(宽度/倾斜取样式)/三角网(→去重棱线)/圆/圆弧(3点); TrueColor 精确/ByLayer 取层色; 复杂类型(MText/Hatch/标注/椭圆/样条)按 recordLen **跳过不崩**(MVP, 同 MapGIS arc 级)。命令 `导入PMX`(选 .pmx→实体入可编辑场景 + 建图层 + 范围缩放 + 计数) + 目录。区别 Kylin 文本 .pmx(用『打开』)。
+
+**验证(强)**: [PmxImportServiceTests](tests/PitMine3D.Kylin.Tests/PmxImportServiceTests.cs) 6 例—— 4 合成档往返(按规格构档→读→核线/点/多段线闭合/圆几何+TrueColor 绿) + 2 **真实原版样本**(桌面 untitled.pmx 98KB / 现状.pmx 363KB, skip-if-absent, 本机读出实体>0)。**build 0 错·单测 1109→1115**。
+
+**本会话第 10 功能**。教训: **robust 逐文件读要含 app 层(Host/PitMineApp), 不止域 Modules**——工程文件格式(.pmx)在 app 层。managed 二进制格式(规格在代码)≠native PMxx(无源), 可移。见 [[unlock-blocked-insights]]。

@@ -746,6 +746,7 @@ public partial class MainWindow : Window
             if (cmd == "撤销") { DoUndo(); return; }
             if (cmd == "重做") { DoRedo(); return; }
             if (cmd == "导入") { await ImportDxfAsync(); return; }
+            if (cmd == "导入PMX" || cmd == "导入原版工程" || cmd == "打开原版工程" || cmd == "PitMine工程") { await PmxImportAsync(); return; }
             if (cmd == "导入点") { await ImportPointsAsync(); return; }
             if (cmd == "导入模板" || cmd.StartsWith("导入模板 ") || cmd == "下载模板") { await ExportImportTemplateAsync(cmd); return; }
             if (cmd == "导出分析" || cmd.StartsWith("导出分析 ")) { await ExportAnalysisAsync(cmd); return; }
@@ -1435,6 +1436,30 @@ public partial class MainWindow : Window
         PopulateObjectTreeCounts(er.TypeCounts, fileName, er.Entities.Count);
         PopulateDrawingLayers();
         StatusMsg.Text = $"已导入 {fileName} · {er.Entities.Count} 可编辑实体 · {er.LayerOrder.Count} 图层（可选中/编辑/删除）{warn}";
+    }
+
+    // 导入 PitMine 工程(.pmx 原版私有二进制)：读核心实体(线/点/多段线/文字/网格棱线/圆/弧)入可编辑场景 + 建图层。
+    // 复杂类型(MText/Hatch/标注/椭圆/样条)按 recordLen 跳过。区别 Kylin 自己的文本 .pmx(用『打开』)。
+    private async Task PmxImportAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "导入 PitMine 工程：选 .pmx（原版二进制工程）",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("PitMine 工程 (PMX)") { Patterns = new[] { "*.pmx" } } }
+        });
+        if (files.Count == 0) return;
+        var r = Cad.PmxImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success) { StatusMsg.Text = $"导入 PitMine 工程：{r.Error}"; return; }
+        BeginChange();
+        foreach (var e in r.Entities) { _layers.EnsureImported(e.LayerName, e.Cr, e.Cg, e.Cb); _scene.Add(e); }
+        _lastImport = null;
+        Viewport.ClearImported();
+        RefreshScene();
+        Viewport.ZoomExtents();
+        PopulateDrawingLayers();
+        string fn = System.IO.Path.GetFileName(files[0].Path.LocalPath);
+        StatusMsg.Text = $"导入 PitMine 工程 {fn}：{r.Entities.Count} 可编辑实体（{r.Summary}）· {r.LayerNames.Count} 图层";
     }
 
     // 点数据导入：CSV/TXT/XYZ/PTS → 可编辑的点实体（进入绘制场景，可选中/编辑/删除）
@@ -8415,7 +8440,7 @@ public partial class MainWindow : Window
     private static readonly string[] CommandCatalog =
     {
         // 文件/绘制/修改
-        "新建","打开","保存","另存为","导入","选项",
+        "新建","打开","保存","另存为","导入","导入PMX","选项",
         "点","直线","多段线","滑动多段线","圆","矩形","正多边形","文字","多行文字","圆弧","图案填充","填充十字",
         "复制","移动","旋转","偏移","修剪","延伸","打断","分解","删除","撤销","重做",
         // 对象捕捉
