@@ -5,7 +5,9 @@ namespace PitMine3D.Kylin.Cad;
 /// <summary>
 /// 车铲匹配核 —— 移植自原 `GeoDataBase.FleetOptimizer` 的匹配系数 + M/M/c 排队(Erlang-C)公式。
 /// 匹配系数 MF = 卡车数·装车节拍 / 循环时间（1≈均衡, &lt;1 铲待车, &gt;1 车排队）；
-/// Erlang-C 给车到达需排队的概率。原完整多规则 DP 优化 + 日产能模型需 DispatchRule 设备 POCO(域耦合), 未移植。
+/// Erlang-C 给车到达需排队的概率。本类是几何/命令侧轻量匹配助手; 原**完整多规则 DP 编组优化 +
+/// 日产能模型已忠实移植**在 <c>src/Data/FleetOptimizer.cs</c>(SolveMinTrucks 无界 DP + ErlangC + 物理产能
+/// 子模型 + 在籍修复, 已接「编组优化」命令), 二者不重复——此处仅供无 DB 的纯几何编组产能切片(FleetCycle)复用。
 /// </summary>
 public static class FleetMatch
 {

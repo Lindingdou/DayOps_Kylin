@@ -1860,3 +1860,12 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - **两期算量 `TerrainAnalysis.TwoEpochVolume`**: 两面各 IDW 到**合并包围盒**网格逐格作差。原版 **C2C 明确排除不重叠区**("两期不重叠处已排除在统计与着色外", C2cResultWindow:40)。Kylin 在仅一面有数据处**外推另一面**→非重叠区有伪方量。**但**: ①同范围测量(常态, 如同一采坑前后期)重叠≈并集, 影响可忽略(现有测同范围, 加掩不变); ②原版**栅格算量的 compute 源未能在托管码定位**(VolumeReportGenerator 仅 PDF 排版, compute 疑 native/对话框)→ 栅格重叠裁剪系由 C2C 原则**推断非确证**; ③忠实修法=对 3 个算量法(总/分标高/分块)统一按数据支撑半径掩非重叠格, 但需保证守恒一致。**判: 真实但低影响 + 原栅格行为未确证 → 记录, 不冒险改已测算量**(遵"不满足验证先记录")。
 
 **本轮**: 0 修 + 2 忠实确认(台阶距/储量结构) + 1 低影响记录(两期算量非重叠外推)。保真审计有时确认忠实——诚实记录, 不制造改动。
+
+## 一五六、保真度审计续三 —— 编组优化 M/M/c + DP 全链忠实(双查避免重复实现)
+
+审计编组优化(FleetOptimizer)全链, 对拍原版:
+- **ErlangC(M/M/c 排队)**: Kylin `FleetMatch.ErlangC` 与原 `FleetOptimizer.ErlangC` **逐字节一致**(a=ρ·c 话务量→Σaᵏ/k!→aᶜ/c!→top=last/(1−ρ)→top/(sum+top)), 标准 Erlang-C 公式数学精确; Kylin 另加 `c<1` 防御。**忠实**。
+- **SolveMinTrucks(无界 DP 最小卡车数)**: **一度据 FleetMatch.cs 注释"DP 未移植"以为是缺口**——双查发现 **`src/Data/FleetOptimizer.cs` 已完整忠实移植**(unit=target/400·cells≤1500·capCells·cost·DP·回溯·在籍修复 与原**逐行一致**), 且已接「编组优化」命令(§844→FleetOptimizeCmd→Data.FleetOptimizer.Optimize)。**无缺口**——在写任何代码前即查出(不同于早前采区划分已提交才 revert, 本次纪律更早生效)。
+- **顺手修**: `src/Cad/FleetMatch.cs` 注释误称 DP"未移植"(实指该轻量文件自身范围, 全量已在 src/Data/)→ 更正注释指向 src/Data/FleetOptimizer.cs, 防未来假缺口调查。
+
+**教训(核对三律再补)**: ①同一功能可能有两处实现(轻量几何侧 `src/Cad/FleetMatch` + 完整 DB 侧 `src/Data/FleetOptimizer`)——**查缺口须跨 src/Cad 与 src/Data 全目录**, 勿只查一处; ②**勿信注释的"未移植"字样**, 必查实际接线的实现(注释可能只描述本文件范围)。本轮 0 缺口 + 1 忠实确认(ErlangC+DP 全链)+ 1 注释更正。
