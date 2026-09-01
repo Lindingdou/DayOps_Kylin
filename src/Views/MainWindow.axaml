@@ -846,6 +846,9 @@
                                             <Button Classes="ribbon-btn small" Tag="折返坑线" Click="OnRibbonCommand" ToolTip.Tip="折返坑线">
                                                 <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mineass_road_switchback}" /><TextBlock Text="折返坑线" /></StackPanel>
                                             </Button>
+                                            <Button Classes="ribbon-btn small" Tag="竖曲线平滑" Click="OnRibbonCommand" ToolTip.Tip="竖曲线平滑：3D 中线 CSV → 变坡点插抛物线竖曲线(GBJ22-87)，出原/平滑纵断面 + 半径校核">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mineass_vertical_curve}" /><TextBlock Text="竖曲线平滑" /></StackPanel>
+                                            </Button>
                                         </WrapPanel>
                                     </StackPanel>
                                 </DockPanel>

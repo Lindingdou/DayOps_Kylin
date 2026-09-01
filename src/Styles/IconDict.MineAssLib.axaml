@@ -377,6 +377,26 @@
     </DrawingImage>
 
     <!-- 螺旋坑线：坑的同心环 + 盘旋下降的坡道弧 + 下行箭头 —— 与 mineass_road_straight（一条直腿）区分 -->
+    <DrawingImage x:Key="mineass_vertical_curve">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 原折线纵断面(灰): 两直坡在变坡点成尖角 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF94A3B8" Thickness="1.4"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M4,26 L16,7 L28,26"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 平滑竖曲线(青): 直坡→抛物线→直坡, 削平尖角 -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Brush="#FF22D3EE" Thickness="2.6" LineCap="Round" LineJoin="Round"/></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M4,26 L9,18 Q16,9 23,18 L28,26"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <!-- 变坡点标记 -->
+                <GeometryDrawing Brush="#FFF59E0B">
+                    <GeometryDrawing.Geometry><EllipseGeometry RadiusX="1.8" RadiusY="1.8" Center="16,7"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
     <DrawingImage x:Key="mineass_road_spiral">
         <DrawingImage.Drawing>
             <DrawingGroup>

@@ -2156,3 +2156,24 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - 其余 55 经名称归类: 排产计划(PlanLib 中长远/短期/月/周计划·动态模拟·出图)/生产调度(TaskLib 任务编制·派工·派车单·实绩·报告·推演)/坑线采剥(MineAssLib 坑线·刀量·采剥接续·工作线)/台阶排土(放坡·模板·并段·扩帮)/native(倾斜摄影·影像底图)/无种子表(班次日历·检修档期)/配置对话框(破碎站·约束·编制配置)——**皆已记录硬边界**, 无非引擎的可做几何子集。
 
 **结论**: 57 受阻按钮 = 未移植子系统(引擎/native/规划/配置对话框)的 UI 入口, 正确未接线 + 兜底诚实提示(§一九〇)。抽查 2/2 确认受阻, 与 memory 既有审计一致(可做者早已接)。本轮 0 补(抽查复核确认受阻)。见 [[unlock-blocked-insights]]。
+
+## 一九二、逐模块系统性 diff —— 竖曲线平滑(补真功能, 拓扑透镜之外的新增)
+
+**方法(新透镜)**: 收敛感之后, 不再凭主题透镜自证, 改**枚举原版全部 9 模块 + 英文类/方法名 diff Kylin 覆盖**(中文串因原版 GBK 编码乱码, 改用英文标识符规避)。逐一核对:
+- **MeshEditLib(382)**: Smooth/Simplify/Weld/Orient/PlaneSection/HoleFill/Repair/Intersect/BoundaryLoops… → Kylin 全有(MeshSmooth/Simplify/Weld/Orient/PlaneSection/HoleFill/Repair.cs + 派发)。**已覆盖(证实非空想)**。
+- **PointCloudLib(157)**: Decimate/GroundFilter/两期体积/VolumeToBase/RoadCenterline/Obstacle/Profile → Kylin 全有(GroundFilter.cs·两期算量·体积计算·提取道路中线·剔除障碍)。**已覆盖**。
+- **RoadLib(271)**: 多为**交互式中线管理**(视口拾取 CenterlinePick/SplitCenterline)→ 受阻; 演化对比/中线管理已接(交互部分诚实标注)。
+- **BlockModelLib/GeoDataBase/SqlLib**: 估值/克里金/等值线/体素 · 本会话 §四/§八 分析 · SQL查询 —— 均已覆盖。
+- **MineAssLib(285)**: 大量排产/坑线/台阶**引擎**(RoadLayoutSolver·UnitPlanEngine·MonthlyMineScheduler·native 坑线内核)→ 受阻; 但混有**自足计算切片**。
+
+**新增真功能 —— 竖曲线平滑(纵断面, GBJ22-87 阶段③)**:
+- 源: `MineAssLib/RoadLayout/ProfileSmoother.VerticalCurves` —— 原版自注"**纯几何、(弧长 s,标高 z)域、可单测**"。相邻纵坡代数差 > trigger 的变坡点插抛物线竖曲线 Lv=R_v·|Δi|(段长放不下 clamp, 半径降低计 violation); 抛物线 z=zb+g1·x+(g2−g1)/(2·span)·x², BVC/EVC 与两侧直坡同点→端点标高自动保持。
+- 载体: `src/Cad/RoadVerticalCurve.cs`(忠实逐行移植) + 命令 `竖曲线平滑`(3D 中线 CSV→累计 XY 弧长为 s→平滑→原/平滑纵断面入场景[灰/青, X=里程 Y=标高]+竖曲线数/最小半径/不达标汇总), 三路可发现(命令行别名/命令目录/RoadLib Ribbon 按钮 + 专属图标 `mineass_vertical_curve`)。
+- **非冗余确认**: Kylin 既有 `纵坡分析`只**读取着色**现状纵坡; 竖曲线平滑**设计/修改**纵断面(插抛物线), 互补。
+- 验证: `RoadVerticalCurveTests` 10 例(端点保持·BVC=5.1·EVC=5.1·抛物线顶点=7.55·逐点抛物线公式·半径 clamp 490·触发阈·n<3 直通·恒定坡不设线) —— 全绿。**build 0 错 · 单测 1050→1060**。
+
+**评估后跳过(记录, 免冗余/边际)**:
+- **RoadCutFillCalculator(路面挖填 RS17)**: 算法可移植(路面网格栅格化逐格 z_road−z_ground 积分, footprint/uncovered 分列——与我 grade MaskByRadius 同"不出数据支撑外造值"纪律), 但**核心数学与 Kylin 两期算量重叠**(网格+双面+带符号 dz), 且原版唯一调用者用 **native 坑线内核**产出 deck 网格 → 独立命令价值边际。**跳过免冗余**(采区划分回退教训)。
+- **VolumeDeviation(方量偏差)**: est vs actual 单元方量对账, 输入为**受阻计划引擎**(UnitPlanEngine)单元, 计算本身琐碎 → 边际, 记录。
+
+**结论**: 逐模块 diff 既**证实**大模块(Mesh/PointCloud/Road/Block/Geo)覆盖, 又**发现** 6 主题透镜漏掉的 1 处真几何缺口(竖曲线)。教训: 收敛感≠收敛, 系统性模块 diff 是主题透镜之外的一层。见 [[unlock-blocked-insights]] [[faithfulness-only-original-commands]]。
