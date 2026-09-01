@@ -64,4 +64,25 @@ public class GeoQueryAggregationTests
         Assert.Equal(1.0, r.ExternalFaultPct, 6);
         Assert.Equal(5000, r.Output, 6);        // 列映射正确(c.output_m3 → Output)
     }
+
+    [Fact]
+    public void GetCoalClassificationRanges_maps_columns_orders_and_handles_nulls()
+    {
+        using var c = Db(@"CREATE TABLE coal_classification(code TEXT, vdaf_min REAL, vdaf_max REAL,
+            g_min REAL, g_max REAL, y_min REAL, y_max REAL, sort_order INT);");
+        // 乱序插入验 ORDER BY sort_order; y_min 留 NULL 验空处理; 列顺序验映射不错位(GB5751 分类正确性所系)。
+        Exec(c, "INSERT INTO coal_classification VALUES ('气煤',28,37,35,100,NULL,NULL,2);");
+        Exec(c, "INSERT INTO coal_classification VALUES ('焦煤',10,28,50,100,NULL,25,1);");
+        var r = GeoDataQueries.GetCoalClassificationRanges(c);
+        Assert.Equal(2, r.Count);
+        Assert.Equal("焦煤", r[0].Code);        // sort_order 1 在前
+        Assert.Equal(10.0, r[0].VdafMin!.Value, 6);
+        Assert.Equal(28.0, r[0].VdafMax!.Value, 6);
+        Assert.Equal(50.0, r[0].GMin!.Value, 6);
+        Assert.Equal(100.0, r[0].GMax!.Value, 6);
+        Assert.Null(r[0].YMin);                 // NULL → null
+        Assert.Equal(25.0, r[0].YMax!.Value, 6);
+        Assert.Equal("气煤", r[1].Code);
+        Assert.Null(r[1].YMax);
+    }
 }
