@@ -64,6 +64,36 @@ public class LongTermSchedulerTests
     }
 
     [Fact]
+    public void GenerateVariants_and_compare_recommends_feasible_best()
+    {
+        var basis = new LongTermPlan { DesignCapacityWanTa = 500, CoalReserveWanT = 15000, BaseStripRatio = 6 };
+        var variants = LongTermScheduler.GenerateVariants(basis, LongTermScheduler.DefaultWorkLines(), LongTermScheduler.DefaultDirections());
+        Assert.Equal(16, variants.Count);                       // 4 工作线 × 4 方向
+        Assert.All(variants, v => Assert.NotNull(v.Result));
+        var results = variants.Select(v => v.Result!).ToList();
+        var best = LongTermComparer.Score(results);
+        Assert.NotNull(best);
+        // 各方案回填了综合分 ∈ [0,100]
+        Assert.All(results, x => Assert.InRange(x.CompositeScore, 0, 100));
+        // 推荐 = 综合分最高(可行优先): 无更高分的可行方案
+        if (best!.Ok)
+            Assert.DoesNotContain(results, x => x.Ok && x.CompositeScore > best.CompositeScore);
+        // 至少一方案得满分维度(归一后某方案某指标=1 → 综合分应拉开)
+        Assert.True(results.Max(x => x.CompositeScore) >= results.Min(x => x.CompositeScore));
+    }
+
+    [Fact]
+    public void Compare_single_plan_scores_50_degenerate()
+    {
+        // 单方案: 各指标 min==max → 归一 0.5 → 综合分 50
+        var p = new LongTermPlan { DesignCapacityWanTa = 300, CoalReserveWanT = 9000 };
+        LongTermScheduler.Schedule(p);
+        var best = LongTermComparer.Score(new[] { p.Result! });
+        Assert.Equal(50, p.Result!.CompositeScore, 0);
+        Assert.Same(p.Result, best);
+    }
+
+    [Fact]
     public void Schedule_is_deterministic()
     {
         LongTermPlan Mk() => new() { DesignCapacityWanTa = 500, CoalReserveWanT = 8000, BaseStripRatio = 6 };

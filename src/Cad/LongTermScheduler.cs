@@ -39,8 +39,20 @@ public sealed class LongTermPlan
     public AdvanceMode WorkLineMode = AdvanceMode.Parallel;
     public double AdvanceAzimuthDeg = 0;
 
+    public string Name = "基准";
     public List<PlanPeriod> Periods { get; } = new();
     public LongTermResult? Result { get; set; }
+
+    /// <summary>拷贝标量参数(新 Periods/Result), 供多方案派生。</summary>
+    public LongTermPlan Clone() => new()
+    {
+        DesignCapacityWanTa = DesignCapacityWanTa, CoalReserveWanT = CoalReserveWanT, BaseStripRatio = BaseStripRatio,
+        BasicStrippingYears = BasicStrippingYears, RampUpYears = RampUpYears, DeclineYears = DeclineYears, RampProfile = RampProfile,
+        StartYear = StartYear, CoalPriceYuanT = CoalPriceYuanT, MiningCostYuanT = MiningCostYuanT, StripCostYuanM3 = StripCostYuanM3,
+        DiscountRatePct = DiscountRatePct, InnerDumpEnabled = InnerDumpEnabled, InnerDumpStartYear = InnerDumpStartYear,
+        EconomicStripRatioMax = EconomicStripRatioMax, BenchHeightM = BenchHeightM,
+        WorkLineLenM = WorkLineLenM, WorkLineMode = WorkLineMode, AdvanceAzimuthDeg = AdvanceAzimuthDeg, Name = Name,
+    };
 }
 
 /// <summary>一个计划期(年)行。</summary>
@@ -55,10 +67,53 @@ public sealed class PlanPeriod
     public bool IsDesignCalcYear;
 }
 
-/// <summary>排产评价指标。</summary>
+/// <summary>排产评价指标。CompositeScore 由多方案对比(LongTermComparer)回填。</summary>
 public sealed record LongTermResult(double ServiceLifeYears, double TimeToCapacityYears, string DesignCalcYearLabel,
     double StablePlateauYears, double ProductionRatioPeak, double BasicStrippingYiM3, double InnerDumpPct,
-    double AvgHaulKm, double Npv, double PaybackYears, double OutputCv, double RatioCv, double ReserveBalanceCoef, bool Ok);
+    double AvgHaulKm, double Npv, double PaybackYears, double OutputCv, double RatioCv, double ReserveBalanceCoef, bool Ok)
+{
+    public double CompositeScore { get; set; }
+    public string Name { get; set; } = "";
+}
+
+/// <summary>方案决策权重(忠实原 DecisionWeights 默认)。</summary>
+public sealed record LongTermWeights(double StablePlateau = 0.18, double PeakShaving = 0.22, double EarlyCapacity = 0.15,
+    double InnerDumpRate = 0.15, double Npv = 0.18, double ReserveBalance = 0.12)
+{
+    public double Sum => StablePlateau + PeakShaving + EarlyCapacity + InnerDumpRate + Npv + ReserveBalance;
+}
+
+/// <summary>多方案对比 —— 忠实原 LongTermComparer.Score: 六指标 min-max 归一 × 权重 → 综合分, 荐可行最高分。</summary>
+public static class LongTermComparer
+{
+    private static double NormHigh(double[] a, int i) { double mn = a.Min(), mx = a.Max(); return mx > mn + 1e-9 ? (a[i] - mn) / (mx - mn) : 0.5; }
+    private static double NormLow(double[] a, int i) { double mn = a.Min(), mx = a.Max(); return mx > mn + 1e-9 ? (mx - a[i]) / (mx - mn) : 0.5; }
+
+    /// <summary>回填各 Result.CompositeScore, 返回推荐方案(可行最高分, 无可行则总最高分)。</summary>
+    public static LongTermResult? Score(IReadOnlyList<LongTermResult> results, LongTermWeights? weights = null)
+    {
+        var r = results.Where(x => x != null).ToList();
+        if (r.Count == 0) return null;
+        var w = weights ?? new LongTermWeights();
+        double wsum = w.Sum <= 0 ? 1 : w.Sum;
+        double[] plateau = r.Select(x => x.StablePlateauYears).ToArray();
+        double[] peak = r.Select(x => x.ProductionRatioPeak).ToArray();
+        double[] ttc = r.Select(x => x.TimeToCapacityYears).ToArray();
+        double[] inner = r.Select(x => x.InnerDumpPct).ToArray();
+        double[] npv = r.Select(x => x.Npv).ToArray();
+        double[] bal = r.Select(x => x.ReserveBalanceCoef).ToArray();
+        LongTermResult? best = null; double bestScore = -1;
+        for (int i = 0; i < r.Count; i++)
+        {
+            double s = NormHigh(plateau, i) * w.StablePlateau + NormLow(peak, i) * w.PeakShaving + NormLow(ttc, i) * w.EarlyCapacity
+                     + NormHigh(inner, i) * w.InnerDumpRate + NormHigh(npv, i) * w.Npv + NormHigh(bal, i) * w.ReserveBalance;
+            r[i].CompositeScore = Math.Round(s / wsum * 100, 0);
+            if (r[i].Ok && r[i].CompositeScore > bestScore) { bestScore = r[i].CompositeScore; best = r[i]; }
+        }
+        if (best == null) foreach (var x in r) if (x.CompositeScore > bestScore) { bestScore = x.CompositeScore; best = x; }
+        return best;
+    }
+}
 
 public static class LongTermScheduler
 {
@@ -198,4 +253,34 @@ public static class LongTermScheduler
     /// <summary>规范最低服务年限(按设计能力分级, GB50197 近似)。</summary>
     public static double ServiceLifeMinFor(double capWanTa) => capWanTa switch
     { >= 1000 => 30, >= 500 => 25, >= 300 => 20, >= 100 => 15, _ => 10 };
+
+    public readonly record struct WorkLineSpec(string Label, double LenM, AdvanceMode Mode);
+    public readonly record struct DirectionSpec(string Label, double AzimuthDeg);
+
+    /// <summary>默认工作线候选(长/中/短 + 扇形回转), 忠实原 DefaultWorkLines。</summary>
+    public static List<WorkLineSpec> DefaultWorkLines() => new()
+    { new("长工作线", 1400, AdvanceMode.Parallel), new("中工作线", 1100, AdvanceMode.Parallel),
+      new("短工作线", 900, AdvanceMode.Parallel), new("扇形回转", 1000, AdvanceMode.FixedPivot) };
+
+    /// <summary>默认推进方向候选(四主方位), 忠实原 DefaultDirections。</summary>
+    public static List<DirectionSpec> DefaultDirections() => new()
+    { new("北推", 0), new("东推", 90), new("南推", 180), new("西推", 270) };
+
+    /// <summary>工作线 × 方向 正交派生多套计划, 每套独立排产。忠实原 GenerateVariants。</summary>
+    public static List<LongTermPlan> GenerateVariants(LongTermPlan basePlan,
+        IReadOnlyList<WorkLineSpec> workLines, IReadOnlyList<DirectionSpec> directions)
+    {
+        var result = new List<LongTermPlan>();
+        foreach (var wl in workLines)
+            foreach (var dir in directions)
+            {
+                var v = basePlan.Clone();
+                v.Name = $"{wl.Label}{dir.Label}";
+                v.WorkLineLenM = wl.LenM; v.WorkLineMode = wl.Mode; v.AdvanceAzimuthDeg = dir.AzimuthDeg;
+                Schedule(v);
+                if (v.Result != null) v.Result.Name = v.Name;
+                result.Add(v);
+            }
+        return result;
+    }
 }

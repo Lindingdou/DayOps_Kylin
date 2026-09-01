@@ -5918,6 +5918,21 @@ public partial class MainWindow : Window
         if (tk.Length > 2 && double.TryParse(tk[2], out var res) && res > 0) p.CoalReserveWanT = res;
         if (tk.Length > 3 && double.TryParse(tk[3], out var br) && br > 0) p.BaseStripRatio = br;
         if (tk.Length > 4) p.RampProfile = tk[4].Contains("激进") ? Cad.RampProfileKind.Aggressive : tk[4].Contains("阶梯") ? Cad.RampProfileKind.Stepped : Cad.RampProfileKind.Linear;
+        // 一键编制: 工作线×方向 16 方案 → 综合评分 → 荐最优, 各方案分柱上屏
+        if (tk.Any(t => t == "一键" || t == "多方案" || t == "对比" || t == "自动"))
+        {
+            var variants = Cad.LongTermScheduler.GenerateVariants(p, Cad.LongTermScheduler.DefaultWorkLines(), Cad.LongTermScheduler.DefaultDirections());
+            var results = variants.Select(v => v.Result!).ToList();
+            var best = Cad.LongTermComparer.Score(results);
+            var ranked = results.OrderByDescending(x => x.CompositeScore).ToList();
+            DrawCategoryBars(ranked.Take(8).Select(x => (x.Name, x.CompositeScore)).ToList(), "综合分");
+            var nm = await SaveCsvAsync("导出中长远多方案", "long_term_variants.csv",
+                "方案,综合分,服务年限,达产期,峰值剥采比,NPV万,内排%,储量均衡,可行\n" +
+                string.Join("", ranked.Select(x => $"{x.Name},{x.CompositeScore:0},{x.ServiceLifeYears:0},{x.TimeToCapacityYears:0},{x.ProductionRatioPeak:0.#},{x.Npv:0},{x.InnerDumpPct:0},{x.ReserveBalanceCoef:0.##},{(x.Ok ? "是" : "否")}\n")));
+            StatusMsg.Text = $"中长远一键编制({variants.Count} 方案·工作线×方向)：推荐【{best?.Name ?? "无"}】综合 {best?.CompositeScore:0}分(服务 {best?.ServiceLifeYears:0}a·峰值剥采比 {best?.ProductionRatioPeak:0.#}·NPV {best?.Npv:0}万·{(best?.Ok == true ? "可行" : "不达标")}) · 前三 " + string.Join(" | ", ranked.Take(3).Select(x => $"{x.Name} {x.CompositeScore:0}分")) + " · 评分柱入场景"
+                + (nm != null ? $" · CSV → {nm}" : "");
+            return;
+        }
         Cad.LongTermScheduler.Schedule(p);
         var r = p.Result!;
         // 逐年生产剥采比曲线上屏(年 → 剥采比)
