@@ -4050,7 +4050,10 @@ public partial class MainWindow : Window
         // 位移分布(原「统计与分布直方图」)：偏差 → min/max/mean/std/分位数 + 20 桶直方图 → CSV
         var summary = Statistics.Describe(dists, 20);
         var name = await SaveCsvAsync("导出C2C分布", "c2c_distribution.csv", Statistics.HistogramCsv(summary));
-        StatusMsg.Text = $"C2C 比对：{ra.Points.Count} 点 · {Statistics.SummaryLine(summary)}"
+        // |位移| P95(边坡变形监测判据, 忠实原 C2C 关键指标): 95% 点位移小于此
+        var sorted = (double[])dists.Clone(); System.Array.Sort(sorted);
+        double p95 = Statistics.Percentile(sorted, 95);
+        StatusMsg.Text = $"C2C 比对：{ra.Points.Count} 点 · {Statistics.SummaryLine(summary)} · |位移|P95={p95.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}m"
             + (name != null ? $" · 分布直方图 → {name}" : "");
     }
 
