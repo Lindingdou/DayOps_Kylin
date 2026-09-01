@@ -2249,3 +2249,11 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 **移植** [src/Cad/SeamOutcropLineExtractor.cs](src/Cad/SeamOutcropLineExtractor.cs) 忠实全移: 现状面三角网上求 **现状Z−顶板Z=0(坡顶=顶板露头)** 与 **现状Z−底板Z=0(坡底=底板露头)** 两条等值线(**marching triangles**: 逐三角看标量 f 三顶点符号, 变号边线性插值取点, 焊接成折线, 穿顶点去重, Douglas-Peucker 抽稀)。**与台阶面提取/煤岩判定互补**: 台阶面提取=坡度式(几何), 煤岩判定=分类; 露头线=**煤层与现状面交线**(地质式坡顶/坡底, 露头线**算出来天然一一对应**, 是原版否定"猜配对"三版失败后的正解)。附 `PairIntoBands`(按并行性配露头带, 间距∈[煤厚/tan60°,煤厚/tan5°]且离散小)。SampleZ 由调用方传(Kylin: `GetHorizonPoints`→`VirtualBorehole`分层→`TinSampler.SampleZ`)。命令 `煤层露头线`(OFF现状面+种子库→逐层出坡顶青/坡底橙线)+面编辑菜单+目录。验证 [SeamOutcropLineExtractorTests](tests/PitMine3D.Kylin.Tests/SeamOutcropLineExtractorTests.cs) 4 例已知值(倾斜面 z=10−0.5x 交顶板 z5 于 x=10/交底板 z2 于 x=16·整层在面下无露头·无数据顶点跳过不造点·并行配带间距6)。**build 0 错·单测 1082→1086**。
 
 **教训(硬, 第 3 类扫描盲区)**: 复扫目录找切片, **别用注释措辞 grep 过滤**(纯几何/可单测 只是部分文件的写法)——要 **`ls` 目录逐文件读用途**。三类盲区已犯: ①名字前缀归堆(线形处理/台阶面提取) ②注释措辞过滤(本项) ③present-but-shallow(台阶面提取)。**"挖尽/收敛"宣言的前提是逐文件读过, 不是 grep 过一遍**。见 [[unlock-blocked-insights]]。
+
+## 二〇〇、月度剥离均衡(TautString 拉紧绳)—— robust ls+读法生效, 第 6 真缺口
+
+用新纠正的 **`ls` 目录逐文件读 `<summary>`** 法扫 MineAssLib/Driving(~42 文件, 之前 grep 过滤过), 挖出 `TautString`——经典**拉紧绳**算法, Kylin 缺(有 `VpBalanceSolver`=剥采比均衡[VP 曲线 采出↔剥离比 K 段], **本项是时间轴月度剥离调度**, 不同问题)。
+
+**移植** [src/Cad/TautString.cs](src/Cad/TautString.cs) 忠实全移: 下包络 lo(必须剥)与上包络 hi(能力)之间求【单调不减·增量最平】累计剥离曲线(漏斗法 O(T²)); 对**任意凸代价同时最优**(最小方差/峰值/相邻月跳动一次全拿, 拉绳经典性质); 前提"剥离只能提前不能推后"(R37, sMin 从 0 起); 转折点标 触底(露煤紧迫)/触顶(能力吃紧)。命令 `月度剥离均衡`(CSV 期号/累计必剥/累计能力 → 均衡累计曲线青 + lo/hi 包络灰入场景, X=期号 Y=累计 + CV/关键月) + 目录; 区别既有 `剥采比均衡`(VP 比值)。验证 [TautStringTests](tests/PitMine3D.Kylin.Tests/TautStringTests.cs) 6 例已知值(线性恒速率无内折·陡约束触底折 c=[0,12.5,25,30]·走廊内单调·拉绳CV<照lo走CV·能力压顶带超前储备·倒挂不可行)。**build 0 错·单测 1086→1092**。
+
+**本会话第 6 真缺口**——robust 逐文件读法(纠正 grep 过滤盲区)立即在"已 grep 过"的目录再挖出一个。**印证: 之前所有"grep 过滤"式复扫都可能漏, 该目录逐文件读法继续**。见 [[unlock-blocked-insights]]。

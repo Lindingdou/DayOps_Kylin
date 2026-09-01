@@ -901,6 +901,7 @@ public partial class MainWindow : Window
                 return;
             }
             if (cmd == "剥采比均衡" || cmd == "VP曲线" || cmd == "剥采比") { await StrippingBalanceAsync(); return; }
+            if (cmd == "月度剥离均衡" || cmd == "剥离调度" || cmd == "拉紧绳" || cmd.StartsWith("月度剥离均衡 ")) { await StripScheduleAsync(cmd); return; }
             if (cmd == "工作面线拟合" || cmd == "工作面线" || cmd == "拟合工作面线") { await WorkingFaceLineAsync(); return; }
             if (cmd == "质量统计" || cmd == "统计分析" || cmd == "煤质CSV统计" || cmd == "样本统计") { await QualityStatsAsync(); return; }   // 用户 CSV 统计(区别于 §四 库煤质统计)
             if (cmd == "坡角估算" || cmd == "工作帮坡角" || cmd == "坡角") { await SlopeEstimateAsync(); return; }
@@ -1647,6 +1648,41 @@ public partial class MainWindow : Window
         RefreshScene();
         if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
         StatusMsg.Text = $"煤厚等值线：{pts.Count} 见煤点 → {res.Levels.Count} 层等厚线 · 煤厚 {Statistics.SummaryLine(res.Stats)}";
+    }
+
+    // 月度剥离均衡(拉紧绳)：CSV(期号,累计必剥lo,累计能力hi 万m³) → 走廊内单调最平累计剥离曲线 + 触边转折
+    // (露煤紧迫/能力吃紧) + 均衡度CV。区别 剥采比均衡(VP=采出↔剥离比): 本命令是时间轴月度剥离调度。忠实原 TautString。
+    private async Task StripScheduleAsync(string cmd)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        { Title = "月度剥离均衡：选 CSV (期号, 累计必剥 lo, 累计能力 hi; 万m³, 含期初0行)", AllowMultiple = false, FileTypeFilter = new[] { new FilePickerFileType("期序列 (CSV/TXT)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } } });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);   // 每行 期号(x), 累计必剥(y), 累计能力(z)
+        if (!r.Success || r.Points.Count < 2) { StatusMsg.Text = "月度剥离均衡：需 ≥2 行 (期号, 累计必剥, 累计能力)"; return; }
+        var lo = new List<double>(); var hi = new List<double>();
+        foreach (var p in r.Points) { lo.Add(p.y); hi.Add(p.z); }
+        var pivots = new List<TautString.Pivot>();
+        var c = TautString.Solve(lo, hi, lo[^1], out var err, pivots);
+        if (c == null) { StatusMsg.Text = $"月度剥离均衡：{err}"; return; }
+        var incArr = TautString.ToIncrements(c);
+        double cv = TautString.Cv(incArr);
+        double imin = double.MaxValue, imax = double.MinValue, isum = 0;
+        foreach (var d in incArr) { if (d < imin) imin = d; if (d > imax) imax = d; isum += d; }
+        double iavg = incArr.Length > 0 ? isum / incArr.Length : 0;
+        double ymax = 0; foreach (var h in hi) if (h > ymax) ymax = h;
+        BeginChange();
+        for (int i = 1; i < lo.Count; i++)   // 累计必剥 lo(灰)
+            _scene.Add(new LineEntity { X0 = i - 1, Y0 = lo[i - 1], X1 = i, Y1 = lo[i], Cr = 0.55f, Cg = 0.55f, Cb = 0.55f, LayerName = "剥离均衡" });
+        for (int i = 1; i < hi.Count; i++)   // 累计能力 hi(浅灰)
+            _scene.Add(new LineEntity { X0 = i - 1, Y0 = hi[i - 1], X1 = i, Y1 = hi[i], Cr = 0.75f, Cg = 0.75f, Cb = 0.75f, LayerName = "剥离均衡" });
+        for (int i = 1; i < c.Length; i++)   // 均衡累计曲线(青)
+            _scene.Add(new LineEntity { X0 = i - 1, Y0 = c[i - 1], X1 = i, Y1 = c[i], Cr = 0.1f, Cg = 0.8f, Cb = 0.9f, LayerName = "剥离均衡" });
+        RefreshScene();
+        if (ymax > 0) Viewport.FitBounds(new double[] { 0, 0, c.Length - 1, ymax });
+        string pv = pivots.Count > 0 ? " · 关键月 " + string.Join("/", pivots.ConvertAll(p => p.ToString())) : "";
+        StatusMsg.Text = $"月度剥离均衡(拉紧绳)：{incArr.Length}期 · 月剥离 {imin.ToString("0", inv)}~{imax.ToString("0", inv)}(均{iavg.ToString("0", inv)}万m³) · "
+            + $"均衡度CV {cv.ToString("0.###", inv)} · {pivots.Count}个触边转折{pv} · 青=均衡曲线/灰=必剥·能力包络（X=期号 Y=累计万m³）";
     }
 
     // 剥采比均衡(VP曲线)：分期物料量 CSV → 累计 V-P 曲线 → DP 分段均衡 → 曲线/折线/比值上屏 + 报表
@@ -8287,7 +8323,7 @@ public partial class MainWindow : Window
         // 块体/运输/路网
         "块体模型","资源量","道路横断面","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","演化对比","螺旋斜坡道","折返斜坡道",
         // 生产计划/投影
-        "境界圈定","剥采比均衡","方案综合对比","开采程序确定","平盘宽度识别","确定可采区域","点落到面上","线落到面上",
+        "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","平盘宽度识别","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
         "设备台账","生产数据","产能分析","故障分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","层位求交","导入生产记录","导入月度产能","导入故障记录","导入月度KPI","导入设备台账","导入煤质","导入观测点","导入月度计划","导入见煤成果","导入路况","导入边坡","导入模板","导出分析",
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","机群驾驶舱","设备综合评分","数据看板","煤种分类","煤质数据健康度","分煤层煤质",
