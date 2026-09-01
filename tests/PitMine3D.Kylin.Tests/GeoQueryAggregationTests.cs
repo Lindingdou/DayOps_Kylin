@@ -44,4 +44,24 @@ public class GeoQueryAggregationTests
         Assert.Equal(1.5, s[0], 6);
         Assert.Equal(2.0, s[1], 6);
     }
+
+    [Fact]
+    public void GetEquipmentFactorRows_joins_kpi_capacity_on_eq_year_month()
+    {
+        using var c = Db(@"CREATE TABLE equipment_kpi_monthly(equipment_id INT, year INT, month INT,
+            availability REAL, actual_run_rate REAL, utilization_rate REAL,
+            internal_fault_rate_pct REAL, external_fault_rate_pct REAL);
+            CREATE TABLE capacity_monthly(equipment_id INT, year INT, month INT, output_m3 REAL);");
+        Exec(c, "INSERT INTO equipment_kpi_monthly VALUES (1,2023,1, 0.9,0.8,0.85, 2.0,1.0);");
+        // 同设备同年月才 join；m=2 无 KPI 匹配应被排除。
+        Exec(c, "INSERT INTO capacity_monthly VALUES (1,2023,1,5000),(1,2023,2,6000);");
+        var rows = GeoDataQueries.GetEquipmentFactorRows(c);
+        var r = Assert.Single(rows);            // 仅 (1,2023,1) 对齐
+        Assert.Equal(0.9, r.Availability, 6);
+        Assert.Equal(0.8, r.RunRate, 6);
+        Assert.Equal(0.85, r.Utilization, 6);
+        Assert.Equal(2.0, r.InternalFaultPct, 6);
+        Assert.Equal(1.0, r.ExternalFaultPct, 6);
+        Assert.Equal(5000, r.Output, 6);        // 列映射正确(c.output_m3 → Output)
+    }
 }
