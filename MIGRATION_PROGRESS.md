@@ -1959,3 +1959,11 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - **修**: `GetFaultStats`+`FaultStats` 加 MtbfHours(=Σwork_hours/故障次数)/MttrHours(=Σduration_hours/故障次数)/SteadyAvailPct(=MTBF/(MTBF+MTTR)×100), 忠实原公式(line 774 "MTBF=总运行时长/故障次数"); `故障分析` 显示"可靠性 MTBF/MTTR/稳态可用率"(有运行时长才附加)。+1 单测(种子上验 MTTR=停机/次数、MTBF=Σworkhours/次数、A_ss=MTBF/(MTBF+MTTR) 关系恒等 + A_ss∈[0,100])。1027 测全绿, 0 错, smoke 正常。Weibull 浴盆/大修预警属 GUI 图表(受阻记录)。
 
 **判据**: 分析输出完整性——同一分析原版算 N 指标, Kylin 算 M<N 即缺口(取公式简单+数据齐者补, 图表/GUI 受阻记录)。同煤质washability/KPI故障归因手法。本轮 1 修。累计分析补全 3 处(煤质 Mad/FCd·KPI 故障归因·故障 MTBF/MTTR)。
+
+## 一六八、分析输出完整性续 —— KPI 补 OEE(设备综合效率)+ 作业率
+
+承 §一六七, 续查 KPI 分析:
+- **缺口**: 原 `CsvDataStore.Oee = Availability × ActualRunRate × UtilizationRate`(设备综合效率, "OEE 三率卡片"), Kylin `GetKpiStats` 只有可用率/利用率均值, **无 OEE, 且未暴露作业率(actual_run_rate 已导入却不显示)**。
+- **修**: `GetKpiStats`+`KpiStats` 加 AvgRunRatePct(作业率均值)+ OeePct(=可用率×作业率×利用率, 由归一化三率百分比求积, 忠实原 Oee); `KPI分析` 显示"三率 可用/作业/利用 · OEE"。+1 单测(OEE=三率积关系恒等 + OEE≤各单率 + ∈[0,100] + 作业率>0)。1028 测全绿, 0 错, smoke 正常。
+
+**分析输出完整性透镜产出**: 累计补 4 处(煤质 Mad/FCd · KPI 故障归因 · 故障 MTBF/MTTR · KPI OEE+作业率)。判据: 原版同分析算的指标(公式简单+数据齐)Kylin 须算全; 图表/GUI(Weibull 浴盆/趋势图/Pareto 图)受阻记录。本轮 1 修。

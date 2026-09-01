@@ -106,15 +106,17 @@ public static class GeoDataQueries
     }
 
     public sealed record KpiStats(int Records, double AvgAvailabilityPct, double AvgUtilizationPct, int LatestYear, int LatestMonth,
-        double AvgInternalFaultPct = 0, double AvgExternalFaultPct = 0);   // 故障归因: 内/外部故障率均值
+        double AvgInternalFaultPct = 0, double AvgExternalFaultPct = 0,
+        double AvgRunRatePct = 0, double OeePct = 0);   // 故障归因: 内/外部故障率均值; 作业率 + OEE(=可用率×作业率×利用率)
 
-    /// <summary>KPI 分析：equipment_kpi_monthly 平均可用率/利用率 + 内/外部故障率(故障归因) + 最新期。</summary>
+    /// <summary>KPI 分析：equipment_kpi_monthly 平均可用率/作业率/利用率 + OEE(三率积) + 内/外部故障率(故障归因) + 最新期。</summary>
     public static KpiStats GetKpiStats(SqliteConnection conn)
     {
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"SELECT COUNT(*), COALESCE(AVG(availability),0), COALESCE(AVG(utilization_rate),0),
                             COALESCE(MAX(year),0), COALESCE(MAX(month),0),
-                            COALESCE(AVG(NULLIF(internal_fault_rate_pct,0)),0), COALESCE(AVG(NULLIF(external_fault_rate_pct,0)),0)
+                            COALESCE(AVG(NULLIF(internal_fault_rate_pct,0)),0), COALESCE(AVG(NULLIF(external_fault_rate_pct,0)),0),
+                            COALESCE(AVG(actual_run_rate),0)
                             FROM equipment_kpi_monthly";
         using var rd = cmd.ExecuteReader();
         rd.Read();
@@ -126,7 +128,11 @@ public static class GeoDataQueries
         double ifr = rd.GetDouble(5), efr = rd.GetDouble(6);
         double ifPct = ifr <= 1.0 && ifr > 0 ? ifr * 100 : ifr;
         double efPct = efr <= 1.0 && efr > 0 ? efr * 100 : efr;
-        return new KpiStats(n, avPct, utPct, rd.GetInt32(3), rd.GetInt32(4), ifPct, efPct);
+        double rr = rd.GetDouble(7);
+        double rrPct = rr <= 1.0 ? rr * 100 : rr;
+        // OEE = 可用率×作业率×利用率(忠实原 CsvDataStore.Oee); 由归一化三率百分比求积
+        double oeePct = avPct / 100.0 * rrPct / 100.0 * utPct / 100.0 * 100.0;
+        return new KpiStats(n, avPct, utPct, rd.GetInt32(3), rd.GetInt32(4), ifPct, efPct, rrPct, oeePct);
     }
 
     public sealed record EfficiencyForecast(int ActiveEquipment, int ProducingUnits, double BaselineMonthlyWanM3, double AvgAvailabilityPct, double AvgRunRatePct, double ProjectedAnnualWanM3);

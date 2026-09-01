@@ -7072,7 +7072,7 @@ public partial class MainWindow : Window
         // 故障归因(内/外部故障率)有数据才附加显示
         string fault = (k.AvgInternalFaultPct > 0 || k.AvgExternalFaultPct > 0)
             ? $" · 故障归因 内{k.AvgInternalFaultPct:0.#}%/外{k.AvgExternalFaultPct:0.#}%" : "";
-        StatusMsg.Text = $"KPI 分析：{k.Records} 条 · 平均可用率 {k.AvgAvailabilityPct:0.#}% · 平均利用率 {k.AvgUtilizationPct:0.#}%{fault} · 最新 {k.LatestYear}-{k.LatestMonth:00}";
+        StatusMsg.Text = $"KPI 分析：{k.Records} 条 · 三率 可用{k.AvgAvailabilityPct:0.#}%/作业{k.AvgRunRatePct:0.#}%/利用{k.AvgUtilizationPct:0.#}% · OEE {k.OeePct:0.#}%{fault} · 最新 {k.LatestYear}-{k.LatestMonth:00}";
     }
 
     private void BoreholeStatsCmd()

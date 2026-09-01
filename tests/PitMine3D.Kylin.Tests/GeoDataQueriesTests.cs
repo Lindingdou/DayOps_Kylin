@@ -307,6 +307,20 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Kpi_stats_computes_oee_from_three_rates()
+    {
+        // OEE = 可用率×作业率×利用率(忠实原 CsvDataStore.Oee)
+        using var db = GeoDatabase.OpenSeeded();
+        var k = GeoDataQueries.GetKpiStats(db.Connection);
+        Assert.True(k.Records > 0);
+        Assert.True(k.AvgRunRatePct > 0, "作业率均值 > 0(种子有 actual_run_rate)");
+        double expectedOee = k.AvgAvailabilityPct / 100.0 * k.AvgRunRatePct / 100.0 * k.AvgUtilizationPct / 100.0 * 100.0;
+        Assert.Equal(expectedOee, k.OeePct, 4);
+        Assert.InRange(k.OeePct, 0, 100);
+        Assert.True(k.OeePct <= k.AvgAvailabilityPct + 1e-6, "OEE ≤ 各单率(三率之积)");   // 积 ≤ 任一因子
+    }
+
+    [Fact]
     public void Export_table_then_reimport_roundtrips()
     {
         using var db = GeoDatabase.OpenSeeded();
