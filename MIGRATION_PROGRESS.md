@@ -3283,3 +3283,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(合成已知值 + 退化对照)**: [RoadNodingTests](tests/PitMine3D.Kylin.Tests/RoadNodingTests.cs) +5 —— X 十字→断 4 段 + BuildNoded 连通; **未 noding 的 Build→X 不连通(证退化存在)**; T 丁字→断 3 段 + 连通; 平行→不断 + 正确不连; 端点相接→不双断 + 连通。**build 0 错·单测 1403→1408**。
 
 **本会话第 82 功能**。教训: **§277"覆盖"标记(关键字匹配的 keyword-matched 类)系统性不可靠**——两轮再核(§81 VoxelVolumeBuilder 均匀退化 + §82 RoadGraphBuilder noding 退化)皆破"收敛", 各挖真缺(§81 体素精度 + §82 路由正确性)。**meta 教训"收敛claim 不可靠"第 N 次验证; keyword-match 覆盖 ≠ 实现深度, 须逐一验建图/精度核心**。见 [[unlock-blocked-insights]] [[faithfulness-only-original-commands]]。
+
+---
+
+## §二八四 再核续：克里金邻域搜索(octant) —— 记录(细化选项非缺口)
+
+续 §283 再核深度。核 Kylin `OrdinaryKriging` 邻域搜索：Kylin 用**最近-k**(按距离排序取 k=12); 原版 kriging 默认 **octant 八分搜索**(UseOctant=true, MaxPerOctant=2, MinSamples=4, SearchRadius=200)——邻域按 8 卦限分区、每卦限最多取 2 样, 防样本方向聚集偏置。
+
+**判定=记录(细化选项, 非缺口)**: (1)Kylin 最近-k 克里金是**有效、可验、有测**(OrdinaryKrigingTests 断言具体估值)的标准做法; (2)octant 是**方向均衡细化**, 仅当样本方向聚集时与最近-k 有别, 一般分布结果相近; (3)原版将其暴露为**交互开关**(KrigingViewModel UseOctant); (4)改默认为 octant 会**广泛改变** Kylin 所有克里金结果(煤质三维插值/品位块模型/面更新/交叉验证)并破坏现有估值断言, 为边际收益。**属邻域细化选项差异, 非 §81/§82 那类能力缺口/正确性缺陷**——记录: Kylin 克里金=最近-k; 原默认 octant 方向均衡(未移植, 结果仅聚集样本有别)。
+
+其余本轮再核(§283/284)算法核**均覆盖**: 约束三角网(托管 CDT)/网格光顺(Laplacian 同原)/等高线(Marching Squares 含鞍点)/网格交线·剖面·侧面(忠实原+测试)/BlockModel·MeshData(结构+子块§59/81)/钻孔柱状图/ProcessArchitecture。**§81/82 两退化(体素子块/路网noding)为集中缺陷已补; 深度再核余皆faithful**。见 [[unlock-blocked-insights]]。
