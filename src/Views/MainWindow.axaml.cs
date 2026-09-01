@@ -1938,7 +1938,9 @@ public partial class MainWindow : Window
         var inv = System.Globalization.CultureInfo.InvariantCulture;
         var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
         double radius = 80.0;
+        string algo = "IDW";   // IDW/NN/MA/OK/SK/UK
         if (tk.Length >= 2 && double.TryParse(tk[1], System.Globalization.NumberStyles.Float, inv, out double rad) && rad > 0) radius = rad;
+        if (tk.Length >= 3) algo = tk[2].ToUpperInvariant();
         var f1 = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         { Title = "更新煤层面：选目标面 OFF", AllowMultiple = false, FileTypeFilter = new[] { new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } } } });
         if (f1.Count == 0) return;
@@ -1958,7 +1960,7 @@ public partial class MainWindow : Window
         for (int i = 0; i < verts.Count; i++) { vf[i * 3] = verts[i].x; vf[i * 3 + 1] = verts[i].y; vf[i * 3 + 2] = verts[i].z; }
         var tf = new int[tris.Count * 3];
         for (int i = 0; i < tris.Count; i++) { tf[i * 3] = tris[i].a; tf[i * 3 + 1] = tris[i].b; tf[i * 3 + 2] = tris[i].c; }
-        var res = Cad.SurfaceUpdate.Evaluate(vf, tf, obs, new Cad.SurfaceUpdate.Options { InfluenceRadius = radius });
+        var res = Cad.SurfaceUpdate.Evaluate(vf, tf, obs, new Cad.SurfaceUpdate.Options { InfluenceRadius = radius, Algorithm = algo });
         BeginChange();
         foreach (var o in obs) { var pt = new PointEntity { X = o.Item1, Y = o.Item2 }; AssignLayer(pt); _scene.Add(pt); }
         RefreshScene();
@@ -1971,7 +1973,7 @@ public partial class MainWindow : Window
             offName = await SaveCsvAsync("导出更新后煤层面", "surface_updated.off", MeshWeld.ToOff(newVerts, tris));
         }
         string cl = res.Clusters.Count > 0 ? $" · {res.Clusters.Count} 影响片区" : "";
-        StatusMsg.Text = $"更新煤层面(R={radius.ToString("0.#", inv)}m·IDW)：{res.Message}{cl} · 抬升≤{res.MaxDisp.ToString("0.##", inv)}m/下沉≤{(-res.MinDisp).ToString("0.##", inv)}m · 净体积 {res.NetVolume.ToString("0", inv)}m³（观测点已入场景）"
+        StatusMsg.Text = $"更新煤层面(R={radius.ToString("0.#", inv)}m·{(obs.Count == 1 ? "NN" : algo)})：{res.Message}{cl} · 抬升≤{res.MaxDisp.ToString("0.##", inv)}m/下沉≤{(-res.MinDisp).ToString("0.##", inv)}m · 净体积 {res.NetVolume.ToString("0", inv)}m³（观测点已入场景）"
             + (offName != null ? $" → {offName}" : "");
     }
 

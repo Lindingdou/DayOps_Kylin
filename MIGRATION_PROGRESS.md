@@ -2264,7 +2264,7 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 
 **移植(拆可验证核)** [src/Cad/SurfaceUpdate.cs](src/Cad/SurfaceUpdate.cs): `Evaluate` 核心=用观测点(现状见煤/补勘顶底板)**局部羽化更新**目标三角网顶点 Z——影响半径 R 内顶点按到最近观测 smoothstep 羽化(内 1→边界 0)、区内目标值 IDW 拟合观测点、newZ=vz+w·(est−vz), 区外不动; 附影响片区(影响圈搭接<2R 并查集归片)+ 位移/面积/净体积统计。命令 `更新煤层面`(目标 OFF + 观测点 CSV + 半径 → 观测点入场景 + 位移/净体积/片区汇总 + **导出更新后 OFF**) + 面编辑菜单 + 目录。验证 [SurfaceUpdateTests](tests/PitMine3D.Kylin.Tests/SurfaceUpdateTests.cs) 6 例已知值(单观测 smoothstep 羽化 newZ=w·5·落点=5·区外不动·落观测点取其值·分离/搭接观测点 2/1 片区·下沉净体积负)。**build 0 错·单测 1092→1098**。
 
-**拆核记录**: 原 520 行 SurfaceUpdateEngine 中——①**Evaluate 羽化更新核**(默认 IDW)已移可验; ②**多算法 NN/MA/OK/SK/UK** 待后续(Kylin Estimation 亦 IDW 基, 点式多算法 API 未暴露); ③**三维分级色带 overlay** 走 native PMBI, 2D 场景受阻, 未移(此出更新后 Z + 数值统计替代)。**本会话第 7 真缺口**。见 [[unlock-blocked-insights]]。
+**拆核记录**: 原 520 行 SurfaceUpdateEngine 中——①**Evaluate 羽化更新核**已移可验; ②**多算法 NN/MA/IDW/OK/SK/UK** —— **已补全**(复用 Kylin `OrdinaryKriging.EstimateAt/EstimateSimpleAt/EstimateUniversalAt` 点式 OK/SK/UK + 变差函数拟合一次; NN/MA/IDW 内联; 单点退化 NN; 命令 `更新煤层面 <半径> <算法>`; +3 单测: NN 取最近值/MA 等权均值/OK 常数数据返常数; build 0错·1098→1101); ③**三维分级色带 overlay** 走 native PMBI, 2D 场景受阻, 未移(此出更新后 Z + 数值统计替代)。**本会话第 7 真缺口**。见 [[unlock-blocked-insights]]。
 
 ## 二〇二、robust 读 PointCloudLib/RoadLib/GeoDataBase —— 均覆盖/native/DB, 无新切片(sweep 收敛)
 

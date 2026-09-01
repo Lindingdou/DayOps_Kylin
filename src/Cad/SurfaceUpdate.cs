@@ -16,6 +16,8 @@ public static class SurfaceUpdate
 {
     public sealed class Options
     {
+        /// <summary>区内目标值估值法：IDW / NN(最近邻) / MA(移动平均) / OK(普通克里金) / SK(简单克里金) / UK(泛克里金)。单点自动退化 NN。</summary>
+        public string Algorithm = "IDW";
         public double InfluenceRadius = 80.0;   // 影响半径(m)：自动选区 + 羽化尺度
         public int MaxSamples = 16;
         public double IdwPower = 2.0;
@@ -56,6 +58,20 @@ public static class SurfaceUpdate
         double R = Math.Max(1e-3, opt.InfluenceRadius);
         double R2 = R * R;
 
+        // 克里金法(OK/SK/UK)预备：控制点(水平估值 Z=0, 值=观测标高) + 全局变差函数(拟合一次, 免逐顶点重拟)
+        string algo = (obs.Count == 1) ? "NN" : (opt.Algorithm ?? "IDW").ToUpperInvariant();   // 单点退化 NN
+        bool kriging = algo == "OK" || algo == "SK" || algo == "UK";
+        List<OrdinaryKriging.ControlPoint> cps = null;
+        OrdinaryKriging.Variogram vg = null;
+        double gMean = 0;
+        if (kriging)
+        {
+            cps = new List<OrdinaryKriging.ControlPoint>(obs.Count);
+            foreach (var o in obs) { cps.Add(new OrdinaryKriging.ControlPoint(o.x, o.y, 0, o.z)); gMean += o.z; }
+            gMean /= obs.Count;
+            if (cps.Count >= 2) vg = OrdinaryKriging.FitVariogram(cps);
+        }
+
         for (int i = 0; i < V; i++)
         {
             double vx = worldVerts[i * 3], vy = worldVerts[i * 3 + 1], vz = worldVerts[i * 3 + 2];
@@ -70,7 +86,17 @@ public static class SurfaceUpdate
             near.Sort((a, b) => a.d.CompareTo(b.d));
             if (near.Count > opt.MaxSamples) near = near.GetRange(0, opt.MaxSamples);
 
-            double est = Idw(near, opt.IdwPower);
+            double? estN = algo switch
+            {
+                "NN" => near[0].z,                                                   // 最近邻
+                "MA" => Mean(near),                                                   // 移动平均(近 k 等权)
+                "OK" => OrdinaryKriging.EstimateAt(cps, vx, vy, 0, opt.MaxSamples, R, vg)?.est,
+                "SK" => OrdinaryKriging.EstimateSimpleAt(cps, vx, vy, 0, gMean, opt.MaxSamples, R, vg)?.est,
+                "UK" => OrdinaryKriging.EstimateUniversalAt(cps, vx, vy, 0, opt.MaxSamples, R, vg)?.est,
+                _ => Idw(near, opt.IdwPower),                                         // IDW(默认)
+            };
+            if (estN == null) continue;                          // 克里金无支撑 → 不动
+            double est = estN.Value;
             double dNear = near[0].d;
             double t = Math.Clamp(1.0 - dNear / R, 0, 1);
             double w = t * t * (3 - 2 * t);                      // smoothstep 羽化
@@ -156,6 +182,12 @@ public static class SurfaceUpdate
             ? $"自动选区：受影响 {nAff} 顶点 / 面积 {area:F0} m²；位移 最大 {maxAbs:F2}m、平均 {res.MeanAbsDisp:F2}m"
             : "影响半径内无有效更新(观测点太远或不足)，可调大影响半径";
         return res;
+    }
+
+    /// <summary>移动平均：近 k 观测等权均值。</summary>
+    private static double Mean(List<(double d, double z)> near)
+    {
+        double s = 0; foreach (var (_, z) in near) s += z; return near.Count > 0 ? s / near.Count : 0;
     }
 
     /// <summary>反距离加权：Σ(z/dᵖ)/Σ(1/dᵖ)；命中观测点(d≈0)直接取其 z。</summary>

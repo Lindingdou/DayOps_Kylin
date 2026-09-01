@@ -83,6 +83,38 @@ public class SurfaceUpdateTests
     }
 
     [Fact]
+    public void Nearest_neighbour_takes_the_closest_observation_value()
+    {
+        var (v, t) = FlatGrid();
+        // 顶点(0,50) 到 A(40,50,10) d=40 近于 B(60,50,20) d=60; NN → 取 A 值 10; w=smoothstep(1-40/80)=0.5 → newZ=5
+        var obs = new List<(double, double, double)> { (40, 50, 10), (60, 50, 20) };
+        var r = SurfaceUpdate.Evaluate(v, t, obs, new SurfaceUpdate.Options { InfluenceRadius = 80, Algorithm = "NN" });
+        Assert.Equal(5.0, r.NewZ[3], 6);
+    }
+
+    [Fact]
+    public void Moving_average_takes_equal_weighted_mean()
+    {
+        var (v, t) = FlatGrid();
+        // 同上两观测, MA → (10+20)/2=15; newZ=0.5·15=7.5（区别 NN=5 / IDW≈6.5）
+        var obs = new List<(double, double, double)> { (40, 50, 10), (60, 50, 20) };
+        var r = SurfaceUpdate.Evaluate(v, t, obs, new SurfaceUpdate.Options { InfluenceRadius = 80, Algorithm = "MA" });
+        Assert.Equal(7.5, r.NewZ[3], 6);
+    }
+
+    [Fact]
+    public void Ordinary_kriging_of_constant_data_returns_the_constant()
+    {
+        var (v, t) = FlatGrid();
+        // 3 观测同值 5(其一落在中心顶点上) → OK 估值处处 5; 中心顶点 d=0 → newZ=5
+        var obs = new List<(double, double, double)> { (50, 50, 5), (40, 50, 5), (60, 50, 5) };
+        var r = SurfaceUpdate.Evaluate(v, t, obs, new SurfaceUpdate.Options { InfluenceRadius = 80, Algorithm = "OK" });
+        Assert.Equal(5.0, r.NewZ[4], 4);          // 落观测点 → 取其值 5
+        for (int i = 0; i < 9; i++)               // 所有受影响顶点 blend 向常数 5, 落 [0,5]
+            if (r.Affected[i]) Assert.InRange(r.NewZ[i], 0.0, 5.0 + 1e-6);
+    }
+
+    [Fact]
     public void Lowering_observation_gives_negative_net_volume()
     {
         var (v, t) = FlatGrid();
