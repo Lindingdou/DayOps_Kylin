@@ -392,6 +392,18 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void Kpi_trend_includes_run_rate_three_rates()
+    {
+        // KPI 趋势应含三率(可用/作业/利用), 此前缺作业率
+        using var db = GeoDatabase.OpenSeeded();
+        var rows = GeoDataQueries.GetKpiTrend(db.Connection);
+        Assert.NotEmpty(rows);
+        Assert.All(rows, r => Assert.InRange(r.AvgRunRatePct, 0, 100));   // 作业率归一化到 %
+        Assert.Contains(rows, r => r.AvgRunRatePct > 0);                  // 种子含 actual_run_rate
+        for (int i = 1; i < rows.Count; i++) Assert.True(rows[i].Year >= rows[i - 1].Year, "按年升序");
+    }
+
+    [Fact]
     public void Export_table_then_reimport_roundtrips()
     {
         using var db = GeoDatabase.OpenSeeded();

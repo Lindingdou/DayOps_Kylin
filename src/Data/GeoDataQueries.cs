@@ -549,20 +549,20 @@ public static class GeoDataQueries
         catch (System.Exception ex) { return (false, ex.Message, 0); }
     }
 
-    public sealed record KpiTrendRow(int Year, double AvgAvailabilityPct, double AvgUtilizationPct);
+    public sealed record KpiTrendRow(int Year, double AvgAvailabilityPct, double AvgUtilizationPct, double AvgRunRatePct = 0);   // 三率齐: +作业率
 
-    /// <summary>KPI 趋势：equipment_kpi_monthly 按年平均 可用率/利用率（比率自适应 0..1 或 0..100）。</summary>
+    /// <summary>KPI 趋势：equipment_kpi_monthly 按年平均 三率 可用率/作业率/利用率（比率自适应 0..1 或 0..100）。</summary>
     public static List<KpiTrendRow> GetKpiTrend(SqliteConnection conn)
     {
         var rows = new List<KpiTrendRow>();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = @"SELECT year, COALESCE(AVG(availability),0), COALESCE(AVG(utilization_rate),0)
+        cmd.CommandText = @"SELECT year, COALESCE(AVG(availability),0), COALESCE(AVG(utilization_rate),0), COALESCE(AVG(actual_run_rate),0)
                             FROM equipment_kpi_monthly GROUP BY year ORDER BY year";
         using var rd = cmd.ExecuteReader();
         while (rd.Read())
         {
-            double av = rd.GetDouble(1), ut = rd.GetDouble(2);
-            rows.Add(new KpiTrendRow(rd.GetInt32(0), av <= 1.0 ? av * 100 : av, ut <= 1.0 ? ut * 100 : ut));
+            double av = rd.GetDouble(1), ut = rd.GetDouble(2), rr = rd.GetDouble(3);
+            rows.Add(new KpiTrendRow(rd.GetInt32(0), av <= 1.0 ? av * 100 : av, ut <= 1.0 ? ut * 100 : ut, rr <= 1.0 ? rr * 100 : rr));
         }
         return rows;
     }

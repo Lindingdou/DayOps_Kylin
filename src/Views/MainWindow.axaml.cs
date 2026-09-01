@@ -7436,8 +7436,8 @@ public partial class MainWindow : Window
         var rows = Data.GeoDataQueries.GetKpiTrend(db.Connection);
         if (rows.Count == 0) { StatusMsg.Text = "KPI趋势：无 KPI 记录"; return; }
         var parts = new List<string>();
-        foreach (var r in rows) parts.Add($"{r.Year}(可用{r.AvgAvailabilityPct:0.#}%·利用{r.AvgUtilizationPct:0.#}%)");
-        StatusMsg.Text = $"设备KPI趋势：" + string.Join(" · ", parts);
+        foreach (var r in rows) parts.Add($"{r.Year}(可用{r.AvgAvailabilityPct:0.#}%·作业{r.AvgRunRatePct:0.#}%·利用{r.AvgUtilizationPct:0.#}%)");
+        StatusMsg.Text = $"设备KPI趋势(三率)：" + string.Join(" · ", parts);
     }
 
     private void CapacityByCategoryCmd()
