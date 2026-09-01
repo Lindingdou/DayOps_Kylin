@@ -2265,3 +2265,12 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **移植(拆可验证核)** [src/Cad/SurfaceUpdate.cs](src/Cad/SurfaceUpdate.cs): `Evaluate` 核心=用观测点(现状见煤/补勘顶底板)**局部羽化更新**目标三角网顶点 Z——影响半径 R 内顶点按到最近观测 smoothstep 羽化(内 1→边界 0)、区内目标值 IDW 拟合观测点、newZ=vz+w·(est−vz), 区外不动; 附影响片区(影响圈搭接<2R 并查集归片)+ 位移/面积/净体积统计。命令 `更新煤层面`(目标 OFF + 观测点 CSV + 半径 → 观测点入场景 + 位移/净体积/片区汇总 + **导出更新后 OFF**) + 面编辑菜单 + 目录。验证 [SurfaceUpdateTests](tests/PitMine3D.Kylin.Tests/SurfaceUpdateTests.cs) 6 例已知值(单观测 smoothstep 羽化 newZ=w·5·落点=5·区外不动·落观测点取其值·分离/搭接观测点 2/1 片区·下沉净体积负)。**build 0 错·单测 1092→1098**。
 
 **拆核记录**: 原 520 行 SurfaceUpdateEngine 中——①**Evaluate 羽化更新核**(默认 IDW)已移可验; ②**多算法 NN/MA/OK/SK/UK** 待后续(Kylin Estimation 亦 IDW 基, 点式多算法 API 未暴露); ③**三维分级色带 overlay** 走 native PMBI, 2D 场景受阻, 未移(此出更新后 Z + 数值统计替代)。**本会话第 7 真缺口**。见 [[unlock-blocked-insights]]。
+
+## 二〇二、robust 读 PointCloudLib/RoadLib/GeoDataBase —— 均覆盖/native/DB, 无新切片(sweep 收敛)
+
+继续 `ls`+逐文件读余下模块, **均无新可移独立切片**:
+- **PointCloudLib**: 绝大多数是 `解析自 native PMxx` 结果类(抽稀/去噪/裁剪/体积/两期/TIN/坡度坡向粗糙度曲率/补洞/障碍/质量统计——算法在 C++ native, Kylin 已各自**托管重实现**覆盖); 道路中线(骨架法)/剖面/GeoTIFF 亦覆盖。无纯托管新算法。
+- **RoadLib**: 演化对比/中线管理/路网/运距/点对点寻径/运输指标/路面生成 全覆盖; StructurePavement=可视化(2D 场景), HaulSolveKernel=点对点寻径覆盖, symbology/edit=显示/交互。无新切片。
+- **GeoDataBase Domain/Services**: 服务层=DB 访问(GeoDataQueries 覆盖); `VirtualDrillEngine`=VirtualBorehole、`TinZSampler`=TinSampler 已移; **`CoalQualityEstimator`(煤质 NN/IDW/OK/MA/SK/UK 空间估值)—— Kylin `OrdinaryKriging.cs` 注释明写"忠实移植原 CoalQualityEstimator 的 OK 核", 且 克里金/IDW/NN/MA/SK/UK 估值 + 空间分布 + 克里金方差 全已接(命令 §805/§4938)——已覆盖**; CoalQualityAnalytics=CoalAnalytics + 本会话煤质分析覆盖。
+
+**sweep 收敛**: 自足几何/地质切片 7 真缺口全在**采矿域几何/地质模块**(RoadLayout/BlockModelLib.Domain/MineAssLib.Driving/MeshEditLib)——robust 逐文件读挖出; **通用/数据模块**(PointCloudLib native·RoadLib·GeoDataBase)robust 读**确认覆盖/native/DB**, 无新切片。余待读 SqlLib(SQL 覆盖)/SeamOutcrop 余(3D 着色阻·Refiner 我露头线覆盖)/CurrentState 余(创建三角网覆盖·config·display)——皆低产。见 [[unlock-blocked-insights]]。
