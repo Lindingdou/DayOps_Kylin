@@ -2575,3 +2575,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [QualityVoxelInterpTests](tests/PitMine3D.Kylin.Tests/QualityVoxelInterpTests.cs) +6—— 四角线性场 V=x: 落样本精确(0/10)·中心等权=5·x=5 线=5·全 9 格有支撑; 半径 3 裁剩四角; 两层 z 分值 k=4 各层中心 5/105(z 维分层); 空点/过密(2001³)防爆空; k=2 挡远离群 999; CSV 头+行数。**build 0 错·单测 1261→1267**。
 
 **本会话第 36 功能**。教训: **同一 DB 服务层连出 3 纯算法(ResolveCoalType/RunAudit/DefaultIdwInterpolation)**——"算法藏在 CRUD 服务里"是本会话最高产角度。**同族不同实现要逐个核语义**: 两处 IDW(EstimationAlgorithms vs DefaultIdwInterpolation)半径语义不同, 忠实各自内联而非强复用(名同实异, 同"文件名≠类名/中文串≠token"的名字误导family)。**计算可做 + 显示受阻 → 出计算产物(CSV/切片)记录显示限**(忠实降级)。见 [[unlock-blocked-insights]]。
+
+## 二三二、创建三角网建 2.5D 面(保留高程 + 导 OFF)—— "算了没存/丢了 Z"补全(第 37 功能)
+
+**present-but-shallow(computed-but-not-saved 变体)**: 对比原 `QuickModelBuilder`(等高线→插值面→固化成体)见 Kylin `创建三角网`(CreateTinAsync)**丢高程且不出面**——只用 `pts2d`(x,y)做 Delaunay、只 `BuildEdges` 画**三角边线框**入场景, **弃掉每点 z、不装 2.5D 面、不导 OFF**。故 Kylin 无法把 (x,y,z) 散点/等高线顶点变成**可复用曲面**(喂 快速建模/算量/分析), 断了原"等高线→面→体"链。既有基元齐备(Delaunay 定拓扑 + MeshWeld.ToOff 写面)。
+
+补 [src/Cad/TinSurface.cs](src/Cad/TinSurface.cs): `Describe(verts3d, tris)` 出 2.5D 面统计(顶点/三角数·XY 投影面积[各三角鞋带和]·高程范围)。改 [CreateTinAsync](src/Views/MainWindow.axaml.cs): 同序装 `pts3d`(保留 z)→ Delaunay(XY 拓扑)→ **`MeshWeld.ToOff(pts3d, tris)` 导 OFF 面**(2.5D, 顶点带各自高程)+ 报投影面积/高程范围; 边线框显示照旧。产物可喂 快速建模/圈范围算量/台阶面提取等 OFF 消费命令。
+
+**验证(已知值)**: [TinSurfaceTests](tests/PitMine3D.Kylin.Tests/TinSurfaceTests.cs) +3—— 10×10 方(高程 0/0/5/5)→2 三角·XY 投影面积恒 100(与对角线无关)·z∈[0,5]; 空面安全; **点→ToOff→ParseOff 往返**保顶点/三角数 + (10,10)顶点 z=106 保真(非丢 0)+ 投影面积 400。**build 0 错·单测 1267→1270**。
+
+**本会话第 37 功能**。教训: **"computed-but-not-saved" 再添一形态——不只"算了没画/没上图", 还有"建了三角网却丢 Z、只画线框不出可复用面"**。查已移几何命令是否**产出可下游复用的产物**(OFF 面/实体), 而非止于屏上线框。此补打通"散点/等高线→2.5D 面→体/算量"链(原 QuickModelBuilder 的面构造那半, Kylin 此前只有"OFF 面→体"下半)。见 [[unlock-blocked-insights]] [[shell-completeness-priority]]。

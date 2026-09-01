@@ -4425,7 +4425,8 @@ public partial class MainWindow : Window
         var r = PointDataImportService.Load(files[0].Path.LocalPath);
         if (!r.Success) { StatusMsg.Text = $"三角网：点导入失败 {r.Error}"; return; }
         var pts2d = new List<(double x, double y)>();
-        foreach (var p in r.Points) pts2d.Add((p.x, p.y));
+        var pts3d = new List<(double x, double y, double z)>();
+        foreach (var p in r.Points) { pts2d.Add((p.x, p.y)); pts3d.Add((p.x, p.y, p.z)); }
         var tris = Delaunay.Triangulate(pts2d);
         if (tris.Count == 0) { StatusMsg.Text = "三角网：点太少或共线，无法剖分"; return; }
         var edges = Delaunay.BuildEdges(pts2d, tris, 0.55f, 0.75f, 0.85f);
@@ -4433,7 +4434,11 @@ public partial class MainWindow : Window
         foreach (var e in edges) _scene.Add(e);
         RefreshScene();
         Viewport.FitBounds(r.Bounds);
-        StatusMsg.Text = $"创建三角网：{pts2d.Count} 点 → {tris.Count} 三角 · {edges.Count} 边";
+        // 装成保留高程的 2.5D TIN 面并导 OFF(可复用于 快速建模/算量/分析)——忠实原「创建三角网建面」, 非仅画边线框。
+        var st = TinSurface.Describe(pts3d, tris);
+        var off = await SaveCsvAsync("导出三角网面(OFF)", "tin_surface.off", MeshWeld.ToOff(pts3d, tris));
+        StatusMsg.Text = $"创建三角网：{pts2d.Count} 点 → {tris.Count} 三角 · {edges.Count} 边 · XY 投影面积 {st.ProjectedAreaXY:0.#} · 高程 {st.ZMin:0.#}~{st.ZMax:0.#}"
+            + (off != null ? $" · 2.5D 面 OFF → {off}(可喂 快速建模/算量)" : "");
     }
 
     // 约束三角网(breakline 嵌入)：点 CSV + 选中的多段线作约束边(断层/山脊等必为三角边)。忠实原「多段线约束嵌入」。
