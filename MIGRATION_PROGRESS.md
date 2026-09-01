@@ -3256,3 +3256,18 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **类枚举全尺寸收官**: <80 / 80–150 / >150 三档纯托管算法类**全归账**——覆盖 / 记录(native·格式·交互·mock·不可验证·2D限) / 架构冗余。**第七次连续收敛确认**。本会话两真获(§79/80)后, 七角度(类枚举全尺寸 · 方法级 · 退化命令再核 · 枚举值 · 孤儿标签 · 导入完整性 · 测试交叉核)皆确认无更多可实现+可验证缺口。
 
 **可实现+可验证+忠实的功能已完成**——余为记录在案的受阻项(native 引擎/系统工具/报告库/交互窗口/原版桩·mock/3D显示/2D场景限)。见 [[unlock-blocked-insights]] [[shell-completeness-priority]]。
+
+---
+
+## §二八二 自适应体素子块细分（VoxelVolumeBuilder 退化补全）—— 再核"已覆盖"破收敛
+
+**第八次收敛复核反被破**: 重核 §277 标"覆盖"(关键字匹配)的 `VoxelVolumeBuilder`(447 行)——发现 **Kylin 体素化仅均匀中心法**(VoxelBands 中心判内外; PMB 导出 subBlockDepthMax=0), **缺原"自适应子块退化"**(边界母块 octree 细分 + N³ 占比"百分比块" → 无偏边界体积)。同 §79 ExtractCenterline 退化教训: "覆盖"须验实现深度。
+
+**补 §81 [AdaptiveVoxel](src/Cad/AdaptiveVoxel.cs)**(忠实移植 VoxelVolumeBuilder 自适应核, 去并行/取消/进度纯算法):
+- `SamplePercent`(N³ 子采样体内占比) · `RefineCell`(边界 cell 递归 8-octant 细分: 实心 octant→满占比叶子/8 子中心皆外→N³ 兜底防薄壁丢/边界→续分) · `Voxelize`(母块中心判内外→按 6 邻居异号分类实心/空/边界→边界细分→总体积占比加权; depth≤0=均匀=Kylin 旧行为)。
+- 纯几何仅吃 `inside(x,y,z)` 谓词(Kylin 传 WindingNumberTester.IsInsideClosed, 已有)。
+- 命令 `自适应体素算量 [深度2 子采样N4]`: OFF→自适应体素化, 报 实心块+边界百分比块数 + 自适应体积/误差 vs 均匀/误差 vs 解析(MeshMetrics 散度定理基准)。
+
+**验证(合成已知值 + 收敛)**: [AdaptiveVoxelTests](tests/PitMine3D.Kylin.Tests/AdaptiveVoxelTests.cs) +7 —— 半空间占比=0.5(精确) · 全内/全外/N=1 二值 · 实心 cell→1 满叶子 · 空→0 叶子 · 半边界 cell 细分总体积≈半(3.8~4.2) · depth0=均匀(=中心数×格体积) · **球 r=5: 自适应体积∈(490,555)、出边界百分比块、且不劣于均匀**(|自适应−解析|≤|均匀−解析|, 证无偏更准)。**build 0 错·单测 1396→1403**。
+
+**本会话第 81 功能**。教训: **"已覆盖"标记(尤其关键字匹配)须周期性验实现深度**——VoxelVolumeBuilder 曾标覆盖(体素命令在)但实为均匀退化, 缺子块精度核。第八次复核不是确认收敛而是**再破**——meta 教训"收敛claim 不可靠"再验。见 [[unlock-blocked-insights]] [[faithfulness-only-original-commands]]。

@@ -1041,6 +1041,7 @@ public partial class MainWindow : Window
             }
             if (cmd == "固化成体" || cmd == "固化实体") { await SolidifyAsync(); return; }
             if (cmd == "体素格网体积" || cmd == "体素体积" || cmd == "体素算量") { await VoxelVolumeAsync(); return; }
+            if (cmd == "自适应体素算量" || cmd == "百分比块体素" || cmd == "自适应体素" || cmd == "子块体素算量" || cmd.StartsWith("自适应体素算量 ")) { await AdaptiveVoxelAsync(cmd); return; }
             if (cmd == "实体转块体" || cmd == "网格转块体" || cmd == "体转块") { await EntityToBlocksAsync(); return; }
             if (cmd == "立方体" || cmd == "长方体" || cmd.StartsWith("立方体 ") || cmd.StartsWith("长方体 ")) { await BoxPrimitiveAsync(cmd); return; }       // 立方体 [边长 | sx sy sz]
             if (cmd == "球体" || cmd == "球" || cmd.StartsWith("球体 ") || cmd.StartsWith("球 ")) { await SpherePrimitiveAsync(cmd); return; }                  // 球体 [半径]
@@ -3129,6 +3130,55 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"体素格网体积：格边 {cell.ToString("0.##", inv)} · 占用 {occupied} 格 · 体素体积 {voxelVol.ToString("0.#", inv)}(精确 {m.Volume.ToString("0.#", inv)}) · {bands.Count} 标高带"
             + (bands.Count > 0 ? $"(峰 {top.ZLow.ToString("0.#", inv)}~{top.ZHigh.ToString("0.#", inv)}m={top.Volume.ToString("0.#", inv)})" : "")
             + (name != null ? $" → {name}" : "");
+    }
+
+    // 自适应体素算量(忠实原 VoxelVolumeBuilder 自适应子块退化): OFF 封闭网格 → 边界母块 octree 细分 + N³ 占比"百分比块"
+    // → 无偏边界体积(比均匀中心法更接近解析体积)。用法 "自适应体素算量 [细分深度 默认2 子采样N 默认4]"。
+    private async Task AdaptiveVoxelAsync(string cmd)
+    {
+        int depth = 2, sampleN = 4;
+        var parts = cmd.Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2) int.TryParse(parts[1], out depth);
+        if (parts.Length >= 3) int.TryParse(parts[2], out sampleN);
+        depth = System.Math.Clamp(depth, 1, 5); sampleN = System.Math.Clamp(sampleN, 1, 8);
+
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "自适应体素算量：选封闭 OFF 网格",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("Geomview 网格 (OFF)") { Patterns = new[] { "*.off" } } }
+        });
+        if (files.Count == 0) return;
+        string text;
+        try { text = System.IO.File.ReadAllText(files[0].Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"自适应体素算量：读取失败 {ex.Message}"; return; }
+        var (mv, mt) = MeshMetrics.ParseOff(text);
+        if (mt.Count == 0) { StatusMsg.Text = "自适应体素算量：无三角"; return; }
+        mt = MeshOrient.MakeConsistent(mv, mt);
+        var fv = new double[mv.Count * 3];
+        for (int i = 0; i < mv.Count; i++) { fv[i * 3] = mv[i].x; fv[i * 3 + 1] = mv[i].y; fv[i * 3 + 2] = mv[i].z; }
+        var ft = new int[mt.Count * 3];
+        for (int i = 0; i < mt.Count; i++) { ft[i * 3] = mt[i].a; ft[i * 3 + 1] = mt[i].b; ft[i * 3 + 2] = mt[i].c; }
+
+        WindingNumberTester wn;
+        try { wn = new WindingNumberTester(fv, ft); }
+        catch (System.Exception ex) { StatusMsg.Text = $"自适应体素算量：建测试器失败 {ex.Message}"; return; }
+        double dgx = wn.MaxX - wn.MinX, dgy = wn.MaxY - wn.MinY, dgz = wn.MaxZ - wn.MinZ;
+        double diag = System.Math.Sqrt(dgx * dgx + dgy * dgy + dgz * dgz);
+        double cell = diag > 0 ? diag / 40.0 : 1.0;   // 母块格边(略粗于均匀版, 细分补精度)
+
+        var uni = await System.Threading.Tasks.Task.Run(() => Cad.AdaptiveVoxel.Voxelize(wn.IsInsideClosed,
+            wn.MinX, wn.MinY, wn.MinZ, wn.MaxX, wn.MaxY, wn.MaxZ, cell, cell, cell, 0, 1));
+        var ada = await System.Threading.Tasks.Task.Run(() => Cad.AdaptiveVoxel.Voxelize(wn.IsInsideClosed,
+            wn.MinX, wn.MinY, wn.MinZ, wn.MaxX, wn.MaxY, wn.MaxZ, cell, cell, cell, depth, sampleN));
+
+        var m = MeshMetrics.Compute(mv, mt);   // 解析体积(散度定理), 作精度基准
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        double exact = System.Math.Abs(m.Volume);
+        double eu = exact > 1e-9 ? System.Math.Abs(uni.Volume - exact) / exact * 100 : 0;
+        double ea = exact > 1e-9 ? System.Math.Abs(ada.Volume - exact) / exact * 100 : 0;
+        StatusMsg.Text = $"自适应体素算量：格边 {cell.ToString("0.##", inv)} · 深度 {depth}/子采样 {sampleN} · 实心 {ada.SolidCells} 块 + 边界百分比块 {ada.SubCells.Count} · "
+            + $"自适应体积 {ada.Volume.ToString("0.#", inv)}(误差 {ea.ToString("0.#", inv)}%) vs 均匀 {uni.Volume.ToString("0.#", inv)}(误差 {eu.ToString("0.#", inv)}%) · 解析 {exact.ToString("0.#", inv)}";
     }
 
     // 实体转块体：选封闭 OFF → GWN 逐格判内外 → 占用格作块体(BlockModel.Block)入场景
@@ -10129,7 +10179,7 @@ public partial class MainWindow : Window
         // 线编辑
         "加密多段线","简化","平滑","样条平滑","抽稀等值线","两线交点","闭合多段线","删除重复点","删除重复线","连接多段线","组合工作线",
         // 网格/建模
-        "网格度量","网格诊断","创建三角网","约束三角网","裁剪三角网","网格焊接","网格边界","网格交线","网格剖面","网格光顺","合并三角网","固化成体","侧面三角网","台阶面提取","煤岩台阶判定","煤层露头线","更新煤层面","立方体","球体","圆柱","体素格网体积","实体转块体",
+        "网格度量","网格诊断","创建三角网","约束三角网","裁剪三角网","网格焊接","网格边界","网格交线","网格剖面","网格光顺","合并三角网","固化成体","侧面三角网","台阶面提取","煤岩台阶判定","煤层露头线","更新煤层面","立方体","球体","圆柱","体素格网体积","自适应体素算量","实体转块体",
         // 区域/地形/点云
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割","移除障碍物",
