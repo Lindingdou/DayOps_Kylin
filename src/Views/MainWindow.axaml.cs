@@ -1115,7 +1115,7 @@ public partial class MainWindow : Window
             if (cmd == "侧面三角网" || cmd == "侧面放样" || cmd == "放样侧面") { await SideSurfaceAsync(); return; }
             if (cmd == "道路横断面" || cmd == "路面加宽超高" || cmd == "弯道加宽") { RoadCrossSectionCmd(); return; }
             if (cmd.StartsWith("道路设计参数") || cmd.StartsWith("最小平曲线半径") || cmd.StartsWith("平曲线半径") || cmd.StartsWith("道路设计校核")) { RoadDesignParamsCmd(cmd); return; }
-            if (cmd.StartsWith("运输布局方案") || cmd.StartsWith("道路布局求解") || cmd.StartsWith("坑线布局方案") || cmd.StartsWith("运输系统布局")) { await RoadLayoutCmd(cmd); return; }
+            if (cmd.StartsWith("运输布局方案") || cmd.StartsWith("道路布局求解") || cmd.StartsWith("坑线布局方案") || cmd.StartsWith("运输系统布局") || cmd.StartsWith("运量驱动布线") || cmd == "运量驱动布线") { await RoadLayoutCmd(cmd); return; }
             if (cmd == "路面生成" || cmd == "生成路面" || cmd == "中线外扩" || cmd.StartsWith("路面生成 ") || cmd.StartsWith("生成路面 ")) { RoadSurfaceCmd(cmd); return; }
             if (cmd == "纵坡分析" || cmd == "纵坡" || cmd == "坡度分档" || cmd == "限坡校核" || cmd.StartsWith("纵坡分析 ") || cmd.StartsWith("限坡校核 ")) { await GradeProfileAsync(cmd); return; }
             if (cmd == "竖曲线平滑" || cmd == "竖曲线" || cmd == "纵断面竖曲线" || cmd.StartsWith("竖曲线平滑 ") || cmd.StartsWith("竖曲线 ")) { await VerticalCurveAsync(cmd); return; }
@@ -1124,7 +1124,7 @@ public partial class MainWindow : Window
             if (cmd == "煤岩台阶判定" || cmd == "煤岩判定" || cmd == "台阶煤岩" || cmd.StartsWith("煤岩台阶判定 ")) { await BenchCoalCmd(cmd); return; }
             if (cmd == "煤层露头线" || cmd == "露头线" || cmd == "煤层露头" || cmd == "露头线提取" || cmd.StartsWith("煤层露头线 ")) { await SeamOutcropCmd(cmd); return; }
             if (cmd == "更新煤层面" || cmd == "更新现状面" || cmd == "煤层面更新" || cmd.StartsWith("更新煤层面 ")) { await SurfaceUpdateCmd(cmd); return; }
-            if (cmd == "平行推进" || cmd == "开采程序确定" || cmd == "工作线推进") { AdvanceCmd(AdvanceMode.Parallel, "平行推进"); return; }
+            if (cmd == "平行推进" || cmd == "开采程序确定" || cmd == "确定开采程序" || cmd == "工作线推进") { AdvanceCmd(AdvanceMode.Parallel, "平行推进"); return; }
             if (cmd == "定点回转" || cmd == "定点回转推进") { AdvanceCmd(AdvanceMode.FixedPivot, "定点回转"); return; }
             if (cmd == "动点回转" || cmd == "动点回转推进") { AdvanceCmd(AdvanceMode.MovingPivot, "动点回转"); return; }
             if (cmd == "螺旋斜坡道" || cmd == "螺旋坑线" || cmd == "螺旋中线") { SpiralRampCmd(); return; }

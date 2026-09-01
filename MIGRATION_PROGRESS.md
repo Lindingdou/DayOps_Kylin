@@ -2932,3 +2932,19 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值+不变量)**: [ShortTermSchedulerTests](tests/PitMine3D.Kylin.Tests/ShortTermSchedulerTests.cs) +4—— WorkdaysFor 常规25/冬20/检修17.5/抢产27.5/保守23; 12月年目标守恒(±1)·完成≈100%·末月累计100%·各月剥采比≤12·默认可行; 紧上限85集中强采削峰无月超85·总近守恒(6迭代近似, 忠实原); 集中强采月产CV>均衡型。**build 0 错·单测 1343→1347**。
 
 **本会话第 67 功能**。规划模块(中长远§259 + 短期§260)两大块补齐; 动态模拟/出图属可视 refinement。第九角度(孤儿标签)已连出规划两功能。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二六一 孤儿标签全量三分（第九角度收官）
+
+**第九角度(XAML 孤儿标签: `Tag=` 有按钮但无 `cmd==` 处理)全量枚举三分**: 276 XAML Tag × 1232 dispatch 串比对, 排除绘图基元(经 `ActivateDrawTool` 路由非 cmd==)后, 孤儿标签三分:
+
+- **真缺可移(已补)**: `中长远进度计划编制`→§259 · `短期生产计划编制`/`月度计划编制`→§260(规划模块两大块, 真量算 Scheduler)。
+- **别名(已接)**: `确定开采程序`→`开采程序确定`(AdvanceCmd 平行推进) · `运量驱动布线`→`运输布局方案`(RoadLayoutCmd, 原亦 CreateRoadLayoutCommand)。
+- **真阻记录**:
+  - TaskLib 调度(任务下达/生产任务书/生产任务编制/生产任务动态调整/班次日历/班组派工/派车单/去向台账/检修档期/采排配对/编制配置/采掘单元清单/钻爆计划衔接/作业区划分): **SampleTaskBoard 样例数据 UI 桩**(23 文件用 SampleTaskBoard, 无真域模型, 同 §工序定额/质量标准), 忠实不臆造。
+  - MineAss 编辑(创建工作线/坑线落地/处理尖灭/局部台阶/最终并段/编辑台阶/动态调整/撤销坑线/约束条件设置/增量增删边/延拓触发设置/排土模板/排土场放坡/平盘联络道/结构路面): 路由 **`IPitDesignCapability`(原生坑设计引擎)**, Kylin 无该原生能力, 记录。
+  - 原生/显示(加载倾斜摄影 OSGB/影像底图 raster/点云管理/渲染配置/显示隐藏/现状写实/补勘钻孔写实/转化为三角格网/破碎站位置/煤层露头着色): 原生/OSGB/渲染, 记录。
+  - 规划可视(中长远规划动态模拟/短期进度计划动态模拟/进度计划方案出图): 排产核已补(§259/260), 动态模拟/出图=可视 refinement, 记录。
+
+**教训**: **第九角度=孤儿标签(XAML `Tag=` 无 `cmd==` 分派)是最大盲区**——前八角度全漏(整串命令比对被 XAML 标签骗过)。全量三分后: 真缺者补(规划两块)、别名接、余为 SampleTaskBoard 桩/原生 IPitDesignCapability/OSGB 渲染, 忠实记录。**判据: XAML Tag 全量 × dispatch 串比对(排除 ActivateDrawTool 路由), 逐孤儿查 Placeholder/OpenWindow(样例)/Capability(原生)/真算法**。见 [[unlock-blocked-insights]]。
