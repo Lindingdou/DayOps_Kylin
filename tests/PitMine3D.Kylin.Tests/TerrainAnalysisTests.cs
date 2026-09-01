@@ -248,4 +248,13 @@ public class TerrainAnalysisTests
         Assert.Empty(TerrainAnalysis.TwoEpochVolumeByPart(empty, empty, 8));
         Assert.Equal("id,kind,volume,cells\n", TerrainAnalysis.TwoEpochByPartCsv(new List<TerrainAnalysis.CutFillPart>()));
     }
+
+    [Fact]
+    public void PolygonAreaXY_shoelace()
+    {
+        // 10×10 方形 → 100; 三角(0,0)-(4,0)-(0,3) → 6; <3 点 → 0。
+        Assert.Equal(100, TerrainAnalysis.PolygonAreaXY(new List<(double x, double y)> { (0, 0), (10, 0), (10, 10), (0, 10) }), 6);
+        Assert.Equal(6, TerrainAnalysis.PolygonAreaXY(new List<(double x, double y)> { (0, 0), (4, 0), (0, 3) }), 6);
+        Assert.Equal(0, TerrainAnalysis.PolygonAreaXY(new List<(double x, double y)> { (0, 0), (1, 1) }), 6);
+    }
 }

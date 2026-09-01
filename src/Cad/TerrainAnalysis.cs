@@ -135,6 +135,19 @@ public static class TerrainAnalysis
         return (above, below, above - below);
     }
 
+    /// <summary>多边形 XY 投影面积(鞋带公式, 忽略首尾是否重复; 取绝对值)。忠实原 VolumeInPolygonResult.AreaXY。</summary>
+    public static double PolygonAreaXY(IReadOnlyList<(double x, double y)> poly)
+    {
+        if (poly == null || poly.Count < 3) return 0;
+        double a2 = 0;
+        for (int i = 0, n = poly.Count; i < n; i++)
+        {
+            var p = poly[i]; var q = poly[(i + 1) % n];
+            a2 += p.x * q.y - q.x * p.y;
+        }
+        return Math.Abs(a2) * 0.5;
+    }
+
     public static (double cut, double fill, double net) TwoEpochVolume(
         IReadOnlyList<(double x, double y, double z)> a, IReadOnlyList<(double x, double y, double z)> b, int n)
     {

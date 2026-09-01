@@ -2458,3 +2458,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [OrdinaryKrigingTests](tests/PitMine3D.Kylin.Tests/OrdinaryKrigingTests.cs) +2—— 线性场 V=x 共线 4 点: 滞后 d 半变异 γ=0.5·d²(箱1 三对 γ=0.5·1 / 箱2 两对 γ=2 / 箱3 一对 γ=4.5, 空箱 Count=0) · auto maxLag 滞后中心递增 + <2 点全 0 箱不崩。**build 0 错·单测 1224→1226**。
 
 **本会话第 25 功能**。教训: **第五层 diff=全 public 方法名穷尽 grep**(类→命令→PMxx字段→enum值→方法名)。658 方法名里绝大多数缺项落排产/图表/PMBI/DB/UI 记录类, 但偶有"内部算了没暴露"的分析核(实验变差)——`FitVariogram` 内部分箱算 γ(h) 却只吐模型, 暴露 γ(h) 云=纯托管新分析。**交互控件(VariogramEditor)是 UI 记录, 但其计算核可出表**(同 Weibull "图表受阻但数值核可做")。见 [[unlock-blocked-insights]]。
+
+## 二二一、圈范围算量补深度+投影面积 —— 点云 native 结果字段级 diff(第 26 功能)
+
+**PMxx 字段 diff 补漏: 之前只做 MeshEditLib 的 PMxx report, 漏了 PointCloudLib 的一整套 native 结果解析器**(CloudOpResult 族: PMQS/VolumeToBase/VolumeInPolygon/SurfaceAttrib/SlopeLines…)。逐字段核对: 多数覆盖(抽稀/去噪/PMF/裁剪/质量/粗糙度/曲率), 但 `VolumeInPolygonResult` 有 Kylin「圈范围算量」缺的两字段——**Depth(顶部 N 米方量)** 与 **ProjectedArea(XY 投影面积)**。
+
+补: [src/Cad/TerrainAnalysis.cs](src/Cad/TerrainAnalysis.cs) `PolygonAreaXY`(鞋带公式, 纯可测) + 扩「圈范围算量」命令支持可选深度(`圈范围算量 <深度>` → 基准=zmax−深度, 只算顶部 N 米, 忠实原 Depth 语义; 缺省仍 zmin) + 报投影面积。复用已测 `VolumeWithinBoundary`。
+
+**验证**: [TerrainAnalysisTests](tests/PitMine3D.Kylin.Tests/TerrainAnalysisTests.cs) +1—— 10×10 方形=100 · 三角(0,0)(4,0)(0,3)=6 · <3点=0。**build 0 错·单测 1226→1227**。
+
+**本会话第 26 功能**。教训: **PMxx 字段 diff 要覆盖每个模块的 native 结果族, 别只做一个模块**——MeshEditLib 的 PMxx 做了, PointCloudLib 的 CloudOpResult 族漏了; 补做挖出 圈范围算量 的深度+投影面积两字段。**命令级"覆盖"仍要字段级复核**(圈范围算量在, 但缺 Depth/Area 两输出)。见 [[unlock-blocked-insights]]。

@@ -780,7 +780,7 @@ public partial class MainWindow : Window
             if (cmd == "高程着色" || cmd == "分色显示" || cmd == "高程分带") { await ShadeTinAsync("高程着色", "低绿→中黄→高棕", TerrainAnalysis.BuildElevationMap); return; }
             if (cmd == "体积计算" || cmd == "算量" || cmd == "土方量") { await VolumeAsync(); return; }
             if (cmd == "两期点云算量" || cmd == "两期算量" || cmd == "两期土方") { await TwoEpochVolumeAsync(); return; }
-            if (cmd == "圈范围算量") { await BoundaryVolumeAsync(); return; }
+            if (cmd == "圈范围算量" || cmd == "圈量" || cmd.StartsWith("圈范围算量 ")) { await BoundaryVolumeAsync(cmd); return; }
             if (cmd == "提取道路中心线" || cmd == "道路中线" || cmd == "提取道路中线") { ExtractCenterline(); return; }
             if (cmd == "点对点寻径" || cmd == "寻径" || cmd == "点对点寻路") { StartPathfind(); return; }
             if (cmd == "备选路径" || cmd == "K最短路" || cmd == "备用路径") { StartKPathfind(); return; }
@@ -5868,7 +5868,7 @@ public partial class MainWindow : Window
     }
 
     // 圈范围算量：选中的闭合多段线作边界 → TIN → 边界内三角体积
-    private async Task BoundaryVolumeAsync()
+    private async Task BoundaryVolumeAsync(string cmd = "圈范围算量")
     {
         if (_selected.Count != 1 || _selected[0] is not PolylineEntity boundary || !boundary.Closed || boundary.Points.Count < 3)
         { StatusMsg.Text = "圈范围算量：请先选中一条闭合多段线作边界"; return; }
@@ -5883,11 +5883,20 @@ public partial class MainWindow : Window
         if (!r.Success) { StatusMsg.Text = $"圈范围算量：点导入失败 {r.Error}"; return; }
         var pts2d = new List<(double x, double y)>();
         double zmin = double.MaxValue;
-        foreach (var p in r.Points) { pts2d.Add((p.x, p.y)); if (p.z < zmin) zmin = p.z; }
+        double zmax = double.MinValue;
+        foreach (var p in r.Points) { pts2d.Add((p.x, p.y)); if (p.z < zmin) zmin = p.z; if (p.z > zmax) zmax = p.z; }
         var tris = Delaunay.Triangulate(pts2d);
         if (tris.Count == 0) { StatusMsg.Text = "圈范围算量：点太少或共线"; return; }
-        var (above, below, net) = TerrainAnalysis.VolumeWithinBoundary(r.Points, tris, zmin, boundary.Points);
-        StatusMsg.Text = $"圈范围算量（基准 z {zmin:0.##}）：上方 {above:0.##} · 下方 {below:0.##} · 净 {net:0.##}";
+
+        // 可选深度: "圈范围算量 <深度>" → 只算顶部 <深度> m(基准=zmax−深度, 忠实原 VolumeInPolygon Depth 语义); 缺省=zmin。
+        double depth = 0; int sp = cmd.IndexOf(' ');
+        if (sp >= 0) double.TryParse(cmd.Substring(sp + 1).Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out depth);
+        double baseZ = depth > 0 ? zmax - depth : zmin;
+
+        var (above, below, net) = TerrainAnalysis.VolumeWithinBoundary(r.Points, tris, baseZ, boundary.Points);
+        double area = TerrainAnalysis.PolygonAreaXY(boundary.Points);
+        string how = depth > 0 ? $"顶部 {depth:0.##}m(基准 z {baseZ:0.##})" : $"基准 z {zmin:0.##}";
+        StatusMsg.Text = $"圈范围算量（{how}）：上方 {above:0.##} · 下方 {below:0.##} · 净 {net:0.##} · 投影面积 {area:0.##}m²";
     }
 
     // 两期算量：选两期高程点 CSV → 同网格差值 → 挖方/填方/净值
