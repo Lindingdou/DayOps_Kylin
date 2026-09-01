@@ -875,6 +875,7 @@ public partial class MainWindow : Window
             if (cmd == "均匀抽稀" || cmd == "距离抽稀" || cmd == "等距抽稀" || cmd.StartsWith("均匀抽稀 ")) { await ThinPointsAsync("uniform", cmd); return; }
             if (cmd == "随机抽稀" || cmd == "随机采样" || cmd == "随机精简" || cmd.StartsWith("随机抽稀 ")) { await ThinPointsAsync("random", cmd); return; }
             if (cmd == "地面点滤波" || cmd == "地面滤波") { await GroundFilterAsync(); return; }
+            if (cmd == "移除障碍物" || cmd == "渐进形态滤波" || cmd == "地面非地面分离" || cmd.StartsWith("移除障碍物 ")) { await PmfAsync(cmd); return; }
             if (cmd == "C2C" || cmd == "点云比对" || cmd == "位移监测 C2C" || cmd == "位移监测") { await CloudCompareAsync(); return; }
             if (cmd == "画道路中线" || cmd == "手动标定线路" || cmd == "道路中线绘制") { ActivateDrawTool("多段线"); StatusMsg.Text = "画道路中线：绘制折线作道路中线（供路网/寻径/演化对比）"; return; }
             if (cmd == "境界圈定" || cmd == "凸包" || cmd == "采场圈定" || cmd == "采场/排土场圈定") { await BoundaryHullAsync(); return; }
@@ -4353,6 +4354,36 @@ public partial class MainWindow : Window
         RefreshScene();
         Viewport.FitBounds(r.Bounds);
         StatusMsg.Text = $"地面点滤波：{r.Points.Count} → {ground.Count} 地面点（cell {cell:0.##}）";
+    }
+
+    // 移除障碍物(渐进形态学 PMF)：点 CSV → 分地面/非地面(车辆/设备/植被/堆料), 两色入场景 + 计数。
+    // 比 地面点滤波(每格最低点)稳健, 且【另出非地面点云】。用法 "移除障碍物 [格边m] [高差阈m]"。
+    private async Task PmfAsync(string cmd)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "移除障碍物：选点 CSV (x,y,z)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("点 (CSV/TXT/XYZ)") { Patterns = new[] { "*.csv", "*.txt", "*.xyz" } } }
+        });
+        if (files.Count == 0) return;
+        var r = PointDataImportService.Load(files[0].Path.LocalPath);
+        if (!r.Success || r.Points.Count == 0) { StatusMsg.Text = $"移除障碍物：导入失败/无点 {r.Error}"; return; }
+        double span = System.Math.Max(r.Bounds[2] - r.Bounds[0], r.Bounds[3] - r.Bounds[1]);
+        double cell = System.Math.Max(span / 80.0, 1e-6);
+        double dhMax = 3.0;
+        if (tk.Length >= 2 && double.TryParse(tk[1], System.Globalization.NumberStyles.Float, inv, out double c) && c > 0) cell = c;
+        if (tk.Length >= 3 && double.TryParse(tk[2], System.Globalization.NumberStyles.Float, inv, out double d) && d > 0) dhMax = d;
+        var res = Cad.ProgressiveMorphFilter.Filter(r.Points, cell, dhMax: dhMax);
+        BeginChange();
+        foreach (var (x, y, _) in res.Ground) { var pt = new PointEntity { X = x, Y = y }; AssignLayer(pt); pt.Cr = 0.55f; pt.Cg = 0.42f; pt.Cb = 0.24f; _scene.Add(pt); }       // 地面 棕
+        foreach (var (x, y, _) in res.NonGround) { var pt = new PointEntity { X = x, Y = y }; AssignLayer(pt); pt.Cr = 0.9f; pt.Cg = 0.2f; pt.Cb = 0.2f; _scene.Add(pt); }         // 非地面(障碍) 红
+        RefreshScene();
+        Viewport.FitBounds(r.Bounds);
+        StatusMsg.Text = $"移除障碍物(渐进形态学 PMF, cell {cell.ToString("0.##", inv)}·阈 {dhMax.ToString("0.#", inv)}m)："
+            + $"地面 {res.GroundCount} 点(棕) / 非地面·障碍 {res.NonGroundCount} 点(红) · 共 {r.Points.Count}（车辆/设备/植被/堆料已分出）";
     }
 
     // 点云抽稀：XYZ CSV → 体素抽稀 → 抽稀后点入场景 + 报压缩比
@@ -8407,7 +8438,7 @@ public partial class MainWindow : Window
         "网格度量","网格诊断","创建三角网","约束三角网","裁剪三角网","网格焊接","网格边界","网格交线","网格剖面","网格光顺","合并三角网","固化成体","侧面三角网","台阶面提取","煤岩台阶判定","煤层露头线","更新煤层面","立方体","球体","圆柱","体素格网体积","实体转块体",
         // 区域/地形/点云
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
-        "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割",
+        "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割","移除障碍物",
         // 块体/运输/路网
         "块体模型","资源量","道路横断面","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","演化对比","螺旋斜坡道","折返斜坡道",
         // 生产计划/投影

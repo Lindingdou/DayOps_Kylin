@@ -2284,3 +2284,11 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **移植** [src/Cad/RegionGrow.cs](src/Cad/RegionGrow.cs): 逐点 PCA(k 近邻, 复用 JacobiEigen3)得法向+曲率; 曲率升序取种子(最平处起); BFS 生长——邻点法向夹角<平滑阈并入、邻点曲率<阈再作新种子(过折棱不再扩); 丢小区+紧凑重编号。命令 `区域生长分割 [平滑角°]`(点 CSV→按光滑度分区, 各区 hue 异色/折棱/小区灰) + 目录(并补登 分割点云)。**区别 分割点云(欧氏=按距离)**: 本命令按表面光滑度, 台阶面/平盘/坡面在折棱处法向突变而分开。验证 [RegionGrowTests](tests/PitMine3D.Kylin.Tests/RegionGrowTests.cs) 4 例已知值(平面单区·陡折棱[113°夹角]分两面且 A/B 深处异区·极缓弯[4°]仍一区·点太少 0 区)。**build 0 错·单测 1101→1105**。
 
 **教训**: "变体敏感"记录不等于永久受阻——region-grow 是**标准算法**(PCL RegionGrowing), 卡点(曲率)其实随现有 PCA 免费得; Kylin 已做 Euclidean 一变体, 补 region-grow 是一致的(标准重实现, 文档标"与 native 具体变体可能不同")。**本会话第 8 个功能**(7 缺口 + region-grow)。判据仍守: 参数(平滑角/曲率阈)与结果确定对应=可验; 非"需鲁棒谓词"的真受阻类(mesh 布尔)。见 [[unlock-blocked-insights]]。
+
+## 二〇四、移除障碍物(渐进形态学 PMF)—— present-but-shallow: 地面点滤波 crude vs PMF 稳健+出障碍
+
+复评点云 `剔除障碍`——发现 Kylin 的 `剔除障碍` 别名实指 `MeshSpikeCull`(网格去尖刺), **非**原版点级"移除障碍物"(渐进形态学 PMF, 出地面点+非地面点两个云); 且 Kylin `地面点滤波` 是 crude 每格最低点。→ present-but-shallow 缺口。原 PMF 走 native(仅 GroundFilterDialog 是 UI, 无托管算法), 按标准算法(Zhang 2003)托管重实现。
+
+**移植** [src/Cad/ProgressiveMorphFilter.cs](src/Cad/ProgressiveMorphFilter.cs): 栅格取每格最低点为初始面; 窗口渐增(1,3,7,15…≤maxWindow)的形态学**开运算**(先腐蚀 min 后膨胀 max)逐尺度削物体; 高程差>阈 dh_k=min(dhMax, dh0+slope·Δwindow·cell) 的格降到开运算面(阈随窗口增长→缓变地形保留、突变物体削去); 末逐点判 z−裸地面>dhMax=非地面。命令 `移除障碍物 [格边] [高差阈]`(点 CSV→地面棕/非地面红两色入场景+计数) + 目录。**比 地面点滤波稳健且另出障碍点云**。验证 [ProgressiveMorphFilterTests](tests/PitMine3D.Kylin.Tests/ProgressiveMorphFilterTests.cs) 4 例已知值(高出地面判非地面·孤立物体[其下无地面]被开运算削去=9点非地面·缓坡0.15<容差0.3全保留·空输入空)。**build 0 错·单测 1105→1109**。
+
+**本会话第 9 个功能**。present-but-shallow 判据: "已有同名命令"要查①是否真同一算法(剔除障碍别名实为去尖刺≠PMF)②深度(地面点滤波 crude vs PMF)。原 native 的标准算法(PMF)可托管重实现(同 Euclidean/region-grow)。见 [[unlock-blocked-insights]]。
