@@ -2553,3 +2553,15 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [CoalTypeInferenceTests](tests/PitMine3D.Kylin.Tests/CoalTypeInferenceTests.cs) +7—— Vdaf 单维+半开边界(Vdaf10 出WY入PM·Vdaf37 出QM入CY)·G/Y 三维(Vdaf25 G70 Y10→JM 而 Y3→null·G10 落 PM/SM 空档→null)·缺Vdaf/空表→null·**重叠区间首命中胜**·分级半开·一致率(2/3=66.67%, 无法判定计数)·useClean 切浮煤 Vdaf 改反推。**build 0 错·单测 1247→1254**。
 
 **本会话第 34 功能**。教训: **"已覆盖"的记录也要复核语义粒度**——`煤种分类` 命令在、能显示字典、能按标注分组, 但"**从实测指标反推**"(GB/T 5751 纯逻辑规则)这一算法维缺失; "读存量标签" 与 "算法反推标签" 是两回事(同 present-but-shallow, 但这里是我**自己误记为已覆盖**)。**可做判据**: 算法(区间匹配)可移可验 + 数据(分类区间)已种子在库 → 补; 精确国标表值属 DB 数据(不臆造, 已在种子)。见 [[unlock-blocked-insights]] [[faithfulness-only-original-commands]]。
+
+## 二三〇、煤质数据审核(一键 N 类规则 QC)—— DB 服务层"纯逻辑"续挖(第 35 功能)
+
+**同脉络续挖**: 反推所在的 DB 服务层(`CoalQualityService`)另有 **`RunAudit`——"7 类规则一键审核"**(GeoDataBasePlugin 明列), 规则逻辑是**纯的**(写库仅落 finding)。逐规则对 Kylin 数据模型核可支撑性:
+- **可做(数据齐)**: ② 物理范围(St∈[0,10]·Ad∈[0,60]·Qnet≤50) · ③ 原煤vs浮煤(浮煤灰>原煤灰=物理不可能) · ④ 煤类反推≠标注(复用 §二二九 `CoalTypeInference`) · ⑤ 同层离群(Ad 3σ, 层样本≥30 才统计) · ⑦ 浮煤回收率∈[0,100]。
+- **数据缺, 记录不做**: ① 工分自洽(M+A+V+FC≈100 需 **Mad 水分/FCd 固定碳**, Kylin `CoalSample`/`coal_sample` 无此列) · ⑥ 钻探-测井煤厚一致(需 drill/log 分列厚度)。
+
+补 [src/Data/CoalAudit.cs](src/Data/CoalAudit.cs): `Run(samples, ranges, minSeamForOutlier=30)` 纯逻辑跑 5 规则→`Finding(样本id/类别/严重度/消息)` + 分类计数汇总 + `ToCsv`。命令 `煤质审核`/`一键审核`([MainWindow](src/Views/MainWindow.axaml.cs) `CoalAuditCmd`): DB 样本+区间→审核 + **有错样红/仅警样橙上图(按样聚合取最重级)** + 导出 + 状态行报分类计数 & 明示"工分自洽/测井一致数据缺未审"。与既有 `煤质离群`(专项 3σ)/`煤类反推`(专项)互补=统一一键 QC 卷。
+
+**验证(已知值)**: [CoalAuditTests](tests/PitMine3D.Kylin.Tests/CoalAuditTests.cs) +7—— St15/Ad70/Qnet60 越界=Error·浮煤灰22>原煤灰15=Error·反推 CY≠标注 QM=Warning·无区间跳过规则④·yield 120/−5 越界·34 正常+1 极端(Ad200)同层 3σ 命中且阈值提到 40(层 35<40)不统计·汇总错/警计数+CSV 行数。**build 0 错·单测 1254→1261**。
+
+**本会话第 35 功能**。教训: **DB 服务层(CRUD)里夹的"纯规则/纯逻辑"要逐条按 Kylin 数据模型核可支撑性**——7 规则里 5 条数据齐(移)、2 条缺字段(Mad/FCd/测井厚, 记录)。**逐规则拆 doable/blocked, 别整包判死也别整包硬吞**(同 §二二八 331/332/333 拆边界纪律)。DB 服务层"纯逻辑"(ResolveCoalType/RunAudit)连出两个功能, 印证 [[unlock-blocked-insights]] "算法在 CRUD 服务里"角度高产。见 [[faithfulness-only-original-commands]]。

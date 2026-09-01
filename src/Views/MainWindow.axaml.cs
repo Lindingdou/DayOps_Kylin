@@ -841,6 +841,7 @@ public partial class MainWindow : Window
             if (cmd == "灰分发热量回归" || cmd == "灰分回归" || cmd == "煤质回归" || cmd == "灰热回归" || cmd.StartsWith("灰分发热量回归 ") || cmd.StartsWith("煤质回归 ")) { await AshCalorificRegressionCmd(cmd); return; }
             if (cmd == "煤质综合结论" || cmd == "煤质结论" || cmd == "综合结论" || cmd == "煤质分析结论" || cmd.StartsWith("煤质综合结论 ")) { await CoalConclusionsCmd(cmd); return; }
             if (cmd == "煤类反推" || cmd == "GB5751反推" || cmd == "煤类一致率" || cmd == "煤类校核" || cmd == "煤类反演" || cmd.StartsWith("煤类反推 ")) { await CoalTypeInferCmd(cmd); return; }
+            if (cmd == "煤质审核" || cmd == "煤质数据审核" || cmd == "煤质质检" || cmd == "煤质数据质检" || cmd == "一键审核" || cmd.StartsWith("煤质审核 ")) { await CoalAuditCmd(cmd); return; }
             if (cmd == "交叉验证" || cmd == "估值交叉验证" || cmd == "留一验证" || cmd == "克里金交叉验证" || cmd.StartsWith("交叉验证 ") || cmd.StartsWith("估值交叉验证 ")) { await SpatialCvCmd(cmd); return; }
             if (cmd == "变差函数分析" || cmd == "实验变差" || cmd == "半变异分析" || cmd == "空间结构分析" || cmd.StartsWith("变差函数分析 ") || cmd.StartsWith("实验变差 ")) { await VariogramAnalysisCmd(cmd); return; }
             if (cmd == "导出离群" || cmd == "离群导出" || cmd.StartsWith("导出离群 ")) { await ExportOutliersAsync(cmd); return; }
@@ -8211,6 +8212,41 @@ public partial class MainWindow : Window
             + (drawn > 0 ? $"（{drawn} 上图·红不一致/绿一致/灰未判）" : "") + (name != null ? $" · CSV → {name}" : "");
     }
 
+    // 煤质数据审核：一键跑物理范围/原煤vs浮煤/煤类反推/同层离群/浮煤回收率 5 类规则 → findings + 有问题样上图定位 + 导出。
+    // 忠实原 CoalQualityService.RunAudit 纯规则逻辑(数据可支撑者); 工分自洽(需 Mad/FCd)/测井一致(需 drill/log 厚)Kylin 数据缺, 记录不做。
+    private async Task CoalAuditCmd(string cmd)
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var samples = Data.GeoDataQueries.GetCoalSamples(db.Connection);
+        if (samples.Count == 0) { StatusMsg.Text = "煤质审核：无煤样数据"; return; }
+        var ranges = Data.GeoDataQueries.GetCoalClassificationRanges(db.Connection);
+        var a = Data.CoalAudit.Run(samples, ranges);
+
+        // 上图: 有 Error 的样红、仅 Warning 的样橙(按样本聚合取最重级)。
+        var worst = new Dictionary<long, Data.CoalAudit.Severity>();
+        foreach (var it in a.Items)
+            if (!worst.TryGetValue(it.SampleId, out var cur) || it.Severity > cur) worst[it.SampleId] = it.Severity;
+        var byId = new Dictionary<long, (double x, double y)>();
+        foreach (var s in samples) byId[s.Id] = (s.X, s.Y);
+        int drawn = 0; double gx0 = double.MaxValue, gy0 = double.MaxValue, gx1 = double.MinValue, gy1 = double.MinValue;
+        BeginChange();
+        foreach (var kv in worst)
+        {
+            if (!byId.TryGetValue(kv.Key, out var p) || (p.x == 0 && p.y == 0)) continue;
+            bool err = kv.Value == Data.CoalAudit.Severity.Error;
+            _scene.Add(new PointEntity { X = p.x, Y = p.y, Size = err ? 2.0 : 1.5, Style = 3,
+                Cr = err ? 0.9f : 0.95f, Cg = err ? 0.15f : 0.6f, Cb = 0.15f, LayerName = err ? "煤质审核-错误" : "煤质审核-警告" });
+            drawn++; if (p.x < gx0) gx0 = p.x; if (p.y < gy0) gy0 = p.y; if (p.x > gx1) gx1 = p.x; if (p.y > gy1) gy1 = p.y;
+        }
+        if (drawn > 0) { RefreshScene(); if (gx1 > gx0) Viewport.FitBounds(new[] { gx0, gy0, gx1, gy1 }); }
+
+        var cat = string.Join(" ", a.ByCategory.Select(c => $"{c.Category}×{c.Count}"));
+        var name = await SaveCsvAsync("导出煤质审核", "coal_audit.csv", Data.CoalAudit.ToCsv(a));
+        StatusMsg.Text = $"煤质审核({samples.Count} 样·5 类规则)：{a.Findings} 项问题（错 {a.Errors}·警 {a.Warnings}）· 分类 [{cat}]"
+            + (drawn > 0 ? $"（{drawn} 样上图·红错/橙警）" : "") + (name != null ? $" · CSV → {name}" : "")
+            + " · 工分自洽/测井一致需 Mad·FCd·测井厚(数据缺, 未审)";
+    }
+
     private static string CoalIndicator(string[] tk, int idx, string def)
         => tk.Length > idx && (tk[idx] is "ad" or "std" or "vdaf" or "qgr" or "qnet") ? tk[idx] : def;
 
@@ -9268,7 +9304,7 @@ public partial class MainWindow : Window
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","机群驾驶舱","设备综合评分","数据看板","煤种分类","煤质数据健康度","分煤层煤质",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
         "产能分类对比","故障类型分布","分工序验收合格率","数据导出","数据字典","达成度评价","产量预测","时序预测","编组优化","智能编组优化","导出编组","导出预测",
-        "商品煤符合性","煤质达标","导出符合性","品位储量曲线","导出品位储量","分标高煤质","导出分标高","煤质离群","导出离群","洗选提质","导出洗选","用途适宜性","导出用途","灰分发热量回归","煤质综合结论","煤类反推","煤类一致率","交叉验证","变差函数分析",
+        "商品煤符合性","煤质达标","导出符合性","品位储量曲线","导出品位储量","分标高煤质","导出分标高","煤质离群","导出离群","洗选提质","导出洗选","用途适宜性","导出用途","灰分发热量回归","煤质综合结论","煤类反推","煤类一致率","煤质审核","交叉验证","变差函数分析",
         // TaskLib 自足计算
         "生产量核算","物料换算","采剥平衡","排土场按量推进","配煤核算","工序进度跟踪","编组产能","环节降效",
     };
