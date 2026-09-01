@@ -1909,3 +1909,11 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - **修**: `ImportCoalSamples` 补全全部数值列(M/A/V/FC 原煤+浮煤 + 真密度 + 胶质 X + 焦渣) + 文本列(plastometric_curve); `GetCoalQualityBySeam` + `SeamQualityRow` 加 AvgMoisturePct(Mad)+AvgFixedCarbonPct(FCd), `分煤层煤质` 显示补全 **工业分析 M/A/V/FC 全列**(水/灰/挥/固碳 + 热)。+1 单测(导入 mad=8/fcd=47/真密度=1.45 → 查回入库 + 汇总呈现)。1018 测全绿, 0 错, smoke [GLINIT] 正常。
 
 **新透镜判据**: 命令在、数据源在, 还要查**每列是否解析**——schema 有列 + 原版导该列 + 有消费路径(分析/SQL查询)而 Kylin import 漏解析 = 真缺口(静默丢数据)。区别: schema 无该列 / 原版也不导 = 非缺口。本轮 1 修(煤质导入补全工业分析)。累计保真+数据完整审计 3 真 bug(估值半径/层位展点漏源/煤质导入漏列)。
+
+## 一六二、导入列完整性透镜续 —— 设备台账无损全列 · 修 + 其余导入普扫
+
+承 §一六一 煤质导入, 续查设备台账 + 普扫全导入:
+- **★设备台账 ImportEquipmentLedger 无损化 · 修**: 原只解析 6 列(equipment_id/category/model/manufacturer/origin/status), **漏 serial_number/asset_code/acquisition_date/commission_year(投产年份)/cumulative_hours(累计台时)/last_overhaul_date/operating_area(所属矿)/notes**——schema(V001)全有、原 DataImportCenter 全导且 EquipmentService(CalculateCumulativeHours/operating_area 查询)真用、Kylin 有 SQL 查询可取。「台账」本义即完整记录, 静默丢 8 列=有损。修: 无损全列。**FK 列陷阱**: model→equipment_model / operating_area→mine_location 有外键(运行期 FK=ON, 二表未种子), 直插未知值→整行 FK 失败(回归!)。解: `FkOpt` 父表无该值则置 NULL(无损降级, 保引用完整, 免整行失败)。+1 单测(导入投产年份 2015/累计台时 42000/出厂编号/备注→查回入库)。1019 测。
+- **普扫其余导入(schema 列 vs import 解析列, 近似)**: production_record(7/6 基本齐)、fault_event(8/10 齐)、capacity_monthly(4/8 齐)、**monthly_plan(~10/4)**、**haul_road(~17/7)**、**equipment_kpi_monthly(~13/4)** 疑有损; slope_design import 实解析 9 列(hint 证)但 GetSlopeDesigns 显示仅 6(cohesion/friction/rock_type 入库未显示=可 SQL 查, 非有损导入)。**候选(monthly_plan/haul_road/kpi)留下轮精确核对消费面再定**(需逐列确认原版导 + Kylin 有消费/SQL 可取, 且避 FK 陷阱)。
+
+**教训补**: 导入列完整性修复须防 **FK 列陷阱**——目标表有外键且父表运行期无数据时, 直插会整行失败, 须父表校验后 NULL 降级。本轮 1 修(设备台账无损)。数据完整性累计 3 修(层位展点/煤质导入/设备台账)。
