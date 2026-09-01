@@ -2803,3 +2803,17 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(写→读往返)**: [PmbExportServiceTests](tests/PitMine3D.Kylin.Tests/PmbExportServiceTests.cs) +4—— 2×2×2 双属性 ToBytes→Parse: 维度/cell中心(origin+(i+.5)*size)/品位/全属性数组精确还原; FromBlocks 乱序4块→网格序 x-fastest 正确且往返还原品位序; 仅几何(无属性)可解品位0; 属性长度不符抛异常。**build 0 错·单测 1312→1316**。
 
 **本会话第 59 功能**。教训: **读写不对称是可靠富矿——有 Reader 先问"原版有无对应 Writer?"(PmbmWriter 确在), 有则格式已知(读端即规格)+往返自验**。同 KdfImport/KdfExport 已成对; PMB 补齐后块体模型可存原生格式回导。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二五二 格式读写层收敛复核（第三收敛角度：Reader/Writer 类全量比对）
+
+**继测试级(§249)、命令级(§250)后, 补格式层复核**: 枚举原版全部 `*Reader`/`*Writer`/`*Importer` 类与 Kylin 比对。
+
+**Writer 侧**: 原版仅 KdfWriter/PmxWriter/PmbmWriter/PmbiWriter/BinaryPayloadWriter。Kylin: Kdf↔Kdf · Pmx↔Pmx · **Pmbm↔Pmb(§251 新补)** 三对齐全; **PmbiWriter/BinaryPayloadWriter = 原生引擎入料格式**(`IEntityCapability.ImportEntitiesBinary` 推实体进 C++ AcDb, [[project-binary-channels]])——Kylin 无原生引擎, N/A; 原版**无** BlkWriter/LasWriter ⇒ Kylin BLK/LAS 仅导入=忠实(原版亦只读)。
+
+**Reader 侧**: KdfReader✓ · MapGis(Project/Wl/Wp/Wt)✓ · PmxReader✓ · BlkReader✓ · PmbmReader✓ · **PMxxReader = 原生算子返回 buffer 读取器**([4magic][4ver][1success]+算子特定 body, 原生 mesh 布尔/体积算子的结果流)——Kylin 无原生算子产此 buffer, N/A(**纠早记"PMxx无源": 读器源可见, 真阻是无原生算子, 非无源**) · **TdmReader/TdmStringReader 早已移**(§见下)。
+
+**TDM 家族纠错(重要)**: 早记"KDF/TDM 无样本不可验"=**误记**。复核: Kylin **已有** `TdmImportService`(.3dm 二进制网格 394 行+测) · `.3ds` 折线(ImportTdmStringEditable+测) · KDF 读写对(+测)——全用**合成字节夹具**已验(格式源码可见即可合成, 同 PMB/blast/工分)。唯 **`.3dp` 工程包**未做: 实为 **Microsoft CAB 归档**, 原版靠 Windows `expand.exe` 解包(内含 .3dm/.3ds 转交已有 reader, 纯编排)——Kylin 无 expand.exe, 托管 CAB+LZX 解压 .NET 无内置且无样本, **=环境阻**(非"无样本", 非缺算法)。
+
+**三收敛角度互证**(测试 19/19 · 命令 200 标签 · 格式 Reader/Writer 全对)一致指向: 可实现+可验证+忠实者已尽, 余为 native 引擎/系统工具依赖。**教训: "无样本"非真阻(格式源可见即可合成验); 逐条复核 blocked 记录仍是富矿——本轮又纠 PMxx"无源"、KDF/TDM"无样本"两误记, 并精确定位 .3dp 真阻(CAB/expand.exe)**。见 [[unlock-blocked-insights]]。
