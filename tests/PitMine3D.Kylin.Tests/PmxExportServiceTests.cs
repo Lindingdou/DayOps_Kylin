@@ -33,6 +33,21 @@ public class PmxExportServiceTests
     }
 
     [Fact]
+    public void Polygon_exports_as_closed_polyline_with_vertices()
+    {
+        // 正方形(4 边, 半径10, 旋转0): 顶点在 0/90/180/270° → (10,0)(0,10)(-10,0)(0,-10)
+        var pg = new PolygonEntity { Cx = 0, Cy = 0, Radius = 10, Sides = 4, Rotation = 0, LayerName = "L1" };
+        var r = RoundTrip(new List<SceneEntity> { pg });
+        Assert.True(r.Success, r.Error);
+        var pl = (PolylineEntity)r.Entities.First(e => e is PolylineEntity);
+        Assert.True(pl.Closed);
+        Assert.Equal(4, pl.Points.Count);
+        Assert.Equal(10, pl.Points[0].Item1, 6); Assert.Equal(0, pl.Points[0].Item2, 6);   // 0°
+        Assert.Equal(0, pl.Points[1].Item1, 6); Assert.Equal(10, pl.Points[1].Item2, 6);   // 90°
+        Assert.Equal(-10, pl.Points[2].Item1, 6);                                            // 180°
+    }
+
+    [Fact]
     public void Round_trip_preserves_entity_counts()
     {
         var r = RoundTrip(Sample());

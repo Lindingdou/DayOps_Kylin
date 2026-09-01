@@ -9,7 +9,7 @@ namespace PitMine3D.Kylin.Cad;
 /// <summary>
 /// 写原版 PitMine 工程文件 .pmx(私有二进制)——反向互操作: 把 Kylin 场景实体存成原版可打开的工程。
 /// 与 <see cref="PmxImportService"/> 同规格(PmxFormat): Header('PMX1') + 段表(Strings/Layers/TextStyles/Entities) + Footer(CRC32)。
-/// 映射 Kylin→PMX: 线1/点3/多段线2(闭合)/文字4/圆14/圆弧15(3点↔外接圆心角); 矩形→闭合多段线2。正多边形/MText/Hatch/标注/椭圆/样条 暂不导出(记录)。
+/// 映射 Kylin→PMX: 线1/点3/多段线2(闭合)/文字4/圆14/圆弧15(3点↔外接圆心角); 矩形·正多边形→闭合多段线2。MText/Hatch/标注/椭圆/样条 暂不导出(记录)。
 /// TrueColor 精确; 图层名成串表。纯逻辑、可单测(与 PmxImportService 往返)。
 /// </summary>
 public static class PmxExportService
@@ -60,6 +60,14 @@ public static class PmxExportService
                     break;
                 case RectEntity rc:
                     Ent(2, rc, w => { w.Write((byte)1); w.Write(4); XY(w, rc.X0, rc.Y0); XY(w, rc.X1, rc.Y0); XY(w, rc.X1, rc.Y1); XY(w, rc.X0, rc.Y1); });
+                    break;
+                case PolygonEntity pg when pg.Sides >= 3 && pg.Radius > 1e-9:   // 正多边形 → 闭合多段线2(N 顶点)
+                    Ent(2, pg, w =>
+                    {
+                        w.Write((byte)1); w.Write(pg.Sides);
+                        for (int vi = 0; vi < pg.Sides; vi++)
+                        { double a = pg.Rotation + 2 * Math.PI * vi / pg.Sides; XY(w, pg.Cx + pg.Radius * Math.Cos(a), pg.Cy + pg.Radius * Math.Sin(a)); }
+                    });
                     break;
                 case CircleEntity c: Ent(14, c, w => { XY(w, c.Cx, c.Cy); w.Write(c.Radius); w.Write(0.0); w.Write(0.0); w.Write(1.0); }); break;   // center + radius + normal(0,0,1)
                 case TextEntity t:
