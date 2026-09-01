@@ -919,6 +919,7 @@ public partial class MainWindow : Window
             if (cmd == "规划计算" || cmd == "开采程序评价" || cmd == "程序评价") { ProgramEvaluateCmd(); return; }
             if (cmd == "派生计划方案" || cmd == "派生方案" || cmd == "多方案派生") { DerivePlansCmd(); return; }
             if (cmd == "中长远进度计划" || cmd == "中长远规划" || cmd == "中长期计划" || cmd == "中长远进度计划编制" || cmd.StartsWith("中长远进度计划 ") || cmd.StartsWith("中长远规划 ")) { await LongTermPlanCmd(cmd); return; }
+            if (cmd == "短期生产计划" || cmd == "短期生产计划编制" || cmd == "月度计划编制" || cmd == "月度计划" || cmd.StartsWith("短期生产计划 ") || cmd.StartsWith("月度计划 ")) { await ShortTermPlanCmd(cmd); return; }
             if (cmd == "剖面分析" || cmd == "剖面" || cmd == "点云剖面") { await SectionProfileAsync(); return; }
             if (cmd == "粗糙度" || cmd == "地表粗糙度") { await RoughnessAsync(); return; }
             if (cmd == "曲率" || cmd == "地表曲率") { await CurvatureAsync(); return; }
@@ -5941,6 +5942,36 @@ public partial class MainWindow : Window
 
     private static string RampText(Cad.RampProfileKind k) => k switch { Cad.RampProfileKind.Aggressive => "激进达产", Cad.RampProfileKind.Stepped => "阶梯爬坡", _ => "线性爬坡" };
 
+    // 短期(月度)生产计划(忠实原 ShortTermScheduler): 年目标→月分布(作业日×设备×组织形态)→均衡→上限回摊→月剥采比→逐月表+月产柱。
+    // 用法 短期生产计划 [年煤目标万t] [基准剥采比] [组织:均衡|多面|集中] [工作历:标准|抢产|保守]。
+    private async Task ShortTermPlanCmd(string cmd)
+    {
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        var p = new Cad.ShortTermPlan();
+        if (tk.Length > 1 && double.TryParse(tk[1], out var an) && an > 0) p.AnnualCoalTargetWanT = an;
+        if (tk.Length > 2 && double.TryParse(tk[2], out var br) && br > 0) p.BaseRatio = br;
+        if (tk.Length > 3) p.Dispatch = tk[3].Contains("集中") ? Cad.DispatchStrategy.Concentrated : tk[3].Contains("多面") ? Cad.DispatchStrategy.MultiFace : Cad.DispatchStrategy.Balanced;
+        if (tk.Length > 4) p.Calendar = tk[4].Contains("抢产") ? Cad.CalendarScenario.Push : tk[4].Contains("保守") ? Cad.CalendarScenario.Conservative : Cad.CalendarScenario.Standard;
+        Cad.ShortTermScheduler.Schedule(p);
+        var r = p.Result!;
+        DrawCategoryBars(p.Months.Select(m => ($"{m.Month}月", m.CoalWanT)).ToList(), "月煤万t");   // 月产柱
+        var name = await SaveCsvAsync("导出短期生产计划", "short_term_plan.csv", ShortTermToCsv(p));
+        string disp = p.Dispatch switch { Cad.DispatchStrategy.Concentrated => "集中强采", Cad.DispatchStrategy.MultiFace => "多面展开", _ => "均衡型" };
+        string cal = p.Calendar switch { Cad.CalendarScenario.Push => "抢产", Cad.CalendarScenario.Conservative => "保守", _ => "标准" };
+        StatusMsg.Text = $"短期生产计划({p.PlanYear}年·{disp}·工作历{cal})：年煤 {r.TotalCoalWanT:0}万t·完成 {r.CompletionRatePct:0.#}% · 均剥采比 {r.AvgRatio:0.##} · 峰月 {r.PeakMonthLabel}({r.PeakMonthCoalWanT:0.#}万t) · 月产CV {r.OutputCv:0.###}·均衡 {r.BalanceCoef:0.##} · 设备利用 {r.AvgEquipUtilPct:0}% · {(r.Ok ? "可行✓" : "不达标")} · 月产柱入场景"
+            + (name != null ? $" · CSV → {name}" : "");
+    }
+
+    private static string ShortTermToCsv(Cad.ShortTermPlan p)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var sb = new System.Text.StringBuilder();
+        sb.Append("月,作业日,煤万t,剥离万m³,剥采比,累计煤,累计剥离,推进m,设备利用%,完成%,作业面,检修\n");
+        foreach (var z in p.Months)
+            sb.Append($"{z.Label},{z.Workdays.ToString("0.#", inv)},{z.CoalWanT.ToString("0.#", inv)},{z.StripWanM3.ToString("0", inv)},{z.Ratio.ToString("0.##", inv)},{z.CumCoal.ToString("0.#", inv)},{z.CumStrip.ToString("0", inv)},{z.AdvanceM.ToString("0.#", inv)},{z.EquipUtilPct.ToString("0", inv)},{z.CompletionPct.ToString("0.#", inv)},{z.ActiveFace},{(z.IsMaintenance ? "检修" : "")}\n");
+        return sb.ToString();
+    }
+
     private static string LongTermToCsv(Cad.LongTermPlan p)
     {
         var inv = System.Globalization.CultureInfo.InvariantCulture;
@@ -9841,7 +9872,7 @@ public partial class MainWindow : Window
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割","移除障碍物",
         // 块体/运输/路网
-        "块体模型","导出PMB","属性赋值","资源量","面约束块体","离散化模型","中长远进度计划","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","瓶颈段分析","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道","直线斜坡道",
+        "块体模型","导出PMB","属性赋值","资源量","面约束块体","离散化模型","中长远进度计划","短期生产计划","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","瓶颈段分析","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道","直线斜坡道",
         // 生产计划/投影
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","开采程序切分","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)

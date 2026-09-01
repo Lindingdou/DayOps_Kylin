@@ -2918,3 +2918,17 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值+不变量)**: [LongTermSchedulerTests](tests/PitMine3D.Kylin.Tests/LongTermSchedulerTests.cs) +4—— AdvanceRateFrom 100/(1200·12·1.35)×1e4=51.44·退化0; 服务年限分级 1000→30/.../50→10; 基建期无煤有剥离负CF·生产采出总量≈储量·首年能力35%(r0)·服务年限=生产年数·峰值剥采比∈(base,7.7]·NPV=Σ折现; 确定性(同输入同输出)。**build 0 错·单测 1339→1343**。
 
 **本会话第 66 功能**。教训: **第九角度=孤儿标签(XAML/目录有标签但无 `cmd==` 处理)**——整串命令比对(§250)会被 XAML 里的孤儿标签骗过(标签在但无实现)。判据: **命令标签比对须查是否有对应 `cmd==` 分派处理, 而非仅字符串存在**。此为最大单项缺口(整规划模块), 前八角度全漏, 靠"逐模块读原 *Scheduler/*Plan 有无 Kylin 对应命令处理"挖出。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二六〇 短期(月度)生产计划排产 —— 孤儿标签续(规划模块第二块)
+
+**第九角度(孤儿标签)续**: `短期生产计划编制`/`月度计划编制`/`短期进度计划动态模拟` 同为 XAML 孤儿标签(无 `cmd==` 处理)。原 `PlanLib.ShortTerm.ShortTermScheduler`(月度排产)是真量算, 平行 LongTerm。
+
+**补** [ShortTermScheduler](src/Cad/ShortTermScheduler.cs)(忠实原, 展平配置): `Schedule(plan)` = 划月 → 月权重(有效作业日×设备可用×作业组织形态 DispatchShape) → 摊年目标 → 均衡平滑(份额=OutputSmooth/Sum) → 月产上限裁剪回摊(RedistributeCeiling 6 迭代) → 月剥采比剖面(强采月偏高, 上限裁剪) → 推进/设备利用/累计/完成率 → Evaluate。`WorkdaysFor`(标准作业日×冬季降效[12,1,2×0.8]×检修降效[7月×0.7]×工作历[抢产1.10/保守0.92])。模型 `ShortTermPlan`(展平 Field/Balance/Faces)/`MonthPeriod`/`ShortTermResult` + 枚举 DispatchStrategy/CalendarScenario。命令 `短期生产计划 [年煤目标] [基准剥采比] [组织] [工作历]`([MainWindow](src/Views/MainWindow.axaml.cs) `ShortTermPlanCmd`): 排产 + 月产柱上屏 + CSV + 摘要。
+
+**忠实取舍**: 备采保有月数校核(Mineable.PreparedMonths)需备采储量配置, 略去该 Ok 项(记录); 余全移。
+
+**验证(已知值+不变量)**: [ShortTermSchedulerTests](tests/PitMine3D.Kylin.Tests/ShortTermSchedulerTests.cs) +4—— WorkdaysFor 常规25/冬20/检修17.5/抢产27.5/保守23; 12月年目标守恒(±1)·完成≈100%·末月累计100%·各月剥采比≤12·默认可行; 紧上限85集中强采削峰无月超85·总近守恒(6迭代近似, 忠实原); 集中强采月产CV>均衡型。**build 0 错·单测 1343→1347**。
+
+**本会话第 67 功能**。规划模块(中长远§259 + 短期§260)两大块补齐; 动态模拟/出图属可视 refinement。第九角度(孤儿标签)已连出规划两功能。见 [[unlock-blocked-insights]]。
