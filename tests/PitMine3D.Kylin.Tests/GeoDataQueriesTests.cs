@@ -348,6 +348,29 @@ public class GeoDataQueriesTests
     }
 
     [Fact]
+    public void SummarizeAnnual_computes_peak_ratio_and_yoy()
+    {
+        var rows = new System.Collections.Generic.List<GeoDataQueries.AnnualOutputRow>
+        {
+            new(2020, 100), new(2021, 150), new(2022, 120),   // 峰值 2021; 最新 2022
+        };
+        var s = GeoDataQueries.SummarizeAnnual(rows);
+        Assert.Equal(2021, s.PeakYear);
+        Assert.Equal(150, s.PeakWanM3, 6);
+        Assert.Equal(2022, s.LatestYear);
+        Assert.Equal(80, s.LatestVsPeakPct, 4);     // 120/150×100
+        Assert.Equal(-20, s.YoYPct, 4);             // (120-150)/150×100
+    }
+
+    [Fact]
+    public void SummarizeAnnual_empty_is_zero()
+    {
+        var s = GeoDataQueries.SummarizeAnnual(new System.Collections.Generic.List<GeoDataQueries.AnnualOutputRow>());
+        Assert.Equal(0, s.PeakYear);
+        Assert.Equal(0, s.YoYPct, 6);
+    }
+
+    [Fact]
     public void Export_table_then_reimport_roundtrips()
     {
         using var db = GeoDatabase.OpenSeeded();

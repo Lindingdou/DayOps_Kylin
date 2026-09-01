@@ -1186,6 +1186,21 @@ public static class GeoDataQueries
         return rows;
     }
 
+    public sealed record AnnualOutputSummary(int PeakYear, double PeakWanM3, int LatestYear, double LatestWanM3, double LatestVsPeakPct, double YoYPct);
+
+    /// <summary>年度产量趋势摘要(忠实原 EquipmentCapabilityWindow): 峰值年+产量 / 最新年 / 最新占峰比% / 同比%。rows 须按 year 升序。纯逻辑、可单测。</summary>
+    public static AnnualOutputSummary SummarizeAnnual(IReadOnlyList<AnnualOutputRow> rows)
+    {
+        if (rows == null || rows.Count == 0) return new AnnualOutputSummary(0, 0, 0, 0, 0, 0);
+        var peak = rows[0];
+        foreach (var r in rows) if (r.OutputWanM3 > peak.OutputWanM3) peak = r;
+        var latest = rows[rows.Count - 1];   // 升序 → 末=最新年
+        double ratio = peak.OutputWanM3 > 1e-9 ? latest.OutputWanM3 / peak.OutputWanM3 * 100 : 0;
+        double yoy = 0;
+        if (rows.Count >= 2) { var prev = rows[rows.Count - 2]; if (prev.OutputWanM3 > 1e-9) yoy = (latest.OutputWanM3 - prev.OutputWanM3) / prev.OutputWanM3 * 100; }
+        return new AnnualOutputSummary(peak.Year, peak.OutputWanM3, latest.Year, latest.OutputWanM3, ratio, yoy);
+    }
+
     public sealed record SeamQualityRow(string SeamCode, int Samples, double AvgAshPct, double AvgVolatilePct, double AvgCalorificMJ,
         double AvgMoisturePct = 0, double AvgFixedCarbonPct = 0);   // Mad 水分 + FCd 固定碳 —— 补全工业分析 M/A/V/FC
 

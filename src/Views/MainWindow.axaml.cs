@@ -7488,7 +7488,10 @@ public partial class MainWindow : Window
         var parts = new List<string>();
         double tot = 0;
         foreach (var r in rows) { parts.Add($"{r.Year}: {r.OutputWanM3:0.#}万m³"); tot += r.OutputWanM3; }
-        StatusMsg.Text = $"年度产量趋势（{rows.Count} 年 · 累计 {tot:0.#}万m³）：" + string.Join(" · ", parts);
+        // 峰值年 + 最新年占峰比(忠实原 EquipmentCapabilityWindow) + 同比
+        var s = Data.GeoDataQueries.SummarizeAnnual(rows);
+        string yoy = rows.Count >= 2 ? $" · 同比 {s.YoYPct:+0.#;-0.#}%" : "";
+        StatusMsg.Text = $"年度产量趋势（{rows.Count} 年 · 累计 {tot:0.#}万m³ · 峰值 {s.PeakYear}年{s.PeakWanM3:0.#}万m³ · {s.LatestYear}年为峰值 {s.LatestVsPeakPct:0.#}%{yoy}）：" + string.Join(" · ", parts);
     }
 
     private void CoalQualityBySeamCmd()

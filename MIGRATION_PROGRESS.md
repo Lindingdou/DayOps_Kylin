@@ -1983,3 +1983,11 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - **修**: `GetCoalQualityStats`+`CoalQualityStats` 加 AshCvPct(SQL 取 SUM(ad²)→代码算样本方差 (Σx²−n·μ²)/(n−1))+ AshUniformity(评价档, 忠实原); `煤质统计` 显示"灰分CV X%(评价)"。+1 单测(独立取 ad_raw 算样本 CV 对拍 + 均匀性档一致)。1030 测全绿, 0 错, smoke 正常。
 
 **分析输出完整性透镜累计 6 处**(煤质 Mad/FCd · KPI 故障归因 · 故障 MTBF/MTTR · KPI OEE · 生产台效 · 煤质灰分 CV/均匀性)。本轮 1 修。数据面(7)+分析输出(6)=**13 处数据/分析补全**, 均"原版有、公式简单、数据齐"且以关系恒等/独立对拍验证。
+
+## 一七一、分析输出完整性续四 —— 年度产量补峰值年/占峰比/同比
+
+承 §一六七–一七〇, 续查年度产量趋势:
+- **缺口**: 原 EquipmentCapabilityWindow 算**峰值年产量 + 当前年占峰比%**(236-244), Kylin `AnnualOutputCmd` 只列各年产量+累计, 无峰值/趋势度量。
+- **修**: 抽纯helper `GeoDataQueries.SummarizeAnnual(rows)`→`AnnualOutputSummary`(峰值年/峰值产量/最新年/最新占峰比%/同比%); `年度产量趋势` 显示"峰值 X年Y万m³ · Z年为峰值 R% · 同比 ±G%"。抽 helper 便于纯单测(不依赖 DB)。+2 单测(峰值/占峰比/同比恒等: 2020:100/2021:150/2022:120→峰2021、占峰80%、同比−20%; 空→0)。1032 测全绿, 0 错, smoke 正常。
+
+**分析输出完整性透镜累计 7 处**(煤质 Mad/FCd · KPI 故障归因 · 故障 MTBF/MTTR · KPI OEE · 生产台效 · 煤质灰分CV · 年度峰值/占峰/同比)。**教训**: 分析派生指标应抽**纯 helper**(Data 层)而非塞 View 命令内, 便于关系恒等单测。本轮 1 修。数据面(7)+分析输出(7)=**14 处补全**。
