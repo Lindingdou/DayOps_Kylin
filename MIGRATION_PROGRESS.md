@@ -2241,3 +2241,11 @@ present-but-shallow 新角度: 对比 Kylin 节点编辑器各节点的**输入�
 - **TaskLib 排产核**(Chain/Dispatch/Shift/Unit/Day/Week/Month/Order/Fleet/Truck): 记录的 17,588 行引擎(ProductionPlanContext/ExploderConfig/FlowAssigner), 8 个自足切片早已提出, 余引擎上下文。
 
 **结论**: 自足几何/地质切片脉(RoadLayout 2 + BlockModelLib/Domain 2)**已挖尽**——本会话 4 真缺口后, 逐项(非归堆)复扫剩余引擎组无更多可移独立切片, 剩全为**引擎流水线几何步(消费者已核实)/已覆盖/记录的大引擎**。这比 §一九四 的"五法收敛"可靠——那次有归堆盲区, 本次逐项核实消费者。可验证/可实现/保真的独立算法切片在此收敛。见 [[unlock-blocked-insights]]。
+
+## 一九九、煤层露头线(SeamOutcropLineExtractor)—— §一九八"挖尽"又错: 注释措辞过滤漏项
+
+**§一九八 刚宣称 BlockModelLib/Domain 挖尽, 本轮即在同目录挖出第 5 真缺口** `SeamOutcropLineExtractor`——**根因: 我的复扫用 `grep 纯几何|可单测` 过滤, 而此文件注释写"露头线是算出来的"不含这些词, 被漏。** 又一次"扫描执行有过滤盲区"(继 名字前缀归堆、注释措辞)。
+
+**移植** [src/Cad/SeamOutcropLineExtractor.cs](src/Cad/SeamOutcropLineExtractor.cs) 忠实全移: 现状面三角网上求 **现状Z−顶板Z=0(坡顶=顶板露头)** 与 **现状Z−底板Z=0(坡底=底板露头)** 两条等值线(**marching triangles**: 逐三角看标量 f 三顶点符号, 变号边线性插值取点, 焊接成折线, 穿顶点去重, Douglas-Peucker 抽稀)。**与台阶面提取/煤岩判定互补**: 台阶面提取=坡度式(几何), 煤岩判定=分类; 露头线=**煤层与现状面交线**(地质式坡顶/坡底, 露头线**算出来天然一一对应**, 是原版否定"猜配对"三版失败后的正解)。附 `PairIntoBands`(按并行性配露头带, 间距∈[煤厚/tan60°,煤厚/tan5°]且离散小)。SampleZ 由调用方传(Kylin: `GetHorizonPoints`→`VirtualBorehole`分层→`TinSampler.SampleZ`)。命令 `煤层露头线`(OFF现状面+种子库→逐层出坡顶青/坡底橙线)+面编辑菜单+目录。验证 [SeamOutcropLineExtractorTests](tests/PitMine3D.Kylin.Tests/SeamOutcropLineExtractorTests.cs) 4 例已知值(倾斜面 z=10−0.5x 交顶板 z5 于 x=10/交底板 z2 于 x=16·整层在面下无露头·无数据顶点跳过不造点·并行配带间距6)。**build 0 错·单测 1082→1086**。
+
+**教训(硬, 第 3 类扫描盲区)**: 复扫目录找切片, **别用注释措辞 grep 过滤**(纯几何/可单测 只是部分文件的写法)——要 **`ls` 目录逐文件读用途**。三类盲区已犯: ①名字前缀归堆(线形处理/台阶面提取) ②注释措辞过滤(本项) ③present-but-shallow(台阶面提取)。**"挖尽/收敛"宣言的前提是逐文件读过, 不是 grep 过一遍**。见 [[unlock-blocked-insights]]。
