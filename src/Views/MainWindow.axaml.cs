@@ -986,6 +986,7 @@ public partial class MainWindow : Window
             if (cmd == "中心线管理" || cmd == "边状态" || cmd == "路网拓扑" || cmd == "中线管理") { RoadNetworkReportCmd(); return; }
             if (cmd == "瓶颈段分析" || cmd == "瓶颈段" || cmd == "关键路段" || cmd == "路段介数" || cmd == "路网瓶颈") { RoadBottleneckCmd(); return; }
             if (cmd == "结构路面" || cmd == "路面带" || cmd == "结构路面带" || cmd.StartsWith("结构路面 ")) { StructurePavementCmd(cmd); return; }
+            if (cmd == "路网运输指标" || cmd == "运输指标路网" || cmd == "路网指标" || cmd == "路网里程指标") { RoadTransportIndicatorsCmd(); return; }
             if (cmd == "中线交点" || cmd == "交点分类" || cmd == "路网交点" || cmd == "中线交点分类" || cmd.StartsWith("中线交点 ") || cmd.StartsWith("交点分类 ")) { CenterlineJunctionsCmd(cmd); return; }
             if (cmd == "路段分类" || cmd == "路网拓扑分类" || cmd == "路段拓扑" || cmd == "干线支线") { RoadTopologyCmd(); return; }
             if (cmd == "排土场容量校核" || cmd == "容量校核" || cmd == "排土容量") { await DumpCapacityAsync(); return; }
@@ -2640,6 +2641,28 @@ public partial class MainWindow : Window
         RefreshScene();
         var head = string.Join(" · ", bw.Take(topN).Where(e => e.Betweenness > 0).Select((e, i) => $"#{i + 1} 介数{e.Betweenness}(长{e.LengthM:0.#}m)"));
         StatusMsg.Text = $"瓶颈段分析(介数核·{(ends.Count >= 2 ? $"{ends.Count} 端点源汇" : "全节点")})：{bw.Count} 边 · 前 {topN} 高流量段红粗上屏 · {head}（车道/陡坡加权待边属性）";
+    }
+
+    // 路网运输指标(忠实原 TransportIndicators 几何部分): 场景路网 → 总里程 + 源×汇可达对 运距均值/最大 + 瓶颈段。
+    // 源汇=悬挂端点(无则全节点截 40)。运量加权/成本需吨量与采矿模型, 记录。
+    private void RoadTransportIndicatorsCmd()
+    {
+        var polys = new List<System.Collections.Generic.IReadOnlyList<(double x, double y)>>();
+        foreach (var e in _scene.Entities)
+            if (e is PolylineEntity pl && pl.Points.Count >= 2) polys.Add(pl.Points);
+        if (polys.Count == 0) { StatusMsg.Text = "路网运输指标：场景无中线（多段线）"; return; }
+        double tol = System.Math.Max(1e-6, SnapTolWorld(_lastPointer) * 0.5);
+        var (nodes, adj) = Cad.RoadNetwork.Build(polys, tol);
+        if (nodes.Count < 2) { StatusMsg.Text = "路网运输指标：路网节点不足"; return; }
+        var ends = Cad.RoadNetwork.DanglingEndpoints(adj);
+        System.Collections.Generic.IReadOnlyList<int> srcs;
+        string basis;
+        if (ends.Count >= 2) { srcs = ends; basis = $"{ends.Count} 端点源汇"; }
+        else { var all = new List<int>(); for (int i = 0; i < System.Math.Min(nodes.Count, 40); i++) all.Add(i); srcs = all; basis = "全节点(截40)"; }
+        var s = Cad.RoadNetwork.NetworkIndicators(adj, srcs, srcs);
+        var bw = Cad.RoadNetwork.EdgeBetweenness(adj, srcs, srcs);
+        string topSeg = bw.Count > 0 && bw[0].Betweenness > 0 ? $"最忙段 介数{bw[0].Betweenness}(长{bw[0].LengthM:0.#}m)" : "无瓶颈";
+        StatusMsg.Text = $"路网运输指标({basis})：总里程 {s.TotalMileageM / 1000:0.###} km · 可达对 {s.ReachablePairs} · 运距 均 {s.MeanDistM:0.#}m/最大 {s.MaxDistM:0.#}m · {topSeg}（运量加权/成本需吨量·采矿模型, 记录）";
     }
 
     // 结构路面(忠实原 StructurePavement): 场景中线(多段线)按路宽等宽外扩成闭合结构路面带 ribbon 入场景。
@@ -9926,7 +9949,7 @@ public partial class MainWindow : Window
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割","移除障碍物",
         // 块体/运输/路网
-        "块体模型","导出PMB","属性赋值","资源量","面约束块体","离散化模型","中长远进度计划","短期生产计划","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","瓶颈段分析","结构路面","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道","直线斜坡道",
+        "块体模型","导出PMB","属性赋值","资源量","面约束块体","离散化模型","中长远进度计划","短期生产计划","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","瓶颈段分析","路网运输指标","结构路面","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道","直线斜坡道",
         // 生产计划/投影
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","开采程序切分","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)

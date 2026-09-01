@@ -247,6 +247,33 @@ public static class RoadNetwork
         return outp;
     }
 
+    /// <summary>路网几何运输指标(忠实原 TransportIndicators 几何部分): 总里程 + 源×汇可达对 等运距 均值/最大。</summary>
+    public readonly record struct NetworkStats(double TotalMileageM, int ReachablePairs, double MeanDistM, double MaxDistM);
+
+    /// <summary>
+    /// 从路网算几何运输指标: 总里程(去重边长和) + 源×汇有序对最短路 可达对数/均值/最大 运距。
+    /// (原另有运量加权均值/成本, 需吨量与采矿模型, 记录; 此为纯几何可达指标。)不可达对(∞)不计。纯图论、可单测。
+    /// </summary>
+    public static NetworkStats NetworkIndicators(List<List<(int to, double w)>> adj, IReadOnlyList<int> sources, IReadOnlyList<int> sinks)
+    {
+        double totalMileage = 0;
+        var seen = new HashSet<(int, int)>();
+        for (int u = 0; u < adj.Count; u++)
+            foreach (var (v, w) in adj[u]) { var e = (System.Math.Min(u, v), System.Math.Max(u, v)); if (seen.Add(e)) totalMileage += w; }
+        double sum = 0, max = 0; int cnt = 0;
+        foreach (var s in sources)
+        {
+            var dist = DijkstraDistances(adj, s);
+            foreach (var t in sinks)
+            {
+                if (s == t) continue;
+                double d = dist[t];
+                if (!double.IsInfinity(d)) { sum += d; if (d > max) max = d; cnt++; }
+            }
+        }
+        return new NetworkStats(totalMileage, cnt, cnt > 0 ? sum / cnt : 0, max);
+    }
+
     /// <summary>度为 1 的悬挂端点(路网端, 天然装卸/出入口候选)。</summary>
     public static List<int> DanglingEndpoints(List<List<(int to, double w)>> adj)
     {

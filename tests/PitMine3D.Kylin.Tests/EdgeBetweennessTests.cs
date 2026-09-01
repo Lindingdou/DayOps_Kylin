@@ -45,6 +45,31 @@ public class EdgeBetweennessTests
     }
 
     [Fact]
+    public void NetworkIndicators_mileage_and_reachable_distances()
+    {
+        // 链 0-1-2-3, 边长 3/4/5 → 总里程 12。端点 {0,3} 源汇: 0→3=12, 3→0=12 → 2 对, 均值/最大 12。
+        var adj = Graph(4, (0, 1, 3), (1, 2, 4), (2, 3, 5));
+        var ends = RoadNetwork.DanglingEndpoints(adj);
+        var s = RoadNetwork.NetworkIndicators(adj, ends, ends);
+        Assert.Equal(12, s.TotalMileageM, 6);
+        Assert.Equal(2, s.ReachablePairs);           // (0,3) 与 (3,0)
+        Assert.Equal(12, s.MeanDistM, 6);
+        Assert.Equal(12, s.MaxDistM, 6);
+    }
+
+    [Fact]
+    public void NetworkIndicators_unreachable_pairs_excluded()
+    {
+        // 两分量 0-1(长2) 与 2-3(长3): 总里程 5; 全节点源汇 → 仅同分量对可达
+        var adj = Graph(4, (0, 1, 2), (2, 3, 3));
+        var s = RoadNetwork.NetworkIndicators(adj, new[] { 0, 1, 2, 3 }, new[] { 0, 1, 2, 3 });
+        Assert.Equal(5, s.TotalMileageM, 6);
+        Assert.Equal(4, s.ReachablePairs);           // (0,1)(1,0)(2,3)(3,2), 跨分量 ∞ 不计
+        Assert.Equal(2.5, s.MeanDistM, 6);           // (2+2+3+3)/4
+        Assert.Equal(3, s.MaxDistM, 6);
+    }
+
+    [Fact]
     public void Unreachable_pairs_skipped_no_throw()
     {
         // 两不连通分量 0-1 与 2-3

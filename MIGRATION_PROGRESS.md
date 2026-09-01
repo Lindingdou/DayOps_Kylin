@@ -2978,3 +2978,17 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 - **交互编辑器/原生显示**: 排土模板(模板编辑器) · 加载倾斜摄影(OSGB) · 影像底图(栅格叠加显示) · 点云管理/渲染配置/现状写实/补勘钻孔写实(3D 写实/渲染) · 增量增删边(交互图编辑) · 延拓触发设置(config)。
 
 **结论**: 孤儿标签逐条个别验证收官——托管可移者仅 结构路面(§70)一条(已补), 余为 native 坑设计引擎/原版桩/config/交互/原生显示/已覆盖。**教训: 孤儿"native"须逐条查工厂方法实际路由(TryGet<Capability> vs new 托管类 vs SkeletonCommand vs OpenWindow), 勿凭标签所属 Tab 臆断**——第九角度至此完全落地。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二六四 路网运输指标统一报表（方法级测试复审——第十角度）
+
+**第十角度: 原版 `*Tests.cs` 方法级复审(§249 只到文件级)**。逐测试文件看**具体测的方法**, 验 Kylin 是否覆盖每个行为。RoadLib 测试(8 文件)复审: RoadLayoutSolver/RoadCrossSection/PathSolver(Dijkstra/KShortest)/StructurePavement(§70)/RoadNetwork 均覆盖; ExtendTriggerSettings=config→options 映射(非算法); **`TransportIndicatorsBuilder.Compute` 出统一几何报表**(总里程 + OD 可达对均/最 + 瓶颈), Kylin 有零件却散(总长在中心线管理、OD 需用户 CSV、瓶颈 §258)——**无从场景路网直算的统一报表**。
+
+**补** [RoadNetwork](src/Cad/RoadNetwork.cs) `NetworkIndicators(adj, sources, sinks)`(总里程=去重边长和 + 源×汇有序对最短路 可达对数/均值/最大, 不可达∞不计) + `NetworkStats`。命令 `路网运输指标`([MainWindow](src/Views/MainWindow.axaml.cs) `RoadTransportIndicatorsCmd`): 场景路网→端点(或全节点截40)源汇→总里程 km + 可达对均/最运距 + 最忙段(介数)一体报表。
+
+**忠实取舍**: 原另有运量加权均值/成本(需吨量+采矿模型), Kylin 2D 路网无吨量/逐边坡度→记录; 纯几何可达指标(里程/OD/介数)完整可移可验(同 §258 介数, 车道/坡度加权待边属性)。
+
+**验证(已知图)**: [EdgeBetweennessTests](tests/PitMine3D.Kylin.Tests/EdgeBetweennessTests.cs) +2—— 链 0-1-2-3(边3/4/5)总里程12·端点源汇2对·均/最12; 两分量总里程5·可达4对(跨分量∞不计)·均2.5/最3。**build 0 错·单测 1354→1356**。
+
+**本会话第 71 功能**。教训: **第十角度=原版测试方法级复审**——文件级映射(§249 19/19)后, 逐测试文件看具体测的方法, 验 Kylin 覆盖每行为。RoadLib 8 测复审挖出统一运输指标(散在多命令未成一体)。方法级比文件级细一层。见 [[unlock-blocked-insights]]。
