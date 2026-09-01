@@ -982,6 +982,7 @@ public partial class MainWindow : Window
             if (cmd == "导出PLY" || cmd == "导出网格PLY" || cmd == "网格导出PLY") { await ExportMeshAsync("ply"); return; }
             if (cmd == "导出STL" || cmd == "导出网格STL" || cmd == "网格导出STL") { await ExportMeshAsync("stl"); return; }
             if (cmd == "中心线管理" || cmd == "边状态" || cmd == "路网拓扑" || cmd == "中线管理") { RoadNetworkReportCmd(); return; }
+            if (cmd == "瓶颈段分析" || cmd == "瓶颈段" || cmd == "关键路段" || cmd == "路段介数" || cmd == "路网瓶颈") { RoadBottleneckCmd(); return; }
             if (cmd == "中线交点" || cmd == "交点分类" || cmd == "路网交点" || cmd == "中线交点分类" || cmd.StartsWith("中线交点 ") || cmd.StartsWith("交点分类 ")) { CenterlineJunctionsCmd(cmd); return; }
             if (cmd == "路段分类" || cmd == "路网拓扑分类" || cmd == "路段拓扑" || cmd == "干线支线") { RoadTopologyCmd(); return; }
             if (cmd == "排土场容量校核" || cmd == "容量校核" || cmd == "排土容量") { await DumpCapacityAsync(); return; }
@@ -2605,6 +2606,37 @@ public partial class MainWindow : Window
             foreach (var (v, w) in adj[u]) if (v > u) { edges++; totLen += w; }
         }
         StatusMsg.Text = $"中心线管理/边状态：{polys.Count} 中线 · 节点 {nodes.Count} · 边 {edges}(总长 {totLen:0.#}) · 断头 {deadEnds} · 交叉 {junctions} · 孤立 {isolated}（增删边/改状态需交互 UI）";
+    }
+
+    // 瓶颈段分析(忠实原 TransportIndicators §1.3.5 介数核): 场景中线建路网 → 边介数(最短路中心性) → 高流量段。
+    // 源汇=悬挂端点(路网端, 天然出入口), 无则全节点(截断 40)。前几段红粗高亮上屏。
+    // (原另乘 车道/陡坡因子; Kylin 中线几何最小模型无 车道/坡度/状态, 该加权记录待边属性模型。)
+    private void RoadBottleneckCmd()
+    {
+        var polys = new List<System.Collections.Generic.IReadOnlyList<(double x, double y)>>();
+        foreach (var e in _scene.Entities)
+            if (e is PolylineEntity pl && pl.Points.Count >= 2) polys.Add(pl.Points);
+        if (polys.Count == 0) { StatusMsg.Text = "瓶颈段分析：场景无中线（多段线）"; return; }
+        double tol = System.Math.Max(1e-6, SnapTolWorld(_lastPointer) * 0.5);
+        var (nodes, adj) = Cad.RoadNetwork.Build(polys, tol);
+        if (nodes.Count < 2) { StatusMsg.Text = "瓶颈段分析：路网节点不足"; return; }
+        var ends = Cad.RoadNetwork.DanglingEndpoints(adj);
+        System.Collections.Generic.IReadOnlyList<int> srcs;
+        if (ends.Count >= 2) srcs = ends;
+        else { var all = new List<int>(); for (int i = 0; i < System.Math.Min(nodes.Count, 40); i++) all.Add(i); srcs = all; }
+        var bw = Cad.RoadNetwork.EdgeBetweenness(adj, srcs, srcs);
+        if (bw.Count == 0) { StatusMsg.Text = "瓶颈段分析：无边"; return; }
+        int topN = System.Math.Min(5, bw.Count);
+        BeginChange();
+        for (int i = 0; i < topN; i++)
+        {
+            var e = bw[i]; if (e.Betweenness == 0) break;
+            var a = nodes[e.U]; var b = nodes[e.V];
+            _scene.Add(new LineEntity { X0 = a.x, Y0 = a.y, X1 = b.x, Y1 = b.y, Cr = 0.95f, Cg = 0.2f, Cb = 0.15f, LayerName = "瓶颈段" });
+        }
+        RefreshScene();
+        var head = string.Join(" · ", bw.Take(topN).Where(e => e.Betweenness > 0).Select((e, i) => $"#{i + 1} 介数{e.Betweenness}(长{e.LengthM:0.#}m)"));
+        StatusMsg.Text = $"瓶颈段分析(介数核·{(ends.Count >= 2 ? $"{ends.Count} 端点源汇" : "全节点")})：{bw.Count} 边 · 前 {topN} 高流量段红粗上屏 · {head}（车道/陡坡加权待边属性）";
     }
 
     // 中线交点分类(忠实 CenterlineJunctions): 场景中线(多段线) → X十字/T丁字/半腰焊/接缝/汇合口 四型分类 →
@@ -9764,7 +9796,7 @@ public partial class MainWindow : Window
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割","移除障碍物",
         // 块体/运输/路网
-        "块体模型","导出PMB","属性赋值","资源量","面约束块体","离散化模型","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道","直线斜坡道",
+        "块体模型","导出PMB","属性赋值","资源量","面约束块体","离散化模型","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","瓶颈段分析","中线交点","路段分类","演化对比","螺旋斜坡道","折返斜坡道","直线斜坡道",
         // 生产计划/投影
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","开采程序切分","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)

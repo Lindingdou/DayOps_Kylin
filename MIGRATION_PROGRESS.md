@@ -2890,3 +2890,17 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(合成已知值)**: [EfficiencyWhatIfTests](tests/PitMine3D.Kylin.Tests/EfficiencyWhatIfTests.cs) +3—— base100·fs0.2·l(0.5,0.1,0.1,0.2): c1=0.10/c2=0.10/c3=0.10/c4=0.12→raw0.42→gain0.357→模拟135.7·增35.7; 零杠杆守基线; faultShare 夹 [0,1]。**build 0 错·单测 1333→1336**。
 
 **本会话第 64 功能**。教训: **第八角度(DB 聚合窗 present-but-partial)连出四功能**(§254 化验覆盖·§255 分煤层箱线·§256 主控因素·§257 效能 what-if)——原分析窗常比 Kylin 命令多一层(分位/相关/what-if 情景), 逐窗读原计算即挖, 纯核合成验。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二五八 路网瓶颈段分析（边介数中心性）—— present-but-partial 拓展至 RoadLib
+
+**第八角度拓展至 RoadLib**: 原 `TransportIndicators` §1.3.5 出**瓶颈段**: score = 介数(betweenness) × 车道因子 × 陡坡因子, 主因(单车道|陡坡|高介数|禁行)。Kylin 有路网(RoadNetwork Dijkstra/OD)但**无瓶颈段/介数分析**。
+
+**补** [RoadNetwork](src/Cad/RoadNetwork.cs) `EdgeBetweenness(adj, sources, sinks)`(所有源×汇 Dijkstra 累计每边被最短路经过次数, 按介数降序) + `DanglingEndpoints`(度1端点=天然出入口)。命令 `瓶颈段分析`/`关键路段`([MainWindow](src/Views/MainWindow.axaml.cs) `RoadBottleneckCmd`): 场景中线建网 → 端点(或全节点截40)为源汇 → 边介数 → 前 5 高流量段红粗上屏。
+
+**忠实取舍**: 原另乘 车道/陡坡因子, 但 Kylin 路网为**中线几何最小模型**(RoadEvolutionModel 注"原 RoadEdge 的最小替代", 无车道/坡度/状态) → 该加权记录待边属性模型; 介数核(图论中心性)完整可移可验。
+
+**验证(已知图)**: [EdgeBetweennessTests](tests/PitMine3D.Kylin.Tests/EdgeBetweennessTests.cs) +3—— 链 0-1-2-3 端点源汇→三边各介数2; Y 型茎边介数4(最忙, 降序首位); 不连通对跳不抛。**build 0 错·单测 1336→1339**。
+
+**本会话第 65 功能**。教训: **第八角度(present-but-partial)不限 GeoDataBase, 拓展到 RoadLib/PointCloudLib 等**——逐分析器读原多算的维度(此为图介数)。数据模型缺属性时取可验证核(介数) + 记录加权refinement(车道/坡度)。见 [[unlock-blocked-insights]]。

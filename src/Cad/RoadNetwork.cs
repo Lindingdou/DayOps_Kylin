@@ -215,4 +215,47 @@ public static class RoadNetwork
         }
         return best;
     }
+
+    /// <summary>一条边的介数结果(端点/长/被最短路经过次数)，按介数降序。</summary>
+    public readonly record struct EdgeBw(int U, int V, double LengthM, int Betweenness);
+
+    /// <summary>
+    /// 边介数(shortest-path centrality) —— 忠实原 TransportIndicators 瓶颈段的介数核: 对所有 源×汇 有序对
+    /// 跑 Dijkstra, 累计每条边被最短路经过次数, 按介数降序。识别路网关键(高流量)段。
+    /// (原另乘 车道因子/陡坡因子; Kylin 路网为中线几何最小模型无 车道/坡度/状态, 该加权记录待边属性模型。)
+    /// 无向边规范 (min,max); s==t 跳; 不可达跳。纯图论、可单测。
+    /// </summary>
+    public static List<EdgeBw> EdgeBetweenness(List<List<(int to, double w)>> adj,
+        IReadOnlyList<int> sources, IReadOnlyList<int> sinks)
+    {
+        var len = new Dictionary<(int, int), double>();
+        for (int u = 0; u < adj.Count; u++)
+            foreach (var (v, w) in adj[u]) { var e = (System.Math.Min(u, v), System.Math.Max(u, v)); if (!len.ContainsKey(e)) len[e] = w; }
+        var bw = new Dictionary<(int, int), int>();
+        foreach (var s in sources)
+            foreach (var t in sinks)
+            {
+                if (s == t) continue;
+                var path = Dijkstra(adj, s, t);
+                for (int i = 1; i < path.Count; i++)
+                { var e = (System.Math.Min(path[i - 1], path[i]), System.Math.Max(path[i - 1], path[i])); bw[e] = bw.GetValueOrDefault(e) + 1; }
+            }
+        var outp = new List<EdgeBw>();
+        foreach (var kv in len)
+            outp.Add(new EdgeBw(kv.Key.Item1, kv.Key.Item2, kv.Value, bw.GetValueOrDefault(kv.Key)));
+        outp.Sort((a, b) => b.Betweenness.CompareTo(a.Betweenness));
+        return outp;
+    }
+
+    /// <summary>度为 1 的悬挂端点(路网端, 天然装卸/出入口候选)。</summary>
+    public static List<int> DanglingEndpoints(List<List<(int to, double w)>> adj)
+    {
+        var ends = new List<int>();
+        for (int i = 0; i < adj.Count; i++)
+        {
+            var uniq = new HashSet<int>(); foreach (var (v, _) in adj[i]) uniq.Add(v);
+            if (uniq.Count <= 1) ends.Add(i);
+        }
+        return ends;
+    }
 }
