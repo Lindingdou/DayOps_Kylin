@@ -223,7 +223,7 @@ public sealed class BenchParameterExtractor
     // ── 辅助 ──────────────────────────────────────────────
 
     /// <summary>最终(组合)帮坡角: β = atan( H / (H/tanα + W) )。与级数无关(匀质近似)。忠实原 BenchTemplateResolver。</summary>
-    private static double OverallSlopeAngleDeg(double benchHeight, double faceAngleDeg, double bermWidth)
+    public static double OverallSlopeAngleDeg(double benchHeight, double faceAngleDeg, double bermWidth)
     {
         if (benchHeight <= 0) return 0;
         double a = faceAngleDeg * Math.PI / 180.0;

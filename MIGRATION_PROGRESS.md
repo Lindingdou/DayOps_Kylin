@@ -2354,3 +2354,13 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **验证(已知值)**: [BenchElevationAnnotatorTests](tests/PitMine3D.Kylin.Tests/BenchElevationAnnotatorTests.cs) 8 例—— 坡顶坡底同高程各自居中→同落 X=5→去重成 1(居中计数 2)、关居中留 2 处、网格去重(近并/远留)、高程标签正负零号、类别配色 + 固定色压过类别、代表点=最近质心顶点、空/无效降级、▽/引线/文字符号几何闭式值。**build 0 错·单测 1163→1171**。
 
 **本会话第 15 功能**。至此 **PlanLib.ShortTerm 件一/件二纯算子簇全数到位**(LandformClassifier/MineableArea/RegionGeometry/BenchWidth 先前已移 + ParameterExtractor + BenchElevationAnnotator 本会话补)。教训: **产出内核专属格式(PMBI)的纯算法, 把"算法核"与"输出格式"切开——核保真移植 + 输出改投 2D 场景实体**, 即可移可验; PMBI 本身(内核喂食传输)无 Kylin 消费者故不移。余 ParameterVerifier(件二·校核)依赖参数验收引擎链, 待评估。见 [[unlock-blocked-insights]]。
+
+## 二一一、现状台阶参数校核(ParameterVerifier 件二·校核)—— 完成件二对(第 16 功能)
+
+补 `ParameterVerifier`, 完成件二对(提取 §二〇九 + **校核**): [src/Cad/BenchParameterVerifier.cs](src/Cad/BenchParameterVerifier.cs) 把提取的实测台阶参数与「设计基准 + 规范默认」逐项校核(偏差%+状态), 稳定性 F=tanφ/tanβ。
+
+**依赖辨析——移的是原版兜底路径, 非新造**: 原 `Verify` 先经 GeoDataBase 参数验收引擎(`ComputeStatus`, 带 StandardMin/Max 分 pass/warning/fail) + 模板库 `BenchTemplateResolver.Resolve`(设计值); **两者未就绪时原版本地兜底**——设计基准取 `Norm`(采场通用 12/70/4·硬 15/70/8·中 12/68/6·软 10/60/5; 排土 10/35/3), 状态取 `FallbackStatus`(|偏差|>15%→warning 否则 pass)。Kylin 无 GeoDataBase 模板库(大引擎, 记为不可移), 正落在原版这条兜底分支——故本类是**原兜底路径的完整忠实移植**(Norm/FallbackStatus/Worst/CohesionlessFactorOfSafety 逐字), 非发明。模板库精细分级(StandardMin/Max 的 fail 档)因无库不可得, 记录。命令 `参数校核 [排土] [hard|medium|soft] [摩擦角φ]`(CSV→提取→校核→存提取+校核合并报表)。
+
+**验证(已知值)**: [BenchParameterVerifierTests](tests/PitMine3D.Kylin.Tests/BenchParameterVerifierTests.cs) 11 例—— Norm 五档与原版一致、实测=规范全 pass、偏差>15% 警戒边界(16.67% warn / 12.5% pass)、排土场基准、稳定性 F 阈值(陡坡<1.3 警/缓坡≥1.3 合格)、无摩擦角或 β=0 不算 F、设计覆盖、Worst 聚合、null 安全、报表头部、提取告警流入校核。**build 0 错·单测 1171→1182**。
+
+**本会话第 16 功能**。至此 **PlanLib.ShortTerm 件一(采场排土场识别)+ 件二(参数提取+校核)整套到位**。教训: **判"依赖大引擎不可移"前, 看原算法有没有自带兜底路径**——ParameterVerifier 表面依赖 GeoDataBase 验收引擎+模板库, 但原代码 try/catch 全带本地兜底(Norm+FallbackStatus), 那条兜底分支正是无库环境(=Kylin)的忠实全貌, 可完整移可验; 只有库精细档(StandardMin/Max)不可得需记录。见 [[unlock-blocked-insights]]。

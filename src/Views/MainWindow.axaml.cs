@@ -774,6 +774,7 @@ public partial class MainWindow : Window
             if (cmd == "平盘标高清单" || cmd == "平盘清单" || cmd == "标高清单" || cmd == "平盘标高统计" || cmd.StartsWith("平盘标高清单 ") || cmd.StartsWith("平盘清单 ")) { await BenchLevelInventoryAsync(cmd); return; }
             if (cmd == "现状参数提取" || cmd == "台阶参数反推" || cmd == "现状台阶参数" || cmd == "参数反推" || cmd.StartsWith("现状参数提取 ") || cmd.StartsWith("台阶参数反推 ")) { await BenchParameterExtractAsync(cmd); return; }
             if (cmd == "标注台阶标高" || cmd == "台阶标高标注" || cmd == "标高标注" || cmd.StartsWith("标注台阶标高 ") || cmd.StartsWith("台阶标高标注 ")) { await BenchElevationAnnotateAsync(cmd); return; }
+            if (cmd == "参数校核" || cmd == "台阶参数校核" || cmd == "现状参数校核" || cmd.StartsWith("参数校核 ") || cmd.StartsWith("台阶参数校核 ")) { await BenchParameterVerifyAsync(cmd); return; }
             if (cmd == "坡向着色" || cmd == "坡向") { await ShadeTinAsync("坡向着色", "按朝向 HSV 配色", TerrainAnalysis.BuildAspectMap); return; }
             if (cmd == "高程着色" || cmd == "分色显示" || cmd == "高程分带") { await ShadeTinAsync("高程着色", "低绿→中黄→高棕", TerrainAnalysis.BuildElevationMap); return; }
             if (cmd == "体积计算" || cmd == "算量" || cmd == "土方量") { await VolumeAsync(); return; }
@@ -1801,6 +1802,47 @@ public partial class MainWindow : Window
         RefreshScene();
         if (bx1 > bx0) Viewport.FitBounds(new[] { bx0, by0, bx1, by1 });
         StatusMsg.Text = res.Message;
+    }
+
+    // 现状台阶参数校核(忠实 ParameterVerifier 兜底路径): 台阶线 CSV → 提取 → 与规范默认基准逐项校核(偏差%+状态)。
+    // "参数校核 [排土] [hard|medium|soft] [摩擦角φ]": 排土=排土场基准(10/35/3); 硬度定采场基准; 摩擦角算稳定性 F。
+    private async Task BenchParameterVerifyAsync(string cmd)
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "参数校核：选坡顶/坡底台阶线 CSV (role,lineId,x,y,z)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("台阶线 (CSV/TXT)") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (files.Count == 0) return;
+        string text;
+        try { text = System.IO.File.ReadAllText(files[0].Path.LocalPath); }
+        catch (System.Exception ex) { StatusMsg.Text = $"参数校核：读文件失败 {ex.Message}"; return; }
+
+        var lines = BenchParameterExtractor.ParseCsv(text);
+        if (lines.Count == 0) { StatusMsg.Text = "参数校核：CSV 没解析出线(需 role,lineId,x,y,z)"; return; }
+        var ext = BenchParameterExtractor.Extract(lines);
+        if (!ext.Ok) { StatusMsg.Text = $"参数校核：{ext.Message}"; return; }
+
+        // 解析标志: 排土 / 硬度 / 摩擦角。
+        bool isDump = false; string? hardness = null; double? phi = null;
+        foreach (var t in cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries).Skip(1))
+        {
+            var s = t.ToLowerInvariant();
+            if (s is "排土" or "排土场" or "dump") isDump = true;
+            else if (s is "hard" or "硬" or "硬岩") hardness = "hard";
+            else if (s is "medium" or "中" or "中硬" or "中硬岩") hardness = "medium";
+            else if (s is "soft" or "软" or "软岩") hardness = "soft";
+            else if (double.TryParse(t, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double v) && v > 0 && v < 60) phi = v;
+        }
+
+        var rep = BenchParameterVerifier.Verify(ext, isDump, hardness, phi);
+        string combined = BenchParameterExtractor.BuildReport(ext, System.IO.Path.GetFileName(files[0].Path.LocalPath))
+                        + "\n" + BenchParameterVerifier.BuildReport(rep);
+        var saved = await SaveCsvAsync("现状台阶参数校核", "现状台阶参数校核.csv", combined);
+        string statusCn = rep.OverallStatus switch { "pass" => "合格", "warning" => "偏差", "fail" => "超标", _ => "待定" };
+        StatusMsg.Text = $"参数校核({(isDump ? "排土场" : "采场")}·{rep.DesignProvenance})：总体 {statusCn}；{ext.Message}"
+                       + (saved != null ? $" · 报表已存 {saved}" : "");
     }
 
     // 煤厚分析等厚线(原 ThicknessSurfaceBuilder「煤厚分析面」的平面等厚线): 观测/见煤点 CSV → 取每行前 3 个
@@ -8766,7 +8808,7 @@ public partial class MainWindow : Window
         // 块体/运输/路网
         "块体模型","资源量","道路横断面","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","演化对比","螺旋斜坡道","折返斜坡道",
         // 生产计划/投影
-        "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","平盘宽度识别","平盘标高清单","现状参数提取","标注台阶标高","确定可采区域","点落到面上","线落到面上",
+        "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
         "设备台账","生产数据","产能分析","故障分析","KPI分析","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","层位求交","导入生产记录","导入月度产能","导入故障记录","导入月度KPI","导入设备台账","导入煤质","导入观测点","导入月度计划","导入见煤成果","导入路况","导入边坡","导入模板","导出分析",
         "现场验收","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","机群驾驶舱","设备综合评分","数据看板","煤种分类","煤质数据健康度","分煤层煤质",
