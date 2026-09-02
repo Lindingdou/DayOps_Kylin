@@ -1005,7 +1005,8 @@ public partial class MainWindow : Window
             if (cmd == "路段分类" || cmd == "路网拓扑分类" || cmd == "路段拓扑" || cmd == "干线支线") { RoadTopologyCmd(); return; }
             if (cmd == "排土场容量校核" || cmd == "容量校核" || cmd == "排土容量") { await DumpCapacityAsync(); return; }
             if (cmd == "生产量核算" || cmd == "任务量汇总" || cmd == "分账合计" || cmd == "生产任务量") { await ProductionQuantityAsync(); return; }
-            if (cmd == "生产任务编制" || cmd == "排产" || cmd == "任务裂解" || cmd == "裂解装箱" || cmd == "班次排产") { TaskExplodeCmd(); return; }
+            if (cmd == "生产任务编制" || cmd == "排产" || cmd == "任务裂解" || cmd == "裂解装箱" || cmd == "班次排产"
+                || cmd.StartsWith("生产任务编制 ") || cmd.StartsWith("排产 ")) { TaskExplodeCmd(cmd); return; }
             if (cmd == "采剥平衡" || cmd == "采剥平衡分析" || cmd == "剥采平衡" || cmd == "物料平衡") { await StripBalanceAsync(); return; }
             if (cmd == "配煤核算" || cmd == "配煤" || cmd == "煤质混合" || cmd == "配煤计算") { await CoalBlendAsync(); return; }
             if (cmd == "工序进度跟踪" || cmd == "工序进度" || cmd == "进度跟踪") { await ProcessProgressAsync(); return; }
@@ -2603,8 +2604,9 @@ public partial class MainWindow : Window
     }
 
     // 生产任务编制(裂解装箱, 忠实原 TaskExploder): 代表性算例(三班×两采装面+穿孔+配煤) → 按班次时窗×编组班产装箱
-    // → 逐班任务 + 校核(运力/双占/接续/配煤/欠产)。示范排产引擎(原 SampleTaskBoard 式代表算例; 真数据需接台账/钻孔计划)。
-    private void TaskExplodeCmd()
+    // → 逐班任务 + 校核(运力/双占/接续/配煤/欠产)。可选「生产任务编制 <月采出万t> <月剥离万m³> [作业日]」按月计划
+    // 分配日目标(忠实原 ShortTermLink); 无参用样例日目标。真数据需接台账/钻孔计划。
+    private void TaskExplodeCmd(string cmd)
     {
         var cfg = new Cad.Tasks.Scheduling.ExploderConfig
         {
@@ -2625,13 +2627,23 @@ public partial class MainWindow : Window
             Drills = { new Cad.Tasks.Scheduling.DrillInput { EquipId = "ZJ-01", Zone = "4煤南", Start = 0, End = 6 } },
             Maintenance = { new Cad.Tasks.Scheduling.MaintenanceWindow { EquipId = "PH2800", Start = 0, End = 2, Label = "定检" } },
         };
+        // 可选: 按月计划分配日目标(忠实原 ShortTermLink)。参数 <月采出万t> <月剥离万m³> [作业日]。
+        string linkNote = "";
+        var tk = cmd.Split(new[] { ' ', ',', '，', '/', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        if (tk.Length >= 3 && double.TryParse(tk[1], out double mCoal) && double.TryParse(tk[2], out double mStrip) && mCoal > 0)
+        {
+            double mWork = tk.Length >= 4 && double.TryParse(tk[3], out double w) && w > 0 ? w : 25;
+            var month = new Cad.Tasks.Scheduling.ShortTermLink.MonthInfo
+            { HasPlan = true, PlanName = "命令行", MonthLabel = "本月", CoalWanT = mCoal, StripWanM3 = mStrip, Workdays = mWork, Density = 1.4 };
+            linkNote = " · " + Cad.Tasks.Scheduling.ShortTermLink.ApplyToConfig(cfg, month);
+        }
         var r = Cad.Tasks.Scheduling.TaskExploder.Explode(cfg);
         int loads = r.Tasks.Count(t => t.Process == Cad.Tasks.ProcessType.Load);
         int idles = r.Tasks.Count(t => t.Process == Cad.Tasks.ProcessType.Idle);
         int errs = r.Violations.Count(v => v.Severity == Cad.Tasks.Scheduling.ViolationSeverity.Error);
         int warns = r.Violations.Count(v => v.Severity == Cad.Tasks.Scheduling.ViolationSeverity.Warn);
         string vio = string.Join(" · ", r.Violations.Take(4).Select(v => $"{v.Code}"));
-        StatusMsg.Text = $"生产任务编制(示例排产)：{r.Tasks.Count} 任务(采装{loads}/穿孔{r.Tasks.Count(t => t.Process == Cad.Tasks.ProcessType.Drill)}/空闲{idles}) · 校核 {errs}错/{warns}警[{vio}]（代表算例; 真数据接台账/钻孔计划）";
+        StatusMsg.Text = $"生产任务编制(示例排产)：{r.Tasks.Count} 任务(采装{loads}/穿孔{r.Tasks.Count(t => t.Process == Cad.Tasks.ProcessType.Drill)}/空闲{idles}) · 校核 {errs}错/{warns}警[{vio}]{linkNote}（代表算例; 真数据接台账/钻孔计划）";
     }
 
     private static Cad.Tasks.ProcessType? ParseProcess(string s) => s switch
