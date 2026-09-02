@@ -3466,3 +3466,25 @@ RoadNetworkConnector(§80, 焊接+桥接)**互补**: 此产 §290 属性 RoadGra
 **判定**: 拉沟推进推荐(六约束打分 + 富化剥采比场)**完成并验证**(6 已知值全中)。**再证 transport pocket 的 present-but-shallow
 签名会跨模块复现**: PanelSplit(几何切分)vs PanelDelineator(方案推荐)= RoadNetwork(几何最短路)vs DijkstraPathSolver(约束寻径)同型。
 PlanLib 求解链首环(拉沟推荐§293)接既有 采区划分§880/推进几何 AdvancePlanner。1489→**1495** 测试, 0 失败, 0 错误。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二九四 记录：方案比较法对比矩阵(ComparisonBuilder)——依赖境界优化多方案链(不可实现-跳过)
+
+作者标注切片全扫(20 个 `纯几何/可单测/纯函数` 标注文件)后, 唯一未覆盖项 `PlanLib.BoundaryOptimization.ComparisonBuilder`
+(采矿手册「方案比较法」: 19 指标×N 方案矩阵 + 方向感知归一 + 逐指标最优标注 + 加权综合评分/排名/推荐)。**记录不实现**:
+
+**依赖链缺**: ComparisonBuilder.Build 吃 `IReadOnlyList<PitScheme>`(各带 19 字段 PitResult: 煤/岩/**资源回收率/平均灰分**/
+剥采比/**生产剥采比峰值/经济合理剥采比**/深/**底宽/占地/台阶数**/净值/NPV/**单位成本**/年限/年产/最小安全系数/校核)。
+Kylin 确定境界=`SectionSolver.SolveDepth`→**单方案** DepthSolveResult(仅 ~6 字段: 深/煤/岩/剥采比/净值/NPV)。缺:
+①**多方案境界生成**(Kylin 产一个方案, 无变体生成) ②**19 维评价**中 灰分(需块体灰分数据, Kylin 块仅品位)/生产剥采比峰值(需时序)/
+底宽/占地/台阶数(需境界三维几何)/单位成本 等 Kylin 单方案 SolveDepth 不产的数据/几何。
+
+**为何记录非港**: 算法本身纯可验, 但**无自然输入源**——19 指标是**境界优化工作流的产物**(跑 N 次境界+全维评价), 非用户手上
+自然数据(区别 §290 约束寻径的路网图=用户自然有→CSV 喂合理)。CSV 喂纯手编 19×N 方案=脱离 Kylin 境界的孤立算法, 且打分核已由
+ProgramComparer(采区方案§)/LongTermComparer(时序方案§)覆盖。**判定: 打分/排名/推荐核已覆盖; 19 指标境界多方案对比矩阵
+需境界优化多方案生成+全维评价链(部分数据 blocked: 块体灰分/三维境界几何), 属大工作流非清洁算法港 → 记录待境界优化链就绪。**
+
+**作者标注切片扫描收官**: 20 标注文件除本项全覆盖(DepositAutoDetector§72/73·TransportIndicators§291·HaulMetrics·StructurePavement§70·
+TemplateDrivingEngine=DriveSequence·RoadGraphBuilder§292·BenchElevationAnnotator·CenterlineLineForm§线形·ProfileSmoother§竖曲线·
+RoadCrossSection·StraightRampAutoRouter§287·AdvancePlanner·SectionSolver·PitEvaluator§47·RoadClipRegion=LineClip.ByPolygon)。见 [[unlock-blocked-insights]]。
