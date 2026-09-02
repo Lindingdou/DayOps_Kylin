@@ -891,6 +891,7 @@ public partial class MainWindow : Window
             if (cmd == "月度计划" || cmd == "月计划" || cmd == "月度计划查看") { MonthlyPlansCmd(); return; }   // 只读展示(编制/授权工作流走 TaskLib, 受阻)
             if (cmd == "路况显示" || cmd == "运输道路" || cmd == "道路台账") { HaulRoadsCmd(); return; }
             if (cmd == "排土场台账" || cmd == "排土场列表" || cmd == "排土场充填" || cmd == "排土场状态") { DumpSitesCmd(); return; }
+            if (cmd == "钻孔煤质汇总" || cmd == "孔层煤质汇总" || cmd == "每孔每层煤质" || cmd == "煤质汇总") { CoalSampleSummaryCmd(); return; }
             if (cmd == "边坡设计" || cmd == "边坡参数" || cmd == "帮坡角设计") { SlopeDesignsCmd(); return; }
             if (cmd == "展绘钻孔" || cmd == "开孔坐标管理" || cmd == "钻孔展绘" || cmd == "开孔坐标") { DrawBoreholesCmd(); return; }
             if (cmd == "展绘层位数据" || cmd == "层位展点" || cmd == "展绘层位") { HorizonPointsCmd(); return; }
@@ -10276,6 +10277,31 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"排土场台账（{sites.Count} 场·总容 {totCap:0}万m³·综合充填 {overallFill:0.#}%）：" + string.Join(" · ", parts);
     }
 
+    // 钻孔煤质汇总(忠实原 CoalQualityService.AllSummary): 读衍生表 coal_sample_summary(每孔每层化验平均)→
+    // 按煤层样数加权汇总(Ad/Vdaf/St/Qgr + 主煤类)。§92/93 式: 已种子数据未 surface → 补读命令。
+    private void CoalSampleSummaryCmd()
+    {
+        var db = EnsureGeoDb(); if (db == null) return;
+        var rows = Data.GeoDataQueries.GetCoalSampleSummaries(db.Connection);
+        if (rows.Count == 0) { StatusMsg.Text = "钻孔煤质汇总：无 coal_sample_summary 数据"; return; }
+        var parts = new List<string>();
+        foreach (var g in rows.GroupBy(r => r.SeamCode).OrderBy(g => g.Key))
+        {
+            int boreholes = g.Count(), samples = g.Sum(r => r.SampleCount);
+            double W(System.Func<Data.GeoDataQueries.CoalSampleSummaryRow, double?> f)
+            {
+                double num = 0, den = 0;
+                foreach (var r in g) if (f(r).HasValue) { num += f(r)!.Value * r.SampleCount; den += r.SampleCount; }
+                return den > 0 ? num / den : 0;
+            }
+            string dom = g.Where(r => !string.IsNullOrEmpty(r.DominantCoalType))
+                          .GroupBy(r => r.DominantCoalType!).OrderByDescending(x => x.Sum(r => r.SampleCount))
+                          .Select(x => x.Key).FirstOrDefault() ?? "—";
+            parts.Add($"{g.Key}({boreholes}孔/{samples}样·Ad{W(r => r.AvgAdRawPct):0.#}%·Vdaf{W(r => r.AvgVdafRawPct):0.#}%·St{W(r => r.AvgStdRawPct):0.##}%·Qgr{W(r => r.AvgQgrDMjKg):0.#}·{dom})");
+        }
+        StatusMsg.Text = $"钻孔煤质汇总(每孔每层平均, 按样数加权)：{rows.Count} 孔层对 · " + string.Join(" · ", parts);
+    }
+
     private void HaulRoadsCmd()
     {
         var db = EnsureGeoDb(); if (db == null) return;
@@ -10724,7 +10750,7 @@ public partial class MainWindow : Window
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","开采程序切分","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
         "设备台账","生产数据","产能分析","故障分析","爆破分析","设备累计工时","KPI分析","机型KPI","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","层位求交","导入生产记录","导入月度产能","导入故障记录","导入爆破记录","导入月度KPI","导入设备台账","导入设备型号","导入煤质","导入观测点","导入月度计划","导入见煤成果","导入路况","导入边坡","导入模板","导出分析",
-        "现场验收","参数验收判定","兼容机型","作业面台账","参数模板库","月度计划","路况显示","排土场台账","边坡设计","钻孔展绘","机群总览","机群驾驶舱","设备综合评分","数据看板","煤种分类","煤质数据健康度","分煤层煤质",
+        "现场验收","参数验收判定","兼容机型","作业面台账","参数模板库","月度计划","路况显示","排土场台账","钻孔煤质汇总","边坡设计","钻孔展绘","机群总览","机群驾驶舱","设备综合评分","数据看板","煤种分类","煤质数据健康度","分煤层煤质",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
         "产能分类对比","故障类型分布","设备因素分析","效能提升模拟","分工序验收合格率","数据导出","数据字典","达成度评价","产量预测","时序预测","编组优化","智能编组优化","导出编组","导出预测",
         "商品煤符合性","煤质达标","导出符合性","品位储量曲线","导出品位储量","分标高煤质","导出分标高","煤质离群","导出离群","洗选提质","导出洗选","用途适宜性","导出用途","灰分发热量回归","煤质综合结论","煤类反推","煤类一致率","煤质审核","测井一致","工分自洽","分煤层煤质","煤质三维插值","品位块模型","交叉验证","变差函数分析",

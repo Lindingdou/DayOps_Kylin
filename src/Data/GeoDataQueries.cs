@@ -735,6 +735,26 @@ public static class GeoDataQueries
         return rows;
     }
 
+    public sealed record CoalSampleSummaryRow(long BoreholeId, string SeamCode, int SampleCount,
+        double? AvgThicknessM, double? AvgAdRawPct, double? AvgVdafRawPct, double? AvgStdRawPct,
+        double? AvgQgrDMjKg, string? DominantCoalType);
+
+    /// <summary>每孔每层化验平均汇总(衍生表 coal_sample_summary)——供钻孔煤质汇总(忠实原 CoalQualityService.AllSummary)。</summary>
+    public static List<CoalSampleSummaryRow> GetCoalSampleSummaries(SqliteConnection conn)
+    {
+        var rows = new List<CoalSampleSummaryRow>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT borehole_id, seam_code, sample_count, avg_thickness, avg_ad_raw, " +
+                          "avg_vdaf_raw, avg_std_raw, avg_qgr_d, dominant_coal_type FROM coal_sample_summary " +
+                          "ORDER BY seam_code, borehole_id";
+        using var rd = cmd.ExecuteReader();
+        double? D(int i) => rd.IsDBNull(i) ? (double?)null : rd.GetDouble(i);
+        while (rd.Read())
+            rows.Add(new CoalSampleSummaryRow(rd.GetInt64(0), rd.GetString(1), rd.GetInt32(2),
+                D(3), D(4), D(5), D(6), D(7), rd.IsDBNull(8) ? null : rd.GetString(8)));
+        return rows;
+    }
+
     public sealed record FleetOverview(int Total, IReadOnlyList<CategoryCount> ByStatus, IReadOnlyList<CategoryCount> ByModel);
 
     /// <summary>机群总览：设备总数 + 按状态 + 按型号(Top)。</summary>
