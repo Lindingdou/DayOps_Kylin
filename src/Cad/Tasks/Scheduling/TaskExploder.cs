@@ -105,6 +105,12 @@ public sealed class ShiftTask
     public double PlannedHours { get; set; }
     public TaskStatus Status { get; set; } = TaskStatus.Planned;
     public List<SchedReason> Reasons { get; set; } = new();
+    // 实绩回灌(达成度评价/滚动重排用)
+    public double ActualVolumeM3 { get; set; }
+    public double ActualHours { get; set; }
+    public int TrucksOnSite { get; set; }
+    public CoalQuality? QualityActual { get; set; }
+    public double AttainmentPct => TargetVolumeM3 > 1e-6 ? Math.Round(ActualVolumeM3 / TargetVolumeM3 * 100, 0) : 0;
 }
 
 public sealed class PlanViolation
