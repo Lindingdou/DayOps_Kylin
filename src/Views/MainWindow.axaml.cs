@@ -6292,6 +6292,13 @@ public partial class MainWindow : Window
         if (walls.Count == 0) walls.Add(new Cad.WallAngle("均一", uniformBeta));
         var betas = Cad.PitEnvelope.EdgeBetas(top, walls);
         var blocks = _lastBlocks.Select(b => (b.X, b.Y, b.Z, b.Size, b.Grade)).ToList();
+        // 逐块灰分(若持多属性且有 灰分/ash 属性): 供圈入煤体积加权平均灰分(忠实原 PitEvaluator AvgAshPct)。
+        System.Collections.Generic.List<double>? ashPerBlock = null;
+        if (_blockAttrs != null)
+        {
+            var ashKey = _blockAttrs.Keys.FirstOrDefault(kk => kk.Contains("灰") || kk.ToLowerInvariant().Contains("ash"));
+            if (ashKey != null && _blockAttrs[ashKey].Length == blocks.Count) ashPerBlock = _blockAttrs[ashKey].ToList();
+        }
         var prof = Cad.SectionSampler.SampleClipped(blocks, cutoff, density, k =>
         {
             double zk = minZ + k * cell;
@@ -6302,9 +6309,10 @@ public partial class MainWindow : Window
             var poly = new System.Collections.Generic.List<(double x, double y)>();
             for (int i = 0; i < bx.Length; i++) poly.Add((bx[i], by[i]));
             return poly;
-        });
+        }, ashPerBlock);
         if (prof == null) { StatusMsg.Text = "境界内资源：无块体"; return; }
-        StatusMsg.Text = $"境界内资源(逐层境界裁)：圈入煤 {prof.CoalT / 1e4:0.##}万t · 岩 {prof.WasteM3 / 1e4:0.##}万m³ · 圈内剥采比 {prof.StripRatioM3PerT:0.##} · 回收率 {prof.RecoveryPct:0.#}%（圈入÷全模型煤）· 坑深{depth:0.#}m·{walls.Count}帮β均{Cad.PitEnvelope.AvgBeta(walls):0.#}°";
+        string ashNote = prof.HasAsh ? $" · 圈入煤均灰 {prof.AvgAshPct:0.##}%" : "";
+        StatusMsg.Text = $"境界内资源(逐层境界裁)：圈入煤 {prof.CoalT / 1e4:0.##}万t · 岩 {prof.WasteM3 / 1e4:0.##}万m³ · 圈内剥采比 {prof.StripRatioM3PerT:0.##} · 回收率 {prof.RecoveryPct:0.#}%（圈入÷全模型煤）{ashNote} · 坑深{depth:0.#}m·{walls.Count}帮β均{Cad.PitEnvelope.AvgBeta(walls):0.#}°";
     }
 
     // 开采程序切分: 块体(_lastBlocks) + 选中工作线(定推进方位) + 推进步距 → 逐期煤/岩量 + 累计剥采比 + 导 CSV(喂剥采比均衡)。

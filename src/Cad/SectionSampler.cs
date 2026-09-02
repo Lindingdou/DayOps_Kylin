@@ -22,11 +22,14 @@ public static class SectionSampler
         public double[] CoalVol = Array.Empty<double>();
         public double[] WasteVol = Array.Empty<double>();
         public double TotalCoalVol;   // 全模型煤体积(不受裁, m³)
+        public double EnclosedAshVolSum;   // 圈入煤的 (灰分×体积) 累加, 供体积加权平均灰分
+        public bool HasAsh;                // 是否给了逐块灰分
         public double EnclosedCoalVol => CoalVol.Sum();
         public double CoalT => EnclosedCoalVol * Density;      // 圈入煤量 t
         public double WasteM3 => WasteVol.Sum();               // 圈入岩量 m³
         public double StripRatioM3PerT => CoalT > 1e-9 ? WasteM3 / CoalT : 0;   // 圈内剥采比 m³/t
         public double RecoveryPct => TotalCoalVol > 1e-9 ? EnclosedCoalVol / TotalCoalVol * 100 : 0;  // 回收率 %
+        public double AvgAshPct => HasAsh && EnclosedCoalVol > 1e-9 ? EnclosedAshVolSum / EnclosedCoalVol : 0;  // 圈入煤体积加权平均灰分 %
     }
 
     /// <summary>
@@ -37,7 +40,8 @@ public static class SectionSampler
     public static ClippedProfile? SampleClipped(
         IReadOnlyList<(double X, double Y, double Z, double Size, double Grade)> blocks,
         double cutoff, double density,
-        Func<int, IReadOnlyList<(double x, double y)>?> layerClip)
+        Func<int, IReadOnlyList<(double x, double y)>?> layerClip,
+        IReadOnlyList<double>? ashPerBlock = null)
     {
         if (blocks == null || blocks.Count == 0) return null;
         double cell = blocks[0].Size > 1e-9 ? blocks[0].Size : 1.0;
@@ -45,10 +49,12 @@ public static class SectionSampler
         foreach (var b in blocks) { if (b.Z < minZ) minZ = b.Z; if (b.Z > maxZ) maxZ = b.Z; }
         int nz = (int)Math.Round((maxZ - minZ) / cell) + 1;
         if (nz <= 0) return null;
-        var p = new ClippedProfile { Nz = nz, Dz = cell, Density = density, CoalVol = new double[nz], WasteVol = new double[nz] };
+        bool hasAsh = ashPerBlock != null && ashPerBlock.Count == blocks.Count;
+        var p = new ClippedProfile { Nz = nz, Dz = cell, Density = density, CoalVol = new double[nz], WasteVol = new double[nz], HasAsh = hasAsh };
         double cellVol = cell * cell * cell;
-        foreach (var b in blocks)
+        for (int i = 0; i < blocks.Count; i++)
         {
+            var b = blocks[i];
             int k = Math.Clamp((int)Math.Round((b.Z - minZ) / cell), 0, nz - 1);
             bool isCoal = b.Grade >= cutoff;
             if (isCoal) p.TotalCoalVol += cellVol;              // 全模型煤(不受裁)
@@ -58,7 +64,8 @@ public static class SectionSampler
                 if (clip.Count < 3) continue;                   // 空多边形 → 该层全出圈
                 if (!LineMath.PointInPolygon(b.X, b.Y, clip)) continue;  // 出圈 → 不计圈入
             }
-            if (isCoal) p.CoalVol[k] += cellVol; else p.WasteVol[k] += cellVol;
+            if (isCoal) { p.CoalVol[k] += cellVol; if (hasAsh) p.EnclosedAshVolSum += ashPerBlock![i] * cellVol; }
+            else p.WasteVol[k] += cellVol;
         }
         return p;
     }

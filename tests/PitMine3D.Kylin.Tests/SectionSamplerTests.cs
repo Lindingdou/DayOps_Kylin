@@ -60,6 +60,25 @@ public class SectionSamplerTests
     }
 
     [Fact]
+    public void AvgAsh_volume_weighted_over_enclosed_coal()
+    {
+        var ash = new List<double> { 20, 30, 5, 5 };   // 对齐 Grid: 煤块灰 20/30, 岩块 5/5(不计)
+        var full = SectionSampler.SampleClipped(Grid(), 0.5, 1.35, _ => Rect(-100, 100), ash)!;
+        Assert.True(full.HasAsh);
+        Assert.Equal(25.0, full.AvgAshPct, 6);          // (20+30)/2 体积等权
+        var half = SectionSampler.SampleClipped(Grid(), 0.5, 1.35, _ => Rect(0, 10), ash)!;
+        Assert.Equal(20.0, half.AvgAshPct, 6);          // 只 x=5 煤块(灰20)圈入
+    }
+
+    [Fact]
+    public void No_ash_when_not_provided_or_misaligned()
+    {
+        Assert.False(SectionSampler.SampleClipped(Grid(), 0.5, 1.35, _ => null)!.HasAsh);
+        Assert.False(SectionSampler.SampleClipped(Grid(), 0.5, 1.35, _ => null, new List<double> { 1, 2 })!.HasAsh);  // 长度不匹配
+        Assert.Equal(0, SectionSampler.SampleClipped(Grid(), 0.5, 1.35, _ => null)!.AvgAshPct, 6);
+    }
+
+    [Fact]
     public void Null_result_on_empty_blocks()
         => Assert.Null(SectionSampler.SampleClipped(new List<(double, double, double, double, double)>(), 0.5, 1.35, _ => null));
 }
