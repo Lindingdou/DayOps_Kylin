@@ -64,6 +64,22 @@ public class ParameterAcceptanceStatusTests
     }
 
     [Fact]
+    public void GetBenchDesignBaseline_reads_seeded_project_params()
+    {
+        using var db = GeoDatabase.OpenSeeded();
+        var bd = GeoDataQueries.GetBenchDesignBaseline(db.Connection);
+        // V007/V026 种子: bench_height/bench_slope_angle/safety_platform_width 的 standard_default 齐备 → FromDb。
+        Assert.True(bd.FromDb, "采场台阶设计基准(H/α/W)应齐备(V007+V026 种子)");
+        Assert.NotNull(bd.BenchHeightM);
+        Assert.NotNull(bd.SlopeAngleDeg);
+        Assert.NotNull(bd.SafetyPlatformWidthM);
+        // 合理量级(台阶高 5~20m·坡面角 40~80°·安全平台宽 3~30m)—— 真实设计参数非硬编码占位。
+        Assert.InRange(bd.BenchHeightM!.Value, 5, 20);
+        Assert.InRange(bd.SlopeAngleDeg!.Value, 40, 80);
+        Assert.InRange(bd.SafetyPlatformWidthM!.Value, 3, 30);
+    }
+
+    [Fact]
     public void GetParameterNorm_unknown_code_returns_null()
     {
         using var db = GeoDatabase.OpenSeeded();

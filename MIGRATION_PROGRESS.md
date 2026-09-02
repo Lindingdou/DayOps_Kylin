@@ -3528,3 +3528,25 @@ V007/V034 seed)。故原 ComputeStatus 的 **DB-norm 验收判定**(报警阈→
 **判定**: 兼容机型判定**完成并验证**(3 测全中)。**GeoDataBase 服务层非-CRUD 方法复核连出 §295(ComputeStatus)+ §296
 (CompatibleModels)两 gap, 均"数据实已种子但算法未接"**——同 §295 教训: 参数验收/设备约束的 DB 标定数据(parameter_definition/
 equipment_constraint)V006-V012 早已种子, 相关判定算法(状态判定/机型兼容)可接。1503→**1506** 测试, 0 失败, 0 错误。见 [[unlock-blocked-insights]] [[verify-seed-enum-values-before-filter]]。
+
+---
+
+## §二九七 参数校核用 DB 真实设计基准(GetBenchDesignBaseline)——第三次更正"无模板库"过时记录
+
+续 §295/§296 复核, BenchParameterVerifier 自注"Kylin 无 GeoDataBase 模板库…本类正兜底路径, 设计基准取硬编码规范默认"。
+第三次证此记录**过时**: parameter_definition 的台阶设计参数 **standard_default 实已种子**——bench_height/bench_slope_angle/
+safety_platform_width/mining_width 由 V007 建 + **V026《东露天矿初步设计说明书》真值覆盖** + V034 分煤岩台阶。原
+BenchTemplateResolver.Resolve 走 PickTemplate→BenchTemplateReader.Read(按 code 取 parameter_definition 值), Kylin 却硬编码
+规范默认(12/70/4)。
+
+**已做**:
+- `GeoDataQueries.GetBenchDesignBaseline`(读 parameter_definition 4 台阶设计 code 的 standard_default → H/α/W/采宽,
+  复用 §295 GetParameterNorm)。忠实原 BenchTemplateReader 按 code 取值。
+- **接入参数校核**: 采场(非排土场)且 DB 设计基准齐备 → 作 designOverride 传 BenchParameterVerifier.Verify(替兜底规范默认);
+  DB 无/排土场 → 兜底规范默认(排土场自有 10/35/3 norms)。忠实原 Resolve 的 PickTemplate→DB 路径 vs Norm 兜底二分。
+  BenchParameterVerifier.Verify 签名/单测不动(designOverride 是既有选填参数, 非破坏)。
+- **1 集成单测**: GetBenchDesignBaseline 对种子库取回 H/α/W 齐备(FromDb)+ 合理量级(台阶高5~20/坡面角40~80/平台宽3~30, 真实设计非占位)。
+
+**判定**: 参数校核用 DB 真实设计基准**完成并验证**(采场校核基准由硬编码规范默认→V026 初设说明书真值)。**"无模板库/数据不可得"
+过时记录第三次被证反(§295 norms/§296 constraints/§297 bench design params 全实已种子 V006-V034)——教训定型: 凡代码自注
+"Kylin 无 X 库/数据不可移", 必 grep migration 实证该表/列种子状态, 数据后来种子的记录已过时。** 1506→**1507** 测试, 0 失败, 0 错误。见 [[unlock-blocked-insights]] [[verify-seed-enum-values-before-filter]]。

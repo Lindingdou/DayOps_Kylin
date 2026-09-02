@@ -1923,12 +1923,30 @@ public partial class MainWindow : Window
             else if (double.TryParse(t, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double v) && v > 0 && v < 60) phi = v;
         }
 
-        var rep = BenchParameterVerifier.Verify(ext, isDump, hardness, phi);
+        // 采场基准优先取 DB 真实设计参数(parameter_definition 标准默认, 忠实原 PickTemplate→BenchTemplateReader 路径);
+        // DB 无/排土场 → 兜底规范默认。V026 初设说明书真值替硬编码规范默认。
+        (double H, double A, double W)? designOverride = null;
+        string dbBaseNote = "";
+        if (!isDump)
+        {
+            var gdb = EnsureGeoDb();
+            if (gdb != null)
+            {
+                var bd = Data.GeoDataQueries.GetBenchDesignBaseline(gdb.Connection);
+                if (bd.FromDb)
+                {
+                    designOverride = (bd.BenchHeightM!.Value, bd.SlopeAngleDeg!.Value, bd.SafetyPlatformWidthM!.Value);
+                    dbBaseNote = $" · DB设计基准 H={bd.BenchHeightM:0.#}/α={bd.SlopeAngleDeg:0.#}/W={bd.SafetyPlatformWidthM:0.#}";
+                }
+            }
+        }
+        var rep = BenchParameterVerifier.Verify(ext, isDump, hardness, phi, designOverride);
         string combined = BenchParameterExtractor.BuildReport(ext, System.IO.Path.GetFileName(files[0].Path.LocalPath))
                         + "\n" + BenchParameterVerifier.BuildReport(rep);
         var saved = await SaveCsvAsync("现状台阶参数校核", "现状台阶参数校核.csv", combined);
         string statusCn = rep.OverallStatus switch { "pass" => "合格", "warning" => "偏差", "fail" => "超标", _ => "待定" };
         StatusMsg.Text = $"参数校核({(isDump ? "排土场" : "采场")}·{rep.DesignProvenance})：总体 {statusCn}；{ext.Message}"
+                       + dbBaseNote
                        + (saved != null ? $" · 报表已存 {saved}" : "");
     }
 

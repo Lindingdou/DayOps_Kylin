@@ -12,6 +12,22 @@ public static class GeoDataQueries
     public sealed record ParameterNorm(string Code, string Name, string? Unit,
         double? StandardMin, double? StandardMax, double? StandardDefault, double? AlarmLow, double? AlarmHigh);
 
+    /// <summary>台阶设计基准(DB parameter_definition 标准默认值 H/α/W/采宽)。FromDb=H/α/W 三者齐备(可作设计基准)。</summary>
+    public sealed record BenchDesignBaseline(double? BenchHeightM, double? SlopeAngleDeg,
+        double? SafetyPlatformWidthM, double? MiningWidthM, bool FromDb);
+
+    /// <summary>
+    /// 从 DB 取台阶设计基准(忠实原 BenchTemplateReader 按 code 取值: bench_height/bench_slope_angle/
+    /// safety_platform_width/mining_width 的 standard_default)。供 参数校核 用真实设计参数(V026 初设说明书)替兜底规范默认。
+    /// </summary>
+    public static BenchDesignBaseline GetBenchDesignBaseline(SqliteConnection conn)
+    {
+        double? V(string code) => GetParameterNorm(conn, code)?.StandardDefault;
+        var h = V("bench_height"); var a = V("bench_slope_angle");
+        var w = V("safety_platform_width"); var mw = V("mining_width");
+        return new BenchDesignBaseline(h, a, w, mw, h.HasValue && a.HasValue && w.HasValue);
+    }
+
     /// <summary>按 code 取参数定义的标准/报警范围(供 DB-norm 参数验收判定)。无则 null。</summary>
     public static ParameterNorm? GetParameterNorm(SqliteConnection conn, string code)
     {
