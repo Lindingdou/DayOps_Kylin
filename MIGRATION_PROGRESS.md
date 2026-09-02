@@ -3354,3 +3354,16 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 - **接命令**: `运输布局方案` 增自动选线支路——选中 ≥2 同心台阶环则 `RampRouteGenerator` 自动出候选(标高按同心序 + 平盘宽按相邻环等效半径差估), 免 CSV; 未选则仍走 CSV。报斜/转/螺候选数。
 
 **判定**: 坑线选线器(Layer-1 算法核 + 命令自动候选)**完成并验证**(8 已知值全中, 含端到端两层贯通)。运量网络流两层(选线 Layer-1 §288 + 方案 Layer-2 §244)至此贯通。1430→**1438** 测试, 0 失败, 0 错误。**再证 §287 教训: 同目录(RoadLayout)"复杂/native 上下文"记录连破两个纯托管算法; 且深港一个算法常带出前次端口的忠实缺(RampForm 三值/IsWorkingWall)**。见 [[unlock-blocked-insights]] [[faithfulness-only-original-commands]]。
+
+---
+
+## §二八九 RoadLayout 目录清扫收官(8/8 归账)
+
+§287/§288 从 RoadLayout 目录连挖两纯托管算法后, 逐文件清扫全目录(8 文件)确认无遗漏:
+- `StraightRampAutoRouter`(550)✓ §287(连续中线连通自检) · `RampRouteGenerator`(190)✓ §288(选线器 Layer-1) ·
+  `RoadLayoutSolver`(211)✓ §244(方案构建 Layer-2 三方案) · `CenterlineLineForm`(273)✓(线形①②③) ·
+  `RoadCrossSection`(97)✓(横断面加宽/超高) · `ProfileSmoother`(83)✓ =RoadVerticalCurve(竖曲线) ·
+  `IRoadLayoutSolver`(133)=DTO 接口(RoadLayoutInput/Result, Kylin RoadLayoutSolver 用等价 RampCand/LayoutScheme 适配)。
+- **`RoadLayoutPlanner`(157)=subsumed/superseded, 非缺口**: 原注自承"首版单线方案入口, 网络流多线求解器未实现"→后由 RoadLayoutSolver(三方案)取代。其 `BuildScheme` 单线方案(lanes=⌈需求/单车道运力⌉ + 运力校核 + MaxLanesPerRoad=4)**结构等同** Kylin §244 的「方案3·单线(基线)」; 候选来自 §288 生成器; 命令「运量驱动布线」已接 RoadLayoutCmd。其独有 FormatReport(逐段"台阶→台阶 形式 纵坡 起坡")为呈现层(§288 命令已报斜/转/螺计数)。前端「需求由 Sources/OD 汇总」= 装卸点设置(交互录入), Kylin 以 demand 参数替代(记录交互边界)。
+
+**判定**: RoadLayout 目录 8 文件全归账(6 移 + 1 DTO 适配 + 1 subsumed)。运量网络流两层(选线§288 + 方案§244)贯通; 单线首版(Planner)被三方案 solver 包含。**目录级清扫再证 §287 教训: 一个目录出真切片(§287/288), 同目录邻近文件值得逐个开来读——但读毕即可确证收敛(非无限继续)**。1438 测试保持, 0 失败。见 [[unlock-blocked-insights]]。
