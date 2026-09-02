@@ -121,4 +121,19 @@ public class GeoQueryAggregationTests
         Assert.Equal(3.2, r.DrillThicknessM!.Value, 6);   // 钻厚(未与测厚错位——测井一致检查所系)
         Assert.Equal(3.5, r.LogThicknessM!.Value, 6);     // 测厚
     }
+
+    [Fact]
+    public void Queries_run_against_real_migrated_schema()
+    {
+        // 上面各测用手写内存 schema, 验的是查询逻辑; 此测对真实迁移 schema 跑同批查询,
+        // 验列名/表名与迁移一致(迁移与查询列名不符会在此抛 "no such column/table")。
+        using var db = GeoDatabase.OpenSeeded();
+        var c = db.Connection;
+        Assert.Null(Record.Exception(() => GeoDataQueries.GetFaultShare(c)));
+        Assert.Null(Record.Exception(() => GeoDataQueries.GetMonthlyOutputSeries(c)));
+        Assert.Null(Record.Exception(() => GeoDataQueries.GetEquipmentFactorRows(c)));
+        Assert.Null(Record.Exception(() => GeoDataQueries.GetCoalClassificationRanges(c)));
+        Assert.Null(Record.Exception(() => GeoDataQueries.GetProximateRows(c)));
+        Assert.Null(Record.Exception(() => GeoDataQueries.GetDrillLogRows(c)));
+    }
 }
