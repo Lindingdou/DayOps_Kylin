@@ -922,6 +922,7 @@ public partial class MainWindow : Window
             if (cmd == "境界圈定" || cmd == "凸包" || cmd == "采场圈定" || cmd == "采场/排土场圈定") { await BoundaryHullAsync(); return; }
             if (cmd == "确定境界" || cmd == "境界优化" || cmd == "最优坑深" || cmd == "经济境界") { PitDepthCmd(); return; }
             if (cmd.StartsWith("经济剥采比") || cmd.StartsWith("经济合理剥采比") || cmd.StartsWith("允许剥采比")) { EconStrippingRatioCmd(cmd); return; }
+            if (cmd.StartsWith("产能推算") || cmd.StartsWith("推进产能") || cmd.StartsWith("产能推进")) { AdvanceCapacityCmd(cmd); return; }
             if (cmd == "开采程序切分" || cmd == "逐期量核算" || cmd == "分期量表" || cmd == "分期剥采比" || cmd.StartsWith("开采程序切分 ")) { await DriveSequenceCmd(cmd); return; }
             if (cmd == "采区划分" || cmd == "采区" || cmd == "储量均衡划分") { PanelSplitCmd(); return; }
             if (cmd == "拉沟推荐" || cmd == "首采区推荐" || cmd == "拉沟位置推荐" || cmd == "拉沟推进推荐") { BoxcutRecommendCmd(); return; }
@@ -6168,6 +6169,19 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"经济合理剥采比 n经(m³/t, 售价{d:0.#}·采{a:0.#}·剥{b:0.#})：{string.Join(" · ", parts)}";
     }
 
+    // 产能/推进耦合正算(忠实原 MiningProgramPlan.CapacityWanTaFrom, 原 MiningProgramConfigWindow 用): Q=L·v·H·ρ/1e4。
+    // 用法: 产能推算 <工作线长L m> <推进度v m/a> <台阶高H m> [煤密度ρ 默认1.35]
+    private void AdvanceCapacityCmd(string cmd)
+    {
+        var tk = cmd.Split(new[] { ' ', ',', '，', '/', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        if (tk.Length < 4 || !double.TryParse(tk[1], out double L) || !double.TryParse(tk[2], out double v) || !double.TryParse(tk[3], out double H) || L <= 0 || H <= 0)
+        { StatusMsg.Text = "产能推算：用法 产能推算 <工作线长L m> <推进度v m/a> <台阶高H m> [煤密度ρ 默认1.35]（如 产能推算 1000 50 15）"; return; }
+        double rho = tk.Length >= 5 && double.TryParse(tk[4], out double rv) && rv > 0 ? rv : Cad.LongTermPlan.DefaultCoalDensity;
+        double q = Cad.LongTermScheduler.CapacityWanTaFrom(L, v, H, rho);
+        double vBack = Cad.LongTermScheduler.AdvanceRateFrom(q, L, H, rho);   // 逆算校验(应还原 v)
+        StatusMsg.Text = $"产能推算(Q=L·v·H·ρ/1e4)：工作线{L:0.#}m·推进{v:0.#}m/a·台阶{H:0.#}m·ρ{rho:0.##} → 产能 {q:0.##} 万t/a（逆算推进度 {vBack:0.#} m/a 自洽）";
+    }
+
     // 开采程序切分: 块体(_lastBlocks) + 选中工作线(定推进方位) + 推进步距 → 逐期煤/岩量 + 累计剥采比 + 导 CSV(喂剥采比均衡)。
     // 忠实原 TemplateDrivingEngine 距离驱动核(平面近似, 陡帮台阶退距≈0)。用法「开采程序切分 [推进步距m 默认50]」。
     private async Task DriveSequenceCmd(string cmd)
@@ -10572,7 +10586,7 @@ public partial class MainWindow : Window
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割","移除障碍物",
         // 块体/运输/路网
-        "块体模型","导出PMB","属性赋值","字高归一化","资源量","经济剥采比","面约束块体","离散化模型","采场排土场识别","采区划分","拉沟推荐","中长远进度计划","短期生产计划","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","约束寻径","路网校验","瓶颈段分析","路网运输指标","运输指标报告","路网建图","结构路面","中线交点","路段分类","演化对比","提取道路中心线","路网连通增强","螺旋斜坡道","折返斜坡道","直线斜坡道","直线坑线","坑线自动布线",
+        "块体模型","导出PMB","属性赋值","字高归一化","资源量","经济剥采比","产能推算","面约束块体","离散化模型","采场排土场识别","采区划分","拉沟推荐","中长远进度计划","短期生产计划","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","约束寻径","路网校验","瓶颈段分析","路网运输指标","运输指标报告","路网建图","结构路面","中线交点","路段分类","演化对比","提取道路中心线","路网连通增强","螺旋斜坡道","折返斜坡道","直线斜坡道","直线坑线","坑线自动布线",
         // 生产计划/投影
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","开采程序切分","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)

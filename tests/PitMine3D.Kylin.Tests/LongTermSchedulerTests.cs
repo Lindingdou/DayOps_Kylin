@@ -16,6 +16,16 @@ public class LongTermSchedulerTests
     }
 
     [Fact]
+    public void CapacityWanTaFrom_known_value_and_inverts_advance_rate()
+    {
+        // 正式 Q=L·v·H·ρ/1e4: 1000·50·15·1.35/1e4 = 1,012,500/1e4 = 101.25 万t/a。
+        Assert.Equal(101.25, LongTermScheduler.CapacityWanTaFrom(1000, 50, 15, 1.35), 6);
+        // 正逆自洽(设计反问题): CapacityWanTaFrom 后 AdvanceRateFrom 还原推进度 v。
+        double q = LongTermScheduler.CapacityWanTaFrom(1200, 51.44, 12, 1.35);
+        Assert.Equal(51.44, LongTermScheduler.AdvanceRateFrom(q, 1200, 12, 1.35), 2);
+    }
+
+    [Fact]
     public void ServiceLifeMin_bands_gb50197()
     {
         Assert.Equal(30, LongTermScheduler.ServiceLifeMinFor(1000));

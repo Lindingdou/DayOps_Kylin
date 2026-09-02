@@ -117,7 +117,11 @@ public static class LongTermComparer
 
 public static class LongTermScheduler
 {
-    /// <summary>推进度 (m/a) = 能力(万t/a)·1e4 / (工作线长·台阶高·煤密度)。</summary>
+    /// <summary>产能/推进耦合正式: Q(万t/a) = 工作线长 L(m)·推进度 v(m/a)·台阶高 H(m)·煤密度 ρ(t/m³) / 1e4(忠实原 MiningProgramPlan.CapacityWanTaFrom)。</summary>
+    public static double CapacityWanTaFrom(double lengthM, double rateMpa, double benchM, double rho = LongTermPlan.DefaultCoalDensity)
+        => lengthM * rateMpa * benchM * rho / 1e4;
+
+    /// <summary>推进度 (m/a) = 能力(万t/a)·1e4 / (工作线长·台阶高·煤密度)。<see cref="CapacityWanTaFrom"/> 之逆(设计反问题: 定产能反算所需推进度)。</summary>
     public static double AdvanceRateFrom(double capacityWanTa, double lengthM, double benchM, double rho = LongTermPlan.DefaultCoalDensity)
         => (lengthM <= 0 || benchM <= 0) ? 0 : capacityWanTa * 1e4 / (lengthM * benchM * rho);
 
