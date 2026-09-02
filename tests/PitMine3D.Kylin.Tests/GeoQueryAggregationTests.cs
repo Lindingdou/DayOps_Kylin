@@ -106,4 +106,19 @@ public class GeoQueryAggregationTests
         var m2 = Assert.Single(r, x => x.SeamCode == "M2");
         Assert.Equal("", m2.HoleId);              // LEFT JOIN 无孔 → COALESCE ''
     }
+
+    [Fact]
+    public void GetDrillLogRows_maps_drill_and_log_thickness_not_swapped()
+    {
+        using var c = Db(@"CREATE TABLE borehole_seam_result(borehole_id INT, seam_code TEXT,
+            drill_seam_thickness REAL, log_seam_thickness REAL);
+            CREATE TABLE borehole(id INT, hole_id TEXT);");
+        Exec(c, "INSERT INTO borehole VALUES (1,'ZK01');");
+        Exec(c, "INSERT INTO borehole_seam_result VALUES (1,'M1', 3.2, 3.5);");   // 钻厚3.2/测厚3.5
+        var r = Assert.Single(GeoDataQueries.GetDrillLogRows(c));
+        Assert.Equal("ZK01", r.HoleId);
+        Assert.Equal("M1", r.SeamCode);
+        Assert.Equal(3.2, r.DrillThicknessM!.Value, 6);   // 钻厚(未与测厚错位——测井一致检查所系)
+        Assert.Equal(3.5, r.LogThicknessM!.Value, 6);     // 测厚
+    }
 }
