@@ -112,6 +112,16 @@ public sealed class RoadEdge
 /// <summary>有向可达连接:从某节点经 Edge 抵达 ToId; Reversed=逆 From→To 行驶(坡度取反)。忠实原 RoadLink。</summary>
 public readonly record struct RoadLink(RoadEdge Edge, string ToId, bool Reversed);
 
+/// <summary>路网校验报告。忠实原 RoadGraph.ValidationReport。</summary>
+public sealed class ValidationReport
+{
+    public bool IsFullyConnected { get; init; }
+    public int ComponentCount { get; init; }
+    public IReadOnlyList<string> IsolatedNodeIds { get; init; } = new List<string>();
+    public IReadOnlyList<string> Issues { get; init; } = new List<string>();
+    public bool Ok => IsFullyConnected && Issues.Count == 0;
+}
+
 /// <summary>路网图:节点 + 边 + 邻接。忠实原 RoadGraph(移植寻径所需核; 打断/序列化等非寻径部分不在此)。</summary>
 public sealed class RoadGraph
 {
@@ -202,6 +212,54 @@ public sealed class RoadGraph
     {
         _adj.Clear();
         foreach (var e in _edges.Values) Link(e);
+    }
+
+    /// <summary>校验:并查集数连通分量 + 孤立节点 + 逐边合规(纵坡/车道/里程)。忠实原 RoadGraph.Validate。</summary>
+    public ValidationReport Validate(double maxGradePct = 10.0)
+    {
+        var issues = new List<string>();
+
+        // 物理连通性(无向, 忽略单双向):并查集数连通分量。
+        var parent = new Dictionary<string, string>();
+        string Find(string x)
+        {
+            string r = x;
+            while (parent[r] != r) r = parent[r];
+            while (parent[x] != r) { var n = parent[x]; parent[x] = r; x = n; }
+            return r;
+        }
+        foreach (var id in _nodes.Keys) parent[id] = id;
+        foreach (var e in _edges.Values)
+        {
+            var ra = Find(e.FromId); var rb = Find(e.ToId);
+            if (ra != rb) parent[ra] = rb;
+        }
+        int components = _nodes.Count == 0 ? 0 : _nodes.Keys.Select(Find).Distinct().Count();
+
+        // 孤立节点:没有任何边引用。
+        var referenced = new HashSet<string>();
+        foreach (var e in _edges.Values) { referenced.Add(e.FromId); referenced.Add(e.ToId); }
+        var isolated = _nodes.Keys.Where(id => !referenced.Contains(id)).ToList();
+        foreach (var id in isolated) issues.Add($"孤立节点:{id}(无边连接)");
+
+        // 逐边合规。
+        foreach (var e in _edges.Values)
+        {
+            if (Math.Abs(e.GradePct) > maxGradePct)
+                issues.Add($"边 {e.Id} 纵坡 {e.GradePct:F1}% 超限(>{maxGradePct:F1}%)");
+            if (e.LaneCount < 1)
+                issues.Add($"边 {e.Id} 车道数 {e.LaneCount} 非法(<1)");
+            if (e.LengthM <= 0)
+                issues.Add($"边 {e.Id} 里程为 0(中线缺失且两端重合?)");
+        }
+
+        return new ValidationReport
+        {
+            IsFullyConnected = components <= 1,
+            ComponentCount = components,
+            IsolatedNodeIds = isolated,
+            Issues = issues,
+        };
     }
 }
 

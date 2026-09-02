@@ -1142,6 +1142,7 @@ public partial class MainWindow : Window
             if (cmd == "运距指标" || cmd == "循环时间" || cmd == "运距统计") { await HaulRecordMetricsAsync(); return; }
             if (cmd == "OD运距矩阵" || cmd == "OD矩阵" || cmd == "运距矩阵") { await OdMatrixAsync(); return; }
             if (cmd.StartsWith("约束寻径") || cmd.StartsWith("运输寻径") || cmd.StartsWith("限坡寻径")) { await RoadConstraintPathAsync(cmd); return; }
+            if (cmd == "运输指标报告" || cmd == "路网运输指标全" || cmd == "全运输指标") { await RoadFullIndicatorsAsync(); return; }
             if (cmd == "新建图层") { var l = _layers.New(); PopulateDrawingLayers(); StatusMsg.Text = $"新建图层「{l.Name}」并置为当前"; return; }
             if (cmd == "删除图层" || cmd == "删层" || cmd == "删除当前图层") { DeleteCurrentLayer(); return; }
             if (cmd.StartsWith("重命名图层 ") || cmd.StartsWith("图层重命名 ") || cmd.StartsWith("图层命名 ")) { RenameCurrentLayer(cmd.Substring(cmd.IndexOf(' ') + 1)); return; }
@@ -6209,6 +6210,61 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"运输布局方案({srcHint}·需求 {demand:0}t/期·单车道 {perLane:0}t·目标{obj ?? "最小成本"})：推荐「{r.Recommended?.Name ?? "无可行方案"}」 · " + string.Join(" | ", parts);
     }
 
+    // 全运输指标报告(忠实原 TransportIndicatorsBuilder): 读属性图 CSV(N,id,x,y,z[,类型 L/U/J,吞吐t/h] /
+    // E,id,from,to[,限载t,车道]) → 节点类型自动源汇 → 总里程/连通/源汇/理论运能(Σ源汇吞吐 min)/等效运距均最/瓶颈段。
+    // 区别既有「路网运输指标」(场景几何部分: 总里程+可达对+瓶颈); 此为全指标(需类型/吞吐属性, 走 CSV)。
+    private async Task RoadFullIndicatorsAsync()
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "运输指标报告：选属性图 CSV (N,id,x,y,z[,类型L/U/J,吞吐t/h] / E,id,from,to[,限载t,车道])",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("属性图 (CSV/TXT)") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (files.Count == 0) return;
+
+        var g = new Cad.RoadGraph();
+        foreach (var ln in System.IO.File.ReadAllLines(files[0].Path.LocalPath))
+        {
+            var p = ln.Split(new[] { ',', '\t' }, System.StringSplitOptions.None);
+            if (p.Length < 1) continue;
+            string kind = p[0].Trim().ToUpperInvariant();
+            if (kind == "N" && p.Length >= 5
+                && double.TryParse(p[2].Trim(), System.Globalization.NumberStyles.Float, inv, out double x)
+                && double.TryParse(p[3].Trim(), System.Globalization.NumberStyles.Float, inv, out double y)
+                && double.TryParse(p[4].Trim(), System.Globalization.NumberStyles.Float, inv, out double z))
+            {
+                var t = p.Length >= 6 ? p[5].Trim().ToUpperInvariant() : "J";
+                var type = t == "L" ? Cad.RoadNodeType.Loading : t == "U" ? Cad.RoadNodeType.Unloading : Cad.RoadNodeType.Junction;
+                var node = new Cad.RoadNode(p[1].Trim(), type, new Cad.Point3d(x, y, z));
+                if (p.Length >= 7 && double.TryParse(p[6].Trim(), System.Globalization.NumberStyles.Float, inv, out double tp)) node.ThroughputTph = tp;
+                g.AddNode(node);
+            }
+            else if (kind == "E" && p.Length >= 4)
+            {
+                try
+                {
+                    var e = new Cad.RoadEdge(p[1].Trim(), p[2].Trim(), p[3].Trim());
+                    if (p.Length >= 5 && double.TryParse(p[4].Trim(), System.Globalization.NumberStyles.Float, inv, out double ml)) e.MaxLoadT = ml;
+                    if (p.Length >= 6 && int.TryParse(p[5].Trim(), out int lc) && lc >= 1) e.LaneCount = lc;
+                    g.AddEdge(e);
+                }
+                catch (System.Exception) { }
+            }
+        }
+        if (g.NodeCount < 2 || g.EdgeCount < 1) { StatusMsg.Text = "运输指标报告：图 CSV 无有效节点/边"; return; }
+
+        var ind = Cad.TransportIndicatorsBuilder.Compute(g, new System.Collections.Generic.List<Cad.RoadGraph>(), Cad.TruckProfile.Default);
+        var top = ind.Bottlenecks.Count > 0 ? ind.Bottlenecks[0] : null;
+        StatusMsg.Text = $"运输指标报告：{ind.NodeCount}节点/{ind.EdgeCount}边 · 总里程 {ind.TotalKm:0.##}km · "
+            + (ind.IsFullyConnected ? "连通" : $"{ind.ComponentCount} 分量")
+            + $" · 源{ind.Sources.Count}汇{ind.Sinks.Count}{(ind.UsedAllNodesFallback ? "(降级全节点)" : "")}"
+            + $" · 理论运能 {ind.TheoreticalCapacityTph:0}t/h(源{ind.SourceThroughputSumTph:0}/汇{ind.SinkCapacitySumTph:0})"
+            + $" · 等效运距 均{ind.AvgEquivM:0.#}/最大{ind.MaxEquivM:0.#}m"
+            + (top != null ? $" · 瓶颈[{top.EdgeId}]({top.Reason},介数{top.Betweenness})" : "");
+    }
+
     // 约束感知运输寻径(忠实原 DijkstraPathSolver): 读属性图 CSV(N,id,x,y,z / E,id,from,to[,限载t]) → 建带
     // 纵坡(由节点标高自动算)/限载/状态的运输图 → 限坡+限载硬约束 Dijkstra → 报路径+里程/等效运距/时间/成本, 画路径。
     // 2D 场景无 per-node 标高/边限载, 故走 CSV 喂属性(忠实既有"CSV 补 2D 缺属性"式)。
@@ -10341,7 +10397,7 @@ public partial class MainWindow : Window
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割","移除障碍物",
         // 块体/运输/路网
-        "块体模型","导出PMB","属性赋值","字高归一化","资源量","面约束块体","离散化模型","采场排土场识别","中长远进度计划","短期生产计划","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","约束寻径","路网校验","瓶颈段分析","路网运输指标","结构路面","中线交点","路段分类","演化对比","提取道路中心线","路网连通增强","螺旋斜坡道","折返斜坡道","直线斜坡道","直线坑线","坑线自动布线",
+        "块体模型","导出PMB","属性赋值","字高归一化","资源量","面约束块体","离散化模型","采场排土场识别","中长远进度计划","短期生产计划","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","约束寻径","路网校验","瓶颈段分析","路网运输指标","运输指标报告","结构路面","中线交点","路段分类","演化对比","提取道路中心线","路网连通增强","螺旋斜坡道","折返斜坡道","直线斜坡道","直线坑线","坑线自动布线",
         // 生产计划/投影
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","开采程序切分","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)

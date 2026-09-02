@@ -3392,3 +3392,29 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **判定**: 约束感知运输寻径(属性图 + 限坡/限载/闭边 Dijkstra + Yen + OD)**完成并验证**(8 原测全中, 逐值等价原版)。
 Kylin 寻径至此: 几何最短路(RoadNetwork, 场景交互) + 约束运输寻径(RoadPathSolver, CSV 属性图)双层。1444→**1452** 测试,
 0 失败, 0 错误。**再证 present-but-shallow 判据: 命令在≠算法全 —— 「点对点寻径」几何版在, 缺运输约束层**。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二九一 全运输指标(TransportIndicatorsBuilder)——续 present-but-shallow: 「路网运输指标」只做几何部分
+
+顺 §290 续核 RoadLib.Routing: Kylin `路网运输指标` 命令自注"忠实原 TransportIndicators **几何部分**"(总里程+可达对+
+瓶颈), 缺原 `TransportIndicatorsBuilder.Compute` 的**全指标**: ①节点类型(Loading/Unloading)**自动源汇解析**(+任一空
+降级全节点) ②OD 等效运距均值/最大 ③**理论运能**(Σ源吞吐/Σ汇吞吐取 min) ④**瓶颈段评分**(介数×车道因子×陡坡因子, 禁行边
+单列) ⑤**分期序列**(各期快照标量趋势)。§71 曾浅映射"→NetworkIndicators"(实 NetworkStats 仅 4 标量子集)。
+
+**已做(纯托管, 依赖 §290 已备)**:
+- 移 `src/Cad/TransportIndicatorsReport.cs`(**逐字忠实** TransportIndicators DTO + BottleneckEdge/PeriodPoint +
+  TransportIndicatorsBuilder.Compute/ResolveSourcesSinks/ComputeBottlenecks/ComputePerPeriodSeries)。复用 §290
+  RoadGraph/DijkstraPathSolver/ODMatrix + 既有 HaulMetrics/TruckProfile。
+- 补 §290 RoadGraph 缺的 `Validate()`(并查集数连通分量 + 孤立节点 + 逐边纵坡/车道/里程合规 → ValidationReport)。
+- **13 已知值单测**: 7 逐字移植原 TransportIndicatorsTests(源汇解析/降级全节点/**理论运能=min(源1000,汇800)=800**/
+  平路等效=实距200/**瓶颈 e1 介数2 排首**/加权留桩 null/分期序列 1期1项)+ 6 移植原 RoadNetworkTests 模型子集
+  (中线几何算坡度10%/单双向邻接/校验分量2/校验超坡+孤立/最近节点)。全中, 等价原版。
+- **接命令** `运输指标报告` + 属性图 CSV(N,id,x,y,z[,类型L/U/J,吞吐t/h] / E,id,from,to[,限载t,车道]) → 全指标报告
+  (节点/边/里程/连通/源汇/理论运能/等效运距均最/瓶颈)。区别既有「路网运输指标」(场景几何部分)。
+
+**判定**: 全运输指标(自动源汇+理论运能+等效运距+瓶颈评分+分期)**完成并验证**(13 测全中, 逐值等价原版)。
+RoadLib.Routing 三核(约束寻径§290 + 全指标§291 + 运距公式 HaulMetrics§71)齐。1452→**1465** 测试, 0 失败, 0 错误。
+**再证 present-but-shallow: "忠实原 X 几何部分"这类自注即 shallow 信号——几何子集在, 全指标(类型/吞吐/评分)缺**。
+RoadGraphBuilder(抽图 noding, Kylin RoadNetwork.BuildNoded §82 已覆盖通用图)/RoadGraphSerializer(持久化)/RoadGraph
+Clone/RemoveNode/NearestEdge/SplitEdgeAtNearest(图编辑) 记录(属性图构建/持久化/编辑, 2D 场景无标高属性/交互域)。见 [[unlock-blocked-insights]]。
