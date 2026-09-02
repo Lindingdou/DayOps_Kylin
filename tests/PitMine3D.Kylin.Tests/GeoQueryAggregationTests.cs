@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Microsoft.Data.Sqlite;
 using PitMine3D.Kylin.Data;
 using Xunit;
@@ -135,5 +136,24 @@ public class GeoQueryAggregationTests
         Assert.Null(Record.Exception(() => GeoDataQueries.GetCoalClassificationRanges(c)));
         Assert.Null(Record.Exception(() => GeoDataQueries.GetProximateRows(c)));
         Assert.Null(Record.Exception(() => GeoDataQueries.GetDrillLogRows(c)));
+    }
+
+    [Fact]
+    public void Imports_insert_into_real_migrated_schema()
+    {
+        // 手写 schema 的导入测只验解析逻辑; 此测对真实迁移库插入, 验 INSERT 列名与迁移一致
+        // (列不符则 Import 内 try/catch 吞异常→Inserted=0→此断言失败, 抓迁移-导入漂移)。
+        using var db = GeoDatabase.OpenSeeded();
+        var c = db.Connection;
+        var blast = GeoDataQueries.ImportBlastEvents(c, new List<IReadOnlyDictionary<string, string>>
+        {
+            new Dictionary<string, string> { ["blast_date"] = "2023-01-01", ["explosive_kg"] = "1000", ["blast_volume_m3"] = "5000" }
+        });
+        Assert.Equal(1, blast.Inserted);    // 真实 blast_event schema 接受插入
+        var models = GeoDataQueries.ImportEquipmentModels(c, new List<IReadOnlyDictionary<string, string>>
+        {
+            new Dictionary<string, string> { ["model"] = "TEST-GUARD-1", ["category"] = "truck" }
+        });
+        Assert.Equal(1, models.Inserted);   // 真实 equipment_model schema 接受
     }
 }
