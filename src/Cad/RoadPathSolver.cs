@@ -261,6 +261,140 @@ public sealed class RoadGraph
             Issues = issues,
         };
     }
+
+    /// <summary>删节点 + 连带删除其关联的所有边(装卸点重录入用)。返回是否删掉。忠实原 RoadGraph.RemoveNode。</summary>
+    public bool RemoveNode(string nodeId)
+    {
+        if (!_nodes.Remove(nodeId)) return false;
+        var incident = _edges.Values
+            .Where(e => e.FromId == nodeId || e.ToId == nodeId)
+            .Select(e => e.Id).ToList();
+        foreach (var id in incident) _edges.Remove(id);
+        RebuildAdjacency();
+        return true;
+    }
+
+    /// <summary>在某边中线上离 at 最近处打断, 插一节点(默认 Junction), 原边删、生成两半(继承属性)。忠实原 SplitEdgeAtNearest。</summary>
+    public RoadNode SplitEdgeAtNearest(string edgeId, in Point3d at, string newNodeId,
+                                       RoadNodeType type = RoadNodeType.Junction)
+    {
+        var e = GetEdge(edgeId) ?? throw new InvalidOperationException($"边 {edgeId} 不存在, 无法打断。");
+        var c = e.Centerline.Count >= 2
+            ? e.Centerline
+            : new[] { GetNode(e.FromId)!.Position, GetNode(e.ToId)!.Position };
+        SplitCenterline(c, at, out var c1, out var c2, out var cut);
+        var node = AddNode(new RoadNode(newNodeId, type, cut));
+        RemoveEdge(edgeId);
+        AddEdge(CopyAttrs(e, $"{edgeId}_a", e.FromId, node.Id, c1));
+        AddEdge(CopyAttrs(e, $"{edgeId}_b", node.Id, e.ToId, c2));
+        return node;
+    }
+
+    /// <summary>把中线在离 at 最近的投影脚切两半(投影脚作共享切点, 去近重合, 保证各 ≥2 点)。</summary>
+    private static void SplitCenterline(IReadOnlyList<Point3d> c, in Point3d at,
+        out IReadOnlyList<Point3d> a, out IReadOnlyList<Point3d> b, out Point3d cut)
+    {
+        int bestSeg = 0;
+        double bestD = double.MaxValue;
+        Point3d bestP = c[0];
+        for (int i = 0; i + 1 < c.Count; i++)
+        {
+            var p0 = c[i];
+            var p1 = c[i + 1];
+            double dx = p1.X - p0.X, dy = p1.Y - p0.Y;
+            double len2 = dx * dx + dy * dy;
+            double t = len2 < 1e-12 ? 0 : ((at.X - p0.X) * dx + (at.Y - p0.Y) * dy) / len2;
+            t = t < 0 ? 0 : (t > 1 ? 1 : t);
+            var q = new Point3d(p0.X + t * dx, p0.Y + t * dy, p0.Z + t * (p1.Z - p0.Z));
+            double d = q.HorizontalDistanceTo(at);
+            if (d < bestD) { bestD = d; bestSeg = i; bestP = q; }
+        }
+        cut = bestP;
+
+        var la = new List<Point3d>();
+        for (int i = 0; i <= bestSeg; i++) la.Add(c[i]);
+        if (la[^1].DistanceTo(bestP) > 1e-6) la.Add(bestP);
+        var lb = new List<Point3d> { bestP };
+        for (int i = bestSeg + 1; i < c.Count; i++)
+            if (lb[^1].DistanceTo(c[i]) > 1e-6) lb.Add(c[i]);
+
+        if (la.Count < 2) la.Add(bestP);          // 退化保护:切点贴端点时凑足 2 点
+        if (lb.Count < 2) lb.Add(c[^1]);
+        a = la; b = lb;
+    }
+
+    /// <summary>克隆一条边的属性到新 Id / 端点 / 中线(打断两半继承原边属性)。</summary>
+    private static RoadEdge CopyAttrs(RoadEdge src, string id, string from, string to, IReadOnlyList<Point3d> centerline)
+        => new(id, from, to, centerline)
+        {
+            LaneCount = src.LaneCount,
+            OneWay = src.OneWay,
+            MaxLoadT = src.MaxLoadT,
+            SpeedLimitKph = src.SpeedLimitKph,
+            Pavement = src.Pavement,
+            Status = src.Status,
+            IsTemporary = src.IsTemporary,
+        };
+
+    /// <summary>离给定点最近的边(按中线/端点的平面距)。忠实原 RoadGraph.NearestEdge。</summary>
+    public RoadEdge? NearestEdge(Point3d p, double maxDistM = double.MaxValue)
+    {
+        RoadEdge? best = null;
+        double bestD = maxDistM;
+        foreach (var e in _edges.Values)
+        {
+            double d = DistanceToEdge(p, e);
+            if (d <= bestD) { bestD = d; best = e; }
+        }
+        return best;
+    }
+
+    private double DistanceToEdge(in Point3d p, RoadEdge e)
+    {
+        var c = e.Centerline;
+        if (c.Count >= 2)
+        {
+            double best = double.MaxValue;
+            for (int i = 1; i < c.Count; i++)
+                best = Math.Min(best, PointSegDist2D(p, c[i - 1], c[i]));
+            return best;
+        }
+        var a = GetNode(e.FromId); var b = GetNode(e.ToId);
+        return (a is not null && b is not null) ? PointSegDist2D(p, a.Position, b.Position) : double.MaxValue;
+    }
+
+    private static double PointSegDist2D(in Point3d p, in Point3d a, in Point3d b)
+    {
+        double dx = b.X - a.X, dy = b.Y - a.Y;
+        double len2 = dx * dx + dy * dy;
+        double t = len2 < 1e-12 ? 0.0 : ((p.X - a.X) * dx + (p.Y - a.Y) * dy) / len2;
+        t = t < 0 ? 0 : (t > 1 ? 1 : t);
+        double qx = a.X + t * dx, qy = a.Y + t * dy;
+        double ex = p.X - qx, ey = p.Y - qy;
+        return Math.Sqrt(ex * ex + ey * ey);
+    }
+
+    /// <summary>深拷贝(时段快照用)。节点/边复制, 中线引用共享(不可变)。忠实原 RoadGraph.Clone。</summary>
+    public RoadGraph Clone()
+    {
+        var g = new RoadGraph();
+        foreach (var n in _nodes.Values)
+            g.AddNode(new RoadNode(n.Id, n.Type, n.Position) { ThroughputTph = n.ThroughputTph, RefId = n.RefId });
+        foreach (var e in _edges.Values)
+            g.AddEdge(new RoadEdge(e.Id, e.FromId, e.ToId, e.Centerline)
+            {
+                LengthM = e.LengthM,
+                GradePct = e.GradePct,
+                LaneCount = e.LaneCount,
+                OneWay = e.OneWay,
+                MaxLoadT = e.MaxLoadT,
+                SpeedLimitKph = e.SpeedLimitKph,
+                Pavement = e.Pavement,
+                Status = e.Status,
+                IsTemporary = e.IsTemporary,
+            });
+        return g;
+    }
 }
 
 /// <summary>寻径权重口径。忠实原 WeightMode。</summary>

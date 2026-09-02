@@ -3418,3 +3418,26 @@ RoadLib.Routing 三核(约束寻径§290 + 全指标§291 + 运距公式 HaulMet
 **再证 present-but-shallow: "忠实原 X 几何部分"这类自注即 shallow 信号——几何子集在, 全指标(类型/吞吐/评分)缺**。
 RoadGraphBuilder(抽图 noding, Kylin RoadNetwork.BuildNoded §82 已覆盖通用图)/RoadGraphSerializer(持久化)/RoadGraph
 Clone/RemoveNode/NearestEdge/SplitEdgeAtNearest(图编辑) 记录(属性图构建/持久化/编辑, 2D 场景无标高属性/交互域)。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二九二 属性路网建图(RoadGraphBuilder)——完成"多段线→属性图→寻径/指标"端到端 + Z 感知 noding
+
+§290/§291 的属性路网此前只能从 节点/边列表 CSV 喂; 补原 `RoadGraphBuilder.FromPolylines`(**从中线多段线抽属性
+路网图**)完成 "多段线 → 属性图 → 约束寻径/全指标" 端到端。与 Kylin 既有 RoadNetwork.BuildNoded(§82, 2D 通用图)/
+RoadNetworkConnector(§80, 焊接+桥接)**互补**: 此产 §290 属性 RoadGraph(带 Z→纵坡)且做 **Z 感知 noding**(立交=XY
+相交但标高差>zSep 不打断)+ 共线重复边去重 + 缺口桥接(跨标高不桥)——**2D 版所无**。
+
+**已做(纯托管, 443 行自足)**:
+- 移 `src/Cad/RoadGraphBuilder.cs`(**逐字忠实**: NodePolylines[X十字/T丁字, Z 闸门] + SplitPolyline + BuildFromNoded
+  [空间哈希端点吸附] + DedupDuplicateEdges[质心判据] + BridgeDangles[Kruskal 式跨片桥接, SplitEdgeAtNearest 打断插节点] +
+  UnionFind + 几何原语 SegSegCross2D/NearestOnPolyline/Bbox)。
+- 补 §290 RoadGraph 缺的 SplitEdgeAtNearest(+SplitCenterline/CopyAttrs)/RemoveNode/NearestEdge/Clone(时段快照)。
+- **16 已知值单测逐字移植原 RoadNetworkTests**: 12 抽图/noding/桥接(共享端点并点/同XY异Z不并/可寻径/**X十字→4边5节点**/
+  **T丁字→3边4节点**/**立交→2边2分量**[Z感知]/**共线去重1**/缺口桥接连通/**跨标高不桥**/超距不桥/**支线接干线中段split+桥**/
+  noding诊断计数)+ 4 图管理(SplitEdgeAtNearest 断边插点/Clone 深拷贝独立/RemoveNode 连带删边/NearestEdge)。全中, 等价原版。
+- **接命令** `路网建图` + 中线 CSV(L,线id,x,y,z) → RoadGraphBuilder → noding 诊断(X十字/T丁字/去重/桥接数)+ 连通性 + 画 noded 边。
+
+**判定**: 属性路网建图(Z 感知 noding + 桥接 + 属性图)**完成并验证**(16 原测全中)。RoadLib 路网/寻径子系统至此端到端齐:
+**中线多段线 →(RoadGraphBuilder 抽图)→ 属性图 →(DijkstraPathSolver §290 约束寻径 / TransportIndicatorsBuilder §291
+全指标)**。1473→**1489** 测试, 0 失败, 0 错误。RoadGraphSerializer(JSON 持久化)记录(持久化域, Kylin 场景 SceneIO 自有)。见 [[unlock-blocked-insights]]。

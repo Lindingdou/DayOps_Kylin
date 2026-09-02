@@ -1143,6 +1143,7 @@ public partial class MainWindow : Window
             if (cmd == "OD运距矩阵" || cmd == "OD矩阵" || cmd == "运距矩阵") { await OdMatrixAsync(); return; }
             if (cmd.StartsWith("约束寻径") || cmd.StartsWith("运输寻径") || cmd.StartsWith("限坡寻径")) { await RoadConstraintPathAsync(cmd); return; }
             if (cmd == "运输指标报告" || cmd == "路网运输指标全" || cmd == "全运输指标") { await RoadFullIndicatorsAsync(); return; }
+            if (cmd == "路网建图" || cmd == "属性路网建图" || cmd == "路网抽图" || cmd == "中线抽图") { await RoadBuildGraphAsync(); return; }
             if (cmd == "新建图层") { var l = _layers.New(); PopulateDrawingLayers(); StatusMsg.Text = $"新建图层「{l.Name}」并置为当前"; return; }
             if (cmd == "删除图层" || cmd == "删层" || cmd == "删除当前图层") { DeleteCurrentLayer(); return; }
             if (cmd.StartsWith("重命名图层 ") || cmd.StartsWith("图层重命名 ") || cmd.StartsWith("图层命名 ")) { RenameCurrentLayer(cmd.Substring(cmd.IndexOf(' ') + 1)); return; }
@@ -6210,6 +6211,59 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"运输布局方案({srcHint}·需求 {demand:0}t/期·单车道 {perLane:0}t·目标{obj ?? "最小成本"})：推荐「{r.Recommended?.Name ?? "无可行方案"}」 · " + string.Join(" | ", parts);
     }
 
+    // 属性路网建图(忠实原 RoadGraphBuilder): 读中线多段线 CSV(L,线id,x,y,z) → 交叉口 noding(X十字/T丁字, Z 闸门
+    // 区分平交·立交) + 端点吸附 + 共线重复边去重 + 缺口桥接(跨标高不桥) → 属性路网图。报 noding 诊断 + 连通性。
+    // 区别 §80/§82(2D 通用图): 此产带纵坡(由 Z 算)的属性图 + Z 感知 noding, 喂约束寻径/全指标。画 noded 中线。
+    private async Task RoadBuildGraphAsync()
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "路网建图：选中线多段线 CSV (L,线id,x,y,z)",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("中线 (CSV/TXT)") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (files.Count == 0) return;
+
+        // 按 线id 分组顺序成多段线。
+        var groups = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<Cad.Point3d>>();
+        var order = new System.Collections.Generic.List<string>();
+        foreach (var ln in System.IO.File.ReadAllLines(files[0].Path.LocalPath))
+        {
+            var p = ln.Split(new[] { ',', '\t' }, System.StringSplitOptions.None);
+            if (p.Length < 5 || p[0].Trim().ToUpperInvariant() != "L") continue;
+            if (!double.TryParse(p[2].Trim(), System.Globalization.NumberStyles.Float, inv, out double x)) continue;
+            if (!double.TryParse(p[3].Trim(), System.Globalization.NumberStyles.Float, inv, out double y)) continue;
+            if (!double.TryParse(p[4].Trim(), System.Globalization.NumberStyles.Float, inv, out double z)) continue;
+            string id = p[1].Trim();
+            if (!groups.TryGetValue(id, out var list)) { list = new(); groups[id] = list; order.Add(id); }
+            list.Add(new Cad.Point3d(x, y, z));
+        }
+        var polys = new System.Collections.Generic.List<System.Collections.Generic.IReadOnlyList<Cad.Point3d>>();
+        foreach (var id in order) if (groups[id].Count >= 2) polys.Add(groups[id]);
+        if (polys.Count == 0) { StatusMsg.Text = "路网建图：CSV 无有效多段线(L,线id,x,y,z; 每线≥2 点)"; return; }
+
+        var g = Cad.RoadGraphBuilder.FromPolylines(polys, out var rep, snapToleranceM: 2.0, gradeSeparationM: 4.0, bridgeGapM: 25.0);
+        var val = g.Validate();
+
+        // 画 noded 边(节点位置连线)预览。
+        int drawn = 0;
+        foreach (var e in g.Edges)
+        {
+            var a = g.GetNode(e.FromId); var b = g.GetNode(e.ToId);
+            if (a == null || b == null) continue;
+            var line = new PolylineEntity { Cr = 0.35f, Cg = 0.75f, Cb = 0.95f, LayerName = "路网图_边" };
+            line.Points.Add((a.Position.X, a.Position.Y));
+            line.Points.Add((b.Position.X, b.Position.Y));
+            _scene.Add(line); drawn++;
+        }
+        BeginChange(); RefreshScene(); Viewport.ZoomExtents();
+        StatusMsg.Text = $"路网建图：{rep.InputLines} 中线 → noding {g.NodeCount}节点/{g.EdgeCount}边"
+            + $"(X十字{rep.CrossSplits}·T丁字{rep.TeeSplits}·去重{rep.DuplicateEdgesRemoved}·桥接{rep.BridgesAdded})"
+            + $" · {(val.IsFullyConnected ? "全连通" : $"{val.ComponentCount}分量")}"
+            + (val.Issues.Count > 0 ? $" · {val.Issues.Count}告警" : "") + $" · 入图 {drawn} 边(蓝, 层『路网图_边』)";
+    }
+
     // 全运输指标报告(忠实原 TransportIndicatorsBuilder): 读属性图 CSV(N,id,x,y,z[,类型 L/U/J,吞吐t/h] /
     // E,id,from,to[,限载t,车道]) → 节点类型自动源汇 → 总里程/连通/源汇/理论运能(Σ源汇吞吐 min)/等效运距均最/瓶颈段。
     // 区别既有「路网运输指标」(场景几何部分: 总里程+可达对+瓶颈); 此为全指标(需类型/吞吐属性, 走 CSV)。
@@ -10397,7 +10451,7 @@ public partial class MainWindow : Window
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割","移除障碍物",
         // 块体/运输/路网
-        "块体模型","导出PMB","属性赋值","字高归一化","资源量","面约束块体","离散化模型","采场排土场识别","中长远进度计划","短期生产计划","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","约束寻径","路网校验","瓶颈段分析","路网运输指标","运输指标报告","结构路面","中线交点","路段分类","演化对比","提取道路中心线","路网连通增强","螺旋斜坡道","折返斜坡道","直线斜坡道","直线坑线","坑线自动布线",
+        "块体模型","导出PMB","属性赋值","字高归一化","资源量","面约束块体","离散化模型","采场排土场识别","中长远进度计划","短期生产计划","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","约束寻径","路网校验","瓶颈段分析","路网运输指标","运输指标报告","路网建图","结构路面","中线交点","路段分类","演化对比","提取道路中心线","路网连通增强","螺旋斜坡道","折返斜坡道","直线斜坡道","直线坑线","坑线自动布线",
         // 生产计划/投影
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","开采程序切分","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)

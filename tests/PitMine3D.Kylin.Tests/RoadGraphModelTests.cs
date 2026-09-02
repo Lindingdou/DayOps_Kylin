@@ -77,4 +77,64 @@ public class RoadGraphModelTests
         Assert.Equal("b", g.NearestNode(new Point3d(95, 3, 0))!.Id);
         Assert.Null(g.NearestNode(new Point3d(95, 3, 0), maxDistM: 1.0)); // 超容差
     }
+
+    [Fact]
+    public void SplitEdgeAtNearest_BreaksEdgeAndInsertsNode()
+    {
+        var g = new RoadGraph();
+        g.AddNode("a", RoadNodeType.Junction, new Point3d(0, 0, 0));
+        g.AddNode("b", RoadNodeType.Junction, new Point3d(100, 0, 0));
+        g.AddEdge(new RoadEdge("AB", "a", "b"));
+        var node = g.SplitEdgeAtNearest("AB", new Point3d(50, 5, 0), "M");
+        Assert.Null(g.GetEdge("AB"));              // 原边删除
+        Assert.NotNull(g.GetEdge("AB_a"));         // 两半
+        Assert.NotNull(g.GetEdge("AB_b"));
+        Assert.Equal(3, g.NodeCount);
+        Assert.InRange(node.Position.X, 49.0, 51.0);
+        Assert.Equal(2, g.EdgesFrom("M").Count);   // 双向:M 接两条半边, 可两向出发
+    }
+
+    [Fact]
+    public void Clone_IsIndependentDeepCopy()
+    {
+        var g = new RoadGraph();
+        g.AddNode("a", RoadNodeType.Junction, new Point3d(0, 0, 0));
+        g.AddNode("b", RoadNodeType.Junction, new Point3d(100, 0, 0));
+        g.AddEdge(new RoadEdge("E", "a", "b"));
+        var snap = g.Clone();
+        g.RemoveEdge("E");                 // 改原图
+        Assert.Equal(0, g.EdgeCount);
+        Assert.Equal(1, snap.EdgeCount);   // 快照不受影响
+    }
+
+    [Fact]
+    public void RemoveNode_AlsoRemovesIncidentEdges()
+    {
+        var g = new RoadGraph();
+        g.AddNode("a", RoadNodeType.Junction, new Point3d(0, 0, 0));
+        g.AddNode("b", RoadNodeType.Junction, new Point3d(100, 0, 0));
+        g.AddNode("c", RoadNodeType.Junction, new Point3d(0, 100, 0));
+        g.AddEdge(new RoadEdge("AB", "a", "b"));
+        g.AddEdge(new RoadEdge("AC", "a", "c"));
+        g.AddEdge(new RoadEdge("BC", "b", "c"));
+        Assert.True(g.RemoveNode("a"));    // 删 a → AB、AC 连带删, BC 保留
+        Assert.Equal(2, g.NodeCount);
+        Assert.Equal(1, g.EdgeCount);
+        Assert.NotNull(g.GetEdge("BC"));
+        Assert.Empty(g.EdgesFrom("a"));    // 邻接已重建, a 不再出现
+        Assert.False(g.RemoveNode("a"));   // 再删返回 false
+    }
+
+    [Fact]
+    public void NearestEdge_ReturnsClosest()
+    {
+        var g = new RoadGraph();
+        g.AddNode("a", RoadNodeType.Junction, new Point3d(0, 0, 0));
+        g.AddNode("b", RoadNodeType.Junction, new Point3d(100, 0, 0));
+        g.AddNode("c", RoadNodeType.Junction, new Point3d(0, 100, 0));
+        g.AddEdge(new RoadEdge("AB", "a", "b"));
+        g.AddEdge(new RoadEdge("AC", "a", "c"));
+        Assert.Equal("AB", g.NearestEdge(new Point3d(50, 3, 0))!.Id);   // 贴近 X 轴边
+        Assert.Equal("AC", g.NearestEdge(new Point3d(3, 50, 0))!.Id);   // 贴近 Y 轴边
+    }
 }
