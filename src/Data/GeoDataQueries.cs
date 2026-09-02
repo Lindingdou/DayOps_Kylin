@@ -12,6 +12,32 @@ public static class GeoDataQueries
     public sealed record ParameterNorm(string Code, string Name, string? Unit,
         double? StandardMin, double? StandardMax, double? StandardDefault, double? AlarmLow, double? AlarmHigh);
 
+    public sealed record DumpSiteRow(string DumpId, string Name, string DumpType,
+        double DesignCapacityWanM3, double CurrentFilledWanM3, double FillRatePct,
+        double? OverallSlopeAngleDeg, double? ServiceYearsRemaining, string Status);
+
+    /// <summary>
+    /// 排土场台账: 各排土场 设计容量/已填/充填率(=已填÷设计×100, 忠实原 DumpSite.FillRate)/整体坡角/剩余年限/状态。
+    /// 内/外排(dump_type)。数据: dump_site(V003 建 + 种子)。
+    /// </summary>
+    public static List<DumpSiteRow> GetDumpSites(SqliteConnection conn)
+    {
+        var rows = new List<DumpSiteRow>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"SELECT dump_id, name, dump_type, design_capacity_wan_m3, current_filled_wan_m3,
+                            overall_slope_angle_deg, service_years_remaining, status FROM dump_site ORDER BY dump_id";
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            double design = r.GetDouble(3), filled = r.GetDouble(4);
+            double fillPct = design > 1e-9 ? filled / design * 100.0 : 0;
+            rows.Add(new DumpSiteRow(r.GetString(0), r.GetString(1), r.GetString(2), design, filled, fillPct,
+                r.IsDBNull(5) ? (double?)null : r.GetDouble(5), r.IsDBNull(6) ? (double?)null : r.GetDouble(6),
+                r.IsDBNull(7) ? "" : r.GetString(7)));
+        }
+        return rows;
+    }
+
     /// <summary>运输道路网总里程 km(忠实原 HaulRoadService.TotalNetworkKm: Σ length_m / 1000)。仅在役(condition≠closed)。</summary>
     public static double GetHaulRoadNetworkKm(SqliteConnection conn)
         => ScalarDouble(conn, "SELECT COALESCE(SUM(length_m),0)/1000.0 FROM haul_road WHERE COALESCE(condition,'') != 'closed'");
