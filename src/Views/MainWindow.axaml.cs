@@ -10098,7 +10098,8 @@ public partial class MainWindow : Window
         if (roads.Count == 0) { StatusMsg.Text = "路况显示：无道路数据"; return; }
         var parts = new List<string>();
         foreach (var r in roads) parts.Add($"{(string.IsNullOrEmpty(r.Name) ? r.RoadId : r.Name)}(长{r.LengthM:0.#}m/坡{r.MaxSlopePct:0.#}%/宽{r.WidthM:0.#}m{(string.IsNullOrEmpty(r.Condition) ? "" : "/" + r.Condition)})");
-        StatusMsg.Text = $"路况显示（{roads.Count} 路段）：" + string.Join(" · ", parts);
+        double netKm = Data.GeoDataQueries.GetHaulRoadNetworkKm(db.Connection);   // 在役路网总里程(忠实 TotalNetworkKm)
+        StatusMsg.Text = $"路况显示（{roads.Count} 路段·在役总里程 {netKm:0.##}km）：" + string.Join(" · ", parts);
     }
 
     private void SlopeDesignsCmd()

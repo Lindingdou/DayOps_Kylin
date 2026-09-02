@@ -12,6 +12,10 @@ public static class GeoDataQueries
     public sealed record ParameterNorm(string Code, string Name, string? Unit,
         double? StandardMin, double? StandardMax, double? StandardDefault, double? AlarmLow, double? AlarmHigh);
 
+    /// <summary>运输道路网总里程 km(忠实原 HaulRoadService.TotalNetworkKm: Σ length_m / 1000)。仅在役(condition≠closed)。</summary>
+    public static double GetHaulRoadNetworkKm(SqliteConnection conn)
+        => ScalarDouble(conn, "SELECT COALESCE(SUM(length_m),0)/1000.0 FROM haul_road WHERE COALESCE(condition,'') != 'closed'");
+
     /// <summary>台阶设计基准(DB parameter_definition 标准默认值 H/α/W/采宽)。FromDb=H/α/W 三者齐备(可作设计基准)。</summary>
     public sealed record BenchDesignBaseline(double? BenchHeightM, double? SlopeAngleDeg,
         double? SafetyPlatformWidthM, double? MiningWidthM, bool FromDb);
