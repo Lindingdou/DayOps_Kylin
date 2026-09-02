@@ -122,4 +122,49 @@ public class RoadVerticalCurveTests
         Assert.Equal(0, r.Violations);
         Assert.Equal(100.0, r.MinRadiusM, 6);
     }
+
+    // ── 移植原 Tests.PitMineApp/ProfileSmootherTests 已知值(等价性由构造; 原 ProfileSmoother.VerticalCurves = Kylin Smooth) ──
+    [Fact]
+    public void Orig_Sag_InsertsOneVerticalCurve_PreservesEndpoints()
+    {
+        // 凹型变坡(−8% → +8%, Δ16%) → 插 1 条竖曲线, R=Lv/ΔG=48/0.16=300, 端点保持, 凹顶抬圆。
+        var s = new double[] { 0, 100, 200 };
+        var z = new double[] { 0, -8, 0 };
+        var vc = RoadVerticalCurve.Smooth(s, z, triggerPct: 2, rV: 300);
+        Assert.Equal(1, vc.Count);
+        Assert.Equal(300.0, vc.MinRadiusM, 0);
+        Assert.Equal(0, vc.Violations);
+        Assert.Equal((0.0, 0.0), vc.Profile[0]);
+        Assert.Equal(200.0, vc.Profile[^1].S, 3);
+        Assert.Equal(0.0, vc.Profile[^1].Z, 3);
+        Assert.True(vc.Profile.Count > 3);
+        double zAt100 = double.NaN;
+        foreach (var p in vc.Profile) if (Math.Abs(p.S - 100) < 1e-6) zAt100 = p.Z;
+        Assert.True(zAt100 > -8.0 + 0.1, "竖曲线应把凹顶抬圆");
+    }
+
+    [Fact]
+    public void Orig_ShortSegments_ClampRadius_FlagsViolation()
+    {
+        // 短段放不下 Lv → clamp, R < R_v, 计 violation。
+        var vc = RoadVerticalCurve.Smooth(new double[] { 0, 10, 20 }, new double[] { 0, -0.8, 0 }, triggerPct: 2, rV: 300);
+        Assert.Equal(1, vc.Count);
+        Assert.Equal(1, vc.Violations);
+        Assert.True(vc.MinRadiusM < 300.0);
+    }
+
+    [Fact]
+    public void Orig_NoGradeChange_NoVerticalCurve()
+    {
+        var vc = RoadVerticalCurve.Smooth(new double[] { 0, 100, 200 }, new double[] { 0, -5, -10 }, 2, 300);
+        Assert.Equal(0, vc.Count);
+        Assert.Equal(3, vc.Profile.Count);
+    }
+
+    [Fact]
+    public void Orig_SmallGradeChange_BelowTrigger_NoVerticalCurve()
+    {
+        var vc = RoadVerticalCurve.Smooth(new double[] { 0, 100, 200 }, new double[] { 0, -5, -9 }, 2, 300);
+        Assert.Equal(0, vc.Count);
+    }
 }

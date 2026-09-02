@@ -89,4 +89,42 @@ public class RoadCrossSectionTests
         // 纵坡越缓展线越长。
         Assert.True(RoadCrossSection.DevelopmentLengthM(45, 6) > RoadCrossSection.DevelopmentLengthM(45, 12));
     }
+
+    // ── 移植原 Tests.PitMineApp/RoadCrossSectionTests 已知值(等价性由构造; §289 补深度核) ──
+    [Fact]
+    public void Orig_Widening_OnlyOnTightCurves()
+    {
+        Assert.Equal(2.4, RoadCrossSection.WideningM(15, 200, laneCount: 2, wheelbaseM: 6), 2);  // 2·36/30
+        Assert.Equal(0.0, RoadCrossSection.WideningM(300, 200, 2, 6), 6);                        // R>阈值
+        Assert.Equal(0.0, RoadCrossSection.WideningM(double.PositiveInfinity, 200, 2, 6), 6);    // 直线
+    }
+
+    [Fact]
+    public void Orig_Superelevation_ClampedAndZeroOnFlat()
+    {
+        Assert.Equal(6.0, RoadCrossSection.SuperelevationPct(15, designSpeedKmh: 25, maxSuperPct: 6), 3);  // 17.8%→clamp 6
+        Assert.Equal(0.0, RoadCrossSection.SuperelevationPct(300, 25, 6), 3);                              // 需求<0
+    }
+
+    [Fact]
+    public void Orig_ComputeAlong_WidensAtCorner()
+    {
+        var pts = new (double, double, double)[] { (0, 0, 0), (10, 0, 0), (10, 10, 0) };
+        var cs = RoadCrossSection.ComputeAlong(pts, baseWidthM: 10, widenThresholdM: 200,
+            laneCount: 2, wheelbaseM: 6, designSpeedKmh: 25, maxSuperPct: 6);
+        Assert.Equal(10.0, cs.WidthM[0], 3);          // 端点直线 → 基宽
+        Assert.True(cs.WidthM[1] > 10.0);             // 角点加宽
+        Assert.Equal(5.09, cs.MaxWideningM, 1);       // 2·36/(2·7.07)
+        Assert.True(cs.MaxSuperelevationPct > 0);     // 紧弯有超高
+    }
+
+    [Fact]
+    public void Orig_ComputeAlong_NoWideningWhenThresholdSmall()
+    {
+        var pts = new (double, double, double)[] { (0, 0, 0), (10, 0, 0), (10, 10, 0) };
+        var cs = RoadCrossSection.ComputeAlong(pts, 10, widenThresholdM: 5,
+            laneCount: 2, wheelbaseM: 6, designSpeedKmh: 25, maxSuperPct: 6);
+        Assert.Equal(0.0, cs.MaxWideningM, 6);
+        Assert.Equal(10.0, cs.WidthM[1], 6);
+    }
 }
