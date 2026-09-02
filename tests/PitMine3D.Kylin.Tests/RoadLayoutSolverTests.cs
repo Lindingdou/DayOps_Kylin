@@ -75,4 +75,68 @@ public class RoadLayoutSolverTests
         // 空候选 → 不成功。
         Assert.False(RoadLayoutSolver.Solve(Array.Empty<RC>(), 800, 1000, 2).Success);
     }
+
+    // ── 移植原版 Tests.MineAssLib/RoadLayoutSolverTests 的 6 已知值(等价性由构造保证) ──
+    // 原用输入式 API(RoadLayoutInput+RampCandidate链, 2 候选×500=1km); Kylin 用 RampCand+参数式,
+    // 原 r.Schemes[0](排序后最优)映射 Kylin r.Recommended(=最高分可行)。链长聚合 chainLenM=Σ RequiredLengthM。
+    private static RC[] Chain2() => new[] { new RC(100, 85, 500, true, ""), new RC(85, 70, 500, true, "") };
+
+    [Fact]
+    public void Orig_small_demand_single_lane_cost_1600()
+    {
+        // 需求 800 < 单车道 1000 → 1 线 1 道; 成本 = 800 × (1km) × 2 = 1600(2 候选×500=1km 验链长聚合)。
+        var r = RoadLayoutSolver.Solve(Chain2(), 800, 1000, 2);
+        Assert.True(r.Success);
+        Assert.NotNull(r.Recommended);
+        Assert.True(r.Recommended!.Feasible);
+        Assert.Single(r.Recommended.Lines);
+        Assert.Equal(1, r.Recommended.Lines[0].LaneCount);
+        Assert.Equal(1600, r.Recommended.TotalHaulCostYuan, 3);   // 原版同值(链长 1km 非 500m)
+    }
+
+    [Fact]
+    public void Orig_large_demand_splits_into_9_lanes_single_infeasible()
+    {
+        // 需求 9000 / 单车道 1000 = 9 总车道 > 单线上限 4 → 拆并行; 单线基线判不可行。
+        var r = RoadLayoutSolver.Solve(Chain2(), 9000, 1000, 0);
+        Assert.True(r.Success);
+        Assert.Contains(r.Schemes, s => s.Feasible);
+        var best = r.Recommended!;
+        Assert.True(best.Feasible);
+        Assert.All(best.Lines, l => Assert.True(l.LaneCount <= RoadLayoutSolver.MaxLanesPerRoad));
+        Assert.Equal(9, best.Lines.Sum(l => l.LaneCount));                 // 总车道守恒 9
+        Assert.True(best.Lines.Sum(l => l.CapacityTons) + 1e-6 >= 9000);   // 运力够
+        Assert.Contains(r.Schemes, s => s.Lines.Count == 1 && !s.Feasible); // 单线 9 道不可行
+    }
+
+    [Fact]
+    public void Orig_lanes_proportional_utilization_never_exceeds_one()
+    {
+        var r = RoadLayoutSolver.Solve(Chain2(), 9000, 1000, 1);
+        foreach (var s in r.Schemes.Where(s => s.Feasible))
+            Assert.All(s.Lines, l => Assert.True(l.Utilization <= 1.0 + 1e-6, $"util={l.Utilization}"));
+    }
+
+    [Fact]
+    public void Orig_haul_cost_zero_when_no_unit_price()
+    {
+        var r = RoadLayoutSolver.Solve(Chain2(), 5000, 1000, 0);
+        Assert.All(r.Schemes, s => Assert.Equal(0, s.TotalHaulCostYuan, 6));
+    }
+
+    [Fact]
+    public void Orig_no_candidates_fails()
+    {
+        var r = RoadLayoutSolver.Solve(Array.Empty<RC>(), 1000, 1000, 1);
+        Assert.False(r.Success);
+    }
+
+    [Fact]
+    public void Orig_recommended_scheme_ranks_feasible_first()
+    {
+        var r = RoadLayoutSolver.Solve(Chain2(), 9000, 1000, 1);
+        Assert.NotNull(r.Recommended);
+        Assert.True(r.Recommended!.Feasible);
+        Assert.True(r.Recommended.Score > 0);
+    }
 }
