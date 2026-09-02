@@ -1141,6 +1141,7 @@ public partial class MainWindow : Window
             if (cmd == "折返斜坡道" || cmd == "折返坑线" || cmd == "折返中线") { SwitchbackRampCmd(); return; }
             if (cmd == "运距指标" || cmd == "循环时间" || cmd == "运距统计") { await HaulRecordMetricsAsync(); return; }
             if (cmd == "OD运距矩阵" || cmd == "OD矩阵" || cmd == "运距矩阵") { await OdMatrixAsync(); return; }
+            if (cmd.StartsWith("约束寻径") || cmd.StartsWith("运输寻径") || cmd.StartsWith("限坡寻径")) { await RoadConstraintPathAsync(cmd); return; }
             if (cmd == "新建图层") { var l = _layers.New(); PopulateDrawingLayers(); StatusMsg.Text = $"新建图层「{l.Name}」并置为当前"; return; }
             if (cmd == "删除图层" || cmd == "删层" || cmd == "删除当前图层") { DeleteCurrentLayer(); return; }
             if (cmd.StartsWith("重命名图层 ") || cmd.StartsWith("图层重命名 ") || cmd.StartsWith("图层命名 ")) { RenameCurrentLayer(cmd.Substring(cmd.IndexOf(' ') + 1)); return; }
@@ -6208,6 +6209,64 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"运输布局方案({srcHint}·需求 {demand:0}t/期·单车道 {perLane:0}t·目标{obj ?? "最小成本"})：推荐「{r.Recommended?.Name ?? "无可行方案"}」 · " + string.Join(" | ", parts);
     }
 
+    // 约束感知运输寻径(忠实原 DijkstraPathSolver): 读属性图 CSV(N,id,x,y,z / E,id,from,to[,限载t]) → 建带
+    // 纵坡(由节点标高自动算)/限载/状态的运输图 → 限坡+限载硬约束 Dijkstra → 报路径+里程/等效运距/时间/成本, 画路径。
+    // 2D 场景无 per-node 标高/边限载, 故走 CSV 喂属性(忠实既有"CSV 补 2D 缺属性"式)。
+    // 用法 "约束寻径 <起点id> <终点id> [限坡% 限载t]"(缺省 不限坡 / 车 90t) + 选属性图 CSV。
+    private async Task RoadConstraintPathAsync(string cmd)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var tk = cmd.Split(new[] { ' ', ',', '，' }, System.StringSplitOptions.RemoveEmptyEntries);
+        if (tk.Length < 3) { StatusMsg.Text = "约束寻径：用法 约束寻径 <起点id> <终点id> [限坡% 限载t]（选属性图 CSV: N,id,x,y,z / E,id,from,to[,限载t]）"; return; }
+        string fromId = tk[1], toId = tk[2];
+        double maxGrade = 0; if (tk.Length >= 4) double.TryParse(tk[3], System.Globalization.NumberStyles.Float, inv, out maxGrade);
+        double payload = 90; if (tk.Length >= 5) double.TryParse(tk[4], System.Globalization.NumberStyles.Float, inv, out payload);
+
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "约束寻径：选属性图 CSV (N,id,x,y,z / E,id,from,to[,限载t])",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("属性图 (CSV/TXT)") { Patterns = new[] { "*.csv", "*.txt" } } }
+        });
+        if (files.Count == 0) return;
+
+        var g = new Cad.RoadGraph();
+        var pos = new System.Collections.Generic.Dictionary<string, (double x, double y)>();
+        foreach (var ln in System.IO.File.ReadAllLines(files[0].Path.LocalPath))
+        {
+            var p = ln.Split(new[] { ',', '\t' }, System.StringSplitOptions.None);
+            if (p.Length < 1) continue;
+            string kind = p[0].Trim().ToUpperInvariant();
+            if (kind == "N" && p.Length >= 5
+                && double.TryParse(p[2].Trim(), System.Globalization.NumberStyles.Float, inv, out double x)
+                && double.TryParse(p[3].Trim(), System.Globalization.NumberStyles.Float, inv, out double y)
+                && double.TryParse(p[4].Trim(), System.Globalization.NumberStyles.Float, inv, out double z))
+            { g.AddNode(p[1].Trim(), Cad.RoadNodeType.Junction, new Cad.Point3d(x, y, z)); pos[p[1].Trim()] = (x, y); }
+            else if (kind == "E" && p.Length >= 4)
+            {
+                try
+                {
+                    var e = new Cad.RoadEdge(p[1].Trim(), p[2].Trim(), p[3].Trim());
+                    if (p.Length >= 5 && double.TryParse(p[4].Trim(), System.Globalization.NumberStyles.Float, inv, out double ml)) e.MaxLoadT = ml;
+                    g.AddEdge(e);
+                }
+                catch (System.Exception) { /* 端点未定义等 → 跳过该边 */ }
+            }
+        }
+        if (g.NodeCount < 2 || g.EdgeCount < 1) { StatusMsg.Text = "约束寻径：图 CSV 无有效节点/边(N,id,x,y,z / E,id,from,to)"; return; }
+
+        var query = new Cad.PathQuery { Mode = Cad.WeightMode.Distance, MaxGradePct = maxGrade, Loaded = true, Truck = new Cad.TruckProfile { PayloadT = payload } };
+        var r = new Cad.DijkstraPathSolver(g).FindPath(fromId, toId, query);
+        if (!r.Feasible)
+        { StatusMsg.Text = $"约束寻径：{fromId}→{toId} 不可达(限坡 {maxGrade:0.#}% / 车 {payload:0}t 下无路; 检查节点 id 或放宽约束)"; return; }
+
+        // 画路径(节点位置连线)
+        var line = new PolylineEntity { Cr = 0.95f, Cg = 0.85f, Cb = 0.30f, LayerName = "约束寻径_路径" };
+        foreach (var nid in r.NodeIds) if (pos.TryGetValue(nid, out var xy)) line.Points.Add((xy.x, xy.y));
+        BeginChange(); if (line.Points.Count >= 2) _scene.Add(line); RefreshScene(); Viewport.ZoomExtents();
+        StatusMsg.Text = $"约束寻径：{fromId}→{toId} {r.EdgeIds.Count} 段(限坡 {maxGrade:0.#}%/车 {payload:0}t) · 里程 {r.LengthM:0.#}m · 等效运距 {r.EquivM:0.#}m · 时间 {r.TimeMin:0.#}min · 成本 {r.Cost:0.#}元 · 经[{string.Join("→", r.EdgeIds)}]";
+    }
+
     // 从选中同心台阶环构建选线用台阶(忠实沿用 2D 场景适配): 按面积降序赋标高(外圈=地表最高, 每内一环降 benchHeightM),
     // 平盘宽由相邻环等效半径差 R_k−R_{k+1}(=平台宽物理近似)估, 坡顶线=环点。喂 RampRouteGenerator 自动选线。
     private static List<Cad.RampBenchLine> BuildBenchesFromRings(List<SceneEntity> rings, double benchHeightM)
@@ -10282,7 +10341,7 @@ public partial class MainWindow : Window
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割","移除障碍物",
         // 块体/运输/路网
-        "块体模型","导出PMB","属性赋值","字高归一化","资源量","面约束块体","离散化模型","采场排土场识别","中长远进度计划","短期生产计划","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","瓶颈段分析","路网运输指标","结构路面","中线交点","路段分类","演化对比","提取道路中心线","路网连通增强","螺旋斜坡道","折返斜坡道","直线斜坡道","直线坑线","坑线自动布线",
+        "块体模型","导出PMB","属性赋值","字高归一化","资源量","面约束块体","离散化模型","采场排土场识别","中长远进度计划","短期生产计划","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","约束寻径","路网校验","瓶颈段分析","路网运输指标","结构路面","中线交点","路段分类","演化对比","提取道路中心线","路网连通增强","螺旋斜坡道","折返斜坡道","直线斜坡道","直线坑线","坑线自动布线",
         // 生产计划/投影
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","开采程序切分","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)

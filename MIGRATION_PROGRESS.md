@@ -3367,3 +3367,28 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 - **`RoadLayoutPlanner`(157)=subsumed/superseded, 非缺口**: 原注自承"首版单线方案入口, 网络流多线求解器未实现"→后由 RoadLayoutSolver(三方案)取代。其 `BuildScheme` 单线方案(lanes=⌈需求/单车道运力⌉ + 运力校核 + MaxLanesPerRoad=4)**结构等同** Kylin §244 的「方案3·单线(基线)」; 候选来自 §288 生成器; 命令「运量驱动布线」已接 RoadLayoutCmd。其独有 FormatReport(逐段"台阶→台阶 形式 纵坡 起坡")为呈现层(§288 命令已报斜/转/螺计数)。前端「需求由 Sources/OD 汇总」= 装卸点设置(交互录入), Kylin 以 demand 参数替代(记录交互边界)。
 
 **判定**: RoadLayout 目录 8 文件全归账(6 移 + 1 DTO 适配 + 1 subsumed)。运量网络流两层(选线§288 + 方案§244)贯通; 单线首版(Planner)被三方案 solver 包含。**目录级清扫再证 §287 教训: 一个目录出真切片(§287/288), 同目录邻近文件值得逐个开来读——但读毕即可确证收敛(非无限继续)**。1438 测试保持, 0 失败。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二九〇 约束感知运输寻径(RoadPathSolver)——present-but-shallow: 通用图缺 纵坡/限载/闭边 约束
+
+再核 RoadLib 寻径: Kylin `RoadNetwork` 是**无属性通用图**(Dijkstra 几何最短路/KShortest/介数/连通), 但原
+`RoadLib.Routing.DijkstraPathSolver` 是**约束感知运输寻径** —— 边带 纵坡/限载/状态, 查询带 限坡/重空车/车型,
+硬约束门控(超坡边拒→逼折返、超限载拒→重车绕行、闭边→绕行/不可达)+ 等效运距/时间/成本 + Yen 备选 + OD 矩阵。
+**present-but-shallow: 命令「点对点寻径」在, 但接的是几何最短路, 缺运输约束层**(同 §82 noding、§287 直线坑线)。
+
+**已做(纯托管, 依赖已备)**:
+- 移 `src/Cad/RoadPathSolver.cs`(**逐字忠实**原 RoadGraph 属性图模型[Point3d/RoadNode/RoadEdge(纵坡由节点标高自动算)/
+  RoadEdgeStatus/RoadLink/邻接双向] + DijkstraPathSolver[限坡·限载·闭边门控的单源缓存 Dijkstra + Reconstruct 度量 +
+  BuildMatrix OD + FindKShortest Yen 备选])。复用 Kylin 既有 `HaulMetrics`/`TruckProfile`(等效运距/行车时间, §71)。
+  与既有 RoadNetwork(无属性通用图)**并存互补**, 类型名无冲突。
+- **8 已知值单测逐字移植原 Tests.RoadLib/PathSolverTests**(等价性由构造保证): 不限坡取直连 B1 / **限坡 10% 逼折返
+  A1-A4**(直连 13.3% 超限) / 缓存 key 含限坡(不误命中) / **闭边 A2→不可达** / **重车超限载 90>50 拒行、空车可过** /
+  OD 矩阵等效运距>0 / **重车上坡 等效运距>实际里程** + 时间/成本>0 / **Yen 只 2 简单路按里程升序**。全中。
+- **接命令** `约束寻径 <起点id> <终点id> [限坡% 限载t]` + 属性图 CSV(N,id,x,y,z / E,id,from,to[,限载t]) → 建图→约束
+  寻径→报 里程/等效运距/时间/成本 + 画路径。**2D 场景无 per-node 标高/边限载 → 走 CSV 喂属性**(忠实既有"CSV 补 2D
+  缺属性"式, 同运输布局候选 CSV)。
+
+**判定**: 约束感知运输寻径(属性图 + 限坡/限载/闭边 Dijkstra + Yen + OD)**完成并验证**(8 原测全中, 逐值等价原版)。
+Kylin 寻径至此: 几何最短路(RoadNetwork, 场景交互) + 约束运输寻径(RoadPathSolver, CSV 属性图)双层。1444→**1452** 测试,
+0 失败, 0 错误。**再证 present-but-shallow 判据: 命令在≠算法全 —— 「点对点寻径」几何版在, 缺运输约束层**。见 [[unlock-blocked-insights]]。
