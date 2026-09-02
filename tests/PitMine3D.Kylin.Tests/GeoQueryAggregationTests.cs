@@ -85,4 +85,25 @@ public class GeoQueryAggregationTests
         Assert.Equal("气煤", r[1].Code);
         Assert.Null(r[1].YMax);
     }
+
+    [Fact]
+    public void GetProximateRows_left_joins_borehole_and_maps_proximate()
+    {
+        using var c = Db(@"CREATE TABLE coal_sample(id INT, borehole_id INT, seam_code TEXT,
+            mad_raw REAL, ad_raw REAL, vdaf_raw REAL, fcd_raw REAL);
+            CREATE TABLE borehole(id INT, hole_id TEXT);");
+        Exec(c, "INSERT INTO borehole VALUES (1,'ZK01');");
+        Exec(c, "INSERT INTO coal_sample VALUES (10,1,'M1', 1.5,15.0,30.0,53.5);");   // 有孔
+        Exec(c, "INSERT INTO coal_sample VALUES (11,99,'M2', 2.0,20.0,28.0,50.0);");  // borehole_id 无匹配 → LEFT JOIN 保留
+        var r = GeoDataQueries.GetProximateRows(c);
+        Assert.Equal(2, r.Count);
+        var m1 = Assert.Single(r, x => x.SeamCode == "M1");
+        Assert.Equal("ZK01", m1.HoleId);
+        Assert.Equal(1.5, m1.Mad!.Value, 6);
+        Assert.Equal(15.0, m1.Ad!.Value, 6);      // 灰分
+        Assert.Equal(30.0, m1.Vdaf!.Value, 6);    // 挥发分(未与灰分错位)
+        Assert.Equal(53.5, m1.Fcd!.Value, 6);
+        var m2 = Assert.Single(r, x => x.SeamCode == "M2");
+        Assert.Equal("", m2.HoleId);              // LEFT JOIN 无孔 → COALESCE ''
+    }
 }
