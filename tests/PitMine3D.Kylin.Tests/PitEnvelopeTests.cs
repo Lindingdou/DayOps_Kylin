@@ -68,6 +68,59 @@ public class PitEnvelopeTests
     }
 
     [Fact]
+    public void MaterializeRings_structure_bench_count_and_descending_z()
+    {
+        var t = Square();
+        var betas = Enumerable.Repeat(45.0, 4).ToArray();
+        // H=10, depth=40 → n=4 台阶; 环 = crest_0 + 4×toe + 3×crest = 8。
+        var rings = PitEnvelope.MaterializeRings(t, betas, benchH: 10, faceAngleDeg: 70, depth: 40);
+        Assert.Equal(8, rings.Count);
+        Assert.Equal(4, rings.Count(r => !r.Crest));   // 4 坡底(toe)=台阶数
+        Assert.Equal(4, rings.Count(r => r.Crest));    // crest_0 + 3
+        Assert.True(rings[0].Crest);                   // 顶口是 crest
+        // Z 自顶向下: 50, 40,40, 30,30, 20,20, 10。
+        Assert.Equal(new[] { 50.0, 40, 40, 30, 30, 20, 20, 10 }, rings.Select(r => r.Z).ToArray());
+    }
+
+    [Fact]
+    public void MaterializeRings_shrink_inward_monotonic()
+    {
+        var t = Square();
+        var betas = Enumerable.Repeat(45.0, 4).ToArray();
+        var rings = PitEnvelope.MaterializeRings(t, betas, benchH: 10, faceAngleDeg: 70, depth: 40);
+        double prev = double.MaxValue;
+        foreach (var r in rings)
+        {
+            double area = PitEnvelope.PolygonArea(r.X, r.Y);
+            Assert.True(area <= prev + 1e-6);   // 逐环向内收缩(面积单调不增)
+            prev = area;
+        }
+        Assert.True(PitEnvelope.PolygonArea(rings[^1].X, rings[^1].Y) < 10000);   // 坑底 < 顶口
+    }
+
+    [Fact]
+    public void LoftMesh_vertex_and_triangle_counts_match_rings()
+    {
+        var t = Square();
+        var betas = Enumerable.Repeat(45.0, 4).ToArray();
+        var rings = PitEnvelope.MaterializeRings(t, betas, benchH: 10, faceAngleDeg: 70, depth: 40);
+        var (verts, tris) = PitEnvelope.LoftMesh(rings);
+        Assert.Equal(rings.Count * 4, verts.Count);          // 8 环 × 4 顶点/环 = 32
+        Assert.Equal((rings.Count - 1) * 4 * 2, tris.Count);  // 7 条带 × 4 边 × 2 三角 = 56
+    }
+
+    [Fact]
+    public void MaterializeRings_degenerate_stops_before_full_depth()
+    {
+        var t = TopOutline.FromBounds(0, 0, 30, 30, 50);     // 小足迹 30×30
+        var betas = Enumerable.Repeat(45.0, 4).ToArray();
+        // depth=200 名义 20 台阶, 但环缩到短边<5m 即止 → 远少于 2×20=40 环。
+        var rings = PitEnvelope.MaterializeRings(t, betas, benchH: 10, faceAngleDeg: 70, depth: 200);
+        Assert.True(rings.Count < 8, $"应提前退化止, 实际 {rings.Count} 环");
+        Assert.True(rings.Count >= 2);
+    }
+
+    [Fact]
     public void Per_wall_slopes_give_asymmetric_bottom()
     {
         var t = Square();

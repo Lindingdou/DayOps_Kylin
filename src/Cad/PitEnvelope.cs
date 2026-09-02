@@ -151,6 +151,87 @@ public static class PitEnvelope
         return Math.Abs(a) / 2.0;
     }
 
+    /// <summary>一条台阶线环: 闭合多边形顶点(XY) + 标高 Z + 是否坡顶(crest, 否则坡底 toe)。</summary>
+    public sealed record BenchRing(double[] X, double[] Y, double Z, bool Crest);
+
+    /// <summary>
+    /// 段③ 三维境界落地: 自顶向下逐台阶生成 crest/toe 环(忠实原 PitMaterializer)。
+    /// crest_0(顶口) → 坡面内缩 H/tanα ↘ toe_0 → 平盘内缩 W=H/tanβ−H/tanα → crest_1 → …;
+    /// 各帮 β 不同 → 各帮 W 不同(逐边)。环退化(外接框短边 &lt; 5m)即到坑底止。台阶数 n=round(depth/H)。
+    /// </summary>
+    public static List<BenchRing> MaterializeRings(TopOutline top, double[] edgeBeta,
+        double benchH, double faceAngleDeg, double depth, double[]? contraction = null)
+    {
+        int m = top.Count;
+        double slopeRun = benchH / Tan(faceAngleDeg);            // 坡面水平投影(各帮同)
+        var slopeInset = new double[m];
+        var bermInset = new double[m];
+        for (int i = 0; i < m; i++)
+        {
+            slopeInset[i] = slopeRun;
+            double perBenchRun = benchH / Tan(edgeBeta[i]);      // H/tanβ 该帮单台阶总进尺
+            bermInset[i] = Math.Max(0.0, perBenchRun - slopeRun);  // 平盘宽 W(该帮)
+        }
+        int n = Math.Max(1, (int)Math.Round(depth / Math.Max(1e-6, benchH)));
+        var rings = new List<BenchRing>();
+        double[] curX, curY;
+        if (contraction != null && contraction.Length == m && contraction.Any(d => d > 1e-6))
+            (curX, curY) = OffsetPolygon(top.X.ToArray(), top.Y.ToArray(), contraction);
+        else { curX = top.X.ToArray(); curY = top.Y.ToArray(); }
+        double z = top.Zsurface;
+        rings.Add(new BenchRing(curX, curY, z, true));
+        for (int k = 1; k <= n; k++)
+        {
+            (curX, curY) = OffsetPolygon(curX, curY, slopeInset); // 坡面下降
+            z -= benchH;
+            rings.Add(new BenchRing(curX, curY, z, false));       // 坡底(toe)
+            if (Degenerate(curX, curY)) break;
+            if (k < n)
+            {
+                (curX, curY) = OffsetPolygon(curX, curY, bermInset); // 平盘内移
+                rings.Add(new BenchRing(curX, curY, z, true));       // 下一坡顶(crest)
+                if (Degenerate(curX, curY)) break;
+            }
+        }
+        return rings;
+    }
+
+    /// <summary>相邻环放样三角化成三维台阶面(各环顶点数 = m, 按 j↔j 连成条带; 忠实原 BuildLoftMesh)。供导 OFF。</summary>
+    public static (List<(double x, double y, double z)> verts, List<(int a, int b, int c)> tris) LoftMesh(List<BenchRing> rings)
+    {
+        var verts = new List<(double, double, double)>();
+        var tris = new List<(int, int, int)>();
+        if (rings.Count < 2) return (verts, tris);
+        int m = rings[0].X.Length;
+        foreach (var ring in rings)
+            for (int j = 0; j < m; j++) verts.Add((ring.X[j], ring.Y[j], ring.Z));
+        for (int r = 0; r < rings.Count - 1; r++)
+        {
+            if (rings[r].X.Length != m || rings[r + 1].X.Length != m) break;
+            int aBase = r * m, bBase = (r + 1) * m;
+            for (int j = 0; j < m; j++)
+            {
+                int j2 = (j + 1) % m;
+                int a0 = aBase + j, a1 = aBase + j2, b0 = bBase + j, b1 = bBase + j2;
+                tris.Add((a0, b0, b1));
+                tris.Add((a0, b1, a1));
+            }
+        }
+        return (verts, tris);
+    }
+
+    /// <summary>环退化(外接框短边 &lt; 5m)即到坑底(忠实原 Degenerate)。</summary>
+    private static bool Degenerate(double[] x, double[] y)
+    {
+        double xmin = double.MaxValue, xmax = double.MinValue, ymin = double.MaxValue, ymax = double.MinValue;
+        for (int i = 0; i < x.Length; i++)
+        {
+            xmin = Math.Min(xmin, x[i]); xmax = Math.Max(xmax, x[i]);
+            ymin = Math.Min(ymin, y[i]); ymax = Math.Max(ymax, y[i]);
+        }
+        return Math.Min(xmax - xmin, ymax - ymin) < 5.0;
+    }
+
     private static bool LineIntersect(double px, double py, double rx, double ry,
                                       double qx, double qy, double sx, double sy,
                                       out double ix, out double iy)
