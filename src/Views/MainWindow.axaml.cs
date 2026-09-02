@@ -885,6 +885,7 @@ public partial class MainWindow : Window
             if (cmd == "工艺架构定义" || cmd == "工艺架构" || cmd == "平盘工艺地图" || cmd == "工艺系统") { ProcessArchitectureCmd(); return; }
             if (cmd == "现场验收录入" || cmd == "现场验收" || cmd == "参数验收") { AcceptanceStatsCmd(); return; }
             if (cmd.StartsWith("参数验收判定") || cmd.StartsWith("DB参数验收") || cmd.StartsWith("验收判定")) { ParamAcceptanceJudgeCmd(cmd); return; }
+            if (cmd.StartsWith("兼容机型") || cmd.StartsWith("可用机型") || cmd.StartsWith("适配机型")) { CompatibleModelsCmd(cmd); return; }
             if (cmd == "作业面台账" || cmd == "作业面" || cmd == "工作面台账" || cmd == "采场参数") { WorkingFacesCmd(); return; }
             if (cmd == "参数模板库" || cmd == "参数化模板" || cmd == "参数模板" || cmd == "参数定义") { ParamTemplatesCmd(); return; }
             if (cmd == "月度计划" || cmd == "月计划" || cmd == "月度计划查看") { MonthlyPlansCmd(); return; }   // 只读展示(编制/授权工作流走 TaskLib, 受阻)
@@ -10018,6 +10019,23 @@ public partial class MainWindow : Window
             + $" · 标准{rng(norm.StandardMin, norm.StandardMax)} 报警{rng(norm.AlarmLow, norm.AlarmHigh)}";
     }
 
+    // 兼容机型判定(忠实原 ProcessArchitectureService.CompatibleModels): 某参数在给定实测值下, 全机型 − 违反其硬约束者。
+    // 数据: equipment_constraint(V012 种子)+ equipment_model。用法 "兼容机型 <参数code> <实测值>"。
+    private void CompatibleModelsCmd(string cmd)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var tk = cmd.Split(new[] { ' ', ',', '，' }, System.StringSplitOptions.RemoveEmptyEntries);
+        if (tk.Length < 3 || !double.TryParse(tk[2], System.Globalization.NumberStyles.Float, inv, out double v))
+        { StatusMsg.Text = "兼容机型：用法 兼容机型 <参数code> <实测值>（code 见 parameter_definition）"; return; }
+        var db = EnsureGeoDb(); if (db == null) return;
+        var (compat, blocked) = Data.GeoDataQueries.CompatibleModels(db.Connection, tk[1], v);
+        if (compat.Count == 0 && blocked.Count == 0) { StatusMsg.Text = $"兼容机型：参数 '{tk[1]}' 无机型/约束数据（查 equipment_model / equipment_constraint）"; return; }
+        string cList = compat.Count <= 8 ? string.Join("/", compat) : string.Join("/", compat.Take(8)) + $"…(+{compat.Count - 8})";
+        StatusMsg.Text = $"兼容机型判定：参数 {tk[1]} 实测 {v.ToString("0.##", inv)} → 可用 {compat.Count} 型"
+            + (compat.Count > 0 ? $"[{cList}]" : "")
+            + (blocked.Count > 0 ? $" · 禁用 {blocked.Count} 型[{string.Join("/", blocked)}]" : " · 无禁用");
+    }
+
     private void AcceptanceStatsCmd()
     {
         var db = EnsureGeoDb(); if (db == null) return;
@@ -10502,7 +10520,7 @@ public partial class MainWindow : Window
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","开采程序切分","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
         "设备台账","生产数据","产能分析","故障分析","爆破分析","设备累计工时","KPI分析","机型KPI","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","层位求交","导入生产记录","导入月度产能","导入故障记录","导入爆破记录","导入月度KPI","导入设备台账","导入设备型号","导入煤质","导入观测点","导入月度计划","导入见煤成果","导入路况","导入边坡","导入模板","导出分析",
-        "现场验收","参数验收判定","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","机群驾驶舱","设备综合评分","数据看板","煤种分类","煤质数据健康度","分煤层煤质",
+        "现场验收","参数验收判定","兼容机型","作业面台账","参数模板库","月度计划","路况显示","边坡设计","钻孔展绘","机群总览","机群驾驶舱","设备综合评分","数据看板","煤种分类","煤质数据健康度","分煤层煤质",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
         "产能分类对比","故障类型分布","设备因素分析","效能提升模拟","分工序验收合格率","数据导出","数据字典","达成度评价","产量预测","时序预测","编组优化","智能编组优化","导出编组","导出预测",
         "商品煤符合性","煤质达标","导出符合性","品位储量曲线","导出品位储量","分标高煤质","导出分标高","煤质离群","导出离群","洗选提质","导出洗选","用途适宜性","导出用途","灰分发热量回归","煤质综合结论","煤类反推","煤类一致率","煤质审核","测井一致","工分自洽","分煤层煤质","煤质三维插值","品位块模型","交叉验证","变差函数分析",

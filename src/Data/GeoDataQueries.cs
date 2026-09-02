@@ -48,6 +48,57 @@ public static class GeoDataQueries
         return (deviation, warn ? "warning" : "pass");
     }
 
+    /// <summary>设备能力约束违反判定(忠实原 ProcessArchitectureService.Violates): min/max/range/equals。纯函数、可单测。</summary>
+    public static bool ViolatesConstraint(string constraintType, double? limitValue, double? limitMin, double? limitMax, double v)
+        => constraintType switch
+        {
+            "min" => limitValue.HasValue && v < limitValue.Value,
+            "max" => limitValue.HasValue && v > limitValue.Value,
+            "range" => (limitMin.HasValue && v < limitMin.Value) || (limitMax.HasValue && v > limitMax.Value),
+            "equals" => limitValue.HasValue && System.Math.Abs(v - limitValue.Value) > 1e-6,
+            _ => false,
+        };
+
+    /// <summary>
+    /// 某参数在给定实测值下的可用/被禁机型(忠实原 ProcessArchitectureService.CompatibleModels):
+    /// 全机型 − 违反该参数【硬约束】者。数据: equipment_constraint(V012 种子) + equipment_model。
+    /// </summary>
+    public static (List<string> compatible, List<string> blocked) CompatibleModels(
+        SqliteConnection conn, string paramCode, double measuredValue)
+    {
+        long? paramId = null;
+        using (var c = conn.CreateCommand())
+        {
+            c.CommandText = "SELECT param_id FROM parameter_definition WHERE code = @c AND is_active = 1 LIMIT 1";
+            c.Parameters.AddWithValue("@c", paramCode);
+            var o = c.ExecuteScalar();
+            if (o != null && o != System.DBNull.Value) paramId = System.Convert.ToInt64(o);
+        }
+        var blocked = new HashSet<string>();
+        if (paramId.HasValue)
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT equipment_model, constraint_type, limit_value, limit_min, limit_max " +
+                              "FROM equipment_constraint WHERE param_id = @p AND consequence = 'hard' AND is_active = 1";
+            cmd.Parameters.AddWithValue("@p", paramId.Value);
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                double? D(int i) => r.IsDBNull(i) ? (double?)null : r.GetDouble(i);
+                if (ViolatesConstraint(r.GetString(1), D(2), D(3), D(4), measuredValue))
+                    blocked.Add(r.GetString(0));
+            }
+        }
+        var compatible = new List<string>();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT model FROM equipment_model";
+            using var r = cmd.ExecuteReader();
+            while (r.Read()) { var m = r.GetString(0); if (!blocked.Contains(m)) compatible.Add(m); }
+        }
+        return (compatible, new List<string>(blocked));
+    }
+
     public sealed record CategoryCount(string Category, int Count);
     public sealed record EquipmentRoster(int Total, IReadOnlyList<CategoryCount> ByCategory, int InService);
 

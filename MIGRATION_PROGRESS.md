@@ -3509,3 +3509,22 @@ V007/V034 seed)。故原 ComputeStatus 的 **DB-norm 验收判定**(报警阈→
 **判定**: DB-norm 参数验收判定**完成并验证**(8 测全中)。**更正教训: "无库/数据不可得"记录须复核 DB schema 实况——parameter_definition
 标定范围早已种子(§38 note 亦证"取值区间/报警上下限归 parameter_definition V034 已校准"), BenchParameterVerifier 兜底自注的
 "无模板库"过时。参数验收双路齐: 兜底(规范默认, CSV 台阶线)+ DB-norm(逐参数标定, code 查询)。** 1495→**1503** 测试, 0 失败, 0 错误。见 [[unlock-blocked-insights]] [[verify-seed-enum-values-before-filter]]。
+
+---
+
+## §二九六 兼容机型判定(CompatibleModels)——GeoDataBase 服务层续挖(数据实已种子)
+
+续 §295 复核 GeoDataBase 服务层非-CRUD 方法, 再挖 `ProcessArchitectureService.CompatibleModels`(某参数在给定实测值下的
+可用机型判定, 求解链首环——决定可用设备清单)。**数据实已种子**: equipment_constraint(参数→设备能力约束, V006 建表 + **V012 seed**)
++ equipment_model, schema 与原逐字一致(constraint_type min/max/range/equals·limit_value/min/max·consequence hard/soft/info)。
+
+**已做(纯托管 + DB 查询)**:
+- `GeoDataQueries.ViolatesConstraint`(**逐字忠实** Violates: min[v<限]/max[v>限]/range[出[min,max]]/equals[偏离], 纯函数可单测)
+  + `CompatibleModels`(忠实原: 查该参数【硬约束】→违反者入 blocked → 全 equipment_model − blocked = 可用机型)。
+- **3 已知值单测**: ViolatesConstraint 四型(min/max/range/equals + 未知型/空限值不违反)+ DB 集成(未知参数→全机型可用无禁用 ·
+  **带硬约束参数极端值→划分全机型不重叠 + 极端值至少一端禁掉某机型证约束生效**)。全中。
+- **接命令** `兼容机型 <参数code> <实测值>` → 查约束 → 报 可用/禁用机型清单。
+
+**判定**: 兼容机型判定**完成并验证**(3 测全中)。**GeoDataBase 服务层非-CRUD 方法复核连出 §295(ComputeStatus)+ §296
+(CompatibleModels)两 gap, 均"数据实已种子但算法未接"**——同 §295 教训: 参数验收/设备约束的 DB 标定数据(parameter_definition/
+equipment_constraint)V006-V012 早已种子, 相关判定算法(状态判定/机型兼容)可接。1503→**1506** 测试, 0 失败, 0 错误。见 [[unlock-blocked-insights]] [[verify-seed-enum-values-before-filter]]。
