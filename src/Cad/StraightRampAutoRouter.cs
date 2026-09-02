@@ -3,13 +3,15 @@ using System.Collections.Generic;
 
 namespace PitMine3D.Kylin.Cad;
 
-/// <summary>坑线展线形式(斜坡道 / 折返)。忠实原 MineAssLib.RoadLayout.RampForm。</summary>
+/// <summary>坑线展线形式(斜坡道 / 折返 / 螺旋)。忠实原 MineAssLib.RoadLayout.RampForm(三值)。</summary>
 public enum RampForm
 {
-    /// <summary>斜坡道:一条直腿沿帮匀坡落到下一级平盘。</summary>
+    /// <summary>斜坡道:一条直腿沿帮匀坡落到下一级平盘(可用帮长 ≥ ΔH/i)。</summary>
     Straight,
-    /// <summary>折返(回头):直线放不下时约束化回头,把展线折成 N 条直腿下降。</summary>
+    /// <summary>折返(回头):帮段不够或须反向 → 回头曲线(半径≥R_min)+平台。</summary>
     Switchback,
+    /// <summary>螺旋:平面受限/近圆形坑, 连续转弯免回头平台(RampRouteGenerator 选型兜底)。</summary>
+    Spiral,
 }
 
 /// <summary>
@@ -27,6 +29,8 @@ public sealed class RampBenchLine
     public IReadOnlyList<(double X, double Y, double Z)> Toe { get; set; } = new List<(double, double, double)>();
     /// <summary>平盘宽(判回头/路宽放得下)。</summary>
     public double BermWidth { get; set; }
+    /// <summary>工作帮?固定坑线只布非工作帮(RampRouteGenerator 用;StraightRampAutoRouter.Route 不读)。</summary>
+    public bool IsWorkingWall { get; set; }
 }
 
 /// <summary>直线坑线自动布线的输入选项(只关限坡 + 连通,先不考虑运量)。</summary>

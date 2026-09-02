@@ -6168,26 +6168,68 @@ public partial class MainWindow : Window
         { StatusMsg.Text = "运输布局方案：用法 运输布局方案 <每期需求t> [单车道运力t 默认1500] [单价元/tkm 默认2]（选坑线候选 CSV: fromLevel,toLevel,lengthM,geomFeasible[,note]）"; return; }
         double perLane = 1500; if (tk.Length >= 3 && double.TryParse(tk[2], out var pl) && pl > 0) perLane = pl;
         double unitCost = 2; if (tk.Length >= 4 && double.TryParse(tk[3], out var uc) && uc > 0) unitCost = uc;
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = "运输布局方案：选坑线候选 CSV (fromLevel,toLevel,lengthM,geomFeasible[,note])",
-            AllowMultiple = false,
-            FileTypeFilter = new[] { new FilePickerFileType("候选 (CSV/TXT)") { Patterns = new[] { "*.csv", "*.txt" } } }
-        });
-        if (files.Count == 0) return;
+
+        // 候选来源二择一: 选中 ≥2 同心台阶环 → 自动选线(RampRouteGenerator Layer-1, 免 CSV); 否则选候选 CSV。
+        var selRings = _selected.FindAll(e => e is PolylineEntity pe && pe.Points.Count >= 3);
         var cands = new List<Cad.RoadLayoutSolver.RampCand>();
-        foreach (var ln in System.IO.File.ReadAllLines(files[0].Path.LocalPath))
+        string srcHint;
+        if (selRings.Count >= 2)
         {
-            var p = ln.Split(new[] { ',', '\t' }, System.StringSplitOptions.None);
-            if (p.Length < 3 || !double.TryParse(p[0].Trim(), out double f) || !double.TryParse(p[1].Trim(), out double t2) || !double.TryParse(p[2].Trim(), out double len) || len <= 0) continue;
-            bool feas = p.Length < 4 || !(p[3].Trim().ToLowerInvariant() is "0" or "false" or "no" or "n" or "否");
-            cands.Add(new Cad.RoadLayoutSolver.RampCand(f, t2, len, feas, p.Length >= 5 ? p[4].Trim() : "几何不可行"));
+            var benches = BuildBenchesFromRings(selRings, benchHeightM: 12);
+            var gen = Cad.RampRouteGenerator.Generate(benches);
+            foreach (var g in gen)
+                cands.Add(new Cad.RoadLayoutSolver.RampCand(g.FromLevel, g.ToLevel, g.RequiredLengthM, g.GeomFeasible, g.Note));
+            if (cands.Count == 0) { StatusMsg.Text = "运输布局方案：所选台阶环不足 2 有效级(需同心坡顶线)"; return; }
+            var (s0, sb0, sp0, _) = Cad.RampRouteGenerator.Tally(gen);
+            srcHint = $"自动选线 {gen.Count} 候选(斜{s0}/转{sb0}/螺{sp0})";
         }
-        if (cands.Count == 0) { StatusMsg.Text = "运输布局方案：候选 CSV 无有效行(需 fromLevel,toLevel,lengthM[,geomFeasible,note])"; return; }
+        else
+        {
+            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "运输布局方案：选坑线候选 CSV (fromLevel,toLevel,lengthM,geomFeasible[,note])（或先选≥2 台阶环自动选线）",
+                AllowMultiple = false,
+                FileTypeFilter = new[] { new FilePickerFileType("候选 (CSV/TXT)") { Patterns = new[] { "*.csv", "*.txt" } } }
+            });
+            if (files.Count == 0) return;
+            foreach (var ln in System.IO.File.ReadAllLines(files[0].Path.LocalPath))
+            {
+                var p = ln.Split(new[] { ',', '\t' }, System.StringSplitOptions.None);
+                if (p.Length < 3 || !double.TryParse(p[0].Trim(), out double f) || !double.TryParse(p[1].Trim(), out double t2) || !double.TryParse(p[2].Trim(), out double len) || len <= 0) continue;
+                bool feas = p.Length < 4 || !(p[3].Trim().ToLowerInvariant() is "0" or "false" or "no" or "n" or "否");
+                cands.Add(new Cad.RoadLayoutSolver.RampCand(f, t2, len, feas, p.Length >= 5 ? p[4].Trim() : "几何不可行"));
+            }
+            if (cands.Count == 0) { StatusMsg.Text = "运输布局方案：候选 CSV 无有效行(需 fromLevel,toLevel,lengthM[,geomFeasible,note])"; return; }
+            srcHint = $"{cands.Count} 候选 CSV";
+        }
         string? obj = tk.Length >= 5 && (tk[4] == "均衡" || tk[4] == "最小运输功" || tk[4] == "最小成本") ? tk[4] : null;
         var r = Cad.RoadLayoutSolver.Solve(cands, demand, perLane, unitCost, obj);
         var parts = r.Schemes.Select(s => $"{s.Name.Split('·')[0]}({s.TotalLanes}车道/{s.Lines.Count}线·{(s.Feasible ? $"可行 {s.Score:0.#}分" : "✗" + s.Violations.Count + "违规")}·基建{s.TotalCapexProxyM:0}m·运营{s.TotalHaulCostYuan / 1e4:0.#}万元)");
-        StatusMsg.Text = $"运输布局方案({cands.Count} 候选·需求 {demand:0}t/期·单车道 {perLane:0}t·目标{obj ?? "最小成本"})：推荐「{r.Recommended?.Name ?? "无可行方案"}」 · " + string.Join(" | ", parts);
+        StatusMsg.Text = $"运输布局方案({srcHint}·需求 {demand:0}t/期·单车道 {perLane:0}t·目标{obj ?? "最小成本"})：推荐「{r.Recommended?.Name ?? "无可行方案"}」 · " + string.Join(" | ", parts);
+    }
+
+    // 从选中同心台阶环构建选线用台阶(忠实沿用 2D 场景适配): 按面积降序赋标高(外圈=地表最高, 每内一环降 benchHeightM),
+    // 平盘宽由相邻环等效半径差 R_k−R_{k+1}(=平台宽物理近似)估, 坡顶线=环点。喂 RampRouteGenerator 自动选线。
+    private static List<Cad.RampBenchLine> BuildBenchesFromRings(List<SceneEntity> rings, double benchHeightM)
+    {
+        var sorted = new List<PolylineEntity>();
+        foreach (var e in rings) if (e is PolylineEntity pe) sorted.Add(pe);
+        sorted.Sort((a, b) => System.Math.Abs(Cad.BenchLines.SignedArea(b.Points))
+                                     .CompareTo(System.Math.Abs(Cad.BenchLines.SignedArea(a.Points))));
+        int n = sorted.Count;
+        var radii = new double[n];
+        for (int k = 0; k < n; k++)
+            radii[k] = System.Math.Sqrt(System.Math.Abs(Cad.BenchLines.SignedArea(sorted[k].Points)) / System.Math.PI);
+        var benches = new List<Cad.RampBenchLine>(n);
+        for (int k = 0; k < n; k++)
+        {
+            double z = (n - 1 - k) * benchHeightM;   // 外圈最高
+            double berm = k + 1 < n ? System.Math.Max(0, radii[k] - radii[k + 1]) : radii[k];
+            var crest = new List<(double X, double Y, double Z)>(sorted[k].Points.Count);
+            foreach (var (x, y) in sorted[k].Points) crest.Add((x, y, z));
+            benches.Add(new Cad.RampBenchLine { Level = z, BermWidth = berm, Crest = crest });
+        }
+        return benches;
     }
 
     // 派生计划方案：块体→场→按不同采区数/推进方位派生多方案→逐一评价→按 NPV 排名 报表

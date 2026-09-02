@@ -3338,3 +3338,19 @@ robust 逐文件读 PlanLib(参数识别工作流 采场圈定/现场参数提�
 **仍记录(忠实边界)**: **坑线落地**(把中线贴帮切进单面坡道+挖填边坡)为内核规模(native 切帮), 无托管源→不做, 与原版一致(原「坑线落地」走 C++)。本次交付的是**自动布线+中线预览**(原「先画中线预览」的可验证托管半), 落地半记录。
 
 **判定**: 直线坑线自动布线(算法核+命令)**完成并验证**(7 已知值全中); 坑线落地(native 切帮)记录。1423→**1430** 测试, 0 失败, 0 错误。**再证 meta-lesson: 「内核规模/受阻」记录须逐一对源复核——本项由「记录」转为已交付可验证功能 + 修一处命令退化。** 见 [[unlock-blocked-insights]] [[faithfulness-only-original-commands]]。
+
+---
+
+## §二八八 坑线选线器 Layer-1(RampRouteGenerator)——运输布局方案自动候选生成(免 CSV)
+
+顺 §287 同目录(RoadLayout)深挖: `RampRouteGenerator`(选线器 Layer-1)亦**纯托管几何**(原注"纯几何、不依赖引擎、可单测"), 无 native。与 §287 StraightRampAutoRouter(出连续中线,连通自检)**互补非重叠**: 本器逐对相邻**非工作帮**台阶按「可用帮长 vs ΔH/i」判**展线形式**(斜坡道/转弯坡道/**螺旋**)+ 单车道年运力 + 起坡点, 出**候选边**喂 Layer-2 `RoadLayoutSolver`(Kylin 已移)。
+
+**缺口**: Kylin `运输布局方案` 原**只能从候选 CSV** 求解(命令注释自承「候选可由坑线生成」但未实装)。本器补上自动候选生成 → 从台阶几何直接出候选。
+
+**已做**:
+- 移 `src/Cad/RampRouteGenerator.cs`(**逐字忠实** Generate + Tally + FormLabel; 最小参数 `RampRouteConstraints` 只含选线实读的 6 字段[限坡/转弯半径/载重/车头时距/利用率/年作业时], **默认值照搬**原 TransportConstraintSettings, 不移全 34 属性域——[[unlock-blocked-insights]] 最小参数适配)。忠实原「首版实现」5 TODO(多腿/走廊/中线偏置/跨帮/螺旋识别)均未实现→记录。
+- **顺带补两处 §287 端口的忠实缺**: 原 `RampForm` 是**三值**(Straight/Switchback/**Spiral**), §287 我只移两值(漏 Spiral, 因 Route 不产螺旋)→补全; 原共享 `BenchLine` 有 `IsWorkingWall`(固定坑线只布非工作帮)→ `RampBenchLine` 补该字段(Route 不读, 选线器读)。
+- **8 已知值单测**(`RampRouteGeneratorTests`): 斜坡道(可用200≥需125)/转弯(短腿100<125 但平盘25≥回头需20)/螺旋(平盘5<20 兜底)/**单车道年运力=(3600/30)·0.8·5000·90=43,200,000t 精确**/工作帮排除+标高降序配对/Tally 计数/零坡不可行/**Layer-1→Layer-2 端到端**(生成候选→映射 RampCand→RoadLayoutSolver.Solve 出方案)。全中。
+- **接命令**: `运输布局方案` 增自动选线支路——选中 ≥2 同心台阶环则 `RampRouteGenerator` 自动出候选(标高按同心序 + 平盘宽按相邻环等效半径差估), 免 CSV; 未选则仍走 CSV。报斜/转/螺候选数。
+
+**判定**: 坑线选线器(Layer-1 算法核 + 命令自动候选)**完成并验证**(8 已知值全中, 含端到端两层贯通)。运量网络流两层(选线 Layer-1 §288 + 方案 Layer-2 §244)至此贯通。1430→**1438** 测试, 0 失败, 0 错误。**再证 §287 教训: 同目录(RoadLayout)"复杂/native 上下文"记录连破两个纯托管算法; 且深港一个算法常带出前次端口的忠实缺(RampForm 三值/IsWorkingWall)**。见 [[unlock-blocked-insights]] [[faithfulness-only-original-commands]]。
