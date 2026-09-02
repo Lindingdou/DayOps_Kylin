@@ -1005,6 +1005,7 @@ public partial class MainWindow : Window
             if (cmd == "路段分类" || cmd == "路网拓扑分类" || cmd == "路段拓扑" || cmd == "干线支线") { RoadTopologyCmd(); return; }
             if (cmd == "排土场容量校核" || cmd == "容量校核" || cmd == "排土容量") { await DumpCapacityAsync(); return; }
             if (cmd == "生产量核算" || cmd == "任务量汇总" || cmd == "分账合计" || cmd == "生产任务量") { await ProductionQuantityAsync(); return; }
+            if (cmd == "生产任务编制" || cmd == "排产" || cmd == "任务裂解" || cmd == "裂解装箱" || cmd == "班次排产") { TaskExplodeCmd(); return; }
             if (cmd == "采剥平衡" || cmd == "采剥平衡分析" || cmd == "剥采平衡" || cmd == "物料平衡") { await StripBalanceAsync(); return; }
             if (cmd == "配煤核算" || cmd == "配煤" || cmd == "煤质混合" || cmd == "配煤计算") { await CoalBlendAsync(); return; }
             if (cmd == "工序进度跟踪" || cmd == "工序进度" || cmd == "进度跟踪") { await ProcessProgressAsync(); return; }
@@ -2599,6 +2600,38 @@ public partial class MainWindow : Window
         }
         if (tasks.Count == 0) { StatusMsg.Text = "生产量核算：未解析到任务记录(工序需 穿孔/爆破/采装/运输/排土)"; return; }
         StatusMsg.Text = "生产量核算（分账，不合总）：" + Cad.Tasks.TaskQuantity.Sum(tasks).Caption;
+    }
+
+    // 生产任务编制(裂解装箱, 忠实原 TaskExploder): 代表性算例(三班×两采装面+穿孔+配煤) → 按班次时窗×编组班产装箱
+    // → 逐班任务 + 校核(运力/双占/接续/配煤/欠产)。示范排产引擎(原 SampleTaskBoard 式代表算例; 真数据需接台账/钻孔计划)。
+    private void TaskExplodeCmd()
+    {
+        var cfg = new Cad.Tasks.Scheduling.ExploderConfig
+        {
+            DateLabel = "示例", IdPrefix = "D", BlastStart = 12, BlastEnd = 12.5,
+            Shifts = { new("早", 0, 8), new("中", 8, 16), new("夜", 16, 24) },
+            Blend = new Cad.Tasks.Scheduling.BlendStandard { MaxAshPct = 12.5, EffHoursPerDay = 20 },
+            Faces =
+            {
+                new Cad.Tasks.Scheduling.FaceInput { Zone = "4煤南", Process = Cad.Tasks.ProcessType.Load, DayTargetM3 = 4800, Material = "煤",
+                    Quality = new Cad.Tasks.CoalQuality { AshPct = 14 },
+                    Group = new Cad.Tasks.Scheduling.EquipmentGroup { MainEquipment = "WK-35A", GroupCapacityM3PerH = 350, RecommendedTrucks = 5,
+                        Trucks = new() { "T1", "T2", "T3", "T4", "T5" } } },
+                new Cad.Tasks.Scheduling.FaceInput { Zone = "4煤北", Process = Cad.Tasks.ProcessType.Load, DayTargetM3 = 3600, Material = "煤",
+                    Quality = new Cad.Tasks.CoalQuality { AshPct = 10 },
+                    Group = new Cad.Tasks.Scheduling.EquipmentGroup { MainEquipment = "PH2800", GroupCapacityM3PerH = 300, RecommendedTrucks = 4,
+                        Trucks = new() { "T6", "T7", "T8" } } },   // 3<4 → 运力不足
+            },
+            Drills = { new Cad.Tasks.Scheduling.DrillInput { EquipId = "ZJ-01", Zone = "4煤南", Start = 0, End = 6 } },
+            Maintenance = { new Cad.Tasks.Scheduling.MaintenanceWindow { EquipId = "PH2800", Start = 0, End = 2, Label = "定检" } },
+        };
+        var r = Cad.Tasks.Scheduling.TaskExploder.Explode(cfg);
+        int loads = r.Tasks.Count(t => t.Process == Cad.Tasks.ProcessType.Load);
+        int idles = r.Tasks.Count(t => t.Process == Cad.Tasks.ProcessType.Idle);
+        int errs = r.Violations.Count(v => v.Severity == Cad.Tasks.Scheduling.ViolationSeverity.Error);
+        int warns = r.Violations.Count(v => v.Severity == Cad.Tasks.Scheduling.ViolationSeverity.Warn);
+        string vio = string.Join(" · ", r.Violations.Take(4).Select(v => $"{v.Code}"));
+        StatusMsg.Text = $"生产任务编制(示例排产)：{r.Tasks.Count} 任务(采装{loads}/穿孔{r.Tasks.Count(t => t.Process == Cad.Tasks.ProcessType.Drill)}/空闲{idles}) · 校核 {errs}错/{warns}警[{vio}]（代表算例; 真数据接台账/钻孔计划）";
     }
 
     private static Cad.Tasks.ProcessType? ParseProcess(string s) => s switch
