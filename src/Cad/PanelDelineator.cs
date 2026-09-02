@@ -62,7 +62,18 @@ public sealed class TopOutline
 {
     public List<double> X = new();
     public List<double> Y = new();
+    public double Zsurface;        // 顶口标高(几何圈定 PitEnvelope 用; 拉沟推荐不设默认 0)
+    public double Cx, Cy;          // 形心(几何圈定用)
     public int Count => X.Count;
+
+    /// <summary>由 XY 包围盒建矩形顶口(块体足迹兜底; 忠实原 PitEnvelope.ResolveTopOutline 的 block?.Spec 路径)。</summary>
+    public static TopOutline FromBounds(double minX, double minY, double maxX, double maxY, double zTop)
+    {
+        var o = new TopOutline { Zsurface = zTop, Cx = (minX + maxX) / 2, Cy = (minY + maxY) / 2 };
+        o.X.AddRange(new[] { minX, maxX, maxX, minX });
+        o.Y.AddRange(new[] { minY, minY, maxY, maxY });
+        return o;
+    }
 }
 
 /// <summary>

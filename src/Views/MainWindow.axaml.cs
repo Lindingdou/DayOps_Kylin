@@ -921,6 +921,7 @@ public partial class MainWindow : Window
             if (cmd == "画道路中线" || cmd == "手动标定线路" || cmd == "道路中线绘制") { ActivateDrawTool("多段线"); StatusMsg.Text = "画道路中线：绘制折线作道路中线（供路网/寻径/演化对比）"; return; }
             if (cmd == "境界圈定" || cmd == "凸包" || cmd == "采场圈定" || cmd == "采场/排土场圈定") { await BoundaryHullAsync(); return; }
             if (cmd == "确定境界" || cmd == "境界优化" || cmd == "最优坑深" || cmd == "经济境界") { PitDepthCmd(); return; }
+            if (cmd.StartsWith("生成境界") || cmd.StartsWith("境界线") || cmd.StartsWith("几何圈定") || cmd.StartsWith("境界壳")) { PitEnvelopeCmd(cmd); return; }
             if (cmd.StartsWith("经济剥采比") || cmd.StartsWith("经济合理剥采比") || cmd.StartsWith("允许剥采比")) { EconStrippingRatioCmd(cmd); return; }
             if (cmd.StartsWith("产能推算") || cmd.StartsWith("推进产能") || cmd.StartsWith("产能推进")) { AdvanceCapacityCmd(cmd); return; }
             if (cmd == "开采程序切分" || cmd == "逐期量核算" || cmd == "分期量表" || cmd == "分期剥采比" || cmd.StartsWith("开采程序切分 ")) { await DriveSequenceCmd(cmd); return; }
@@ -6182,6 +6183,42 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"产能推算(Q=L·v·H·ρ/1e4)：工作线{L:0.#}m·推进{v:0.#}m/a·台阶{H:0.#}m·ρ{rho:0.##} → 产能 {q:0.##} 万t/a（逆算推进度 {vBack:0.#} m/a 自洽）";
     }
 
+    // 生成境界(几何圈定): 块体足迹顶口 + slope_design 分帮坡角 → 逐帮放坡内缩 drop/tanβ 到坑底 → 顶/底境界多边形入场景。
+    // 忠实原 PitEnvelope 纯几何核(块体足迹兜底路径, 非 native 地表界)。用法: 生成境界 <坑深m> [最小底宽m 默认20] [统一帮坡角° 无slope_design时默认45]
+    private void PitEnvelopeCmd(string cmd)
+    {
+        if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "生成境界：请先导入/生成块体"; return; }
+        var tk = cmd.Split(new[] { ' ', ',', '，', '/', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        if (tk.Length < 2 || !double.TryParse(tk[1], out double depth) || depth <= 0)
+        { StatusMsg.Text = "生成境界：用法 生成境界 <坑深m> [最小底宽m 默认20] [统一帮坡角° 默认45]（先有 slope_design 则按分帮坡角）"; return; }
+        double minBottom = tk.Length >= 3 && double.TryParse(tk[2], out double mb) && mb > 0 ? mb : 20;
+        double uniformBeta = tk.Length >= 4 && double.TryParse(tk[3], out double ub) && ub > 0 ? ub : 45;
+        double minX = _lastBlocks.Min(b => b.X - b.Size / 2), maxX = _lastBlocks.Max(b => b.X + b.Size / 2);
+        double minY = _lastBlocks.Min(b => b.Y - b.Size / 2), maxY = _lastBlocks.Max(b => b.Y + b.Size / 2);
+        double zTop = _lastBlocks.Max(b => b.Z + b.Size / 2);
+        var top = Cad.TopOutline.FromBounds(minX, minY, maxX, maxY, zTop);
+        var walls = new System.Collections.Generic.List<Cad.WallAngle>();
+        var db = EnsureGeoDb();
+        if (db != null)
+            foreach (var s in Data.GeoDataQueries.GetSlopeDesigns(db.Connection))
+                if (s.FinalAngle > 1) walls.Add(new Cad.WallAngle(s.Side, s.FinalAngle));
+        if (walls.Count == 0) walls.Add(new Cad.WallAngle("均一", uniformBeta));
+        var betas = Cad.PitEnvelope.EdgeBetas(top, walls);
+        double capDepth = Cad.PitEnvelope.GeometricDepthCapPerWall(top, minBottom, betas);
+        double useDepth = System.Math.Min(depth, capDepth);
+        var (bx, by) = Cad.PitEnvelope.InsetPerWall(top, useDepth, betas);
+        var topPoly = new PolylineEntity { Closed = true, Cr = 0.9f, Cg = 0.9f, Cb = 0.4f };   // 顶口(黄)
+        for (int i = 0; i < top.Count; i++) topPoly.Points.Add((top.X[i], top.Y[i]));
+        var botPoly = new PolylineEntity { Closed = true, Cr = 1f, Cg = 0.5f, Cb = 0.2f };      // 坑底(橙)
+        for (int i = 0; i < bx.Length; i++) botPoly.Points.Add((bx[i], by[i]));
+        AssignLayer(topPoly); AssignLayer(botPoly); _scene.Add(topPoly); _scene.Add(botPoly);
+        RefreshScene();
+        double topAreaHa = Cad.PitEnvelope.PolygonArea(top.X.ToArray(), top.Y.ToArray()) / 1e4;
+        double botAreaHa = Cad.PitEnvelope.PolygonArea(bx, by) / 1e4;
+        string cap = useDepth < depth - 1e-6 ? $"(几何封顶, 请求{depth:0.#}m)" : "";
+        StatusMsg.Text = $"生成境界(逐帮放坡)：坑深 {useDepth:0.#}m{cap} · 顶口 {topAreaHa:0.##}公顷 · 坑底 {botAreaHa:0.##}公顷 · {walls.Count}帮(β均{Cad.PitEnvelope.AvgBeta(walls):0.#}°) · 最小底宽{minBottom:0.#}m（顶黄/底橙已入场景）";
+    }
+
     // 开采程序切分: 块体(_lastBlocks) + 选中工作线(定推进方位) + 推进步距 → 逐期煤/岩量 + 累计剥采比 + 导 CSV(喂剥采比均衡)。
     // 忠实原 TemplateDrivingEngine 距离驱动核(平面近似, 陡帮台阶退距≈0)。用法「开采程序切分 [推进步距m 默认50]」。
     private async Task DriveSequenceCmd(string cmd)
@@ -10586,7 +10623,7 @@ public partial class MainWindow : Window
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割","移除障碍物",
         // 块体/运输/路网
-        "块体模型","导出PMB","属性赋值","字高归一化","资源量","经济剥采比","产能推算","面约束块体","离散化模型","采场排土场识别","采区划分","拉沟推荐","中长远进度计划","短期生产计划","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","约束寻径","路网校验","瓶颈段分析","路网运输指标","运输指标报告","路网建图","结构路面","中线交点","路段分类","演化对比","提取道路中心线","路网连通增强","螺旋斜坡道","折返斜坡道","直线斜坡道","直线坑线","坑线自动布线",
+        "块体模型","导出PMB","属性赋值","字高归一化","资源量","经济剥采比","产能推算","生成境界","面约束块体","离散化模型","采场排土场识别","采区划分","拉沟推荐","中长远进度计划","短期生产计划","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","约束寻径","路网校验","瓶颈段分析","路网运输指标","运输指标报告","路网建图","结构路面","中线交点","路段分类","演化对比","提取道路中心线","路网连通增强","螺旋斜坡道","折返斜坡道","直线斜坡道","直线坑线","坑线自动布线",
         // 生产计划/投影
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","开采程序切分","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
