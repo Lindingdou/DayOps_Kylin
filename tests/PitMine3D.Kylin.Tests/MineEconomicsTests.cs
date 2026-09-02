@@ -17,6 +17,16 @@ public class MineEconomicsTests
     }
 
     [Fact]
+    public void Taylor_service_life_clamps_to_5_60()
+    {
+        // 应用服务年限夹 [5,60](忠实原 PitEvaluator Min(60,Max(5,·)))。
+        Assert.Equal(13.0, MineEconomics.TaylorServiceLifeYears(16), 6);    // 6.5·2=13 落区间内不变
+        Assert.Equal(5.0, MineEconomics.TaylorServiceLifeYears(0.001), 6);  // 6.5·0.178≈1.16 < 5 → 夹到 5
+        Assert.Equal(60.0, MineEconomics.TaylorServiceLifeYears(1e8), 6);   // 6.5·100=650 > 60 → 夹到 60
+        Assert.Equal(0, MineEconomics.TaylorServiceLifeYears(0), 6);        // 无储量 → 0(不夹到 5)
+    }
+
+    [Fact]
     public void Annuity_pv_factor_and_zero_rate_degenerates_to_years()
     {
         // r=10%, T=10 → (1−1.1⁻¹⁰)/0.1 = 6.1446。

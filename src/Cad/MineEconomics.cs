@@ -12,6 +12,13 @@ public static class MineEconomics
     public static double TaylorMineLifeYears(double reserveMt)
         => reserveMt > 1e-9 ? 6.5 * Math.Pow(reserveMt, 0.25) : 0.0;
 
+    /// <summary>
+    /// 泰勒规则【应用】服务年限: T=6.5·R^0.25 夹于 [5,60] 年(忠实原 PitEvaluator 的域约束 Min(60,Max(5,·))——
+    /// 矿山服务年限工程上不 &lt;5(太短不经济)或 &gt;60(过长不确定)。R≤0→0。境界/规划报寿命用此夹后值。
+    /// </summary>
+    public static double TaylorServiceLifeYears(double reserveMt)
+        => reserveMt > 1e-9 ? Math.Min(60.0, Math.Max(5.0, TaylorMineLifeYears(reserveMt))) : 0.0;
+
     /// <summary>年金现值系数 (1−(1+r)⁻ᵀ)/r(r=折现率, T=年限)。r≈0 时退化为 T。用于总净值等额分摊折现。</summary>
     public static double AnnuityPvFactor(double rate, double years)
     {

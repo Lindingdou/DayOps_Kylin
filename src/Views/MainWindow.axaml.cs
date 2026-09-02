@@ -6142,7 +6142,7 @@ public partial class MainWindow : Window
         var r = SectionSolver.SolveDepth(prof, revenuePerCoalT: 220, stripCostPerM3: 20);
         double coalWan = r.CoalT / 1e4, wasteWan = r.WasteM3 / 1e4;
         // 时序/经济评价(忠实原 PitEvaluator): 泰勒规则服务年限 T=6.5·R^0.25(R=储量 Mt=万t/100) + 年产=储量/年限 + NPV(净值等额分摊折现 8%)。
-        double reserveMt = coalWan / 100.0, life = Cad.MineEconomics.TaylorMineLifeYears(reserveMt);
+        double reserveMt = coalWan / 100.0, life = Cad.MineEconomics.TaylorServiceLifeYears(reserveMt);   // 夹 [5,60]a 忠实原 PitEvaluator
         double annualWan = life > 1e-9 ? coalWan / life : 0;
         double npvWan = Cad.MineEconomics.NpvLevelized(r.NetValueYuan / 1e4, life, 0.08);
         string econ = life > 0 ? $" · 服务年限≈{life:0.#}a(泰勒) · 年产≈{annualWan:0.#}万t/a · NPV≈{npvWan:0.#}万元(8%)" : "";
