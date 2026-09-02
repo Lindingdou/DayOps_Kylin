@@ -36,6 +36,26 @@ public class MineEconomicsTests
     }
 
     [Fact]
+    public void Allowable_stripping_ratio_four_methods()
+    {
+        // 忠实原 EconParams.ComputeEconRatio 四式(默认算例 d=320/a=95/b=28)。
+        Assert.Equal(225.0 / 28, MineEconomics.AllowableStrippingRatio(MineEconomics.EconRatioMethod.Price, 95, 28, 320)!.Value, 6);            // (320−95)/28
+        Assert.Equal(210.0 / 28, MineEconomics.AllowableStrippingRatio(MineEconomics.EconRatioMethod.PriceProfit, 95, 28, 320, minProfit: 15)!.Value, 6);   // (320−(95+15))/28
+        Assert.Equal(204.0 / 28, MineEconomics.AllowableStrippingRatio(MineEconomics.EconRatioMethod.PriceProfitReclaim, 95, 28, 320, minProfit: 15, reclaimCost: 6)!.Value, 6); // (320−116)/28
+        Assert.Equal(85.0 / 28, MineEconomics.AllowableStrippingRatio(MineEconomics.EconRatioMethod.CostComparison, 95, 28, undergroundCost: 180)!.Value, 6);  // (C_D−a)/b=(180−95)/28
+        // 盈利/复垦抬高门槛(可采比更严): 价格 > 价格+盈利 > 价格+盈利+复垦。
+        Assert.True(MineEconomics.AllowableStrippingRatio(MineEconomics.EconRatioMethod.Price, 95, 28, 320)!.Value
+                  > MineEconomics.AllowableStrippingRatio(MineEconomics.EconRatioMethod.PriceProfit, 95, 28, 320, minProfit: 15)!.Value);
+    }
+
+    [Fact]
+    public void Allowable_stripping_ratio_nonpositive_strip_cost_null()
+    {
+        Assert.Null(MineEconomics.AllowableStrippingRatio(MineEconomics.EconRatioMethod.Price, 95, 0, 320));   // b≤0 → null(不除零)
+        Assert.Null(MineEconomics.AllowableStrippingRatio(MineEconomics.EconRatioMethod.Price, 95, -5, 320));
+    }
+
+    [Fact]
     public void Npv_levelized_discounts_below_undiscounted_net()
     {
         // 总净值 1000, 年限 10, 折现 10% → (1000/10)·6.1446=614.46 < 1000(折现后小于名义)。

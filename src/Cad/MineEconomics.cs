@@ -30,4 +30,33 @@ public static class MineEconomics
     /// <summary>总净值按服务年限等额分摊后折现的 NPV = (净值/年限)·年金现值系数(忠实原 PitEvaluator DCF)。</summary>
     public static double NpvLevelized(double totalNet, double life, double rate)
         => life > 1e-9 ? (totalNet / life) * AnnuityPvFactor(rate, life) : 0.0;
+
+    /// <summary>经济合理剥采比 n经 的四种确定原则(忠实原 PitScheme.EconParams.EconRatioMethod)。</summary>
+    public enum EconRatioMethod
+    {
+        CostComparison,      // 成本比较法(替代原则): n=(C_D − a)/b
+        Price,               // 价格法:                n=(d − a)/b
+        PriceProfit,         // 价格法 + 盈利:          n=[d − (a+e)]/b
+        PriceProfitReclaim,  // 价格法 + 盈利 + 复垦:    n=[d − (a+e+c)]/b
+    }
+
+    /// <summary>
+    /// 按所选原则算经济合理剥采比 n经 (m³/t, 体积口径; 忠实原 EconParams.ComputeEconRatio 四式)。
+    /// a=露天纯采矿成本(元/t), b=剥离成本(元/m³), d=原煤售价(元/t), C_D=地下采矿成本(元/t),
+    /// e=单位最低盈利(元/t), c=分摊复垦费(元/t)。b≤0(剥离成本非正)→ null。
+    /// </summary>
+    public static double? AllowableStrippingRatio(EconRatioMethod method,
+        double miningCost, double stripCost, double price = 0,
+        double undergroundCost = 0, double minProfit = 0, double reclaimCost = 0)
+    {
+        if (stripCost <= 0) return null;
+        return method switch
+        {
+            EconRatioMethod.CostComparison     => (undergroundCost - miningCost) / stripCost,
+            EconRatioMethod.Price              => (price - miningCost) / stripCost,
+            EconRatioMethod.PriceProfit        => (price - (miningCost + minProfit)) / stripCost,
+            EconRatioMethod.PriceProfitReclaim => (price - (miningCost + minProfit + reclaimCost)) / stripCost,
+            _ => null,
+        };
+    }
 }
