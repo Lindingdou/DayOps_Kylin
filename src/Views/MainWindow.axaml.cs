@@ -923,6 +923,7 @@ public partial class MainWindow : Window
             if (cmd == "确定境界" || cmd == "境界优化" || cmd == "最优坑深" || cmd == "经济境界") { PitDepthCmd(); return; }
             if (cmd.StartsWith("生成境界") || cmd.StartsWith("境界线") || cmd.StartsWith("几何圈定") || cmd.StartsWith("境界壳")) { PitEnvelopeCmd(cmd); return; }
             if (cmd.StartsWith("境界建模") || cmd.StartsWith("境界落地") || cmd.StartsWith("生成台阶面") || cmd.StartsWith("三维境界")) { await BenchModelAsync(cmd); return; }
+            if (cmd.StartsWith("境界内资源") || cmd.StartsWith("圈入资源") || cmd.StartsWith("坑内资源") || cmd.StartsWith("圈入量")) { EnclosedResourceCmd(cmd); return; }
             if (cmd.StartsWith("经济剥采比") || cmd.StartsWith("经济合理剥采比") || cmd.StartsWith("允许剥采比")) { EconStrippingRatioCmd(cmd); return; }
             if (cmd.StartsWith("产能推算") || cmd.StartsWith("推进产能") || cmd.StartsWith("产能推进")) { AdvanceCapacityCmd(cmd); return; }
             if (cmd == "开采程序切分" || cmd == "逐期量核算" || cmd == "分期量表" || cmd == "分期剥采比" || cmd.StartsWith("开采程序切分 ")) { await DriveSequenceCmd(cmd); return; }
@@ -6265,6 +6266,47 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"境界建模(逐台阶放坡)：{benches} 台阶 / {rings.Count} 环 · 深 {depth:0.#}m · H={benchH:0.#}m·坡面α={faceA:0.#}° · {walls.Count}帮 · 台阶线(顶红底蓝)入场景{offNote}";
     }
 
+    // 境界内资源(圈入量): 用逐层境界轮廓(PitEnvelope 逐层放坡内缩)裁块体 → 圈入煤/岩 + 回收率(圈入÷全模型)。
+    // 忠实原 SectionSampler.SampleLayers 的 layerClipsXY 语义。区别 资源量(全模型不裁): 本命令出真实坑内圈入资源。
+    // 用法: 境界内资源 <坑深m> [统一帮坡角° 默认45]（先有 slope_design 则按分帮坡角）
+    private void EnclosedResourceCmd(string cmd)
+    {
+        if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "境界内资源：请先导入/生成块体"; return; }
+        var tk = cmd.Split(new[] { ' ', ',', '，', '/', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        if (tk.Length < 2 || !double.TryParse(tk[1], out double depth) || depth <= 0)
+        { StatusMsg.Text = "境界内资源：用法 境界内资源 <坑深m> [统一帮坡角° 默认45]（按逐层境界轮廓裁块体, 出圈入煤/岩+回收率）"; return; }
+        double uniformBeta = tk.Length >= 3 && double.TryParse(tk[2], out double ub) && ub > 0 ? ub : 45;
+        double cutoff = _lastBlocks.Average(b => b.Grade);
+        double density = 1.35;
+        double cell = _lastBlocks[0].Size > 1e-9 ? _lastBlocks[0].Size : 1.0;
+        double minX = _lastBlocks.Min(b => b.X - b.Size / 2), maxX = _lastBlocks.Max(b => b.X + b.Size / 2);
+        double minY = _lastBlocks.Min(b => b.Y - b.Size / 2), maxY = _lastBlocks.Max(b => b.Y + b.Size / 2);
+        double minZ = _lastBlocks.Min(b => b.Z), maxZ = _lastBlocks.Max(b => b.Z);
+        double zTop = maxZ + cell / 2;
+        var top = Cad.TopOutline.FromBounds(minX, minY, maxX, maxY, zTop);
+        var walls = new System.Collections.Generic.List<Cad.WallAngle>();
+        var db = EnsureGeoDb();
+        if (db != null)
+            foreach (var s in Data.GeoDataQueries.GetSlopeDesigns(db.Connection))
+                if (s.FinalAngle > 1) walls.Add(new Cad.WallAngle(s.Side, s.FinalAngle));
+        if (walls.Count == 0) walls.Add(new Cad.WallAngle("均一", uniformBeta));
+        var betas = Cad.PitEnvelope.EdgeBetas(top, walls);
+        var blocks = _lastBlocks.Select(b => (b.X, b.Y, b.Z, b.Size, b.Grade)).ToList();
+        var prof = Cad.SectionSampler.SampleClipped(blocks, cutoff, density, k =>
+        {
+            double zk = minZ + k * cell;
+            double drop = zTop - zk;
+            if (drop < 0) drop = 0;
+            if (drop > depth + 1e-6) return new System.Collections.Generic.List<(double x, double y)>();  // 坑底以下 → 空(出圈)
+            var (bx, by) = Cad.PitEnvelope.InsetPerWall(top, drop, betas);
+            var poly = new System.Collections.Generic.List<(double x, double y)>();
+            for (int i = 0; i < bx.Length; i++) poly.Add((bx[i], by[i]));
+            return poly;
+        });
+        if (prof == null) { StatusMsg.Text = "境界内资源：无块体"; return; }
+        StatusMsg.Text = $"境界内资源(逐层境界裁)：圈入煤 {prof.CoalT / 1e4:0.##}万t · 岩 {prof.WasteM3 / 1e4:0.##}万m³ · 圈内剥采比 {prof.StripRatioM3PerT:0.##} · 回收率 {prof.RecoveryPct:0.#}%（圈入÷全模型煤）· 坑深{depth:0.#}m·{walls.Count}帮β均{Cad.PitEnvelope.AvgBeta(walls):0.#}°";
+    }
+
     // 开采程序切分: 块体(_lastBlocks) + 选中工作线(定推进方位) + 推进步距 → 逐期煤/岩量 + 累计剥采比 + 导 CSV(喂剥采比均衡)。
     // 忠实原 TemplateDrivingEngine 距离驱动核(平面近似, 陡帮台阶退距≈0)。用法「开采程序切分 [推进步距m 默认50]」。
     private async Task DriveSequenceCmd(string cmd)
@@ -10669,7 +10711,7 @@ public partial class MainWindow : Window
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割","移除障碍物",
         // 块体/运输/路网
-        "块体模型","导出PMB","属性赋值","字高归一化","资源量","经济剥采比","产能推算","生成境界","境界建模","面约束块体","离散化模型","采场排土场识别","采区划分","拉沟推荐","中长远进度计划","短期生产计划","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","约束寻径","路网校验","瓶颈段分析","路网运输指标","运输指标报告","路网建图","结构路面","中线交点","路段分类","演化对比","提取道路中心线","路网连通增强","螺旋斜坡道","折返斜坡道","直线斜坡道","直线坑线","坑线自动布线",
+        "块体模型","导出PMB","属性赋值","字高归一化","资源量","经济剥采比","产能推算","生成境界","境界建模","境界内资源","面约束块体","离散化模型","采场排土场识别","采区划分","拉沟推荐","中长远进度计划","短期生产计划","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","约束寻径","路网校验","瓶颈段分析","路网运输指标","运输指标报告","路网建图","结构路面","中线交点","路段分类","演化对比","提取道路中心线","路网连通增强","螺旋斜坡道","折返斜坡道","直线斜坡道","直线坑线","坑线自动布线",
         // 生产计划/投影
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","开采程序切分","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
