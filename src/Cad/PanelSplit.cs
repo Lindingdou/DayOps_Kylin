@@ -72,10 +72,23 @@ public sealed class StripRatioField
     public double Dx, Dy, Ox, Oy, Density;
     public double[] CoalVol = Array.Empty<double>();
     public double[] WasteVol = Array.Empty<double>();
+    public double[] CoalThickM = Array.Empty<double>();   // 每列煤厚 (m)
+    public double[] DepthToCoalM = Array.Empty<double>();  // 每列埋深:顶到首个煤 (m)
+    public long CoalColumns;                               // 含煤列数
+    public double TopZ;                                    // 顶面 Z
     public int Idx(int i, int j) => i + j * Nx;
+    /// <summary>该列剥采比 (m³/t); 无煤列返回 +∞。忠实原 StripRatioField.StripRatioAt。</summary>
+    public double StripRatioAt(int i, int j)
+    {
+        int c = Idx(i, j);
+        double coalT = CoalVol[c] * Density;
+        return coalT > 1e-6 ? WasteVol[c] / coalT : double.PositiveInfinity;
+    }
+    /// <summary>列中心平面坐标。忠实原 StripRatioField.Center。</summary>
+    public (double x, double y) Center(int i, int j) => (Ox + (i + 0.5) * Dx, Oy + (j + 0.5) * Dy);
 
     /// <summary>
-    /// 从稀疏块体聚成剥采比场（托管重算原 Sampler 的聚合：逐 XY 列累 煤/岩 体积）。
+    /// 从稀疏块体聚成剥采比场（托管重算原 Sampler 的聚合：逐 XY 列累 煤/岩 体积 + 煤厚/埋深）。
     /// 煤岩判别以品位阈值 cutoff 替代原属性分类器(本块体仅品位); 假定块体等大(体素/规则块)。
     /// </summary>
     public static StripRatioField? FromBlocks(IReadOnlyList<(double X, double Y, double Z, double Size, double Grade)> blocks,
@@ -84,10 +97,12 @@ public sealed class StripRatioField
         if (blocks == null || blocks.Count == 0) return null;
         double cell = blocks[0].Size > 1e-9 ? blocks[0].Size : 1.0;
         double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        double minZ = double.MaxValue, maxZ = double.MinValue;
         foreach (var b in blocks)
         {
             if (b.X < minX) minX = b.X; if (b.Y < minY) minY = b.Y;
             if (b.X > maxX) maxX = b.X; if (b.Y > maxY) maxY = b.Y;
+            if (b.Z < minZ) minZ = b.Z; if (b.Z > maxZ) maxZ = b.Z;
         }
         int nx = (int)Math.Round((maxX - minX) / cell) + 1;
         int ny = (int)Math.Round((maxY - minY) / cell) + 1;
@@ -97,15 +112,31 @@ public sealed class StripRatioField
         {
             Nx = nx, Ny = ny, Dx = cell, Dy = cell, Ox = minX - cell / 2, Oy = minY - cell / 2, Density = density,
             CoalVol = new double[ncol], WasteVol = new double[ncol],
+            CoalThickM = new double[ncol], DepthToCoalM = new double[ncol], TopZ = maxZ + cell / 2,
         };
+        var topCoalZ = new double[ncol];
+        for (int c = 0; c < ncol; c++) topCoalZ[c] = double.NegativeInfinity;
         double cellVol = cell * cell * cell;
         foreach (var b in blocks)
         {
             int i = Math.Clamp((int)Math.Round((b.X - minX) / cell), 0, nx - 1);
             int j = Math.Clamp((int)Math.Round((b.Y - minY) / cell), 0, ny - 1);
             int col = i + j * nx;
-            if (b.Grade >= cutoff) f.CoalVol[col] += cellVol; else f.WasteVol[col] += cellVol;
+            if (b.Grade >= cutoff)
+            {
+                f.CoalVol[col] += cellVol; f.CoalThickM[col] += cell;
+                if (b.Z > topCoalZ[col]) topCoalZ[col] = b.Z;   // 该列最顶煤块
+            }
+            else f.WasteVol[col] += cellVol;
         }
+        long coalCols = 0;
+        double fullDepth = (maxZ - minZ) + cell;
+        for (int c = 0; c < ncol; c++)
+        {
+            if (topCoalZ[c] > double.NegativeInfinity) { coalCols++; f.DepthToCoalM[c] = maxZ - topCoalZ[c]; }
+            else f.DepthToCoalM[c] = fullDepth;   // 无煤列:埋深=满列高
+        }
+        f.CoalColumns = coalCols;
         return f;
     }
 }

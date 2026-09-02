@@ -3441,3 +3441,28 @@ RoadNetworkConnector(§80, 焊接+桥接)**互补**: 此产 §290 属性 RoadGra
 **判定**: 属性路网建图(Z 感知 noding + 桥接 + 属性图)**完成并验证**(16 原测全中)。RoadLib 路网/寻径子系统至此端到端齐:
 **中线多段线 →(RoadGraphBuilder 抽图)→ 属性图 →(DijkstraPathSolver §290 约束寻径 / TransportIndicatorsBuilder §291
 全指标)**。1473→**1489** 测试, 0 失败, 0 错误。RoadGraphSerializer(JSON 持久化)记录(持久化域, Kylin 场景 SceneIO 自有)。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二九三 拉沟·推进候选推荐(PanelDelineator)——PlanLib 里的 present-but-shallow(采区划分只切分不推荐)
+
+模块枚举复核 PlanLib(继 §287-292 transport 后), 挖出与 transport 同签名的 present-but-shallow: Kylin `PanelSplit`
+只做**几何切分**(沿用户**指定**的推进方位等煤量切 N 采区 + 赋开采序), 缺原 `PlanLib.BoundaryOptimization.PanelDelineator`
+的**首采区拉沟位置 + 推进方位自动推荐**(求解链第一环)——按 剥采比最小/埋深浅/运输便利/利于内排/工作线长/避构造 **六约束
+打分**荐最优拉沟推进方案。Kylin 要用户**指定**方位, 原**自动推荐**方位。
+
+**已做(纯托管, 只读剥采比场)**:
+- **富化 Kylin StripRatioField**(此前只有 CoalVol/WasteVol 供几何切分, 是原类的子集)→补 `StripRatioAt`(剥采比 m³/t)/
+  `DepthToCoalM`(逐列埋深:顶到首煤)/`CoalThickM`(逐列煤厚)/`Center`(列中心)/`CoalColumns`/`TopZ`; FromBlocks 补逐列最顶煤块 Z 追踪算埋深。
+- 移 `src/Cad/PanelDelineator.cs`(**逐字忠实** Recommend[4 边近边带 + 剥采比梯度候选, 六约束打分 + 加权综合] + GradientCandidate
+  [低/高剥采比加权形心→推进方位] + Band[近边带聚合剥采比/埋深/煤覆盖/CV] + FormFromOutline[境界弯直度→平行/回转])
+  + DTO(BoxcutWeights/BoxcutAdvanceOption/TopOutline)。复用既有 AdvanceMode(§AdvancePlanner)。最小参数(minWorkingLineM+
+  weights)替原 MiningProgramPlan(避移其**硬编码演示方案** MakeBoxcut, 忠实不移 demo)。原 ResolveOutline(取境界线)依赖引擎, 不移(境界作输入)。
+- **6 已知值单测**: StripRatioField 富化(单列 SR=岩1000/煤2000=0.5·煤厚20·埋深10·中心·纯岩列 SR=∞满列埋深)/
+  Recommend 出 5 候选一推荐(=最高分可行)/**南带 SR=0→SrScore=1 > 北带 SR=4→SrScore=0**(低剥采比边评分高)/工作线过长全不可行/
+  Recompute 全分=1→100 分。全中。
+- **接命令** `拉沟推荐` + 补 `采区划分`(此前漏在 palette) → 块体→剥采比场→PanelDelineator→报 ★推荐方案(方位/方式/工作线/分)+依据+候选。
+
+**判定**: 拉沟推进推荐(六约束打分 + 富化剥采比场)**完成并验证**(6 已知值全中)。**再证 transport pocket 的 present-but-shallow
+签名会跨模块复现**: PanelSplit(几何切分)vs PanelDelineator(方案推荐)= RoadNetwork(几何最短路)vs DijkstraPathSolver(约束寻径)同型。
+PlanLib 求解链首环(拉沟推荐§293)接既有 采区划分§880/推进几何 AdvancePlanner。1489→**1495** 测试, 0 失败, 0 错误。见 [[unlock-blocked-insights]]。

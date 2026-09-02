@@ -920,6 +920,7 @@ public partial class MainWindow : Window
             if (cmd == "确定境界" || cmd == "境界优化" || cmd == "最优坑深" || cmd == "经济境界") { PitDepthCmd(); return; }
             if (cmd == "开采程序切分" || cmd == "逐期量核算" || cmd == "分期量表" || cmd == "分期剥采比" || cmd.StartsWith("开采程序切分 ")) { await DriveSequenceCmd(cmd); return; }
             if (cmd == "采区划分" || cmd == "采区" || cmd == "储量均衡划分") { PanelSplitCmd(); return; }
+            if (cmd == "拉沟推荐" || cmd == "首采区推荐" || cmd == "拉沟位置推荐" || cmd == "拉沟推进推荐") { BoxcutRecommendCmd(); return; }
             if (cmd == "规划计算" || cmd == "开采程序评价" || cmd == "程序评价") { ProgramEvaluateCmd(); return; }
             if (cmd == "派生计划方案" || cmd == "派生方案" || cmd == "多方案派生") { DerivePlansCmd(); return; }
             if (cmd == "中长远进度计划" || cmd == "中长远规划" || cmd == "中长期计划" || cmd == "中长远进度计划编制" || cmd.StartsWith("中长远进度计划 ") || cmd.StartsWith("中长远规划 ")) { await LongTermPlanCmd(cmd); return; }
@@ -6040,6 +6041,27 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"资源量(cutoff {cut:0.##})：矿量 {ore:0.#} 吨位 {tonnage:0.#} · 废 {waste:0.#} · 剥采比 {strip:0.##} · 平均品位 {avg:0.###} · 金属 {metal:0.#}";
     }
 
+    // 拉沟推荐(忠实原 PanelDelineator): 块体 → 剥采比场 → 按 剥采比/埋深/运输/内排/工作线/地质 六约束打分,
+    // 自动荐首采区拉沟位置 + 推进方位(求解链第一环)。区别 采区划分(需用户指定推进方位): 此层自动推荐方位。
+    private void BoxcutRecommendCmd()
+    {
+        if (_lastBlocks == null || _lastBlocks.Count == 0) { StatusMsg.Text = "拉沟推荐：请先导入/生成块体（块体模型 / 实体转块体）"; return; }
+        double gsum = 0; foreach (var b in _lastBlocks) gsum += b.Grade;
+        double cutoff = gsum / _lastBlocks.Count;
+        var blocks = _lastBlocks.Select(b => (b.X, b.Y, b.Z, b.Size, b.Grade)).ToList();
+        var field = Cad.StripRatioField.FromBlocks(blocks, cutoff, 1.35);
+        if (field == null || field.CoalColumns == 0) { StatusMsg.Text = "拉沟推荐：剥采比场无煤（检查块体品位/阈值）"; return; }
+        double minWL = System.Math.Min(field.Nx * field.Dx, field.Ny * field.Dy) * 0.5;   // 最小工作线=短边一半
+        var opts = Cad.PanelDelineator.Recommend(field, minWL);
+        var rec = opts.FirstOrDefault(o => o.Recommended);
+        var top3 = string.Join(" | ", opts.OrderByDescending(o => o.TotalScore).Take(3)
+            .Select(o => $"{o.Name.Split('·')[0]}({o.TotalScore:0}分{(o.Recommended ? "★" : "")})"));
+        if (rec == null) { StatusMsg.Text = $"拉沟推荐：{opts.Count} 候选均不可行(工作线长 < {minWL:0}m) · {top3}"; return; }
+        string modeText = rec.AdvanceMode switch
+        { Cad.AdvanceMode.Parallel => "平行推进", Cad.AdvanceMode.FixedPivot => "定点回转", _ => "动点回转" };
+        StatusMsg.Text = $"拉沟推荐：★{rec.Name}（方位 {rec.AdvanceAzimuthDeg:0}° · {modeText} · 工作线 {rec.WorkingLineLengthM:0}m · {rec.TotalScore:0}分）· {rec.Rationale} · 候选 {top3}";
+    }
+
     // 采区划分：最近块体 → 剥采比场(品位阈值聚合) → 沿推进轴等煤量切 N 采区 → 采区矩形入场景 + 报表
     private void PanelSplitCmd()
     {
@@ -10451,7 +10473,7 @@ public partial class MainWindow : Window
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割","移除障碍物",
         // 块体/运输/路网
-        "块体模型","导出PMB","属性赋值","字高归一化","资源量","面约束块体","离散化模型","采场排土场识别","中长远进度计划","短期生产计划","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","约束寻径","路网校验","瓶颈段分析","路网运输指标","运输指标报告","路网建图","结构路面","中线交点","路段分类","演化对比","提取道路中心线","路网连通增强","螺旋斜坡道","折返斜坡道","直线斜坡道","直线坑线","坑线自动布线",
+        "块体模型","导出PMB","属性赋值","字高归一化","资源量","面约束块体","离散化模型","采场排土场识别","采区划分","拉沟推荐","中长远进度计划","短期生产计划","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","约束寻径","路网校验","瓶颈段分析","路网运输指标","运输指标报告","路网建图","结构路面","中线交点","路段分类","演化对比","提取道路中心线","路网连通增强","螺旋斜坡道","折返斜坡道","直线斜坡道","直线坑线","坑线自动布线",
         // 生产计划/投影
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","开采程序切分","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
