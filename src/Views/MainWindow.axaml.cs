@@ -1136,7 +1136,8 @@ public partial class MainWindow : Window
             if (cmd == "定点回转" || cmd == "定点回转推进") { AdvanceCmd(AdvanceMode.FixedPivot, "定点回转"); return; }
             if (cmd == "动点回转" || cmd == "动点回转推进") { AdvanceCmd(AdvanceMode.MovingPivot, "动点回转"); return; }
             if (cmd == "螺旋斜坡道" || cmd == "螺旋坑线" || cmd == "螺旋中线") { SpiralRampCmd(); return; }
-            if (cmd == "直线斜坡道" || cmd == "直线坑线" || cmd == "直线中线" || cmd.StartsWith("直线斜坡道 ") || cmd.StartsWith("直线坑线 ")) { StraightRampCmd(cmd); return; }
+            if (cmd == "直线坑线" || cmd == "坑线自动布线" || cmd == "坑线连通自检" || cmd == "直线坑线自动布线" || cmd.StartsWith("直线坑线 ") || cmd.StartsWith("坑线自动布线 ")) { StraightRampRouteCmd(cmd); return; }
+            if (cmd == "直线斜坡道" || cmd == "直线中线" || cmd.StartsWith("直线斜坡道 ")) { StraightRampCmd(cmd); return; }
             if (cmd == "折返斜坡道" || cmd == "折返坑线" || cmd == "折返中线") { SwitchbackRampCmd(); return; }
             if (cmd == "运距指标" || cmd == "循环时间" || cmd == "运距统计") { await HaulRecordMetricsAsync(); return; }
             if (cmd == "OD运距矩阵" || cmd == "OD矩阵" || cmd == "运距矩阵") { await OdMatrixAsync(); return; }
@@ -8155,6 +8156,61 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"直线斜坡道中线：纵坡{grade:0.#}%·长{len:0.#}·方位{az:0.#}° → {pts.Count} 点(绿; 降 {(grade / 100 * len):0.#}m)";
     }
 
+    // 直线坑线【自动布线】(忠实原 StraightRampAutoRouter.Route 连通自检): 取场景/选中同心台阶环(坡顶线) →
+    // 按包围面积降序赋台阶标高(外圈=地表最高, 每内一环降一个台阶高 H) → 逐级直腿首尾相接(平面投影 L=ΔH/i≤限坡)
+    // → 内圈周长不足则报告并止于最后可行台阶。画预览中线(黄, 层『运输坑线_预览』)。
+    // 用法 "直线坑线 [限坡i% 台阶高H 路宽B]"(缺省 8%/10/0)。坑线落地(贴帮切面)为内核规模, 记录不做。
+    // 注: Kylin 场景 2D(环无 Z), 按同心序合成台阶标高 —— 忠实沿用既有 2D 适配(见 提取道路中心线)。
+    private void StraightRampRouteCmd(string cmd)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        double i = 8, H = 10, B = 0;
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        if (tk.Length >= 2) double.TryParse(tk[1], System.Globalization.NumberStyles.Float, inv, out i);
+        if (tk.Length >= 3) double.TryParse(tk[2], System.Globalization.NumberStyles.Float, inv, out H);
+        if (tk.Length >= 4) double.TryParse(tk[3], System.Globalization.NumberStyles.Float, inv, out B);
+        if (H < 1) H = 1;   // 防台阶标高被 ZTolerance(0.5) 去重折叠
+
+        // 台阶环: 选中闭合折线(≥2) 否则全场景 ≥3 点折线
+        var sel = _selected.FindAll(e => e is PolylineEntity pe && pe.Points.Count >= 3);
+        var rings = sel.Count >= 2 ? new System.Collections.Generic.List<SceneEntity>(sel)
+                                   : new System.Collections.Generic.List<SceneEntity>();
+        if (rings.Count == 0)
+            foreach (var e in _scene.Entities)
+                if (e is PolylineEntity pl && pl.Points.Count >= 3) rings.Add(e);
+        if (rings.Count < 2) { StatusMsg.Text = "直线坑线：请选≥2 条同心台阶环(坡顶线), 或先【批量台阶扩帮】生成台阶。"; return; }
+
+        // 按包围面积降序 → 外圈(地表)在前
+        rings.Sort((a, b) =>
+        {
+            double aa = System.Math.Abs(Cad.BenchLines.SignedArea(((PolylineEntity)a).Points));
+            double ab = System.Math.Abs(Cad.BenchLines.SignedArea(((PolylineEntity)b).Points));
+            return ab.CompareTo(aa);
+        });
+
+        int n = rings.Count;
+        var benches = new System.Collections.Generic.List<Cad.RampBenchLine>(n);
+        for (int k = 0; k < n; k++)
+        {
+            double z = (n - 1 - k) * H;   // 外圈最高, 内圈=0
+            var pts = ((PolylineEntity)rings[k]).Points;
+            var crest = new System.Collections.Generic.List<(double X, double Y, double Z)>(pts.Count);
+            foreach (var (x, y) in pts) crest.Add((x, y, z));
+            benches.Add(new Cad.RampBenchLine { Level = z, BermWidth = B, Crest = crest });
+        }
+
+        var rr = Cad.StraightRampAutoRouter.Route(benches, new Cad.StraightRampRouteOptions { GradePct = i, RoadWidth = B });
+        if (!rr.Success) { StatusMsg.Text = $"直线坑线：无法布线 — {rr.Error}"; return; }
+
+        var line = new PolylineEntity { Cr = 0.95f, Cg = 0.85f, Cb = 0.30f, LayerName = "运输坑线_预览" };
+        foreach (var (x, y, _) in rr.Centerline) line.Points.Add((x, y));
+        BeginChange(); _scene.Add(line); RefreshScene(); Viewport.ZoomExtents();
+        StatusMsg.Text = $"直线坑线自动布线：{n}环 限坡{i:0.#}% 台阶高{H:0.#}m → 贯通 {rr.LevelsConnected}/{rr.LevelsTotal} 级"
+            + $"(直腿{rr.StraightLegs}/折返{rr.SwitchbackLegs}), 到达 Z={rr.ReachedZ:0.#}m"
+            + (rr.ReachedBottom ? " ✓到底" : " (止于最后可行台阶)")
+            + $" · 中线 {rr.Centerline.Count} 点(黄, 层『运输坑线_预览』)";
+    }
+
     // 视图中心的世界坐标(生成体放置点)；取不到时退回原点
     private (double x, double y) ViewCenterWorld()
     {
@@ -10184,7 +10240,7 @@ public partial class MainWindow : Window
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割","移除障碍物",
         // 块体/运输/路网
-        "块体模型","导出PMB","属性赋值","字高归一化","资源量","面约束块体","离散化模型","采场排土场识别","中长远进度计划","短期生产计划","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","瓶颈段分析","路网运输指标","结构路面","中线交点","路段分类","演化对比","提取道路中心线","路网连通增强","螺旋斜坡道","折返斜坡道","直线斜坡道",
+        "块体模型","导出PMB","属性赋值","字高归一化","资源量","面约束块体","离散化模型","采场排土场识别","中长远进度计划","短期生产计划","道路横断面","道路设计参数","运输布局方案","路面生成","纵坡分析","竖曲线平滑","线形处理","运距指标","OD运距矩阵","点对点寻径","备选路径","路网校验","瓶颈段分析","路网运输指标","结构路面","中线交点","路段分类","演化对比","提取道路中心线","路网连通增强","螺旋斜坡道","折返斜坡道","直线斜坡道","直线坑线","坑线自动布线",
         // 生产计划/投影
         "境界圈定","剥采比均衡","月度剥离均衡","方案综合对比","开采程序确定","开采程序切分","平盘宽度识别","平盘标高清单","现状参数提取","参数校核","趋势整合台阶","标注台阶标高","确定可采区域","点落到面上","线落到面上",
         // §四/§八 数据分析(SQLite 种子库)
