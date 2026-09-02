@@ -9,6 +9,45 @@ namespace PitMine3D.Kylin.Data;
 /// </summary>
 public static class GeoDataQueries
 {
+    public sealed record ParameterNorm(string Code, string Name, string? Unit,
+        double? StandardMin, double? StandardMax, double? StandardDefault, double? AlarmLow, double? AlarmHigh);
+
+    /// <summary>按 code 取参数定义的标准/报警范围(供 DB-norm 参数验收判定)。无则 null。</summary>
+    public static ParameterNorm? GetParameterNorm(SqliteConnection conn, string code)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT code, name, unit, standard_min, standard_max, standard_default, alarm_low, alarm_high " +
+                          "FROM parameter_definition WHERE code = @c AND is_active = 1 LIMIT 1";
+        cmd.Parameters.AddWithValue("@c", code);
+        using var r = cmd.ExecuteReader();
+        if (!r.Read()) return null;
+        double? D(int i) => r.IsDBNull(i) ? (double?)null : r.GetDouble(i);
+        return new ParameterNorm(r.GetString(0), r.GetString(1), r.IsDBNull(2) ? null : r.GetString(2),
+            D(3), D(4), D(5), D(6), D(7));
+    }
+
+    /// <summary>
+    /// 参数验收状态判定(忠实原 GeoDataBase ParameterAcceptanceService.ComputeStatus):
+    /// 报警阈(alarm_low/high)超限→fail; 标准范围(standard_min/max)超或偏差>15%→warning; 否则 pass; 无实测→pending。
+    /// 纯函数(不依赖 DB, 便于单测)。区别 BenchParameterVerifier 兜底路径: 此用 DB 逐参数标定的 standard/alarm 范围。
+    /// </summary>
+    public static (double? deviationPct, string status) ComputeAcceptanceStatus(
+        double? alarmLow, double? alarmHigh, double? standardMin, double? standardMax,
+        double? templateValue, double? measuredValue)
+    {
+        if (!measuredValue.HasValue) return (null, "pending");
+        double? deviation = null;
+        if (templateValue.HasValue && System.Math.Abs(templateValue.Value) > 1e-6)
+            deviation = (measuredValue.Value - templateValue.Value) / templateValue.Value * 100;
+        double v = measuredValue.Value;
+        bool fail = (alarmLow.HasValue && v < alarmLow.Value) || (alarmHigh.HasValue && v > alarmHigh.Value);
+        if (fail) return (deviation, "fail");
+        bool warn = (standardMin.HasValue && v < standardMin.Value)
+                 || (standardMax.HasValue && v > standardMax.Value)
+                 || (deviation.HasValue && System.Math.Abs(deviation.Value) > 15);
+        return (deviation, warn ? "warning" : "pass");
+    }
+
     public sealed record CategoryCount(string Category, int Count);
     public sealed record EquipmentRoster(int Total, IReadOnlyList<CategoryCount> ByCategory, int InService);
 

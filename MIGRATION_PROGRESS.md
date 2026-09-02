@@ -3488,3 +3488,24 @@ ProgramComparer(采区方案§)/LongTermComparer(时序方案§)覆盖。**判�
 **作者标注切片扫描收官**: 20 标注文件除本项全覆盖(DepositAutoDetector§72/73·TransportIndicators§291·HaulMetrics·StructurePavement§70·
 TemplateDrivingEngine=DriveSequence·RoadGraphBuilder§292·BenchElevationAnnotator·CenterlineLineForm§线形·ProfileSmoother§竖曲线·
 RoadCrossSection·StraightRampAutoRouter§287·AdvancePlanner·SectionSolver·PitEvaluator§47·RoadClipRegion=LineClip.ByPolygon)。见 [[unlock-blocked-insights]]。
+
+---
+
+## §二九五 更正记录：DB-norm 参数验收判定(ComputeStatus)——parameter_definition 标准/报警范围实已种子
+
+复核 GeoDataBase 服务层非-CRUD 方法(§99/111 高产角度), 挖出 `ParameterAcceptanceService.ComputeStatus` 的 present-but-shallow,
+且**更正一处过时记录**: Kylin BenchParameterVerifier 自注「Kylin 无 GeoDataBase 模板库(大引擎, 记为不可移), 故本类正是兜底路径」,
+但复核发现 **parameter_definition 表的 standard_min/standard_max/alarm_low/alarm_high 逐参数标定范围实已种子**(V006 建表 +
+V007/V034 seed)。故原 ComputeStatus 的 **DB-norm 验收判定**(报警阈→fail·标准范围/偏差>15%→warning)**实可做**, 非"无库不可移"。
+
+**已做(纯托管 + DB 查询)**:
+- `GeoDataQueries.ComputeAcceptanceStatus`(**逐字忠实** ComputeStatus: 无实测→pending·报警 alarm_low/high 超限→fail·标准
+  standard_min/max 超或偏差>15%→warning·否则 pass; **纯函数不依赖 DB, 可单测**) + `GetParameterNorm`(按 code 查
+  parameter_definition 的标准/报警范围)。区别 BenchParameterVerifier 兜底路径(规范默认): 此用 **DB 逐参数标定**范围。
+- **8 已知值单测**: 6 纯函数(无实测 pending·报警超限 fail·低于标准下限 warning·偏差20%>15% warning·全范围内 pass·**报警优先于标准**)
+  + 2 DB 集成(未知 code→null·**种子 code 取回范围 + 标准默认值判 pass 偏差0**, 证 parameter_definition 确有种子标定范围)。全中。
+- **接命令** `参数验收判定 <参数code> <实测值> [模板值]` → 查 DB 逐参数范围 → 判 fail/warning/pass + 偏差% + 范围显示。
+
+**判定**: DB-norm 参数验收判定**完成并验证**(8 测全中)。**更正教训: "无库/数据不可得"记录须复核 DB schema 实况——parameter_definition
+标定范围早已种子(§38 note 亦证"取值区间/报警上下限归 parameter_definition V034 已校准"), BenchParameterVerifier 兜底自注的
+"无模板库"过时。参数验收双路齐: 兜底(规范默认, CSV 台阶线)+ DB-norm(逐参数标定, code 查询)。** 1495→**1503** 测试, 0 失败, 0 错误。见 [[unlock-blocked-insights]] [[verify-seed-enum-values-before-filter]]。
