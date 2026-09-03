@@ -49,6 +49,12 @@ public class CadGlViewport : OpenGlControlBase
     private double[]? _lastBounds;   // 最近导入的包围盒，供 ZE 重新范围缩放
     private bool _showGrid = true;   // 网格/轴显隐
 
+    // 渲染局部原点(世界 XY)：CGCS2000 等大坐标(X~5e5、Y~4e6)直接进 float32 矩阵会灾难性抵消，
+    // 旋转时几何被变换到 NaN/视锥外而"消失"。故把几何与相机整体平移到近原点渲染，屏幕读数再加回。
+    // 首次拿到有效包围盒时定原点并锁定(整篇文档稳定)，ClearImported 复位。仅 XY 需要(Z 本就小)。
+    private double _ox, _oy;
+    private bool _originSet;
+
     // 选择高亮（对象树选类型 → 高亮其几何）
     private GlRenderer.Mesh _highlight;
     private bool _hasHighlight;
@@ -111,17 +117,18 @@ public class CadGlViewport : OpenGlControlBase
         if (pending != null)
         {
             _pendingImport = null;
+            EnsureOrigin(_pendingBounds);
             if (_hasImported) _renderer.DeleteMesh(_imported);
-            _imported = _renderer.Upload(pending);
+            _imported = _renderer.Upload(Localize(pending));
             _hasImported = !_imported.IsEmpty;
-            _camera.FitBounds(_pendingBounds);
+            _camera.FitBounds(LocalizeBounds(_pendingBounds));
         }
 
         if (_highlightDirty)
         {
             _highlightDirty = false;
             if (_hasHighlight) _renderer.DeleteMesh(_highlight);
-            _highlight = _renderer.Upload(_pendingHighlight!);
+            _highlight = _renderer.Upload(Localize(_pendingHighlight!));
             _hasHighlight = !_highlight.IsEmpty;
         }
 
@@ -129,7 +136,7 @@ public class CadGlViewport : OpenGlControlBase
         {
             _snapDirty = false;
             if (_hasSnap) _renderer.DeleteMesh(_snap);
-            _snap = _renderer.Upload(_pendingSnap!);
+            _snap = _renderer.Upload(Localize(_pendingSnap!));
             _hasSnap = !_snap.IsEmpty;
         }
 
@@ -137,7 +144,7 @@ public class CadGlViewport : OpenGlControlBase
         {
             _sceneDirty = false;
             if (_hasScene) _renderer.DeleteMesh(_scene);
-            _scene = _renderer.Upload(_pendingScene!);
+            _scene = _renderer.Upload(Localize(_pendingScene!));
             _hasScene = !_scene.IsEmpty;
         }
 
@@ -242,6 +249,7 @@ public class CadGlViewport : OpenGlControlBase
     /// </summary>
     public void ShowImportedGeometry(float[] lineVertices, double[] bounds)
     {
+        EnsureOrigin(bounds);
         _pendingImport = lineVertices;
         _pendingBounds = bounds;
         _lastBounds = bounds;
@@ -253,6 +261,7 @@ public class CadGlViewport : OpenGlControlBase
     {
         _layerGeom = layerGeom;
         _hiddenLayers.Clear();
+        EnsureOrigin(bounds);
         _pendingImport = ConcatVisible();
         _pendingBounds = bounds;
         _lastBounds = bounds;
@@ -265,6 +274,7 @@ public class CadGlViewport : OpenGlControlBase
         _layerGeom = null;
         _hiddenLayers.Clear();
         _pendingImport = Array.Empty<float>();
+        _originSet = false; _ox = 0; _oy = 0;   // 新文档：复位渲染局部原点
         RequestNextFrameRendering();
     }
 
@@ -282,7 +292,7 @@ public class CadGlViewport : OpenGlControlBase
     public void ZoomExtents()
     {
         if (_lastBounds == null) return;
-        _camera.FitBounds(_lastBounds);
+        _camera.FitBounds(LocalizeBounds(_lastBounds));
         RequestNextFrameRendering();
     }
 
@@ -291,7 +301,8 @@ public class CadGlViewport : OpenGlControlBase
     {
         if (bounds == null || bounds.Length < 4) return;
         _lastBounds = bounds;
-        _camera.FitBounds(bounds);
+        EnsureOrigin(bounds);
+        _camera.FitBounds(LocalizeBounds(bounds));
         RequestNextFrameRendering();
     }
 
@@ -324,6 +335,34 @@ public class CadGlViewport : OpenGlControlBase
         _pendingSnap = (cross == null || cross.Length == 0) ? Array.Empty<float>() : cross;
         _snapDirty = true;
         RequestNextFrameRendering();
+    }
+
+    // 首次拿到有效包围盒时锁定渲染局部原点(XY 中心)，整篇文档稳定。
+    private void EnsureOrigin(double[]? bounds)
+    {
+        if (_originSet || bounds == null || bounds.Length < 4) return;
+        if (bounds[2] <= bounds[0] || bounds[3] <= bounds[1]) return;   // 空/退化包围盒不定原点
+        _ox = (bounds[0] + bounds[2]) * 0.5;
+        _oy = (bounds[1] + bounds[3]) * 0.5;
+        _originSet = true;
+    }
+
+    // 世界 P3_C3 → 渲染局部(仅减 XY 原点；Z/颜色不动)。原点未定或空则原样返回。
+    // 减法在 float 内近距抵消(Sterbenz)精确，仅保留上传时已有的量化；结果近原点 → 矩阵不再抵消。
+    private float[] Localize(float[]? world)
+    {
+        if (!_originSet || world == null || world.Length == 0) return world ?? Array.Empty<float>();
+        var v = (float[])world.Clone();
+        float ox = (float)_ox, oy = (float)_oy;
+        for (int i = 0; i + 5 < v.Length; i += 6) { v[i] -= ox; v[i + 1] -= oy; }
+        return v;
+    }
+
+    // 包围盒 [minX,minY,maxX,maxY] 减原点，供相机在局部空间 FitBounds。
+    private double[]? LocalizeBounds(double[]? b)
+    {
+        if (b == null || b.Length < 4 || !_originSet) return b;
+        return new[] { b[0] - _ox, b[1] - _oy, b[2] - _ox, b[3] - _oy };
     }
 
     // 拼接所有可见图层的几何为一段连续缓冲
@@ -391,9 +430,12 @@ public class CadGlViewport : OpenGlControlBase
     /// <summary>当前是否 2D 平面视图。</summary>
     public bool Is2DView => _camera.Is2D;
 
-    /// <summary>屏幕像素（相对本控件）→ Z=0 平面世界坐标，供状态栏坐标读数。</summary>
+    /// <summary>屏幕像素（相对本控件）→ Z=0 平面世界坐标，供状态栏坐标读数。相机在局部空间求解，读数加回原点得绝对世界坐标。</summary>
     public (double x, double y)? ScreenToWorld(double sx, double sy)
-        => _camera.ScreenToWorldOnZPlane(sx, sy, Bounds.Width, Bounds.Height);
+    {
+        var p = _camera.ScreenToWorldOnZPlane(sx, sy, Bounds.Width, Bounds.Height);
+        return p == null ? null : (p.Value.x + _ox, p.Value.y + _oy);
+    }
 
     // ---------- 几何（示例内容；接入内核后由 AcDb worldDraw 提供）----------
     private static float[] BuildGrid(int n, float step)
