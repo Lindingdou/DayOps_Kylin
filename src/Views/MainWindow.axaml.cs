@@ -428,6 +428,7 @@ public partial class MainWindow : Window
         _onHostMoved = (_, e) =>
         {
             var p = e.GetPosition(ViewportHost);
+            Viewport.SetCursorScreen(p.X, p.Y);   // CAD 十字光标随动
             var w = Viewport.ScreenToWorld(p.X, p.Y);
 
             // 窗口框选：画选框(交叉=蓝，窗口=绿)
@@ -596,6 +597,7 @@ public partial class MainWindow : Window
             }
             else Viewport.ZoomExtents();                                  // 否则 = 范围缩放
         };
+        _onHostExited = (_, _) => Viewport.HideCursor();                   // 光标离开视口 → 收起十字
 
         // 对象树选类型 → 视口高亮该类型几何
         ObjectTree.SelectionChanged += OnObjectTreeSelect;
@@ -794,6 +796,7 @@ public partial class MainWindow : Window
     private System.EventHandler<Avalonia.Input.PointerReleasedEventArgs>? _onHostReleased;
     private System.EventHandler<Avalonia.Input.PointerWheelEventArgs>? _onHostWheel;
     private System.EventHandler<Avalonia.Input.TappedEventArgs>? _onHostDoubleTapped;
+    private System.EventHandler<Avalonia.Input.PointerEventArgs>? _onHostExited;
 
     private Scene _scene => _active.Scene;        // 当前文档的托管绘制场景
     private LayerTable _layers => _active.Layers;  // 当前文档的图层表
@@ -807,6 +810,7 @@ public partial class MainWindow : Window
         if (st.Host != null) return;
         var vp = new PitMine3D.Kylin.Controls.CadGlViewport();
         var host = new Panel { Background = Avalonia.Media.Brushes.Transparent, ContextMenu = BuildViewportContextMenu() };
+        host.Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.None);   // 隐藏系统箭头 → 只见 CAD 十字光标
         host.Children.Add(vp);
         // 左上角操作提示叠层
         var hint = new StackPanel();
@@ -870,6 +874,7 @@ public partial class MainWindow : Window
         if (_onHostReleased != null) host.PointerReleased += _onHostReleased;
         if (_onHostWheel != null) host.PointerWheelChanged += _onHostWheel;
         if (_onHostDoubleTapped != null) host.DoubleTapped += _onHostDoubleTapped;
+        if (_onHostExited != null) host.PointerExited += _onHostExited;
     }
     private readonly UndoManager _undo = new();   // 撤销/重做
     private DrawTool? _tool;                      // 当前激活的绘制工具

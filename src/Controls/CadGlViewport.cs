@@ -69,6 +69,15 @@ public class CadGlViewport : OpenGlControlBase
     private float[]? _pendingSnap;
     private bool _snapDirty;
 
+    // CAD 十字光标（满视口横竖两线 + 中心拾取框, 随光标移动; 屏幕对齐, NDC 直接画）。对应内核光标(GetCursorPos)。
+    private const double CursorBoxPx = 7;                 // 中心拾取框半边长(像素)
+    private GlRenderer.Mesh _cursor;
+    private bool _hasCursor;
+    private double _cursorSx, _cursorSy;                 // 光标屏幕坐标(DIP)
+    private bool _showCursor;                             // 光标在视口内 → 显示
+    private double _curBuiltSx = double.NaN, _curBuiltSy;// 上次建网格的光标位/尺寸(变了才重建)
+    private double _curBuiltW, _curBuiltH;
+
     private readonly Stopwatch _clock = Stopwatch.StartNew();
 
     /// <summary>OpenGL 上下文就绪后回报后端版本串给界面。</summary>
@@ -111,10 +120,12 @@ public class CadGlViewport : OpenGlControlBase
         if (_hasHighlight) _renderer.DeleteMesh(_highlight);
         if (_hasSnap) _renderer.DeleteMesh(_snap);
         if (_hasScene) _renderer.DeleteMesh(_scene);
+        if (_hasCursor) _renderer.DeleteMesh(_cursor);
         _renderer.Deinit();
         // 上下文销毁——句柄失效, 复位标志; 否则重建后旧 id 可能撞上新网格(grid/cube/gizmo)致误删/花屏。
         // 保留的托管源(_pendingImport/_pendingScene/…)不动, OnOpenGlInit 会据此重新入队重传。
         _hasImported = _hasScene = _hasHighlight = _hasSnap = false;
+        _hasCursor = false; _curBuiltSx = double.NaN;   // 十字光标下次移动即按当前上下文重建
     }
 
     protected override void OnOpenGlRender(GlInterface gl, int fb)
@@ -161,6 +172,29 @@ public class CadGlViewport : OpenGlControlBase
             _hasScene = !_scene.IsEmpty;
         }
 
+        // CAD 十字光标：光标位/视口尺寸变了才重建满屏横竖两线(NDC, 屏幕对齐, 与几何无关不受相机影响)。
+        if (_showCursor && Bounds.Width > 0 && Bounds.Height > 0 &&
+            (_cursorSx != _curBuiltSx || _cursorSy != _curBuiltSy || Bounds.Width != _curBuiltW || Bounds.Height != _curBuiltH))
+        {
+            _curBuiltSx = _cursorSx; _curBuiltSy = _cursorSy; _curBuiltW = Bounds.Width; _curBuiltH = Bounds.Height;
+            float nx = (float)(2.0 * _cursorSx / Bounds.Width - 1.0);
+            float ny = (float)(1.0 - 2.0 * _cursorSy / Bounds.Height);
+            float hx = (float)(CursorBoxPx * 2.0 / Bounds.Width);    // 中心拾取框半宽(px→NDC)
+            float hy = (float)(CursorBoxPx * 2.0 / Bounds.Height);
+            const float r = 1f, g = 1f, b = 1f;   // 白色十字光标(醒目, 区别于红/绿轴与灰网格)
+            float[] verts = {
+                nx, -1f, 0f, r, g, b,   nx, 1f, 0f, r, g, b,        // 竖线(满屏)
+                -1f, ny, 0f, r, g, b,   1f, ny, 0f, r, g, b,        // 横线(满屏)
+                nx - hx, ny - hy, 0f, r,g,b,   nx + hx, ny - hy, 0f, r,g,b,   // 拾取框: 下
+                nx + hx, ny - hy, 0f, r,g,b,   nx + hx, ny + hy, 0f, r,g,b,   // 右
+                nx + hx, ny + hy, 0f, r,g,b,   nx - hx, ny + hy, 0f, r,g,b,   // 上
+                nx - hx, ny + hy, 0f, r,g,b,   nx - hx, ny - hy, 0f, r,g,b,   // 左
+            };
+            if (_hasCursor) _renderer.DeleteMesh(_cursor);
+            _cursor = _renderer.Upload(verts);
+            _hasCursor = !_cursor.IsEmpty;
+        }
+
         float[] vp = _camera.ViewProj(aspect);
 
         _renderer.BeginFrame(w, h, 0.13f, 0.14f, 0.16f);
@@ -168,6 +202,7 @@ public class CadGlViewport : OpenGlControlBase
         ScenePass(vp);
         HighlightPass(vp);
         OverlayPass(w, h);
+        CursorPass();
         _renderer.EndFrame();
 
         // 连续动画：请求下一帧
@@ -218,6 +253,15 @@ public class CadGlViewport : OpenGlControlBase
         _renderer.EndPass();
     }
 
+    /// <summary>CAD 十字光标：满视口横竖两线（屏幕对齐，NDC 直接画，恒定 Identity 矩阵）。深度关，最上层。</summary>
+    private void CursorPass()
+    {
+        if (!_showCursor || !_hasCursor) return;
+        _renderer.BeginPass(depthTest: false);
+        _renderer.Draw(_cursor, GL_LINES, Mat4.Identity());
+        _renderer.EndPass();
+    }
+
     // ---------- 交互 API（供宿主 Panel 转发）----------
     // OpenGlControlBase 自身命中测试不可靠（无背景时部分后端收不到指针），
     // 交互统一由宿主 Panel（可命中）转发到相机。
@@ -238,6 +282,21 @@ public class CadGlViewport : OpenGlControlBase
     public void ZoomAt(double sx, double sy, double factor)
     {
         _camera.ZoomAtScreen(sx, sy, Bounds.Width, Bounds.Height, factor);
+        RequestNextFrameRendering();
+    }
+
+    /// <summary>更新 CAD 十字光标屏幕位置（DIP）并显示；宿主 Panel 的 PointerMoved 转发。</summary>
+    public void SetCursorScreen(double sx, double sy)
+    {
+        _cursorSx = sx; _cursorSy = sy; _showCursor = true;
+        RequestNextFrameRendering();
+    }
+
+    /// <summary>隐藏十字光标（光标离开视口）。</summary>
+    public void HideCursor()
+    {
+        if (!_showCursor) return;
+        _showCursor = false;
         RequestNextFrameRendering();
     }
 
