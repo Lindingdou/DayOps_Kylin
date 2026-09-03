@@ -12,6 +12,9 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using PitMine3D.Kylin.Cad;
 using PitMine3D.Kylin.Cad.Draw;
+using Avalonia.Controls.Templates;
+using DMC = Dock.Model.Mvvm.Controls;
+using DCore = Dock.Model.Core;
 
 namespace PitMine3D.Kylin.Views;
 
@@ -20,8 +23,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        FillDock();                // 在停靠布局构建视图前, 先把暂存面板内容装入各工具/文档
-        InitDockLayout();          // 显式初始化停靠布局(设活动项/父级/DockManager), 否则主区不渲染
+        BuildDock();               // 代码建 MVVM 停靠布局 + 内容模板(返回暂存面板控件)
         PopulateDrawingLayers();   // 启动即显示绘制图层("0")，可管理
         SetDocPath(null);          // 初始标题=未命名
         RenderAssistant(_assistant.Current());   // 智能助手：启动显示欢迎 + 主菜单
@@ -645,45 +647,58 @@ public partial class MainWindow : Window
         };
     }
 
-    // Dock 布局就绪后：把暂存(ContentStash)里的面板内容移入各工具/文档。
-    // 内容在 Window namescope 构建(字段/事件已回填)，此处只搬迁可视父级，不影响任何引用。
-    // 显式初始化停靠布局：建工厂 → InitLayout(设各级 ActiveDockable/父级链/DockManager)。
-    // XAML 的 InitializeLayout 属性在本项目未生效(主区空白)，改在此代码初始化。
-    private void InitDockLayout()
+    // 用 MVVM 停靠模型在代码里搭布局(忠实原 PitMine3D AvalonDock 的可拖拽/浮动/停靠 面板):
+    // 各面板=轻量 Tool/Document 视图模型; 内容经 DataTemplate 供给 —— 模板直接返回暂存里已建好的
+    // 面板控件(仍属 Window namescope, 字段/事件不变), 返回前脱离旧父以支持浮动/重停靠时重取。
+    private void BuildDock()
     {
-        if (Dock == null || RootLayout == null) return;
-        var factory = new Dock.Model.Avalonia.Factory();
-        Dock.Factory = factory;
-        factory.InitLayout(RootLayout);
-        SetActivesRecursive(RootLayout);   // 逐级设 ActiveDockable/DefaultDockable, 否则主区/工具区空白
-        Dock.Layout = RootLayout;
+        if (Dock == null) return;
+        var f = new Dock.Model.Mvvm.Factory();
+
+        var panels = new DMC.Tool { Id = "Panels", Title = "文件 / 图层 / 对象", CanClose = true, CanFloat = true };
+        var props = new DMC.Tool { Id = "Props", Title = "特性", CanClose = true, CanFloat = true };
+        var assistant = new DMC.Tool { Id = "Assistant", Title = "智能助手", CanClose = true, CanFloat = true };
+        var viewport = new DMC.Document { Id = "Viewport", Title = "视口", CanClose = false, CanFloat = false };
+
+        var leftDock = new DMC.ToolDock { Alignment = DCore.Alignment.Left, Proportion = 0.18,
+            ActiveDockable = panels, VisibleDockables = f.CreateList<DCore.IDockable>(panels) };
+        var docDock = new DMC.DocumentDock { Proportion = 0.60, CanCreateDocument = false,
+            ActiveDockable = viewport, VisibleDockables = f.CreateList<DCore.IDockable>(viewport) };
+        // 右侧一个工具停靠：特性 + 智能助手 两页(标签)——与左侧同为直接 ToolDock, 比例才被布局采用。
+        var rightDock = new DMC.ToolDock { Alignment = DCore.Alignment.Right, Proportion = 0.22,
+            ActiveDockable = props, VisibleDockables = f.CreateList<DCore.IDockable>(props, assistant) };
+
+        var mainDock = new DMC.ProportionalDock { Orientation = DCore.Orientation.Horizontal,
+            VisibleDockables = f.CreateList<DCore.IDockable>(
+                leftDock, new DMC.ProportionalDockSplitter(), docDock, new DMC.ProportionalDockSplitter(), rightDock) };
+        var root = new DMC.RootDock { Id = "Root", ActiveDockable = mainDock, DefaultDockable = mainDock,
+            VisibleDockables = f.CreateList<DCore.IDockable>(mainDock) };
+
+        f.InitLayout(root);
+        Dock.Factory = f;
+        Dock.Layout = root;
+
+        // 内容模板：只匹配我的叶子面板(按 Id), 返回暂存控件; 停靠框架的容器控件仍用其内建主题渲染。
+        Dock.DataTemplates.Add(new FuncDataTemplate<DCore.IDockable>(
+            d => d?.Id is "Panels" or "Props" or "Assistant" or "Viewport",
+            (d, _) => ContentFor(d?.Id)));
     }
 
-    // 递归设每个 IDock 的活动/默认可停靠项 = 首个可见项(ToolDock 显示活动页、RootDock 显示活动区)。
-    private static void SetActivesRecursive(Dock.Model.Core.IDock dock)
+    // 按 Id 取暂存面板控件; 返回前脱离当前父(Panel 或 ContentPresenter), 供浮动/重停靠重新宿主。
+    private Control? ContentFor(string? id)
     {
-        var kids = dock.VisibleDockables;
-        if (kids == null || kids.Count == 0) return;
-        dock.ActiveDockable ??= kids[0];
-        dock.DefaultDockable ??= kids[0];
-        foreach (var d in kids)
-            if (d is Dock.Model.Core.IDock child) SetActivesRecursive(child);
-    }
-
-    private void FillDock()
-    {
-        if (LeftTool == null || ViewportDoc == null || PropsTool == null || AssistantTool == null) return;
-        MoveIntoDockable(LeftPanelContent, c => LeftTool.Content = c);
-        MoveIntoDockable(ViewportHost, c => ViewportDoc.Content = c);
-        MoveIntoDockable(PropsContent, c => PropsTool.Content = c);
-        MoveIntoDockable(AssistantContent, c => AssistantTool.Content = c);
-    }
-
-    private static void MoveIntoDockable(Control? content, System.Action<Control> assign)
-    {
-        if (content == null) return;
-        (content.Parent as Panel)?.Children.Remove(content);
-        assign(content);
+        Control? c = id switch
+        {
+            "Panels" => LeftPanelContent,
+            "Props" => PropsContent,
+            "Assistant" => AssistantContent,
+            "Viewport" => ViewportHost,
+            _ => null,
+        };
+        if (c?.Parent is Panel p) p.Children.Remove(c);
+        else if (c?.Parent is ContentControl cc) cc.Content = null;
+        else if (c?.Parent is Avalonia.Controls.Presenters.ContentPresenter cp) cp.Content = null;
+        return c;
     }
 
     private enum NavMode { None, Orbit, Pan }

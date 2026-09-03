@@ -2,8 +2,6 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="using:PitMine3D.Kylin.Controls"
         xmlns:dc="using:Dock.Avalonia.Controls"
-        xmlns:dm="using:Dock.Model.Avalonia.Controls"
-        xmlns:dmf="using:Dock.Model.Avalonia"
         x:Class="PitMine3D.Kylin.Views.MainWindow"
         Width="1240" Height="800"
         MinWidth="900" MinHeight="600"
@@ -1315,30 +1313,8 @@
                 </Grid>
         </Panel>
 
-        <!-- Dock 布局：工具/文档内容留空, 加载后由代码把暂存面板移入(见 OnDockLoaded) -->
-        <dc:DockControl Grid.Row="1" x:Name="Dock">
-            <dm:RootDock x:Name="RootLayout" Id="Root">
-                <dm:ProportionalDock Orientation="Horizontal">
-                    <dm:ToolDock Proportion="0.18" Alignment="Left">
-                        <dm:Tool x:Name="LeftTool" Id="Panels" Title="文件 / 图层 / 对象" CanClose="True" CanFloat="True" />
-                    </dm:ToolDock>
-                    <dm:ProportionalDockSplitter />
-                    <dm:DocumentDock Proportion="0.62" CanCreateDocument="False">
-                        <dm:Document x:Name="ViewportDoc" Id="Viewport" Title="视口" CanClose="False" CanFloat="False" />
-                    </dm:DocumentDock>
-                    <dm:ProportionalDockSplitter />
-                    <dm:ProportionalDock Orientation="Vertical" Proportion="0.20">
-                        <dm:ToolDock Proportion="0.42" Alignment="Right">
-                            <dm:Tool x:Name="PropsTool" Id="Props" Title="特性" CanClose="True" CanFloat="True" />
-                        </dm:ToolDock>
-                        <dm:ProportionalDockSplitter />
-                        <dm:ToolDock Proportion="0.58" Alignment="Right">
-                            <dm:Tool x:Name="AssistantTool" Id="Assistant" Title="智能助手" CanClose="True" CanFloat="True" />
-                        </dm:ToolDock>
-                    </dm:ProportionalDock>
-                </dm:ProportionalDock>
-            </dm:RootDock>
-        </dc:DockControl>
+        <!-- 停靠布局在代码 BuildDock() 里搭建(MVVM 模型), 内容经 DataTemplate 供暂存面板控件 -->
+        <dc:DockControl Grid.Row="1" x:Name="Dock" />
 
         <!-- ============================ 命令行 ============================ -->
         <Border Grid.Row="2" Background="#1E1F22" Padding="8,4">

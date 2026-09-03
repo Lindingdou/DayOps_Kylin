@@ -25,6 +25,7 @@
     <PackageReference Include="ACadSharp" Version="3.5.7" />
     <PackageReference Include="Dock.Avalonia" Version="11.2.0" />
     <PackageReference Include="Dock.Model.Avalonia" Version="11.2.0" />
+    <PackageReference Include="Dock.Model.Mvvm" Version="11.2.0" />
     <!-- 地质/生产数据库(§四/§八): SQLite 嵌入式, 跨平台可移(非 DM8) + Dapper POCO 映射 —— 与原 SqlLib 同版本 -->
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.10" />
     <PackageReference Include="Dapper" Version="2.1.35" />
