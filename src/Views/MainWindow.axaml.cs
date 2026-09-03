@@ -660,9 +660,10 @@ public partial class MainWindow : Window
         var f = new Dock.Model.Mvvm.Factory();
 
         // 左侧面板：内部用 TabControl 呈现「文件管理器 / 图层」两个可见标签(见 XAML LeftTabs)。
-        var panels = new DMC.Tool { Id = "Panels", Title = "文件 · 图层", CanClose = true, CanFloat = true };
-        var props = new DMC.Tool { Id = "Props", Title = "特性", CanClose = true, CanFloat = true };
-        var assistant = new DMC.Tool { Id = "Assistant", Title = "智能助手", CanClose = true, CanFloat = true };
+        // CanFloat=false：拖拽只在停靠区重排; 吸附不到新位就回到原处(不浮出独立窗口/不消失), 仅关闭键移除。
+        var panels = new DMC.Tool { Id = "Panels", Title = "文件 · 图层", CanClose = true, CanFloat = false };
+        var props = new DMC.Tool { Id = "Props", Title = "特性", CanClose = true, CanFloat = false };
+        var assistant = new DMC.Tool { Id = "Assistant", Title = "智能助手", CanClose = true, CanFloat = false };
         var leftDock = new DMC.ToolDock { Alignment = DCore.Alignment.Left, Proportion = 0.18,
             ActiveDockable = panels, VisibleDockables = f.CreateList<DCore.IDockable>(panels) };
         var docDock = new DMC.DocumentDock { Proportion = 0.60, CanCreateDocument = false,
