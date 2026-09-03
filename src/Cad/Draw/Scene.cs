@@ -15,14 +15,16 @@ public abstract class SceneEntity
     public double[]? Dash;                             // 线型虚线样式(画/空,世界单位); null=实线
     public short LineWeight = -1;                      // 线宽(DXF LineWeightType 值: -1=ByLayer, -3=Default, 0..211=0.01mm); 当前不渲染变宽线, 但 round-trip 保值供下游绘图
     public short Transparency = -1;                    // 透明度(-1=随层 ByLayer, 0..90=百分比); 当前渲染不透明(P3_C3 无 alpha), 但 round-trip 保值供下游/重导出
+    public double Elevation;                            // 实体标高(Z, 世界单位): 平面实体默认 0; 等高线/台阶线等按此抬高显示三维。Points 仍存 XY, 此值统一供 z。
 
     /// <summary>把自身镶嵌为线段（交错 P3_C3）追加到 o。</summary>
     public abstract void Tessellate(List<float> o);
 
     protected void Seg(List<float> o, double x0, double y0, double x1, double y1)
     {
-        o.Add((float)x0); o.Add((float)y0); o.Add(0); o.Add(Cr); o.Add(Cg); o.Add(Cb);
-        o.Add((float)x1); o.Add((float)y1); o.Add(0); o.Add(Cr); o.Add(Cg); o.Add(Cb);
+        float z = (float)Elevation;
+        o.Add((float)x0); o.Add((float)y0); o.Add(z); o.Add(Cr); o.Add(Cg); o.Add(Cb);
+        o.Add((float)x1); o.Add((float)y1); o.Add(z); o.Add(Cr); o.Add(Cg); o.Add(Cb);
     }
 
     /// <summary>按线型 Dash 把一段切成虚线子段镶嵌(实线时=单段)。</summary>
@@ -80,7 +82,7 @@ public abstract class SceneEntity
     /// 单一枢纽: 变换深拷(Colored)与各处手工构造新实体(简化/平滑/裁剪)都经此, 加样式字段只改这一处。</summary>
     public void CopyStyleFrom(SceneEntity s)
     {
-        Cr = s.Cr; Cg = s.Cg; Cb = s.Cb; Dash = s.Dash; LineWeight = s.LineWeight; Transparency = s.Transparency; Visible = s.Visible; LayerName = s.LayerName;
+        Cr = s.Cr; Cg = s.Cg; Cb = s.Cb; Dash = s.Dash; LineWeight = s.LineWeight; Transparency = s.Transparency; Visible = s.Visible; LayerName = s.LayerName; Elevation = s.Elevation;
     }
 
     // 变换/克隆深拷: 保留全部非几何属性。图层保留使 移动/复制/镜像/剪贴板 不改层;

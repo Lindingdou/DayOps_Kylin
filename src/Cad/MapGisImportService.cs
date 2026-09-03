@@ -163,17 +163,17 @@ public static class MapGisImportService
                 lines.Add((pl, vsoff - 2, (int)vc, mgColor));
             }
 
-            // 等高线 Z 注入(obj2)：仅用于诊断/后续三维，托管场景为 2D 折线不改点，但记录 Z 命中数于警告
+            // 等高线 Z 注入(obj2)：把每条等高线的高程写入实体 Elevation → 三维视图按高程抬升成地形
             int withZ = 0;
             if (sections.Count >= 3)
-                withZ = CountZInjectable(data, sections[2], lines);
+                withZ = InjectZFromObj2(data, sections[2], lines);
 
             foreach (var (pl, _, _, _) in lines) result.Entities.Add(pl);
             result.Bounds = new[] { xmin, ymin, xmax, ymax };
             result.LayerColors[layer] = lines.Count > 0 ? (lines[0].pl.Cr, lines[0].pl.Cg, lines[0].pl.Cb) : (0.86f, 0.9f, 0.6f);
             result.LayerOrder.Add(layer);
             result.TypeCounts["多段线"] = lines.Count;
-            if (withZ > 0) result.Warnings.Add($"识别等高线 Z {withZ} 条（2D 折线不改点，Z 供参考）");
+            if (withZ > 0) result.Warnings.Add($"注入等高线 Z {withZ} 条（按高程抬升显示三维地形）");
         }
         catch (Exception ex) { result.Error = $"WL 解析失败：{ex.Message}"; }
         return result;
@@ -347,8 +347,8 @@ public static class MapGisImportService
         try { return Encoding.GetEncoding("GBK"); } catch { return Encoding.UTF8; }
     }
 
-    // obj2 等高线 Z 识别(不改点，仅计数)：忠实原 InjectZFromObj2 的 "@Continuous" - 0x14 起点规则。
-    private static int CountZInjectable(byte[] data, (int off, int size) obj2, List<(PolylineEntity pl, long vStart, int vc, byte color)> lines)
+    // obj2 等高线 Z 注入(设实体 Elevation)：忠实原 InjectZFromObj2 的 "@Continuous" - 0x14 起点规则。
+    private static int InjectZFromObj2(byte[] data, (int off, int size) obj2, List<(PolylineEntity pl, long vStart, int vc, byte color)> lines)
     {
         int obj2End = obj2.off + obj2.size;
         byte[] needle = Encoding.ASCII.GetBytes("@Continuous");
@@ -364,7 +364,9 @@ public static class MapGisImportService
             if (recStart >= obj2.off && recStart + 16 <= data.Length)
             {
                 double z = BitConverter.ToDouble(data, recStart);
-                if (z > 800 && z < 2000)
+                // 结构匹配(@Continuous 记录 + 顶点键→线)已是主过滤，Z 范围仅作防错位的通用地形高程护栏
+                // (原实测矿区取 800~2000m；放宽到一般陆地高程以适配任意标高的工区)。
+                if (z > -500 && z < 9000)
                 {
                     uint key = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(recStart + 9, 4));
                     // 命中判定：key 落在某 line 的 [vStart, vStart+vc*16)
@@ -373,8 +375,8 @@ public static class MapGisImportService
                     if (cand >= 0)
                     {
                         long s = starts[cand];
-                        // 找该 start 对应的 line vc
-                        foreach (var ln in lines) if (ln.vStart == s) { if (key < s + (long)ln.vc * 16) hits++; break; }
+                        // 找该 start 对应的 line：命中则把等高线高程注入实体 Elevation(整条按此 Z 抬高显示三维)
+                        foreach (var ln in lines) if (ln.vStart == s) { if (key < s + (long)ln.vc * 16) { ln.pl.Elevation = z; hits++; } break; }
                     }
                 }
             }
