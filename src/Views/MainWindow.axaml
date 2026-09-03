@@ -1,6 +1,9 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="using:PitMine3D.Kylin.Controls"
+        xmlns:dc="using:Dock.Avalonia.Controls"
+        xmlns:dm="using:Dock.Model.Avalonia.Controls"
+        xmlns:dmf="using:Dock.Model.Avalonia"
         x:Class="PitMine3D.Kylin.Views.MainWindow"
         Width="1240" Height="800"
         MinWidth="900" MinHeight="600"
@@ -1220,10 +1223,9 @@
         </TabControl>
 
         <!-- ============================ 3D 视口 ============================ -->
-        <Grid Grid.Row="1" ColumnDefinitions="220,Auto,*,Auto,260">
-        <!-- 左侧对象管理器 -->
-        <Border Grid.Column="0" Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,1,0">
-            <Grid RowDefinitions="Auto,Auto,Auto,*,Auto,130,Auto,Auto,*">
+        <!-- 隐藏暂存：面板内容在 Window namescope 构建(x:Name/事件正常回填)，加载后移入 Dock 工具 -->
+        <Panel Grid.Row="1" x:Name="ContentStash" IsVisible="False">
+        <Grid x:Name="LeftPanelContent" RowDefinitions="Auto,Auto,Auto,*,Auto,130,Auto,Auto,*" Background="#F7F8FA">
                 <!-- 文件管理器 -->
                 <TextBlock Grid.Row="0" Text="文件管理器" FontWeight="SemiBold" FontSize="13"
                            Margin="10,8,10,4" Foreground="#3A3F46" />
@@ -1244,9 +1246,7 @@
                            Margin="10,0,10,6" FontSize="11" Foreground="#8A929C" />
                 <TreeView Grid.Row="8" x:Name="ObjectTree" Background="Transparent" BorderThickness="0" Margin="4,0" />
             </Grid>
-        </Border>
-        <GridSplitter Grid.Column="1" Width="4" Background="#DCDFE4" ResizeDirection="Columns" HorizontalAlignment="Center" />
-        <Panel Grid.Column="2" x:Name="ViewportHost" Background="Transparent">
+        <Panel x:Name="ViewportHost" Background="Transparent">
             <Panel.ContextMenu>
                 <ContextMenu Opening="OnCtxMenuOpening">
                     <!-- 视图切换置顶(高频、不依赖选中): 2D/3D/缩放/栅格 -->
@@ -1292,12 +1292,7 @@
                 <TextBlock Text="Z 上 · CGCS2000 约定" Foreground="#C9D6E6" FontSize="11" />
             </Border>
         </Panel>
-        <GridSplitter Grid.Column="3" Width="4" Background="#DCDFE4" ResizeDirection="Columns" HorizontalAlignment="Center" />
-        <!-- 右侧特性面板 -->
-        <Border Grid.Column="4" Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="1,0,0,0">
-            <Grid RowDefinitions="*,Auto,1.6*">
-                <!-- 特性面板 -->
-                <Grid Grid.Row="0" RowDefinitions="Auto,Auto,*">
+        <Grid x:Name="PropsContent" RowDefinitions="Auto,Auto,*" Background="#F7F8FA">
                     <TextBlock Grid.Row="0" Text="特性" FontWeight="SemiBold" FontSize="13"
                                Margin="10,8,10,4" Foreground="#3A3F46" />
                     <TextBlock Grid.Row="1" x:Name="PropertyHint" Text="选中单个实体查看特性"
@@ -1306,9 +1301,7 @@
                         <StackPanel x:Name="PropertyPanel" />
                     </ScrollViewer>
                 </Grid>
-                <GridSplitter Grid.Row="1" Height="4" Background="#DCDFE4" ResizeDirection="Rows" HorizontalAlignment="Stretch" VerticalAlignment="Center" />
-                <!-- 智能助手（菜单引导，点选即执行命令） -->
-                <Grid Grid.Row="2" RowDefinitions="Auto,*,Auto" Background="#F2F4F7">
+                <Grid x:Name="AssistantContent" RowDefinitions="Auto,*,Auto" Background="#F2F4F7">
                     <TextBlock Grid.Row="0" Text="智能助手 🤖" FontWeight="SemiBold" FontSize="13"
                                Margin="10,8,10,4" Foreground="#3A3F46" />
                     <ScrollViewer Grid.Row="1" Margin="6,0,6,4">
@@ -1320,9 +1313,32 @@
                         <Button Grid.Column="1" Content="发送" FontSize="12" Margin="4,0,0,0" Padding="8,2" Click="OnAssistantSend" />
                     </Grid>
                 </Grid>
-            </Grid>
-        </Border>
-        </Grid>
+        </Panel>
+
+        <!-- Dock 布局：工具/文档内容留空, 加载后由代码把暂存面板移入(见 OnDockLoaded) -->
+        <dc:DockControl Grid.Row="1" x:Name="Dock">
+            <dm:RootDock x:Name="RootLayout" Id="Root">
+                <dm:ProportionalDock Orientation="Horizontal">
+                    <dm:ToolDock Proportion="0.18" Alignment="Left">
+                        <dm:Tool x:Name="LeftTool" Id="Panels" Title="文件 / 图层 / 对象" CanClose="True" CanFloat="True" />
+                    </dm:ToolDock>
+                    <dm:ProportionalDockSplitter />
+                    <dm:DocumentDock Proportion="0.62" CanCreateDocument="False">
+                        <dm:Document x:Name="ViewportDoc" Id="Viewport" Title="视口" CanClose="False" CanFloat="False" />
+                    </dm:DocumentDock>
+                    <dm:ProportionalDockSplitter />
+                    <dm:ProportionalDock Orientation="Vertical" Proportion="0.20">
+                        <dm:ToolDock Proportion="0.42" Alignment="Right">
+                            <dm:Tool x:Name="PropsTool" Id="Props" Title="特性" CanClose="True" CanFloat="True" />
+                        </dm:ToolDock>
+                        <dm:ProportionalDockSplitter />
+                        <dm:ToolDock Proportion="0.58" Alignment="Right">
+                            <dm:Tool x:Name="AssistantTool" Id="Assistant" Title="智能助手" CanClose="True" CanFloat="True" />
+                        </dm:ToolDock>
+                    </dm:ProportionalDock>
+                </dm:ProportionalDock>
+            </dm:RootDock>
+        </dc:DockControl>
 
         <!-- ============================ 命令行 ============================ -->
         <Border Grid.Row="2" Background="#1E1F22" Padding="8,4">

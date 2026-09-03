@@ -20,6 +20,8 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        FillDock();                // 在停靠布局构建视图前, 先把暂存面板内容装入各工具/文档
+        InitDockLayout();          // 显式初始化停靠布局(设活动项/父级/DockManager), 否则主区不渲染
         PopulateDrawingLayers();   // 启动即显示绘制图层("0")，可管理
         SetDocPath(null);          // 初始标题=未命名
         RenderAssistant(_assistant.Current());   // 智能助手：启动显示欢迎 + 主菜单
@@ -641,6 +643,47 @@ public partial class MainWindow : Window
                 DoRedo();
             }
         };
+    }
+
+    // Dock 布局就绪后：把暂存(ContentStash)里的面板内容移入各工具/文档。
+    // 内容在 Window namescope 构建(字段/事件已回填)，此处只搬迁可视父级，不影响任何引用。
+    // 显式初始化停靠布局：建工厂 → InitLayout(设各级 ActiveDockable/父级链/DockManager)。
+    // XAML 的 InitializeLayout 属性在本项目未生效(主区空白)，改在此代码初始化。
+    private void InitDockLayout()
+    {
+        if (Dock == null || RootLayout == null) return;
+        var factory = new Dock.Model.Avalonia.Factory();
+        Dock.Factory = factory;
+        factory.InitLayout(RootLayout);
+        SetActivesRecursive(RootLayout);   // 逐级设 ActiveDockable/DefaultDockable, 否则主区/工具区空白
+        Dock.Layout = RootLayout;
+    }
+
+    // 递归设每个 IDock 的活动/默认可停靠项 = 首个可见项(ToolDock 显示活动页、RootDock 显示活动区)。
+    private static void SetActivesRecursive(Dock.Model.Core.IDock dock)
+    {
+        var kids = dock.VisibleDockables;
+        if (kids == null || kids.Count == 0) return;
+        dock.ActiveDockable ??= kids[0];
+        dock.DefaultDockable ??= kids[0];
+        foreach (var d in kids)
+            if (d is Dock.Model.Core.IDock child) SetActivesRecursive(child);
+    }
+
+    private void FillDock()
+    {
+        if (LeftTool == null || ViewportDoc == null || PropsTool == null || AssistantTool == null) return;
+        MoveIntoDockable(LeftPanelContent, c => LeftTool.Content = c);
+        MoveIntoDockable(ViewportHost, c => ViewportDoc.Content = c);
+        MoveIntoDockable(PropsContent, c => PropsTool.Content = c);
+        MoveIntoDockable(AssistantContent, c => AssistantTool.Content = c);
+    }
+
+    private static void MoveIntoDockable(Control? content, System.Action<Control> assign)
+    {
+        if (content == null) return;
+        (content.Parent as Panel)?.Children.Remove(content);
+        assign(content);
     }
 
     private enum NavMode { None, Orbit, Pan }
