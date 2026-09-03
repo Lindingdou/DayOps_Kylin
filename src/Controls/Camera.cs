@@ -113,11 +113,15 @@ internal sealed class Camera
     {
         if (Is2D)
         {
-            // 正交俯视：相机在注视点正上方看向 -Z，屏幕 X 右 / Y 上
-            float[] eye2 = { Target[0], Target[1], Target[2] + (float)Dist };
+            // 正交俯视：相机远置于注视点上方看向 -Z，屏幕 X 右 / Y 上。眼高与 near/far 覆盖大 Z 跨度——
+            // 否则抬升到高程的几何(等高线/三维地形, Z 可达千米级)会被裁出视锥, 切 2D 后看着空白(“无法切回 2D”)。
+            // ortho 尺寸(缩放)仍由 Dist 决定, 与眼高解耦。
+            double camZ = Dist + 100000.0;
+            float[] eye2 = { Target[0], Target[1], (float)(Target[2] + camZ) };
             float[] view2 = Mat4.LookAt(eye2, Target, new[] { 0f, 1f, 0f });
             float halfH = (float)Dist;
-            float[] proj2 = Mat4.Ortho(-halfH * aspect, halfH * aspect, -halfH, halfH, 0.01f, (float)(Dist * 4.0 + 10.0));
+            float far2 = (float)(2.0 * camZ + Dist * 4.0 + 10.0);
+            float[] proj2 = Mat4.Ortho(-halfH * aspect, halfH * aspect, -halfH, halfH, 0.01f, far2);
             return Mat4.Mul(proj2, view2);
         }
         // 透视：远平面随距离放大，避免大图纸被裁
