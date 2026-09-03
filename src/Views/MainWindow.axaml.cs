@@ -23,6 +23,8 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        _active = NewDocState();   // 首个文档(场景/图层), 供 _scene/_layers 与停靠布局
+        _docs.Add(_active);
         BuildDock();               // 代码建 MVVM 停靠布局 + 内容模板(返回暂存面板控件)
         PopulateDrawingLayers();   // 启动即显示绘制图层("0")，可管理
         SetDocPath(null);          // 初始标题=未命名
@@ -658,12 +660,11 @@ public partial class MainWindow : Window
         var panels = new DMC.Tool { Id = "Panels", Title = "文件 / 图层 / 对象", CanClose = true, CanFloat = true };
         var props = new DMC.Tool { Id = "Props", Title = "特性", CanClose = true, CanFloat = true };
         var assistant = new DMC.Tool { Id = "Assistant", Title = "智能助手", CanClose = true, CanFloat = true };
-        var viewport = new DMC.Document { Id = "Viewport", Title = "视口", CanClose = false, CanFloat = false };
-
         var leftDock = new DMC.ToolDock { Alignment = DCore.Alignment.Left, Proportion = 0.18,
             ActiveDockable = panels, VisibleDockables = f.CreateList<DCore.IDockable>(panels) };
         var docDock = new DMC.DocumentDock { Proportion = 0.60, CanCreateDocument = false,
-            ActiveDockable = viewport, VisibleDockables = f.CreateList<DCore.IDockable>(viewport) };
+            ActiveDockable = _active.Vm, VisibleDockables = f.CreateList<DCore.IDockable>(_active.Vm) };
+        _dockFactory = f; _docDock = docDock;
         // 右侧一个工具停靠：特性 + 智能助手 两页(标签)——与左侧同为直接 ToolDock, 比例才被布局采用。
         var rightDock = new DMC.ToolDock { Alignment = DCore.Alignment.Right, Proportion = 0.22,
             ActiveDockable = props, VisibleDockables = f.CreateList<DCore.IDockable>(props, assistant) };
@@ -677,18 +678,20 @@ public partial class MainWindow : Window
         f.InitLayout(root);
         Dock.Factory = f;
         Dock.Layout = root;
+        f.ActiveDockableChanged += (_, e) => OnActiveDocChanged(e.Dockable);   // 标签切换 → 切当前文档
 
-        // 内容模板：只匹配我的叶子面板(按 Id), 返回暂存控件; 停靠框架容器仍用内建主题渲染。
+        // 内容模板：匹配我的叶子面板(按 Id)或任一文档(Doc*), 返回暂存控件; 框架容器仍用内建主题渲染。
         // 关键：注册到 Application 级(而非 Dock 级)——浮动时面板进入独立宿主窗口(另一个 DockControl),
         // 只有 App 级模板会被其继承, 否则浮动面板因无模板而"消失"。
         var tpl = new FuncDataTemplate<DCore.IDockable>(
-            d => d?.Id is "Panels" or "Props" or "Assistant" or "Viewport",
+            d => d?.Id is "Panels" or "Props" or "Assistant" || (d?.Id?.StartsWith("Doc") == true),
             (d, _) => ContentFor(d?.Id));
         var appTpls = Avalonia.Application.Current!.DataTemplates;
         if (!appTpls.Contains(tpl)) appTpls.Add(tpl);
     }
 
     // 按 Id 取暂存面板控件; 返回前脱离当前父(Panel 或 ContentPresenter), 供浮动/重停靠重新宿主。
+    // 所有文档(Doc*)共用同一个视口控件——只有活动文档的内容被材质化, 故视口恒在活动标签内。
     private Control? ContentFor(string? id)
     {
         Control? c = id switch
@@ -696,13 +699,45 @@ public partial class MainWindow : Window
             "Panels" => LeftPanelContent,
             "Props" => PropsContent,
             "Assistant" => AssistantContent,
-            "Viewport" => ViewportHost,
-            _ => null,
+            _ => (id != null && id.StartsWith("Doc")) ? ViewportHost : null,
         };
         if (c?.Parent is Panel p) p.Children.Remove(c);
         else if (c?.Parent is ContentControl cc) cc.Content = null;
         else if (c?.Parent is Avalonia.Controls.Presenters.ContentPresenter cp) cp.Content = null;
         return c;
+    }
+
+    // 新建一个文档状态(独立 场景/图层 + 文档视图模型)。首个文档不可关, 其余可关。
+    private DocState NewDocState()
+    {
+        _docSeq++;
+        var st = new DocState { Id = $"Doc{_docSeq}", Title = $"未命名 {_docSeq}" };
+        st.Vm = new DMC.Document { Id = st.Id, Title = st.Title, CanClose = _docSeq > 1, CanFloat = false };
+        return st;
+    }
+
+    // 「新建」→ 新增一个文档标签并切过去(视口共享, 切标签即切场景)。
+    private void NewDocument()
+    {
+        var st = NewDocState();
+        _docs.Add(st);
+        _dockFactory.AddDockable(_docDock, st.Vm);
+        _dockFactory.SetActiveDockable(st.Vm);   // 触发 ActiveDockableChanged → OnActiveDocChanged 完成切换
+    }
+
+    // 标签切换/激活 → 切当前文档: _active 换掉(其 _scene/_layers 随之切), 取消进行中命令, 刷面板与场景。
+    private void OnActiveDocChanged(DCore.IDockable? d)
+    {
+        if (d is not DMC.Document doc) return;
+        var st = _docs.FirstOrDefault(x => x.Vm == doc);
+        if (st == null || st == _active) return;
+        _active = st;
+        _tool = null; _measure = null; _angle = null; _selected.Clear();
+        _editMode = EditMode.None; _lastImport = null;
+        Viewport.ClearImported();      // 视口切到新文档(v1: 导入线框不跨文档保留)
+        PopulateDrawingLayers();
+        RefreshScene();
+        StatusMsg.Text = $"当前文档「{st.Title}」";
     }
 
     private enum NavMode { None, Orbit, Pan }
@@ -726,8 +761,22 @@ public partial class MainWindow : Window
     private bool _slideDragging;                 // 滑动多段线：正在按住拖动
     private readonly List<(double x, double y)> _slidePts = new();   // 滑动采样点
     private Avalonia.Point _slideLastScreen;     // 上次采样的屏幕点(控制采样密度)
-    private readonly Scene _scene = new();       // 托管绘制场景
-    private readonly LayerTable _layers = new();  // 图层表
+    // 多文档：每个文档一套 场景 + 图层; _scene/_layers 恒指向当前活动文档(下方属性)。
+    private sealed class DocState
+    {
+        public string Id = "", Title = "";
+        public Scene Scene = new();
+        public LayerTable Layers = new();
+        public DMC.Document Vm = null!;
+    }
+    private readonly List<DocState> _docs = new();
+    private DocState _active = null!;
+    private int _docSeq;
+    private Dock.Model.Mvvm.Factory _dockFactory = null!;
+    private DMC.DocumentDock _docDock = null!;
+
+    private Scene _scene => _active.Scene;        // 当前文档的托管绘制场景
+    private LayerTable _layers => _active.Layers;  // 当前文档的图层表
     private readonly UndoManager _undo = new();   // 撤销/重做
     private DrawTool? _tool;                      // 当前激活的绘制工具
     private readonly List<SceneEntity> _selected = new();   // 选择集
@@ -802,7 +851,7 @@ public partial class MainWindow : Window
         if (sender is Control c && c.Tag is string cmd)
         {
             if (_suppressCmdLog) _suppressCmdLog = false; else LogCommand(cmd);   // 命令回显(转派来的已回显, 跳过)
-            if (cmd == "新建") { NewScene(); return; }
+            if (cmd == "新建") { NewDocument(); return; }
             if (cmd == "打开") { await OpenSceneAsync(); return; }
             if (cmd == "保存") { await SaveSceneAsync(); return; }
             if (cmd == "撤销") { DoUndo(); return; }
@@ -11455,7 +11504,7 @@ public partial class MainWindow : Window
                 LayersAllOn();
                 break;
             case "NEW":
-                NewScene();
+                NewDocument();
                 break;
             case "UNDO":
             case "U":
