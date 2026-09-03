@@ -678,10 +678,14 @@ public partial class MainWindow : Window
         Dock.Factory = f;
         Dock.Layout = root;
 
-        // 内容模板：只匹配我的叶子面板(按 Id), 返回暂存控件; 停靠框架的容器控件仍用其内建主题渲染。
-        Dock.DataTemplates.Add(new FuncDataTemplate<DCore.IDockable>(
+        // 内容模板：只匹配我的叶子面板(按 Id), 返回暂存控件; 停靠框架容器仍用内建主题渲染。
+        // 关键：注册到 Application 级(而非 Dock 级)——浮动时面板进入独立宿主窗口(另一个 DockControl),
+        // 只有 App 级模板会被其继承, 否则浮动面板因无模板而"消失"。
+        var tpl = new FuncDataTemplate<DCore.IDockable>(
             d => d?.Id is "Panels" or "Props" or "Assistant" or "Viewport",
-            (d, _) => ContentFor(d?.Id)));
+            (d, _) => ContentFor(d?.Id));
+        var appTpls = Avalonia.Application.Current!.DataTemplates;
+        if (!appTpls.Contains(tpl)) appTpls.Add(tpl);
     }
 
     // 按 Id 取暂存面板控件; 返回前脱离当前父(Panel 或 ContentPresenter), 供浮动/重停靠重新宿主。
