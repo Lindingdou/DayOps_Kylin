@@ -31,9 +31,11 @@ public class CadGlViewport : OpenGlControlBase
     private GlRenderer.Mesh _grid, _cube, _gizmo;
 
     // 导入的图纸线框（世界坐标 P3_C3 线段）。上传须在 GL 线程，故 UI 线程只挂起数据，下一帧消费。
+    // _pendingImport 保留世界坐标源(不清空)——切换标签会销毁并重建 GL 上下文, 需据此重传, 否则线框丢失。
     private GlRenderer.Mesh _imported;
     private bool _hasImported;
     private float[]? _pendingImport;
+    private bool _importedDirty;
     private double[]? _pendingBounds;
 
     // 托管绘制场景几何（Home 绘制命令画的实体）
@@ -91,6 +93,13 @@ public class CadGlViewport : OpenGlControlBase
         _grid = _renderer.Upload(BuildGrid(10, 1f));
         _cube = _renderer.Upload(BuildCube());
         _gizmo = _renderer.Upload(BuildGizmo());
+
+        // GL 上下文(重)建后, 旧上下文里上传的网格句柄已失效——从保留的托管源重新入队, 下一帧重传。
+        // 切换文档标签时 Avalonia 会 Deinit/Init 该视口(销毁并重建上下文), 有此重传各文档几何才不丢/不空白。
+        if (_pendingImport is { Length: > 0 }) _importedDirty = true;
+        if (_pendingScene != null) _sceneDirty = true;
+        if (_pendingHighlight != null) _highlightDirty = true;
+        if (_pendingSnap != null) _snapDirty = true;
     }
 
     protected override void OnOpenGlDeinit(GlInterface gl)
@@ -103,6 +112,9 @@ public class CadGlViewport : OpenGlControlBase
         if (_hasSnap) _renderer.DeleteMesh(_snap);
         if (_hasScene) _renderer.DeleteMesh(_scene);
         _renderer.Deinit();
+        // 上下文销毁——句柄失效, 复位标志; 否则重建后旧 id 可能撞上新网格(grid/cube/gizmo)致误删/花屏。
+        // 保留的托管源(_pendingImport/_pendingScene/…)不动, OnOpenGlInit 会据此重新入队重传。
+        _hasImported = _hasScene = _hasHighlight = _hasSnap = false;
     }
 
     protected override void OnOpenGlRender(GlInterface gl, int fb)
@@ -112,16 +124,17 @@ public class CadGlViewport : OpenGlControlBase
         int h = Math.Max(1, (int)(Bounds.Height * scale));
         float aspect = h == 0 ? 1f : (float)w / h;
 
-        // 消费待上传的导入几何（必须在 GL 线程 = 本回调内）
-        var pending = _pendingImport;
-        if (pending != null)
+        // 消费待上传的导入几何（必须在 GL 线程 = 本回调内）。源保留于 _pendingImport 供上下文重建后重传。
+        if (_importedDirty)
         {
-            _pendingImport = null;
+            _importedDirty = false;
+            var src = _pendingImport ?? Array.Empty<float>();
             EnsureOrigin(_pendingBounds);
             if (_hasImported) _renderer.DeleteMesh(_imported);
-            _imported = _renderer.Upload(Localize(pending));
+            _imported = _renderer.Upload(Localize(src));
             _hasImported = !_imported.IsEmpty;
-            _camera.FitBounds(LocalizeBounds(_pendingBounds));
+            // 缩放一次：仅导入/分层时 _pendingBounds 非空才对准; 之后置空, 切换重传不再动相机。
+            if (_pendingBounds != null) { _camera.FitBounds(LocalizeBounds(_pendingBounds)); _pendingBounds = null; }
         }
 
         if (_highlightDirty)
@@ -246,6 +259,7 @@ public class CadGlViewport : OpenGlControlBase
         _pendingImport = lineVertices;
         _pendingBounds = bounds;
         _lastBounds = bounds;
+        _importedDirty = true;
         RequestNextFrameRendering();
     }
 
@@ -258,6 +272,7 @@ public class CadGlViewport : OpenGlControlBase
         _pendingImport = ConcatVisible();
         _pendingBounds = bounds;
         _lastBounds = bounds;
+        _importedDirty = true;
         RequestNextFrameRendering();
     }
 
@@ -267,6 +282,7 @@ public class CadGlViewport : OpenGlControlBase
         _layerGeom = null;
         _hiddenLayers.Clear();
         _pendingImport = Array.Empty<float>();
+        _importedDirty = true;
         _originSet = false; _ox = 0; _oy = 0;   // 新文档：复位渲染局部原点
         RequestNextFrameRendering();
     }
@@ -278,6 +294,7 @@ public class CadGlViewport : OpenGlControlBase
         if (visible) _hiddenLayers.Remove(layer); else _hiddenLayers.Add(layer);
         _pendingImport = ConcatVisible();
         _pendingBounds = null;                 // 显隐不重新缩放
+        _importedDirty = true;
         RequestNextFrameRendering();
     }
 

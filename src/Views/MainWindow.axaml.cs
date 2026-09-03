@@ -744,7 +744,7 @@ public partial class MainWindow : Window
         _tool = null; _measure = null; _angle = null; _selected.Clear();
         _editMode = EditMode.None; _lastImport = null;
         // 访问 Viewport 即懒建当前文档的独立视口(EnsureHost); 各标签各有其宿主, 切换不再空白。
-        Viewport.ClearImported();      // v1: 导入线框不跨文档保留
+        // 不清导入几何——每文档视口自留其线框(切换会重建 GL 上下文, CadGlViewport 会据保留源重传)。
         PopulateDrawingLayers();
         RefreshScene();
         StatusMsg.Text = $"当前文档「{st.Title}」";
