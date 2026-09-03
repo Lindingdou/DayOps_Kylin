@@ -683,4 +683,32 @@ public class DxfImportTests
         Assert.NotNull(line);
         Assert.False(line!.Visible);   // 隐藏状态往返(DXF IsInvisible)
     }
+
+    [Fact]
+    public void LoadEntities_preserves_entity_elevation_z()
+    {
+        // 带高程的图元: 等高线 LwPolyline(Elevation=50) + 空间线(端点 Z=30) + 圆(圆心 Z=20)。
+        // 回归"导入 DWG/DXF 只展 2D 图元"——可编辑导入须按源高程抬升, 否则全压平 Z=0。
+        var doc = new CadDocument();
+        var lp = new LwPolyline { Elevation = 50 };
+        lp.Vertices.Add(new LwPolyline.Vertex(new XY(0, 0)));
+        lp.Vertices.Add(new LwPolyline.Vertex(new XY(10, 0)));
+        lp.Vertices.Add(new LwPolyline.Vertex(new XY(10, 10)));
+        doc.Entities.Add(lp);
+        doc.Entities.Add(new Line { StartPoint = new XYZ(0, 0, 30), EndPoint = new XYZ(5, 5, 30) });
+        doc.Entities.Add(new Circle { Center = new XYZ(2, 2, 20), Radius = 3 });
+
+        string path = Path.Combine(Path.GetTempPath(), "pm_dxf_elev.dxf");
+        using (var writer = new DxfWriter(path, doc, false)) writer.Write();
+
+        var er = DxfImportService.LoadEntities(path);
+        Assert.True(er.Success, er.Error);
+        Assert.Contains(er.Entities, e => e is PolylineEntity p && System.Math.Abs(p.Elevation - 50) < 1e-3);   // 等高线抬到 50
+        Assert.Contains(er.Entities, e => e is LineEntity l && System.Math.Abs(l.Elevation - 30) < 1e-3);       // 线取端点 Z 均值
+        Assert.Contains(er.Entities, e => e is CircleEntity c && System.Math.Abs(c.Elevation - 20) < 1e-3);     // 圆取圆心 Z
+        // 反证: 若没有高程注入, 三者 Elevation 都会是 0（旧的"只展 2D"行为）
+        Assert.DoesNotContain(er.Entities, e => (e is PolylineEntity || e is LineEntity || e is CircleEntity) && e.Elevation == 0);
+
+        try { File.Delete(path); } catch { /* 清理失败无碍 */ }
+    }
 }

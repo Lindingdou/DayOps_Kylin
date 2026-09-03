@@ -395,10 +395,12 @@ public static class DxfImportService
         short emitLW = -1;           // 当前实体线宽(同上; 存实体自身值, round-trip 保真, 不解析 ByLayer)
         bool emitVisible = true;     // 当前实体可见性(同上; DXF IsInvisible 取反, round-trip 隐藏状态)
         short emitTransp = -1;       // 当前实体透明度(-1=随层; DXF Transparency round-trip)
+        double emitElev = 0;         // 当前实体标高 Z(Emit 顶置, Finalize 读)——DWG/DXF 有高程的实体按此抬升显示三维, 否则平面 0
 
         void Finalize(SceneEntity se, Affine2? xf, (float r, float g, float b) col, string layer)
         {
             se.Cr = col.r; se.Cg = col.g; se.Cb = col.b; se.Dash = emitDash; se.LineWeight = emitLW; se.Visible = emitVisible; se.Transparency = emitTransp;
+            se.Elevation = emitElev;                   // 源实体标高 Z(Apply 经 CopyStyleFrom 保留), 使有高程的图元不再压平成 2D
             if (xf != null) se = se.Apply(xf.Value);   // 变换保留颜色(Colored)，但不拷层名
             se.LayerName = layer;
             result.Entities.Add(se);
@@ -408,6 +410,30 @@ public static class DxfImportService
                 float x = o[i], y = o[i + 1];
                 if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y;
             }
+        }
+
+        // 取实体代表标高 Z(世界单位): 均匀高程(等高线/水平图元)忠实原(原亦按 Elevation 统一给 Z);
+        // 逐点变高(3D 多段线/面)取均值近似——本实体模型每实体单一 Elevation, 无法逐点保 Z。
+        static double EntityZ(Entity e) => e switch
+        {
+            Arc ar => ar.Center.Z,                 // Arc : Circle, 须在 Circle 前
+            Circle ci => ci.Center.Z,
+            Line ln => (ln.StartPoint.Z + ln.EndPoint.Z) * 0.5,
+            LwPolyline lp => lp.Elevation,
+            Polyline2D p2 => p2.Elevation,
+            Polyline3D p3 => AvgZ(p3),
+            Point pt => pt.Location.Z,
+            Ellipse el => el.Center.Z,
+            Insert ins => ins.InsertPoint.Z,
+            Face3D f3 => (f3.FirstCorner.Z + f3.SecondCorner.Z + f3.ThirdCorner.Z + f3.FourthCorner.Z) * 0.25,
+            Solid so => (so.FirstCorner.Z + so.SecondCorner.Z + so.ThirdCorner.Z + so.FourthCorner.Z) * 0.25,
+            _ => 0,
+        };
+        static double AvgZ(Polyline3D p3)
+        {
+            double s = 0; int n = 0;
+            foreach (var v in p3.Vertices) { s += v.Location.Z; n++; }
+            return n > 0 ? s / n : 0;
         }
 
         PolylineEntity? EllipsePoly(Ellipse ell)
@@ -465,6 +491,7 @@ public static class DxfImportService
             emitLW = (short)ent.LineWeight;                                          // 线宽(存实体自身值, round-trip 保真)
             emitVisible = !ent.IsInvisible;                                          // 可见性(DXF IsInvisible 取反)
             emitTransp = ent.Transparency.IsByLayer ? (short)-1 : ent.Transparency.Value;   // 透明度(随层=-1, 否则百分比)
+            emitElev = EntityZ(ent);                                                        // 实体标高 Z(见 EntityZ): 有高程按此抬升三维显示
             switch (ent)
             {
                 case Line ln:
