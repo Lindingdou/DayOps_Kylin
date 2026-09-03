@@ -15,7 +15,7 @@ internal sealed class Camera
     public float[] Target { get; } = { 0f, 0f, 1f };
 
     /// <summary>2D 平面视图（正交俯视）为 true；3D 轨道为 false。</summary>
-    public bool Is2D { get; private set; }
+    public bool Is2D { get; private set; } = true;   // 默认 2D 平面(俯视)模式
 
     /// <summary>切换 2D 平面 / 3D 轨道。</summary>
     public void SetMode(bool is2D) => Is2D = is2D;

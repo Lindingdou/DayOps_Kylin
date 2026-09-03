@@ -1280,7 +1280,7 @@
                     Margin="12" HorizontalAlignment="Left" VerticalAlignment="Top">
                 <StackPanel>
                     <TextBlock Text="3D 视口 · OpenGL" Foreground="#EAF2FF" FontWeight="SemiBold" FontSize="13" />
-                    <TextBlock Text="左键拖拽 = 轨道旋转 · 滚轮 = 缩放" Foreground="#B9C6D6" FontSize="11" Margin="0,3,0,0" />
+                    <TextBlock Text="左键拖拽 = 平移 · 滚轮 = 缩放 · 右键切 2D/3D" Foreground="#B9C6D6" FontSize="11" Margin="0,3,0,0" />
                     <TextBlock x:Name="GlInfo" Text="渲染后端: 初始化中…" Foreground="#8FE3A0" FontSize="11" Margin="0,2,0,0" />
                 </StackPanel>
             </Border>

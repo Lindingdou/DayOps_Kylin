@@ -179,15 +179,8 @@ public class CadGlViewport : OpenGlControlBase
     private void ScenePass(float[] vp)
     {
         _renderer.BeginPass(depthTest: true);
-        bool any = false;
-        if (_hasImported) { _renderer.Draw(_imported, GL_LINES, vp); any = true; }
-        if (_hasScene) { _renderer.Draw(_scene, GL_LINES, vp); any = true; }
-        if (!any)
-        {
-            float angle = (float)_clock.Elapsed.TotalSeconds * 0.6f;
-            float[] model = Mat4.Mul(Mat4.Translate(0f, 0f, 1.6f), Mat4.RotateZ(angle));
-            _renderer.Draw(_cube, GL_TRIANGLES, Mat4.Mul(vp, model));
-        }
+        if (_hasImported) _renderer.Draw(_imported, GL_LINES, vp);
+        if (_hasScene) _renderer.Draw(_scene, GL_LINES, vp);
         _renderer.EndPass();
     }
 
