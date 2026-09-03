@@ -659,7 +659,8 @@ public partial class MainWindow : Window
         if (Dock == null) return;
         var f = new Dock.Model.Mvvm.Factory();
 
-        var panels = new DMC.Tool { Id = "Panels", Title = "文件 / 图层 / 对象", CanClose = true, CanFloat = true };
+        // 左侧面板：内部用 TabControl 呈现「文件管理器 / 图层」两个可见标签(见 XAML LeftTabs)。
+        var panels = new DMC.Tool { Id = "Panels", Title = "文件 · 图层", CanClose = true, CanFloat = true };
         var props = new DMC.Tool { Id = "Props", Title = "特性", CanClose = true, CanFloat = true };
         var assistant = new DMC.Tool { Id = "Assistant", Title = "智能助手", CanClose = true, CanFloat = true };
         var leftDock = new DMC.ToolDock { Alignment = DCore.Alignment.Left, Proportion = 0.18,
@@ -704,10 +705,10 @@ public partial class MainWindow : Window
             EnsureHost(st);
             return st.Host;
         }
-        // 面板类为单例(左面板/属性/助手各一份), 复用时先从旧父脱挂。
+        // 面板类为单例(左面板标签组/属性/助手各一份), 复用时先从旧父脱挂。
         Control? c = id switch
         {
-            "Panels" => LeftPanelContent,
+            "Panels" => LeftTabs,
             "Props" => PropsContent,
             "Assistant" => AssistantContent,
             _ => null,

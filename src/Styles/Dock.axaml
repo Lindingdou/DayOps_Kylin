@@ -1,0 +1,59 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:dc="using:Dock.Avalonia.Controls">
+    <!-- ================= 停靠面板美化 ================= -->
+    <!-- 主色 #0A5AD4(与 Ribbon 一致)；面板底 #F7F8FA；标签条 #EAEEF3；分隔 #DCDFE4 -->
+
+    <!-- ===== 停靠面板标题栏(ToolChromeControl)：干净浅底 + 深色标题 ===== -->
+    <Style Selector="dc|ToolChromeControl">
+        <Setter Property="Background" Value="#E9EEF4" />
+    </Style>
+    <Style Selector="dc|ToolChromeControl /template/ Border#PART_Border">
+        <Setter Property="Background" Value="#E9EEF4" />
+        <Setter Property="BorderBrush" Value="#DCDFE4" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+    </Style>
+    <Style Selector="dc|ToolChromeControl /template/ TextBlock#PART_Title">
+        <Setter Property="Foreground" Value="#2A3441" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="FontSize" Value="12.5" />
+    </Style>
+
+    <!-- ===== 左面板标签：文件管理器 / 图层 ===== -->
+    <Style Selector="TabControl.dock-tabs">
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Background" Value="#F7F8FA" />
+    </Style>
+    <Style Selector="TabControl.dock-tabs > TabItem">
+        <Setter Property="FontSize" Value="12.5" />
+        <Setter Property="FontWeight" Value="Normal" />
+        <Setter Property="Foreground" Value="#5A6472" />
+        <Setter Property="Padding" Value="16,9" />
+        <Setter Property="MinHeight" Value="0" />
+        <Setter Property="Margin" Value="0" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <!-- 悬停 -->
+    <Style Selector="TabControl.dock-tabs > TabItem:pointerover /template/ Border#PART_LayoutRoot">
+        <Setter Property="Background" Value="#E1E7EF" />
+    </Style>
+    <!-- 选中：白底 + 主色文字 + 加粗 + 顶部主色指示条 -->
+    <Style Selector="TabControl.dock-tabs > TabItem:selected">
+        <Setter Property="Foreground" Value="#0A5AD4" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="TabControl.dock-tabs > TabItem:selected /template/ Border#PART_LayoutRoot">
+        <Setter Property="Background" Value="#F7F8FA" />
+        <Setter Property="BorderBrush" Value="#0A5AD4" />
+        <Setter Property="BorderThickness" Value="0,2,0,0" />
+    </Style>
+    <!-- 隐藏 Fluent 默认的选中下划线(SelectedPipe)，改用上边指示条 -->
+    <Style Selector="TabControl.dock-tabs > TabItem /template/ Border#PART_SelectedPipe">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <!-- ===== 停靠工具页签(特性 / 智能助手 等)与文档页签统一字号 ===== -->
+    <Style Selector="TabControl.dock-tabs ListBox">
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+</Styles>
