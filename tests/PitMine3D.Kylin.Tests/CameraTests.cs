@@ -36,6 +36,7 @@ public class CameraTests
     public void Mode_3d_orbits_2d_pans()
     {
         var cam = new Camera();
+        cam.SetMode(false);   // 相机默认 2D(俯视), 本例先验 3D 轨道行为, 显式切 3D
 
         // 3D：orbit 改 yaw，不动 target
         double yaw0 = cam.Yaw;
@@ -56,6 +57,7 @@ public class CameraTests
     public void ViewProj_differs_between_2d_and_3d()
     {
         var cam = new Camera();
+        cam.SetMode(false);   // 相机默认 2D, 显式切 3D 以对比两模式
         float[] vp3d = cam.ViewProj(1.5f);
         cam.SetMode(true);
         float[] vp2d = cam.ViewProj(1.5f);

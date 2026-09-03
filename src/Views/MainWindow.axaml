@@ -1244,52 +1244,7 @@
                            Margin="10,0,10,6" FontSize="11" Foreground="#8A929C" />
                 <TreeView Grid.Row="8" x:Name="ObjectTree" Background="Transparent" BorderThickness="0" Margin="4,0" />
             </Grid>
-        <Panel x:Name="ViewportHost" Background="Transparent">
-            <Panel.ContextMenu>
-                <ContextMenu Opening="OnCtxMenuOpening">
-                    <!-- 视图切换置顶(高频、不依赖选中): 2D/3D/缩放/栅格 -->
-                    <MenuItem Header="2D 平面视图" Click="OnCtx2D" />
-                    <MenuItem Header="3D 轨道视图" Click="OnCtx3D" />
-                    <MenuItem Header="范围缩放" Click="OnCtxZoomExtents" />
-                    <MenuItem Header="网格 / 轴 开关" Click="OnCtxGrid" />
-                    <Separator />
-                    <MenuItem Header="特性" Tag="特性" Click="OnCtxCommand" />
-                    <MenuItem Header="快速选择（选类似）" Tag="快速选择" Click="OnCtxCommand" />
-                    <MenuItem Header="全部选择" Tag="全部选择" Click="OnCtxCommand" />
-                    <MenuItem x:Name="CtxSelSets" Header="调用选择集" />
-                    <Separator />
-                    <MenuItem Header="复制" Tag="复制到剪贴板" Click="OnCtxCommand" />
-                    <MenuItem Header="剪切" Tag="剪切" Click="OnCtxCommand" />
-                    <MenuItem Header="粘贴" Tag="粘贴" Click="OnCtxCommand" />
-                    <MenuItem Header="删除" Tag="删除" Click="OnCtxCommand" />
-                    <Separator />
-                    <MenuItem Header="隐藏对象" Tag="隐藏对象" Click="OnCtxCommand" />
-                    <MenuItem Header="隐藏同一图层对象" Tag="隐藏同一图层对象" Click="OnCtxCommand" />
-                    <MenuItem Header="结束隐藏" Tag="结束隐藏" Click="OnCtxCommand" />
-                    <Separator />
-                    <MenuItem Header="测距" Tag="距离" Click="OnCtxCommand" />
-                    <MenuItem Header="测角" Tag="角度" Click="OnCtxCommand" />
-                    <MenuItem Header="面积" Tag="面积" Click="OnCtxCommand" />
-                    <Separator />
-                    <MenuItem Header="清除高亮" Click="OnCtxClearHighlight" />
-                </ContextMenu>
-            </Panel.ContextMenu>
-            <controls:CadGlViewport x:Name="Viewport" />
-            <!-- 左上叠加信息 -->
-            <Border Background="#B0000000" CornerRadius="6" Padding="10,7"
-                    Margin="12" HorizontalAlignment="Left" VerticalAlignment="Top">
-                <StackPanel>
-                    <TextBlock Text="3D 视口 · OpenGL" Foreground="#EAF2FF" FontWeight="SemiBold" FontSize="13" />
-                    <TextBlock Text="左键拖拽 = 平移 · 滚轮 = 缩放 · 右键切 2D/3D" Foreground="#B9C6D6" FontSize="11" Margin="0,3,0,0" />
-                    <TextBlock x:Name="GlInfo" Text="渲染后端: 初始化中…" Foreground="#8FE3A0" FontSize="11" Margin="0,2,0,0" />
-                </StackPanel>
-            </Border>
-            <!-- 右下角坐标系铭牌 -->
-            <Border Background="#80102040" CornerRadius="4" Padding="8,5"
-                    Margin="12" HorizontalAlignment="Right" VerticalAlignment="Bottom">
-                <TextBlock Text="Z 上 · CGCS2000 约定" Foreground="#C9D6E6" FontSize="11" />
-            </Border>
-        </Panel>
+        <!-- 视口宿主(CadGlViewport + 提示叠层 + 右键菜单)现按「每文档独立视口」在代码里懒建, 见 MainWindow.axaml.cs 的 EnsureHost/BuildViewportContextMenu。 -->
         <Grid x:Name="PropsContent" RowDefinitions="Auto,Auto,*" Background="#F7F8FA">
                     <TextBlock Grid.Row="0" Text="特性" FontWeight="SemiBold" FontSize="13"
                                Margin="10,8,10,4" Foreground="#3A3F46" />

@@ -30,17 +30,17 @@ public partial class MainWindow : Window
         SetDocPath(null);          // 初始标题=未命名
         RenderAssistant(_assistant.Current());   // 智能助手：启动显示欢迎 + 主菜单
 
-        // OpenGL 上下文就绪后，把真实后端版本显示到视口与状态栏
-        Viewport.GlReady += backend =>
+        // OpenGL 上下文就绪后，把真实后端版本显示到状态栏(每文档独立视口都会触发)
+        _onGlReady = backend =>
         {
-            GlInfo.Text = $"渲染后端: {backend}";
             StatusMsg.Text = $"OpenGL 就绪 · {backend}";
         };
 
         // 视口交互：在宿主 Panel（可命中）上收指针事件，转发到相机。
         // OpenGlControlBase 自身无背景时命中测试不可靠，直接在其上收事件在部分后端收不到，
         // 故统一在 ViewportHost（Background=Transparent → 全区可命中）上处理。
-        ViewportHost.PointerPressed += (_, e) =>
+        // 存为委托, 每建一个文档视口即挂上(见 WireHost/EnsureHost)。
+        _onHostPressed = (_, e) =>
         {
             var props = e.GetCurrentPoint(ViewportHost).Properties;
             _lastPointer = e.GetPosition(ViewportHost);
@@ -425,7 +425,7 @@ public partial class MainWindow : Window
                 _nav = NavMode.None;                                      // 右键留给上下文菜单
             if (_nav != NavMode.None) e.Pointer.Capture(ViewportHost);
         };
-        ViewportHost.PointerMoved += (_, e) =>
+        _onHostMoved = (_, e) =>
         {
             var p = e.GetPosition(ViewportHost);
             var w = Viewport.ScreenToWorld(p.X, p.Y);
@@ -516,7 +516,7 @@ public partial class MainWindow : Window
                 Viewport.Orbit((p.X - _lastPointer.X) * 0.01, (p.Y - _lastPointer.Y) * 0.01);
             _lastPointer = p;
         };
-        ViewportHost.PointerReleased += (_, e) =>
+        _onHostReleased = (_, e) =>
         {
             var rel = e.GetPosition(ViewportHost);
 
@@ -580,12 +580,12 @@ public partial class MainWindow : Window
             e.Pointer.Capture(null);
             if (wasClick) PickAt(rel);
         };
-        ViewportHost.PointerWheelChanged += (_, e) =>
+        _onHostWheel = (_, e) =>
         {
             var p = e.GetPosition(ViewportHost);
             Viewport.ZoomAt(p.X, p.Y, e.Delta.Y > 0 ? 0.9 : 1.1);        // 朝光标缩放
         };
-        ViewportHost.DoubleTapped += (_, _) =>
+        _onHostDoubleTapped = (_, _) =>
         {
             if (_tool != null && _tool.IsMultiPoint)                      // 双击结束多段线
             {
@@ -690,16 +690,25 @@ public partial class MainWindow : Window
         if (!appTpls.Contains(tpl)) appTpls.Add(tpl);
     }
 
-    // 按 Id 取暂存面板控件; 返回前脱离当前父(Panel 或 ContentPresenter), 供浮动/重停靠重新宿主。
-    // 所有文档(Doc*)共用同一个视口控件——只有活动文档的内容被材质化, 故视口恒在活动标签内。
+    // 按 Id 取内容控件: 面板类(单例, 暂存于 XAML)返回前脱离旧父供浮动/重停靠; 文档(Doc*)各返回自己的独立视口宿主(懒建)。
+    // 每文档独立视口——切换标签时框架材质化该文档自己的宿主, 故各标签互不干扰, 切换不再空白。
     private Control? ContentFor(string? id)
     {
+        // 文档: 每个文档拥有自己的独立视口宿主(懒建), 各在各自标签内, 互不冲突——切换不再空白。
+        if (id != null && id.StartsWith("Doc"))
+        {
+            var st = _docs.FirstOrDefault(x => x.Id == id);
+            if (st == null) return null;
+            EnsureHost(st);
+            return st.Host;
+        }
+        // 面板类为单例(左面板/属性/助手各一份), 复用时先从旧父脱挂。
         Control? c = id switch
         {
             "Panels" => LeftPanelContent,
             "Props" => PropsContent,
             "Assistant" => AssistantContent,
-            _ => (id != null && id.StartsWith("Doc")) ? ViewportHost : null,
+            _ => null,
         };
         if (c?.Parent is Panel p) p.Children.Remove(c);
         else if (c?.Parent is ContentControl cc) cc.Content = null;
@@ -716,7 +725,7 @@ public partial class MainWindow : Window
         return st;
     }
 
-    // 「新建」→ 新增一个文档标签并切过去(视口共享, 切标签即切场景)。
+    // 「新建」→ 新增一个文档标签并切过去(每文档独立视口, 切标签即切视口+场景)。
     private void NewDocument()
     {
         var st = NewDocState();
@@ -734,7 +743,8 @@ public partial class MainWindow : Window
         _active = st;
         _tool = null; _measure = null; _angle = null; _selected.Clear();
         _editMode = EditMode.None; _lastImport = null;
-        Viewport.ClearImported();      // 视口切到新文档(v1: 导入线框不跨文档保留)
+        // 访问 Viewport 即懒建当前文档的独立视口(EnsureHost); 各标签各有其宿主, 切换不再空白。
+        Viewport.ClearImported();      // v1: 导入线框不跨文档保留
         PopulateDrawingLayers();
         RefreshScene();
         StatusMsg.Text = $"当前文档「{st.Title}」";
@@ -768,6 +778,8 @@ public partial class MainWindow : Window
         public Scene Scene = new();
         public LayerTable Layers = new();
         public DMC.Document Vm = null!;
+        public Panel? Host;                                        // 该文档独立视口宿主(懒建)
+        public PitMine3D.Kylin.Controls.CadGlViewport? Vp;         // 该文档独立 3D 视口
     }
     private readonly List<DocState> _docs = new();
     private DocState _active = null!;
@@ -775,8 +787,90 @@ public partial class MainWindow : Window
     private Dock.Model.Mvvm.Factory _dockFactory = null!;
     private DMC.DocumentDock _docDock = null!;
 
+    // 视口事件处理委托(构造期赋值一次; 每建一个文档视口即挂上, 见 WireHost)——每文档独立视口, 共用同一套逻辑。
+    private System.Action<string>? _onGlReady;
+    private System.EventHandler<Avalonia.Input.PointerPressedEventArgs>? _onHostPressed;
+    private System.EventHandler<Avalonia.Input.PointerEventArgs>? _onHostMoved;
+    private System.EventHandler<Avalonia.Input.PointerReleasedEventArgs>? _onHostReleased;
+    private System.EventHandler<Avalonia.Input.PointerWheelEventArgs>? _onHostWheel;
+    private System.EventHandler<Avalonia.Input.TappedEventArgs>? _onHostDoubleTapped;
+
     private Scene _scene => _active.Scene;        // 当前文档的托管绘制场景
     private LayerTable _layers => _active.Layers;  // 当前文档的图层表
+    // Viewport/ViewportHost 指向当前活动文档的独立视口(懒建), 全部 172 处引用自动跟随活动文档。
+    private PitMine3D.Kylin.Controls.CadGlViewport Viewport { get { EnsureHost(_active); return _active.Vp!; } }
+    private Panel ViewportHost { get { EnsureHost(_active); return _active.Host!; } }
+
+    // 为文档懒建独立视口宿主(透明 Panel 便于命中测试 + CadGlViewport + 提示叠层 + 右键菜单) 并挂上事件委托。
+    private void EnsureHost(DocState st)
+    {
+        if (st.Host != null) return;
+        var vp = new PitMine3D.Kylin.Controls.CadGlViewport();
+        var host = new Panel { Background = Avalonia.Media.Brushes.Transparent, ContextMenu = BuildViewportContextMenu() };
+        host.Children.Add(vp);
+        // 左上角操作提示叠层
+        var hint = new StackPanel();
+        hint.Children.Add(new TextBlock { Text = "视口 · OpenGL", Foreground = Avalonia.Media.Brushes.White, FontWeight = Avalonia.Media.FontWeight.SemiBold, FontSize = 13 });
+        hint.Children.Add(new TextBlock { Text = "左键拖拽 = 平移 · 滚轮 = 缩放 · 右键切 2D/3D", Foreground = Avalonia.Media.Brush.Parse("#B9C6D6"), FontSize = 11, Margin = new Avalonia.Thickness(0, 3, 0, 0) });
+        host.Children.Add(new Border
+        {
+            Background = Avalonia.Media.Brush.Parse("#B0000000"),
+            CornerRadius = new Avalonia.CornerRadius(6),
+            Padding = new Avalonia.Thickness(10, 7),
+            Margin = new Avalonia.Thickness(12),
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top,
+            Child = hint,
+        });
+        st.Vp = vp; st.Host = host;
+        WireHost(host, vp);
+    }
+
+    // 视口右键菜单(每文档一份, 共用同一批处理器)。忠实原 ViewportHost.ContextMenu(见 MainWindow.axaml 历史)。
+    private ContextMenu BuildViewportContextMenu()
+    {
+        var m = new ContextMenu();
+        m.Opening += OnCtxMenuOpening;
+        void Item(string header, System.EventHandler<RoutedEventArgs> click) { var mi = new MenuItem { Header = header }; mi.Click += click; m.Items.Add(mi); }
+        void Cmd(string header, string tag) { var mi = new MenuItem { Header = header, Tag = tag }; mi.Click += OnCtxCommand; m.Items.Add(mi); }
+        void Sep() => m.Items.Add(new Separator());
+        Item("2D 平面视图", OnCtx2D);
+        Item("3D 轨道视图", OnCtx3D);
+        Item("范围缩放", OnCtxZoomExtents);
+        Item("网格 / 轴 开关", OnCtxGrid);
+        Sep();
+        Cmd("特性", "特性");
+        Cmd("快速选择（选类似）", "快速选择");
+        Cmd("全部选择", "全部选择");
+        m.Items.Add(new MenuItem { Header = "调用选择集", Name = "CtxSelSets" });
+        Sep();
+        Cmd("复制", "复制到剪贴板");
+        Cmd("剪切", "剪切");
+        Cmd("粘贴", "粘贴");
+        Cmd("删除", "删除");
+        Sep();
+        Cmd("隐藏对象", "隐藏对象");
+        Cmd("隐藏同一图层对象", "隐藏同一图层对象");
+        Cmd("结束隐藏", "结束隐藏");
+        Sep();
+        Cmd("测距", "距离");
+        Cmd("测角", "角度");
+        Cmd("面积", "面积");
+        Sep();
+        Item("清除高亮", OnCtxClearHighlight);
+        return m;
+    }
+
+    // 把构造期备好的事件委托挂到某个视口宿主(每文档一次)。
+    private void WireHost(Panel host, PitMine3D.Kylin.Controls.CadGlViewport vp)
+    {
+        if (_onGlReady != null) vp.GlReady += _onGlReady;
+        if (_onHostPressed != null) host.PointerPressed += _onHostPressed;
+        if (_onHostMoved != null) host.PointerMoved += _onHostMoved;
+        if (_onHostReleased != null) host.PointerReleased += _onHostReleased;
+        if (_onHostWheel != null) host.PointerWheelChanged += _onHostWheel;
+        if (_onHostDoubleTapped != null) host.DoubleTapped += _onHostDoubleTapped;
+    }
     private readonly UndoManager _undo = new();   // 撤销/重做
     private DrawTool? _tool;                      // 当前激活的绘制工具
     private readonly List<SceneEntity> _selected = new();   // 选择集
@@ -8160,10 +8254,12 @@ public partial class MainWindow : Window
     // 右键菜单打开 → 动态重建「调用选择集」子菜单（忠实原上下文菜单的选择集入口）。
     private void OnCtxMenuOpening(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        if (CtxSelSets == null) return;
-        CtxSelSets.Items.Clear();
-        CtxSelSets.IsEnabled = _selSets.Count > 0;
-        if (_selSets.Count == 0) { CtxSelSets.Items.Add(new MenuItem { Header = "（暂无，先用 创建选择集）", IsEnabled = false }); return; }
+        // 每文档独立右键菜单——从正在打开的菜单里取本份「调用选择集」子项(按 Name 定位)。
+        var ctxSelSets = (sender as ContextMenu)?.Items.OfType<MenuItem>().FirstOrDefault(mi => mi.Name == "CtxSelSets");
+        if (ctxSelSets == null) return;
+        ctxSelSets.Items.Clear();
+        ctxSelSets.IsEnabled = _selSets.Count > 0;
+        if (_selSets.Count == 0) { ctxSelSets.Items.Add(new MenuItem { Header = "（暂无，先用 创建选择集）", IsEnabled = false }); return; }
         for (int i = 0; i < _selSets.Count; i++)
         {
             var s = _selSets.At(i);
@@ -8171,7 +8267,7 @@ public partial class MainWindow : Window
             int idx = i;
             var mi = new MenuItem { Header = $"{s.Value.name}  ({s.Value.ents.Count} 项)" };
             mi.Click += (_, _) => RecallSelSetByIndex(idx);
-            CtxSelSets.Items.Add(mi);
+            ctxSelSets.Items.Add(mi);
         }
     }
 
