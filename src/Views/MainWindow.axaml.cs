@@ -46,6 +46,16 @@ public partial class MainWindow : Window
             _lastPointer = e.GetPosition(ViewportHost);
             _pressPos = _lastPointer;
 
+            // 双击滚轮(中键) = 范围缩放(ZOOMEXTENTS)，CAD 标准手势。
+            if (props.IsMiddleButtonPressed && e.ClickCount == 2)
+            {
+                _nav = NavMode.None;
+                Viewport.ZoomExtents();
+                StatusMsg.Text = "范围缩放（双击滚轮）";
+                e.Handled = true;
+                return;
+            }
+
             // 测距模式：左键取点（第一/第二点）
             if (_measure != null && props.IsLeftButtonPressed)
             {
