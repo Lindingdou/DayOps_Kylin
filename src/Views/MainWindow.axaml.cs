@@ -110,8 +110,8 @@ public partial class MainWindow : Window
                 return;
             }
 
-            // 编辑（移动/复制/镜像）：左键取点（与命令行坐标共用 FeedPoint）
-            if (_editMode != EditMode.None && props.IsLeftButtonPressed)
+            // 编辑（移动/复制/镜像）取点：左键喂点（与命令行坐标共用 FeedPoint）。选择对象阶段不取点(交给下方框选/点选)。
+            if (_editMode != EditMode.None && !_editAwaitSelect && props.IsLeftButtonPressed)
             {
                 _nav = NavMode.None;
                 var wp = PickWorld();
@@ -418,9 +418,9 @@ public partial class MainWindow : Window
                 }
             }
 
-            // 窗口框选（仅 2D 空闲态左键）：拖=选择框，不拖=点选（平移改中键）
+            // 窗口框选（2D 空闲态 或 编辑选择对象阶段 左键）：拖=选择框，不拖=点选（平移改中键）
             if (props.IsLeftButtonPressed && Viewport.Is2DView && _tool == null && _measure == null
-                && _editMode == EditMode.None && !_offsetActive && !_trimActive && !_breakActive && !_slideActive)
+                && (_editMode == EditMode.None || _editAwaitSelect) && !_offsetActive && !_trimActive && !_breakActive && !_slideActive)
             {
                 _selBoxActive = true; _selBoxStart = _lastPointer; _nav = NavMode.None;
                 e.Pointer.Capture(ViewportHost);
@@ -509,8 +509,8 @@ public partial class MainWindow : Window
             if (dragTip != null)
             {
                 string? dh = shown == null ? null
-                    : _tool != null ? _tool.DragHint(shown.Value.x, shown.Value.y)
-                    : EditDragHint(shown.Value);
+                    : _tool != null ? (_tool.DragHint(shown.Value.x, shown.Value.y) ?? _tool.Prompt)   // 绘制: 维度或取点提示
+                    : EditTipText(shown.Value);                                                        // 编辑: 选择/取点/维度提示
                 if (dh != null)
                 {
                     ((TextBlock)dragTip.Child!).Text = dh;
@@ -648,7 +648,7 @@ public partial class MainWindow : Window
                 _tool = null;
                 _measure = null;
                 _angle = null;
-                _editMode = EditMode.None;
+                _editMode = EditMode.None; _editAwaitSelect = false;
                 _editPts.Clear();
                 _offsetActive = false;
                 _trimActive = false;
@@ -787,7 +787,7 @@ public partial class MainWindow : Window
         if (st == null || st == _active) return;
         _active = st;
         _tool = null; _measure = null; _angle = null; _selected.Clear();
-        _editMode = EditMode.None; _lastImport = null;
+        _editMode = EditMode.None; _editAwaitSelect = false; _lastImport = null;
         // 访问 Viewport 即懒建当前文档的独立视口(EnsureHost); 各标签各有其宿主, 切换不再空白。
         // 不清导入几何——每文档视口自留其线框(切换会重建 GL 上下文, CadGlViewport 会据保留源重传)。
         PopulateDrawingLayers();
@@ -954,6 +954,8 @@ public partial class MainWindow : Window
     private Avalonia.Point _pressPos;             // 按下位置（区分点击/拖拽）
     private enum EditMode { None, Move, Copy, Mirror, Rotate, Scale }
     private EditMode _editMode = EditMode.None;
+    private bool _editAwaitSelect;                                  // 编辑命令的"选择对象"阶段(右键确定后转取点)
+    private string _editName = "";                                  // 当前编辑命令名(用于提示)
     private readonly List<(double x, double y)> _editPts = new();   // 编辑取的点（基点/目标点/参照…）
     private bool _offsetActive;                    // 偏移：等待点击一侧
     private bool _trimActive;                       // 修剪/延伸：等待点目标线
@@ -8086,11 +8088,13 @@ public partial class MainWindow : Window
         SaveSel();
         double tol = SnapTolWorld(rel);
         var hit = _scene.Pick(w.Value.x, w.Value.y, tol, _layers.IsSelectable);
-        if (hit == null) _selected.Clear();
+        // 编辑选择对象阶段: 累加/减选(不清空); 空闲态: 单选替换。
+        if (hit == null) { if (!_editAwaitSelect) _selected.Clear(); }
         else if (_selected.Contains(hit)) _selected.Remove(hit);
-        else { _selected.Clear(); _selected.Add(hit); }
+        else { if (!_editAwaitSelect) _selected.Clear(); _selected.Add(hit); }
         HighlightSelection();
-        StatusMsg.Text = _selected.Count > 0 ? $"已选 {_selected.Count} 个实体" : "未选中";
+        if (_editAwaitSelect) StatusMsg.Text = $"{_editName}：选择对象（右键确定，已选 {_selected.Count}）";
+        else StatusMsg.Text = _selected.Count > 0 ? $"已选 {_selected.Count} 个实体" : "未选中";
     }
 
     private void HighlightSelection()
@@ -8216,11 +8220,11 @@ public partial class MainWindow : Window
         double minY = System.Math.Min(wa.Value.y, wb.Value.y), maxY = System.Math.Max(wa.Value.y, wb.Value.y);
         bool crossing = b.X < a.X;
         SaveSel();
-        _selected.Clear();
+        if (!_editAwaitSelect) _selected.Clear();   // 编辑选择阶段累加, 空闲态替换
         foreach (var en in _scene.Entities)
         {
             if (!_layers.IsSelectable(en.LayerName)) continue;
-            if (SelectionBox.Match(en, minX, minY, maxX, maxY, crossing)) _selected.Add(en);
+            if (SelectionBox.Match(en, minX, minY, maxX, maxY, crossing) && !_selected.Contains(en)) _selected.Add(en);
         }
         HighlightSelection();
         StatusMsg.Text = _selected.Count > 0 ? $"框选 {_selected.Count} 个（{(crossing ? "交叉" : "窗口")}）" : "框选：未选中";
@@ -8333,6 +8337,8 @@ public partial class MainWindow : Window
     // 右键菜单打开 → 动态重建「调用选择集」子菜单（忠实原上下文菜单的选择集入口）。
     private void OnCtxMenuOpening(object? sender, System.ComponentModel.CancelEventArgs e)
     {
+        // 编辑"选择对象"阶段: 右键 = 确定选择集(不弹菜单), 转入取点阶段。
+        if (_editAwaitSelect) { e.Cancel = true; ConfirmEditSelection(); return; }
         // 每文档独立右键菜单——从正在打开的菜单里取本份「调用选择集」子项(按 Name 定位)。
         var ctxSelSets = (sender as ContextMenu)?.Items.OfType<MenuItem>().FirstOrDefault(mi => mi.Name == "CtxSelSets");
         if (ctxSelSets == null) return;
@@ -9001,11 +9007,30 @@ public partial class MainWindow : Window
     }
 
     // 进入编辑（移动/复制/镜像）：需已有选择
+    // AutoCAD 式动词-名词流程：命令 → 选择对象(可继续加/减选) → 右键确定 → 取基点 + 拖拽。
+    // 已有预选(名词-动词)则作为初始选择集, 右键即可直接确定。
     private void StartEdit(EditMode mode, string name)
     {
-        if (_selected.Count == 0) { StatusMsg.Text = $"{name}：请先选实体"; return; }
-        _editMode = mode; _editPts.Clear(); _tool = null; _measure = null; _lastInputPoint = null;
-        StatusMsg.Text = mode == EditMode.Mirror ? $"{name}：指定镜像线第一点" : $"{name}：指定基点";
+        _editMode = mode; _editName = name; _editPts.Clear();
+        _tool = null; _measure = null; _lastInputPoint = null;
+        _editAwaitSelect = true;
+        StatusMsg.Text = $"{name}：选择对象（单击/框选，右键确定" + (_selected.Count > 0 ? $"，已选 {_selected.Count}" : "") + "）";
+        RefreshScene();
+    }
+
+    // 右键确定选择集 → 转入取点阶段（基点/镜像线首点）。空选则取消命令。
+    private void ConfirmEditSelection()
+    {
+        _editAwaitSelect = false;
+        if (_selected.Count == 0) { _editMode = EditMode.None; HideDragTip(); StatusMsg.Text = $"{_editName}：未选对象，命令取消"; return; }
+        HighlightSelection();
+        StatusMsg.Text = $"{_editName}：{(_editMode == EditMode.Mirror ? "指定镜像线第一点" : "指定基点")}（已选 {_selected.Count}）";
+        RefreshScene();
+    }
+
+    private void HideDragTip()
+    {
+        if (_active.DragTip != null) { _active.DragTip.Opacity = 0; (_active.DragTip.Parent as Control)?.InvalidateVisual(); }
     }
 
     private void StartOffset()
@@ -9446,6 +9471,18 @@ public partial class MainWindow : Window
                 return $"比例 {(refLen < 1e-9 ? 1 : newLen / refLen):0.###}";
             default: return null;
         }
+    }
+
+    // 编辑态光标浮标文本(随鼠标的动态输入提示): 选择阶段=选择提示; 取点阶段=拖拽维度 或 下一取点提示。
+    private string? EditTipText((double x, double y) c)
+    {
+        if (_editAwaitSelect) return $"选择对象 · 右键确定（已选 {_selected.Count}）";
+        if (_editMode == EditMode.None) return null;
+        var dim = EditDragHint(c);
+        if (dim != null) return dim;
+        return _editPts.Count == 0
+            ? $"{_editName}：{(_editMode == EditMode.Mirror ? "指定镜像线第一点" : "指定基点")}"
+            : EditPrompt(_editMode, _editPts.Count);
     }
 
     // 对选择集施加仿射变换；copy=true 则加副本，否则替换原实体
