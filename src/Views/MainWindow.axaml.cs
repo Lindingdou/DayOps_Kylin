@@ -508,7 +508,9 @@ public partial class MainWindow : Window
             var dragTip = _active.DragTip;
             if (dragTip != null)
             {
-                string? dh = (_tool != null && shown != null) ? _tool.DragHint(shown.Value.x, shown.Value.y) : null;
+                string? dh = shown == null ? null
+                    : _tool != null ? _tool.DragHint(shown.Value.x, shown.Value.y)
+                    : EditDragHint(shown.Value);
                 if (dh != null)
                 {
                     ((TextBlock)dragTip.Child!).Text = dh;
@@ -533,7 +535,7 @@ public partial class MainWindow : Window
                 return;
             }
 
-            if (_tool != null && _nav == NavMode.None) RefreshScene();   // 橡皮筋预览随光标刷新
+            if ((_tool != null || _editMode != EditMode.None) && _nav == NavMode.None) RefreshScene();   // 橡皮筋/编辑拖拽预览随光标刷新
 
             if (_nav == NavMode.Pan)
                 Viewport.Pan(_lastPointer.X, _lastPointer.Y, p.X, p.Y);
@@ -8056,6 +8058,18 @@ public partial class MainWindow : Window
             var pv = new PolylineEntity { Points = _slidePts, Cr = 0.55f, Cg = 0.62f, Cb = 0.70f };
             pv.Tessellate(list);
         }
+        // 编辑即时预览(AutoCAD 式拖拽跟随)：选中实体按「已取点 + 光标」变换后以预览色叠加。
+        if (_cursorWorld != null && _selected.Count > 0 && BuildEditPreview(_cursorWorld.Value) is Affine2 em)
+        {
+            foreach (var e in _selected)
+            {
+                var g = e.Apply(em);
+                g.Cr = 0.55f; g.Cg = 0.62f; g.Cb = 0.70f;   // 预览灰蓝
+                g.Tessellate(list);
+            }
+            if (_editMode == EditMode.Mirror && _editPts.Count == 1)   // 镜像轴线也预览
+                new LineEntity { X0 = _editPts[0].x, Y0 = _editPts[0].y, X1 = _cursorWorld.Value.x, Y1 = _cursorWorld.Value.y, Cr = 0.85f, Cg = 0.6f, Cb = 0.3f }.Tessellate(list);
+        }
         Viewport.SetSceneGeometry(list.ToArray());
         if (_scene.Count != _lastSceneCount) { _lastSceneCount = _scene.Count; RefreshObjectTree(); }
     }
@@ -9368,10 +9382,12 @@ public partial class MainWindow : Window
         _ => "指定目标点"
     };
 
-    private Affine2 BuildEditTransform()
+    private Affine2 BuildEditTransform() => BuildTransformFrom(_editPts, _editMode);
+
+    // 由「已取点」构造编辑变换。move/copy=平移, mirror=镜像线, rotate=绝对角, scale=参照比例。
+    private static Affine2 BuildTransformFrom(System.Collections.Generic.IReadOnlyList<(double x, double y)> p, EditMode mode)
     {
-        var p = _editPts;
-        switch (_editMode)
+        switch (mode)
         {
             case EditMode.Move:
             case EditMode.Copy:
@@ -9388,6 +9404,43 @@ public partial class MainWindow : Window
                 return Affine2.Scale(f, p[0].x, p[0].y);
             }
             default: return Affine2.Translate(0, 0);
+        }
+    }
+
+    // 编辑即时预览变换：仅差最后一点(由光标补)时给出——供选中实体拖拽跟随。
+    private Affine2? BuildEditPreview((double x, double y) cursor)
+    {
+        if (_editMode == EditMode.None || _editPts.Count != EditPointCount(_editMode) - 1) return null;
+        var pts = new System.Collections.Generic.List<(double x, double y)>(_editPts) { cursor };
+        return BuildTransformFrom(pts, _editMode);
+    }
+
+    // 编辑拖拽即时信息(位移/角度/比例) —— 供光标浮标显示。
+    private string? EditDragHint((double x, double y) c)
+    {
+        if (_editMode == EditMode.None || _editPts.Count == 0) return null;
+        var b = _editPts[0];
+        switch (_editMode)
+        {
+            case EditMode.Move:
+            case EditMode.Copy:
+                if (_editPts.Count != 1) return null;
+                double dx = c.x - b.x, dy = c.y - b.y;
+                return $"位移 {System.Math.Sqrt(dx * dx + dy * dy):0.##}  Δx {dx:0.##}  Δy {dy:0.##}";
+            case EditMode.Rotate:
+                if (_editPts.Count != 1) return null;
+                double ang = System.Math.Atan2(c.y - b.y, c.x - b.x) * 180.0 / System.Math.PI;
+                return $"角度 {(ang < 0 ? ang + 360.0 : ang):0.#}°";
+            case EditMode.Mirror:
+                if (_editPts.Count != 1) return null;
+                double ma = System.Math.Atan2(c.y - b.y, c.x - b.x) * 180.0 / System.Math.PI;
+                return $"镜像轴 {(ma < 0 ? ma + 360.0 : ma):0.#}°";
+            case EditMode.Scale:
+                if (_editPts.Count != 2) return null;
+                double refLen = System.Math.Sqrt((_editPts[1].x - b.x) * (_editPts[1].x - b.x) + (_editPts[1].y - b.y) * (_editPts[1].y - b.y));
+                double newLen = System.Math.Sqrt((c.x - b.x) * (c.x - b.x) + (c.y - b.y) * (c.y - b.y));
+                return $"比例 {(refLen < 1e-9 ? 1 : newLen / refLen):0.###}";
+            default: return null;
         }
     }
 
