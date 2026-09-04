@@ -160,13 +160,25 @@ internal sealed class Camera
     /// <summary>叠加层坐标罗盘用：随相机朝向的纯旋转 + 小正交，无平移。</summary>
     public float[] GizmoViewProj()
     {
-        float[] e = Eye();
-        float dx = e[0] - Target[0], dy = e[1] - Target[1], dz = e[2] - Target[2];
-        float l = MathF.Sqrt(dx * dx + dy * dy + dz * dz);
-        if (l < 1e-6f) l = 1f;
-        float[] eye = { dx / l * 3f, dy / l * 3f, dz / l * 3f };
+        float[] eye, up;
+        if (Is2D)
+        {
+            // 2D 正交俯视：从正上方看向原点 → X 轴朝右、Y 轴朝上、Z 轴朝观察者(收成一点)。
+            eye = new[] { 0f, 0f, 3f };
+            up = new[] { 0f, 1f, 0f };
+        }
+        else
+        {
+            // 3D 轨道：罗盘随相机朝向(纯旋转)。
+            float[] e = Eye();
+            float dx = e[0] - Target[0], dy = e[1] - Target[1], dz = e[2] - Target[2];
+            float l = MathF.Sqrt(dx * dx + dy * dy + dz * dz);
+            if (l < 1e-6f) l = 1f;
+            eye = new[] { dx / l * 3f, dy / l * 3f, dz / l * 3f };
+            up = new[] { 0f, 0f, 1f };
+        }
         float[] proj = Mat4.Ortho(-1.6f, 1.6f, -1.6f, 1.6f, -10f, 10f);
-        float[] view = Mat4.LookAt(eye, new[] { 0f, 0f, 0f }, new[] { 0f, 0f, 1f });
+        float[] view = Mat4.LookAt(eye, new[] { 0f, 0f, 0f }, up);
         return Mat4.Mul(proj, view);
     }
 }
