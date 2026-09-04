@@ -1224,21 +1224,22 @@
         <!-- 隐藏暂存：面板内容在 Window namescope 构建(x:Name/事件正常回填)，加载后移入 Dock 工具 -->
         <Panel Grid.Row="1" x:Name="ContentStash" IsVisible="False">
         <!-- 左面板：文件管理器 / 图层 两个可见标签(TabControl) -->
-        <TabControl x:Name="LeftTabs" Classes="dock-tabs" Background="#F7F8FA">
-            <TabItem Header="文件管理器">
-                <Grid RowDefinitions="Auto,Auto,*" Background="#F7F8FA">
-                    <Button Grid.Row="0" Content="打开文件夹…" Click="OnOpenFolder"
-                            Margin="8,8,8,4" HorizontalAlignment="Stretch" />
-                    <TextBlock Grid.Row="1" x:Name="FileFolderLabel" Text="未选择文件夹"
-                               Margin="10,0,10,4" FontSize="10" Foreground="#8A929C" TextTrimming="CharacterEllipsis" />
-                    <ListBox Grid.Row="2" x:Name="FileList" Background="Transparent" BorderThickness="0"
-                             Margin="4,0" DoubleTapped="OnFileListDoubleTapped" />
-                </Grid>
-            </TabItem>
-            <TabItem Header="图层">
-                <ListBox x:Name="LayerList" Background="Transparent" BorderThickness="0" Margin="4,6" />
-            </TabItem>
-        </TabControl>
+        <!-- 左面板：文件管理器 / 图层 —— 两个独立 Dock 工具, 由 ToolDock 呈现底部标签(与右面板同款, 见 BuildDock) -->
+        <Grid x:Name="FileContent" RowDefinitions="Auto,Auto,Auto,*" Background="#F7F8FA">
+            <TextBlock Grid.Row="0" Text="文件管理器" FontWeight="SemiBold" FontSize="13"
+                       Margin="10,8,10,4" Foreground="#3A3F46" />
+            <Button Grid.Row="1" Content="打开文件夹…" Click="OnOpenFolder"
+                    Margin="8,0,8,4" HorizontalAlignment="Stretch" />
+            <TextBlock Grid.Row="2" x:Name="FileFolderLabel" Text="未选择文件夹"
+                       Margin="10,0,10,4" FontSize="10" Foreground="#8A929C" TextTrimming="CharacterEllipsis" />
+            <ListBox Grid.Row="3" x:Name="FileList" Background="Transparent" BorderThickness="0"
+                     Margin="4,0" DoubleTapped="OnFileListDoubleTapped" />
+        </Grid>
+        <Grid x:Name="LayerContent" RowDefinitions="Auto,*" Background="#F7F8FA">
+            <TextBlock Grid.Row="0" Text="图层" FontWeight="SemiBold" FontSize="13"
+                       Margin="10,8,10,4" Foreground="#3A3F46" />
+            <ListBox Grid.Row="1" x:Name="LayerList" Background="Transparent" BorderThickness="0" Margin="4,4" />
+        </Grid>
         <!-- 对象管理器: 用户"没必要维护对象" → 不设标签; 控件留在暂存区(隐藏)以保代码引用不断 -->
         <Grid x:Name="ObjectContent" RowDefinitions="Auto,Auto,*" Background="#F7F8FA">
             <TextBlock Grid.Row="0" Text="对象管理器" FontWeight="SemiBold" FontSize="13"
@@ -1248,27 +1249,28 @@
             <TreeView Grid.Row="2" x:Name="ObjectTree" Background="Transparent" BorderThickness="0" Margin="4,0" />
         </Grid>
         <!-- 视口宿主(CadGlViewport + 提示叠层 + 右键菜单)现按「每文档独立视口」在代码里懒建, 见 MainWindow.axaml.cs 的 EnsureHost/BuildViewportContextMenu。 -->
+        <!-- 右面板：特性 / 智能助手 —— 两个独立 Dock 工具, 由 ToolDock 呈现底部标签(见 BuildDock) -->
         <Grid x:Name="PropsContent" RowDefinitions="Auto,Auto,*" Background="#F7F8FA">
-                    <TextBlock Grid.Row="0" Text="特性" FontWeight="SemiBold" FontSize="13"
-                               Margin="10,8,10,4" Foreground="#3A3F46" />
-                    <TextBlock Grid.Row="1" x:Name="PropertyHint" Text="选中单个实体查看特性"
-                               Margin="10,0,10,6" FontSize="11" Foreground="#8A929C" />
-                    <ScrollViewer Grid.Row="2" Margin="4,0,4,8">
-                        <StackPanel x:Name="PropertyPanel" />
-                    </ScrollViewer>
-                </Grid>
-                <Grid x:Name="AssistantContent" RowDefinitions="Auto,*,Auto" Background="#F2F4F7">
-                    <TextBlock Grid.Row="0" Text="智能助手 🤖" FontWeight="SemiBold" FontSize="13"
-                               Margin="10,8,10,4" Foreground="#3A3F46" />
-                    <ScrollViewer Grid.Row="1" Margin="6,0,6,4">
-                        <StackPanel x:Name="AssistantPanel" />
-                    </ScrollViewer>
-                    <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="6,2,6,8">
-                        <TextBox Grid.Column="0" x:Name="AssistantInput" Watermark="输入命令名或问题…" FontSize="12"
-                                 Padding="4,2" KeyDown="OnAssistantInputKeyDown" />
-                        <Button Grid.Column="1" Content="发送" FontSize="12" Margin="4,0,0,0" Padding="8,2" Click="OnAssistantSend" />
-                    </Grid>
-                </Grid>
+            <TextBlock Grid.Row="0" Text="特性" FontWeight="SemiBold" FontSize="13"
+                       Margin="10,8,10,4" Foreground="#3A3F46" />
+            <TextBlock Grid.Row="1" x:Name="PropertyHint" Text="选中单个实体查看特性"
+                       Margin="10,0,10,6" FontSize="11" Foreground="#8A929C" />
+            <ScrollViewer Grid.Row="2" Margin="4,0,4,8">
+                <StackPanel x:Name="PropertyPanel" />
+            </ScrollViewer>
+        </Grid>
+        <Grid x:Name="AssistantContent" RowDefinitions="Auto,*,Auto" Background="#F2F4F7">
+            <TextBlock Grid.Row="0" Text="智能助手 🤖" FontWeight="SemiBold" FontSize="13"
+                       Margin="10,8,10,4" Foreground="#3A3F46" />
+            <ScrollViewer Grid.Row="1" Margin="6,0,6,4">
+                <StackPanel x:Name="AssistantPanel" />
+            </ScrollViewer>
+            <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="6,2,6,8">
+                <TextBox Grid.Column="0" x:Name="AssistantInput" Watermark="输入命令名或问题…" FontSize="12"
+                         Padding="4,2" KeyDown="OnAssistantInputKeyDown" />
+                <Button Grid.Column="1" Content="发送" FontSize="12" Margin="4,0,0,0" Padding="8,2" Click="OnAssistantSend" />
+            </Grid>
+        </Grid>
         </Panel>
 
         <!-- 停靠布局在代码 BuildDock() 里搭建(MVVM 模型), 内容经 DataTemplate 供暂存面板控件 -->

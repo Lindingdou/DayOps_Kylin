@@ -676,17 +676,18 @@ public partial class MainWindow : Window
         if (Dock == null) return;
         var f = new Dock.Model.Mvvm.Factory();
 
-        // 左侧面板：内部用 TabControl 呈现「文件管理器 / 图层」两个可见标签(见 XAML LeftTabs)。
+        // 左/右面板：各由两个独立 Dock 工具组成, ToolDock 呈现底部标签(左=文件管理器/图层, 右=特性/智能助手)。
         // CanFloat=false：拖拽只在停靠区重排; 吸附不到新位就回到原处(不浮出独立窗口/不消失), 仅关闭键移除。
-        var panels = new DMC.Tool { Id = "Panels", Title = "文件 · 图层", CanClose = true, CanFloat = false };
+        var fileTool = new DMC.Tool { Id = "File", Title = "文件管理器", CanClose = true, CanFloat = false };
+        var layerTool = new DMC.Tool { Id = "Layer", Title = "图层", CanClose = true, CanFloat = false };
         var props = new DMC.Tool { Id = "Props", Title = "特性", CanClose = true, CanFloat = false };
         var assistant = new DMC.Tool { Id = "Assistant", Title = "智能助手", CanClose = true, CanFloat = false };
         var leftDock = new DMC.ToolDock { Alignment = DCore.Alignment.Left, Proportion = 0.18,
-            ActiveDockable = panels, VisibleDockables = f.CreateList<DCore.IDockable>(panels) };
+            ActiveDockable = fileTool, VisibleDockables = f.CreateList<DCore.IDockable>(fileTool, layerTool) };
         var docDock = new DMC.DocumentDock { Proportion = 0.60, CanCreateDocument = false,
             ActiveDockable = _active.Vm, VisibleDockables = f.CreateList<DCore.IDockable>(_active.Vm) };
         _dockFactory = f; _docDock = docDock;
-        // 右侧一个工具停靠：特性 + 智能助手 两页(标签)——与左侧同为直接 ToolDock, 比例才被布局采用。
+        // 右侧工具停靠：特性 + 智能助手 两页(底部标签)。
         var rightDock = new DMC.ToolDock { Alignment = DCore.Alignment.Right, Proportion = 0.22,
             ActiveDockable = props, VisibleDockables = f.CreateList<DCore.IDockable>(props, assistant) };
 
@@ -705,7 +706,7 @@ public partial class MainWindow : Window
         // 关键：注册到 Application 级(而非 Dock 级)——浮动时面板进入独立宿主窗口(另一个 DockControl),
         // 只有 App 级模板会被其继承, 否则浮动面板因无模板而"消失"。
         var tpl = new FuncDataTemplate<DCore.IDockable>(
-            d => d?.Id is "Panels" or "Props" or "Assistant" || (d?.Id?.StartsWith("Doc") == true),
+            d => d?.Id is "File" or "Layer" or "Props" or "Assistant" || (d?.Id?.StartsWith("Doc") == true),
             (d, _) => ContentFor(d?.Id));
         var appTpls = Avalonia.Application.Current!.DataTemplates;
         if (!appTpls.Contains(tpl)) appTpls.Add(tpl);
@@ -726,7 +727,8 @@ public partial class MainWindow : Window
         // 面板类为单例(左面板标签组/属性/助手各一份), 复用时先从旧父脱挂。
         Control? c = id switch
         {
-            "Panels" => LeftTabs,
+            "File" => FileContent,
+            "Layer" => LayerContent,
             "Props" => PropsContent,
             "Assistant" => AssistantContent,
             _ => null,
