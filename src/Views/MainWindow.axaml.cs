@@ -515,9 +515,10 @@ public partial class MainWindow : Window
                 {
                     ((TextBlock)dragTip.Child!).Text = dh;
                     dragTip.Margin = new Avalonia.Thickness(p.X + 18, p.Y + 20, 0, 0);
-                    dragTip.IsVisible = true;
+                    dragTip.Opacity = 1;
+                    (dragTip.Parent as Control)?.InvalidateVisual();   // GL 之上叠层须显式重合成
                 }
-                else dragTip.IsVisible = false;
+                else if (dragTip.Opacity != 0) { dragTip.Opacity = 0; (dragTip.Parent as Control)?.InvalidateVisual(); }
             }
 
             // 夹点拖拽：实时预览移动后的实体（高亮通道）
@@ -626,7 +627,7 @@ public partial class MainWindow : Window
         _onHostExited = (_, _) =>                                          // 光标离开视口 → 收起十字与浮标
         {
             Viewport.HideCursor();
-            if (_active.DragTip != null) _active.DragTip.IsVisible = false;
+            if (_active.DragTip != null) { _active.DragTip.Opacity = 0; (_active.DragTip.Parent as Control)?.InvalidateVisual(); }
         };
 
         // 对象树选类型 → 视口高亮该类型几何
@@ -670,7 +671,7 @@ public partial class MainWindow : Window
                 Viewport.SetSnapMarker(null);
                 Viewport.SetHighlight(null);
                 _snapShown = false;
-                if (_active.DragTip != null) _active.DragTip.IsVisible = false;   // 收起绘制浮标
+                if (_active.DragTip != null) { _active.DragTip.Opacity = 0; (_active.DragTip.Parent as Control)?.InvalidateVisual(); }   // 收起绘制浮标
                 RefreshScene();          // 提交后刷新(含清除进行中的预览)
                 StatusMsg.Text = finishedPoly ? $"多段线完成（已画 {_scene.Count}）" : "就绪";
             }
@@ -855,11 +856,14 @@ public partial class MainWindow : Window
         var host = new Panel { Background = Avalonia.Media.Brushes.Transparent, ContextMenu = BuildViewportContextMenu() };
         host.Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.None);   // 隐藏系统箭头 → 只见 CAD 十字光标
         host.Children.Add(vp);
-        // 左上角操作提示叠层
+        // 叠层统一装进一个容器(命中透传): OpenGlControl 的直接兄弟里只有第一个 Border 会合成上屏,
+        // 多个叠层须收进单一容器, 容器内的多个子级再正常渲染(否则浮标等第二个叠层不显示)。
+        var overlay = new Panel { IsHitTestVisible = false };
+        // 左上角操作提示
         var hint = new StackPanel();
         hint.Children.Add(new TextBlock { Text = "视口 · OpenGL", Foreground = Avalonia.Media.Brushes.White, FontWeight = Avalonia.Media.FontWeight.SemiBold, FontSize = 13 });
         hint.Children.Add(new TextBlock { Text = "左键拖拽 = 平移 · 滚轮 = 缩放 · 右键切 2D/3D", Foreground = Avalonia.Media.Brush.Parse("#B9C6D6"), FontSize = 11, Margin = new Avalonia.Thickness(0, 3, 0, 0) });
-        host.Children.Add(new Border
+        overlay.Children.Add(new Border
         {
             Background = Avalonia.Media.Brush.Parse("#B0000000"),
             CornerRadius = new Avalonia.CornerRadius(6),
@@ -869,7 +873,7 @@ public partial class MainWindow : Window
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top,
             Child = hint,
         });
-        // 绘制时跟随光标的即时信息浮标(长度/角度/半径/宽高…); 不参与命中测试, 初始隐藏。
+        // 绘制/编辑时跟随光标的即时信息浮标(长度/角度/半径/位移/比例…)
         var tip = new Border
         {
             Background = Avalonia.Media.Brush.Parse("#E6111820"),
@@ -879,11 +883,11 @@ public partial class MainWindow : Window
             Padding = new Avalonia.Thickness(7, 3),
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top,
-            IsHitTestVisible = false,
-            IsVisible = false,
+            Opacity = 0,   // 用透明度显隐(始终在布局中); 每次改动后 _onHostMoved 会 RefreshScene 驱动重合成
             Child = new TextBlock { Foreground = Avalonia.Media.Brushes.White, FontSize = 12, FontWeight = Avalonia.Media.FontWeight.SemiBold },
         };
-        host.Children.Add(tip);
+        overlay.Children.Add(tip);
+        host.Children.Add(overlay);
         st.Vp = vp; st.Host = host; st.DragTip = tip;
         WireHost(host, vp);
     }
