@@ -49,6 +49,7 @@ public class CadGlViewport : OpenGlControlBase
     private readonly HashSet<string> _hiddenLayers = new();
 
     private double[]? _lastBounds;   // 最近导入的包围盒，供 ZE 重新范围缩放
+    private double[]? _sceneBounds;  // 当前绘制场景几何的世界 XY 包围盒，供 ZE 框住手绘图元
     private bool _showGrid = true;   // 网格/轴显隐
 
     // 渲染局部原点(世界 XY)：CGCS2000 等大坐标(X~5e5、Y~4e6)直接进 float32 矩阵会灾难性抵消，
@@ -304,8 +305,31 @@ public class CadGlViewport : OpenGlControlBase
     public void SetSceneGeometry(float[] verts)
     {
         _pendingScene = verts ?? Array.Empty<float>();
+        _sceneBounds = ComputeXYBounds(_pendingScene);   // 手绘/编辑后更新 ZE 目标包围盒
         _sceneDirty = true;
         RequestNextFrameRendering();
+    }
+
+    // 从 P3_C3 顶点缓冲(stride 6, XY 在 0/1，世界坐标)算 XY 包围盒；空缓冲返回 null。
+    private static double[]? ComputeXYBounds(float[] v)
+    {
+        if (v == null || v.Length < 6) return null;
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        for (int i = 0; i + 5 < v.Length; i += 6)
+        {
+            double x = v[i], y = v[i + 1];
+            if (x < minX) minX = x; if (x > maxX) maxX = x;
+            if (y < minY) minY = y; if (y > maxY) maxY = y;
+        }
+        return new[] { minX, minY, maxX, maxY };
+    }
+
+    // 两包围盒求并；任一为 null 返回另一个。
+    private static double[]? UnionBounds(double[]? a, double[]? b)
+    {
+        if (a == null) return b;
+        if (b == null) return a;
+        return new[] { Math.Min(a[0], b[0]), Math.Min(a[1], b[1]), Math.Max(a[2], b[2]), Math.Max(a[3], b[3]) };
     }
 
     /// <summary>
@@ -360,8 +384,10 @@ public class CadGlViewport : OpenGlControlBase
     /// <summary>范围缩放到最近导入几何（ZE / ZOOMEXTENTS）。</summary>
     public void ZoomExtents()
     {
-        if (_lastBounds == null) return;
-        _camera.FitBounds(LocalizeBounds(_lastBounds));
+        // 框住 导入几何 ∪ 手绘场景几何；无任何几何才不动。(LocalizeBounds 按当前原点态一致换算)
+        var b = UnionBounds(_lastBounds, _sceneBounds);
+        if (b == null) return;
+        _camera.FitBounds(LocalizeBounds(b));
         RequestNextFrameRendering();
     }
 
