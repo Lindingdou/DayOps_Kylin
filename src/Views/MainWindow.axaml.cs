@@ -607,6 +607,13 @@ public partial class MainWindow : Window
         {
             if (e.Key == Key.Escape)
             {
+                // 绘制多段线中途按 Esc：提交已画的多段线(而非丢弃)——符合"Esc 结束并保留"预期(≥2 点才成线)。
+                bool finishedPoly = false;
+                if (_tool != null && _tool.IsMultiPoint)
+                {
+                    var fin = _tool.Finish();
+                    if (fin != null) { BeginChange(); AssignLayer(fin); _scene.Add(fin); finishedPoly = true; }
+                }
                 _tool = null;
                 _measure = null;
                 _angle = null;
@@ -633,8 +640,8 @@ public partial class MainWindow : Window
                 Viewport.SetSnapMarker(null);
                 Viewport.SetHighlight(null);
                 _snapShown = false;
-                RefreshScene();          // 清除进行中的预览
-                StatusMsg.Text = "就绪";
+                RefreshScene();          // 提交后刷新(含清除进行中的预览)
+                StatusMsg.Text = finishedPoly ? $"多段线完成（已画 {_scene.Count}）" : "就绪";
             }
             else if (e.Key == Key.Delete)
             {
