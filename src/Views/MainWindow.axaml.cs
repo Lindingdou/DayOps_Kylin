@@ -504,6 +504,20 @@ public partial class MainWindow : Window
 
             _cursorWorld = shown;
 
+            // 绘制即时浮标：工具激活且已落基点 → 光标旁显示长度/角度/半径/宽高; 否则隐藏(随拖拽实时更新)。
+            var dragTip = _active.DragTip;
+            if (dragTip != null)
+            {
+                string? dh = (_tool != null && shown != null) ? _tool.DragHint(shown.Value.x, shown.Value.y) : null;
+                if (dh != null)
+                {
+                    ((TextBlock)dragTip.Child!).Text = dh;
+                    dragTip.Margin = new Avalonia.Thickness(p.X + 18, p.Y + 20, 0, 0);
+                    dragTip.IsVisible = true;
+                }
+                else dragTip.IsVisible = false;
+            }
+
             // 夹点拖拽：实时预览移动后的实体（高亮通道）
             if (_gripIndex >= 0 && _selected.Count == 1 && shown != null)
             {
@@ -607,7 +621,11 @@ public partial class MainWindow : Window
             }
             else Viewport.ZoomExtents();                                  // 否则 = 范围缩放
         };
-        _onHostExited = (_, _) => Viewport.HideCursor();                   // 光标离开视口 → 收起十字
+        _onHostExited = (_, _) =>                                          // 光标离开视口 → 收起十字与浮标
+        {
+            Viewport.HideCursor();
+            if (_active.DragTip != null) _active.DragTip.IsVisible = false;
+        };
 
         // 对象树选类型 → 视口高亮该类型几何
         ObjectTree.SelectionChanged += OnObjectTreeSelect;
@@ -650,6 +668,7 @@ public partial class MainWindow : Window
                 Viewport.SetSnapMarker(null);
                 Viewport.SetHighlight(null);
                 _snapShown = false;
+                if (_active.DragTip != null) _active.DragTip.IsVisible = false;   // 收起绘制浮标
                 RefreshScene();          // 提交后刷新(含清除进行中的预览)
                 StatusMsg.Text = finishedPoly ? $"多段线完成（已画 {_scene.Count}）" : "就绪";
             }
@@ -803,6 +822,7 @@ public partial class MainWindow : Window
         public DMC.Document Vm = null!;
         public Panel? Host;                                        // 该文档独立视口宿主(懒建)
         public PitMine3D.Kylin.Controls.CadGlViewport? Vp;         // 该文档独立 3D 视口
+        public Border? DragTip;                                    // 绘制时跟随光标的即时信息浮标(长度/角度/半径…)
     }
     private readonly List<DocState> _docs = new();
     private DocState _active = null!;
@@ -847,7 +867,22 @@ public partial class MainWindow : Window
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top,
             Child = hint,
         });
-        st.Vp = vp; st.Host = host;
+        // 绘制时跟随光标的即时信息浮标(长度/角度/半径/宽高…); 不参与命中测试, 初始隐藏。
+        var tip = new Border
+        {
+            Background = Avalonia.Media.Brush.Parse("#E6111820"),
+            BorderBrush = Avalonia.Media.Brush.Parse("#5A9BE5"),
+            BorderThickness = new Avalonia.Thickness(1),
+            CornerRadius = new Avalonia.CornerRadius(4),
+            Padding = new Avalonia.Thickness(7, 3),
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top,
+            IsHitTestVisible = false,
+            IsVisible = false,
+            Child = new TextBlock { Foreground = Avalonia.Media.Brushes.White, FontSize = 12, FontWeight = Avalonia.Media.FontWeight.SemiBold },
+        };
+        host.Children.Add(tip);
+        st.Vp = vp; st.Host = host; st.DragTip = tip;
         WireHost(host, vp);
     }
 

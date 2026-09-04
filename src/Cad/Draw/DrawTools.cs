@@ -23,6 +23,22 @@ public abstract class DrawTool
     /// <summary>追加进行中的预览（橡皮筋）：已点的点 + 当前光标。cursor 为 null 时只画已确定部分。</summary>
     public virtual void AppendPreview(List<float> o, (double x, double y)? cursor) { }
 
+    /// <summary>拖拽即时信息（长度/角度/半径/宽高…）。未落基点或工具无适配 → null（此时状态栏仅显 X/Y）。</summary>
+    public virtual string? DragHint(double x, double y) => null;
+
+    /// <summary>长度 + 角度（度，从 +X 逆时针 0–360）—— 直线/多段线段等通用格式。</summary>
+    protected static string LenAng(double x0, double y0, double x1, double y1)
+    {
+        double dx = x1 - x0, dy = y1 - y0;
+        double ang = Math.Atan2(dy, dx) * 180.0 / Math.PI;
+        if (ang < 0) ang += 360.0;
+        return $"长 {Math.Sqrt(dx * dx + dy * dy):0.##}  角 {ang:0.#}°";
+    }
+
+    /// <summary>两点距离。</summary>
+    protected static double Dist(double x0, double y0, double x1, double y1)
+        => Math.Sqrt((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0));
+
     /// <summary>预览色（灰蓝）。</summary>
     protected const float PR = 0.55f, PG = 0.62f, PB = 0.70f;
 
@@ -45,6 +61,7 @@ public sealed class LineTool : DrawTool
         if (_p0 != null && cursor != null)
             Tint(new LineEntity { X0 = _p0.Value.x, Y0 = _p0.Value.y, X1 = cursor.Value.x, Y1 = cursor.Value.y }).Tessellate(o);
     }
+    public override string? DragHint(double x, double y) => _p0 == null ? null : LenAng(_p0.Value.x, _p0.Value.y, x, y);
     public override void Reset() => _p0 = null;
 }
 
@@ -68,6 +85,7 @@ public sealed class CircleTool : DrawTool
             Tint(new CircleEntity { Cx = _c.Value.x, Cy = _c.Value.y, Radius = Math.Sqrt(dx * dx + dy * dy) }).Tessellate(o);
         }
     }
+    public override string? DragHint(double x, double y) => _c == null ? null : $"半径 {Dist(_c.Value.x, _c.Value.y, x, y):0.##}";
     public override void Reset() => _c = null;
 }
 
@@ -92,6 +110,7 @@ public sealed class Circle2PTool : DrawTool
         if (_p0 != null && cursor != null)
             Tint(Make(_p0.Value.x, _p0.Value.y, cursor.Value.x, cursor.Value.y)).Tessellate(o);
     }
+    public override string? DragHint(double x, double y) => _p0 == null ? null : $"直径 {Dist(_p0.Value.x, _p0.Value.y, x, y):0.##}";
     public override void Reset() => _p0 = null;
 }
 
@@ -139,6 +158,8 @@ public sealed class RectTool : DrawTool
         if (_p0 != null && cursor != null)
             Tint(new RectEntity { X0 = _p0.Value.x, Y0 = _p0.Value.y, X1 = cursor.Value.x, Y1 = cursor.Value.y }).Tessellate(o);
     }
+    public override string? DragHint(double x, double y)
+        => _p0 == null ? null : $"宽 {Math.Abs(x - _p0.Value.x):0.##}  高 {Math.Abs(y - _p0.Value.y):0.##}";
     public override void Reset() => _p0 = null;
 }
 
@@ -170,6 +191,8 @@ public sealed class ArcTool : DrawTool
         else               // 2 点：三点圆弧预览
             Tint(new ArcEntity { X1 = _p1.Value.x, Y1 = _p1.Value.y, X2 = _p2.Value.x, Y2 = _p2.Value.y, X3 = cursor.Value.x, Y3 = cursor.Value.y }).Tessellate(o);
     }
+    public override string? DragHint(double x, double y)
+        => _p1 == null ? null : _p2 == null ? LenAng(_p1.Value.x, _p1.Value.y, x, y) : LenAng(_p2.Value.x, _p2.Value.y, x, y);
     public override void Reset() { _p1 = null; _p2 = null; }
 }
 
@@ -197,6 +220,8 @@ public sealed class ArcSceTool : DrawTool
         var e = MakeSce(_s.Value.x, _s.Value.y, _c.Value.x, _c.Value.y, cursor.Value.x, cursor.Value.y);
         if (e != null) Tint(e).Tessellate(o);
     }
+    public override string? DragHint(double x, double y)
+        => _s == null ? null : _c == null ? LenAng(_s.Value.x, _s.Value.y, x, y) : $"半径 {Dist(_c.Value.x, _c.Value.y, _s.Value.x, _s.Value.y):0.##}";
     public override void Reset() { _s = null; _c = null; }
 }
 
@@ -219,6 +244,8 @@ public sealed class ArcCseTool : DrawTool
         var e = ArcSceTool.MakeSce(_s.Value.x, _s.Value.y, _c.Value.x, _c.Value.y, cursor.Value.x, cursor.Value.y);
         if (e != null) Tint(e).Tessellate(o);
     }
+    public override string? DragHint(double x, double y)
+        => _c == null ? null : _s == null ? $"半径 {Dist(_c.Value.x, _c.Value.y, x, y):0.##}" : LenAng(_s.Value.x, _s.Value.y, x, y);
     public override void Reset() { _c = null; _s = null; }
 }
 
@@ -243,6 +270,7 @@ public sealed class PolylineTool : DrawTool
         if (cursor != null && _pts.Count > 0)
             Seg(o, _pts[^1], cursor.Value, PR, PG, PB);       // 橡皮筋段
     }
+    public override string? DragHint(double x, double y) => _pts.Count == 0 ? null : LenAng(_pts[^1].x, _pts[^1].y, x, y);
     private static void Seg(List<float> o, (double x, double y) a, (double x, double y) b, float r, float g, float bl)
     {
         o.Add((float)a.x); o.Add((float)a.y); o.Add(0); o.Add(r); o.Add(g); o.Add(bl);
@@ -273,5 +301,6 @@ public sealed class PolygonTool : DrawTool
         if (_c != null && cursor != null)
             Tint(Make(_c.Value.x, _c.Value.y, cursor.Value.x, cursor.Value.y, Sides)).Tessellate(o);
     }
+    public override string? DragHint(double x, double y) => _c == null ? null : $"半径 {Dist(_c.Value.x, _c.Value.y, x, y):0.##}  边 {Sides}";
     public override void Reset() => _c = null;
 }

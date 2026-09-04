@@ -823,4 +823,41 @@ public class DrawToolsTests
         // 默认(HAlign=VAlign=0) 与不设对齐同(向后兼容)
         Assert.Equal(TextBounds(baseline).minX, TextBounds(new TextEntity { X = 0, Y = 0, Height = 1, Text = "A" }).minX, 6);
     }
+
+    // ---- 绘制即时拖拽信息(DragHint) ----
+    [Fact]
+    public void LineTool_drag_hint_shows_length_and_angle()
+    {
+        var t = new LineTool();
+        Assert.Null(t.DragHint(3, 4));                 // 未落起点 → 无提示
+        t.AddPoint(0, 0);
+        Assert.Equal("长 5  角 53.1°", t.DragHint(3, 4));   // 3-4-5, atan2(4,3)=53.13°
+    }
+
+    [Fact]
+    public void CircleTool_drag_hint_shows_radius()
+    {
+        var t = new CircleTool();
+        Assert.Null(t.DragHint(3, 4));
+        t.AddPoint(0, 0);
+        Assert.Equal("半径 5", t.DragHint(3, 4));
+    }
+
+    [Fact]
+    public void RectTool_drag_hint_shows_width_height()
+    {
+        var t = new RectTool();
+        t.AddPoint(2, 3);
+        Assert.Equal("宽 5  高 6", t.DragHint(7, 9));
+    }
+
+    [Fact]
+    public void PolylineTool_drag_hint_tracks_last_vertex()
+    {
+        var t = new PolylineTool();
+        Assert.Null(t.DragHint(1, 1));                 // 未起点
+        t.AddPoint(0, 0);
+        t.AddPoint(10, 0);                             // 最近顶点 (10,0)
+        Assert.Equal("长 5  角 90°", t.DragHint(10, 5));   // 从 (10,0) 向上 5
+    }
 }
