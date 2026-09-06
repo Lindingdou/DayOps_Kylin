@@ -1296,11 +1296,11 @@
                              FontFamily="Consolas,monospace" Watermark="命令别名/中文命令后回车（LINE / 距离 / 俯视 …），↑↓ 回溯历史，Tab 补全"
                              KeyDown="OnCommandKeyDown" TextChanged="OnCommandInputChanged" />
                 </Grid>
-                <!-- 命令自动补全候选 -->
-                <TextBlock x:Name="CmdSuggest" DockPanel.Dock="Bottom" Foreground="#C7A96B" FontSize="11"
-                           FontFamily="Consolas,monospace" Margin="40,0,0,2" Text="" IsVisible="False" />
-                <!-- 命令历史/输出回显 -->
-                <ScrollViewer x:Name="CmdLogScroll" DockPanel.Dock="Top" MaxHeight="60" Margin="0,0,0,3"
+                <!-- 命令自动补全候选：固定占一行(Opacity 显隐, 不用 IsVisible)——显隐不改变命令行区高度, 视口不被挤动 -->
+                <TextBlock x:Name="CmdSuggest" DockPanel.Dock="Bottom" Foreground="#C7A96B" FontSize="11" Height="16"
+                           FontFamily="Consolas,monospace" Margin="40,0,0,2" Text="" Opacity="0" />
+                <!-- 命令历史/输出回显：固定高度(非 MaxHeight)——日志从空长到满时命令行区高度不变, 视口不随之缩放/漂移 -->
+                <ScrollViewer x:Name="CmdLogScroll" DockPanel.Dock="Top" Height="60" Margin="0,0,0,3"
                               HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
                     <StackPanel x:Name="CmdLog" />
                 </ScrollViewer>

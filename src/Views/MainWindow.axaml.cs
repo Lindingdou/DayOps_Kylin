@@ -11266,16 +11266,16 @@ public partial class MainWindow : Window
     {
         if (CmdSuggest == null || CommandInput == null) return;
         string t = CommandInput.Text?.Trim() ?? "";
-        if (t.Length == 0) { CmdSuggest.IsVisible = false; return; }
+        if (t.Length == 0) { CmdSuggest.Opacity = 0; return; }
         var hits = new List<string>();
         foreach (var c in CommandCatalog)
         {
             if (c.Contains(t, System.StringComparison.OrdinalIgnoreCase)) hits.Add(c);
             if (hits.Count >= 8) break;
         }
-        if (hits.Count == 0) { CmdSuggest.IsVisible = false; return; }
+        if (hits.Count == 0) { CmdSuggest.Opacity = 0; return; }
         CmdSuggest.Text = "候选(Tab 补全): " + string.Join("  ·  ", hits);
-        CmdSuggest.IsVisible = true;
+        CmdSuggest.Opacity = 1;
     }
 
     // Tab 补全：取第一个候选填入命令框
@@ -11315,7 +11315,7 @@ public partial class MainWindow : Window
         if (e.Key == Key.Down) { RecallHistory(tb, +1); e.Handled = true; return; }   // ↓ 回溯较新命令
         if (e.Key == Key.Tab) { CompleteCommand(tb); e.Handled = true; return; }      // Tab 补全首个候选
         if (e.Key != Key.Enter) return;
-        if (CmdSuggest != null) CmdSuggest.IsVisible = false;                          // 执行时收起候选
+        if (CmdSuggest != null) CmdSuggest.Opacity = 0;                          // 执行时收起候选
 
         string cmd = tb.Text.Trim();
         if (cmd.Length == 0)   // 空命令行 + Enter = 重复上次命令（AutoCAD 行为；仅空闲态，不干预进行中的交互）
