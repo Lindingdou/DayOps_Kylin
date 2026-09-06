@@ -108,6 +108,9 @@ public sealed class LayerTable
     /// <summary>全部打开：所有层开且解冻（锁定保持）。</summary>
     public void AllOn() { foreach (var l in _layers) { l.Visible = true; l.Frozen = false; } }
 
+    /// <summary>全部关闭：所有层不显示（锁定/冻结状态不变）。忠实原版"全关"(层可见性关)。</summary>
+    public void AllOff() { foreach (var l in _layers) l.Visible = false; }
+
     /// <summary>图层隔离：只显示 name 层，其余全部关闭(Visible=false)。返回被关闭层数。取消用 AllOn。忠实原版"图层隔离"(LAYISO)。</summary>
     public int Isolate(string name)
     {

@@ -142,6 +142,7 @@
                                         <Button Classes="ribbon-btn small" Tag="对齐标注" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_linear_dimension}" /><TextBlock Text="对齐标注" /></StackPanel></Button>
                                         <Button Classes="ribbon-btn small" Tag="半径标注" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_radial_dimension}" /><TextBlock Text="半径标注" /></StackPanel></Button>
                                         <Button Classes="ribbon-btn small" Tag="连续标注" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_continuous_dimension}" /><TextBlock Text="连续标注" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="标注样式" Click="OnRibbonCommand" ToolTip.Tip="选中标注后调整其样式（箭头/文字/精度等）"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_dimension_style}" /><TextBlock Text="标注样式" /></StackPanel></Button>
                                     </WrapPanel>
                                 </DockPanel>
                             </Border>
@@ -167,6 +168,7 @@
                                         <Button Classes="ribbon-btn small" Tag="复制到剪贴板" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_copy}" /><TextBlock Text="复制" /></StackPanel></Button>
                                         <Button Classes="ribbon-btn small" Tag="粘贴" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_paste}" /><TextBlock Text="粘贴" /></StackPanel></Button>
                                         <Button Classes="ribbon-btn small" Tag="基点粘贴" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_paste_base}" /><TextBlock Text="基点粘贴" /></StackPanel></Button>
+                                        <Button Classes="ribbon-btn small" Tag="原坐标粘贴" Click="OnRibbonCommand" ToolTip.Tip="粘贴到原坐标位置"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_paste_origin}" /><TextBlock Text="原坐标粘贴" /></StackPanel></Button>
                                     </WrapPanel>
                                 </DockPanel>
                             </Border>
@@ -191,8 +193,10 @@
                                             </ComboBox>
                                             <WrapPanel Orientation="Horizontal" Margin="0,3,0,0">
                                                 <Button Classes="ribbon-btn small" Tag="全开" Click="OnRibbonCommand" MinWidth="46"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_show_all}" /><TextBlock Text="全开" /></StackPanel></Button>
+                                                <Button Classes="ribbon-btn small" Tag="全关" Click="OnRibbonCommand" MinWidth="46"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_visible_off}" /><TextBlock Text="全关" /></StackPanel></Button>
                                                 <Button Classes="ribbon-btn small" Tag="冻结" Click="OnRibbonCommand" MinWidth="46"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_frozen}" /><TextBlock Text="冻结" /></StackPanel></Button>
                                                 <Button Classes="ribbon-btn small" Tag="锁定" Click="OnRibbonCommand" MinWidth="46"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_locked}" /><TextBlock Text="锁定" /></StackPanel></Button>
+                                                <Button Classes="ribbon-btn small" Tag="刷新" Click="OnRibbonCommand" MinWidth="46" ToolTip.Tip="重生成/刷新视图 (REGEN)"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_refresh}" /><TextBlock Text="刷新" /></StackPanel></Button>
                                             </WrapPanel>
                                         </StackPanel>
                                     </StackPanel>
@@ -213,6 +217,9 @@
                                         <WrapPanel Orientation="Vertical" MaxHeight="72">
                                             <Button Classes="ribbon-btn small" Tag="渲染配置" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_render_cfg}" /><TextBlock Text="渲染配置" /></StackPanel></Button>
                                             <Button Classes="ribbon-btn small" Tag="缩放" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_Zoom}" /><TextBlock Text="缩放" /></StackPanel></Button>
+                                            <Button Classes="ribbon-btn small" Tag="平移" Click="OnRibbonCommand" ToolTip.Tip="平移视图（按住鼠标中键拖拽）"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_Pan}" /><TextBlock Text="平移" /></StackPanel></Button>
+                                            <Button Classes="ribbon-btn small" Tag="夹点开关" Click="OnRibbonCommand" ToolTip.Tip="切换夹点（Gizmo）显示"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_gizmo}" /><TextBlock Text="Gizmo" /></StackPanel></Button>
+                                            <Button Classes="ribbon-btn small" Tag="清理标记" Click="OnRibbonCommand" ToolTip.Tip="清除视图中所有 × 标记 (CLRMARK)"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_clear_marks}" /><TextBlock Text="清理标记" /></StackPanel></Button>
                                             <Button Classes="ribbon-btn small" Tag="清空视图" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_clear_marks}" /><TextBlock Text="清空视图" /></StackPanel></Button>
                                             <Button Classes="ribbon-btn small" ToolTip.Tip="标准视图预设">
                                                 <Button.Flyout>
@@ -251,6 +258,8 @@
                                             <Button Classes="ribbon-btn small" Tag="全部选择" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_select_all}" /><TextBlock Text="全部选择" /></StackPanel></Button>
                                             <Button Classes="ribbon-btn small" Tag="最后" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_select_last}" /><TextBlock Text="最后" /></StackPanel></Button>
                                             <Button Classes="ribbon-btn small" Tag="上次" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_select_previous}" /><TextBlock Text="上次" /></StackPanel></Button>
+                                            <Button Classes="ribbon-btn small" Tag="创建选择集" Click="OnRibbonCommand" ToolTip.Tip="将当前选择保存为命名选择集"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_create_selection}" /><TextBlock Text="创建选择集" /></StackPanel></Button>
+                                            <Button Classes="ribbon-btn small" Tag="调用选择集" Click="OnRibbonCommand" ToolTip.Tip="重新选中此前保存的命名选择集"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_recall_selection}" /><TextBlock Text="调用选择集" /></StackPanel></Button>
                                         </WrapPanel>
                                     </StackPanel>
                                 </DockPanel>

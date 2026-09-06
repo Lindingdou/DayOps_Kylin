@@ -1438,6 +1438,7 @@ public partial class MainWindow : Window
             if (cmd == "取消隔离" || cmd == "结束隔离" || cmd == "取消图层隔离") { _layers.AllOn(); PopulateDrawingLayers(); AfterLayerStateChange(); StatusMsg.Text = "已取消图层隔离（全部打开）"; return; }
             if (cmd == "图层特性管理器") { var l = _layers.CycleCurrent(); StatusMsg.Text = $"当前图层「{l.Name}」 显示{( l.Shown?"开":"关")}/{(l.Locked?"锁":"解锁")}（再点循环切换）"; return; }
             if (cmd == "全开" || cmd == "全部打开" || cmd == "图层全开") { _layers.AllOn(); PopulateDrawingLayers(); AfterLayerStateChange(); StatusMsg.Text = "已打开全部图层"; return; }
+            if (cmd == "全关" || cmd == "全部关闭" || cmd == "图层全关") { _layers.AllOff(); PopulateDrawingLayers(); AfterLayerStateChange(); StatusMsg.Text = "已关闭全部图层"; return; }
             if (cmd == "冻结") { FreezeCurrentLayer(true); return; }
             if (cmd == "解冻") { FreezeCurrentLayer(false); return; }
             if (cmd == "锁定") { LockCurrentLayer(true); return; }
@@ -1464,7 +1465,7 @@ public partial class MainWindow : Window
             if (cmd == "圆TTR" || cmd == "圆(切切半径)") { StartTTR(); return; }
             if (cmd == "圆弧SER" || cmd == "圆弧(起点端点半径)") { StartArcSer(); return; }
             if (cmd == "打断") { StartBreak(); return; }
-            if (cmd == "夹点开关" || cmd == "夹点") { ToggleGizmo(); return; }
+            if (cmd == "夹点开关" || cmd == "夹点" || cmd == "Gizmo" || cmd == "GIZMO") { ToggleGizmo(); return; }
             if (cmd == "正交" || cmd == "正交开关") { _orthoOn = !_orthoOn; SyncDraftToggles(); StatusMsg.Text = _orthoOn ? "正交: 开" : "正交: 关"; return; }
             if (cmd == "栅格" || cmd == "栅格显示" || cmd == "显示栅格" || cmd == "GRID") { SetGrid(!_gridOn); StatusMsg.Text = _gridOn ? "栅格: 开" : "栅格: 关"; return; }
             if (cmd == "栅格捕捉" || cmd == "捕捉开关") { _snapOn = !_snapOn; SyncDraftToggles(); StatusMsg.Text = _snapOn ? $"栅格捕捉: 开（步长 {_snapStep:0.##}）" : "栅格捕捉: 关"; return; }
