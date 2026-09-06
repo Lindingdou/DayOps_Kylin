@@ -20,4 +20,19 @@ public static class SnapPoints
         }
         return found;
     }
+
+    /// <summary>返回去掉与 (ex,ey) 重合(容差 eps)顶点后的副本 —— 夹点拖拽时排除"被拖的那一个点"，
+    /// 否则会捕捉到自己原位置导致鼠标粘住(原版 SnapContext.excludePoint)；同实体其他顶点仍可捕捉。</summary>
+    public static float[] Exclude(float[] verts, double ex, double ey, double eps = 1e-6)
+    {
+        if (verts == null || verts.Length < 6) return verts ?? System.Array.Empty<float>();
+        var o = new System.Collections.Generic.List<float>(verts.Length);
+        for (int i = 0; i + 5 < verts.Length; i += 6)
+        {
+            double dx = verts[i] - ex, dy = verts[i + 1] - ey;
+            if (dx * dx + dy * dy <= eps * eps) continue;
+            for (int k = 0; k < 6; k++) o.Add(verts[i + k]);
+        }
+        return o.ToArray();
+    }
 }

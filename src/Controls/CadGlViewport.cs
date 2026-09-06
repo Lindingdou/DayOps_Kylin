@@ -408,10 +408,10 @@ public class CadGlViewport : OpenGlControlBase
         RequestNextFrameRendering();
     }
 
-    /// <summary>高亮一组几何（P3_C3 位置，重着色为高亮色）；null/空 → 清除高亮。</summary>
-    public void SetHighlight(float[]? geom)
+    /// <summary>高亮一组几何（P3_C3 位置，默认重着色为高亮色；recolor=false 保留自带颜色，供夹点冷/热/选中配色）；null/空 → 清除高亮。</summary>
+    public void SetHighlight(float[]? geom, bool recolor = true)
     {
-        _pendingHighlight = (geom == null || geom.Length == 0) ? Array.Empty<float>() : Recolor(geom, 1f, 0.9f, 0.2f);
+        _pendingHighlight = (geom == null || geom.Length == 0) ? Array.Empty<float>() : (recolor ? Recolor(geom, 1f, 0.9f, 0.2f) : geom);
         _highlightDirty = true;
         RequestNextFrameRendering();
     }

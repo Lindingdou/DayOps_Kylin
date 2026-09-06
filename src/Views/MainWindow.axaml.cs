@@ -400,21 +400,37 @@ public partial class MainWindow : Window
                 return;
             }
 
-            // 夹点编辑：空闲态单选，左键按在夹点上 → 开始拖拽该夹点
-            if (props.IsLeftButtonPressed && _selected.Count == 1 && _measure == null
+            // 夹点编辑(忠实原版 GripEditor.OnMouseDown)：空闲态左键按在夹点上 →
+            //   Ctrl/Shift = 只改夹点选择集(Ctrl 逐个加减 / Shift 沿线区间)，本次不拖；
+            //   无修饰键   = 点已选中的夹点拖整组，点未选中的清空后只选它再拖。
+            //   点空白顺手清掉夹点选择，事件继续交给框选/点选。
+            if (props.IsLeftButtonPressed && _selected.Count > 0 && _measure == null && _tool == null
                 && _editMode == EditMode.None && !_offsetActive && !_trimActive && !_breakActive && !_slideActive)
             {
-                var wp = PickWorld();
+                var wp = Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);   // 命中用原始光标点(与原版 HitTest 一致)
                 if (wp != null)
                 {
-                    int gi = HitGrip(wp.Value.x, wp.Value.y, SnapTolWorld(_lastPointer));
+                    int gi = _gripsOn ? _grips.HitTest(wp.Value.x, wp.Value.y, SnapTolWorld(_lastPointer)) : -1;
                     if (gi >= 0)
                     {
-                        _gripIndex = gi; _nav = NavMode.None;
+                        bool ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control), shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+                        if (ctrl || shift)
+                        {
+                            if (ctrl) _grips.ToggleGrip(gi); else _grips.SelectRangeTo(gi);
+                            RedrawHighlight();
+                            StatusMsg.Text = $"夹点：已选 {_grips.SelectedCount()} 个（拖任一个整组移动 · Ctrl 加减 · Shift 区间）";
+                            return;
+                        }
+                        if (!_grips.IsSelected(gi)) _grips.SelectOnly(gi);
+                        var wpd = PickWorld() ?? wp;
+                        _gripDrag.Begin(_grips, gi, wpd.Value.x, wpd.Value.y);
+                        _snapVertsDrag = SnapPoints.Exclude(_lastImport?.LineVertices ?? _snapVerts, _gripDrag.Base.x, _gripDrag.Base.y);   // 捕捉自避：排除被拖的那一个点
+                        _nav = NavMode.None;
                         e.Pointer.Capture(ViewportHost);
-                        StatusMsg.Text = "夹点：拖到目标点松开";
+                        StatusMsg.Text = $"{_gripDrag.Prompt}  空格=切换模式 · 命令行可键入坐标 · Esc=取消";
                         return;
                     }
+                    if (_grips.SelectedCount() > 0) { _grips.ClearSelection(); RedrawHighlight(); }
                 }
             }
 
@@ -464,7 +480,7 @@ public partial class MainWindow : Window
 
             // 对象捕捉：吸附到最近顶点（优先场景几何；显示态导入用其网格顶点）
             _snapWorld = null;
-            var snapSrc = _lastImport?.LineVertices ?? _snapVerts;
+            var snapSrc = _gripDrag.Active && _snapVertsDrag != null ? _snapVertsDrag : (_lastImport?.LineVertices ?? _snapVerts);   // 夹点拖拽中排除被拖点
             _snapHitMode = null;
             if (w != null && SnapToggle.IsChecked == true)
             {
@@ -504,6 +520,20 @@ public partial class MainWindow : Window
 
             _cursorWorld = shown;
 
+            // 夹点拖拽：按当前模式(拉伸/移动/旋转/缩放)实时预览变换后的实体 + 光标旁模式提示
+            if (_gripDrag.Active)
+            {
+                if (shown != null) RefreshGripPreview(p, shown.Value);
+                _lastPointer = p;
+                return;
+            }
+            // 夹点悬停(热夹点)：空闲态光标压到夹点上变亮蓝，供空格切模式
+            if (_gripsOn && _grips.Count > 0 && _nav == NavMode.None && _tool == null && _editMode == EditMode.None)
+            {
+                int hv = w != null ? _grips.HitTest(w.Value.x, w.Value.y, SnapTolWorld(p)) : -1;
+                if (hv != _gripHover) { _gripHover = hv; RedrawHighlight(); }
+            }
+
             // 绘制即时浮标：工具激活且已落基点 → 光标旁显示长度/角度/半径/宽高; 否则隐藏(随拖拽实时更新)。
             var dragTip = _active.DragTip;
             if (dragTip != null)
@@ -519,21 +549,6 @@ public partial class MainWindow : Window
                     (dragTip.Parent as Control)?.InvalidateVisual();   // GL 之上叠层须显式重合成
                 }
                 else if (dragTip.Opacity != 0) { dragTip.Opacity = 0; (dragTip.Parent as Control)?.InvalidateVisual(); }
-            }
-
-            // 夹点拖拽：实时预览移动后的实体（高亮通道）
-            if (_gripIndex >= 0 && _selected.Count == 1 && shown != null)
-            {
-                var moved = _selected[0].MoveGrip(_gripIndex, shown.Value.x, shown.Value.y);
-                if (moved != null)
-                {
-                    var o = new List<float>();
-                    moved.Tessellate(o);
-                    foreach (var g in moved.Grips()) AppendGripSquare(o, g.x, g.y, GripSize());
-                    Viewport.SetHighlight(o.ToArray());
-                }
-                _lastPointer = p;
-                return;
             }
 
             if ((_tool != null || _editMode != EditMode.None) && _nav == NavMode.None) RefreshScene();   // 橡皮筋/编辑拖拽预览随光标刷新
@@ -561,25 +576,13 @@ public partial class MainWindow : Window
                 return;
             }
 
-            // 夹点拖拽：松开 → 用移动后的实体替换原实体
-            if (_gripIndex >= 0)
+            // 夹点拖拽：松开 → 按当前模式落地(整组一步 Undo)；取不到世界点则取消
+            if (_gripDrag.Active)
             {
-                int gi = _gripIndex; _gripIndex = -1;
                 e.Pointer.Capture(null);
                 var wp = _snapWorld ?? Viewport.ScreenToWorld(rel.X, rel.Y);
-                if (wp != null && _selected.Count == 1)
-                {
-                    var moved = _selected[0].MoveGrip(gi, wp.Value.x, wp.Value.y);
-                    if (moved != null)
-                    {
-                        BeginChange();
-                        _scene.Replace(_selected[0], moved);
-                        _selected.Clear(); _selected.Add(moved);
-                        RefreshScene();
-                        HighlightSelection();
-                        StatusMsg.Text = "夹点编辑完成";
-                    }
-                }
+                if (wp != null) CommitGripDrag(_snapWorld == null ? ApplyDraftAids(wp.Value.x, wp.Value.y) : wp.Value);
+                else CancelGripDrag();
                 return;
             }
 
@@ -636,6 +639,20 @@ public partial class MainWindow : Window
         // ESC：退出当前绘制/测量
         KeyDown += (_, e) =>
         {
+            // 空格：悬停/拖拽夹点时循环夹点模式 Stretch → Move → Rotate → Scale(原版 GripEditor.CycleMode)
+            if (e.Key == Key.Space && (_gripDrag.Active || _gripHover >= 0))
+            {
+                _gripDrag.CycleMode();
+                StatusMsg.Text = $"{_gripDrag.Prompt}  空格=切换模式";
+                if (_gripDrag.Active && _cursorWorld != null) RefreshGripPreview(_lastPointer, _cursorWorld.Value);
+                e.Handled = true;
+                return;
+            }
+            if (e.Key == Key.Escape && _gripDrag.Active)   // 拖拽中 Esc：放弃这一拖，实体与选集保持原样
+            {
+                CancelGripDrag();
+                return;
+            }
             if (e.Key == Key.Escape)
             {
                 // 绘制多段线中途按 Esc：提交已画的多段线(而非丢弃)——符合"Esc 结束并保留"预期(≥2 点才成线)。
@@ -663,7 +680,7 @@ public partial class MainWindow : Window
                 _dimRadActive = false; _dimRadCircle = null; _dimDiameter = false;
                 _dimAngActive = false; _angVertex = null; _angP1 = null;
                 _coordLabelActive = false;
-                _gripIndex = -1;
+                _gripDrag.Cancel(); _snapVertsDrag = null; _gripHover = -1;
                 _selBoxActive = false;
                 _ttrActive = false; _ttrAwaitRadius = false; _ttrRef1 = null; _ttrRef2 = null;
                 _serActive = false; _serAwaitRadius = false; _serStart = null; _serEnd = null;
@@ -961,7 +978,10 @@ public partial class MainWindow : Window
     private bool _trimActive;                       // 修剪/延伸：等待点目标线
     private bool _breakActive;                      // 打断：等待取两点
     private readonly List<(double x, double y)> _breakPts = new();   // 打断的两点
-    private int _gripIndex = -1;                    // 夹点拖拽中的夹点序号(-1=无)
+    private readonly GripTable _grips = new();        // 夹点表：多实体出夹点 + Ctrl/Shift 多夹点选择(原版 GripManager)
+    private readonly GripDrag _gripDrag = new();      // 夹点拖拽状态：拉伸/移动/旋转/缩放四模式(原版 GripEditor)
+    private int _gripHover = -1;                      // 悬停(热)夹点序号(-1=无)
+    private float[]? _snapVertsDrag;                  // 拖拽期间的捕捉候选(已排除被拖点，原版 excludePoint)
     private bool _gripsOn = true;                    // 夹点显示开关(GIZMO)
     private bool _pathActive;                       // 点对点寻径：等待取两点
     private (double x, double y)? _pathP1;
@@ -8098,15 +8118,105 @@ public partial class MainWindow : Window
         else StatusMsg.Text = _selected.Count > 0 ? $"已选 {_selected.Count} 个实体" : "未选中";
     }
 
+    // 选集变化入口：重建夹点表(旧夹点选择必然失效，同原版 Rebuild) → 重画高亮
     private void HighlightSelection()
     {
         UpdatePropertyPanel();
+        _grips.Rebuild(_selected);
+        _gripHover = -1;
+        RedrawHighlight();
+    }
+
+    // 只重画高亮 + 夹点方块(夹点选择/悬停变化时用，不动夹点表)
+    private void RedrawHighlight()
+    {
         if (_selected.Count == 0) { Viewport.SetHighlight(null); return; }
+        var ent = new List<float>();
+        foreach (var e in _selected) e.Tessellate(ent);
+        var o = new List<float>(Controls.CadGlViewport.Recolor(ent.ToArray(), 1f, 0.9f, 0.2f));   // 实体=高亮黄；夹点保留自身配色
+        if (_gripsOn) AppendGripTable(o);
+        Viewport.SetHighlight(o.ToArray(), recolor: false);
+    }
+
+    // 夹点方块配色忠实原版 Viewport.cpp：冷=蓝、热(悬停)=亮蓝；多选选中=品红 + 白描边 + 大一号(拖任一个整组动，"要动几个点"一眼可见)
+    private void AppendGripTable(List<float> o)
+    {
+        double h = GripSize();
+        for (int i = 0; i < _grips.Count; i++)
+        {
+            var g = _grips.Grips[i];
+            bool hot = i == _gripHover;
+            if (_grips.IsSelected(i))
+            {
+                AppendGripSquare(o, g.X, g.Y, h * 1.8, 1f, 1f, 1f);
+                AppendGripSquare(o, g.X, g.Y, h * 1.4, hot ? 1f : 0.95f, hot ? 0.45f : 0.05f, hot ? 0.95f : 0.75f);
+            }
+            else AppendGripSquare(o, g.X, g.Y, h, 0f, hot ? 0.8f : 0.5f, 1f);
+        }
+    }
+
+    // 夹点拖拽预览：受影响实体按模式变换后画到高亮通道(其余选中实体照常高亮)，并在光标旁显示模式与量值
+    private void RefreshGripPreview(Avalonia.Point p, (double x, double y) c)
+    {
+        var prev = _gripDrag.Preview(c.x, c.y);
+        var ent = new List<float>();
         var o = new List<float>();
-        foreach (var e in _selected) e.Tessellate(o);
-        if (_gripsOn && _selected.Count == 1)           // 单选 + 夹点开 → 叠加夹点方块
-            foreach (var g in _selected[0].Grips()) AppendGripSquare(o, g.x, g.y, GripSize());
-        Viewport.SetHighlight(o.ToArray());
+        double h = GripSize();
+        foreach (var e in _selected)
+        {
+            var hit = prev.Find(t => ReferenceEquals(t.old, e));
+            var shown = hit.moved ?? e;
+            shown.Tessellate(ent);
+            if (_gripsOn) foreach (var g in shown.Grips()) AppendGripSquare(o, g.x, g.y, h);
+        }
+        o.InsertRange(0, Controls.CadGlViewport.Recolor(ent.ToArray(), 1f, 0.9f, 0.2f));
+        Viewport.SetHighlight(o.ToArray(), recolor: false);
+
+        var tip = _active.DragTip;
+        if (tip == null) return;
+        double v = _gripDrag.ValueAt(c.x, c.y);
+        string val = _gripDrag.Mode switch
+        {
+            GripMode.Rotate => $"角度 {v * 180 / System.Math.PI:0.0}°",
+            GripMode.Scale => $"比例 {v:0.000}",
+            _ => $"距离 {v:0.00}",
+        };
+        ((TextBlock)tip.Child!).Text = $"{_gripDrag.Prompt} {val}";
+        tip.Margin = new Avalonia.Thickness(p.X + 18, p.Y + 20, 0, 0);
+        tip.Opacity = 1;
+        (tip.Parent as Control)?.InvalidateVisual();
+    }
+
+    // 夹点拖拽落地：整组一次 Replace + 一次 BeginChange(= 原版 AcDbDragGripsCommand 一步 Undo)
+    private void CommitGripDrag((double x, double y) pt)
+    {
+        var res = _gripDrag.Preview(pt.x, pt.y);
+        string mode = GripDrag.ModePrompt(_gripDrag.Mode);
+        _gripDrag.Cancel(); _snapVertsDrag = null;
+        if (res.Count > 0)
+        {
+            BeginChange();
+            foreach (var (old, moved) in res)
+            {
+                _scene.Replace(old, moved);
+                int k = _selected.IndexOf(old);
+                if (k >= 0) _selected[k] = moved;
+            }
+            RefreshScene();
+            StatusMsg.Text = $"夹点编辑完成 {mode}（{res.Count} 个实体）";
+        }
+        else StatusMsg.Text = "夹点：该夹点不支持此操作，未改变";
+        HighlightSelection();
+        HideDragTip();
+    }
+
+    // 夹点拖拽取消：实体从未被改(预览式)，只清状态并恢复高亮
+    private void CancelGripDrag()
+    {
+        _gripDrag.Cancel(); _snapVertsDrag = null;
+        RedrawHighlight();
+        HideDragTip();
+        StatusMsg.Text = "夹点：已取消";
     }
 
     // 右侧特性面板：随选择更新（单选=逐行属性; 多选=计数; 空=提示）
@@ -8159,9 +8269,8 @@ public partial class MainWindow : Window
     }
 
     // 夹点方块（小正方形轮廓，蓝色）
-    private static void AppendGripSquare(List<float> o, double cx, double cy, double h)
+    private static void AppendGripSquare(List<float> o, double cx, double cy, double h, float r = 0.30f, float g = 0.62f, float b = 1.0f)
     {
-        const float r = 0.30f, g = 0.62f, b = 1.0f;
         void Seg(double x0, double y0, double x1, double y1)
         {
             o.Add((float)x0); o.Add((float)y0); o.Add(0); o.Add(r); o.Add(g); o.Add(b);
@@ -8176,20 +8285,6 @@ public partial class MainWindow : Window
     {
         double w = ViewportHost.Bounds.Width, h = ViewportHost.Bounds.Height;
         return SnapTolWorld(new Avalonia.Point(w / 2, h / 2)) * 0.45;
-    }
-
-    // 命中夹点：返回 _selected[0] 上距 (wx,wy) 在容差内的夹点序号，无则 -1
-    private int HitGrip(double wx, double wy, double tol)
-    {
-        if (!_gripsOn || _selected.Count != 1) return -1;
-        var grips = _selected[0].Grips();
-        int best = -1; double bestD = tol * tol;
-        for (int i = 0; i < grips.Count; i++)
-        {
-            double dx = grips[i].x - wx, dy = grips[i].y - wy, d = dx * dx + dy * dy;
-            if (d <= bestD) { bestD = d; best = i; }
-        }
-        return best;
     }
 
     // 框选选框(世界坐标 P3_C3, 交叉=蓝/窗口=绿)
@@ -9159,7 +9254,7 @@ public partial class MainWindow : Window
     private void ToggleGizmo()
     {
         _gripsOn = !_gripsOn;
-        if (!_gripsOn) { _gripIndex = -1; }
+        if (!_gripsOn) { _gripDrag.Cancel(); _snapVertsDrag = null; _gripHover = -1; }
         HighlightSelection();
         StatusMsg.Text = _gripsOn ? "夹点：开" : "夹点：关";
     }
@@ -11229,6 +11324,13 @@ public partial class MainWindow : Window
             cmd = _lastCommand!;
         }
         tb.Text = string.Empty;
+
+        // 夹点拖拽中：键入坐标(x,y / @dx,dy 相对被拖夹点 / d<ang) → 精确落点(原版 CommitDragAt)
+        if (_gripDrag.Active)
+        {
+            var gp = ParseCoord(cmd, _gripDrag.Base);
+            if (gp != null) { CommitGripDrag(gp.Value); return; }
+        }
 
         // 文字：下一条命令行输入即内容
         if (_textActive) { _textActive = false; bool mt = _mtextMode; _mtextMode = false; if (cmd.Length > 0) PlaceText(mt ? cmd.Replace("|", "\n") : cmd); return; }

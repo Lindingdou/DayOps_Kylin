@@ -3550,3 +3550,31 @@ BenchTemplateResolver.Resolve 走 PickTemplate→BenchTemplateReader.Read(按 co
 **判定**: 参数校核用 DB 真实设计基准**完成并验证**(采场校核基准由硬编码规范默认→V026 初设说明书真值)。**"无模板库/数据不可得"
 过时记录第三次被证反(§295 norms/§296 constraints/§297 bench design params 全实已种子 V006-V034)——教训定型: 凡代码自注
 "Kylin 无 X 库/数据不可移", 必 grep migration 实证该表/列种子状态, 数据后来种子的记录已过时。** 1506→**1507** 测试, 0 失败, 0 错误。见 [[unlock-blocked-insights]] [[verify-seed-enum-values-before-filter]]。
+
+## §二九八 夹点拖拽系统(drag)对齐原版 xllAcEd GripManager/GripEditor (2026-09-06)
+
+用户点名分析原 PitMine3D 的 drag 系统并要求 Kylin 具备。原版核心 = 内核 `Kernel/xllAcEd` 的
+GripManager(夹点表: 选集→`getGripPoints`, 8px 命中, Ctrl 逐个/Shift 同实体区间·闭合环取短弧, ≤100 实体) +
+GripEditor(四模式 Stretch/Move/Rotate/Scale 空格循环, 按下快照 basePos/起点鼠标/被拖夹点组, 松开压
+AcDbDragGripsCommand 整组一步 Undo / AcDbTransformCommand, Esc CancelDrag, CommitDragAt 命令行坐标) +
+Editor 路由(导航→夹点→Picking; 拖动中捕捉排除被拖点; `** STRETCH ** Specify point...` 提示) +
+Viewport 配色(冷蓝/热亮蓝/选中品红+白描边大一号)。Kylin 此前仅"单选单夹点 Stretch"。
+
+**已做**(4 步):
+1. `Cad/Draw/GripTable.cs`(纯): Rebuild(多实体, ObjLimit=100)/HitTest/SelectOnly/ToggleGrip/SelectRangeTo(闭合环短弧,
+   跨实体退化点选, 锚点不动)/Rebuild 清选择 —— 逐条对照原 GripManager.cpp。
+2. `Cad/Draw/GripDrag.cs`(纯): GripMode + Begin 快照 + Preview(Stretch=整组按锚点位移逐 MoveGrip; Move/Rotate/Scale=
+   Affine2 作用于被拖夹点所属实体; Rotate 相对角/Scale 距离比同原版) + ValueAt + Prompt/ModePrompt/NextMode。
+   Kylin 走预览式(松开才 Replace), Esc 取消天然无需原版 inv(lastApplied) 回退。
+3. MainWindow 接线: 多选出夹点; 按下 Ctrl/Shift 只改夹点选集; 无修饰键点未选夹点→只选它再拖, 点已选→拖整组; 点空白清
+   夹点选择; 悬停热夹点; 空格切模式(悬停或拖拽时); 拖动中光标浮标显示 `** MODE ** 指定…: 距离/角度/比例`; 松开
+   CommitGripDrag 整组 Replace + 一次 BeginChange(一步 Undo); Esc CancelGripDrag; 命令行 `x,y`/`@dx,dy`(相对被拖点)
+   落点; GIZMO 关时全部失效。`CadGlViewport.SetHighlight(recolor:false)` 让夹点保留自身配色(此前高亮通道整体重着色
+   为黄, 夹点蓝色从未显示过)。
+4. `SnapPoints.Exclude`: 拖拽期间捕捉候选排除被拖的那一个点(原版 excludePoint), 同实体其他顶点仍可捕捉。
+
+**验证**: +17 单测(GripTableTests/SnapExcludeTests), 1585→**1602** 全过, 0 失败。PITMINE_SELFTEST 直设状态截图 2 张确认:
+选中态(品红大方块 ×3 + 热夹点亮蓝 + 冷蓝)、Rotate 拖拽预览(六边形绕锚点转 90° + 浮标 `** ROTATE ** 指定旋转角度: 角度 90.0°`);
+自检块已删。**记录**: 原版 `ExecuteGripDragInput` 在内核中未找到宿主调用方(接口存在未接线), Kylin 已接命令行坐标;
+台阶线受约束夹点(锁高程/限同线)属台阶调整模块, 待该模块移植时随 Predicate 挂上; ObjectSnap 扩展模式(交点/垂足)
+的几何未排除被拖实体(原版 ctx.exclude=选集), 影响仅在拖动中偶发捕捉到自身段, 记为小差距。
