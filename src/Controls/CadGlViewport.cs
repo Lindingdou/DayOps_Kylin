@@ -52,6 +52,12 @@ public partial class CadGlViewport : OpenGlControlBase
     private bool _facesDirty;
     private double _sceneZc;          // 场景几何高程中心(供 ZE/FitBounds 把注视点放到模型高度)
 
+    // 选中高亮的着色面(选中三角网表面盖高亮色, GL_TRIANGLES)
+    private GlRenderer.Mesh _highlightFaces;
+    private bool _hasHighlightFaces;
+    private float[]? _pendingHighlightFaces;
+    private bool _highlightFacesDirty;
+
     // 图层显隐：图层名 → 该层几何；隐藏集
     private Dictionary<string, float[]>? _layerGeom;
     private readonly HashSet<string> _hiddenLayers = new();
@@ -122,6 +128,7 @@ public partial class CadGlViewport : OpenGlControlBase
         if (_pendingScene != null) _sceneDirty = true;
         if (_pendingHighlight != null) _highlightDirty = true;
         if (_pendingFaces != null) _facesDirty = true;
+        if (_pendingHighlightFaces != null) _highlightFacesDirty = true;
         if (_pendingSnap != null) _snapDirty = true;
     }
 
@@ -135,12 +142,14 @@ public partial class CadGlViewport : OpenGlControlBase
         if (_hasSnap) _renderer.DeleteMesh(_snap);
         if (_hasScene) _renderer.DeleteMesh(_scene);
         if (_hasFaces) _renderer.DeleteMesh(_faces);
+        if (_hasHighlightFaces) _renderer.DeleteMesh(_highlightFaces);
         if (_hasCursor) _renderer.DeleteMesh(_cursor);
         _renderer.Deinit();
         // 上下文销毁——句柄失效, 复位标志; 否则重建后旧 id 可能撞上新网格(grid/cube/gizmo)致误删/花屏。
         // 保留的托管源(_pendingImport/_pendingScene/…)不动, OnOpenGlInit 会据此重新入队重传。
-        _hasImported = _hasScene = _hasHighlight = _hasSnap = _hasFaces = false;
+        _hasImported = _hasScene = _hasHighlight = _hasSnap = _hasFaces = _hasHighlightFaces = false;
         if (_pendingFaces != null) _facesDirty = true;
+        if (_pendingHighlightFaces != null) _highlightFacesDirty = true;
         _hasCursor = false; _curBuiltSx = double.NaN;   // 十字光标下次移动即按当前上下文重建
     }
 
@@ -186,6 +195,14 @@ public partial class CadGlViewport : OpenGlControlBase
             if (_hasFaces) _renderer.DeleteMesh(_faces);
             _faces = _renderer.Upload(Localize(_pendingFaces!));
             _hasFaces = !_faces.IsEmpty;
+        }
+
+        if (_highlightFacesDirty)
+        {
+            _highlightFacesDirty = false;
+            if (_hasHighlightFaces) _renderer.DeleteMesh(_highlightFaces);
+            _highlightFaces = _renderer.Upload(Localize(_pendingHighlightFaces!));
+            _hasHighlightFaces = !_highlightFaces.IsEmpty;
         }
 
         if (_sceneDirty)
@@ -268,9 +285,17 @@ public partial class CadGlViewport : OpenGlControlBase
         _renderer.EndPass();
     }
 
-    /// <summary>选择高亮：选中类型的几何用高亮色画在最上层。深度关。</summary>
+    /// <summary>选择高亮：先在选中三角网表面盖一层高亮色面(深度开 + 负偏移压住原面)，再把高亮线画在最上层(深度关)。</summary>
     private void HighlightPass(float[] vp)
     {
+        if (_hasHighlightFaces)
+        {
+            _renderer.BeginPass(depthTest: true);
+            _renderer.SetPolygonOffset(true, -1.5f, -1.5f);   // 负偏移: 高亮面压在原面之前(否则 z-fighting 闪烁)
+            _renderer.Draw(_highlightFaces, GL_TRIANGLES, vp);
+            _renderer.SetPolygonOffset(false);
+            _renderer.EndPass();
+        }
         if (!_hasHighlight && !_hasSnap) return;
         _renderer.BeginPass(depthTest: false);
         if (_hasHighlight) _renderer.Draw(_highlight, GL_LINES, vp);
@@ -660,6 +685,14 @@ public partial class CadGlViewport : OpenGlControlBase
 
 public partial class CadGlViewport
 {
+    /// <summary>设置选中高亮的着色面（P3_C3, GL_TRIANGLES）；空/null → 清除。</summary>
+    public void SetHighlightFaces(float[]? tris)
+    {
+        _pendingHighlightFaces = (tris == null || tris.Length == 0) ? Array.Empty<float>() : tris;
+        _highlightFacesDirty = true;
+        RequestNextFrameRendering();
+    }
+
     /// <summary>设置托管场景的着色三角面（P3_C3, GL_TRIANGLES）；空 → 清除。</summary>
     public void SetSceneFaces(float[] tris)
     {

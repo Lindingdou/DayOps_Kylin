@@ -187,7 +187,7 @@ public partial class MainWindow : Window
                             BeginChange();
                             _scene.Remove(_selected[0]);
                             foreach (var pe in parts) _scene.Add(pe);
-                            _selected.Clear(); Viewport.SetHighlight(null);
+                            _selected.Clear(); Viewport.SetHighlight(null); Viewport.SetHighlightFaces(null);
                             StatusMsg.Text = $"已打断（剩 {parts.Count} 段）";
                         }
                         else StatusMsg.Text = "该实体不支持打断（点/文字；直线/多段线/圆弧/圆/矩形/多边形可打断）";
@@ -720,7 +720,7 @@ public partial class MainWindow : Window
                 _serActive = false; _serAwaitRadius = false; _serStart = null; _serEnd = null;
                 _selected.Clear();
                 Viewport.SetSnapMarker(null);
-                Viewport.SetHighlight(null);
+                Viewport.SetHighlight(null); Viewport.SetHighlightFaces(null);
                 _snapShown = false;
                 if (_active.DragTip != null) { _active.DragTip.Opacity = 0; (_active.DragTip.Parent as Control)?.InvalidateVisual(); }   // 收起绘制浮标
                 RefreshScene();          // 提交后刷新(含清除进行中的预览)
@@ -1437,7 +1437,7 @@ public partial class MainWindow : Window
             if (cmd == "西北等轴测" || cmd == "西北轴测") { Viewport.SetView("nw"); StatusMsg.Text = "视图: 西北等轴测"; return; }
             if (cmd == "范围缩放" || cmd == "全部缩放" || cmd == "范围") { Viewport.ZoomExtents(); StatusMsg.Text = "视图: 范围缩放"; return; }
             if (cmd == "上一视图" || cmd == "返回视图") { StatusMsg.Text = Viewport.PrevView() ? "视图: 已返回上一视图" : "视图: 无更早视图"; return; }
-            if (cmd == "清空视图") { _selected.Clear(); Viewport.SetHighlight(null); Viewport.SetSnapMarker(null); _snapShown = false; RefreshScene(); StatusMsg.Text = "已清空选择/高亮/捕捉标记"; return; }
+            if (cmd == "清空视图") { _selected.Clear(); Viewport.SetHighlight(null); Viewport.SetHighlightFaces(null); Viewport.SetSnapMarker(null); _snapShown = false; RefreshScene(); StatusMsg.Text = "已清空选择/高亮/捕捉标记"; return; }
             if (cmd == "隐藏对象" || cmd == "隐藏") { HideSelectedObjects(); return; }
             if (cmd == "隐藏同一图层对象" || cmd == "隐藏图层" || cmd == "隐藏同层") { HideSelectedLayers(); return; }
             if (cmd == "结束隐藏" || cmd == "取消隐藏" || cmd == "显示全部" || cmd == "全部显示") { EndHide(); return; }
@@ -1675,7 +1675,7 @@ public partial class MainWindow : Window
 
         _lastImport = null;
         Viewport.ClearImported();
-        Viewport.SetHighlight(null);
+        Viewport.SetHighlight(null); Viewport.SetHighlightFaces(null);
         Viewport.SetSnapMarker(null); _snapShown = false;
         ObjectTree.ItemsSource = null;
         ObjectTreeHint.IsVisible = true;
@@ -1741,7 +1741,7 @@ public partial class MainWindow : Window
                     _layers.EnsureImported(e.LayerName, e.Cr, e.Cg, e.Cb);
             PopulateDrawingLayers();
             _selected.Clear();
-            Viewport.SetHighlight(null);
+            Viewport.SetHighlight(null); Viewport.SetHighlightFaces(null);
             RefreshScene();
             SetDocPath(files[0].Path.LocalPath);
             StatusMsg.Text = $"已打开 {Path.GetFileName(files[0].Path.LocalPath)} · {_scene.Count} 实体 · {_layers.Layers.Count} 图层";
@@ -6293,7 +6293,7 @@ public partial class MainWindow : Window
         var m = CoordTransform.ToAffine(h.Value);
         BeginChange();
         for (int i = 0; i < _scene.Entities.Count; i++) _scene.Entities[i] = _scene.Entities[i].Apply(m);
-        _selected.Clear(); Viewport.SetHighlight(null);
+        _selected.Clear(); Viewport.SetHighlight(null); Viewport.SetHighlightFaces(null);
         RefreshScene();
         double scale = System.Math.Sqrt(h.Value.a * h.Value.a + h.Value.b * h.Value.b);
         double rot = System.Math.Atan2(h.Value.b, h.Value.a) * 180 / System.Math.PI;
@@ -7145,7 +7145,7 @@ public partial class MainWindow : Window
             foreach (var pt in chain) pl.Points.Add(pt);
             _scene.Add(pl);
         }
-        _selected.Clear(); Viewport.SetHighlight(null);
+        _selected.Clear(); Viewport.SetHighlight(null); Viewport.SetHighlightFaces(null);
         RefreshScene();
         StatusMsg.Text = $"组合工作线：{polys.Count} 条 → {merged.Count} 条";
     }
@@ -8081,7 +8081,7 @@ public partial class MainWindow : Window
         while (CmdLog.Children.Count > 100) CmdLog.Children.RemoveAt(0);
         CmdLogScroll?.ScrollToEnd();
     }
-    private void OnCtxClearHighlight(object? s, RoutedEventArgs e) => Viewport.SetHighlight(null);
+    private void OnCtxClearHighlight(object? s, RoutedEventArgs e) { Viewport.SetHighlight(null); Viewport.SetHighlightFaces(null); }
 
     // 对象捕捉容差：约 12px 换算到世界单位
     private double SnapTolWorld(Avalonia.Point p)
@@ -8166,7 +8166,7 @@ public partial class MainWindow : Window
         _scene.Clear();
         foreach (var e in loaded.Entities) _scene.Add(e);
         _selected.Clear();
-        Viewport.SetHighlight(null);
+        Viewport.SetHighlight(null); Viewport.SetHighlightFaces(null);
         RefreshScene();
     }
 
@@ -8375,12 +8375,45 @@ public partial class MainWindow : Window
     // 只重画高亮 + 夹点方块(夹点选择/悬停变化时用，不动夹点表)
     private void RedrawHighlight()
     {
-        if (_selected.Count == 0) { Viewport.SetHighlight(null); return; }
+        if (_selected.Count == 0) { Viewport.SetHighlight(null); Viewport.SetHighlightFaces(null); return; }
+        // 三角网：表面盖一层高亮色面 + 三维包围盒 + 轮廓边线(大网省边线, 靠色面与包围盒即可辨识);
+        // 其它实体：自身线框重着色。高亮色取青(与黄色地形/深色背景都拉得开)。
+        const float hr = 0.15f, hg = 0.95f, hb = 1.0f;
         var ent = new List<float>();
-        foreach (var e in _selected) { if (e is MeshEntity me) me.TessellateEdges(ent); else e.Tessellate(ent); }   // 三角网高亮总画边线(纯面模式也能看到选中)
-        var o = new List<float>(Controls.CadGlViewport.Recolor(ent.ToArray(), 1f, 0.9f, 0.2f));   // 实体=高亮黄；夹点保留自身配色
+        var faces = new List<float>();
+        foreach (var e in _selected)
+        {
+            if (e is MeshEntity me)
+            {
+                me.TessellateHighlightFaces(faces, hr, hg, hb);
+                AppendBoundingBox(ent, me);
+                if (me.Edges.Count <= 30000) me.TessellateEdges(ent);
+            }
+            else e.Tessellate(ent);
+        }
+        var o = new List<float>(Controls.CadGlViewport.Recolor(ent.ToArray(), hr, hg, hb));   // 实体=高亮青；夹点保留自身配色
+        Viewport.SetHighlightFaces(faces.Count > 0 ? faces.ToArray() : null);
         if (_gripsOn) AppendGripTable(o);
         Viewport.SetHighlight(o.ToArray(), recolor: false);
+    }
+
+    // 选中三角网的三维包围盒线框(12 条棱)——远看/小目标时也能一眼看到"选中了哪个模型"
+    private static void AppendBoundingBox(List<float> o, MeshEntity me)
+    {
+        var b = me.Bounds;
+        double z0 = b.minZ + me.Elevation, z1 = b.maxZ + me.Elevation;
+        void Seg(double x0, double y0, double zz0, double x1, double y1, double zz1)
+        {
+            o.Add((float)x0); o.Add((float)y0); o.Add((float)zz0); o.Add(0); o.Add(0); o.Add(0);
+            o.Add((float)x1); o.Add((float)y1); o.Add((float)zz1); o.Add(0); o.Add(0); o.Add(0);
+        }
+        foreach (double z in new[] { z0, z1 })
+        {
+            Seg(b.minX, b.minY, z, b.maxX, b.minY, z); Seg(b.maxX, b.minY, z, b.maxX, b.maxY, z);
+            Seg(b.maxX, b.maxY, z, b.minX, b.maxY, z); Seg(b.minX, b.maxY, z, b.minX, b.minY, z);
+        }
+        Seg(b.minX, b.minY, z0, b.minX, b.minY, z1); Seg(b.maxX, b.minY, z0, b.maxX, b.minY, z1);
+        Seg(b.maxX, b.maxY, z0, b.maxX, b.maxY, z1); Seg(b.minX, b.maxY, z0, b.minX, b.maxY, z1);
     }
 
     // 夹点方块配色忠实原版 Viewport.cpp：冷=蓝、热(悬停)=亮蓝；多选选中=品红 + 白描边 + 大一号(拖任一个整组动，"要动几个点"一眼可见)
@@ -8592,7 +8625,7 @@ public partial class MainWindow : Window
         foreach (var e in _selected) _scene.Remove(e);
         int n = _selected.Count;
         _selected.Clear();
-        Viewport.SetHighlight(null);
+        Viewport.SetHighlight(null); Viewport.SetHighlightFaces(null);
         RefreshScene();
         StatusMsg.Text = $"已删除 {n} 个实体";
     }
@@ -8757,7 +8790,7 @@ public partial class MainWindow : Window
 
     private void ClrMark()   // 清理标记 / CLRMARK：清高亮/捕捉标记
     {
-        Viewport.SetHighlight(null);
+        Viewport.SetHighlight(null); Viewport.SetHighlightFaces(null);
         Viewport.SetSnapMarker(null);
         _snapShown = false;
         StatusMsg.Text = "已清理标记";
@@ -8838,7 +8871,7 @@ public partial class MainWindow : Window
         SaveSel();
         int n = _selected.Count;
         _selected.Clear();
-        Viewport.SetHighlight(null);
+        Viewport.SetHighlight(null); Viewport.SetHighlightFaces(null);
         RefreshScene();
         StatusMsg.Text = $"已取消选择（{n} 个；「上次」可恢复）";
     }
@@ -9631,7 +9664,7 @@ public partial class MainWindow : Window
     {
         if (_selected.Count == 0) { StatusMsg.Text = "隐藏对象：没有选中实体"; return; }
         int n = _scene.HideEntities(_selected);
-        _selected.Clear(); Viewport.SetHighlight(null);
+        _selected.Clear(); Viewport.SetHighlight(null); Viewport.SetHighlightFaces(null);
         RefreshScene();
         StatusMsg.Text = $"隐藏对象：{n} 个（结束隐藏可恢复，共隐藏 {_scene.HiddenCount}）";
     }
@@ -9648,7 +9681,7 @@ public partial class MainWindow : Window
             var ly = _layers.Get(name);
             if (ly != null && ly.Visible) { ly.Visible = false; _hiddenLayers.Add(name); ok++; }
         }
-        _selected.Clear(); Viewport.SetHighlight(null);
+        _selected.Clear(); Viewport.SetHighlight(null); Viewport.SetHighlightFaces(null);
         AfterLayerStateChange(); PopulateDrawingLayers();
         StatusMsg.Text = $"隐藏图层 {ok} 个：{string.Join(", ", names)}（结束隐藏可恢复）";
     }

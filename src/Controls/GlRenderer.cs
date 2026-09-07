@@ -107,9 +107,12 @@ internal sealed class GlRenderer
 
     private const int GL_POLYGON_OFFSET_FILL = 0x8037;
     /// <summary>着色面深度偏移开/关：面向后偏移一点, 同一位置的边线/高亮线不被面吃掉(z-fighting)。</summary>
-    public void SetPolygonOffset(bool on)
+    public void SetPolygonOffset(bool on) => SetPolygonOffset(on, 1.0f, 1.0f);
+
+    /// <summary>多边形深度偏移。正值把面推远(让线浮在面上)；负值把面拉近(选中高亮面盖住原面)。</summary>
+    public void SetPolygonOffset(bool on, float factor, float units)
     {
-        if (on) { _gl.Enable(GL_POLYGON_OFFSET_FILL); _ext.PolygonOffset(1.0f, 1.0f); }
+        if (on) { _gl.Enable(GL_POLYGON_OFFSET_FILL); _ext.PolygonOffset(factor, units); }
         else _gl.Disable(GL_POLYGON_OFFSET_FILL);
     }
 

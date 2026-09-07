@@ -107,8 +107,20 @@ internal static class Mat4
         inv[15] =  m[0]*m[5]*m[10]  - m[0]*m[6]*m[9]   - m[4]*m[1]*m[10] + m[4]*m[2]*m[9]  + m[8]*m[1]*m[6]   - m[8]*m[2]*m[5];
 
         double det = m[0]*inv[0] + m[1]*inv[4] + m[2]*inv[8] + m[3]*inv[12];
-        if (Math.Abs(det) < 1e-12) return null;
+        // 阈值必须相对于矩阵量级：大场景的 2D 正交投影(halfH≈万, far≈26万)各轴尺度悬殊,
+        // 行列式本就 ~1e-14 却完全可逆; 固定 1e-12 会误判为奇异 → ScreenToWorld 全线 null
+        // (2D 下点选/框选/捕捉/坐标读数全失效, 大坐标模型如 .3dm 必中)。
+        // 用 Hadamard 上界(各列范数之积)归一, 真奇异时 |det|/上界 ≈ 浮点噪声(~1e-7), 可靠区分。
+        double bound = 1;
+        for (int c = 0; c < 4; c++)
+        {
+            double s = 0;
+            for (int r = 0; r < 4; r++) { double a = m[c * 4 + r]; s += a * a; }
+            bound *= Math.Sqrt(s);
+        }
+        if (double.IsNaN(det) || double.IsInfinity(det) || Math.Abs(det) <= 1e-9 * bound) return null;
         float invDet = (float)(1.0 / det);
+        if (float.IsNaN(invDet) || float.IsInfinity(invDet)) return null;
         for (int i = 0; i < 16; i++) inv[i] *= invDet;
         return inv;
     }

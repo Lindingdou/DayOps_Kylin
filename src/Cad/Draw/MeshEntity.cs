@@ -225,6 +225,28 @@ public sealed class MeshEntity : SceneEntity
         return me;
     }
 
+    /// <summary>
+    /// 选中高亮面：三角面按高亮色出，仍保留平行光明暗(看得出起伏), 不受显示模式影响(线框模式选中也上色)。
+    /// </summary>
+    public void TessellateHighlightFaces(List<float> o, float hr, float hg, float hb)
+    {
+        foreach (var (a, bb, c) in Tris)
+        {
+            if (a >= Verts.Count || bb >= Verts.Count || c >= Verts.Count) continue;
+            var p = Verts[a]; var q = Verts[bb]; var r = Verts[c];
+            double ux = q.x - p.x, uy = q.y - p.y, uz = q.z - p.z, vx = r.x - p.x, vy = r.y - p.y, vz = r.z - p.z;
+            var n = Normalize((uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx));
+            double lambert = Math.Abs(n.x * Light.x + n.y * Light.y + n.z * Light.z);
+            float k = (float)(0.55 + 0.45 * lambert);
+            void V((double x, double y, double z) w)
+            {
+                o.Add((float)w.x); o.Add((float)w.y); o.Add((float)(w.z + Elevation));
+                o.Add(Math.Min(1f, hr * k)); o.Add(Math.Min(1f, hg * k)); o.Add(Math.Min(1f, hb * k));
+            }
+            V(p); V(q); V(r);
+        }
+    }
+
     /// <summary>XY 点是否落在任一三角的平面投影内(框选/点选面内判定用)。</summary>
     public bool ContainsXY(double x, double y)
     {
