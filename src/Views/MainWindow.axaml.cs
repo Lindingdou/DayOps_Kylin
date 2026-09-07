@@ -33,6 +33,11 @@ public partial class MainWindow : Window
         GlyphFontHost.Install();   // 视口文字用系统真字形(含中文), 取不到则退回笔画字体
         Modeling.MeshEditWindows.Register(); Modeling.EstimationWindows.Register(); Modeling.ModelUpdateWindows.Register(); Modeling.BlockModelWindows.Register();   // 三维地质建模独立窗口登记(功能项名 → 窗口)
 
+        // 自检钩子: PITMINE_SELFTEST=<Ribbon 命令名> 时, 窗口显示后自动派发一次该命令 ——
+        // 供渲染核对(截图比对原版)用; 未设该变量时完全不生效。
+        if (System.Environment.GetEnvironmentVariable("PITMINE_SELFTEST") is { Length: > 0 } stCmd)
+            Opened += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(() => { try { DispatchRibbon(stCmd); } catch { } });
+
         // 交互提示同步(同原版 jigPromptText)：任一指针/键盘事件处理完后刷新命令行提示与信息栏历史。
         // handledEventsToo=true —— 视口/按钮把事件标记 Handled 后仍要刷新；排队到事件处理完再算(状态已切换)。
         System.EventHandler<RoutedEventArgs> promptKick = (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(SyncPrompt);

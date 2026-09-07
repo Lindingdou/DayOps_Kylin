@@ -92,6 +92,13 @@ public partial class BoreholeSelectDialog : Window
 
     private void OnCancel(object? sender, RoutedEventArgs e) => Close(false);
 
+    /// <summary>自检用: 不弹窗直接全选可展绘的钻孔(等价于点「全选」+「确定」)。</summary>
+    public void SelectAllDrawable()
+    {
+        foreach (var vm in _all) if (vm.Drawable) vm.SetCheckedSilent(true);
+        Result = null;   // null = 可展绘的全部
+    }
+
     /// <summary>
     /// 「展绘钻孔」完整流程(原插件 Ribbon 命令): 选孔对话框 → BoreholeColumnBuilder 生成柱状图 → 清旧图层后入场景 →
     /// 状态栏回报 孔数/煤层段数/跳过数(照原文案)。
@@ -104,8 +111,13 @@ public partial class BoreholeSelectDialog : Window
         if (holes.Count == 0) { ctx.Status("展绘钻孔：数据库中没有钻孔"); return; }
 
         var dlg = new BoreholeSelectDialog(holes);
-        bool ok = await dlg.ShowDialog<bool>(ctx.Owner);
-        if (!ok) { ctx.Status("展绘钻孔：已取消"); return; }
+        if (Environment.GetEnvironmentVariable("PITMINE_SELFTEST") is { Length: > 0 })
+            dlg.SelectAllDrawable();            // 自检: 不弹窗, 全选可展绘的孔
+        else
+        {
+            bool ok = await dlg.ShowDialog<bool>(ctx.Owner);
+            if (!ok) { ctx.Status("展绘钻孔：已取消"); return; }
+        }
 
         var r = GeoDbViews.BuildBoreholeColumns(ctx.Conn, dlg.Result);
         if (r.HoleCount == 0) { ctx.Status($"展绘钻孔：没有可展绘的钻孔（跳过 {r.SkippedHoles} 孔，缺孔口高程或孔深）"); return; }

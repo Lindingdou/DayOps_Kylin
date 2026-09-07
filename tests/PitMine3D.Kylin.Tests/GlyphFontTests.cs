@@ -148,4 +148,49 @@ public class GlyphFontTests : IDisposable
         var t = new TextEntity { X = 0, Y = 0, Height = 10, Text = "A1" };
         Assert.NotEmpty(t.LocalStrokes());
     }
+
+    [Fact]
+    public void FillTriangles_CoversGlyphArea_AndTextEntityEmitsFaces()
+    {
+        InstallTinyFont();
+        var tris = GlyphFont.FillTriangles('A');
+        Assert.NotNull(tris);
+        Assert.True(tris!.Length % 6 == 0 && tris.Length >= 6);
+        // 方框 0.05..0.45 × 0..0.70 → 填充面积应逼近 0.4×0.7 = 0.28
+        double area = 0;
+        for (int i = 0; i + 5 < tris.Length; i += 6)
+            area += Math.Abs((tris[i + 2] - tris[i]) * (tris[i + 5] - tris[i + 1])
+                           - (tris[i + 4] - tris[i]) * (tris[i + 3] - tris[i + 1])) / 2;
+        Assert.InRange(area, 0.28 * 0.97, 0.28 * 1.03);
+        // 不越出字形包围盒
+        for (int i = 0; i + 1 < tris.Length; i += 2)
+        {
+            Assert.InRange(tris[i], 0.05f - 1e-4f, 0.45f + 1e-4f);
+            Assert.InRange(tris[i + 1], -1e-4f, 0.70f + 1e-4f);
+        }
+        // TextEntity: 实心三角进面缓冲(P3_C3), 且该字不再重复出轮廓线
+        var t = new TextEntity { X = 100, Y = 200, Height = 10, Text = "A", Cr = 1, Cg = 1, Cb = 0 };
+        var faces = new List<float>();
+        t.TessellateFaces(faces);
+        Assert.Equal(tris.Length / 6 * 18, faces.Count);
+        Assert.InRange(faces[0], 100 + 0.05 * 10 - 1e-3, 100 + 0.45 * 10 + 1e-3);
+        Assert.Equal(1f, faces[3]); Assert.Equal(0f, faces[5]);
+        Assert.Empty(t.LocalStrokes(skipFilled: true));
+        Assert.NotEmpty(t.LocalStrokes());               // 默认口径仍给轮廓(兼容旧调用)
+    }
+
+    [Fact]
+    public void Billboards_CarryFills_AndFallBackToStrokes()
+    {
+        InstallTinyFont();
+        var sc = new Scene();
+        sc.Entities.Add(new TextEntity { X = 1, Y = 2, Elevation = 3, Height = 5, Text = "A", ScreenFacing = true });
+        sc.Entities.Add(new TextEntity { X = 0, Y = 0, Height = 5, Text = "1", ScreenFacing = true });   // 该字体无 '1' → 简笔画
+        var bb = sc.BuildBillboards();
+        Assert.Equal(2, bb.Count);
+        Assert.NotEmpty(bb[0].Fills);                     // 真字形 → 实心
+        Assert.Empty(bb[0].Strokes);
+        Assert.Empty(bb[1].Fills);                        // 回退简笔画 → 仍是线
+        Assert.NotEmpty(bb[1].Strokes);
+    }
 }

@@ -31,6 +31,7 @@ public static class GlyphFont
     public static void Reset()
     {
         lock (Cache) { Cache.Clear(); AdvCache.Clear(); _init = false; _ok = false; }
+        lock (FillCache) FillCache.Clear();
     }
 
     private static uint Tag(string s) => ((uint)s[0] << 24) | ((uint)s[1] << 16) | ((uint)s[2] << 8) | s[3];
@@ -298,5 +299,90 @@ public static class GlyphFont
             outp.Add((mt * mt * p0.x + 2 * mt * t * c.x + t * t * p1.x,
                       mt * mt * p0.y + 2 * mt * t * c.y + t * t * p1.y));
         }
+    }
+
+    // ── 字形填充三角(实心字) ───────────────────────────────────────────
+    // 原版真字体路径给的是 fillTris(实心), 只有回退的内置简笔画才是纯轮廓 —— 见 AcGe::StrokeFont。
+    // 这里用「梯形扫描填充」+ even-odd 规则: 按 em 高度切 N 条带, 带上下边各与轮廓求交,
+    // 交点数相同就配成梯形(斜边分段线性, 无锯齿感), 否则退回该带中心线的矩形。
+    // 相比 earcut 不需判定外轮廓/洞、不怕自交, 结果对任意字形都稳。
+    private static readonly Dictionary<char, float[]?> FillCache = new();
+    private const int FillBands = 64;   // 每字 em 高度切带数(阶梯 = 字高/64, 屏幕上通常 <1px)
+
+    /// <summary>字形实心三角(em 归一化, 扁平 x,y 每 3 点一三角)。无字形返回 null。</summary>
+    public static float[]? FillTriangles(char c)
+    {
+        EnsureInit();
+        if (!_ok) return null;
+        lock (FillCache)
+        {
+            if (FillCache.TryGetValue(c, out var hit)) return hit;
+            float[]? res = null;
+            try
+            {
+                var contours = Outline(c);
+                if (contours != null && contours.Count > 0) res = Fill(contours);
+            }
+            catch { res = null; }
+            FillCache[c] = res;
+            return res;
+        }
+    }
+
+    private static float[]? Fill(List<List<(double x, double y)>> contours)
+    {
+        double ymin = double.MaxValue, ymax = double.MinValue;
+        foreach (var c in contours)
+            foreach (var (_, y) in c) { if (y < ymin) ymin = y; if (y > ymax) ymax = y; }
+        if (ymax - ymin < 1e-9) return null;
+
+        double dy = (ymax - ymin) / FillBands;
+        var tris = new List<float>(FillBands * 12);
+        var xs0 = new List<double>(); var xs1 = new List<double>(); var xsm = new List<double>();
+        for (int i = 0; i < FillBands; i++)
+        {
+            double y0 = ymin + i * dy, y1 = y0 + dy, ym = y0 + dy * 0.5;
+            Crossings(contours, y0 + dy * 1e-3, xs0);
+            Crossings(contours, y1 - dy * 1e-3, xs1);
+            if (xs0.Count == xs1.Count && xs0.Count >= 2 && (xs0.Count & 1) == 0)
+            {
+                for (int k = 0; k + 1 < xs0.Count; k += 2)
+                {
+                    double a0 = xs0[k], b0 = xs0[k + 1], a1 = xs1[k], b1 = xs1[k + 1];
+                    Quad(tris, a0, y0, b0, y0, b1, y1, a1, y1);   // 梯形
+                }
+            }
+            else
+            {
+                Crossings(contours, ym, xsm);
+                for (int k = 0; k + 1 < xsm.Count; k += 2)
+                    Quad(tris, xsm[k], y0, xsm[k + 1], y0, xsm[k + 1], y1, xsm[k], y1);   // 退回矩形
+            }
+        }
+        return tris.Count > 0 ? tris.ToArray() : null;
+    }
+
+    /// <summary>扫描线 y 与所有轮廓边的交点 x(升序)。</summary>
+    private static void Crossings(List<List<(double x, double y)>> contours, double y, List<double> outp)
+    {
+        outp.Clear();
+        foreach (var c in contours)
+            for (int i = 0; i + 1 < c.Count; i++)
+            {
+                var p = c[i]; var q = c[i + 1];
+                if ((p.y <= y && q.y > y) || (q.y <= y && p.y > y))
+                {
+                    double t = (y - p.y) / (q.y - p.y);
+                    outp.Add(p.x + t * (q.x - p.x));
+                }
+            }
+        outp.Sort();
+    }
+
+    private static void Quad(List<float> tris, double x0, double y0, double x1, double y1,
+                             double x2, double y2, double x3, double y3)
+    {
+        tris.Add((float)x0); tris.Add((float)y0); tris.Add((float)x1); tris.Add((float)y1); tris.Add((float)x2); tris.Add((float)y2);
+        tris.Add((float)x0); tris.Add((float)y0); tris.Add((float)x2); tris.Add((float)y2); tris.Add((float)x3); tris.Add((float)y3);
     }
 }

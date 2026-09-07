@@ -823,11 +823,63 @@ public sealed class TextEntity : SceneEntity
     /// 字形 → 局部二维线段(锚点为原点, 未旋转/未平移)。公告板与普通文字共用同一套排版。
     /// 有真字体(<see cref="GlyphFont"/>, 支持中文)就用其轮廓与步进宽度; 缺字/未启用退回 <see cref="StrokeFont"/>。
     /// </summary>
-    public List<(double x0, double y0, double x1, double y1)> LocalStrokes()
+    public List<(double x0, double y0, double x1, double y1)> LocalStrokes(bool skipFilled = false)
     {
         var outp = new List<(double, double, double, double)>();
         double wf = WidthFactor <= 0 ? 1 : WidthFactor;
         double tanOb = Math.Tan(ObliqueAngle);
+        Layout((ch, cursor, vOff) =>
+        {
+            var contours = GlyphFont.Outline(ch);
+            if (contours != null && contours.Count > 0)
+            {
+                if (skipFilled && GlyphFont.FillTriangles(ch) != null) return;   // 该字已由实心三角画出
+                foreach (var c in contours)
+                    for (int i = 0; i + 1 < c.Count; i++)
+                    {
+                        double x0 = c[i].x * Height * wf + c[i].y * Height * tanOb, y0 = c[i].y * Height;
+                        double x1 = c[i + 1].x * Height * wf + c[i + 1].y * Height * tanOb, y1 = c[i + 1].y * Height;
+                        outp.Add((cursor + x0, vOff + y0, cursor + x1, vOff + y1));
+                    }
+            }
+            else
+            {
+                foreach (var (sx0, sy0, sx1, sy1) in StrokeFont.Strokes(ch))
+                    outp.Add((cursor + sx0 * Height * wf + sy0 * Height * tanOb, vOff + sy0 * Height,
+                              cursor + sx1 * Height * wf + sy1 * Height * tanOb, vOff + sy1 * Height));
+            }
+        });
+        return outp;
+    }
+
+    /// <summary>
+    /// 字形 → 局部二维实心三角(锚点为原点, 未旋转/未平移)。忠实原版: 真字体走 fillTris(实心),
+    /// 只有缺字退回的内置简笔画才是纯轮廓 —— 见 AcGe::StrokeFont 的 GDI 字形优先策略。
+    /// </summary>
+    public List<(double x0, double y0, double x1, double y1, double x2, double y2)> LocalFillTriangles()
+    {
+        var outp = new List<(double, double, double, double, double, double)>();
+        double wf = WidthFactor <= 0 ? 1 : WidthFactor;
+        double tanOb = Math.Tan(ObliqueAngle);
+        Layout((ch, cursor, vOff) =>
+        {
+            var tris = GlyphFont.FillTriangles(ch);
+            if (tris == null) return;                       // 缺字 → 由 LocalStrokes 出轮廓
+            for (int i = 0; i + 5 < tris.Length; i += 6)
+            {
+                double ax = tris[i], ay = tris[i + 1], bx = tris[i + 2], by = tris[i + 3], cx = tris[i + 4], cy = tris[i + 5];
+                outp.Add((cursor + ax * Height * wf + ay * Height * tanOb, vOff + ay * Height,
+                          cursor + bx * Height * wf + by * Height * tanOb, vOff + by * Height,
+                          cursor + cx * Height * wf + cy * Height * tanOb, vOff + cy * Height));
+            }
+        });
+        return outp;
+    }
+
+    /// <summary>逐字排版(多行/对齐/步进)，回调给出该字的游标 x 与行基线偏移 y。笔画与填充共用。</summary>
+    private void Layout(Action<char, double, double> perChar)
+    {
+        double wf = WidthFactor <= 0 ? 1 : WidthFactor;
         double fallbackAdv = Height * 0.8 * wf;
         var lines = (Text ?? "").Split('\n');
         double lineH = Height * 1.5;
@@ -835,45 +887,42 @@ public sealed class TextEntity : SceneEntity
         {
             string line = lines[li];
             double width = 0;
-            foreach (char ch in line) width += AdvanceOf(ch, wf);
+            foreach (char ch in line) width += AdvanceOf(ch);
             double hOff = HAlign == 1 ? -width / 2 : HAlign == 2 ? -width : 0;
             double vOff = (VAlign == 1 ? -Height / 2 : VAlign == 2 ? -Height : 0) - li * lineH;
             double cursor = hOff;
             foreach (char ch in line)
             {
-                var contours = GlyphFont.Outline(ch);
-                if (contours != null && contours.Count > 0)
-                {
-                    foreach (var c in contours)
-                        for (int i = 0; i + 1 < c.Count; i++)
-                        {
-                            double x0 = c[i].x * Height * wf + c[i].y * Height * tanOb, y0 = c[i].y * Height;
-                            double x1 = c[i + 1].x * Height * wf + c[i + 1].y * Height * tanOb, y1 = c[i + 1].y * Height;
-                            outp.Add((cursor + x0, vOff + y0, cursor + x1, vOff + y1));
-                        }
-                }
-                else
-                {
-                    foreach (var (sx0, sy0, sx1, sy1) in StrokeFont.Strokes(ch))
-                        outp.Add((cursor + sx0 * Height * wf + sy0 * Height * tanOb, vOff + sy0 * Height,
-                                  cursor + sx1 * Height * wf + sy1 * Height * tanOb, vOff + sy1 * Height));
-                }
-                cursor += AdvanceOf(ch, wf);
+                perChar(ch, cursor, vOff);
+                cursor += AdvanceOf(ch);
             }
         }
-        return outp;
 
-        double AdvanceOf(char ch, double widthFactor)
+        double AdvanceOf(char ch)
         {
             var o = GlyphFont.Outline(ch);
-            return o != null ? GlyphFont.Advance(ch) * Height * widthFactor : fallbackAdv;
+            return o != null ? GlyphFont.Advance(ch) * Height * wf : fallbackAdv;
         }
     }
+
+    /// <summary>实心字形三角(旋转+平移到锚点)。公告板文字由视口按相机基向量另行绘制。</summary>
+    public override void TessellateFaces(List<float> o)
+    {
+        if (ScreenFacing) return;
+        double c = Math.Cos(Rotation), s = Math.Sin(Rotation);
+        void P(double lx, double ly)
+        {
+            o.Add((float)(X + lx * c - ly * s)); o.Add((float)(Y + lx * s + ly * c)); o.Add((float)Elevation);
+            o.Add(Cr); o.Add(Cg); o.Add(Cb);
+        }
+        foreach (var (ax, ay, bx, by, cx2, cy2) in LocalFillTriangles()) { P(ax, ay); P(bx, by); P(cx2, cy2); }
+    }
+
     public override void Tessellate(List<float> o)
     {
         if (ScreenFacing) return;   // 公告板文字由视口按相机基向量单独绘制
         double c = Math.Cos(Rotation), s = Math.Sin(Rotation);
-        foreach (var (lx0, ly0, lx1, ly1) in LocalStrokes())
+        foreach (var (lx0, ly0, lx1, ly1) in LocalStrokes(skipFilled: true))
             Seg(o, X + lx0 * c - ly0 * s, Y + lx0 * s + ly0 * c,
                    X + lx1 * c - ly1 * s, Y + lx1 * s + ly1 * c);   // 旋转后平移到锚点
     }
@@ -990,7 +1039,8 @@ public sealed class Scene
         {
             if (e is not TextEntity t || !t.ScreenFacing) continue;
             if (!t.Visible || (isShown != null && !isShown(t.LayerName))) continue;
-            list.Add(new BillboardText(t.X, t.Y, t.Elevation, t.Cr, t.Cg, t.Cb, t.LocalStrokes()));
+            list.Add(new BillboardText(t.X, t.Y, t.Elevation, t.Cr, t.Cg, t.Cb,
+                                       t.LocalStrokes(skipFilled: true), t.LocalFillTriangles()));
         }
         return list;
     }
@@ -1045,4 +1095,5 @@ public sealed class Scene
 /// <summary>一条公告板文字(始终朝屏幕)：世界锚点 + 颜色 + 已排版好的局部笔画线段。</summary>
 public readonly record struct BillboardText(
     double X, double Y, double Z, float Cr, float Cg, float Cb,
-    List<(double x0, double y0, double x1, double y1)> Strokes);
+    List<(double x0, double y0, double x1, double y1)> Strokes,
+    List<(double x0, double y0, double x1, double y1, double x2, double y2)> Fills);

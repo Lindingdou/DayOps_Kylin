@@ -3770,10 +3770,29 @@ Viewport 配色(冷蓝/热亮蓝/选中品红+白描边大一号)。Kylin 此前
 - **文字渲染策略**(核对原 `AcGe::StrokeFont` / `StrokeFontRegistry` / `xllAcDb_Text::worldDraw` 后确认原版做法)：
   ① 优先取**系统真字体字形轮廓**(原版走 Windows GDI GetGlyphOutline; Kylin 侧我们自解析 TrueType `cmap(4/12)`/`loca`/`glyf`,
      简单+复合字形, 二次贝塞尔按固定步细分, em 归一化, 逐字缓存) —— ASCII 与中文统一走真字体;
-  ② 该字体缺此字形才回退内置笔画(原版内置仅 ASCII, 我们同); ③ **纯轮廓无填充**(与原版一致);
+  ② 该字体缺此字形才回退内置笔画(原版内置仅 ASCII, 我们同); ③ 真字体字形**实心填充**(见 §三一一 更正);
   ④ billboard 用相机右/上基向量、对齐偏移沿基向量算(原 `pWd->billboardBasis`)。
   `GlyphFontHost` 按候选名探测并**用中文探针字复核**——Avalonia 找不到请求字体会静默替换(Windows 上换成 Segoe UI 无中文),
   不复核会误判"已装中文字体"(实测踩到); 候选顺序: 麒麟常见 CJK → 宋体(原版默认) → 黑体/雅黑 → 拉丁兜底; 都没有则中文交回笔画字体(画不出)。
   排版改为按真字体 `hmtx` 逐字步进(原先固定 0.8 字高), 中英混排不再挤压; 2D 公告板用固定基向量(球坐标基会把字斜过来甚至镜像, 实测踩到)。
 测试 +4(`GlyphFontTests`: 测试内自造最小 TTF 验证轮廓解析/em 归一化/步进, 缺字回退, 逐字步进, 无字体时行为不变) + 展绘钻孔 2 例改判三维几何
 (顶点/三角数、煤段真高程 450~455、柱径 14m、注记 ScreenFacing 与高程、三维引线)。全套 **1807 通过**；实机自检 2D/3D 各截图确认。
+
+## §三一一 文字实心填充(更正 §三一〇 的"纯轮廓"结论) (2026-09-07)
+
+用户「pitmine 中不是这么处理的吧」+ 给出 Windows 原版钻孔标注截图(孔号为实心黄字)。
+复核原 `Kernel/xllAcGe/src/Core/GeomKernel/StrokeFont.cpp`，注释写得很直白：
+「优先用绑定的真字体(GDI)取字形 —— ASCII 与 CJK 统一走真字体，这样数字/英文也能拿到**实心填充(fillTris)**…
+无 GDI 绑定/该字体缺此字形 → 退回内置简笔画(仅 ASCII 有定义，**纯轮廓无填充**)」。
+即 §三一〇 写的"纯轮廓无填充与原版一致"是错的：**只有回退的简笔画才是轮廓，真字体路径是实心**。原版用 earcut
+(`Kernel/xllAcGe/include/Core/GeomKernel/earcut.hpp`)三角化字形轮廓。
+
+- `GlyphFont.FillTriangles(char)`：字形轮廓 → 实心三角(em 归一化，逐字缓存)。用**梯形扫描填充**+even-odd：
+  按 em 高度切 64 条带，带的上下边各与轮廓求交，交点数一致就配成梯形(斜边分段线性)，否则退回该带中心线的矩形。
+  相比 earcut 不必判定外轮廓/洞、不怕自交，任意字形都稳；阶梯 = 字高/64，屏幕上通常 <1px。
+- `TextEntity.LocalFillTriangles()` + `TessellateFaces` 覆写：非公告板文字的实心三角进面缓冲(P3_C3)；
+  `LocalStrokes(skipFilled: true)` 让已填充的字不再重复出轮廓线，缺字回退的简笔画仍走线。
+- `BillboardText` 增 `Fills`；视口 `EnsureBillboards` 同时建线网格与面网格，`ScenePass` 先 `GL_TRIANGLES` 画实心字再 `GL_LINES` 画简笔画。
+- 自检钩子：`PITMINE_SELFTEST=<Ribbon 命令名>` 时窗口显示后自动派发一次该命令(展绘钻孔另加不弹窗全选)，供截图核对渲染。
+测试 +2(填充面积逼近字形包围盒面积/不越界/进面缓冲带颜色/已填充字不再出轮廓；公告板真字形出 Fills、缺字回退出 Strokes)。
+全套 **1809 通过**；实机自检截图：孔号数字已为实心黄字，用真字体(黑体)离线光栅化复核"煤"字填充完整可辨。

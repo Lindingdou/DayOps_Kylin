@@ -37,8 +37,8 @@ public partial class CadGlViewport : OpenGlControlBase
     private double _gridWpp;                  // 建网时的 世界长度/像素(挡位判定)
 
     // 公告板文字(始终朝屏幕, 忠实原版 screenFacing 注记): 按相机基向量重建, 相机没动就复用
-    private GlRenderer.Mesh _billboards;
-    private bool _hasBillboards;
+    private GlRenderer.Mesh _billboards, _billboardFills;
+    private bool _hasBillboards, _hasBillboardFills;
     private List<BillboardText>? _pendingBillboards;
     private bool _billboardsDirty;
     private double _bbYaw = double.NaN, _bbPitch, _bbTx, _bbTy, _bbTz;
@@ -171,13 +171,14 @@ public partial class CadGlViewport : OpenGlControlBase
         if (_hasFaces) _renderer.DeleteMesh(_faces);
         if (_hasHighlightFaces) _renderer.DeleteMesh(_highlightFaces);
         if (_hasBillboards) _renderer.DeleteMesh(_billboards);
+        if (_hasBillboardFills) _renderer.DeleteMesh(_billboardFills);
         if (_hasCursor) _renderer.DeleteMesh(_cursor);
         _renderer.Deinit();
         // 上下文销毁——句柄失效, 复位标志; 否则重建后旧 id 可能撞上新网格(grid/cube/gizmo)致误删/花屏。
         // 保留的托管源(_pendingImport/_pendingScene/…)不动, OnOpenGlInit 会据此重新入队重传。
         _hasImported = _hasScene = _hasHighlight = _hasSnap = _hasFaces = _hasHighlightFaces = false;
         _hasGrid = false; _hasGridPlan = false;
-        _hasBillboards = false; _bbYaw = double.NaN;
+        _hasBillboards = false; _hasBillboardFills = false; _bbYaw = double.NaN;
         if (_pendingFaces != null) _facesDirty = true;
         if (_pendingHighlightFaces != null) _highlightFacesDirty = true;
         _hasCursor = false; _curBuiltSx = double.NaN;   // 十字光标下次移动即按当前上下文重建
@@ -317,7 +318,9 @@ public partial class CadGlViewport : OpenGlControlBase
         if (_hasFaces) { _renderer.SetPolygonOffset(true); _renderer.Draw(_faces, GL_TRIANGLES, vp); _renderer.SetPolygonOffset(false); }   // 着色面先画, 深度偏移让边线浮在面上
         if (_hasImported) _renderer.Draw(_imported, GL_LINES, vp);
         if (_hasScene) _renderer.Draw(_scene, GL_LINES, vp);
-        if (_hasBillboards) _renderer.Draw(_billboards, GL_LINES, vp);   // 注记始终朝屏幕
+        // 注记始终朝屏幕: 实心字形先画三角(忠实原版 fillTris), 缺字回退的简笔画再画线
+        if (_hasBillboardFills) _renderer.Draw(_billboardFills, GL_TRIANGLES, vp);
+        if (_hasBillboards) _renderer.Draw(_billboards, GL_LINES, vp);
         _renderer.EndPass();
     }
 
@@ -721,7 +724,11 @@ public partial class CadGlViewport : OpenGlControlBase
         var src = _pendingBillboards;
         if (src == null || src.Count == 0)
         {
-            if (_billboardsDirty && _hasBillboards) { _renderer.DeleteMesh(_billboards); _hasBillboards = false; }
+            if (_billboardsDirty)
+            {
+                if (_hasBillboards) { _renderer.DeleteMesh(_billboards); _hasBillboards = false; }
+                if (_hasBillboardFills) { _renderer.DeleteMesh(_billboardFills); _hasBillboardFills = false; }
+            }
             _billboardsDirty = false;
             return;
         }
@@ -736,9 +743,15 @@ public partial class CadGlViewport : OpenGlControlBase
         _bbTx = _camera.Target[0]; _bbTy = _camera.Target[1]; _bbTz = _camera.Target[2]; _bb2D = _camera.Is2D;
 
         var v = new List<float>();
+        var f = new List<float>();
         foreach (var t in src)
         {
             double ax = t.X - _ox, ay = t.Y - _oy, az = t.Z;
+            if (t.Fills != null)
+                foreach (var (x0, y0, x1, y1, x2, y2) in t.Fills)
+                {
+                    Pt(f, ax, ay, az, x0, y0, t); Pt(f, ax, ay, az, x1, y1, t); Pt(f, ax, ay, az, x2, y2, t);
+                }
             foreach (var (x0, y0, x1, y1) in t.Strokes)
             {
                 // 局部 (x,y) → 世界: 锚点 + x·右 + y·上
@@ -751,6 +764,16 @@ public partial class CadGlViewport : OpenGlControlBase
         if (_hasBillboards) _renderer.DeleteMesh(_billboards);
         _billboards = _renderer.Upload(v.ToArray());
         _hasBillboards = !_billboards.IsEmpty;
+        if (_hasBillboardFills) _renderer.DeleteMesh(_billboardFills);
+        _billboardFills = _renderer.Upload(f.ToArray());
+        _hasBillboardFills = !_billboardFills.IsEmpty;
+
+        // 局部 (x,y) → 世界: 锚点 + x·右 + y·上
+        void Pt(List<float> o, double ax, double ay, double az, double x, double y, BillboardText t)
+        {
+            o.Add((float)(ax + x * rx + y * ux)); o.Add((float)(ay + x * ry + y * uy)); o.Add((float)(az + x * rz + y * uz));
+            o.Add(t.Cr); o.Add(t.Cg); o.Add(t.Cb);
+        }
     }
 
     /// <summary>设置公告板文字(始终朝屏幕的注记)；空/null → 清除。</summary>
