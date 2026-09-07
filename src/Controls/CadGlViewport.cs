@@ -580,6 +580,21 @@ public partial class CadGlViewport : OpenGlControlBase
         return (x, y, z) => f(x - ox, y - oy, z);
     }
 
+    /// <summary>带深度的投影函数(3D 点选面命中取最前者)。</summary>
+    public Func<double, double, double, (double sx, double sy, double depth)?> WorldToScreenDepthProjector()
+    {
+        var f = _camera.MakeProjectorDepth(Bounds.Width, Bounds.Height);
+        double ox = _ox, oy = _oy;
+        return (x, y, z) => f(x - ox, y - oy, z);
+    }
+
+    /// <summary>屏幕点 → 视平面(过注视点、垂直视线)上的世界三维点；2D 时为 Z=0 平面点。供 3D 选框/拾取落点。</summary>
+    public (double x, double y, double z)? ScreenToViewPlane(double sx, double sy)
+    {
+        var p = _camera.ScreenToViewPlane(sx, sy, Bounds.Width, Bounds.Height);
+        return p == null ? null : (p.Value.x + _ox, p.Value.y + _oy, p.Value.z);
+    }
+
     // ---------- 几何（示例内容；接入内核后由 AcDb worldDraw 提供）----------
     private static float[] BuildGrid(int n, float step)
     {

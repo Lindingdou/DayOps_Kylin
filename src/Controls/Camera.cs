@@ -202,16 +202,38 @@ internal sealed class Camera
     /// <summary>一次算好 ViewProj 的投影函数(大网逐顶点投影时避免每点重建矩阵)。</summary>
     public Func<double, double, double, (double sx, double sy)?> MakeProjector(double vw, double vh)
     {
+        var f = MakeProjectorDepth(vw, vh);
+        return (x, y, z) => { var r = f(x, y, z); return r == null ? null : (r.Value.sx, r.Value.sy); };
+    }
+
+    /// <summary>投影 + 深度(NDC z, 越小越近; 相机后方 null)。供 3D 点选面命中取最前者。</summary>
+    public Func<double, double, double, (double sx, double sy, double depth)?> MakeProjectorDepth(double vw, double vh)
+    {
         if (vw < 1 || vh < 1) return (_, _, _) => null;
         var m = ViewProj((float)(vw / vh));
         return (x, y, z) =>
         {
             double cx = m[0] * x + m[4] * y + m[8] * z + m[12];
             double cy = m[1] * x + m[5] * y + m[9] * z + m[13];
+            double cz = m[2] * x + m[6] * y + m[10] * z + m[14];
             double cw = m[3] * x + m[7] * y + m[11] * z + m[15];
             if (cw <= 1e-9) return null;
-            return ((cx / cw + 1.0) * 0.5 * vw, (1.0 - cy / cw) * 0.5 * vh);
+            return ((cx / cw + 1.0) * 0.5 * vw, (1.0 - cy / cw) * 0.5 * vh, cz / cw);
         };
+    }
+
+    /// <summary>
+    /// 屏幕点 → 过注视点、垂直视线的视平面上的世界(局部)三维点(3D 平移/缩放/选框同一口径)。
+    /// 2D 时退化为 Z=0 平面反投影(z=0)。
+    /// </summary>
+    public (double x, double y, double z)? ScreenToViewPlane(double sx, double sy, double vw, double vh)
+    {
+        if (vw < 1 || vh < 1) return null;
+        if (Is2D) { var p = ScreenToWorldOnZPlane(sx, sy, vw, vh); return p == null ? null : (p.Value.x, p.Value.y, 0); }
+        double upp = 2.0 * Dist * Math.Tan(Math.PI / 8) / vh;
+        double dx = (sx - vw / 2) * upp, dy = (sy - vh / 2) * upp;
+        var (rx, ry, rz, ux, uy, uz) = ViewAxes();
+        return (Target[0] + dx * rx - dy * ux, Target[1] + dx * ry - dy * uy, Target[2] + dx * rz - dy * uz);
     }
 
     private static (double x, double y, double z) UnprojectNdc(float[] inv, double nx, double ny, double nz)

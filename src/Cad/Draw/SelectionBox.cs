@@ -96,6 +96,70 @@ public static class SelectionBox
         return crossing ? hit : all;
     }
 
+    /// <summary>
+    /// 屏幕空间点选(3D 视图)：像素容差内离点击最近的实体边线；三角网另按"点击落在某三角投影内"命中(多网重叠取深度最前者)。
+    /// 边线命中优先于面命中(便于在面上选线)。
+    /// </summary>
+    public static SceneEntity? PickScreen(IEnumerable<SceneEntity> entities, double sx, double sy, double tolPx,
+        Func<double, double, double, (double sx, double sy, double depth)?> project, Func<string, bool>? canSelect = null)
+    {
+        SceneEntity? bestEdge = null; double bestD = tolPx;
+        SceneEntity? bestFace = null; double bestDepth = double.MaxValue;
+        var o = new List<float>();
+        foreach (var e in entities)
+        {
+            if (!e.Visible) continue;
+            if (canSelect != null && !canSelect(e.LayerName)) continue;
+            o.Clear();
+            if (e is MeshEntity me)
+            {
+                // 面命中：先包围盒投影粗排斥, 再逐三角
+                var b = me.Bounds;
+                double bx0 = double.MaxValue, by0 = double.MaxValue, bx1 = double.MinValue, by1 = double.MinValue; bool anyCorner = false;
+                foreach (var (cx, cy, cz) in new[] { (b.minX, b.minY, b.minZ), (b.maxX, b.minY, b.minZ), (b.maxX, b.maxY, b.minZ), (b.minX, b.maxY, b.minZ), (b.minX, b.minY, b.maxZ), (b.maxX, b.minY, b.maxZ), (b.maxX, b.maxY, b.maxZ), (b.minX, b.maxY, b.maxZ) })
+                {
+                    var s = project(cx, cy, cz); if (s == null) continue; anyCorner = true;
+                    bx0 = Math.Min(bx0, s.Value.sx); bx1 = Math.Max(bx1, s.Value.sx); by0 = Math.Min(by0, s.Value.sy); by1 = Math.Max(by1, s.Value.sy);
+                }
+                if (!anyCorner || sx < bx0 - tolPx || sx > bx1 + tolPx || sy < by0 - tolPx || sy > by1 + tolPx) continue;
+                foreach (var (a, bb, c) in me.Tris)
+                {
+                    if (a >= me.Verts.Count || bb >= me.Verts.Count || c >= me.Verts.Count) continue;
+                    var p = project(me.Verts[a].x, me.Verts[a].y, me.Verts[a].z + me.Elevation);
+                    var q = project(me.Verts[bb].x, me.Verts[bb].y, me.Verts[bb].z + me.Elevation);
+                    var r = project(me.Verts[c].x, me.Verts[c].y, me.Verts[c].z + me.Elevation);
+                    if (p == null || q == null || r == null) continue;
+                    double d = (q.Value.sy - r.Value.sy) * (p.Value.sx - r.Value.sx) + (r.Value.sx - q.Value.sx) * (p.Value.sy - r.Value.sy);
+                    if (Math.Abs(d) < 1e-12) continue;
+                    double w0 = ((q.Value.sy - r.Value.sy) * (sx - r.Value.sx) + (r.Value.sx - q.Value.sx) * (sy - r.Value.sy)) / d;
+                    double w1 = ((r.Value.sy - p.Value.sy) * (sx - r.Value.sx) + (p.Value.sx - r.Value.sx) * (sy - r.Value.sy)) / d;
+                    double w2 = 1 - w0 - w1;
+                    if (w0 < -1e-9 || w1 < -1e-9 || w2 < -1e-9) continue;
+                    double depth = w0 * p.Value.depth + w1 * q.Value.depth + w2 * r.Value.depth;
+                    if (depth < bestDepth) { bestDepth = depth; bestFace = me; }
+                }
+                if (MeshEntity.RenderMode != MeshEntity.DisplayMode.Shaded) me.TessellateEdges(o);   // 有线框显示时边线也可点中
+            }
+            else e.Tessellate(o);
+            for (int i = 0; i + 11 < o.Count; i += 12)
+            {
+                var a = project(o[i], o[i + 1], o[i + 2]); var b = project(o[i + 6], o[i + 7], o[i + 8]);
+                if (a == null || b == null) continue;
+                double dd = SegDist(sx, sy, a.Value.sx, a.Value.sy, b.Value.sx, b.Value.sy);
+                if (dd <= bestD) { bestD = dd; bestEdge = e; }
+            }
+        }
+        return bestEdge ?? bestFace;
+    }
+
+    private static double SegDist(double px, double py, double x0, double y0, double x1, double y1)
+    {
+        double dx = x1 - x0, dy = y1 - y0, l2 = dx * dx + dy * dy;
+        double t = l2 < 1e-18 ? 0 : Math.Clamp(((px - x0) * dx + (py - y0) * dy) / l2, 0, 1);
+        double cx = x0 + t * dx, cy = y0 + t * dy;
+        return Math.Sqrt((px - cx) * (px - cx) + (py - cy) * (py - cy));
+    }
+
     private static bool In(double x, double y, double minX, double minY, double maxX, double maxY)
         => x >= minX && x <= maxX && y >= minY && y <= maxY;
 

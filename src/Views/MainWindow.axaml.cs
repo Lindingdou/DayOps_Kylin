@@ -8335,11 +8335,25 @@ public partial class MainWindow : Window
     // 点选：命中则单选(再点取消)，未命中清空
     private void PickAt(Avalonia.Point rel)
     {
-        var w = _snapWorld ?? Viewport.ScreenToWorld(rel.X, rel.Y);
-        if (w == null) return;
-        SaveSel();
-        double tol = SnapTolWorld(rel);
-        var hit = _scene.Pick(w.Value.x, w.Value.y, tol, _layers.IsSelectable);
+        SceneEntity? hit;
+        if (!Viewport.Is2DView)
+        {
+            // 3D：Z=0 平面反投影不代表实体位置(模型可在千米高程), 改屏幕空间点选(边线像素距离 + 三角网面命中取最前)
+            SaveSel();
+            hit = SelectionBox.PickScreen(_scene.Entities, rel.X, rel.Y, _snapTolPx, Viewport.WorldToScreenDepthProjector(), _layers.IsSelectable);
+        }
+        else
+        {
+            var w = _snapWorld ?? Viewport.ScreenToWorld(rel.X, rel.Y);
+            if (w == null) return;
+            SaveSel();
+            double tol = SnapTolWorld(rel);
+            hit = _scene.Pick(w.Value.x, w.Value.y, tol, _layers.IsSelectable);
+            // 2D 点在三角网面内(未贴边线)也算选中该网(着色面模式下面是可见的)
+            if (hit == null)
+                foreach (var en in _scene.Entities)
+                    if (en is MeshEntity me && en.Visible && _layers.IsSelectable(en.LayerName) && me.ContainsXY(w.Value.x, w.Value.y)) { hit = me; break; }
+        }
         // 编辑选择对象阶段: 累加/减选(不清空); 空闲态: 单选替换。
         if (hit == null) { if (!_editAwaitSelect) _selected.Clear(); }
         else if (_selected.Contains(hit)) _selected.Remove(hit);
@@ -8521,17 +8535,18 @@ public partial class MainWindow : Window
     // 框选选框(世界坐标 P3_C3, 交叉=蓝/窗口=绿)
     private float[] BoxRect(Avalonia.Point a, Avalonia.Point b, bool crossing)
     {
-        var c0 = Viewport.ScreenToWorld(a.X, a.Y);
-        var c1 = Viewport.ScreenToWorld(b.X, a.Y);
-        var c2 = Viewport.ScreenToWorld(b.X, b.Y);
-        var c3 = Viewport.ScreenToWorld(a.X, b.Y);
+        // 选框四角落在视平面上(3D 过注视点垂直视线; 2D 即 Z=0 平面)——旧版 3D 下投到 Z=0 平面, 模型在高程处时选框飘出视野
+        var c0 = Viewport.ScreenToViewPlane(a.X, a.Y);
+        var c1 = Viewport.ScreenToViewPlane(b.X, a.Y);
+        var c2 = Viewport.ScreenToViewPlane(b.X, b.Y);
+        var c3 = Viewport.ScreenToViewPlane(a.X, b.Y);
         if (c0 == null || c1 == null || c2 == null || c3 == null) return System.Array.Empty<float>();
         float r = 0.4f, g = crossing ? 0.7f : 0.95f, bl = crossing ? 1.0f : 0.5f;
         var o = new List<float>();
-        void Seg((double x, double y) p, (double x, double y) q)
+        void Seg((double x, double y, double z) p, (double x, double y, double z) q)
         {
-            o.Add((float)p.x); o.Add((float)p.y); o.Add(0); o.Add(r); o.Add(g); o.Add(bl);
-            o.Add((float)q.x); o.Add((float)q.y); o.Add(0); o.Add(r); o.Add(g); o.Add(bl);
+            o.Add((float)p.x); o.Add((float)p.y); o.Add((float)p.z); o.Add(r); o.Add(g); o.Add(bl);
+            o.Add((float)q.x); o.Add((float)q.y); o.Add((float)q.z); o.Add(r); o.Add(g); o.Add(bl);
         }
         Seg(c0.Value, c1.Value); Seg(c1.Value, c2.Value); Seg(c2.Value, c3.Value); Seg(c3.Value, c0.Value);
         return o.ToArray();
