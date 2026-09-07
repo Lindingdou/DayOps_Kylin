@@ -30,6 +30,8 @@ public partial class MainWindow : Window
         PopulateDrawingLayers();   // 启动即显示绘制图层("0")，可管理
         SetDocPath(null);          // 初始标题=未命名
         RenderAssistant(_assistant.Current());   // 智能助手：启动显示欢迎 + 主菜单
+        Modeling.MeshEditWindows.Register(); Modeling.EstimationWindows.Register(); Modeling.ModelUpdateWindows.Register();   // 三维地质建模独立窗口登记(功能项名 → 窗口)
+        ModelingSelfTestHook();   // 临时自检(env 门控), 测完删
 
         // 交互提示同步(同原版 jigPromptText)：任一指针/键盘事件处理完后刷新命令行提示与信息栏历史。
         // handledEventsToo=true —— 视口/按钮把事件标记 Handled 后仍要刷新；排队到事件处理完再算(状态已切换)。

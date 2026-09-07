@@ -81,4 +81,5 @@ public static class ModelingWindows
         return win;
     }
     public static int OpenCount => Open.Count;
+    public static void CloseAll() { foreach (var w in new List<Window>(Open.Values)) w.Close(); Open.Clear(); }
 }
