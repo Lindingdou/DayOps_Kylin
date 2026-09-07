@@ -1,0 +1,43 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="PitMine3D.Kylin.Views.Modeling.DiagnoseDialog" x:CompileBindings="False"
+        Classes="geodb" Title="格网质量检测" Width="460" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="16" RowDefinitions="Auto,Auto,Auto">
+        <!-- 顶部：综合严重度横幅（颜色随严重度，代码设置） -->
+        <Border x:Name="statusBanner" Grid.Row="0" CornerRadius="6" BorderThickness="1" Margin="0,0,0,14">
+            <Grid ColumnDefinitions="4,Auto,*">
+                <Border x:Name="statusAccent" Grid.Column="0" CornerRadius="6,0,0,6"/>
+                <TextBlock x:Name="statusIcon" Grid.Column="1" FontSize="22" VerticalAlignment="Center" Margin="14,0,0,0"/>
+                <StackPanel Grid.Column="2" Margin="12,12,14,12" VerticalAlignment="Center">
+                    <TextBlock x:Name="statusText" FontSize="15" FontWeight="Bold"/>
+                    <TextBlock x:Name="summaryText" Margin="0,4,0,0" TextWrapping="Wrap" Classes="muted"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- 中部：问题列表卡片 -->
+        <Border Grid.Row="1" Classes="panel" Padding="0">
+            <StackPanel>
+                <Grid Margin="16,10,16,8" ColumnDefinitions="*,64,58,58">
+                    <TextBlock Grid.Column="0" Text="问题类型" FontWeight="SemiBold" Classes="muted"/>
+                    <TextBlock Grid.Column="1" Text="计数" FontWeight="SemiBold" HorizontalAlignment="Center" Classes="muted"/>
+                    <TextBlock Grid.Column="2" Grid.ColumnSpan="2" Text="操作" FontWeight="SemiBold" HorizontalAlignment="Center" Classes="muted"/>
+                </Grid>
+                <Border Height="1" Background="#FFD0D5DD"/>
+                <StackPanel x:Name="rowsHost" Margin="8,4,8,8"/>
+                <Border x:Name="causesDivider" Height="1" Background="#FFD0D5DD"/>
+                <StackPanel x:Name="causesSection" Margin="16,8,16,12">
+                    <TextBlock Text="潜在原因" FontWeight="SemiBold" Margin="0,0,0,6" Classes="muted"/>
+                    <StackPanel x:Name="causesHost"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- 底部按钮 -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0" Spacing="8">
+            <Button x:Name="repairAllButton" Content="全部自动修复" MinWidth="96" Click="OnRepairAllClick" Classes="primary"/>
+            <Button x:Name="clearMarkersButton" Content="清理标记" MinWidth="72" Click="OnClearMarkersClick"/>
+            <Button x:Name="closeButton" Content="关闭" MinWidth="72" Click="OnCloseClick" IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</Window>

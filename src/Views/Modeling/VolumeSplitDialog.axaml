@@ -1,0 +1,106 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="PitMine3D.Kylin.Views.Modeling.VolumeSplitDialog" x:CompileBindings="False"
+        Classes="geodb" Title="两期三角网算量" Width="400" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner">
+    <StackPanel Margin="16">
+        <TextBlock Text="两期算量 — 生成填方 / 挖方封闭体" FontSize="15" FontWeight="Bold" Margin="0,0,0,4"/>
+        <TextBlock TextWrapping="Wrap" Margin="0,0,0,14" Classes="muted"
+                   Text="确定后在视口中依次点选 ① 第一期(原始/较早) ② 第二期(现状/较新) 三角网。挖方=第二期更低，填方=第二期更高；各连通块生成独立水密实体。"/>
+
+        <Grid Margin="0,0,0,8" ColumnDefinitions="Auto,70,*">
+            <TextBlock Grid.Column="0" Text="体积格网" VerticalAlignment="Center"/>
+            <TextBox x:Name="txtGridCell" Grid.Column="1" Text="2" Margin="8,0,6,0" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="2" VerticalAlignment="Center" FontSize="11" Classes="muted" TextWrapping="Wrap" Text="m  (决定体积精度；越小越精细越慢，建议 2~5m)"/>
+        </Grid>
+        <Grid Margin="0,0,0,8" ColumnDefinitions="Auto,70,*">
+            <TextBlock Grid.Column="0" Text="渲染格网" VerticalAlignment="Center"/>
+            <TextBox x:Name="txtRenderCell" Grid.Column="1" Text="6" Margin="8,0,6,0" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="2" VerticalAlignment="Center" FontSize="11" Classes="muted" TextWrapping="Wrap" Text="m  (&gt;体积格网时降三角提帧率，体积不变；≤则不解耦)"/>
+        </Grid>
+        <Grid Margin="0,0,0,8" ColumnDefinitions="Auto,70,*">
+            <TextBlock Grid.Column="0" Text="最小高差" VerticalAlignment="Center"/>
+            <TextBox x:Name="txtMinDz" Grid.Column="1" Text="1" Margin="8,0,6,0" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="2" VerticalAlignment="Center" FontSize="11" Classes="muted" TextWrapping="Wrap" Text="m  (高差小于此值=未变化；压亚米噪声，勿设成台阶高)"/>
+        </Grid>
+        <Grid Margin="0,0,0,14" ColumnDefinitions="Auto,70,*">
+            <TextBlock Grid.Column="0" Text="去噪半径" VerticalAlignment="Center"/>
+            <TextBox x:Name="txtOpenRadius" Grid.Column="1" Text="1" Margin="8,0,6,0" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="2" VerticalAlignment="Center" FontSize="11" Classes="muted" TextWrapping="Wrap" Text="格  (形态学开运算，去零星碎块；0=不去噪，1~2 压噪)"/>
+        </Grid>
+        <Grid Margin="0,0,0,14" ColumnDefinitions="Auto,70,*">
+            <TextBlock Grid.Column="0" Text="最小台阶高" VerticalAlignment="Center"/>
+            <TextBox x:Name="txtMinBenchH" Grid.Column="1" Text="3" Margin="8,0,6,0" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="2" VerticalAlignment="Center" FontSize="11" Classes="muted" TextWrapping="Wrap" Text="m  (区内最大高差小于此值=非台阶，整块丢弃；0=不过滤)"/>
+        </Grid>
+
+        <!-- 填方颜色 -->
+        <Border Classes="panel" Padding="12" Margin="0,0,0,10">
+            <StackPanel>
+                <Grid Margin="0,0,0,8" ColumnDefinitions="Auto,*,Auto">
+                    <TextBlock Grid.Column="0" Text="填方颜色" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <Border x:Name="fillPreview" Grid.Column="1" Height="20" CornerRadius="3" Margin="12,0" BorderThickness="1" BorderBrush="Gray"/>
+                    <TextBox x:Name="txtFillHex" Grid.Column="2" Width="82" VerticalAlignment="Center" Text="#0078FF" LostFocus="OnFillHexLostFocus"/>
+                </Grid>
+                <Grid ColumnDefinitions="18,*,34" RowDefinitions="Auto,Auto,Auto">
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="R" VerticalAlignment="Center"/>
+                    <Slider x:Name="sliderFillR" Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="255" Margin="4,2" VerticalAlignment="Center" ValueChanged="OnFillSliderChanged"/>
+                    <TextBlock x:Name="fillRVal" Grid.Row="0" Grid.Column="2" Text="0" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="G" VerticalAlignment="Center"/>
+                    <Slider x:Name="sliderFillG" Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="255" Margin="4,2" VerticalAlignment="Center" ValueChanged="OnFillSliderChanged"/>
+                    <TextBlock x:Name="fillGVal" Grid.Row="1" Grid.Column="2" Text="0" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="B" VerticalAlignment="Center"/>
+                    <Slider x:Name="sliderFillB" Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="255" Margin="4,2" VerticalAlignment="Center" ValueChanged="OnFillSliderChanged"/>
+                    <TextBlock x:Name="fillBVal" Grid.Row="2" Grid.Column="2" Text="0" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!-- 挖方颜色 -->
+        <Border Classes="panel" Padding="12" Margin="0,0,0,10">
+            <StackPanel>
+                <Grid Margin="0,0,0,8" ColumnDefinitions="Auto,*,Auto">
+                    <TextBlock Grid.Column="0" Text="挖方颜色" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <Border x:Name="cutPreview" Grid.Column="1" Height="20" CornerRadius="3" Margin="12,0" BorderThickness="1" BorderBrush="Gray"/>
+                    <TextBox x:Name="txtCutHex" Grid.Column="2" Width="82" VerticalAlignment="Center" Text="#FF3C00" LostFocus="OnCutHexLostFocus"/>
+                </Grid>
+                <Grid ColumnDefinitions="18,*,34" RowDefinitions="Auto,Auto,Auto">
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="R" VerticalAlignment="Center"/>
+                    <Slider x:Name="sliderCutR" Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="255" Margin="4,2" VerticalAlignment="Center" ValueChanged="OnCutSliderChanged"/>
+                    <TextBlock x:Name="cutRVal" Grid.Row="0" Grid.Column="2" Text="0" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="G" VerticalAlignment="Center"/>
+                    <Slider x:Name="sliderCutG" Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="255" Margin="4,2" VerticalAlignment="Center" ValueChanged="OnCutSliderChanged"/>
+                    <TextBlock x:Name="cutGVal" Grid.Row="1" Grid.Column="2" Text="0" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="B" VerticalAlignment="Center"/>
+                    <Slider x:Name="sliderCutB" Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="255" Margin="4,2" VerticalAlignment="Center" ValueChanged="OnCutSliderChanged"/>
+                    <TextBlock x:Name="cutBVal" Grid.Row="2" Grid.Column="2" Text="0" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!-- 结果(计算后出现): 挖/填/净/重叠 + 各封闭体表 + dz 着色格开关 + 导出 CSV -->
+        <Border x:Name="resultPanel" Classes="panel" Padding="10" Margin="0,0,0,10" IsVisible="False">
+            <StackPanel>
+                <TextBlock x:Name="txtResult" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,6"/>
+                <DataGrid x:Name="bodyGrid" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single" MaxHeight="160" SelectionChanged="OnBodySelected">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="类型" Binding="{Binding Kind}" Width="60"/>
+                        <DataGridTextColumn Header="序号" Binding="{Binding Index}" Width="50"/>
+                        <DataGridTextColumn Header="格数" Binding="{Binding Cells}" Width="60"/>
+                        <DataGridTextColumn Header="面积 m²" Binding="{Binding AreaM2, StringFormat={}{0:F1}}" Width="80"/>
+                        <DataGridTextColumn Header="体积 m³" Binding="{Binding VolumeM3, StringFormat={}{0:F1}}" Width="90"/>
+                        <DataGridTextColumn Header="最大高差" Binding="{Binding MaxDz, StringFormat={}{0:F2}}" Width="*"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Spacing="10">
+                    <CheckBox x:Name="chkCells" Content="高差着色格" IsCheckedChanged="OnCellsToggled"/>
+                    <Button Content="导出 CSV" Click="OnExportCsv" Padding="10,2"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,6,0,0" Spacing="8">
+            <Button x:Name="btnOk" Content="确定" MinWidth="84" Click="OnOkClick" IsDefault="True" Classes="primary"/>
+            <Button Content="取消" MinWidth="84" Click="OnCancelClick" IsCancel="True"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

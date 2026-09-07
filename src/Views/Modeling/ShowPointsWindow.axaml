@@ -1,0 +1,34 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="PitMine3D.Kylin.Views.Modeling.ShowPointsWindow" x:CompileBindings="False"
+        Classes="geodb" Title="展点 — 加载与校验点数据" Height="560" Width="660" WindowStartupLocation="CenterOwner">
+    <Grid Margin="12" RowDefinitions="Auto,Auto,*,Auto,Auto">
+        <TextBlock Text="展点：加载 X,Y,Z 点数据 → 校验 → 入库" FontSize="15" FontWeight="Bold" Margin="0,0,0,8"/>
+
+        <Border Grid.Row="1" Classes="toolbar" Margin="0,0,0,8">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+                <Button Content="从文件加载…" Click="OnLoadFile" Padding="8,2"/>
+                <Button Content="从剪贴板加载" Click="OnLoadClipboard" Padding="8,2"/>
+                <Border Width="1" Background="#FFB0B4BA" Margin="4,2"/>
+                <Button Content="清空" Click="OnClear" Padding="8,2"/>
+            </StackPanel>
+        </Border>
+
+        <DataGrid x:Name="grid" Grid.Row="2" AutoGenerateColumns="False" IsReadOnly="False" SelectionMode="Single" CellEditEnded="OnCellEditEnded">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="#" Binding="{Binding Index}" IsReadOnly="True" Width="44"/>
+                <DataGridTextColumn Header="X" Binding="{Binding X, Mode=TwoWay}" Width="*"/>
+                <DataGridTextColumn Header="Y" Binding="{Binding Y, Mode=TwoWay}" Width="*"/>
+                <DataGridTextColumn Header="Z" Binding="{Binding Z, Mode=TwoWay}" Width="*"/>
+                <DataGridTextColumn Header="校验" Binding="{Binding Status}" IsReadOnly="True" Width="120"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <TextBlock x:Name="summaryText" Grid.Row="3" Margin="2,8,0,0" TextWrapping="Wrap"
+                   Text="请从文件或剪贴板加载点数据(每行 X,Y,Z；多列时取前 3 个数值列)"/>
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0" Spacing="8">
+            <Button Content="展绘到视图" Click="OnCommit" IsDefault="True" Padding="16,4" Classes="primary"/>
+            <Button Content="关闭" Click="OnClose" Padding="16,4"/>
+        </StackPanel>
+    </Grid>
+</Window>
