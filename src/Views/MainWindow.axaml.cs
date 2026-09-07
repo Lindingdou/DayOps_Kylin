@@ -871,7 +871,14 @@ public partial class MainWindow : Window
         if (st.Host != null) return;
         var vp = new PitMine3D.Kylin.Controls.CadGlViewport();
         var host = new Panel { Background = Avalonia.Media.Brushes.Transparent, ContextMenu = BuildViewportContextMenu() };
-        host.Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.None);   // 隐藏系统箭头 → 只见 CAD 十字光标
+        var cursorNone = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.None);
+        var cursorArrow = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Arrow);
+        host.Cursor = cursorNone;   // 隐藏系统箭头 → 只见 CAD 十字光标
+        // 右键菜单弹出期间要能看见系统箭头(菜单弹层沿用宿主的 None 光标就"没鼠标"了)：
+        // 打开 → 宿主换回箭头并收起 CAD 十字；关闭 → 恢复 None，十字随下次 PointerMoved 重现。
+        host.ContextMenu!.Cursor = cursorArrow;
+        host.ContextMenu.Opened += (_, _) => { host.Cursor = cursorArrow; vp.HideCursor(); };
+        host.ContextMenu.Closed += (_, _) => { host.Cursor = cursorNone; };
         host.Children.Add(vp);
         // 叠层统一装进一个容器(命中透传): OpenGlControl 的直接兄弟里只有第一个 Border 会合成上屏,
         // 多个叠层须收进单一容器, 容器内的多个子级再正常渲染(否则浮标等第二个叠层不显示)。
