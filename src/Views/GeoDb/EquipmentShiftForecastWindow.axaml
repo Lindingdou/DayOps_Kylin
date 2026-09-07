@@ -1,0 +1,187 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.GeoDb.EquipmentShiftForecastWindow" x:CompileBindings="False"
+        Classes="geodb" Title="班次生产效能预测" Width="1480" Height="900" WindowStartupLocation="CenterOwner">
+    <Grid RowDefinitions="Auto,*,Auto">
+        <!-- Header (渐变深色) -->
+        <Border Grid.Row="0" Padding="20,14">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                    <GradientStop Color="#FF1A237E" Offset="0"/>
+                    <GradientStop Color="#FF283593" Offset="0.5"/>
+                    <GradientStop Color="#FF1976D2" Offset="1"/>
+                </LinearGradientBrush>
+            </Border.Background>
+            <Grid>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="📊" FontSize="22" Margin="0,0,12,0" Foreground="White"/>
+                    <StackPanel>
+                        <TextBlock Text="班次生产效能预测" Foreground="White" FontSize="18" FontWeight="Bold"/>
+                        <TextBlock Text="单台设备能力分布 · 未来班次预测 · 编组潜力评估" Foreground="#FFB3E5FC" FontSize="11" Margin="0,2,0,0"/>
+                    </StackPanel>
+                </StackPanel>
+                <TextBlock HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="#FFB3E5FC" FontSize="11" Text="基于历史班次记录的统计学分析  ·  数据源:production_record"/>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1" Margin="8" ColumnDefinitions="240,8,*">
+            <!-- 左:设备列表(按分类分组) -->
+            <Border Grid.Column="0" Classes="panel">
+                <Grid RowDefinitions="Auto,*">
+                    <Border Grid.Row="0" Padding="10,8">
+                        <TextBlock Text="设备清单" FontWeight="Bold" FontSize="13"/>
+                    </Border>
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <StackPanel x:Name="equipmentListPanel"/>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+
+            <GridSplitter Grid.Column="1" Width="8" Background="Transparent"/>
+
+            <Grid Grid.Column="2" RowDefinitions="Auto,*,Auto">
+                <!-- 顶部 KPI 摘要(4 张大卡片) -->
+                <UniformGrid Grid.Row="0" Rows="1" Columns="4" Margin="0,0,0,8">
+                    <Border CornerRadius="6" Padding="16,12" Margin="0,0,8,0">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                                <GradientStop Color="#FF1976D2" Offset="0"/><GradientStop Color="#FF42A5F5" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
+                        <StackPanel>
+                            <TextBlock Text="预测下班产能" Foreground="#FFE3F2FD" FontSize="11"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                <TextBlock x:Name="kpiNextOutput" Text="—" Foreground="White" FontSize="28" FontWeight="Bold"/>
+                                <TextBlock x:Name="kpiNextOutputUnit" Text="" Foreground="#FFE3F2FD" FontSize="12" VerticalAlignment="Bottom" Margin="6,0,0,4"/>
+                            </StackPanel>
+                            <TextBlock x:Name="kpiNextOutputHint" Text="基于近 N 班均值" Foreground="#FFB3E5FC" FontSize="10" Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Border>
+                    <Border CornerRadius="6" Padding="16,12" Margin="0,0,8,0">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                                <GradientStop Color="#FF388E3C" Offset="0"/><GradientStop Color="#FF66BB6A" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
+                        <StackPanel>
+                            <TextBlock Text="95% 置信区间" Foreground="#FFE8F5E9" FontSize="11"/>
+                            <TextBlock x:Name="kpiConfidence" Text="—" Foreground="White" FontSize="20" FontWeight="Bold" Margin="0,4,0,0"/>
+                            <TextBlock x:Name="kpiVariance" Text="变异系数 —" Foreground="#FFC8E6C9" FontSize="10" Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Border>
+                    <Border CornerRadius="6" Padding="16,12" Margin="0,0,8,0">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                                <GradientStop Color="#FFF57C00" Offset="0"/><GradientStop Color="#FFFFB74D" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
+                        <StackPanel>
+                            <TextBlock Text="风险等级" Foreground="#FFFFF3E0" FontSize="11"/>
+                            <TextBlock x:Name="kpiRiskLevel" Text="—" Foreground="White" FontSize="28" FontWeight="Bold" Margin="0,4,0,0"/>
+                            <TextBlock x:Name="kpiRiskHint" Text="" Foreground="#FFFFE0B2" FontSize="10" Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Border>
+                    <Border CornerRadius="6" Padding="16,12">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                                <GradientStop Color="#FF1565C0" Offset="0"/><GradientStop Color="#FFAB47BC" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
+                        <StackPanel>
+                            <TextBlock Text="综合潜力评分" Foreground="#FFE3F2FD" FontSize="11"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                <TextBlock x:Name="kpiOverallScore" Text="—" Foreground="White" FontSize="28" FontWeight="Bold"/>
+                                <TextBlock Text="/100" Foreground="#FFE1BEE7" FontSize="14" VerticalAlignment="Bottom" Margin="4,0,0,4"/>
+                            </StackPanel>
+                            <TextBlock x:Name="kpiOverallHint" Text="" Foreground="#FFE1BEE7" FontSize="10" Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Border>
+                </UniformGrid>
+
+                <!-- 中部 2×2 图表网格 -->
+                <Grid Grid.Row="1" RowDefinitions="*,8,*" ColumnDefinitions="*,8,*">
+                    <Border Grid.Row="0" Grid.Column="0" Classes="panel">
+                        <Grid RowDefinitions="Auto,*">
+                            <Border Grid.Row="0" Padding="12,8">
+                                <StackPanel Orientation="Horizontal"><TextBlock Text="📈" FontSize="13" Margin="0,0,6,0"/><TextBlock Text="班次产量趋势 + 未来 6 班预测" FontWeight="Bold" FontSize="13"/></StackPanel>
+                            </Border>
+                            <ch:ChartView Grid.Row="1" x:Name="trendChart" Margin="8" Legend="Top" YTitle="产量"/>
+                        </Grid>
+                    </Border>
+                    <Border Grid.Row="0" Grid.Column="2" Classes="panel">
+                        <Grid RowDefinitions="Auto,*">
+                            <Border Grid.Row="0" Padding="12,8">
+                                <StackPanel Orientation="Horizontal"><TextBlock Text="📊" FontSize="13" Margin="0,0,6,0"/><TextBlock Text="班产量频次分布 (能力包络)" FontWeight="Bold" FontSize="13"/></StackPanel>
+                            </Border>
+                            <ch:ChartView Grid.Row="1" x:Name="histChart" Margin="8" Legend="Hidden" XTitle="产量分桶" YTitle="出现次数"/>
+                        </Grid>
+                    </Border>
+                    <Border Grid.Row="2" Grid.Column="0" Classes="panel">
+                        <Grid RowDefinitions="Auto,*">
+                            <Border Grid.Row="0" Padding="12,8">
+                                <StackPanel Orientation="Horizontal"><TextBlock Text="🎯" FontSize="13" Margin="0,0,6,0"/><TextBlock Text="工时 — 产量 散点 (效率离散度)" FontWeight="Bold" FontSize="13"/></StackPanel>
+                            </Border>
+                            <ch:ChartView Grid.Row="1" x:Name="scatterChart" Margin="8" Legend="Hidden" NumericX="True" XMin="0" XMax="9" XTitle="作业小时 (h)" YTitle="班产量"/>
+                        </Grid>
+                    </Border>
+                    <Border Grid.Row="2" Grid.Column="2" Classes="panel">
+                        <Grid RowDefinitions="Auto,*">
+                            <Border Grid.Row="0" Padding="12,8">
+                                <StackPanel Orientation="Horizontal"><TextBlock Text="⭐" FontSize="13" Margin="0,0,6,0"/><TextBlock Text="五维潜力评分" FontWeight="Bold" FontSize="13"/></StackPanel>
+                            </Border>
+                            <StackPanel Grid.Row="1" Margin="20,14" Spacing="12">
+                                <Grid ColumnDefinitions="80,*,50">
+                                    <TextBlock Grid.Column="0" Text="产能强度" VerticalAlignment="Center" FontSize="12"/>
+                                    <ProgressBar Grid.Column="1" x:Name="scoreOutput" Maximum="100" Height="18" Margin="8,0" Foreground="#FF1976D2" Background="#FFE3F2FD"/>
+                                    <TextBlock Grid.Column="2" x:Name="scoreOutputValue" Text="—" FontWeight="Bold" VerticalAlignment="Center" TextAlignment="Right"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="80,*,50">
+                                    <TextBlock Grid.Column="0" Text="稳定性" VerticalAlignment="Center" FontSize="12"/>
+                                    <ProgressBar Grid.Column="1" x:Name="scoreStability" Maximum="100" Height="18" Margin="8,0" Foreground="#FF388E3C" Background="#FFE8F5E9"/>
+                                    <TextBlock Grid.Column="2" x:Name="scoreStabilityValue" Text="—" FontWeight="Bold" VerticalAlignment="Center" TextAlignment="Right"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="80,*,50">
+                                    <TextBlock Grid.Column="0" Text="可用率" VerticalAlignment="Center" FontSize="12"/>
+                                    <ProgressBar Grid.Column="1" x:Name="scoreAvail" Maximum="100" Height="18" Margin="8,0" Foreground="#FFF57C00" Background="#FFFFF3E0"/>
+                                    <TextBlock Grid.Column="2" x:Name="scoreAvailValue" Text="—" FontWeight="Bold" VerticalAlignment="Center" TextAlignment="Right"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="80,*,50">
+                                    <TextBlock Grid.Column="0" Text="效率" VerticalAlignment="Center" FontSize="12"/>
+                                    <ProgressBar Grid.Column="1" x:Name="scoreEfficiency" Maximum="100" Height="18" Margin="8,0" Foreground="#FF1565C0" Background="#FFE3F2FD"/>
+                                    <TextBlock Grid.Column="2" x:Name="scoreEfficiencyValue" Text="—" FontWeight="Bold" VerticalAlignment="Center" TextAlignment="Right"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="80,*,50">
+                                    <TextBlock Grid.Column="0" Text="可靠性" VerticalAlignment="Center" FontSize="12"/>
+                                    <ProgressBar Grid.Column="1" x:Name="scoreReliability" Maximum="100" Height="18" Margin="8,0" Foreground="#FFC62828" Background="#FFFFEBEE"/>
+                                    <TextBlock Grid.Column="2" x:Name="scoreReliabilityValue" Text="—" FontWeight="Bold" VerticalAlignment="Center" TextAlignment="Right"/>
+                                </Grid>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <!-- 底部:分析细节 + 编组建议 -->
+                <Border Grid.Row="2" Classes="panel" Margin="0,8,0,0">
+                    <Grid ColumnDefinitions="*,*">
+                        <Grid Grid.Column="0" RowDefinitions="Auto,*">
+                            <Border Grid.Row="0" Padding="12,8">
+                                <StackPanel Orientation="Horizontal"><TextBlock Text="🔎" FontSize="13" Margin="0,0,6,0"/><TextBlock Text="分析细节" FontWeight="Bold" FontSize="13"/></StackPanel>
+                            </Border>
+                            <StackPanel Grid.Row="1" Margin="14,10" x:Name="analysisDetails"/>
+                        </Grid>
+                        <Grid Grid.Column="1" Background="#FFF7F8FA" RowDefinitions="Auto,*">
+                            <Border Grid.Row="0" Background="#FFE8F5E9" Padding="12,8">
+                                <StackPanel Orientation="Horizontal"><TextBlock Text="🤝" FontSize="13" Margin="0,0,6,0"/><TextBlock Text="编组建议(供智能编组系统参考)" FontWeight="Bold" FontSize="13" Foreground="#FF2E7D32"/></StackPanel>
+                            </Border>
+                            <StackPanel Grid.Row="1" Margin="14,10" x:Name="dispatchSuggestion"/>
+                        </Grid>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+
+        <Border Grid.Row="2" Classes="statusbar">
+            <TextBlock x:Name="statusText" Text="就绪"/>
+        </Border>
+    </Grid>
+</Window>

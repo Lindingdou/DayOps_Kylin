@@ -1,0 +1,73 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.GeoDb.DataImportCenterWindow" x:CompileBindings="False"
+        Classes="geodb" Title="数据导入导出中心" Width="1080" Height="700" WindowStartupLocation="CenterOwner">
+    <Grid RowDefinitions="Auto,*,Auto">
+        <Border Grid.Row="0" Classes="hdr hdr-cyan" Padding="18,12">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="📦" FontSize="20" Margin="0,0,10,0" Foreground="White"/>
+                <StackPanel>
+                    <TextBlock Text="数据导入导出中心" Foreground="White" FontSize="17" FontWeight="Bold"/>
+                    <TextBlock Text="设备域各类数据统一 模板 / 导入 / 导出(已从各窗口收回集中于此)" Foreground="#FFB2F5EA" FontSize="11" Margin="0,2,0,0"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <Grid Grid.Row="1" Margin="10" ColumnDefinitions="270,10,*">
+            <!-- 左:数据类型列表 -->
+            <Border Grid.Column="0" Classes="panel">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="数据类型" FontWeight="Bold" FontSize="12" Margin="10,8,10,4" Foreground="#FF0F766E"/>
+                    <ListBox x:Name="typesList" BorderThickness="0" Margin="4" SelectionChanged="OnTypeChanged">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="4,3">
+                                    <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="13"/>
+                                    <TextBlock Text="{Binding Group}" FontSize="10" Foreground="#FF778899"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+
+            <!-- 右:详情 + 操作 -->
+            <Border Grid.Column="2" Classes="panel">
+                <DockPanel Margin="16,12">
+                    <StackPanel DockPanel.Dock="Top">
+                        <TextBlock x:Name="detailName" Text="请选择左侧数据类型" FontSize="16" FontWeight="Bold" Foreground="#FF0E7490"/>
+                        <TextBlock x:Name="detailDesc" Text="" TextWrapping="Wrap" Margin="0,4,0,10" Classes="muted" FontSize="12"/>
+                        <TextBlock Text="模板列(红色为必填):" FontWeight="Bold" FontSize="12" Margin="0,4,0,4"/>
+                        <Border Background="#FFF7F8FA" CornerRadius="4" Padding="8" Margin="0,0,0,8">
+                            <WrapPanel x:Name="colPanel"/>
+                        </Border>
+                        <TextBlock x:Name="notesText" Text="" TextWrapping="Wrap" FontSize="11" Classes="muted" Margin="0,0,0,10"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <TextBlock Text="重复记录:" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,10,0"/>
+                            <RadioButton x:Name="policySkip" Content="跳过" IsChecked="True" VerticalAlignment="Center" Margin="0,0,14,0"/>
+                            <RadioButton x:Name="policyOverwrite" Content="覆盖" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Button x:Name="btnTemplate" Content="📄 下载模板(CSV)" Click="OnTemplateClick" Padding="14,6" Background="#FF0891B2" Foreground="White" BorderThickness="0" FontWeight="Bold"/>
+                            <Button x:Name="btnImport" Content="📥 导入文件(CSV)…" Click="OnImportClick" Padding="14,6" Background="#FF15803D" Foreground="White" BorderThickness="0" FontWeight="Bold"/>
+                            <Button x:Name="btnExport" Content="📤 导出全部(CSV)" Click="OnExportClick" Padding="14,6" Background="#FFB45309" Foreground="White" BorderThickness="0" FontWeight="Bold"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- 结果 -->
+                    <Border Margin="0,12,0,0" Classes="panel" Background="#FFF7F8FA">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" Text="运行结果" FontWeight="Bold" FontSize="12" Margin="10,8,10,4" Classes="muted"/>
+                            <TextBox x:Name="resultText" Margin="8" IsReadOnly="True" TextWrapping="Wrap" BorderThickness="0" Background="Transparent"
+                                     FontFamily="Consolas, Cascadia Code, monospace" Text="选择数据类型后:下载模板填写 → 导入;或导出当前库中全部记录。"/>
+                        </DockPanel>
+                    </Border>
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="2" Classes="statusbar">
+            <TextBlock x:Name="statusText" Text="就绪"/>
+        </Border>
+    </Grid>
+</Window>

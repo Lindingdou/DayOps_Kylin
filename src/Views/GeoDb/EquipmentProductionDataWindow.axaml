@@ -1,0 +1,162 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.GeoDb.EquipmentProductionDataWindow" x:CompileBindings="False"
+        Classes="geodb" Title="设备生产数据" Width="1240" Height="720" WindowStartupLocation="CenterOwner">
+    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
+        <Border Grid.Row="0" Classes="hdr hdr-dark" Padding="16,10">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="设备生产数据" Foreground="White" FontSize="16" FontWeight="Bold"/>
+                <TextBlock Text="班次产量 · 故障明细 · CSV 导入导出" Foreground="#FFB0BEC5" FontSize="12" VerticalAlignment="Center" Margin="16,2,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <!-- 工具栏 -->
+        <Border Grid.Row="1" Classes="toolbar">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="＋ 新增" Click="OnAddClick" Padding="12,4"/>
+                <Button Content="− 删除" Click="OnDeleteClick" Padding="12,4"/>
+                <Button Content="💾 保存" Click="OnSaveClick" Classes="warn" Padding="12,4"/>
+                <Button Content="🔄 重新加载" Click="OnReloadClick" Padding="12,4"/>
+                <Border Width="1" Background="#FFDCDFE4" Margin="8,0"/>
+                <TextBlock Text="📦 批量导入/导出请用「设备管理 → 数据导入导出」" VerticalAlignment="Center" Classes="muted" FontSize="11.5"/>
+            </StackPanel>
+        </Border>
+
+        <!-- 筛选条 -->
+        <Border Grid.Row="2" Background="#FFF7F8FA" Padding="12,6">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="筛选:" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,8,0"/>
+                <TextBlock Text="设备:" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                <ComboBox x:Name="filterEquipment" Width="120" Margin="0,0,12,0" SelectionChanged="OnFilterChanged"/>
+                <TextBlock Text="班次:" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                <ComboBox x:Name="filterShift" Width="80" Margin="0,0,12,0" SelectionChanged="OnFilterChanged" SelectedIndex="0">
+                    <ComboBoxItem Content="全部"/>
+                    <ComboBoxItem Content="A"/>
+                    <ComboBoxItem Content="B"/>
+                    <ComboBoxItem Content="C"/>
+                </ComboBox>
+                <CheckBox x:Name="filterFaultOnly" Content="仅含故障" VerticalAlignment="Center" Margin="0,0,12,0" IsCheckedChanged="OnFilterChanged"/>
+                <TextBlock x:Name="resultCountText" Text="—" VerticalAlignment="Center" Classes="muted" Margin="12,0,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <!-- 主体:明细表格 + 统计分析 双 Tab -->
+        <TabControl Grid.Row="3" Margin="6,4,6,4" SelectionChanged="OnMainTabChanged">
+            <TabItem Header="📋 数据明细">
+                <DataGrid x:Name="dataGrid" Margin="2" AutoGenerateColumns="False" IsReadOnly="False" SelectionMode="Single" CanUserSortColumns="True">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="设备编号" Binding="{Binding EquipmentId, Mode=TwoWay}" Width="90"/>
+                        <DataGridTextColumn Header="日期" Binding="{Binding DateText, Mode=TwoWay}" Width="100"/>
+                        <DataGridTextColumn Header="班次" Binding="{Binding Shift, Mode=TwoWay}" Width="60"/>
+                        <DataGridTextColumn Header="产量(m³)" Binding="{Binding OutputM3, Mode=TwoWay, StringFormat={}{0:F0}}" Width="100"/>
+                        <DataGridTextColumn Header="作业小时" Binding="{Binding WorkHours, Mode=TwoWay, StringFormat={}{0:F1}}" Width="80"/>
+                        <DataGridTemplateColumn Header="故障小时" Width="80">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding FaultHours, StringFormat={}{0:F1}}" VerticalAlignment="Center" Margin="6,0"
+                                               Classes.fault="{Binding HasFault}">
+                                        <TextBlock.Styles>
+                                            <Style Selector="TextBlock.fault">
+                                                <Setter Property="Foreground" Value="#FFC62828"/>
+                                                <Setter Property="FontWeight" Value="Bold"/>
+                                            </Style>
+                                        </TextBlock.Styles>
+                                    </TextBlock>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                            <DataGridTemplateColumn.CellEditingTemplate>
+                                <DataTemplate>
+                                    <TextBox Text="{Binding FaultHours, Mode=TwoWay}" VerticalAlignment="Center"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellEditingTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="故障原因" Binding="{Binding FaultReason, Mode=TwoWay}" Width="*"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </TabItem>
+
+            <TabItem Header="📊 统计分析">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="8">
+                        <TextBlock x:Name="analyticsScope" Text="统计范围:—" Classes="muted" FontSize="12" Margin="2,0,2,8"/>
+                        <UniformGrid Rows="1" Columns="6" Margin="0,0,0,10">
+                            <Border Classes="tile" Background="#FF1565C0" Margin="0,0,6,0">
+                                <StackPanel>
+                                    <TextBlock Text="总产量" Foreground="#FFBBDEFB" FontSize="11"/>
+                                    <TextBlock x:Name="kpiTotalOut" Text="—" Foreground="White" FontSize="21" FontWeight="Bold" Margin="0,3,0,0"/>
+                                    <TextBlock Text="万m³" Foreground="#FFBBDEFB" FontSize="10"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Classes="tile" Background="#FF00838F" Margin="0,0,6,0">
+                                <StackPanel>
+                                    <TextBlock Text="日均产量" Foreground="#FFB2EBF2" FontSize="11"/>
+                                    <TextBlock x:Name="kpiDailyAvg" Text="—" Foreground="White" FontSize="21" FontWeight="Bold" Margin="0,3,0,0"/>
+                                    <TextBlock Text="万m³/日" Foreground="#FFB2EBF2" FontSize="10"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Classes="tile" Background="#FF00695C" Margin="0,0,6,0">
+                                <StackPanel>
+                                    <TextBlock Text="单台单班均产" Foreground="#FFB2DFDB" FontSize="11"/>
+                                    <TextBlock x:Name="kpiShiftAvg" Text="—" Foreground="White" FontSize="21" FontWeight="Bold" Margin="0,3,0,0"/>
+                                    <TextBlock Text="万m³" Foreground="#FFB2DFDB" FontSize="10"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Classes="tile" Background="#FF2E7D32" Margin="0,0,6,0">
+                                <StackPanel>
+                                    <TextBlock Text="有效作业率" Foreground="#FFC8E6C9" FontSize="11"/>
+                                    <TextBlock x:Name="kpiEffRate" Text="—" Foreground="White" FontSize="21" FontWeight="Bold" Margin="0,3,0,0"/>
+                                    <TextBlock Text="作业/(作业+故障)" Foreground="#FFC8E6C9" FontSize="10"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Classes="tile" Background="#FFC62828" Margin="0,0,6,0">
+                                <StackPanel>
+                                    <TextBlock Text="故障时长占比" Foreground="#FFFFCDD2" FontSize="11"/>
+                                    <TextBlock x:Name="kpiFaultRate" Text="—" Foreground="White" FontSize="21" FontWeight="Bold" Margin="0,3,0,0"/>
+                                    <TextBlock Text="故障/(作业+故障)" Foreground="#FFFFCDD2" FontSize="10"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Classes="tile" Background="#FFEF6C00" Margin="0">
+                                <StackPanel>
+                                    <TextBlock Text="故障次数" Foreground="#FFFFE0B2" FontSize="11"/>
+                                    <TextBlock x:Name="kpiFaultCount" Text="—" Foreground="White" FontSize="21" FontWeight="Bold" Margin="0,3,0,0"/>
+                                    <TextBlock Text="次 (故障班次)" Foreground="#FFFFE0B2" FontSize="10"/>
+                                </StackPanel>
+                            </Border>
+                        </UniformGrid>
+
+                        <Grid ColumnDefinitions="*,8,*" RowDefinitions="Auto,8,Auto">
+                            <Border Grid.Row="0" Grid.Column="0" Classes="panel">
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Top" Text="🕐 班次产量对比(A/B/C)" FontWeight="Bold" FontSize="12" Margin="10,8,10,0"/>
+                                    <ch:ChartView x:Name="shiftChart" Height="240" Margin="6" Legend="Hidden" YTitle="产量(万m³)" YMin="0"/>
+                                </DockPanel>
+                            </Border>
+                            <Border Grid.Row="0" Grid.Column="2" Classes="panel">
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Top" Text="📈 产量日趋势" FontWeight="Bold" FontSize="12" Margin="10,8,10,0"/>
+                                    <ch:ChartView x:Name="dailyChart" Height="240" Margin="6" Legend="Hidden" YTitle="万m³" YMin="0"/>
+                                </DockPanel>
+                            </Border>
+                            <Border Grid.Row="2" Grid.Column="0" Classes="panel">
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Top" Text="🔧 故障原因 Pareto(时长 + 累计占比)" FontWeight="Bold" FontSize="12" Margin="10,8,10,0"/>
+                                    <ch:ChartView x:Name="faultParetoChart" Height="260" Margin="6" Legend="Hidden" YTitle="故障时长(h)" YMin="0" Y2Title="累计%" Y2Min="0" Y2Max="100"/>
+                                </DockPanel>
+                            </Border>
+                            <Border Grid.Row="2" Grid.Column="2" Classes="panel">
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Top" Text="🏆 设备产量 Top 10" FontWeight="Bold" FontSize="12" Margin="10,8,10,0"/>
+                                    <ch:ChartView x:Name="equipTopChart" Height="260" Margin="6" Legend="Hidden" YTitle="万m³" YMin="0"/>
+                                </DockPanel>
+                            </Border>
+                        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+
+        <Border Grid.Row="4" Classes="statusbar">
+            <TextBlock x:Name="statusText" Text="就绪"/>
+        </Border>
+    </Grid>
+</Window>

@@ -1,0 +1,80 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.GeoDb.EquipmentDispatchWindow" x:CompileBindings="False"
+        Classes="geodb" Title="设备智能编组" Width="1240" Height="700" WindowStartupLocation="CenterOwner">
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
+        <Border Grid.Row="0" Classes="hdr hdr-dark" Padding="16,10">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="设备智能编组" Foreground="White" FontSize="16" FontWeight="Bold"/>
+                <TextBlock Text="铲-车匹配 · 月计划编组建议 · 效率评分" Foreground="#FFB0BEC5" FontSize="12" VerticalAlignment="Center" Margin="16,2,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <!-- 参数条 -->
+        <Border Grid.Row="1" Classes="toolbar" Padding="14,10">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="本月计划目标:" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,8,0"/>
+                <TextBlock Text="自营剥离量(万 m³):" VerticalAlignment="Center" Margin="8,0,4,0"/>
+                <TextBox x:Name="planStrippingInput" Width="80" Text="260" VerticalAlignment="Center"/>
+                <TextBlock Text="平均运距(km):" VerticalAlignment="Center" Margin="16,0,4,0"/>
+                <TextBox x:Name="planDistanceInput" Width="60" Text="1.82" VerticalAlignment="Center"/>
+                <TextBlock Text="工作日:" VerticalAlignment="Center" Margin="16,0,4,0"/>
+                <TextBox x:Name="planDaysInput" Width="50" Text="30" VerticalAlignment="Center"/>
+                <Button Content="🔄 重新计算" Click="OnRecalcClick" Classes="primary" Padding="12,4" Margin="16,0,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <Grid Grid.Row="2" Margin="8" ColumnDefinitions="*,8,400">
+            <!-- 左:铲-车匹配矩阵 -->
+            <Border Grid.Column="0" Classes="panel">
+                <Grid RowDefinitions="Auto,*">
+                    <Border Grid.Row="0" Padding="10,8">
+                        <Grid>
+                            <TextBlock Text="铲-车匹配矩阵" FontWeight="Bold" FontSize="13"/>
+                            <TextBlock HorizontalAlignment="Right" FontSize="11" Classes="muted" Text="评分基于斗容/载重匹配度、循环时间、效率"/>
+                        </Grid>
+                    </Border>
+                    <DataGrid Grid.Row="1" x:Name="matchingGrid" Margin="8" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="电铲型号" Binding="{Binding ShovelModel}" Width="100"/>
+                            <DataGridTextColumn Header="斗容 (m³)" Binding="{Binding ShovelBucketM3}" Width="80"/>
+                            <DataGridTextColumn Header="卡车型号" Binding="{Binding TruckModel}" Width="90"/>
+                            <DataGridTextColumn Header="载重 (t)" Binding="{Binding TruckPayloadT}" Width="70"/>
+                            <DataGridTextColumn Header="装满需 (斗)" Binding="{Binding BucketLoadsPerTruck, StringFormat={}{0:F1}}" Width="90"/>
+                            <DataGridTextColumn Header="推荐卡车数" Binding="{Binding RecommendedTruckCount}" Width="100"/>
+                            <DataGridTextColumn Header="循环时间(分)" Binding="{Binding CycleTimeMin, StringFormat={}{0:F0}}" Width="100"/>
+                            <DataGridTemplateColumn Header="效率评分" Width="*">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Grid ColumnDefinitions="*,40">
+                                            <ProgressBar Grid.Column="0" Value="{Binding EfficiencyScore}" Maximum="100" Height="16" Margin="4,0" Foreground="{Binding EfficiencyBrush}"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding EfficiencyScore}" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="Bold"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </Border>
+
+            <GridSplitter Grid.Column="1" Width="8" Background="Transparent"/>
+
+            <!-- 右:推荐编组方案 -->
+            <Border Grid.Column="2" Classes="panel">
+                <Grid RowDefinitions="Auto,*">
+                    <Border Grid.Row="0" Padding="10,8">
+                        <TextBlock Text="推荐编组方案" FontWeight="Bold" FontSize="13"/>
+                    </Border>
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <StackPanel x:Name="recommendationPanel" Margin="12"/>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="3" Classes="statusbar">
+            <TextBlock x:Name="statusText" Text="就绪"/>
+        </Border>
+    </Grid>
+</Window>

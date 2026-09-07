@@ -1,0 +1,228 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.GeoDb.EquipmentManagementWindow" x:CompileBindings="False"
+        Classes="geodb" Title="设备信息管理" Width="1180" Height="640" WindowStartupLocation="CenterOwner">
+    <Grid RowDefinitions="Auto,*,Auto">
+        <!-- 顶部标题栏 -->
+        <Border Grid.Row="0" Classes="hdr hdr-dark" Padding="16,10">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="设备信息管理" Foreground="White" FontSize="16" FontWeight="Bold"/>
+                <TextBlock x:Name="titleHint" Text="" Foreground="#FFB0BEC5" FontSize="12" VerticalAlignment="Center" Margin="16,2,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <Grid Grid.Row="1" Margin="8" ColumnDefinitions="260,8,*,8,320">
+            <!-- ═══ 左栏:在籍设备列表 + 操作按钮 ═══ -->
+            <Border Grid.Column="0" Classes="panel">
+                <Grid RowDefinitions="Auto,Auto,*,Auto">
+                    <Border Grid.Row="0" Padding="10,8">
+                        <TextBlock Text="在籍设备" FontWeight="Bold" FontSize="13"/>
+                    </Border>
+                    <ComboBox Grid.Row="1" x:Name="categoryFilter" Margin="8,8,8,4" HorizontalAlignment="Stretch" SelectionChanged="OnCategoryFilterChanged">
+                        <ComboBoxItem Content="全部" Tag="All"/>
+                        <ComboBoxItem Content="电铲" Tag="Shovel"/>
+                        <ComboBoxItem Content="矿用卡车" Tag="Truck"/>
+                        <ComboBoxItem Content="钻机" Tag="Drill"/>
+                        <ComboBoxItem Content="前装机" Tag="Loader"/>
+                        <ComboBoxItem Content="推土机" Tag="Dozer"/>
+                        <ComboBoxItem Content="平路机" Tag="Grader"/>
+                        <ComboBoxItem Content="水车/水鹤" Tag="WaterTruck"/>
+                    </ComboBox>
+                    <ListBox Grid.Row="2" x:Name="equipmentList" BorderThickness="0" Margin="4" SelectionChanged="OnEquipmentSelectionChanged">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Border Padding="8,6" Margin="0,1" CornerRadius="3" Background="Transparent">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="{Binding Id}" FontWeight="Bold" FontSize="13"/>
+                                            <TextBlock Text="{Binding Model}" Classes="muted" FontSize="11"/>
+                                        </StackPanel>
+                                        <Border Grid.Column="1" VerticalAlignment="Top" Background="#FFE8F5E9" CornerRadius="2" Padding="4,1" Margin="4,2,0,0">
+                                            <TextBlock Text="{Binding Status}" FontSize="10" Foreground="#FF2E7D32"/>
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <Grid Grid.Row="3" ColumnDefinitions="*,*,*">
+                        <Button Grid.Column="0" Content="＋ 新增" Click="OnAddClick" Classes="primary" Padding="8,8" Margin="4" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
+                        <Button Grid.Column="1" Content="− 删除" Click="OnDeleteClick" Classes="danger" Padding="8,8" Margin="4" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
+                        <Button Grid.Column="2" Content="💾 保存" Click="OnSaveClick" Classes="success" Padding="8,8" Margin="4" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <GridSplitter Grid.Column="1" Width="8" Background="Transparent"/>
+
+            <!-- ═══ 中栏:三维展示(PNG 转台序列帧播放器) ═══ -->
+            <Border Grid.Column="2" Classes="panel">
+                <Grid RowDefinitions="Auto,*,Auto">
+                    <Border Grid.Row="0" Padding="10,8">
+                        <Grid>
+                            <TextBlock x:Name="viewportTitle" Text="三维展示" FontWeight="Bold" FontSize="13"/>
+                            <TextBlock x:Name="interactionHint" HorizontalAlignment="Right" FontSize="11" Classes="muted" Text="拖拽旋转 · 滚轮逐帧 · 底部进度条/暂停"/>
+                        </Grid>
+                    </Border>
+
+                    <Grid Grid.Row="1">
+                        <!-- 序列帧播放器(检测到 PNG 序列时启用) -->
+                        <Grid x:Name="frameViewerHost" IsVisible="False" RowDefinitions="*,Auto" Background="#FFF7F8FA">
+                            <Image Grid.Row="0" x:Name="frameImage" Stretch="Uniform" Margin="80,40,80,20" Cursor="SizeWestEast"
+                                   PointerPressed="OnFramePointerPressed" PointerMoved="OnFramePointerMoved"
+                                   PointerReleased="OnFramePointerReleased" PointerWheelChanged="OnFramePointerWheel"/>
+                            <Border Grid.Row="1" Background="#FF263238" Padding="12,6">
+                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                    <TextBlock Grid.Column="0" x:Name="frameIndexText" Text="000 / 060" Foreground="White" FontSize="11" VerticalAlignment="Center" MinWidth="55"/>
+                                    <Slider Grid.Column="1" x:Name="frameSlider" Margin="12,0" Minimum="0" Maximum="59" VerticalAlignment="Center" ValueChanged="OnFrameSliderChanged"/>
+                                    <Button Grid.Column="2" x:Name="autoplayButton" Content="⏸ 暂停" Click="OnAutoplayToggle" Padding="12,3" Background="#FFD32F2F" Foreground="White" BorderThickness="0"/>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                        <!-- 回退:没有序列帧时(原为 HelixToolkit 程序化几何视图, Kylin 无 Helix → 占位) -->
+                        <Grid x:Name="fallbackHost" Background="#FFF7F8FA">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <TextBlock x:Name="fallbackText" Text="无模型" FontSize="20" FontWeight="Bold" Classes="muted" HorizontalAlignment="Center"/>
+                                <TextBlock Text="未找到该型号/类别的转台序列帧(Assets/Models3D)" FontSize="11" Classes="muted" HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+
+                    <!-- 相机视角按钮:仅对可交互的 3D Viewport 有意义;序列帧转台时隐藏 -->
+                    <Border x:Name="cameraToolbar" Grid.Row="2" Padding="10,6">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="重置视角" Click="OnCameraClick" Padding="10,3"/>
+                            <Button Content="俯视" Click="OnCameraClick" Padding="10,3"/>
+                            <Button Content="侧视" Click="OnCameraClick" Padding="10,3"/>
+                            <Button Content="正视" Click="OnCameraClick" Padding="10,3"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <GridSplitter Grid.Column="3" Width="8" Background="Transparent"/>
+
+            <!-- ═══ 右栏:参数面板 ═══ -->
+            <Border Grid.Column="4" Classes="panel">
+                <Grid RowDefinitions="Auto,*">
+                    <Border Grid.Row="0" Padding="10,8">
+                        <TextBlock Text="设备参数" FontWeight="Bold" FontSize="13"/>
+                    </Border>
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <StackPanel x:Name="parameterPanel" Margin="14,10">
+                            <TextBlock Text="基础信息" FontWeight="Bold" Foreground="#FF1976D2" Margin="0,6,0,6"/>
+                            <Grid ColumnDefinitions="110,*" Margin="0,2">
+                                <TextBlock Text="设备编号" Classes="muted" VerticalAlignment="Center"/>
+                                <TextBox Grid.Column="1" Text="{Binding Id, Mode=TwoWay}"/>
+                            </Grid>
+                            <Grid ColumnDefinitions="110,*" Margin="0,4,0,2">
+                                <TextBlock Text="分类" Classes="muted" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" Text="{Binding CategoryDisplay}" FontWeight="Bold" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Grid ColumnDefinitions="110,*" Margin="0,4,0,2">
+                                <TextBlock Text="型号" Classes="muted" VerticalAlignment="Center"/>
+                                <TextBox Grid.Column="1" Text="{Binding Model, Mode=TwoWay}"/>
+                            </Grid>
+                            <Grid ColumnDefinitions="110,*" Margin="0,4,0,2">
+                                <TextBlock Text="厂家" Classes="muted" VerticalAlignment="Center"/>
+                                <TextBox Grid.Column="1" Text="{Binding Manufacturer, Mode=TwoWay}"/>
+                            </Grid>
+                            <Grid ColumnDefinitions="110,*" Margin="0,4,0,2">
+                                <TextBlock Text="产地" Classes="muted" VerticalAlignment="Center"/>
+                                <TextBox Grid.Column="1" Text="{Binding Origin, Mode=TwoWay}"/>
+                            </Grid>
+                            <Grid ColumnDefinitions="110,*" Margin="0,4,0,2">
+                                <TextBlock Text="状态" Classes="muted" VerticalAlignment="Center"/>
+                                <ComboBox Grid.Column="1" x:Name="statusCombo" HorizontalAlignment="Stretch" SelectedItem="{Binding Status, Mode=TwoWay}"/>
+                            </Grid>
+
+                            <TextBlock Text="资产履历" FontWeight="Bold" Foreground="#FF1976D2" Margin="0,16,0,6"/>
+                            <Grid ColumnDefinitions="110,*" Margin="0,2">
+                                <TextBlock Text="资产编码" Classes="muted" VerticalAlignment="Center"/>
+                                <TextBox Grid.Column="1" Text="{Binding AssetCode, Mode=TwoWay}"/>
+                            </Grid>
+                            <Grid ColumnDefinitions="110,*" Margin="0,4,0,2">
+                                <TextBlock Text="出厂序列号" Classes="muted" VerticalAlignment="Center"/>
+                                <TextBox Grid.Column="1" Text="{Binding SerialNumber, Mode=TwoWay}"/>
+                            </Grid>
+                            <Grid ColumnDefinitions="110,*" Margin="0,4,0,2">
+                                <TextBlock Text="投用日期" Classes="muted" VerticalAlignment="Center"/>
+                                <DatePicker Grid.Column="1" HorizontalAlignment="Stretch" SelectedDate="{Binding AcquisitionDate, Mode=TwoWay}"/>
+                            </Grid>
+                            <Grid ColumnDefinitions="110,*" Margin="0,4,0,2">
+                                <TextBlock Text="累计工时(h)" Classes="muted" VerticalAlignment="Center"/>
+                                <TextBox Grid.Column="1" Text="{Binding CumulativeHours, Mode=TwoWay}"/>
+                            </Grid>
+                            <Grid ColumnDefinitions="110,*" Margin="0,4,0,2">
+                                <TextBlock Text="上次大修" Classes="muted" VerticalAlignment="Center"/>
+                                <DatePicker Grid.Column="1" HorizontalAlignment="Stretch" SelectedDate="{Binding LastOverhaulDate, Mode=TwoWay}"/>
+                            </Grid>
+
+                            <TextBlock Text="性能参数" FontWeight="Bold" Foreground="#FF1976D2" Margin="0,16,0,6"/>
+                            <Grid ColumnDefinitions="110,*" Margin="0,2">
+                                <TextBlock Text="工作重量(t)" Classes="muted" VerticalAlignment="Center"/>
+                                <TextBox Grid.Column="1" Text="{Binding WorkingWeightTon, Mode=TwoWay}"/>
+                            </Grid>
+                            <Grid ColumnDefinitions="110,*" Margin="0,4,0,2">
+                                <TextBlock Text="装机功率(kW)" Classes="muted" VerticalAlignment="Center"/>
+                                <TextBox Grid.Column="1" Text="{Binding PowerKw, Mode=TwoWay}"/>
+                            </Grid>
+                            <Grid ColumnDefinitions="110,*" Margin="0,4,0,2">
+                                <TextBlock Text="整机尺寸(m)" Classes="muted" VerticalAlignment="Center"/>
+                                <TextBox Grid.Column="1" Text="{Binding DimensionsLwh, Mode=TwoWay}" ToolTip.Tip="长 × 宽 × 高"/>
+                            </Grid>
+                            <Grid ColumnDefinitions="110,*" Margin="0,4,0,2">
+                                <TextBlock Text="斗容(m³)" Classes="muted" VerticalAlignment="Center"/>
+                                <TextBox Grid.Column="1" Text="{Binding BucketCapacityM3, Mode=TwoWay}"/>
+                            </Grid>
+                            <Grid ColumnDefinitions="110,*" Margin="0,4,0,2">
+                                <TextBlock Text="额定载重(t)" Classes="muted" VerticalAlignment="Center"/>
+                                <TextBox Grid.Column="1" Text="{Binding LoadCapacityTon, Mode=TwoWay}"/>
+                            </Grid>
+                            <Grid ColumnDefinitions="110,*" Margin="0,4,0,2">
+                                <TextBlock Text="最大行速(km/h)" Classes="muted" VerticalAlignment="Center"/>
+                                <TextBox Grid.Column="1" Text="{Binding MaxSpeedKmh, Mode=TwoWay}"/>
+                            </Grid>
+                            <Grid ColumnDefinitions="110,*" Margin="0,4,0,2">
+                                <TextBlock Text="轮胎规格" Classes="muted" VerticalAlignment="Center"/>
+                                <TextBox Grid.Column="1" Text="{Binding TireSpec, Mode=TwoWay}"/>
+                            </Grid>
+                            <Grid ColumnDefinitions="110,*" Margin="0,4,0,2">
+                                <TextBlock Text="孔径范围(mm)" Classes="muted" VerticalAlignment="Center"/>
+                                <TextBox Grid.Column="1" Text="{Binding DrillDiameterMm, Mode=TwoWay}"/>
+                            </Grid>
+
+                            <TextBlock Text="当前作业" FontWeight="Bold" Foreground="#FF1976D2" Margin="0,16,0,6"/>
+                            <TextBox Text="{Binding OperatingArea, Mode=TwoWay}" ToolTip.Tip="当前作业平盘 / 队组 / 巡查区域"/>
+
+                            <TextBlock Text="🏔 工艺作业(联动)" FontWeight="Bold" Foreground="#FF1565C0" Margin="0,16,0,6"/>
+                            <Border x:Name="processInfoBorder" Background="#FFE3F2FD" CornerRadius="4" Padding="10,8" BorderBrush="#FF90CAF9" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock x:Name="faceCodeText" Text="未关联工作面" FontWeight="Bold" Foreground="#FF0D47A1"/>
+                                    <Grid Margin="0,4,0,0" ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto">
+                                        <TextBlock Grid.Row="0" Grid.Column="0" x:Name="benchHeightText" FontSize="11" Classes="muted"/>
+                                        <TextBlock Grid.Row="0" Grid.Column="1" x:Name="platformWidthText" FontSize="11" Classes="muted"/>
+                                        <TextBlock Grid.Row="1" Grid.Column="0" x:Name="materialText" FontSize="11" Classes="muted"/>
+                                        <TextBlock Grid.Row="1" Grid.Column="1" x:Name="advanceRateText" FontSize="11" Classes="muted"/>
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" x:Name="processAdapText" FontSize="11" FontWeight="Bold" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <TextBlock Text="备注" FontWeight="Bold" Foreground="#FF1976D2" Margin="0,16,0,6"/>
+                            <TextBox Text="{Binding Notes, Mode=TwoWay}" TextWrapping="Wrap" AcceptsReturn="True" MinHeight="60"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="2" Classes="statusbar">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <TextBlock x:Name="statusText" Text="就绪"/>
+                <TextBlock Text="|"/>
+                <TextBlock x:Name="storageHint" Text="" Classes="muted"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>
