@@ -118,7 +118,7 @@ def tab_xaml(header, groups):
     x  = f'            <TabItem Header="{esc(header)}">\n'
     x += '                <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,0,1">\n'
     x += '                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">\n'
-    x += '                        <StackPanel Orientation="Horizontal" Height="108">\n'
+    x += '                        <StackPanel Orientation="Horizontal" Height="94">\n'
     for cap, btns in groups: x += group_xaml(cap, btns)
     x += '                        </StackPanel>\n                    </ScrollViewer>\n                </Border>\n            </TabItem>\n'
     return x

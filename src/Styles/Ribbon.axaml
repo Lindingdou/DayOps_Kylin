@@ -8,7 +8,7 @@
     </Style>
     <Style Selector="TabControl.ribbon > TabItem">
         <Setter Property="FontSize" Value="13" />
-        <Setter Property="Padding" Value="16,7" />
+        <Setter Property="Padding" Value="10,4" />
         <Setter Property="MinHeight" Value="0" />
         <Setter Property="Margin" Value="0" />
     </Style>
@@ -19,8 +19,8 @@
 
     <!-- ============ 分组容器 ============ -->
     <Style Selector="Border.ribbon-group">
-        <Setter Property="Padding" Value="7,5,7,3" />
-        <Setter Property="Margin" Value="1,4" />
+        <Setter Property="Padding" Value="3,2,3,1" />
+        <Setter Property="Margin" Value="0,2" />
         <Setter Property="BorderBrush" Value="#DCDFE4" />
         <Setter Property="BorderThickness" Value="0,0,1,0" />
     </Style>
@@ -28,15 +28,15 @@
         <Setter Property="FontSize" Value="11" />
         <Setter Property="Foreground" Value="#8A9099" />
         <Setter Property="HorizontalAlignment" Value="Center" />
-        <Setter Property="Margin" Value="0,4,0,0" />
+        <Setter Property="Margin" Value="0,2,0,0" />
     </Style>
 
     <!-- ============ Ribbon 按钮：扁平 + 悬停高亮 ============ -->
     <Style Selector="Button.ribbon-btn">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
-        <Setter Property="CornerRadius" Value="4" />
-        <Setter Property="Padding" Value="4" />
+        <Setter Property="CornerRadius" Value="3" />
+        <Setter Property="Padding" Value="3,2" />
         <Setter Property="Cursor" Value="Hand" />
     </Style>
     <Style Selector="Button.ribbon-btn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
@@ -51,28 +51,30 @@
 
     <!-- 大按钮：竖排 图标 + 文字 -->
     <Style Selector="Button.large">
-        <Setter Property="Width" Value="64" />
-        <Setter Property="MinHeight" Value="72" />
+        <Setter Property="MinWidth" Value="44" />
+        <Setter Property="MinHeight" Value="66" />
+        <Setter Property="Margin" Value="0" />
         <Setter Property="VerticalAlignment" Value="Stretch" />
     </Style>
     <Style Selector="Button.large Image">
-        <Setter Property="Width" Value="30" />
-        <Setter Property="Height" Value="30" />
+        <Setter Property="Width" Value="32" />
+        <Setter Property="Height" Value="32" />
     </Style>
     <Style Selector="Button.large TextBlock">
         <Setter Property="FontSize" Value="12" />
         <Setter Property="TextAlignment" Value="Center" />
         <Setter Property="TextWrapping" Value="Wrap" />
-        <Setter Property="Margin" Value="0,4,0,0" />
+        <Setter Property="Margin" Value="0,2,0,0" />
     </Style>
 
     <!-- 小按钮：横排 图标 + 文字。压 MinHeight（FluentTheme 默认 32）+ 减竖向内边距，
          保证 3 个塞进一列（DayOps 的 3 行 × N 列布局）。 -->
     <Style Selector="Button.small">
-        <Setter Property="MinWidth" Value="76" />
+        <Setter Property="MinWidth" Value="0" />
         <Setter Property="MinHeight" Value="0" />
         <Setter Property="Height" Value="22" />
-        <Setter Property="Padding" Value="5,0" />
+        <Setter Property="Padding" Value="3,0" />
+        <Setter Property="Margin" Value="0" />
         <Setter Property="HorizontalContentAlignment" Value="Left" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
@@ -83,7 +85,38 @@
     <Style Selector="Button.small TextBlock">
         <Setter Property="FontSize" Value="12" />
         <Setter Property="VerticalAlignment" Value="Center" />
-        <Setter Property="Margin" Value="6,0,0,0" />
+        <Setter Property="Margin" Value="4,0,2,0" />
+    </Style>
+
+    <!-- ToggleButton 版 ribbon 大按钮(帮助/AI 助手, 同原版 Fluent:ToggleButton Large) -->
+    <Style Selector="ToggleButton.ribbon-btn">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="3" />
+        <Setter Property="Padding" Value="3,2" />
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="ToggleButton.ribbon-btn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="#1A0A5AD4" />
+    </Style>
+    <Style Selector="ToggleButton.ribbon-btn:checked /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="#330A5AD4" />
+    </Style>
+    <Style Selector="ToggleButton.large">
+        <Setter Property="MinWidth" Value="44" />
+        <Setter Property="MinHeight" Value="66" />
+        <Setter Property="VerticalAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="ToggleButton.large Image">
+        <Setter Property="Width" Value="32" />
+        <Setter Property="Height" Value="32" />
+        <Setter Property="Stretch" Value="Uniform" />
+    </Style>
+    <Style Selector="ToggleButton.large TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="TextAlignment" Value="Center" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="Margin" Value="0,4,0,0" />
     </Style>
 
 </Styles>

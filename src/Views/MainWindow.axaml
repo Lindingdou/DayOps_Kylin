@@ -3,12 +3,12 @@
         xmlns:controls="using:PitMine3D.Kylin.Controls"
         xmlns:dc="using:Dock.Avalonia.Controls"
         x:Class="PitMine3D.Kylin.Views.MainWindow"
-        Width="1240" Height="800"
+        Width="1280" Height="800"
         MinWidth="900" MinHeight="600"
         Background="#F3F4F6"
-        Title="PitMine3D · 麒麟版 (Avalonia + OpenGL 最小实现)">
+        Title="中煤平朔露天煤矿生产计划决策支撑系统 · DayOps">
 
-    <Grid RowDefinitions="Auto,*,Auto,Auto">
+    <Grid RowDefinitions="Auto,*,Auto">   <!-- Ribbon / DockingManager(含信息栏 Tab) / StatusBar —— 同原版 mainGrid -->
 
         <!-- ============================ 顶部 Ribbon ============================ -->
         <TabControl Grid.Row="0" Classes="ribbon">
@@ -17,7 +17,7 @@
             <TabItem Header="开始">
                 <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,0,1">
                     <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                        <StackPanel Orientation="Horizontal" Height="108">
+                        <StackPanel Orientation="Horizontal" Height="94">
 
                             <!-- 文件 -->
                             <Border Classes="ribbon-group">
@@ -106,9 +106,6 @@
                                             <Button Classes="ribbon-btn small" Tag="文字" Click="OnRibbonCommand">
                                                 <StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_text}" /><TextBlock Text="文字" /></StackPanel>
                                             </Button>
-                                            <Button Classes="ribbon-btn small" Tag="图案填充" Click="OnRibbonCommand" ToolTip.Tip="选闭合边界→按角度/间距生成剖面线(用户定义线填充)">
-                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_hatch}" /><TextBlock Text="填充" /></StackPanel>
-                                            </Button>
                                         </WrapPanel>
                                     </StackPanel>
                                 </DockPanel>
@@ -134,46 +131,7 @@
                                 </DockPanel>
                             </Border>
 
-                            <!-- 注释 -->
-                            <Border Classes="ribbon-group">
-                                <DockPanel>
-                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="注释" />
-                                    <WrapPanel Orientation="Vertical" MaxHeight="72">
-                                        <Button Classes="ribbon-btn small" Tag="对齐标注" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_linear_dimension}" /><TextBlock Text="对齐标注" /></StackPanel></Button>
-                                        <Button Classes="ribbon-btn small" Tag="半径标注" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_radial_dimension}" /><TextBlock Text="半径标注" /></StackPanel></Button>
-                                        <Button Classes="ribbon-btn small" Tag="连续标注" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_continuous_dimension}" /><TextBlock Text="连续标注" /></StackPanel></Button>
-                                        <Button Classes="ribbon-btn small" Tag="标注样式" Click="OnRibbonCommand" ToolTip.Tip="选中标注后调整其样式（箭头/文字/精度等）"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_dimension_style}" /><TextBlock Text="标注样式" /></StackPanel></Button>
-                                    </WrapPanel>
-                                </DockPanel>
-                            </Border>
-
-                            <!-- 测量 -->
-                            <Border Classes="ribbon-group">
-                                <DockPanel>
-                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="测量" />
-                                    <WrapPanel Orientation="Vertical" MaxHeight="72">
-                                        <Button Classes="ribbon-btn small" Tag="距离" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_measure}" /><TextBlock Text="距离" /></StackPanel></Button>
-                                        <Button Classes="ribbon-btn small" Tag="面积" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_measure_area}" /><TextBlock Text="面积" /></StackPanel></Button>
-                                        <Button Classes="ribbon-btn small" Tag="角度" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_measure_angle}" /><TextBlock Text="角度" /></StackPanel></Button>
-                                    </WrapPanel>
-                                </DockPanel>
-                            </Border>
-
-                            <!-- 剪贴板 -->
-                            <Border Classes="ribbon-group">
-                                <DockPanel>
-                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="剪贴板" />
-                                    <WrapPanel Orientation="Vertical" MaxHeight="72">
-                                        <Button Classes="ribbon-btn small" Tag="剪切" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_cut}" /><TextBlock Text="剪切" /></StackPanel></Button>
-                                        <Button Classes="ribbon-btn small" Tag="复制到剪贴板" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_copy}" /><TextBlock Text="复制" /></StackPanel></Button>
-                                        <Button Classes="ribbon-btn small" Tag="粘贴" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_paste}" /><TextBlock Text="粘贴" /></StackPanel></Button>
-                                        <Button Classes="ribbon-btn small" Tag="基点粘贴" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_paste_base}" /><TextBlock Text="基点粘贴" /></StackPanel></Button>
-                                        <Button Classes="ribbon-btn small" Tag="原坐标粘贴" Click="OnRibbonCommand" ToolTip.Tip="粘贴到原坐标位置"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_paste_origin}" /><TextBlock Text="原坐标粘贴" /></StackPanel></Button>
-                                    </WrapPanel>
-                                </DockPanel>
-                            </Border>
-
-                            <!-- 图层 -->
+                            <!-- 图层(原版: 图层特性管理器/新建图层 Large + 当前图层 combo(宽160) + 两行 Middle: 全开 全关 冻结 / 锁定 刷新) -->
                             <Border Classes="ribbon-group">
                                 <DockPanel>
                                     <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="图层" />
@@ -185,95 +143,178 @@
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_layer_add}" /><TextBlock Text="新建&#x0a;图层" /></StackPanel>
                                         </Button>
                                         <StackPanel VerticalAlignment="Center" Margin="6,0,0,0">
-                                            <TextBlock Text="当前图层" FontSize="11" Foreground="#8A9099" Margin="0,0,0,2" />
-                                            <ComboBox SelectedIndex="0" Width="120" MinHeight="26">
-                                                <ComboBoxItem>0 · 默认层</ComboBoxItem>
-                                                <ComboBoxItem>台阶线</ComboBoxItem>
-                                                <ComboBoxItem>坡顶线</ComboBoxItem>
-                                            </ComboBox>
-                                            <WrapPanel Orientation="Horizontal" Margin="0,3,0,0">
-                                                <Button Classes="ribbon-btn small" Tag="全开" Click="OnRibbonCommand" MinWidth="46"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_show_all}" /><TextBlock Text="全开" /></StackPanel></Button>
-                                                <Button Classes="ribbon-btn small" Tag="全关" Click="OnRibbonCommand" MinWidth="46"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_visible_off}" /><TextBlock Text="全关" /></StackPanel></Button>
-                                                <Button Classes="ribbon-btn small" Tag="冻结" Click="OnRibbonCommand" MinWidth="46"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_frozen}" /><TextBlock Text="冻结" /></StackPanel></Button>
-                                                <Button Classes="ribbon-btn small" Tag="锁定" Click="OnRibbonCommand" MinWidth="46"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_locked}" /><TextBlock Text="锁定" /></StackPanel></Button>
-                                                <Button Classes="ribbon-btn small" Tag="刷新" Click="OnRibbonCommand" MinWidth="46" ToolTip.Tip="重生成/刷新视图 (REGEN)"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_refresh}" /><TextBlock Text="刷新" /></StackPanel></Button>
-                                            </WrapPanel>
+                                            <StackPanel Orientation="Horizontal">
+                                                <Image Source="{StaticResource icon_layer}" Width="16" Height="16" VerticalAlignment="Center" />
+                                                <TextBlock Text="当前图层" FontSize="12" VerticalAlignment="Center" Margin="4,0,6,0" />
+                                                <ComboBox SelectedIndex="0" Width="160" MinHeight="22" Height="22" Padding="6,0" FontSize="12">
+                                                    <ComboBoxItem>0 · 默认层</ComboBoxItem>
+                                                    <ComboBoxItem>台阶线</ComboBoxItem>
+                                                    <ComboBoxItem>坡顶线</ComboBoxItem>
+                                                </ComboBox>
+                                            </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                                <Button Classes="ribbon-btn small" Tag="全开" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_show_all}" /><TextBlock Text="全开" /></StackPanel></Button>
+                                                <Button Classes="ribbon-btn small" Tag="全关" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_visible_off}" /><TextBlock Text="全关" /></StackPanel></Button>
+                                                <Button Classes="ribbon-btn small" Tag="冻结" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_frozen}" /><TextBlock Text="冻结" /></StackPanel></Button>
+                                            </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                                <Button Classes="ribbon-btn small" Tag="锁定" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_locked}" /><TextBlock Text="锁定" /></StackPanel></Button>
+                                                <Button Classes="ribbon-btn small" Tag="刷新" Click="OnRibbonCommand" MinWidth="60" ToolTip.Tip="重生成/刷新视图 (REGEN)"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_refresh}" /><TextBlock Text="刷新" /></StackPanel></Button>
+                                            </StackPanel>
                                         </StackPanel>
                                     </StackPanel>
                                 </DockPanel>
                             </Border>
 
-                            <!-- 视图 -->
+                            <!-- 视图(原版: 渲染配置 Large · 切换窗口 SplitButton Large · Middle: 2D 3D 缩放 / 平移 Gizmo 清理标记 / 清空视图) -->
                             <Border Classes="ribbon-group">
                                 <DockPanel>
                                     <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="视图" />
                                     <StackPanel Orientation="Horizontal">
-                                        <Button Classes="ribbon-btn large" Tag="3D" Click="OnRibbonCommand">
-                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_3D}" /><TextBlock Text="3D" /></StackPanel>
+                                        <Button Classes="ribbon-btn large" Tag="渲染配置" Click="OnRibbonCommand">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_render_cfg}" /><TextBlock Text="渲染&#x0a;配置" /></StackPanel>
                                         </Button>
-                                        <Button Classes="ribbon-btn large" Tag="2D" Click="OnRibbonCommand">
-                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_2D}" /><TextBlock Text="2D" /></StackPanel>
+                                        <Button Classes="ribbon-btn large" ToolTip.Tip="切换窗口：列出已打开的文档，点选即切换；下方为标准视图预设">
+                                            <Button.Flyout>
+                                                <MenuFlyout Opening="OnSwitchViewFlyoutOpening" />
+                                            </Button.Flyout>
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_win}" /><TextBlock Text="切换&#x0a;窗口 ▾" /></StackPanel>
                                         </Button>
                                         <WrapPanel Orientation="Vertical" MaxHeight="72">
-                                            <Button Classes="ribbon-btn small" Tag="渲染配置" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_render_cfg}" /><TextBlock Text="渲染配置" /></StackPanel></Button>
-                                            <Button Classes="ribbon-btn small" Tag="缩放" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_Zoom}" /><TextBlock Text="缩放" /></StackPanel></Button>
+                                            <Button Classes="ribbon-btn small" Tag="2D" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_2D}" /><TextBlock Text="2D" /></StackPanel></Button>
+                                            <Button Classes="ribbon-btn small" Tag="3D" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_3D}" /><TextBlock Text="3D" /></StackPanel></Button>
+                                            <Button Classes="ribbon-btn small" Tag="范围缩放" Click="OnRibbonCommand" ToolTip.Tip="缩放全图 (ZE)"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_Zoom}" /><TextBlock Text="缩放" /></StackPanel></Button>
                                             <Button Classes="ribbon-btn small" Tag="平移" Click="OnRibbonCommand" ToolTip.Tip="平移视图（按住鼠标中键拖拽）"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_Pan}" /><TextBlock Text="平移" /></StackPanel></Button>
                                             <Button Classes="ribbon-btn small" Tag="夹点开关" Click="OnRibbonCommand" ToolTip.Tip="切换夹点（Gizmo）显示"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_gizmo}" /><TextBlock Text="Gizmo" /></StackPanel></Button>
                                             <Button Classes="ribbon-btn small" Tag="清理标记" Click="OnRibbonCommand" ToolTip.Tip="清除视图中所有 × 标记 (CLRMARK)"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_clear_marks}" /><TextBlock Text="清理标记" /></StackPanel></Button>
                                             <Button Classes="ribbon-btn small" Tag="清空视图" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_clear_marks}" /><TextBlock Text="清空视图" /></StackPanel></Button>
-                                            <Button Classes="ribbon-btn small" ToolTip.Tip="标准视图预设">
-                                                <Button.Flyout>
-                                                    <MenuFlyout>
-                                                        <MenuItem Header="俯视" Tag="俯视" Click="OnRibbonCommand" />
-                                                        <MenuItem Header="仰视" Tag="仰视" Click="OnRibbonCommand" />
-                                                        <MenuItem Header="主视 (前)" Tag="主视" Click="OnRibbonCommand" />
-                                                        <MenuItem Header="后视" Tag="后视" Click="OnRibbonCommand" />
-                                                        <MenuItem Header="左视" Tag="左视" Click="OnRibbonCommand" />
-                                                        <MenuItem Header="右视" Tag="右视" Click="OnRibbonCommand" />
-                                                        <MenuItem Header="西南等轴测" Tag="西南等轴测" Click="OnRibbonCommand" />
-                                                        <MenuItem Header="东南等轴测" Tag="东南等轴测" Click="OnRibbonCommand" />
-                                                        <MenuItem Header="东北等轴测" Tag="东北等轴测" Click="OnRibbonCommand" />
-                                                        <MenuItem Header="西北等轴测" Tag="西北等轴测" Click="OnRibbonCommand" />
-                                                        <Separator />
-                                                        <MenuItem Header="范围缩放" Tag="范围缩放" Click="OnRibbonCommand" />
-                                                        <MenuItem Header="上一视图" Tag="上一视图" Click="OnRibbonCommand" />
-                                                    </MenuFlyout>
-                                                </Button.Flyout>
-                                                <StackPanel Orientation="Horizontal"><TextBlock Text="视图预设 ▾" /></StackPanel>
-                                            </Button>
                                         </WrapPanel>
                                     </StackPanel>
                                 </DockPanel>
                             </Border>
 
-                            <!-- 特性 -->
+                            <!-- 注释(原版: 标注 SplitButton Large · 填充 SplitButton Large · 图案/比例/角度 参数栏) -->
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="注释" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" ToolTip.Tip="标注：对齐 / 连续 / 半径 · 标注样式">
+                                            <Button.Flyout>
+                                                <MenuFlyout>
+                                                    <MenuItem Header="对齐标注" Tag="对齐标注" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="连续标注" Tag="连续标注" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="半径标注" Tag="半径标注" Click="OnRibbonCommand" />
+                                                    <Separator />
+                                                    <MenuItem Header="标注样式" Tag="标注样式" Click="OnRibbonCommand" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_linear_dimension}" /><TextBlock Text="标注 ▾" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" ToolTip.Tip="填充：按右侧 比例(间距)/角度 生成剖面线；十字 = 交叉填充开关">
+                                            <Button.Flyout>
+                                                <MenuFlyout>
+                                                    <MenuItem Header="图案填充" Click="OnHatchFillClick" />
+                                                    <Separator />
+                                                    <MenuItem Header="十字交叉(开/关)" Tag="填充十字" Click="OnRibbonCommand" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_hatch}" /><TextBlock Text="填充 ▾" /></StackPanel>
+                                        </Button>
+                                        <!-- 图案/比例/角度 三行共享列(同原版 Grid Width=176) -->
+                                        <Grid Width="176" Margin="4,0" VerticalAlignment="Center" ColumnDefinitions="Auto,Auto,*" RowDefinitions="24,24,24">
+                                            <Image Grid.Row="0" Grid.Column="0" Source="{StaticResource icon_hatch}" Width="15" Height="15" Margin="0,0,5,0" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="图案" Width="34" VerticalAlignment="Center" FontSize="12" />
+                                            <ComboBox Grid.Row="0" Grid.Column="2" x:Name="HatchPatternBox" SelectedIndex="0" MinHeight="22" Height="22" Padding="6,0" FontSize="12" SelectionChanged="OnHatchPatternChanged">
+                                                <ComboBoxItem>ANSI31 斜线</ComboBoxItem>
+                                                <ComboBoxItem>ANSI37 十字</ComboBoxItem>
+                                            </ComboBox>
+                                            <Image Grid.Row="1" Grid.Column="0" Source="{StaticResource icon_hatch_scale}" Width="15" Height="15" Margin="0,0,5,0" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="比例" Width="34" VerticalAlignment="Center" FontSize="12" />
+                                            <TextBox Grid.Row="1" Grid.Column="2" x:Name="HatchScaleBox" Text="" Watermark="自动" MinHeight="22" Height="22" Padding="4,0" FontSize="12" ToolTip.Tip="剖面线间距(世界单位)；空 = 自动" />
+                                            <Image Grid.Row="2" Grid.Column="0" Source="{StaticResource icon_hatch_angle}" Width="15" Height="15" Margin="0,0,5,0" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Row="2" Grid.Column="1" Text="角度" Width="34" VerticalAlignment="Center" FontSize="12" />
+                                            <TextBox Grid.Row="2" Grid.Column="2" x:Name="HatchAngleBox" Text="45" MinHeight="22" Height="22" Padding="4,0" FontSize="12" />
+                                        </Grid>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+
+                            <!-- 特性(原版: 剪贴板 SplitButton Large · 测量 SplitButton Large · 线型栏 · 快速选择/创建选择集/调用选择集 Large · 全部选择/最后/上次 Middle) -->
                             <Border Classes="ribbon-group">
                                 <DockPanel>
                                     <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="特性" />
                                     <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" ToolTip.Tip="剪贴板：剪切 / 复制 / 粘贴 / 基点粘贴 / 原坐标粘贴">
+                                            <Button.Flyout>
+                                                <MenuFlyout>
+                                                    <MenuItem Header="剪切" Tag="剪切" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="复制" Tag="复制到剪贴板" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="粘贴" Tag="粘贴" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="基点粘贴" Tag="基点粘贴" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="原坐标粘贴" Tag="原坐标粘贴" Click="OnRibbonCommand" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_paste}" /><TextBlock Text="剪贴板 ▾" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" ToolTip.Tip="测量：距离 / 角度 / 面积">
+                                            <Button.Flyout>
+                                                <MenuFlyout>
+                                                    <MenuItem Header="距离" Tag="距离" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="角度" Tag="角度" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="面积" Tag="面积" Click="OnRibbonCommand" />
+                                                </MenuFlyout>
+                                            </Button.Flyout>
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_measure}" /><TextBlock Text="测量 ▾" /></StackPanel>
+                                        </Button>
+                                        <!-- 线型栏(同原版 特性 组内 颜色/线宽/线型 栏; Kylin 现有命令仅线型) -->
+                                        <StackPanel Width="150" Margin="4,0" VerticalAlignment="Center">
+                                            <DockPanel Height="22">
+                                                <Image Source="{StaticResource icon_linetype}" Width="15" Height="15" Margin="0,0,5,0" VerticalAlignment="Center" />
+                                                <TextBlock Text="线型" Width="34" VerticalAlignment="Center" FontSize="12" />
+                                                <ComboBox x:Name="LinetypeBox" SelectedIndex="0" MinHeight="22" Height="22" Padding="6,0" FontSize="12" HorizontalAlignment="Stretch" SelectionChanged="OnLinetypeChanged">
+                                                    <ComboBoxItem>实线</ComboBoxItem>
+                                                    <ComboBoxItem>虚线</ComboBoxItem>
+                                                    <ComboBoxItem>点划线</ComboBoxItem>
+                                                    <ComboBoxItem>点线</ComboBoxItem>
+                                                    <ComboBoxItem>双点划线</ComboBoxItem>
+                                                </ComboBox>
+                                            </DockPanel>
+                                        </StackPanel>
                                         <Button Classes="ribbon-btn large" Tag="快速选择" Click="OnRibbonCommand">
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_quick_select}" /><TextBlock Text="快速&#x0a;选择" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" Tag="创建选择集" Click="OnRibbonCommand" ToolTip.Tip="将当前选择保存为命名选择集">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_create_selection}" /><TextBlock Text="创建&#x0a;选择集" /></StackPanel>
+                                        </Button>
+                                        <Button Classes="ribbon-btn large" ToolTip.Tip="调用选择集：列出已保存的命名选择集，点选即重新选中">
+                                            <Button.Flyout>
+                                                <MenuFlyout Opening="OnRecallSelFlyoutOpening" />
+                                            </Button.Flyout>
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_recall_selection}" /><TextBlock Text="调用&#x0a;选择集 ▾" /></StackPanel>
                                         </Button>
                                         <WrapPanel Orientation="Vertical" MaxHeight="72">
                                             <Button Classes="ribbon-btn small" Tag="全部选择" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_select_all}" /><TextBlock Text="全部选择" /></StackPanel></Button>
                                             <Button Classes="ribbon-btn small" Tag="最后" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_select_last}" /><TextBlock Text="最后" /></StackPanel></Button>
                                             <Button Classes="ribbon-btn small" Tag="上次" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_select_previous}" /><TextBlock Text="上次" /></StackPanel></Button>
-                                            <Button Classes="ribbon-btn small" Tag="创建选择集" Click="OnRibbonCommand" ToolTip.Tip="将当前选择保存为命名选择集"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_create_selection}" /><TextBlock Text="创建选择集" /></StackPanel></Button>
-                                            <Button Classes="ribbon-btn small" Tag="调用选择集" Click="OnRibbonCommand" ToolTip.Tip="重新选中此前保存的命名选择集"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_recall_selection}" /><TextBlock Text="调用选择集" /></StackPanel></Button>
                                         </WrapPanel>
                                     </StackPanel>
                                 </DockPanel>
                             </Border>
 
-                            <!-- 帮助 -->
+                            <!-- 帮助(原版: 注册 · 帮助文档 · AI 助手(切换右侧 AI 助手页) 均 Large) -->
                             <Border Classes="ribbon-group" BorderThickness="0">
                                 <DockPanel>
                                     <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="帮助" />
                                     <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="注册" Click="OnRibbonCommand">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_register}" /><TextBlock Text="注册" /></StackPanel>
+                                        </Button>
                                         <Button Classes="ribbon-btn large" Tag="帮助文档" Click="OnRibbonCommand">
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_help}" /><TextBlock Text="帮助&#x0a;文档" /></StackPanel>
                                         </Button>
-                                        <Button Classes="ribbon-btn small" Tag="注册" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_register}" /><TextBlock Text="注册" /></StackPanel></Button>
+                                        <ToggleButton Classes="ribbon-btn large" x:Name="AiChatToggle" IsCheckedChanged="OnAiChatToggle" ToolTip.Tip="显示/收起右侧 AI 助手">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_ai_chat}" /><TextBlock Text="AI&#x0a;助手" /></StackPanel>
+                                        </ToggleButton>
                                     </StackPanel>
                                 </DockPanel>
                             </Border>
@@ -287,7 +328,7 @@
             <TabItem Header="地质与工程信息数据库">
                 <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,0,1">
                     <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                        <StackPanel Orientation="Horizontal" Height="108">
+                        <StackPanel Orientation="Horizontal" Height="94">
                             <Border Classes="ribbon-group">
                                 <DockPanel>
                                     <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="钻孔管理" />
@@ -412,7 +453,7 @@
             <TabItem Header="三维地质建模">
                 <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,0,1">
                     <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                        <StackPanel Orientation="Horizontal" Height="108">
+                        <StackPanel Orientation="Horizontal" Height="94">
                             <Border Classes="ribbon-group">
                                 <DockPanel>
                                     <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="建模" />
@@ -612,7 +653,7 @@
             <TabItem Header="点云处理">
                 <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,0,1">
                     <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                        <StackPanel Orientation="Horizontal" Height="108">
+                        <StackPanel Orientation="Horizontal" Height="94">
                             <Border Classes="ribbon-group">
                                 <DockPanel>
                                     <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="点云数据" />
@@ -770,7 +811,7 @@
             <TabItem Header="剥采排工程辅助设计">
                 <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,0,1">
                     <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                        <StackPanel Orientation="Horizontal" Height="108">
+                        <StackPanel Orientation="Horizontal" Height="94">
                             <Border Classes="ribbon-group">
                                 <DockPanel>
                                     <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="剥采工程" />
@@ -899,7 +940,7 @@
             <TabItem Header="道路运输系统">
                 <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,0,1">
                     <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                        <StackPanel Orientation="Horizontal" Height="108">
+                        <StackPanel Orientation="Horizontal" Height="94">
                             <Border Classes="ribbon-group">
                                 <DockPanel>
                                     <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="路网构建" />
@@ -994,7 +1035,7 @@
             <TabItem Header="生产计划编制">
                 <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,0,1">
                     <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                        <StackPanel Orientation="Horizontal" Height="108">
+                        <StackPanel Orientation="Horizontal" Height="94">
                             <Border Classes="ribbon-group">
                                 <DockPanel>
                                     <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="优化开采设计" />
@@ -1098,7 +1139,7 @@
             <TabItem Header="日常生产组织">
                 <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,0,1">
                     <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                        <StackPanel Orientation="Horizontal" Height="108">
+                        <StackPanel Orientation="Horizontal" Height="94">
                             <Border Classes="ribbon-group">
                                 <DockPanel>
                                     <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="基础数据" />
@@ -1280,44 +1321,86 @@
                 <Button Grid.Column="1" Content="发送" FontSize="12" Margin="4,0,0,0" Padding="8,2" Click="OnAssistantSend" />
             </Grid>
         </Grid>
+        <!-- 信息栏(原版底部 LayoutAnchorable「信息栏」: 命令历史填满上方 + 底部一行 图标·命令:·输入框), 由 BuildDock 停靠为底部面板 -->
+        <Border x:Name="CmdContent" Background="#F7F8FA" Padding="4,2">
+            <DockPanel LastChildFill="True">
+                <!-- 命令输入行(底部, 高 24, 同原版) -->
+                <Grid DockPanel.Dock="Bottom" Height="24" ColumnDefinitions="Auto,Auto,*">
+                    <Image Grid.Column="0" Source="{StaticResource icon_option}" Width="16" Height="16" VerticalAlignment="Center" Margin="2,0,0,0" />
+                    <TextBlock Grid.Column="1" Text="命令:" Foreground="#3A3F46" VerticalAlignment="Center" Margin="6,0,6,0" FontFamily="Consolas,monospace" />
+                    <TextBox Grid.Column="2" x:Name="CommandInput" Height="20" MinHeight="20" Padding="4,0" VerticalContentAlignment="Center"
+                             Background="#FFFFFF" BorderBrush="#D3D7DE" BorderThickness="1" Foreground="#1E1F22"
+                             FontFamily="Consolas,monospace" Watermark="命令别名/中文命令后回车（LINE / 距离 / 俯视 …），↑↓ 回溯历史，Tab 补全"
+                             KeyDown="OnCommandKeyDown" TextChanged="OnCommandInputChanged" />
+                </Grid>
+                <!-- 命令自动补全候选：固定占一行(Opacity 显隐, 不用 IsVisible)——显隐不改变面板布局 -->
+                <TextBlock x:Name="CmdSuggest" DockPanel.Dock="Bottom" Foreground="#8A6D2B" FontSize="11" Height="16"
+                           FontFamily="Consolas,monospace" Margin="30,0,0,2" Text="" Opacity="0" />
+                <!-- 命令历史/输出回显：填满面板其余高度(面板高度由停靠比例决定, 日志增长不影响视口) -->
+                <ScrollViewer x:Name="CmdLogScroll" Margin="0,0,0,3" Background="#FFFFFF"
+                              HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                    <StackPanel x:Name="CmdLog" Margin="4,2" />
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
         </Panel>
 
         <!-- 停靠布局在代码 BuildDock() 里搭建(MVVM 模型), 内容经 DataTemplate 供暂存面板控件 -->
         <dc:DockControl Grid.Row="1" x:Name="Dock" />
 
-        <!-- ============================ 命令行 ============================ -->
-        <Border Grid.Row="2" Background="#1E1F22" Padding="8,4">
-            <DockPanel>
-                <!-- 命令输入行 -->
-                <Grid DockPanel.Dock="Bottom" ColumnDefinitions="Auto,*">
-                    <TextBlock Grid.Column="0" Text="命令:" Foreground="#9DA3AD" VerticalAlignment="Center" Margin="2,0,8,0" FontFamily="Consolas,monospace" />
-                    <TextBox Grid.Column="1" x:Name="CommandInput"
-                             Background="Transparent" BorderThickness="0" Foreground="#E6E6E6"
-                             FontFamily="Consolas,monospace" Watermark="命令别名/中文命令后回车（LINE / 距离 / 俯视 …），↑↓ 回溯历史，Tab 补全"
-                             KeyDown="OnCommandKeyDown" TextChanged="OnCommandInputChanged" />
-                </Grid>
-                <!-- 命令自动补全候选：固定占一行(Opacity 显隐, 不用 IsVisible)——显隐不改变命令行区高度, 视口不被挤动 -->
-                <TextBlock x:Name="CmdSuggest" DockPanel.Dock="Bottom" Foreground="#C7A96B" FontSize="11" Height="16"
-                           FontFamily="Consolas,monospace" Margin="40,0,0,2" Text="" Opacity="0" />
-                <!-- 命令历史/输出回显：固定高度(非 MaxHeight)——日志从空长到满时命令行区高度不变, 视口不随之缩放/漂移 -->
-                <ScrollViewer x:Name="CmdLogScroll" DockPanel.Dock="Top" Height="60" Margin="0,0,0,3"
-                              HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-                    <StackPanel x:Name="CmdLog" />
-                </ScrollViewer>
-            </DockPanel>
-        </Border>
-
-        <!-- ============================ 状态栏 ============================ -->
-        <Border Grid.Row="3" Background="#0A5AD4" Height="26">
+        <!-- ============================ 状态栏(同原版 Fluent:StatusBar 项序) ============================ -->
+        <Border Grid.Row="2" Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,1,0,0" Height="26">
             <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto">
-                <TextBlock Grid.Column="0" x:Name="CoordText" Text="X 0.000  Y 0.000  Z 0.000"
-                           Foreground="White" VerticalAlignment="Center" Margin="10,0" FontSize="12" FontFamily="Consolas,monospace" />
-                <ToggleButton Grid.Column="1" x:Name="SnapToggle" Content="对象捕捉" Foreground="White" Background="Transparent" BorderThickness="0" Padding="8,0" FontSize="12" />
-                <ToggleButton Grid.Column="2" x:Name="OrthoToggle" Content="正交" IsCheckedChanged="OnOrthoToggle" Foreground="White" Background="Transparent" BorderThickness="0" Padding="8,0" FontSize="12" />
-                <ToggleButton Grid.Column="3" x:Name="GridSnapToggle" Content="栅格捕捉" IsCheckedChanged="OnGridSnapToggle" Foreground="White" Background="Transparent" BorderThickness="0" Padding="8,0" FontSize="12" />
-                <TextBlock Grid.Column="4" x:Name="StatusMsg" Text="就绪" Foreground="#DCE8FF" VerticalAlignment="Center" Margin="12,0" FontSize="12" />
-                <TextBlock Grid.Column="5" Text="Avalonia 11 · OpenGL · 麒麟 SP10 就绪"
-                           Foreground="#DCE8FF" VerticalAlignment="Center" Margin="10,0" FontSize="12" />
+                <!-- Coordinate: 鼠标进入视口才显示世界坐标, 离开清空(同原版 txtCoordinate) -->
+                <TextBlock Grid.Column="0" x:Name="CoordText" Text="" MinWidth="280"
+                           Foreground="#1E1F22" VerticalAlignment="Center" Margin="10,0" FontSize="13" FontFamily="Consolas,monospace" />
+                <Border Grid.Column="1" Width="1" Background="#DCDFE4" Margin="0,4" />
+                <!-- Performance: 帧时间采样(同原版 txtFrameProfilerStatus) -->
+                <TextBlock Grid.Column="2" x:Name="FpsText" Text="FPS — | — ms" MinWidth="180"
+                           Foreground="#8A929C" VerticalAlignment="Center" Margin="10,0" FontSize="12" FontFamily="Consolas,monospace"
+                           ToolTip.Tip="帧时间采样 — 启动后约 1 秒开始显示数据" />
+                <Border Grid.Column="3" Width="1" Background="#DCDFE4" Margin="0,4" />
+                <TextBlock Grid.Column="4" x:Name="StatusMsg" Text="就绪" Foreground="#3A3F46" VerticalAlignment="Center" Margin="12,0" FontSize="12" TextTrimming="CharacterEllipsis" />
+                <!-- extend(右侧): 正交 · 捕捉(左键开关, 右键捕捉模式) · 栅格 · 栅格捕捉 · 选项 —— 20x20 图标按钮同原版 -->
+                <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                    <ToggleButton x:Name="OrthoToggle" Width="20" Height="20" Padding="0" Background="Transparent" BorderThickness="0"
+                                  IsCheckedChanged="OnOrthoToggle" ToolTip.Tip="正交 (F8)">
+                        <Image Source="{StaticResource icon_ortho}" Width="16" Height="16" />
+                    </ToggleButton>
+                    <Border Width="1" Background="#DCDFE4" Margin="4,2" />
+                    <ToggleButton x:Name="SnapToggle" Width="20" Height="20" Padding="0" Background="Transparent" BorderThickness="0"
+                                  ToolTip.Tip="对象捕捉 (左键开关, 右键设置捕捉模式)">
+                        <Image Source="{StaticResource icon_snap}" Width="16" Height="16" />
+                        <ToggleButton.ContextMenu>
+                            <ContextMenu Opening="OnSnapModeMenuOpening">
+                                <MenuItem Header="端点 (Endpoint)" IsEnabled="False" ToolTip.Tip="恒开" />
+                                <MenuItem Header="中点 (Midpoint)" IsEnabled="False" ToolTip.Tip="恒开" />
+                                <MenuItem Header="圆心 (Center)" IsEnabled="False" ToolTip.Tip="恒开" />
+                                <MenuItem x:Name="MiSnapIntersection" Header="交点 (Intersection)" Tag="3" Click="OnSnapModeMenuClick" />
+                                <MenuItem x:Name="MiSnapPerpendicular" Header="垂足 (Perpendicular)" Tag="4" Click="OnSnapModeMenuClick" />
+                                <MenuItem x:Name="MiSnapNearest" Header="最近 (Nearest)" Tag="5" Click="OnSnapModeMenuClick" />
+                                <Separator />
+                                <MenuItem Header="全部开启" Click="OnSnapModeAllOnClick" />
+                                <MenuItem Header="全部关闭" Click="OnSnapModeAllOffClick" />
+                            </ContextMenu>
+                        </ToggleButton.ContextMenu>
+                    </ToggleButton>
+                    <Border Width="1" Background="#DCDFE4" Margin="4,2" />
+                    <ToggleButton x:Name="GridToggle" Width="20" Height="20" Padding="0" Background="Transparent" BorderThickness="0"
+                                  IsChecked="True" IsCheckedChanged="OnGridToggle" ToolTip.Tip="栅格开关">
+                        <Image Source="{StaticResource icon_grid}" Width="16" Height="16" />
+                    </ToggleButton>
+                    <Border Width="1" Background="#DCDFE4" Margin="4,2" />
+                    <ToggleButton x:Name="GridSnapToggle" Width="20" Height="20" Padding="0" Background="Transparent" BorderThickness="0"
+                                  IsCheckedChanged="OnGridSnapToggle" ToolTip.Tip="栅格捕捉 (F9)">
+                        <Image Source="{StaticResource icon_point}" Width="16" Height="16" />
+                    </ToggleButton>
+                    <Border Width="1" Background="#DCDFE4" Margin="4,2" />
+                    <Button Width="20" Height="20" Padding="0" Background="Transparent" BorderThickness="0"
+                            Click="OnStatusOptionsClick" ToolTip.Tip="选项 (显示 / 选择集 / 打开和保存)">
+                        <Image Source="{StaticResource icon_settings}" Width="16" Height="16" />
+                    </Button>
+                </StackPanel>
             </Grid>
         </Border>
 

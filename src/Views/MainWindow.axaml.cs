@@ -23,6 +23,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        WindowState = WindowState.Maximized;   // 原版默认 1920x1080 铺满屏幕；XAML 里设 WindowState 在部分平台不生效, 改代码设
         _active = NewDocState();   // 首个文档(场景/图层), 供 _scene/_layers 与停靠布局
         _docs.Add(_active);
         BuildDock();               // 代码建 MVVM 停靠布局 + 内容模板(返回暂存面板控件)
@@ -627,9 +628,10 @@ public partial class MainWindow : Window
             }
             else Viewport.ZoomExtents();                                  // 否则 = 范围缩放
         };
-        _onHostExited = (_, _) =>                                          // 光标离开视口 → 收起十字与浮标
+        _onHostExited = (_, _) =>                                          // 光标离开视口 → 收起十字与浮标, 状态栏坐标清空(同原版)
         {
             Viewport.HideCursor();
+            CoordText.Text = "";
             if (_active.DragTip != null) { _active.DragTip.Opacity = 0; (_active.DragTip.Parent as Control)?.InvalidateVisual(); }
         };
 
@@ -717,24 +719,34 @@ public partial class MainWindow : Window
 
         // 左/右面板：各由两个独立 Dock 工具组成, ToolDock 呈现底部标签(左=文件管理器/图层, 右=特性/智能助手)。
         // CanFloat=false：拖拽只在停靠区重排; 吸附不到新位就回到原处(不浮出独立窗口/不消失), 仅关闭键移除。
+        // 布局忠实原版 MainWindow.xaml LayoutRoot：
+        //   垂直 [ 水平 [ 左(文件管理器/…, 最小宽 240) | 中央文档区 | 右(属性对话框/AI 助手, 宽 270) ] | 底部 信息栏(高 120, 最小 80) ]
+        // Dock.Avalonia 只有比例没有像素：按原版 1920x1080 换算 左 240/1920≈0.125、右 270/1920≈0.14、信息栏 120/(1080-Ribbon-状态栏)≈0.14。
         var fileTool = new DMC.Tool { Id = "File", Title = "文件管理器", CanClose = true, CanFloat = false };
         var layerTool = new DMC.Tool { Id = "Layer", Title = "图层", CanClose = true, CanFloat = false };
-        var props = new DMC.Tool { Id = "Props", Title = "特性", CanClose = true, CanFloat = false };
-        var assistant = new DMC.Tool { Id = "Assistant", Title = "智能助手", CanClose = true, CanFloat = false };
-        var leftDock = new DMC.ToolDock { Alignment = DCore.Alignment.Left, Proportion = 0.18,
+        var props = new DMC.Tool { Id = "Props", Title = "属性对话框", CanClose = false, CanFloat = false };   // 原版 CanHide=False
+        var assistant = new DMC.Tool { Id = "Assistant", Title = "AI 助手", CanClose = false, CanFloat = false }; // 原版 CanClose=False
+        var info = new DMC.Tool { Id = "Info", Title = "信息栏", CanClose = false, CanFloat = false };          // 原版 CanHide/CanClose=False
+        var leftDock = new DMC.ToolDock { Alignment = DCore.Alignment.Left, Proportion = 0.14,
             ActiveDockable = fileTool, VisibleDockables = f.CreateList<DCore.IDockable>(fileTool, layerTool) };
-        var docDock = new DMC.DocumentDock { Proportion = 0.60, CanCreateDocument = false,
+        var docDock = new DMC.DocumentDock { Proportion = 0.70, CanCreateDocument = false,
             ActiveDockable = _active.Vm, VisibleDockables = f.CreateList<DCore.IDockable>(_active.Vm) };
         _dockFactory = f; _docDock = docDock;
-        // 右侧工具停靠：特性 + 智能助手 两页(底部标签)。
-        var rightDock = new DMC.ToolDock { Alignment = DCore.Alignment.Right, Proportion = 0.22,
+        // 右侧工具停靠：属性对话框(默认选中) + AI 助手 两页(底部标签)。
+        var rightDock = new DMC.ToolDock { Alignment = DCore.Alignment.Right, Proportion = 0.16,
             ActiveDockable = props, VisibleDockables = f.CreateList<DCore.IDockable>(props, assistant) };
+        _propsTool = props; _assistantTool = assistant;   // Ribbon「AI 助手」切换钮用
 
-        var mainDock = new DMC.ProportionalDock { Orientation = DCore.Orientation.Horizontal,
+        var mainDock = new DMC.ProportionalDock { Orientation = DCore.Orientation.Horizontal, Proportion = 0.84,
             VisibleDockables = f.CreateList<DCore.IDockable>(
                 leftDock, new DMC.ProportionalDockSplitter(), docDock, new DMC.ProportionalDockSplitter(), rightDock) };
-        var root = new DMC.RootDock { Id = "Root", ActiveDockable = mainDock, DefaultDockable = mainDock,
-            VisibleDockables = f.CreateList<DCore.IDockable>(mainDock) };
+        // 底部：信息栏(命令历史 + 命令输入)——原版为 DockingManager 内的 LayoutAnchorable, 可拖动/可隐藏。
+        var bottomDock = new DMC.ToolDock { Alignment = DCore.Alignment.Bottom, Proportion = 0.16,
+            ActiveDockable = info, VisibleDockables = f.CreateList<DCore.IDockable>(info) };
+        var vertDock = new DMC.ProportionalDock { Orientation = DCore.Orientation.Vertical,
+            VisibleDockables = f.CreateList<DCore.IDockable>(mainDock, new DMC.ProportionalDockSplitter(), bottomDock) };
+        var root = new DMC.RootDock { Id = "Root", ActiveDockable = vertDock, DefaultDockable = vertDock,
+            VisibleDockables = f.CreateList<DCore.IDockable>(vertDock) };
 
         f.InitLayout(root);
         Dock.Factory = f;
@@ -745,7 +757,7 @@ public partial class MainWindow : Window
         // 关键：注册到 Application 级(而非 Dock 级)——浮动时面板进入独立宿主窗口(另一个 DockControl),
         // 只有 App 级模板会被其继承, 否则浮动面板因无模板而"消失"。
         var tpl = new FuncDataTemplate<DCore.IDockable>(
-            d => d?.Id is "File" or "Layer" or "Props" or "Assistant" || (d?.Id?.StartsWith("Doc") == true),
+            d => d?.Id is "File" or "Layer" or "Props" or "Assistant" or "Info" || (d?.Id?.StartsWith("Doc") == true),
             (d, _) => ContentFor(d?.Id));
         var appTpls = Avalonia.Application.Current!.DataTemplates;
         if (!appTpls.Contains(tpl)) appTpls.Add(tpl);
@@ -770,6 +782,7 @@ public partial class MainWindow : Window
             "Layer" => LayerContent,
             "Props" => PropsContent,
             "Assistant" => AssistantContent,
+            "Info" => CmdContent,
             _ => null,
         };
         if (c?.Parent is Panel p) p.Children.Remove(c);
@@ -883,20 +896,9 @@ public partial class MainWindow : Window
         // 叠层统一装进一个容器(命中透传): OpenGlControl 的直接兄弟里只有第一个 Border 会合成上屏,
         // 多个叠层须收进单一容器, 容器内的多个子级再正常渲染(否则浮标等第二个叠层不显示)。
         var overlay = new Panel { IsHitTestVisible = false };
-        // 左上角操作提示
-        var hint = new StackPanel();
-        hint.Children.Add(new TextBlock { Text = "视口 · OpenGL", Foreground = Avalonia.Media.Brushes.White, FontWeight = Avalonia.Media.FontWeight.SemiBold, FontSize = 13 });
-        hint.Children.Add(new TextBlock { Text = "左键拖拽 = 平移 · 滚轮 = 缩放 · 右键切 2D/3D", Foreground = Avalonia.Media.Brush.Parse("#B9C6D6"), FontSize = 11, Margin = new Avalonia.Thickness(0, 3, 0, 0) });
-        overlay.Children.Add(new Border
-        {
-            Background = Avalonia.Media.Brush.Parse("#B0000000"),
-            CornerRadius = new Avalonia.CornerRadius(6),
-            Padding = new Avalonia.Thickness(10, 7),
-            Margin = new Avalonia.Thickness(12),
-            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left,
-            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top,
-            Child = hint,
-        });
+        // (原版视口无"视口·OpenGL"操作提示框, 复刻布局时已去掉; 操作说明见 帮助 命令)
+        // 帧时间采样 → 状态栏 Performance 项(同原版 txtFrameProfilerStatus)
+        vp.FrameStats += (fps, ms) => { if (ReferenceEquals(st, _active) && FpsText != null) FpsText.Text = $"FPS {fps:0} | {ms:0.0} ms"; };
         // 绘制/编辑时跟随光标的即时信息浮标(长度/角度/半径/位移/比例…)
         var tip = new Border
         {
@@ -1656,7 +1658,7 @@ public partial class MainWindow : Window
     private void SetDocPath(string? path)
     {
         _currentPath = path;
-        Title = "PitMine3D · Kylin — " + (path == null ? "未命名" : Path.GetFileName(path));
+        Title = "中煤平朔露天煤矿生产计划决策支撑系统 · DayOps — " + (path == null ? "未命名" : Path.GetFileName(path));   // 原版标题 + 当前文档名
     }
 
     private async Task SaveSceneAsync()
@@ -7854,9 +7856,124 @@ public partial class MainWindow : Window
     // 网格显隐(保持 _gridOn 与视口一致)
     private void SetGrid(bool on)
     {
+        if (GridToggle != null && GridToggle.IsChecked != on) GridToggle.IsChecked = on;   // 状态栏栅格钮同步(触发 OnGridToggle 后下一行早退)
         if (on == _gridOn) return;
         _gridOn = on;
         Viewport.ToggleGrid();
+    }
+
+    // ── 状态栏(同原版 extend 项)：栅格开关 / 捕捉模式右键菜单 / 选项 ──
+    private void OnGridToggle(object? sender, RoutedEventArgs e) => SetGrid(GridToggle.IsChecked == true);
+
+    private void OnStatusOptionsClick(object? sender, RoutedEventArgs e) => ShowOptions();
+
+    // 捕捉模式菜单打开时按 _snapExtraMask 回填勾选(端点/中点/圆心/象限恒开, 同原版 miSnap* IsCheckable)
+    private void OnSnapModeMenuOpening(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        void Sync(MenuItem? mi, ObjectSnap.Mode m) { if (mi != null) mi.Icon = (_snapExtraMask & (1 << (int)m)) != 0 ? new TextBlock { Text = "✓" } : null; }
+        Sync(MiSnapIntersection, ObjectSnap.Mode.Intersection);
+        Sync(MiSnapPerpendicular, ObjectSnap.Mode.Perpendicular);
+        Sync(MiSnapNearest, ObjectSnap.Mode.Nearest);
+    }
+
+    private void OnSnapModeMenuClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem mi || mi.Tag is not string t || !int.TryParse(t, out int bit)) return;
+        _snapExtraMask ^= 1 << bit;
+        SnapToggle.IsChecked = true;   // 改模式即视为要用捕捉(同原版)
+        StatusMsg.Text = $"捕捉模式: 交点{On(ObjectSnap.Mode.Intersection)} 垂足{On(ObjectSnap.Mode.Perpendicular)} 最近{On(ObjectSnap.Mode.Nearest)}（端点/中点/圆心/象限恒开）";
+        string On(ObjectSnap.Mode m) => (_snapExtraMask & (1 << (int)m)) != 0 ? "✓" : "✗";
+    }
+
+    private void OnSnapModeAllOnClick(object? sender, RoutedEventArgs e)
+    {
+        _snapExtraMask = ObjectSnap.MaskOf(ObjectSnap.Mode.Intersection, ObjectSnap.Mode.Nearest, ObjectSnap.Mode.Perpendicular);
+        SnapToggle.IsChecked = true;
+        StatusMsg.Text = "对象捕捉: 全部开启";
+    }
+
+    private void OnSnapModeAllOffClick(object? sender, RoutedEventArgs e)
+    {
+        _snapExtraMask = 0;
+        SnapToggle.IsChecked = false;
+        StatusMsg.Text = "对象捕捉: 全部关闭";
+    }
+
+    // ── Ribbon 开始页(复刻原版 Fluent Ribbon Home)专用处理 ──
+    private DMC.Tool? _propsTool, _assistantTool;
+
+    // 「切换窗口」下拉展开：动态列出已打开的全部文档(同原版 btnSwitchView)，点选即切换；下方附标准视图预设。
+    private void OnSwitchViewFlyoutOpening(object? sender, System.EventArgs e)
+    {
+        if (sender is not MenuFlyout fl) return;
+        fl.Items.Clear();
+        foreach (var st in _docs)
+        {
+            var d = st;
+            var mi = new MenuItem { Header = (ReferenceEquals(d, _active) ? "● " : "　") + d.Title };
+            mi.Click += (_, _) => _dockFactory.SetActiveDockable(d.Vm);
+            fl.Items.Add(mi);
+        }
+        fl.Items.Add(new Separator());
+        var views = new MenuItem { Header = "标准视图" };
+        foreach (var v in new[] { "俯视", "仰视", "主视", "后视", "左视", "右视", "西南等轴测", "东南等轴测", "东北等轴测", "西北等轴测" })
+        {
+            var name = v;
+            var mi = new MenuItem { Header = name };
+            mi.Click += (_, _) => DispatchRibbon(name);
+            views.Items.Add(mi);
+        }
+        fl.Items.Add(views);
+        var ze = new MenuItem { Header = "范围缩放" }; ze.Click += (_, _) => DispatchRibbon("范围缩放"); fl.Items.Add(ze);
+        var pv = new MenuItem { Header = "上一视图" }; pv.Click += (_, _) => DispatchRibbon("上一视图"); fl.Items.Add(pv);
+    }
+
+    // 「调用选择集」下拉展开：列出命名选择集(与右键菜单同源 _selSets)。
+    private void OnRecallSelFlyoutOpening(object? sender, System.EventArgs e)
+    {
+        if (sender is not MenuFlyout fl) return;
+        fl.Items.Clear();
+        if (_selSets.Count == 0) { fl.Items.Add(new MenuItem { Header = "（暂无，先用 创建选择集）", IsEnabled = false }); return; }
+        for (int i = 0; i < _selSets.Count; i++)
+        {
+            var s = _selSets.At(i);
+            if (s == null) continue;
+            int idx = i;
+            var mi = new MenuItem { Header = $"{s.Value.name}  ({s.Value.ents.Count} 项)" };
+            mi.Click += (_, _) => RecallSelSetByIndex(idx);
+            fl.Items.Add(mi);
+        }
+    }
+
+    // 「AI 助手」切换：选中 → 右侧停靠切到 AI 助手页；取消 → 切回属性对话框(同原版 btnAiChat 切换 aiChatAnchorable)。
+    private void OnAiChatToggle(object? sender, RoutedEventArgs e)
+    {
+        if (_dockFactory == null) return;
+        var target = AiChatToggle.IsChecked == true ? _assistantTool : _propsTool;
+        if (target != null) _dockFactory.SetActiveDockable(target);
+    }
+
+    // 「填充 → 图案填充」：按注释组的 角度/比例(间距) 栏拼命令 "图案填充 <角度> [间距]"。
+    private void OnHatchFillClick(object? sender, RoutedEventArgs e)
+    {
+        string ang = (HatchAngleBox?.Text ?? "").Trim(); if (ang.Length == 0) ang = "45";
+        string sp = (HatchScaleBox?.Text ?? "").Trim();
+        DispatchRibbon(sp.Length > 0 ? $"图案填充 {ang} {sp}" : $"图案填充 {ang}");
+    }
+
+    // 图案下拉：ANSI31 斜线 / ANSI37 十字 → 映射到现有 十字交叉 开关。
+    private void OnHatchPatternChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (HatchPatternBox == null) return;
+        bool cross = HatchPatternBox.SelectedIndex == 1;
+        if (cross != _hatchCross) { _hatchCross = cross; StatusMsg.Text = $"图案填充: {(cross ? "ANSI37 十字交叉" : "ANSI31 斜线")}"; }
+    }
+
+    // 线型下拉 → 现有 "线型 <名>" 命令(影响新画直线/多段线)。
+    private void OnLinetypeChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (LinetypeBox?.SelectedItem is ComboBoxItem it && it.Content is string name && _dockFactory != null)
+            DispatchRibbon($"线型 {name}");
     }
     private void OnCtxClearHighlight(object? s, RoutedEventArgs e) => Viewport.SetHighlight(null);
 
@@ -11220,7 +11337,7 @@ public partial class MainWindow : Window
         CmdLog.Children.Add(new TextBlock
         {
             Text = "▸ " + cmd, FontSize = 11, FontFamily = new FontFamily("Consolas,monospace"),
-            Foreground = Brush.Parse("#8FB6E8")
+            Foreground = Brush.Parse("#2F5FA8")   // 信息栏为浅色面板(同原版 Theme.Surface), 用深蓝可读
         });
         while (CmdLog.Children.Count > 100) CmdLog.Children.RemoveAt(0);
         CmdLogScroll?.ScrollToEnd();

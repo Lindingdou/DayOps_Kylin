@@ -83,6 +83,10 @@ public class CadGlViewport : OpenGlControlBase
 
     /// <summary>OpenGL 上下文就绪后回报后端版本串给界面。</summary>
     public event Action<string>? GlReady;
+    /// <summary>帧时间采样(每秒一次)：(fps, 平均帧时 ms)。UI 线程回调。</summary>
+    public event Action<double, double>? FrameStats;
+    private int _frameCount;
+    private long _statT0;
 
     protected override void OnOpenGlInit(GlInterface gl)
     {
@@ -205,6 +209,17 @@ public class CadGlViewport : OpenGlControlBase
         OverlayPass(w, h);
         CursorPass();
         _renderer.EndFrame();
+
+        // 帧时间采样：每秒汇总一次 FPS / 平均帧时(ms) → 状态栏 Performance 项(同原版 FrameProfiler)
+        _frameCount++;
+        long now = _clock.ElapsedMilliseconds;
+        if (now - _statT0 >= 1000)
+        {
+            double fps = _frameCount * 1000.0 / (now - _statT0);
+            double ms = (now - _statT0) / (double)_frameCount;
+            _frameCount = 0; _statT0 = now;
+            if (FrameStats != null) Dispatcher.UIThread.Post(() => FrameStats?.Invoke(fps, ms), DispatcherPriority.Background);
+        }
 
         // 连续动画：请求下一帧
         Dispatcher.UIThread.Post(RequestNextFrameRendering, DispatcherPriority.Background);
