@@ -7579,7 +7579,17 @@ public partial class MainWindow : Window
         foreach (var en in _scene.Entities) { var t = CnOf(en); counts[t] = counts.GetValueOrDefault(t) + 1; }
         ObjectTreeHint.IsVisible = false;
         var root = new TreeViewItem { Header = $"图形（{_scene.Count} 实体）", IsExpanded = true };
-        foreach (var kv in counts) root.Items.Add(new TreeViewItem { Header = $"{kv.Key} × {kv.Value}", Tag = kv.Key });
+        foreach (var kv in counts)
+        {
+            var node = new TreeViewItem { Header = $"{kv.Key} × {kv.Value}", Tag = kv.Key };
+            if (kv.Key == "三角网")   // 三角网按名称列子项(建模对象可逐个选中)
+            {
+                node.IsExpanded = true;
+                foreach (var me in _scene.Entities.OfType<MeshEntity>())
+                    node.Items.Add(new TreeViewItem { Header = $"{me.Name}（{me.TriangleCount} 三角）", Tag = "mesh:" + me.Name });
+            }
+            root.Items.Add(node);
+        }
         ObjectTree.ItemsSource = new[] { root };
     }
 
@@ -7864,6 +7874,14 @@ public partial class MainWindow : Window
     {
         if (ObjectTree.SelectedItem is TreeViewItem { Tag: string type })
         {
+            if (type.StartsWith("mesh:"))   // 单张三角网
+            {
+                var one = _scene.Entities.OfType<MeshEntity>().FirstOrDefault(m => m.Name == type.Substring(5));
+                if (one == null) return;
+                _selected.Clear(); _selected.Add(one); HighlightSelection();
+                var bb = one.Bounds; StatusMsg.Text = $"对象树：选中三角网「{one.Name}」 {one.VertexCount} 顶点 / {one.TriangleCount} 三角 · Z {bb.minZ:0.#}~{bb.maxZ:0.#}";
+                return;
+            }
             // OFF 显示态导入(不在场景)：仅高亮其类型几何
             if (_scene.Count == 0 && _lastImport != null && _lastImport.TypeGeometry.TryGetValue(type, out var geom))
             { Viewport.SetHighlight(geom); return; }
