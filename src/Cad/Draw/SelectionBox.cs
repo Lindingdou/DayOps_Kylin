@@ -10,6 +10,7 @@ public static class SelectionBox
     /// <summary>实体是否被选框选中。crossing=false 窗口选(整体在框内)；true 交叉选(任一点在框内或任一段与框相交)。</summary>
     public static bool Match(SceneEntity e, double minX, double minY, double maxX, double maxY, bool crossing)
     {
+        if (e is MeshEntity me) return MatchMesh(me, minX, minY, maxX, maxY, crossing);
         var o = new List<float>();
         e.Tessellate(o);
         if (o.Count == 0) return false;
@@ -27,12 +28,35 @@ public static class SelectionBox
         return crossing ? hit : all;
     }
 
+    /// <summary>
+    /// 三角网框选：不依赖显示模式(着色面模式下 Tessellate 不出边线)。窗口选=包围盒全在框内；
+    /// 交叉选=包围盒与框相交 且 (任一顶点在框内 或 任一边穿框)。大网先用包围盒粗排斥。
+    /// </summary>
+    public static bool MatchMesh(MeshEntity me, double minX, double minY, double maxX, double maxY, bool crossing)
+    {
+        if (me.VertexCount == 0) return false;
+        var b = me.Bounds;
+        bool boxInside = b.minX >= minX && b.maxX <= maxX && b.minY >= minY && b.maxY <= maxY;
+        if (!crossing) return boxInside;
+        if (boxInside) return true;
+        if (b.maxX < minX || b.minX > maxX || b.maxY < minY || b.minY > maxY) return false;
+        foreach (var (x, y, _) in me.Verts) if (In(x, y, minX, minY, maxX, maxY)) return true;
+        foreach (var (i, j) in me.Edges)
+        {
+            var p = me.Verts[i]; var q = me.Verts[j];
+            if (SegRect(p.x, p.y, q.x, q.y, minX, minY, maxX, maxY)) return true;
+        }
+        // 框整个落在某个三角内部(无顶点/无边穿过)：框中心落在网内也算碰到
+        double cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+        return me.ContainsXY(cx, cy);
+    }
+
     /// <summary>实体是否被多边形圈选。crossing=false 全含(所有顶点在多边形内)；true 任一顶点在内。</summary>
     public static bool MatchPolygon(SceneEntity e, IReadOnlyList<(double x, double y)> poly, bool crossing)
     {
         if (poly.Count < 3) return false;
         var o = new List<float>();
-        e.Tessellate(o);
+        if (e is MeshEntity mm) mm.TessellateEdges(o); else e.Tessellate(o);
         if (o.Count == 0) return false;
         bool all = true, any = false;
         for (int i = 0; i + 1 < o.Count; i += 6)

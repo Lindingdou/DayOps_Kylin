@@ -225,6 +225,25 @@ public sealed class MeshEntity : SceneEntity
         return me;
     }
 
+    /// <summary>XY 点是否落在任一三角的平面投影内(框选/点选面内判定用)。</summary>
+    public bool ContainsXY(double x, double y)
+    {
+        var b = Bounds;
+        if (x < b.minX || x > b.maxX || y < b.minY || y > b.maxY) return false;
+        foreach (var (a, bb, c) in Tris)
+        {
+            if (a >= Verts.Count || bb >= Verts.Count || c >= Verts.Count) continue;
+            var p = Verts[a]; var q = Verts[bb]; var r = Verts[c];
+            double d = (q.y - r.y) * (p.x - r.x) + (r.x - q.x) * (p.y - r.y);
+            if (Math.Abs(d) < 1e-15) continue;
+            double w0 = ((q.y - r.y) * (x - r.x) + (r.x - q.x) * (y - r.y)) / d;
+            double w1 = ((r.y - p.y) * (x - r.x) + (p.x - r.x) * (y - r.y)) / d;
+            double w2 = 1 - w0 - w1;
+            if (w0 >= -1e-9 && w1 >= -1e-9 && w2 >= -1e-9) return true;
+        }
+        return false;
+    }
+
     /// <summary>三角总面积(三维真面积)。</summary>
     public double SurfaceArea()
     {
