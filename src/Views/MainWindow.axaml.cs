@@ -31,6 +31,12 @@ public partial class MainWindow : Window
         SetDocPath(null);          // 初始标题=未命名
         RenderAssistant(_assistant.Current());   // 智能助手：启动显示欢迎 + 主菜单
 
+        // 交互提示同步(同原版 jigPromptText)：任一指针/键盘事件处理完后刷新命令行提示与信息栏历史。
+        // handledEventsToo=true —— 视口/按钮把事件标记 Handled 后仍要刷新；排队到事件处理完再算(状态已切换)。
+        System.EventHandler<RoutedEventArgs> promptKick = (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(SyncPrompt);
+        foreach (var ev in new RoutedEvent[] { PointerPressedEvent, PointerReleasedEvent, KeyDownEvent })
+            this.AddHandler(ev, promptKick, RoutingStrategies.Tunnel | RoutingStrategies.Bubble, true);
+
         // OpenGL 上下文就绪后，把真实后端版本显示到状态栏(每文档独立视口都会触发)
         _onGlReady = backend =>
         {
@@ -456,6 +462,7 @@ public partial class MainWindow : Window
         {
             var p = e.GetPosition(ViewportHost);
             Viewport.SetCursorScreen(p.X, p.Y);   // CAD 十字光标随动
+            SyncPrompt();                          // 异步命令(对话框后)切换的状态在此兜底刷新提示
             var w = Viewport.ScreenToWorld(p.X, p.Y);
 
             // 窗口框选：画选框(交叉=蓝，窗口=绿)
@@ -539,9 +546,16 @@ public partial class MainWindow : Window
             var dragTip = _active.DragTip;
             if (dragTip != null)
             {
-                string? dh = shown == null ? null
-                    : _tool != null ? (_tool.DragHint(shown.Value.x, shown.Value.y) ?? _tool.Prompt)   // 绘制: 维度或取点提示
-                    : EditTipText(shown.Value);                                                        // 编辑: 选择/取点/维度提示
+                // 浮标 = 当前步骤提示(与命令行 CmdPrompt 同源) + 实时维度(绘制: 长/角/半径…; 编辑: 位移/角度/比例)
+                string? dh = null;
+                if (shown != null)
+                {
+                    string prompt = CurrentPrompt();
+                    string? dims = _tool != null ? _tool.DragHint(shown.Value.x, shown.Value.y)
+                                 : (_editMode != EditMode.None && !_editAwaitSelect) ? EditDragHint(shown.Value)
+                                 : null;
+                    if (prompt.Length > 0) dh = dims != null ? $"{prompt}  {dims}" : prompt;
+                }
                 if (dh != null)
                 {
                     ((TextBlock)dragTip.Child!).Text = dh;
@@ -7974,6 +7988,58 @@ public partial class MainWindow : Window
     {
         if (LinetypeBox?.SelectedItem is ComboBoxItem it && it.Content is string name && _dockFactory != null)
             DispatchRibbon($"线型 {name}");
+    }
+
+    // ── 交互提示(同原版 jigPromptText + 命令行历史回显)：按当前交互状态给出 AutoCAD 式步骤提示 ──
+    private string _lastPrompt = "";
+
+    /// <summary>当前交互步骤提示；空闲返回空串。顺序 = 各状态互斥优先级(工具/编辑/夹点/测量/其它单步命令)。</summary>
+    private string CurrentPrompt()
+    {
+        if (_tool != null) return _tool.Prompt;
+        if (_editAwaitSelect) return $"{_editName}：选择对象 或 [右键确定]（已选 {_selected.Count}）";
+        if (_editMode != EditMode.None)
+            return _editPts.Count == 0
+                ? $"{_editName}：{(_editMode == EditMode.Mirror ? "指定镜像线的第一点" : "指定基点 或 [位移(D)]")}"
+                : EditPrompt(_editMode, _editPts.Count);
+        if (_gripDrag.Active) return _gripDrag.Prompt;
+        if (_measure != null) return "测量：指定下一点（右键/Esc 结束）";
+        if (_angle != null) return "角度测量：依次指定 顶点、第一点、第二点";
+        if (_offsetActive) return "偏移：指定要偏移的那一侧上的点";
+        if (_trimActive) return "修剪/延伸：先选边界，再点要修剪或延伸的对象（Esc 退出）";
+        if (_breakActive) return _breakPts.Count == 0 ? "打断：指定第一个打断点" : "打断：指定第二个打断点";
+        if (_slideActive) return _slideDragging ? "滑动多段线：拖动中…松开结束" : "滑动多段线：按住左键拖动绘制";
+        if (_textActive) return _mtextMode ? "多行文字：在命令行输入内容（| 换行）后回车" : "文字：在命令行输入内容后回车";
+        if (_ttrActive) return _ttrAwaitRadius ? "圆TTR：在命令行输入半径并回车" : _ttrRef1 == null ? "圆TTR：选择第一个相切对象（直线/圆）" : "圆TTR：选择第二个相切对象";
+        if (_serActive) return _serAwaitRadius ? "圆弧SER：在命令行输入半径并回车（负值取另一侧）" : _serStart == null ? "圆弧SER：指定起点" : "圆弧SER：指定端点";
+        if (_dimActive) return _dimP1 == null ? "标注：指定第一条尺寸界线原点" : _dimP2 == null ? "标注：指定第二条尺寸界线原点" : "标注：指定尺寸线位置";
+        if (_dimRadActive) return _dimRadCircle == null ? $"{(_dimDiameter ? "直径" : "半径")}标注：选择圆或圆弧" : "标注：指定尺寸线位置";
+        if (_dimAngActive) return _angVertex == null ? "角度标注：指定角的顶点" : _angP1 == null ? "角度标注：指定第一条边上的点" : "角度标注：指定第二条边上的点";
+        if (_pathActive) return _pathP1 == null ? "寻径：指定起点" : "寻径：指定终点";
+        if (_pasteBaseActive) return "粘贴：指定插入基点";
+        if (_benchActive) return "分帮扩帮：指定推进方向与步距点";
+        if (_spotActive) return "高程查询：点击查询位置（Esc 结束）";
+        if (_coordLabelActive) return "坐标标注：点击标注位置（Esc 结束）";
+        if (_selBoxActive) return "指定对角点（左→右 窗口 / 右→左 交叉）";
+        return "";
+    }
+
+    /// <summary>提示变化时：更新命令行提示标签 + 回显到信息栏历史(灰色, 区别于 ▸ 命令行)。</summary>
+    private void SyncPrompt()
+    {
+        if (CmdPrompt == null) return;
+        string p = CurrentPrompt();
+        if (p == _lastPrompt) return;
+        _lastPrompt = p;
+        CmdPrompt.Text = p.Length == 0 ? "" : p + ":";
+        if (p.Length == 0 || CmdLog == null) return;
+        CmdLog.Children.Add(new TextBlock
+        {
+            Text = "  " + p + ":", FontSize = 11, FontFamily = new FontFamily("Consolas,monospace"),
+            Foreground = Brush.Parse("#6B7280")
+        });
+        while (CmdLog.Children.Count > 100) CmdLog.Children.RemoveAt(0);
+        CmdLogScroll?.ScrollToEnd();
     }
     private void OnCtxClearHighlight(object? s, RoutedEventArgs e) => Viewport.SetHighlight(null);
 

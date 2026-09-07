@@ -1325,10 +1325,12 @@
         <Border x:Name="CmdContent" Background="#F7F8FA" Padding="4,2">
             <DockPanel LastChildFill="True">
                 <!-- 命令输入行(底部, 高 24, 同原版) -->
-                <Grid DockPanel.Dock="Bottom" Height="24" ColumnDefinitions="Auto,Auto,*">
+                <Grid DockPanel.Dock="Bottom" Height="24" ColumnDefinitions="Auto,Auto,Auto,*">
                     <Image Grid.Column="0" Source="{StaticResource icon_option}" Width="16" Height="16" VerticalAlignment="Center" Margin="2,0,0,0" />
                     <TextBlock Grid.Column="1" Text="命令:" Foreground="#3A3F46" VerticalAlignment="Center" Margin="6,0,6,0" FontFamily="Consolas,monospace" />
-                    <TextBox Grid.Column="2" x:Name="CommandInput" Height="20" MinHeight="20" Padding="4,0" VerticalContentAlignment="Center"
+                    <!-- 交互提示(同原版 jigPromptText / AutoCAD 命令行提示)：绘制/编辑/夹点/测量等进行中显示当前步骤, 空闲时空 -->
+                    <TextBlock Grid.Column="2" x:Name="CmdPrompt" Text="" Foreground="#0A5AD4" VerticalAlignment="Center" Margin="0,0,6,0" FontFamily="Consolas,monospace" />
+                    <TextBox Grid.Column="3" x:Name="CommandInput" Height="20" MinHeight="20" Padding="4,0" VerticalContentAlignment="Center"
                              Background="#FFFFFF" BorderBrush="#D3D7DE" BorderThickness="1" Foreground="#1E1F22"
                              FontFamily="Consolas,monospace" Watermark="命令别名/中文命令后回车（LINE / 距离 / 俯视 …），↑↓ 回溯历史，Tab 补全"
                              KeyDown="OnCommandKeyDown" TextChanged="OnCommandInputChanged" />
