@@ -398,13 +398,13 @@ public static partial class GeoDbViews
                 StdRaw = Num(Cell("S_原")), StdClean = Num(Cell("S_浮")),
                 QgrD = Num(Cell("Qgr_d")), QnetAd = Num(Cell("Qnet_ad")),
                 PlasticXMm = Num(Cell("胶质层X_mm")), PlasticYMm = Num(Cell("胶质层Y_mm")),
-                PlastometricCurve = NullIfEmpty(Cell("曲线形状")),
+                PlastometricCurve = CoalNullIfEmpty(Cell("曲线形状")),
                 CakingG = Num(Cell("粘结指数G")),
                 CharResidueRaw = Int(Cell("焦渣_原")), CharResidueClean = Int(Cell("焦渣_浮")),
                 CleanCoalYield = Num(Cell("浮煤回收率")),
-                CoalType = NullIfEmpty(Cell("煤类")),
+                CoalType = CoalNullIfEmpty(Cell("煤类")),
                 SourcePage = Int(Cell("来源页")),
-                Remark = NullIfEmpty(Cell("备注")),
+                Remark = CoalNullIfEmpty(Cell("备注")),
             });
             existing.Add(key);
         }
@@ -430,7 +430,7 @@ public static partial class GeoDbViews
         if (int.TryParse(s, out var i)) return i;
         return TryD(s, out var d) ? (int)d : null;
     }
-    private static string? NullIfEmpty(string s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+    private static string? CoalNullIfEmpty(string s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
     // ═══════════════════════════ 指标取值/命名 ═══════════════════════════
 
