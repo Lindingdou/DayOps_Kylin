@@ -1,0 +1,127 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.GeoDb.CoalQualityDataWindow" x:CompileBindings="False"
+        Classes="geodb" Title="煤质数据管理" Width="1180" Height="640" WindowStartupLocation="CenterOwner">
+  <Grid Margin="10" RowDefinitions="Auto,Auto,*,Auto">
+
+    <!-- 标题 -->
+    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+      <TextBlock Text="煤质数据管理" Classes="page-title"/>
+      <TextBlock x:Name="subtitleText" Margin="12,4,0,0" Classes="muted"/>
+    </StackPanel>
+
+    <!-- 工具栏 -->
+    <Border Grid.Row="1" Classes="toolbar">
+      <StackPanel Orientation="Horizontal" Spacing="6">
+        <Button Content="🔄 刷新" Click="OnRefreshClick" Padding="8,2"/>
+        <Separator Width="1" Height="20"/>
+        <Button Content="➕ 新增" Click="OnAddClick" Padding="8,2"/>
+        <Button Content="✎ 编辑" Click="OnEditClick" Padding="8,2"/>
+        <Button Content="🗑 删除" Click="OnDeleteClick" Padding="8,2"/>
+        <Separator Width="1" Height="20"/>
+        <Button Content="📥 导入 CSV" Click="OnImportClick" Padding="8,2"/>
+        <Button Content="📤 导出 CSV" Click="OnExportClick" Padding="8,2"/>
+        <Button Content="📄 下载模板" Click="OnTemplateClick" Padding="8,2"/>
+        <Separator Width="1" Height="20"/>
+        <TextBlock Text="煤层 " VerticalAlignment="Center" Margin="6,0,4,0"/>
+        <ComboBox x:Name="seamFilter" Width="120" SelectionChanged="OnFilterChanged"/>
+        <TextBlock Text="  孔号 " VerticalAlignment="Center" Margin="6,0,4,0"/>
+        <TextBox x:Name="holeFilter" Width="120" KeyDown="OnFilterKeyDown"/>
+        <TextBlock Text="  煤类 " VerticalAlignment="Center" Margin="6,0,4,0"/>
+        <ComboBox x:Name="coalTypeFilter" Width="120" SelectionChanged="OnFilterChanged"/>
+        <Separator Width="1" Height="20"/>
+        <Button Content="📊 重算层平均" Click="OnRebuildSummaryClick" Padding="8,2"/>
+      </StackPanel>
+    </Border>
+
+    <!-- 中间：左树 + 右网格 -->
+    <Grid Grid.Row="2" Margin="0,8,0,0" ColumnDefinitions="240,5,*">
+
+      <!-- 左：分组树（按煤层/按孔号） -->
+      <Border Classes="panel">
+        <DockPanel>
+          <Border DockPanel.Dock="Top" Classes="panel-hdr">
+            <TextBlock Text="按煤层导航" Classes="panel-title"/>
+          </Border>
+          <TreeView x:Name="seamTree" SelectionChanged="OnTreeSelectionChanged" BorderThickness="0"/>
+        </DockPanel>
+      </Border>
+
+      <GridSplitter Grid.Column="1" ResizeDirection="Columns" Background="Transparent"/>
+
+      <!-- 右：上 DataGrid + 下详情 -->
+      <Grid Grid.Column="2" RowDefinitions="*,5,248">
+        <Border Classes="panel">
+          <DataGrid x:Name="grid" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
+                    SelectionChanged="OnRowSelected" DoubleTapped="OnGridDoubleClick">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="孔号"   Binding="{Binding HoleId}"   Width="80"/>
+              <DataGridTextColumn Header="煤层"   Binding="{Binding SeamCode}" Width="60"/>
+              <DataGridTextColumn Header="起深"   Binding="{Binding DepthFrom, StringFormat={}{0:F2}}" Width="60"/>
+              <DataGridTextColumn Header="止深"   Binding="{Binding DepthTo, StringFormat={}{0:F2}}" Width="60"/>
+              <DataGridTextColumn Header="厚度"   Binding="{Binding SampleThickness, StringFormat={}{0:F2}}" Width="56"/>
+              <DataGridTextColumn Header="Z高程"  Binding="{Binding ZSample, StringFormat={}{0:F1}}" Width="68"/>
+              <DataGridTextColumn Header="原Mad"  Binding="{Binding MadRaw, StringFormat={}{0:F2}}" Width="60"/>
+              <DataGridTextColumn Header="原Ad"   Binding="{Binding AdRaw, StringFormat={}{0:F2}}" Width="60"/>
+              <DataGridTextColumn Header="原Vdaf" Binding="{Binding VdafRaw, StringFormat={}{0:F2}}" Width="62"/>
+              <DataGridTextColumn Header="原S"    Binding="{Binding StdRaw, StringFormat={}{0:F2}}" Width="56"/>
+              <DataGridTextColumn Header="Q弹筒"  Binding="{Binding QgrD, StringFormat={}{0:F2}}" Width="62"/>
+              <DataGridTextColumn Header="G"      Binding="{Binding CakingG, StringFormat={}{0:F1}}" Width="48"/>
+              <DataGridTextColumn Header="X mm"   Binding="{Binding PlasticXMm, StringFormat={}{0:F1}}" Width="56"/>
+              <DataGridTextColumn Header="Y mm"   Binding="{Binding PlasticYMm, StringFormat={}{0:F1}}" Width="56"/>
+              <DataGridTextColumn Header="煤类"   Binding="{Binding CoalType}" Width="60"/>
+              <DataGridTextColumn Header="页"     Binding="{Binding SourcePage}" Width="40"/>
+            </DataGrid.Columns>
+          </DataGrid>
+        </Border>
+
+        <GridSplitter Grid.Row="1" ResizeDirection="Rows" Background="Transparent"/>
+
+        <!-- 下：详情 + 衍生指标（双卡片） -->
+        <Grid Grid.Row="2" ColumnDefinitions="1.35*,8,*">
+
+          <!-- 左卡：当前选中样品 -->
+          <Border Classes="panel" CornerRadius="8">
+            <Grid RowDefinitions="Auto,*">
+              <StackPanel Margin="14,11,14,7">
+                <StackPanel Orientation="Horizontal">
+                  <Border Width="3" Height="14" CornerRadius="1.5" Margin="0,0,7,0" Background="#0086D1"/>
+                  <TextBlock Text="当前选中样品" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center"/>
+                </StackPanel>
+                <TextBlock x:Name="detailTitle" Margin="10,6,0,0" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap" Foreground="#0086D1"/>
+              </StackPanel>
+              <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="14,0,14,10">
+                <Grid x:Name="metricGrid">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" MinWidth="96"/>
+                    <ColumnDefinition Width="58"/>
+                    <ColumnDefinition Width="58"/>
+                    <ColumnDefinition Width="*"/>
+                  </Grid.ColumnDefinitions>
+                </Grid>
+              </ScrollViewer>
+            </Grid>
+          </Border>
+
+          <!-- 右卡：衍生指标 -->
+          <Border Grid.Column="2" Classes="panel" CornerRadius="8">
+            <Grid RowDefinitions="Auto,*">
+              <StackPanel Orientation="Horizontal" Margin="14,11,14,7">
+                <Border Width="3" Height="14" CornerRadius="1.5" Margin="0,0,7,0" Background="#0086D1"/>
+                <TextBlock Text="衍生指标" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center"/>
+              </StackPanel>
+              <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="14,0,14,10">
+                <StackPanel x:Name="derivedHost"/>
+              </ScrollViewer>
+            </Grid>
+          </Border>
+        </Grid>
+      </Grid>
+    </Grid>
+
+    <!-- 状态栏 -->
+    <Border Grid.Row="3" Classes="statusbar" Margin="0,6,0,0">
+      <TextBlock x:Name="statusText" Text="就绪"/>
+    </Border>
+  </Grid>
+</Window>

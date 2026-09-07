@@ -1,0 +1,197 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.GeoDb.CoalQualityStatsWindow" x:CompileBindings="False"
+        Classes="geodb" Title="煤质统计分析" Width="1280" Height="760" WindowStartupLocation="CenterOwner">
+  <Grid Margin="10" RowDefinitions="Auto,Auto,Auto,*,Auto">
+
+    <StackPanel Orientation="Horizontal">
+      <TextBlock Text="煤质统计分析" Classes="page-title"/>
+      <TextBlock x:Name="subtitleText" Margin="12,4,0,0" Classes="muted"/>
+    </StackPanel>
+
+    <!-- 筛选条 -->
+    <Border Grid.Row="1" Margin="0,8,0,0" Classes="panel" CornerRadius="3">
+      <StackPanel Orientation="Horizontal" Margin="10,6">
+        <TextBlock Text="煤层 " VerticalAlignment="Center"/>
+        <ComboBox x:Name="seamFilter" Width="100" SelectionChanged="OnFilterChanged" Margin="2,0,12,0"/>
+
+        <TextBlock Text="指标 " VerticalAlignment="Center"/>
+        <ComboBox x:Name="indicatorFilter" Width="170" SelectionChanged="OnFilterChanged" Margin="2,0,12,0" SelectedIndex="0">
+          <ComboBoxItem Content="Ad 灰分 (%)" Tag="ad_raw"/>
+          <ComboBoxItem Content="Vdaf 挥发分 (%)" Tag="vdaf_raw"/>
+          <ComboBoxItem Content="S 全硫 (%)" Tag="std_raw"/>
+          <ComboBoxItem Content="Qnet 低位发热 (MJ/kg)" Tag="qnet_ad"/>
+          <ComboBoxItem Content="G 粘结指数" Tag="caking_g"/>
+        </ComboBox>
+
+        <TextBlock Text="样品 " VerticalAlignment="Center"/>
+        <ComboBox x:Name="rawOrCleanFilter" Width="80" SelectionChanged="OnFilterChanged" Margin="2,0,12,0" SelectedIndex="0">
+          <ComboBoxItem Content="原煤"/>
+          <ComboBoxItem Content="浮煤"/>
+        </ComboBox>
+
+        <Separator Width="10"/>
+        <Button Content="🔄 重新计算" Click="OnRecomputeClick" Padding="8,3"/>
+        <Button Content="📤 导出 CSV" Click="OnExportClick" Padding="8,3" Margin="6,0,0,0"/>
+      </StackPanel>
+    </Border>
+
+    <!-- KPI 概览条：n / 均值 / σ / CV / 极差 + GB 分级分布 -->
+    <Border Grid.Row="2" Margin="0,8,0,0" Classes="panel" CornerRadius="6" Padding="12,8">
+      <StackPanel x:Name="kpiStrip" Orientation="Horizontal" VerticalAlignment="Center"/>
+    </Border>
+
+    <!-- 中间四象限 -->
+    <Grid Grid.Row="3" Margin="0,8,0,0" ColumnDefinitions="*,6,*" RowDefinitions="*,6,*">
+
+      <!-- 左上：分组汇总表 -->
+      <Border Classes="panel" CornerRadius="3">
+        <DockPanel>
+          <Border DockPanel.Dock="Top" Classes="panel-hdr panel-hdr-plain"><TextBlock Text="按煤层分组统计" Classes="panel-title plain"/></Border>
+          <DataGrid x:Name="statsGrid" AutoGenerateColumns="False" IsReadOnly="True" BorderThickness="0">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="煤层" Binding="{Binding SeamCode}" Width="60"/>
+              <DataGridTextColumn Header="样品" Binding="{Binding Count}" Width="60"/>
+              <DataGridTextColumn Header="均值" Binding="{Binding Mean, StringFormat={}{0:F2}}" Width="70"/>
+              <DataGridTextColumn Header="σ" Binding="{Binding Std, StringFormat={}{0:F2}}" Width="60"/>
+              <DataGridTextColumn Header="Min" Binding="{Binding Min, StringFormat={}{0:F2}}" Width="60"/>
+              <DataGridTextColumn Header="P25" Binding="{Binding P25, StringFormat={}{0:F2}}" Width="60"/>
+              <DataGridTextColumn Header="P50" Binding="{Binding P50, StringFormat={}{0:F2}}" Width="60"/>
+              <DataGridTextColumn Header="P75" Binding="{Binding P75, StringFormat={}{0:F2}}" Width="60"/>
+              <DataGridTextColumn Header="Max" Binding="{Binding Max, StringFormat={}{0:F2}}" Width="60"/>
+              <DataGridTextColumn Header="评级" Binding="{Binding SampleSizeLevel}" Width="*"/>
+            </DataGrid.Columns>
+          </DataGrid>
+        </DockPanel>
+      </Border>
+
+      <GridSplitter Grid.Column="1" ResizeDirection="Columns" Background="Transparent"/>
+
+      <!-- 右上：箱线图 -->
+      <Border Grid.Column="2" Classes="panel" CornerRadius="3">
+        <DockPanel>
+          <Border DockPanel.Dock="Top" Classes="panel-hdr panel-hdr-plain"><TextBlock x:Name="boxTitle" Text="箱线对照" Classes="panel-title plain"/></Border>
+          <ch:ChartView x:Name="boxChart" Margin="6"/>
+        </DockPanel>
+      </Border>
+
+      <GridSplitter Grid.Row="1" Grid.ColumnSpan="3" ResizeDirection="Rows" Background="Transparent"/>
+
+      <!-- 左下：分析结论 / 散点 / 指标相关性 / 洗选提质 / 离群质检 -->
+      <Border Grid.Row="2" Classes="panel" CornerRadius="3">
+        <TabControl Padding="0">
+          <TabItem Header="分析结论">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+              <StackPanel x:Name="conclusionHost" Margin="10"/>
+            </ScrollViewer>
+          </TabItem>
+          <TabItem Header="散点">
+            <DockPanel>
+              <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="8,5">
+                <TextBlock Text="X = Ad 灰分    Y =" VerticalAlignment="Center"/>
+                <ComboBox x:Name="scatterYSel" Width="120" Margin="6,0,0,0" SelectionChanged="OnScatterYChanged" SelectedIndex="0">
+                  <ComboBoxItem Content="Vdaf 挥发分" Tag="vdaf"/>
+                  <ComboBoxItem Content="St 全硫" Tag="std"/>
+                  <ComboBoxItem Content="Qgr 发热量" Tag="qgr"/>
+                  <ComboBoxItem Content="G 粘结指数" Tag="caking"/>
+                </ComboBox>
+                <TextBlock Text="（已放大主簇·半透明看密度·极端离群见「离群质检」）" VerticalAlignment="Center" Margin="12,0,0,0" FontSize="11" Classes="muted"/>
+              </StackPanel>
+              <ch:ChartView x:Name="scatterChart" Margin="6"/>
+            </DockPanel>
+          </TabItem>
+          <TabItem Header="指标相关性">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+              <Grid x:Name="corrHost" Margin="10"/>
+            </ScrollViewer>
+          </TabItem>
+          <TabItem Header="洗选提质">
+            <DataGrid x:Name="washGrid" AutoGenerateColumns="False" IsReadOnly="True" BorderThickness="0">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="煤层" Binding="{Binding SeamCode}" Width="54"/>
+                <DataGridTextColumn Header="配对" Binding="{Binding PairedAsh}" Width="46"/>
+                <DataGridTextColumn Header="原Ad" Binding="{Binding AdRaw, StringFormat={}{0:F1}}" Width="50"/>
+                <DataGridTextColumn Header="浮Ad" Binding="{Binding AdClean, StringFormat={}{0:F1}}" Width="50"/>
+                <DataGridTextColumn Header="降灰%" Binding="{Binding DeAshPct, StringFormat={}{0:F1}}" Width="54"/>
+                <DataGridTextColumn Header="原St" Binding="{Binding StRaw, StringFormat={}{0:F2}}" Width="50"/>
+                <DataGridTextColumn Header="浮St" Binding="{Binding StClean, StringFormat={}{0:F2}}" Width="50"/>
+                <DataGridTextColumn Header="脱硫%" Binding="{Binding DeSulfurPct, StringFormat={}{0:F1}}" Width="54"/>
+                <DataGridTextColumn Header="回收%" Binding="{Binding YieldMean, StringFormat={}{0:F1}}" Width="*"/>
+              </DataGrid.Columns>
+            </DataGrid>
+          </TabItem>
+          <TabItem Header="离群质检">
+            <DockPanel>
+              <TextBlock x:Name="outlierSummary" DockPanel.Dock="Top" Padding="8,5" TextWrapping="Wrap" Classes="muted"/>
+              <DataGrid x:Name="outlierGrid" AutoGenerateColumns="False" IsReadOnly="True" BorderThickness="0">
+                <DataGrid.Columns>
+                  <DataGridTextColumn Header="孔号" Binding="{Binding HoleId}" Width="88"/>
+                  <DataGridTextColumn Header="煤层" Binding="{Binding SeamCode}" Width="54"/>
+                  <DataGridTextColumn Header="值" Binding="{Binding Value, StringFormat={}{0:F2}}" Width="60"/>
+                  <DataGridTextColumn Header="高程" Binding="{Binding Z, StringFormat={}{0:F0}}" Width="60"/>
+                  <DataGridTextColumn Header="方向" Binding="{Binding Kind}" Width="50"/>
+                  <DataGridTextColumn Header="超出(IQR)" Binding="{Binding Severity, StringFormat={}{0:F1}}" Width="*"/>
+                </DataGrid.Columns>
+              </DataGrid>
+            </DockPanel>
+          </TabItem>
+        </TabControl>
+      </Border>
+
+      <!-- 右下：分布直方 / 高程剖面 / 商品煤符合性 / 用途适宜性 -->
+      <Border Grid.Row="2" Grid.Column="2" Classes="panel" CornerRadius="3">
+        <TabControl Padding="0">
+          <TabItem x:Name="histTab" Header="分布直方">
+            <ch:ChartView x:Name="histChart" Margin="6"/>
+          </TabItem>
+          <TabItem Header="高程剖面">
+            <ch:ChartView x:Name="profileChart" Margin="6"/>
+          </TabItem>
+          <TabItem Header="商品煤符合性">
+            <DockPanel>
+              <Border DockPanel.Dock="Top" Background="#F7F8FA" Padding="6,4">
+                <WrapPanel>
+                  <CheckBox x:Name="cmpAdOn" Content="Ad≤" IsChecked="True" VerticalAlignment="Center"/>
+                  <TextBox x:Name="cmpAdMax" Text="16" Width="46" Margin="3,0,12,0"/>
+                  <CheckBox x:Name="cmpStOn" Content="St≤" IsChecked="True" VerticalAlignment="Center"/>
+                  <TextBox x:Name="cmpStMax" Text="1.0" Width="46" Margin="3,0,12,0"/>
+                  <CheckBox x:Name="cmpQOn" Content="Qgr≥" IsChecked="False" VerticalAlignment="Center"/>
+                  <TextBox x:Name="cmpQMin" Text="24" Width="46" Margin="3,0,12,0"/>
+                  <Button Content="计算达标率" Click="OnComplianceClick" Padding="8,2"/>
+                </WrapPanel>
+              </Border>
+              <TextBlock x:Name="complianceSummary" DockPanel.Dock="Top" Padding="8,5" TextWrapping="Wrap" FontWeight="SemiBold"/>
+              <DataGrid x:Name="complianceGrid" AutoGenerateColumns="False" IsReadOnly="True" BorderThickness="0">
+                <DataGrid.Columns>
+                  <DataGridTextColumn Header="煤层" Binding="{Binding SeamCode}" Width="70"/>
+                  <DataGridTextColumn Header="评定段" Binding="{Binding Evaluated}" Width="70"/>
+                  <DataGridTextColumn Header="达标段" Binding="{Binding Pass}" Width="70"/>
+                  <DataGridTextColumn Header="达标率%" Binding="{Binding PassPct, StringFormat={}{0:F1}}" Width="*"/>
+                </DataGrid.Columns>
+              </DataGrid>
+            </DockPanel>
+          </TabItem>
+          <TabItem Header="用途适宜性">
+            <DataGrid x:Name="utilGrid" AutoGenerateColumns="False" IsReadOnly="True" BorderThickness="0">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="煤层" Binding="{Binding SeamCode}" Width="54"/>
+                <DataGridTextColumn Header="段" Binding="{Binding N}" Width="40"/>
+                <DataGridTextColumn Header="Ad" Binding="{Binding Ad, StringFormat={}{0:F1}}" Width="46"/>
+                <DataGridTextColumn Header="St" Binding="{Binding St, StringFormat={}{0:F2}}" Width="46"/>
+                <DataGridTextColumn Header="Qgr" Binding="{Binding Cal, StringFormat={}{0:F1}}" Width="50"/>
+                <DataGridTextColumn Header="动力评级" Binding="{Binding SteamGrade}" Width="66"/>
+                <DataGridTextColumn Header="动力说明" Binding="{Binding SteamNote}" Width="150"/>
+                <DataGridTextColumn Header="煤类" Binding="{Binding CokingType}" Width="70"/>
+                <DataGridTextColumn Header="炼焦说明" Binding="{Binding CokingNote}" Width="*"/>
+              </DataGrid.Columns>
+            </DataGrid>
+          </TabItem>
+        </TabControl>
+      </Border>
+    </Grid>
+
+    <Border Grid.Row="4" Classes="statusbar" Margin="0,6,0,0">
+      <TextBlock x:Name="statusText" Text="就绪"/>
+    </Border>
+  </Grid>
+</Window>

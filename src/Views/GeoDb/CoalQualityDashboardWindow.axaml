@@ -1,0 +1,132 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.GeoDb.CoalQualityDashboardWindow" x:CompileBindings="False"
+        Classes="geodb" Title="煤质数据看板" Width="1280" Height="780" WindowStartupLocation="CenterOwner">
+  <Grid Margin="12" RowDefinitions="Auto,Auto,Auto,*,Auto">
+
+    <StackPanel Orientation="Horizontal">
+      <TextBlock Text="煤质数据看板" FontSize="20" FontWeight="Bold"/>
+      <TextBlock x:Name="subtitleText" Margin="14,4,0,0" Classes="muted" FontSize="12"/>
+    </StackPanel>
+
+    <!-- 5 张 KPI 卡 -->
+    <Grid Grid.Row="1" Margin="0,10,0,0" ColumnDefinitions="*,*,*,*,*">
+      <Border Grid.Column="0" Classes="card">
+        <StackPanel>
+          <TextBlock Text="平均灰分 Ad" Classes="kpi-title"/>
+          <TextBlock x:Name="kpiAd" Classes="kpi-value" Text="—"/>
+          <TextBlock x:Name="kpiAdLevel" Classes="kpi-sub"/>
+        </StackPanel>
+      </Border>
+      <Border Grid.Column="1" Classes="card">
+        <StackPanel>
+          <TextBlock Text="平均硫分 S" Classes="kpi-title"/>
+          <TextBlock x:Name="kpiS" Classes="kpi-value" Text="—"/>
+          <TextBlock x:Name="kpiSLevel" Classes="kpi-sub"/>
+        </StackPanel>
+      </Border>
+      <Border Grid.Column="2" Classes="card">
+        <StackPanel>
+          <TextBlock Text="平均挥发分 Vdaf" Classes="kpi-title"/>
+          <TextBlock x:Name="kpiV" Classes="kpi-value" Text="—"/>
+          <TextBlock x:Name="kpiVLevel" Classes="kpi-sub"/>
+        </StackPanel>
+      </Border>
+      <Border Grid.Column="3" Classes="card">
+        <StackPanel>
+          <TextBlock Text="平均发热量 Qgr,d" Classes="kpi-title"/>
+          <TextBlock x:Name="kpiQ" Classes="kpi-value" Text="—"/>
+          <TextBlock x:Name="kpiQLevel" Classes="kpi-sub"/>
+        </StackPanel>
+      </Border>
+      <Border Grid.Column="4" Classes="card" Margin="0">
+        <StackPanel>
+          <TextBlock Text="平均粘结指数 G" Classes="kpi-title"/>
+          <TextBlock x:Name="kpiG" Classes="kpi-value" Text="—"/>
+          <TextBlock x:Name="kpiGSub" Classes="kpi-sub" Text="—"/>
+        </StackPanel>
+      </Border>
+    </Grid>
+
+    <!-- 综合分析结论横幅 -->
+    <Border Grid.Row="2" Margin="0,10,0,0" Classes="panel" CornerRadius="6" Padding="14,9">
+      <StackPanel>
+        <TextBlock Text="综合分析结论" FontSize="12" FontWeight="Bold" Classes="muted" Margin="0,0,0,4"/>
+        <StackPanel x:Name="conclusionBanner"/>
+      </StackPanel>
+    </Border>
+
+    <!-- 中间 4 象限 -->
+    <Grid Grid.Row="3" Margin="0,10,0,0" ColumnDefinitions="*,6,*" RowDefinitions="*,6,*">
+
+      <!-- 左上：煤类构成 -->
+      <Border Classes="panel" CornerRadius="6">
+        <DockPanel>
+          <Border DockPanel.Dock="Top" Classes="panel-hdr panel-hdr-plain"><TextBlock Text="煤类构成" Classes="panel-title plain"/></Border>
+          <ch:PieChartView x:Name="pieCoalType" Margin="6"/>
+        </DockPanel>
+      </Border>
+
+      <!-- 右上：各煤层煤质对比 -->
+      <Border Grid.Column="2" Classes="panel" CornerRadius="6">
+        <DockPanel>
+          <Border DockPanel.Dock="Top" Classes="panel-hdr panel-hdr-plain"><TextBlock Text="各煤层煤质对比" Classes="panel-title plain"/></Border>
+          <ch:ChartView x:Name="seamCompareChart" Margin="6"/>
+        </DockPanel>
+      </Border>
+
+      <!-- 左下：数据健康度 -->
+      <Border Grid.Row="2" Classes="panel" CornerRadius="6">
+        <DockPanel>
+          <Border DockPanel.Dock="Top" Classes="panel-hdr panel-hdr-plain"><TextBlock Text="数据健康度" Classes="panel-title plain"/></Border>
+          <Grid Margin="20,16" ColumnDefinitions="*,*">
+            <StackPanel>
+              <TextBlock x:Name="healthSampleCount" FontSize="13" Margin="0,4,0,0"/>
+              <TextBlock x:Name="healthCoalTypeCoverage" FontSize="13" Margin="0,4,0,0"/>
+              <TextBlock x:Name="healthDensityCheck" FontSize="13" Margin="0,4,0,0"/>
+            </StackPanel>
+            <StackPanel Grid.Column="1">
+              <TextBlock x:Name="healthSelfConsistency" FontSize="13" Margin="0,4,0,0"/>
+              <TextBlock x:Name="healthClassConsistency" FontSize="13" Margin="0,4,0,0"/>
+            </StackPanel>
+          </Grid>
+        </DockPanel>
+      </Border>
+
+      <!-- 右下：化验段分布 / 灰分分级 / 硫分分级 / 洗选提质 -->
+      <Border Grid.Row="2" Grid.Column="2" Classes="panel" CornerRadius="6">
+        <TabControl Padding="0">
+          <TabItem Header="化验段分布">
+            <ch:ChartView x:Name="seamCountChart" Margin="6"/>
+          </TabItem>
+          <TabItem Header="灰分分级构成">
+            <ch:ChartView x:Name="adGradeChart" Margin="6"/>
+          </TabItem>
+          <TabItem Header="硫分分级构成">
+            <ch:ChartView x:Name="sGradeChart" Margin="6"/>
+          </TabItem>
+          <TabItem Header="洗选提质">
+            <DockPanel>
+              <TextBlock DockPanel.Dock="Top" Padding="8,4" TextWrapping="Wrap" Classes="muted"
+                         Text="原煤→浮煤洗选效果（成对样本，92% 覆盖）：降灰率高、脱硫率高 = 好选，判要不要洗、洗到哪一档。"/>
+              <DataGrid x:Name="washGrid" AutoGenerateColumns="False" IsReadOnly="True" BorderThickness="0">
+                <DataGrid.Columns>
+                  <DataGridTextColumn Header="煤层" Binding="{Binding SeamCode}" Width="60"/>
+                  <DataGridTextColumn Header="原Ad" Binding="{Binding AdRaw, StringFormat={}{0:F1}}" Width="56"/>
+                  <DataGridTextColumn Header="浮Ad" Binding="{Binding AdClean, StringFormat={}{0:F1}}" Width="56"/>
+                  <DataGridTextColumn Header="降灰%" Binding="{Binding DeAshPct, StringFormat={}{0:F1}}" Width="62"/>
+                  <DataGridTextColumn Header="脱硫%" Binding="{Binding DeSulfurPct, StringFormat={}{0:F1}}" Width="62"/>
+                  <DataGridTextColumn Header="回收%" Binding="{Binding YieldMean, StringFormat={}{0:F1}}" Width="*"/>
+                </DataGrid.Columns>
+              </DataGrid>
+            </DockPanel>
+          </TabItem>
+        </TabControl>
+      </Border>
+    </Grid>
+
+    <Border Grid.Row="4" Classes="statusbar" Margin="0,8,0,0">
+      <TextBlock x:Name="statusText" Text="就绪"/>
+    </Border>
+  </Grid>
+</Window>
