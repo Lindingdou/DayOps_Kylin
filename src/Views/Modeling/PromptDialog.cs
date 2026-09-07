@@ -84,6 +84,8 @@ public sealed class PromptDialog : Window
     public static async Task<PromptDialog?> AskAsync(Window owner, string title, IReadOnlyList<Field> fields, string? description = null)
     {
         var d = new PromptDialog(title, fields, description);
+        if (Environment.GetEnvironmentVariable("PITMINE_SELFTEST") is { Length: > 0 })   // 自检：按默认值直接确定(不弹窗)
+            return d.Collect() ? d : null;
         var ok = await d.ShowDialog<bool>(owner);
         return ok ? d : null;
     }

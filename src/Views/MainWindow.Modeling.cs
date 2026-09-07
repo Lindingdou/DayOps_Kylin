@@ -293,6 +293,7 @@ public partial class MainWindow
         var loops = SelectedPolylines().Where(l => l.Closed && l.Points.Count >= 3).ToList();
         List<(int a, int b, int c)> tris = loops.Count > 0 ? Delaunay.TriangulateClipped(p2, loops[0].Points) : Delaunay.Triangulate(p2);
         if (tris.Count == 0) { StatusMsg.Text = "创建三角网：点太少或共线，无法剖分"; return; }
+        tris = OrientUp(p3, tris);   // 统一绕向(法线朝上), 边界环/成体/内外判定都依赖一致绕向
         var me = AddMesh(new MeshEntity(NewMeshName("三角网"), p3, tris), true);
         SelectEntities(new SceneEntity[] { me });
         var st = TinSurface.Describe(p3, tris);
@@ -316,6 +317,7 @@ public partial class MainWindow
         }
         var tris = Delaunay.TriangulateConstrained(p3.Select(p => (p.x, p.y)).ToList(), cons);
         if (tris.Count == 0) { StatusMsg.Text = "多段线嵌入三角网：剖分失败"; return; }
+        tris = OrientUp(p3, tris);
         var me = new MeshEntity(meshes.Count > 0 ? meshes[0].Name : NewMeshName("约束三角网"), p3, tris);
         if (meshes.Count > 0) ReplaceMesh(meshes[0], me); else { AddMesh(me, true); SelectEntities(new SceneEntity[] { me }); }
         StatusMsg.Text = $"多段线嵌入三角网「{me.Name}」：嵌入 {lines.Count} 条线 {cons.Count} 段约束 → {tris.Count} 三角";
@@ -372,7 +374,7 @@ public partial class MainWindow
         if (meshes.Count < 2) { if (SelectedMeshes().Count > 2) StatusMsg.Text = "快速建模：只选顶/底板面 2 张；连续多层请用「地质体建模」"; return; }
         var top = meshes[0]; var bot = meshes[1];
         if (LayerSolid.MeanZ(top.Verts) < LayerSolid.MeanZ(bot.Verts)) (top, bot) = (bot, top);
-        var solid = LayerSolid.FromSurfaces(top.Verts, top.Tris, bot.Verts, bot.Tris);
+        var solid = LayerSolid.FromSurfaces(top.Verts, OrientUp(top.Verts, top.Tris), bot.Verts, OrientUp(bot.Verts, bot.Tris));
         if (solid == null) { StatusMsg.Text = "快速建模：顶/底面需为有开边的开放面（取其边界环放样侧壁）"; return; }
         var (wv, wt) = solid.Value;
         var d = MeshDiagnose.Analyze(wv, wt);
@@ -387,7 +389,7 @@ public partial class MainWindow
         var meshes = await PickMeshesAsync("地质体建模", 2);
         if (meshes.Count < 2) return;
         var ordered = meshes.OrderByDescending(m => LayerSolid.MeanZ(m.Verts)).ToList();
-        var layers = LayerSolid.MultiLayer(ordered.Select(m => ((IReadOnlyList<(double x, double y, double z)>)m.Verts, (IReadOnlyList<(int a, int b, int c)>)m.Tris)).ToList());
+        var layers = LayerSolid.MultiLayer(ordered.Select(m => ((IReadOnlyList<(double x, double y, double z)>)m.Verts, (IReadOnlyList<(int a, int b, int c)>)OrientUp(m.Verts, m.Tris))).ToList());
         int ok = 0; BeginChange();
         var made = new List<SceneEntity>();
         for (int i = 0; i < layers.Count; i++)
@@ -565,7 +567,7 @@ public partial class MainWindow
         var added = new List<SceneEntity>(); int loopsN = 0;
         foreach (var m in meshes)
         {
-            var loops = MeshBoundaryLoops.Extract(m.Verts, m.Tris);
+            var loops = MeshBoundaryLoops.Extract(m.Verts, OrientUp(m.Verts, m.Tris));
             foreach (var lp in loops) { if (lp.Count < 2) continue; var pl = Poly3(lp, true, 0.95f, 0.5f, 0.2f); pl.LayerName = m.LayerName; _scene.Add(pl); added.Add(pl); loopsN++; }
         }
         RefreshScene(); SelectEntities(added);
@@ -878,5 +880,22 @@ public partial class MainWindow
         SelectEntities(new SceneEntity[] { me });
         var d = MeshDiagnose.Analyze(v, t);
         StatusMsg.Text = $"已导入三角网「{me.Name}」：{v.Count} 顶点 · {t.Count} 三角 · {(d.IsClosed ? "闭合体" : $"开放面(开放边 {d.BoundaryEdges})")} · 图层「{me.LayerName}」";
+    }
+}
+
+public partial class MainWindow
+{
+    /// <summary>统一三角绕向且法线朝上(XY 投影有向面积和为正)。开放面用；闭合体请用 MeshOrient.MakeConsistent(外向)。</summary>
+    private static List<(int a, int b, int c)> OrientUp(IReadOnlyList<(double x, double y, double z)> v, IReadOnlyList<(int a, int b, int c)> t)
+    {
+        var r = MeshOrient.MakeConsistent(v, t);
+        double s = 0;
+        foreach (var (a, b, c) in r)
+        {
+            if (a >= v.Count || b >= v.Count || c >= v.Count) continue;
+            s += (v[b].x - v[a].x) * (v[c].y - v[a].y) - (v[c].x - v[a].x) * (v[b].y - v[a].y);
+        }
+        if (s < 0) for (int i = 0; i < r.Count; i++) r[i] = (r[i].a, r[i].c, r[i].b);
+        return r;
     }
 }
