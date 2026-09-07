@@ -1,0 +1,78 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.GeoDb.ParameterTemplateWindow" x:CompileBindings="False"
+        Classes="geodb" Title="参数模板库" Width="1340" Height="760" WindowStartupLocation="CenterOwner">
+    <Grid RowDefinitions="Auto,*,Auto">
+
+        <!-- 顶栏 -->
+        <Border Grid.Row="0" Classes="hdr" Padding="14,10">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Classes="hdr-title" FontSize="18" Text="📚 参数模板库"/>
+                <TextBlock Classes="hdr-sub" VerticalAlignment="Bottom" Margin="14,0,0,3" Text="硬岩 / 软岩 / 煤层 等场景化预设,可被多平盘引用"/>
+            </StackPanel>
+        </Border>
+
+        <Grid Grid.Row="1" Margin="8" ColumnDefinitions="320,*">
+
+            <!-- 左:模板列表 -->
+            <Border Grid.Column="0" Classes="panel" CornerRadius="3" Margin="0,0,4,0">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top" Background="White" Padding="10,6" CornerRadius="3,3,0,0">
+                        <TextBlock Text="模板列表" FontWeight="Bold" Foreground="#FF0D47A1"/>
+                    </Border>
+                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="6" Spacing="6">
+                        <Button Content="+ 新建" Padding="10,4" Click="OnNewTemplate"/>
+                        <Button Content="📋 复制" Padding="10,4" Click="OnCloneTemplate" ToolTip.Tip="基于选中模板复制一份,版本号 +1"/>
+                        <Button Content="🗃 归档" Padding="10,4" Click="OnArchiveTemplate"/>
+                        <Button Content="🗑" Padding="10,4" Click="OnDeleteTemplate"/>
+                    </StackPanel>
+                    <ListBox x:Name="templateList" FontSize="12" Background="Transparent" BorderThickness="0" SelectionChanged="OnTemplateSelectionChanged">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Border Padding="8,6" Margin="0,1">
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="{Binding Name}" FontWeight="Bold"/>
+                                            <TextBlock Text="{Binding Version}" Classes="muted" FontSize="10" VerticalAlignment="Bottom"/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="物料 " FontSize="11" Classes="muted"/>
+                                            <TextBlock Text="{Binding ApplicableMaterial}" FontSize="11" Classes="muted"/>
+                                            <TextBlock Text=" · 硬度 " FontSize="11" Classes="muted"/>
+                                            <TextBlock Text="{Binding ApplicableHardness}" FontSize="11" Classes="muted"/>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding Description}" FontSize="10" Classes="muted" TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+
+            <!-- 右:模板详情 -->
+            <Border Grid.Column="1" Classes="panel" CornerRadius="3" Margin="4,0,0,0">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top" Classes="panel-hdr" Padding="10,8">
+                        <DockPanel>
+                            <TextBlock x:Name="tplInfoText" DockPanel.Dock="Right" Classes="muted" FontSize="11" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="tplHeaderText" Text="选择左侧模板" FontWeight="Bold" FontSize="14" Foreground="#FF0D47A1" VerticalAlignment="Center"/>
+                        </DockPanel>
+                    </Border>
+                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="6,4" Spacing="6">
+                        <Button Content="💾 保存所有改动" Padding="12,4" FontWeight="Bold" Click="OnSaveAll"/>
+                        <Button Content="🔍 引用此模板的平盘" Padding="12,4" Click="OnViewUsage"/>
+                        <TextBlock x:Name="statusInline" VerticalAlignment="Center" Margin="8,0,0,0" Classes="muted" FontSize="11"/>
+                    </StackPanel>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel x:Name="paramGroupsPanel" Margin="14,8"/>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="2" Classes="statusbar">
+            <TextBlock x:Name="statusText" Text="就绪" FontSize="11"/>
+        </Border>
+    </Grid>
+</Window>

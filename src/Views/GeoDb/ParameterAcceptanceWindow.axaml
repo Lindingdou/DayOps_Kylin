@@ -1,0 +1,81 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.GeoDb.ParameterAcceptanceWindow" x:CompileBindings="False"
+        Classes="geodb" Title="现场验收录入" Width="1280" Height="780" WindowStartupLocation="CenterOwner">
+    <Grid RowDefinitions="Auto,Auto,*,Auto,Auto">
+
+        <!-- 顶栏 -->
+        <Border Grid.Row="0" Classes="hdr" Padding="14,10">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Classes="hdr-title" FontSize="18" Text="✓ 现场验收录入"/>
+                <TextBlock Classes="hdr-sub" VerticalAlignment="Bottom" Margin="14,0,0,3" Text="按平盘 + 环节 + 日期录入实测参数,自动算偏差与报警"/>
+            </StackPanel>
+        </Border>
+
+        <!-- 筛选条 -->
+        <Border Grid.Row="1" Classes="toolbar" Padding="14,10">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="平盘:" VerticalAlignment="Center" FontWeight="Bold"/>
+                <ComboBox x:Name="locationCombo" Width="140" Margin="6,0,12,0" Padding="6,4" SelectionChanged="OnLocationOrPhaseChanged"/>
+                <TextBlock Text="环节:" VerticalAlignment="Center" FontWeight="Bold"/>
+                <ComboBox x:Name="phaseCombo" Width="180" Margin="6,0,12,0" Padding="6,4" SelectionChanged="OnLocationOrPhaseChanged"/>
+                <TextBlock Text="测量日期:" VerticalAlignment="Center" FontWeight="Bold"/>
+                <DatePicker x:Name="measureDatePicker" Margin="6,0,12,0" Padding="4"/>
+                <TextBlock Text="验收人:" VerticalAlignment="Center" FontWeight="Bold"/>
+                <TextBox x:Name="acceptedByBox" Width="100" Margin="6,0,12,0" Padding="6,4"/>
+                <TextBlock Text="炮区/工作面:" VerticalAlignment="Center" FontWeight="Bold"/>
+                <TextBox x:Name="scopeBox" Width="140" Margin="6,0,12,0" Padding="6,4"/>
+                <Button Content="📥 历史查询" Margin="20,0,0,0" Padding="10,4" Click="OnLoadHistory"/>
+            </StackPanel>
+        </Border>
+
+        <!-- 参数录入表格 -->
+        <Border Grid.Row="2" Classes="panel" CornerRadius="3" Margin="8,4,8,4">
+            <DockPanel>
+                <Border DockPanel.Dock="Top" Classes="panel-hdr">
+                    <DockPanel>
+                        <TextBlock x:Name="phaseInfoText" DockPanel.Dock="Right" Classes="muted" FontSize="11" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="phaseHeaderText" Text="请选择平盘和工艺环节" FontWeight="Bold" FontSize="13" Foreground="#FF0D47A1" VerticalAlignment="Center"/>
+                    </DockPanel>
+                </Border>
+                <DataGrid x:Name="paramsGrid" AutoGenerateColumns="False" IsReadOnly="False" SelectionMode="Single"
+                          GridLinesVisibility="Horizontal" RowHeight="30" FontSize="12">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="参数"     Binding="{Binding ParamName}"      Width="160" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="单位"     Binding="{Binding Unit}"           Width="60"  IsReadOnly="True"/>
+                        <DataGridTextColumn Header="标准范围" Binding="{Binding StdRange}"       Width="120" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="模板值"   Binding="{Binding TemplateValue}"  Width="80"  IsReadOnly="True"/>
+                        <DataGridTextColumn Header="实测值"   Binding="{Binding MeasuredText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100"/>
+                        <DataGridTextColumn Header="偏差"     Binding="{Binding DeviationText}"  Width="80"  IsReadOnly="True"/>
+                        <DataGridTextColumn Header="状态"     Binding="{Binding StatusIcon}"     Width="60"  IsReadOnly="True"/>
+                        <DataGridTextColumn Header="必填"     Binding="{Binding IsRequiredText}" Width="50"  IsReadOnly="True"/>
+                        <DataGridTextColumn Header="备注"     Binding="{Binding Notes, Mode=TwoWay}" Width="*"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </DockPanel>
+        </Border>
+
+        <!-- 验收结论 -->
+        <Border Grid.Row="3" Classes="panel" CornerRadius="3" Margin="8,0,8,4" Padding="14,8">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="验收结论:" VerticalAlignment="Center" FontWeight="Bold" Foreground="#FFE65100"/>
+                <RadioButton x:Name="conclusionPassRadio"    Content="✅ 合格"       Margin="14,0,0,0" GroupName="conclusion" IsChecked="True"/>
+                <RadioButton x:Name="conclusionPartialRadio" Content="⚠ 整改后合格" Margin="14,0,0,0" GroupName="conclusion"/>
+                <RadioButton x:Name="conclusionFailRadio"    Content="❌ 不合格"     Margin="14,0,0,0" GroupName="conclusion"/>
+                <TextBlock Text="整改说明:" VerticalAlignment="Center" Margin="40,0,4,0"/>
+                <TextBox x:Name="remarkBox" Width="500" Padding="6,4"/>
+            </StackPanel>
+        </Border>
+
+        <!-- 底栏按钮 -->
+        <Border Grid.Row="4" Classes="statusbar" Padding="14,8">
+            <DockPanel>
+                <TextBlock x:Name="statusText" DockPanel.Dock="Right" Text="就绪" VerticalAlignment="Center" FontSize="11"/>
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <Button Content="💾 提交验收" Padding="20,6" FontWeight="Bold" Background="#FF1565C0" Foreground="White" Click="OnSubmitAcceptance"/>
+                    <Button Content="📊 偏差报警" Padding="14,6" Click="OnShowAlerts"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

@@ -1,0 +1,89 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.GeoDb.ProcessArchitectureWindow" x:CompileBindings="False"
+        Classes="geodb" Title="工艺架构定义" Width="1340" Height="760" WindowStartupLocation="CenterOwner">
+    <Grid RowDefinitions="Auto,*,Auto">
+
+        <!-- 顶栏 -->
+        <Border Grid.Row="0" Classes="hdr" Padding="14,10">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Classes="hdr-title" FontSize="18" Text="🏗 工艺架构定义"/>
+                <TextBlock Classes="hdr-sub" VerticalAlignment="Bottom" Margin="14,0,0,3" Text="工艺系统 / 工艺环节 / 参数定义 的元数据维护"/>
+            </StackPanel>
+        </Border>
+
+        <!-- 主区域:三栏 -->
+        <Grid Grid.Row="1" Margin="8" ColumnDefinitions="280,*,360">
+
+            <!-- 左:工艺系统树 -->
+            <Border Grid.Column="0" Classes="panel" CornerRadius="3" Margin="0,0,4,0">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top" Background="White" Padding="10,6" CornerRadius="3,3,0,0">
+                        <TextBlock Text="工艺系统 / 环节" FontWeight="Bold" Foreground="#FF0D47A1"/>
+                    </Border>
+                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="6" Spacing="6">
+                        <Button Content="+ 系统" Padding="10,4" Click="OnAddSystem"/>
+                        <Button Content="+ 环节" Padding="10,4" Click="OnAddPhase"/>
+                        <Button Content="🗑" Padding="10,4" Click="OnDeleteTreeNode" ToolTip.Tip="删除选中的系统或环节"/>
+                    </StackPanel>
+                    <TreeView x:Name="archTree" Background="Transparent" BorderThickness="0"/>
+                </DockPanel>
+            </Border>
+
+            <!-- 中:参数列表(选中环节下) -->
+            <Border Grid.Column="1" Classes="panel" CornerRadius="3" Margin="4,0">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top" Classes="panel-hdr">
+                        <DockPanel>
+                            <TextBlock x:Name="paramCountText" DockPanel.Dock="Right" Classes="muted" FontSize="11" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="phaseTitleText" Text="选择左侧环节查看参数" FontWeight="Bold" Foreground="#FF0D47A1" VerticalAlignment="Center"/>
+                        </DockPanel>
+                    </Border>
+                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="6" Spacing="6">
+                        <Button Content="+ 新增参数" Padding="10,4" Click="OnAddParameter"/>
+                        <Button Content="🗑 删除选中" Padding="10,4" Click="OnDeleteParameter"/>
+                        <Button Content="💾 保存所有改动" Padding="10,4" FontWeight="Bold" Click="OnSaveAllParameters"/>
+                    </StackPanel>
+                    <DataGrid x:Name="paramsGrid" AutoGenerateColumns="False" IsReadOnly="False" SelectionMode="Single"
+                              GridLinesVisibility="Horizontal" RowHeight="26" FontSize="12">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="编码"     Binding="{Binding Code}"                Width="140"/>
+                            <DataGridTextColumn Header="名称"     Binding="{Binding Name}"                Width="120"/>
+                            <DataGridTextColumn Header="单位"     Binding="{Binding Unit}"                Width="70"/>
+                            <DataGridTextColumn Header="类型"     Binding="{Binding ValueType}"           Width="70"/>
+                            <DataGridTextColumn Header="标准下限" Binding="{Binding StandardMinText}"     Width="80"/>
+                            <DataGridTextColumn Header="标准上限" Binding="{Binding StandardMaxText}"     Width="80"/>
+                            <DataGridTextColumn Header="推荐值"   Binding="{Binding StandardDefaultText}" Width="80"/>
+                            <DataGridCheckBoxColumn Header="必填" Binding="{Binding IsRequired}"          Width="60"/>
+                            <DataGridTextColumn Header="派生公式" Binding="{Binding CalcFormula}"         Width="140"/>
+                            <DataGridTextColumn Header="说明"     Binding="{Binding Description}"         Width="*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </Border>
+
+            <!-- 右:详情/编辑面板 -->
+            <Border Grid.Column="2" Classes="panel" CornerRadius="3" Margin="4,0,0,0">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top" Classes="panel-hdr panel-hdr-warm">
+                        <TextBlock Text="参数详情 / 设备约束" FontWeight="Bold" Foreground="#FFE65100"/>
+                    </Border>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="12,8">
+                        <StackPanel x:Name="detailPanel">
+                            <TextBlock Text="选择中间一行参数查看详情..." Classes="muted" FontStyle="Italic"
+                                       HorizontalAlignment="Center" Margin="0,40,0,0"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <!-- 底部状态栏 -->
+        <Border Grid.Row="2" Classes="statusbar">
+            <DockPanel>
+                <TextBlock x:Name="dirtyHint" DockPanel.Dock="Right" Text="" FontSize="11" Foreground="#FFFF6F00" FontWeight="Bold"/>
+                <TextBlock x:Name="statusText" Text="就绪" FontSize="11"/>
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

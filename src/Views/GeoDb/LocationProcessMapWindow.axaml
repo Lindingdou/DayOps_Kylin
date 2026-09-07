@@ -1,0 +1,142 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.GeoDb.LocationProcessMapWindow" x:CompileBindings="False"
+        Classes="geodb" Title="平盘工艺地图" Width="1400" Height="780" WindowStartupLocation="CenterOwner">
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
+
+        <!-- 顶栏 -->
+        <Border Grid.Row="0" Classes="hdr" Padding="14,10">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Classes="hdr-title" FontSize="18" Text="🗺 平盘工艺地图"/>
+                <TextBlock Classes="hdr-sub" VerticalAlignment="Bottom" Margin="14,0,0,3" Text="按平盘 → 工艺环节 → 参数 → 适配设备的端到端联动"/>
+            </StackPanel>
+        </Border>
+
+        <!-- 平盘选择 -->
+        <Border Grid.Row="1" Classes="toolbar" Padding="14,8">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="平盘:" VerticalAlignment="Center" FontWeight="Bold"/>
+                <ComboBox x:Name="locationCombo" Width="200" Margin="8,0,0,0" Padding="6,4" SelectionChanged="OnLocationChanged"/>
+                <TextBlock x:Name="locationInfoText" VerticalAlignment="Center" Margin="20,0,0,0" Classes="muted"/>
+                <Button Content="🔄 刷新" Margin="20,0,0,0" Padding="10,4" Click="OnRefresh"/>
+                <Button Content="+ 绑定新环节" Margin="8,0,0,0" Padding="10,4" Click="OnBindNewPhase"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Tab 区域 -->
+        <TabControl Grid.Row="2" Margin="8" Background="White">
+
+            <!-- Tab 1: 现状视图 -->
+            <TabItem Header="📊 现状视图">
+                <Grid Margin="4" ColumnDefinitions="280,*,320">
+
+                    <!-- 左:本平盘已绑定的环节树 -->
+                    <Border Grid.Column="0" Classes="panel" CornerRadius="3" Margin="0,0,4,0">
+                        <DockPanel>
+                            <Border DockPanel.Dock="Top" Background="White" Padding="10,6" CornerRadius="3,3,0,0">
+                                <TextBlock Text="本平盘工艺环节" FontWeight="Bold" Foreground="#FF0D47A1"/>
+                            </Border>
+                            <TreeView x:Name="phaseTree" Background="Transparent" BorderThickness="0"/>
+                        </DockPanel>
+                    </Border>
+
+                    <!-- 中:参数对照 -->
+                    <Border Grid.Column="1" Classes="panel" CornerRadius="3" Margin="4,0">
+                        <DockPanel>
+                            <Border DockPanel.Dock="Top" Classes="panel-hdr" Padding="10,8">
+                                <DockPanel>
+                                    <ComboBox x:Name="templateCombo" DockPanel.Dock="Right" Width="220" Padding="6,2" SelectionChanged="OnTemplateSwitched"/>
+                                    <TextBlock DockPanel.Dock="Right" Text="套用模板:" VerticalAlignment="Center" Margin="0,0,6,0" Classes="muted"/>
+                                    <TextBlock x:Name="phaseHeaderText" Text="选择左侧环节" FontWeight="Bold" FontSize="14" Foreground="#FF0D47A1" VerticalAlignment="Center"/>
+                                </DockPanel>
+                            </Border>
+                            <DataGrid x:Name="paramCompareGrid" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
+                                      GridLinesVisibility="Horizontal" RowHeight="28" FontSize="12">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="参数"     Binding="{Binding ParamName}"     Width="140"/>
+                                    <DataGridTextColumn Header="单位"     Binding="{Binding Unit}"          Width="60"/>
+                                    <DataGridTextColumn Header="标准范围" Binding="{Binding StdRange}"      Width="120"/>
+                                    <DataGridTextColumn Header="模板值"   Binding="{Binding TemplateVal}"   Width="80"/>
+                                    <DataGridTextColumn Header="最新实测" Binding="{Binding MeasuredVal}"   Width="90"/>
+                                    <DataGridTextColumn Header="偏差"     Binding="{Binding DeviationText}" Width="80"/>
+                                    <DataGridTextColumn Header="状态"     Binding="{Binding StatusIcon}"    Width="60"/>
+                                    <DataGridTextColumn Header="测量日期" Binding="{Binding MeasureDate}"   Width="90"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </DockPanel>
+                    </Border>
+
+                    <!-- 右:适配设备 -->
+                    <Border Grid.Column="2" Classes="panel" CornerRadius="3" Margin="4,0,0,0">
+                        <DockPanel>
+                            <Border DockPanel.Dock="Top" Classes="panel-hdr panel-hdr-warm">
+                                <TextBlock Text="⚙ 适配设备" FontWeight="Bold" Foreground="#FFE65100"/>
+                            </Border>
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel x:Name="compatPanel" Margin="10,8"/>
+                            </ScrollViewer>
+                        </DockPanel>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 2: 方案视图 (MVP) -->
+            <TabItem Header="🎯 方案视图(MVP)">
+                <Grid Margin="4" ColumnDefinitions="320,*">
+
+                    <!-- 左:输入 -->
+                    <Border Grid.Column="0" Classes="panel" CornerRadius="3" Margin="0,0,4,0">
+                        <DockPanel>
+                            <Border DockPanel.Dock="Top" Background="White" Padding="10,6" CornerRadius="3,3,0,0">
+                                <TextBlock Text="输入目标" FontWeight="Bold" Foreground="#FF0D47A1"/>
+                            </Border>
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel Margin="14">
+                                    <TextBlock Text="月剥离目标(万 m³)" Classes="muted" Margin="0,0,0,4"/>
+                                    <TextBox x:Name="targetStripBox" Text="80" Padding="6,4"/>
+
+                                    <TextBlock Text="月采煤目标(万 t)" Classes="muted" Margin="0,12,0,4"/>
+                                    <TextBox x:Name="targetCoalBox" Text="120" Padding="6,4"/>
+
+                                    <TextBlock Text="工作日(天)" Classes="muted" Margin="0,12,0,4"/>
+                                    <TextBox x:Name="workDaysBox" Text="30" Padding="6,4"/>
+
+                                    <TextBlock Text="物料类型" Classes="muted" Margin="0,12,0,4"/>
+                                    <ComboBox x:Name="materialCombo" Padding="6,4" SelectedIndex="0" HorizontalAlignment="Stretch">
+                                        <ComboBoxItem Content="rh 岩石(硬)"    Tag="rh-hard"/>
+                                        <ComboBoxItem Content="c4 4 煤(中硬)"  Tag="c4-medium"/>
+                                        <ComboBoxItem Content="c9 9 煤(中硬)"  Tag="c9-medium"/>
+                                        <ComboBoxItem Content="coal 煤(软)"    Tag="coal-soft"/>
+                                    </ComboBox>
+
+                                    <Button Content="🚀 生成方案" Margin="0,20,0,0" Padding="12,8" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                            Background="#FF1565C0" Foreground="White" FontWeight="Bold" Click="OnGeneratePlan"/>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </DockPanel>
+                    </Border>
+
+                    <!-- 右:方案结果 -->
+                    <Border Grid.Column="1" Classes="panel" CornerRadius="3" Margin="4,0,0,0">
+                        <DockPanel>
+                            <Border DockPanel.Dock="Top" Classes="panel-hdr panel-hdr-ok">
+                                <TextBlock Text="🎯 推荐配置与约束校验" FontWeight="Bold" Foreground="#FF2E7D32"/>
+                            </Border>
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel x:Name="planResultPanel" Margin="14">
+                                    <TextBlock Text="点击左侧 🚀 生成方案 开始..." Classes="muted" FontStyle="Italic"
+                                               HorizontalAlignment="Center" Margin="0,40,0,0"/>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </DockPanel>
+                    </Border>
+                </Grid>
+            </TabItem>
+        </TabControl>
+
+        <!-- 底部状态栏 -->
+        <Border Grid.Row="3" Classes="statusbar">
+            <TextBlock x:Name="statusText" Text="就绪" FontSize="11"/>
+        </Border>
+    </Grid>
+</Window>
