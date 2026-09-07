@@ -3695,3 +3695,10 @@ Viewport 配色(冷蓝/热亮蓝/选中品红+白描边大一号)。Kylin 此前
 - .3dm：`TdmImportService.LoadMeshes` 网格级读取(顶点/索引/名/色) → `ImportTdmAsMeshes` 每网一个 MeshEntity(图层=网格名) 面模型显示；实测 4-2底面.3dm 43018 三角 导入 92 ms、刷新 3 ms(镶嵌缓存)。旧线框显示通道仅作解析失败回退。
 - `MeshEntity` 边线/着色面镶嵌缓存(键=模式/高程着色/颜色/标高, `Invalidate()` 清)；默认 `RenderMode=Shaded`(不叠网格线, 渲染配置可切)。
 - 验证：1779 测试；实机 3dm 导入 + 3D 偏心滚轮 10 次相机日志正常(yaw/pitch 不变、target 按预期趋向光标)。
+
+## §三〇四 3dm 导入后框选失效修正 + 3D 框选 (2026-09-07)
+
+用户反馈「3dm 导入模型后，框选无法使用」。两层原因：
+1. `SelectionBox.Match` 靠 `Tessellate` 出的线段判定，三角网默认「着色面」模式下 Tessellate 不出边线 → 永远选不中。改 `MatchMesh`(包围盒全含=窗口选；交叉选=顶点在框内/边穿框/框心落在面内)，圈选与屏幕空间判定改走 `TessellateEdges`。
+2. 3D 视图原本左键拖拽=轨道旋转，根本没有框选。改为 2D/3D 一致：左键拖拽=框选(3D 在屏幕空间判定：`Camera.MakeProjector` 世界→屏幕投影, `SelectionBox.MatchScreen`)，轨道旋转改 Shift+左键 或 Shift+中键；帮助文案同步。
+测试 +4(`SelectionBoxMeshTests`/`BoxSelect3DTests`：着色面模式窗口/交叉/圈选、面内框心、投影与反投影互逆、透视下三角网与抬高多段线的窗口/交叉判定)。全套 1783 通过。
