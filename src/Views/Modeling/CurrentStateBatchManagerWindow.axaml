@@ -1,0 +1,30 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.Modeling.CurrentStateBatchManagerWindow" x:CompileBindings="False"
+        Classes="geodb" Title="现状写实数据管理" Width="780" Height="520" WindowStartupLocation="CenterOwner">
+    <DockPanel Margin="10">
+        <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Opacity="0.8" Margin="0,0,0,8"
+                   Text="按现状写实批次(系统唯一时间标签)管理现状数据。双击「名称」可改名；删除批次会连带删除该批全部现状点，且不可撤销。"/>
+
+        <Border DockPanel.Dock="Top" Classes="toolbar" Margin="0,0,0,8">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+                <Button Content="刷新" Click="OnRefresh" Padding="8,2"/>
+                <Border Width="1" Background="#D0D4DA" Margin="2,2"/>
+                <Button Content="删除批次" Click="OnDelete" Padding="8,2" Classes="danger"/>
+            </StackPanel>
+        </Border>
+
+        <Border DockPanel.Dock="Bottom" Classes="statusbar" Margin="0,8,0,0">
+            <TextBlock x:Name="statusText" Text="就绪"/>
+        </Border>
+
+        <DataGrid x:Name="grid" AutoGenerateColumns="False" IsReadOnly="False" SelectionMode="Single" CellEditEnded="OnCellEditEnded">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="名称" Binding="{Binding Name, Mode=TwoWay}" Width="*"/>
+                <DataGridTextColumn Header="时间标签" Binding="{Binding Label}" IsReadOnly="True" Width="210"/>
+                <DataGridTextColumn Header="来源" Binding="{Binding Source}" IsReadOnly="True" Width="100"/>
+                <DataGridTextColumn Header="点数" Binding="{Binding PointCount}" IsReadOnly="True" Width="64"/>
+            </DataGrid.Columns>
+        </DataGrid>
+    </DockPanel>
+</Window>

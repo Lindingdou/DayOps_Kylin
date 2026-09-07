@@ -1,0 +1,90 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.Modeling.SupplementaryBoreholeWindow" x:CompileBindings="False"
+        Classes="geodb" Title="补勘钻孔写实" Width="1060" Height="780" WindowStartupLocation="CenterOwner">
+    <DockPanel Margin="8">
+        <!-- 顶部工具条 -->
+        <Border DockPanel.Dock="Top" Classes="toolbar" Margin="0,0,0,8">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBlock Text="批次:" VerticalAlignment="Center" Margin="2,0,4,0"/>
+                <ComboBox x:Name="batchCombo" Width="230" SelectionChanged="OnBatchChanged"
+                          ToolTip.Tip="当前写实批次(新增/导入的孔归入此批次)；系统唯一时间标签。管理见「数据管理」"/>
+                <Button Content="新建批次" Click="OnNewBatch" Padding="8,2"/>
+                <Button Content="数据管理" Click="OnManageData" Padding="8,2"
+                        ToolTip.Tip="打开写实数据管理：按批次(时间标签)删除 / 改名"/>
+                <Border Width="1" Background="#D0D4DA" Margin="2,2"/>
+                <Button Content="下载模板…" Click="OnDownloadTemplate" Padding="8,2" ToolTip.Tip="CSV 模板：列随当前煤层结构生成"/>
+                <Button Content="导入 CSV…" Click="OnImportCsv" Padding="8,2" ToolTip.Tip="导入写实数据(CSV，同模板列头)；孔号已存在则整孔覆盖并归入导入批次"/>
+                <Button Content="导出 CSV" Click="OnExportCsv" Padding="8,2" ToolTip.Tip="把当前批次全部补勘孔及层位导出为 CSV(同模板列头)"/>
+                <Border Width="1" Background="#D0D4DA" Margin="2,2"/>
+                <Button Content="煤层结构…" Click="OnEditStructure" Padding="8,2"/>
+                <Border Width="1" Background="#D0D4DA" Margin="2,2"/>
+                <Button Content="保存" Click="OnSave" Padding="8,2" Classes="primary"/>
+                <Button Content="展绘" Click="OnDraw" Padding="8,2"
+                        ToolTip.Tip="把当前批次补勘孔展绘到视口：孔位点 + 孔号 + 各层顶/底板点(按煤层色) + 孔柱，图层「补勘钻孔写实」"/>
+            </StackPanel>
+        </Border>
+
+        <!-- 底部状态栏 -->
+        <Border DockPanel.Dock="Bottom" Classes="statusbar" Margin="0,8,0,0">
+            <TextBlock x:Name="statusText" Text="就绪"/>
+        </Border>
+
+        <!-- 三栏 -->
+        <Grid ColumnDefinitions="200,*,360">
+            <!-- 左:补勘孔列表 -->
+            <DockPanel Grid.Column="0" Margin="0,0,8,0">
+                <TextBlock DockPanel.Dock="Top" Text="补勘钻孔" FontWeight="Bold" Margin="0,0,0,4"/>
+                <TextBox DockPanel.Dock="Top" x:Name="filterBox" Margin="0,0,0,4" Watermark="筛选孔号" ToolTip.Tip="筛选孔号"/>
+                <Grid DockPanel.Dock="Bottom" Margin="0,4,0,0" ColumnDefinitions="*,*">
+                    <Button Grid.Column="0" Content="新增孔" Click="OnAddHole" Margin="0,0,3,0" HorizontalAlignment="Stretch"/>
+                    <Button Grid.Column="1" Content="删除孔" Click="OnDeleteHole" Margin="3,0,0,0" HorizontalAlignment="Stretch" Classes="danger"/>
+                </Grid>
+                <ListBox x:Name="holeList" SelectionChanged="OnHoleSelected"/>
+            </DockPanel>
+
+            <!-- 中:交互柱状图 -->
+            <Grid Grid.Column="1" Margin="0,0,8,0" RowDefinitions="Auto,*">
+                <TextBlock x:Name="headerText" Grid.Row="0" FontSize="14" FontWeight="Bold" Margin="4,0,0,6" Text="（选择或新增左侧补勘钻孔）"/>
+                <Border Grid.Row="1" Background="White" BorderBrush="#D0D4DA" BorderThickness="1" CornerRadius="3">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                        <Canvas x:Name="columnCanvas" Background="Transparent"/>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+
+            <!-- 右:录入面板 -->
+            <Border Grid.Column="2" Classes="panel">
+                <DockPanel Margin="10">
+                    <TextBlock DockPanel.Dock="Top" Text="孔信息" FontWeight="Bold" Margin="0,0,0,6"/>
+                    <Grid DockPanel.Dock="Top" Margin="0,0,0,10" ColumnDefinitions="64,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="孔号" VerticalAlignment="Center" Opacity="0.75"/>
+                        <TextBox Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" x:Name="holeIdBox" Margin="0,2"/>
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="经距X" VerticalAlignment="Center" Opacity="0.75"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="xBox" Margin="0,2"/>
+                        <Button Grid.Row="1" Grid.Column="2" Grid.RowSpan="2" Content="拾取孔位" Click="OnPickPosition" Margin="6,2,0,2" Padding="6,2" VerticalAlignment="Stretch"
+                                ToolTip.Tip="在视口点一下取孔位 X/Y(Esc 取消)"/>
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="纬距Y" VerticalAlignment="Center" Opacity="0.75"/>
+                        <TextBox Grid.Row="2" Grid.Column="1" x:Name="yBox" Margin="0,2"/>
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="孔口高程" VerticalAlignment="Center" Opacity="0.75"/>
+                        <TextBox Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" x:Name="zBox" Margin="0,2"/>
+                    </Grid>
+
+                    <TextBlock DockPanel.Dock="Top" Text="煤层顶底板高程 (m)" FontWeight="Bold" Margin="0,2,0,2"/>
+                    <TextBlock DockPanel.Dock="Top" Opacity="0.65" TextWrapping="Wrap" Margin="0,0,0,6"
+                               Text="逐层填顶板/底板高程(只填该孔实见的层)。厚度自动算。改「煤层结构…」增减层。"/>
+                    <Button DockPanel.Dock="Bottom" Content="刷新预览" Click="OnRefreshPreview" Margin="0,8,0,0" HorizontalAlignment="Stretch"/>
+                    <DataGrid x:Name="seamGrid" AutoGenerateColumns="False" IsReadOnly="False" SelectionMode="Single"
+                              CellEditEnded="OnSeamCellEditEnded" SelectionChanged="OnSeamRowSelected">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="煤层" Binding="{Binding SeamName}" IsReadOnly="True" Width="*"/>
+                            <DataGridTextColumn Header="顶板高程" Binding="{Binding RoofText, Mode=TwoWay}" Width="82"/>
+                            <DataGridTextColumn Header="底板高程" Binding="{Binding FloorText, Mode=TwoWay}" Width="82"/>
+                            <DataGridTextColumn Header="厚度" Binding="{Binding ThicknessText}" IsReadOnly="True" Width="56"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </DockPanel>
+</Window>
