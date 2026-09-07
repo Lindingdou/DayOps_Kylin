@@ -27,6 +27,13 @@ public abstract class SceneEntity
         o.Add((float)x1); o.Add((float)y1); o.Add(z); o.Add(Cr); o.Add(Cg); o.Add(Cb);
     }
 
+    /// <summary>逐端点真高程的线段(三角网边线用, 不走线型)。</summary>
+    protected void Seg3(List<float> o, double x0, double y0, double z0, double x1, double y1, double z1)
+    {
+        o.Add((float)x0); o.Add((float)y0); o.Add((float)z0); o.Add(Cr); o.Add(Cg); o.Add(Cb);
+        o.Add((float)x1); o.Add((float)y1); o.Add((float)z1); o.Add(Cr); o.Add(Cg); o.Add(Cb);
+    }
+
     /// <summary>按线型 Dash 把一段切成虚线子段镶嵌(实线时=单段)。</summary>
     protected void SegD(List<float> o, double x0, double y0, double x1, double y1)
     {
@@ -35,7 +42,7 @@ public abstract class SceneEntity
     }
 
     /// <summary>点 (px,py) 到本实体几何的最近距离（拾取用；对自身镶嵌的每段求点到线段距离取最小）。</summary>
-    public double DistanceTo(double px, double py)
+    public virtual double DistanceTo(double px, double py)
     {
         var o = new List<float>();
         Tessellate(o);
@@ -428,33 +435,49 @@ public sealed class PolylineEntity : SceneEntity
 {
     public List<(double x, double y)> Points = new();
     public bool Closed;
+    /// <summary>逐顶点高程(可空=平面多段线, 统一用 Elevation)。与 Points 等长时生效——三维多段线(落面/交线/等值线/剖面线)用。</summary>
+    public List<double>? Zs;
+    public bool Has3D => Zs != null && Zs.Count == Points.Count && Points.Count > 0;
+    /// <summary>第 i 顶点的 z(三维取 Zs[i]+Elevation, 平面取 Elevation)。</summary>
+    public double ZAt(int i) => Has3D ? Zs![i] + Elevation : Elevation;
     public override void Tessellate(List<float> o)
     {
+        bool z3 = Has3D;
         for (int i = 0; i + 1 < Points.Count; i++)
-            SegD(o, Points[i].x, Points[i].y, Points[i + 1].x, Points[i + 1].y);
+        {
+            if (z3) Seg3(o, Points[i].x, Points[i].y, ZAt(i), Points[i + 1].x, Points[i + 1].y, ZAt(i + 1));
+            else SegD(o, Points[i].x, Points[i].y, Points[i + 1].x, Points[i + 1].y);
+        }
         if (Closed && Points.Count > 1)
-            SegD(o, Points[^1].x, Points[^1].y, Points[0].x, Points[0].y);
+        {
+            if (z3) Seg3(o, Points[^1].x, Points[^1].y, ZAt(Points.Count - 1), Points[0].x, Points[0].y, ZAt(0));
+            else SegD(o, Points[^1].x, Points[^1].y, Points[0].x, Points[0].y);
+        }
     }
     public override SceneEntity Apply(Affine2 m)
     {
-        var pl = new PolylineEntity { Closed = Closed };
+        var pl = new PolylineEntity { Closed = Closed, Zs = Has3D ? new List<double>(Zs!) : null };
         foreach (var p in Points) pl.Points.Add(m.Map(p.x, p.y));
         return Colored(pl);
     }
     public override List<SceneEntity>? Explode()
     {
         var list = new List<SceneEntity>();
-        for (int i = 0; i + 1 < Points.Count; i++)
-            list.Add(Colored(new LineEntity { X0 = Points[i].x, Y0 = Points[i].y, X1 = Points[i + 1].x, Y1 = Points[i + 1].y }));
-        if (Closed && Points.Count > 1)
-            list.Add(Colored(new LineEntity { X0 = Points[^1].x, Y0 = Points[^1].y, X1 = Points[0].x, Y1 = Points[0].y }));
+        LineEntity L(int i, int j)
+        {
+            var l = Colored(new LineEntity { X0 = Points[i].x, Y0 = Points[i].y, X1 = Points[j].x, Y1 = Points[j].y });
+            if (Has3D) l.Elevation = (ZAt(i) + ZAt(j)) / 2;
+            return (LineEntity)l;
+        }
+        for (int i = 0; i + 1 < Points.Count; i++) list.Add(L(i, i + 1));
+        if (Closed && Points.Count > 1) list.Add(L(Points.Count - 1, 0));
         return list.Count > 0 ? list : null;
     }
     public override List<(double x, double y)> Grips() => new(Points);   // 各顶点
     public override SceneEntity? MoveGrip(int i, double nx, double ny)
     {
         if (i < 0 || i >= Points.Count) return null;
-        var pl = new PolylineEntity { Closed = Closed };
+        var pl = new PolylineEntity { Closed = Closed, Zs = Has3D ? new List<double>(Zs!) : null };
         for (int k = 0; k < Points.Count; k++) pl.Points.Add(k == i ? (nx, ny) : Points[k]);
         return Colored(pl);
     }
@@ -838,6 +861,7 @@ public static class EntityTypeName
         PointEntity => "点",
         PolygonEntity => "正多边形",
         TextEntity => "文字",
+        MeshEntity => "三角网",
         _ => "其他"
     };
 }

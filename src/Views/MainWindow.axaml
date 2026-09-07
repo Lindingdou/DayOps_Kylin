@@ -454,30 +454,31 @@
                 <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,0,1">
                     <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                         <StackPanel Orientation="Horizontal" Height="94">
+                            <!-- 组序/组成照原 MeshEditLibPlugin + BlockModelLibPlugin：建模 · 倾斜摄影 · 编辑(点/线/面/体/工具) · 地质统计学分析 · 更新地质模型 · 块体模型 · 采矿模型 -->
                             <Border Classes="ribbon-group">
                                 <DockPanel>
                                     <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="建模" />
                                     <StackPanel Orientation="Horizontal">
-                                        <Button Classes="ribbon-btn large" Tag="创建三角网" Click="OnRibbonCommand" ToolTip.Tip="创建三角网">
+                                        <Button Classes="ribbon-btn large" Tag="创建三角网" Click="OnRibbonCommand" ToolTip.Tip="创建三角网：选中的高程点(可加一条闭合线裁边)→ Delaunay 三角网入场景">
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_Triangle}" /><TextBlock Text="创建三角网" /></StackPanel>
                                         </Button>
                                         <WrapPanel Orientation="Vertical" MaxHeight="72">
-                                            <Button Classes="ribbon-btn small" Tag="固化成体" Click="OnRibbonCommand" ToolTip.Tip="固化成体">
+                                            <Button Classes="ribbon-btn small" Tag="固化成体" Click="OnRibbonCommand" ToolTip.Tip="固化成体：选中的顶/底/侧面三角网焊成闭合实体">
                                                 <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mb_solidify}" /><TextBlock Text="固化成体" /></StackPanel>
                                             </Button>
-                                            <Button Classes="ribbon-btn small" Tag="侧面三角网" Click="OnRibbonCommand" ToolTip.Tip="侧面三角网">
+                                            <Button Classes="ribbon-btn small" Tag="侧面三角网" Click="OnRibbonCommand" ToolTip.Tip="侧面三角网：选中顶线+底线两条多段线放样侧壁">
                                                 <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mb_side_tri}" /><TextBlock Text="侧面三角网" /></StackPanel>
                                             </Button>
-                                            <Button Classes="ribbon-btn small" Tag="快速建模" Click="OnRibbonCommand" ToolTip.Tip="快速建模">
+                                            <Button Classes="ribbon-btn small" Tag="快速建模" Click="OnRibbonCommand" ToolTip.Tip="快速建模：选中顶板面+底板面两张三角网一键成体">
                                                 <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mb_quickmodel}" /><TextBlock Text="快速建模" /></StackPanel>
                                             </Button>
-                                            <Button Classes="ribbon-btn small" Tag="地质体建模" Click="OnRibbonCommand" ToolTip.Tip="地质体建模">
+                                            <Button Classes="ribbon-btn small" Tag="地质体建模" Click="OnRibbonCommand" ToolTip.Tip="地质体建模：层位面连续多层自动成体">
                                                 <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mb_geomodel}" /><TextBlock Text="地质体建模" /></StackPanel>
                                             </Button>
-                                            <Button Classes="ribbon-btn small" Tag="展点" Click="OnRibbonCommand" ToolTip.Tip="展点">
+                                            <Button Classes="ribbon-btn small" Tag="展点" Click="OnRibbonCommand" ToolTip.Tip="展点：把高程点数据展绘到场景">
                                                 <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mb_show_pts}" /><TextBlock Text="展点" /></StackPanel>
                                             </Button>
-                                            <Button Classes="ribbon-btn small" ToolTip.Tip="基本几何体">
+                                            <Button Classes="ribbon-btn small" ToolTip.Tip="基本几何体：在视口点位放置拓扑闭合的立方体/球体/圆柱">
                                                 <Button.Flyout>
                                                     <MenuFlyout>
                                                         <MenuItem Header="立方体" Tag="立方体" Click="OnRibbonCommand" />
@@ -495,17 +496,17 @@
                                 <DockPanel>
                                     <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="倾斜摄影" />
                                     <StackPanel Orientation="Horizontal">
-                                        <Button Classes="ribbon-btn large" Tag="加载倾斜摄影" Click="OnRibbonCommand" ToolTip.Tip="加载倾斜摄影">
+                                        <Button Classes="ribbon-btn large" Tag="加载倾斜摄影" Click="OnRibbonCommand" ToolTip.Tip="加载倾斜摄影(OSGB 需原生渲染内核, 本机记录受阻)">
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mb_oblique_import}" /><TextBlock Text="加载倾斜摄影" /></StackPanel>
                                         </Button>
-                                        <Button Classes="ribbon-btn large" Tag="转化为三角格网" Click="OnRibbonCommand" ToolTip.Tip="转化为三角格网">
+                                        <Button Classes="ribbon-btn large" Tag="转化为三角格网" Click="OnRibbonCommand" ToolTip.Tip="转化为三角格网：选中的点 → 三角网">
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mb_oblique_tin}" /><TextBlock Text="转化为三角格网" /></StackPanel>
                                         </Button>
                                         <WrapPanel Orientation="Vertical" MaxHeight="72">
-                                            <Button Classes="ribbon-btn small" Tag="隐藏" Click="OnRibbonCommand" ToolTip.Tip="隐藏">
+                                            <Button Classes="ribbon-btn small" Tag="隐藏" Click="OnRibbonCommand" ToolTip.Tip="隐藏选中对象">
                                                 <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mb_oblique_hide}" /><TextBlock Text="隐藏" /></StackPanel>
                                             </Button>
-                                            <Button Classes="ribbon-btn small" Tag="删除" Click="OnRibbonCommand" ToolTip.Tip="删除">
+                                            <Button Classes="ribbon-btn small" Tag="删除" Click="OnRibbonCommand" ToolTip.Tip="删除选中对象">
                                                 <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mb_oblique_del}" /><TextBlock Text="删除" /></StackPanel>
                                             </Button>
                                         </WrapPanel>
@@ -519,7 +520,10 @@
                                         <Button Classes="ribbon-btn large" ToolTip.Tip="点编辑">
                                             <Button.Flyout>
                                                 <MenuFlyout>
+                                                    <MenuItem Header="修改高程点" Tag="修改高程点" Click="OnRibbonCommand" />
                                                     <MenuItem Header="删除重复点" Tag="删除重复点" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="修改点样式" Tag="修改点样式" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="赋节点高程" Tag="赋节点高程" Click="OnRibbonCommand" />
                                                     <MenuItem Header="点落到面上" Tag="点落到面上" Click="OnRibbonCommand" />
                                                     <MenuItem Header="顶点焊接" Tag="顶点焊接" Click="OnRibbonCommand" />
                                                 </MenuFlyout>
@@ -529,13 +533,18 @@
                                         <Button Classes="ribbon-btn large" ToolTip.Tip="线编辑">
                                             <Button.Flyout>
                                                 <MenuFlyout>
-                                                    <MenuItem Header="加密多段线" Tag="加密多段线" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="抽稀/简化" Tag="简化" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="两线交点" Tag="两线交点" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="闭合多段线" Tag="闭合多段线" Click="OnRibbonCommand" />
                                                     <MenuItem Header="删除重复线" Tag="删除重复线" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="闭合线裁剪" Tag="闭合线裁剪" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="统一线高程" Tag="统一线高程" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="闭合多段线" Tag="闭合多段线" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="加密多段线" Tag="加密多段线" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="抽稀等值线" Tag="抽稀等值线" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="标识起点" Tag="标识起点" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="标识线序" Tag="标识线序" Click="OnRibbonCommand" />
                                                     <MenuItem Header="连接多段线" Tag="连接多段线" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="两线交点" Tag="两线交点" Click="OnRibbonCommand" />
                                                     <MenuItem Header="线落到面上" Tag="线落到面上" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="多段线嵌入三角网" Tag="多段线嵌入三角网" Click="OnRibbonCommand" />
                                                 </MenuFlyout>
                                             </Button.Flyout>
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource edit_line}" /><TextBlock Text="线编辑 ▾" /></StackPanel>
@@ -543,15 +552,15 @@
                                         <Button Classes="ribbon-btn large" ToolTip.Tip="面编辑">
                                             <Button.Flyout>
                                                 <MenuFlyout>
-                                                    <MenuItem Header="网格度量" Tag="网格度量" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="格网质量检测(诊断)" Tag="网格诊断" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="生成三角网边界" Tag="网格边界" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="台阶面提取(坡顶/坡底线)" Tag="台阶面提取" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="煤岩台阶判定(坡顶线→煤/岩)" Tag="煤岩台阶判定" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="煤层露头线(现状面∩顶/底板)" Tag="煤层露头线" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="更新煤层面(观测点局部更新)" Tag="更新煤层面" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="生成三角网边界" Tag="生成三角网边界" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="闭合线裁剪面" Tag="闭合线裁剪面" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="沿线分割三角网" Tag="沿线分割三角网" Click="OnRibbonCommand" />
                                                     <MenuItem Header="合并三角网" Tag="合并三角网" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="侧面三角网" Tag="侧面三角网" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="面交线" Tag="面交线" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="裁剪面" Tag="裁剪面" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="修复拓扑关系" Tag="修复拓扑关系" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="删除三角面" Tag="删除三角面" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="格网质量检测" Tag="格网质量检测" Click="OnRibbonCommand" />
                                                 </MenuFlyout>
                                             </Button.Flyout>
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource edit_face}" /><TextBlock Text="面编辑 ▾" /></StackPanel>
@@ -559,20 +568,26 @@
                                         <Button Classes="ribbon-btn large" ToolTip.Tip="体编辑">
                                             <Button.Flyout>
                                                 <MenuFlyout>
-                                                    <MenuItem Header="固化成体" Tag="固化成体" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="顶点焊接" Tag="网格焊接" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="两期三角网算量" Tag="两期三角网算量" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="分割地质体" Tag="分割地质体" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="布尔-并集" Tag="布尔-并集" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="布尔-交集" Tag="布尔-交集" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="布尔-差集" Tag="布尔-差集" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="布尔-补集" Tag="布尔-补集" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="三角网体积" Tag="三角网体积" Click="OnRibbonCommand" />
                                                     <MenuItem Header="体素格网体积" Tag="体素格网体积" Click="OnRibbonCommand" />
                                                     <MenuItem Header="实体转块体" Tag="实体转块体" Click="OnRibbonCommand" />
                                                 </MenuFlyout>
                                             </Button.Flyout>
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource edit_body}" /><TextBlock Text="体编辑 ▾" /></StackPanel>
                                         </Button>
-                                        <Button Classes="ribbon-btn large" ToolTip.Tip="工具">
+                                        <Button Classes="ribbon-btn large" ToolTip.Tip="工具：构建等值线 / 创建剖面 / 动态剖面 / 实时曲面坐标">
                                             <Button.Flyout>
                                                 <MenuFlyout>
-                                                    <MenuItem Header="距离测量" Tag="距离" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="面积测量" Tag="面积" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="角度测量" Tag="角度" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="构建等值线" Tag="构建等值线" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="创建剖面" Tag="创建剖面" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="动态剖面" Tag="动态剖面" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="实时曲面坐标" Tag="实时曲面坐标" Click="OnRibbonCommand" />
                                                 </MenuFlyout>
                                             </Button.Flyout>
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource me_contour}" /><TextBlock Text="工具 ▾" /></StackPanel>
@@ -584,10 +599,10 @@
                                 <DockPanel>
                                     <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="地质统计学分析" />
                                     <StackPanel Orientation="Horizontal">
-                                        <Button Classes="ribbon-btn large" Tag="快速估值" Click="OnRibbonCommand" ToolTip.Tip="快速估值">
+                                        <Button Classes="ribbon-btn large" Tag="快速估值" Click="OnRibbonCommand" ToolTip.Tip="快速估值：IDW/最近邻/移动平均 + 数据分析">
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource stat_quick}" /><TextBlock Text="快速估值" /></StackPanel>
                                         </Button>
-                                        <Button Classes="ribbon-btn large" Tag="克里金估值" Click="OnRibbonCommand" ToolTip.Tip="克里金估值">
+                                        <Button Classes="ribbon-btn large" Tag="克里金估值" Click="OnRibbonCommand" ToolTip.Tip="克里金估值：变差函数拟合 + 普通/简单/泛克里金">
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource stat_kriging}" /><TextBlock Text="克里金估值" /></StackPanel>
                                         </Button>
                                     </StackPanel>
@@ -597,13 +612,13 @@
                                 <DockPanel>
                                     <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="更新地质模型" />
                                     <StackPanel Orientation="Horizontal">
-                                        <Button Classes="ribbon-btn large" Tag="补勘钻孔写实" Click="OnRibbonCommand" ToolTip.Tip="补勘钻孔写实">
+                                        <Button Classes="ribbon-btn large" Tag="补勘钻孔写实" Click="OnRibbonCommand" ToolTip.Tip="补勘钻孔写实：录入/导入补勘钻孔层位并展绘">
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mu_borehole}" /><TextBlock Text="补勘钻孔写实" /></StackPanel>
                                         </Button>
-                                        <Button Classes="ribbon-btn large" Tag="现状写实" Click="OnRibbonCommand" ToolTip.Tip="现状写实">
+                                        <Button Classes="ribbon-btn large" Tag="现状写实" Click="OnRibbonCommand" ToolTip.Tip="现状写实：现状测点批次管理与标记">
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mu_current}" /><TextBlock Text="现状写实" /></StackPanel>
                                         </Button>
-                                        <Button Classes="ribbon-btn large" Tag="更新煤层面" Click="OnRibbonCommand" ToolTip.Tip="更新煤层面">
+                                        <Button Classes="ribbon-btn large" Tag="更新煤层面" Click="OnRibbonCommand" ToolTip.Tip="更新煤层面：用补勘/现状点局部更新煤层顶底板面">
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mu_update}" /><TextBlock Text="更新煤层面" /></StackPanel>
                                         </Button>
                                     </StackPanel>
@@ -613,36 +628,62 @@
                                 <DockPanel>
                                     <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="块体模型" />
                                     <StackPanel Orientation="Horizontal">
-                                        <Button Classes="ribbon-btn large" Tag="导入块体" Click="OnRibbonCommand" ToolTip.Tip="从 CSV 导入块体模型">
-                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mb_prim_box}" /><TextBlock Text="导入块体" /></StackPanel>
+                                        <Button Classes="ribbon-btn large" Tag="创建块体" Click="OnRibbonCommand" ToolTip.Tip="创建块体模型">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mb_prim_box}" /><TextBlock Text="创建块体" /></StackPanel>
                                         </Button>
-                                        <Button Classes="ribbon-btn large" Tag="实体转块体" Click="OnRibbonCommand" ToolTip.Tip="选封闭三角网体→体素化成块体">
-                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource te_voxel_volume}" /><TextBlock Text="实体转块体" /></StackPanel>
-                                        </Button>
-                                        <Button Classes="ribbon-btn large" Tag="约束块体" Click="OnRibbonCommand" ToolTip.Tip="选闭合多段线→仅保留范围内块体">
+                                        <Button Classes="ribbon-btn large" Tag="约束块体" Click="OnRibbonCommand" ToolTip.Tip="约束块体：用三角网/闭合体裁剪块体">
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource me_clip_loop}" /><TextBlock Text="约束块体" /></StackPanel>
                                         </Button>
-                                        <Button Classes="ribbon-btn large" Tag="块体着色" Click="OnRibbonCommand" ToolTip.Tip="按品位色带着色全部块体">
-                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource stat_kriging}" /><TextBlock Text="块体着色" /></StackPanel>
+                                        <Button Classes="ribbon-btn large" Tag="导入块体" Click="OnRibbonCommand" ToolTip.Tip="导入块体模型(CSV/BLK/PMB)">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mb_geomodel}" /><TextBlock Text="导入块体" /></StackPanel>
                                         </Button>
-                                        <Button Classes="ribbon-btn large" Tag="筛选块体" Click="OnRibbonCommand" ToolTip.Tip="按品位阈值筛选块体">
-                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource te_quality}" /><TextBlock Text="筛选块体" /></StackPanel>
+                                        <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                            <Button Classes="ribbon-btn small" Tag="导出块体" Click="OnRibbonCommand" ToolTip.Tip="导出块体">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource te_voxel_volume}" /><TextBlock Text="导出块体" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="属性赋值" Click="OnRibbonCommand" ToolTip.Tip="属性赋值：样本插值/表达式给块体赋属性">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource stat_quick}" /><TextBlock Text="属性赋值" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="块体着色" Click="OnRibbonCommand" ToolTip.Tip="块体着色">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource stat_kriging}" /><TextBlock Text="块体着色" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="删除块体" Click="OnRibbonCommand" ToolTip.Tip="删除块体">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource te_delete_tri}" /><TextBlock Text="删除块体" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="筛选块体" Click="OnRibbonCommand" ToolTip.Tip="筛选块体">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource te_quality}" /><TextBlock Text="筛选块体" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="切面剖切" Click="OnRibbonCommand" ToolTip.Tip="切面剖切">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource me_section}" /><TextBlock Text="切面剖切" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="输出报告" Click="OnRibbonCommand" ToolTip.Tip="输出报告：资源量/属性统计报告">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource te_volume_diff}" /><TextBlock Text="输出报告" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="实体转块体" Click="OnRibbonCommand" ToolTip.Tip="实体转块体：闭合三角网离散为块体">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource te_embed_pline}" /><TextBlock Text="实体转块体" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="体素格网体积" Click="OnRibbonCommand" ToolTip.Tip="体素格网体积">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource te_voxel_volume}" /><TextBlock Text="体素格网体积" /></StackPanel>
+                                            </Button>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="采矿模型" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="采矿模型" Click="OnRibbonCommand" ToolTip.Tip="采矿模型(条带划分需内核, 本机记录受阻)">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_Geo3d}" /><TextBlock Text="采矿模型" /></StackPanel>
                                         </Button>
-                                        <Button Classes="ribbon-btn large" Tag="切面剖切" Click="OnRibbonCommand" ToolTip.Tip="选线→取沿线一格宽剖面块体">
-                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource me_section}" /><TextBlock Text="切面剖切" /></StackPanel>
-                                        </Button>
-                                        <Button Classes="ribbon-btn large" Tag="体素格网体积" Click="OnRibbonCommand" ToolTip.Tip="选封闭体→体素化算总体积/分标高体积">
-                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource te_volume_diff}" /><TextBlock Text="体素体积" /></StackPanel>
-                                        </Button>
-                                        <Button Classes="ribbon-btn large" Tag="删除块体" Click="OnRibbonCommand" ToolTip.Tip="清除全部块体单元">
-                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource te_delete_tri}" /><TextBlock Text="删除块体" /></StackPanel>
-                                        </Button>
-                                        <Button Classes="ribbon-btn large" Tag="导出块体" Click="OnRibbonCommand" ToolTip.Tip="导出块体模型为 CSV">
-                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource mb_geomodel}" /><TextBlock Text="导出块体" /></StackPanel>
-                                        </Button>
-                                        <Button Classes="ribbon-btn large" Tag="输出报告" Click="OnRibbonCommand" ToolTip.Tip="输出资源量报告 CSV">
-                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource stat_quick}" /><TextBlock Text="输出报告" /></StackPanel>
-                                        </Button>
+                                        <WrapPanel Orientation="Vertical" MaxHeight="72">
+                                            <Button Classes="ribbon-btn small" Tag="离散化模型" Click="OnRibbonCommand" ToolTip.Tip="离散化模型：闭合体离散为块体">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource te_embed_pline}" /><TextBlock Text="离散化模型" /></StackPanel>
+                                            </Button>
+                                            <Button Classes="ribbon-btn small" Tag="体积算量" Click="OnRibbonCommand" ToolTip.Tip="体积算量：三角网/闭合体体积与面积">
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource te_volume_diff}" /><TextBlock Text="体积算量" /></StackPanel>
+                                            </Button>
+                                        </WrapPanel>
                                     </StackPanel>
                                 </DockPanel>
                             </Border>

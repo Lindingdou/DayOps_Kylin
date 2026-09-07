@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 
 namespace PitMine3D.Kylin.Cad.Draw;
 
@@ -59,9 +60,20 @@ public static class EntityProperties
                 r.Add(("几何", "点大小", N(p.Size)));
                 r.Add(("几何", "点样式", p.Style.ToString(Inv)));
                 break;
+            case MeshEntity me:
+                r.Add(("几何", "名称", me.Name));
+                r.Add(("几何", "顶点数", me.VertexCount.ToString(Inv)));
+                r.Add(("几何", "三角数", me.TriangleCount.ToString(Inv)));
+                var mb = me.Bounds;
+                r.Add(("几何", "范围X", N(mb.minX) + " ~ " + N(mb.maxX)));
+                r.Add(("几何", "范围Y", N(mb.minY) + " ~ " + N(mb.maxY)));
+                r.Add(("几何", "高程", N(mb.minZ) + " ~ " + N(mb.maxZ)));
+                r.Add(("几何", "表面积", N(me.SurfaceArea())));
+                break;
             case PolylineEntity pl:
                 r.Add(("几何", "闭合", pl.Closed ? "是" : "否"));
                 r.Add(("几何", "顶点数", pl.Points.Count.ToString(Inv)));
+                if (pl.Has3D) r.Add(("几何", "高程", N(pl.Zs!.Min()) + " ~ " + N(pl.Zs!.Max())));
                 break;
             case TextEntity t:
                 r.Add(("几何", "位置", F(t.X, t.Y)));
@@ -180,7 +192,8 @@ public static class EntityProperties
         PointEntity p => Style(e, new PointEntity { X = p.X, Y = p.Y, Size = p.Size, Style = p.Style }),
         ArcEntity a => Style(e, new ArcEntity { X1 = a.X1, Y1 = a.Y1, X2 = a.X2, Y2 = a.Y2, X3 = a.X3, Y3 = a.Y3, Segments = a.Segments }),
         TextEntity t => Style(e, new TextEntity { X = t.X, Y = t.Y, Height = t.Height, Text = t.Text, Rotation = t.Rotation }),
-        PolylineEntity pl => Style(e, new PolylineEntity { Points = new List<(double, double)>(pl.Points), Closed = pl.Closed }),
+        PolylineEntity pl => Style(e, new PolylineEntity { Points = new List<(double, double)>(pl.Points), Closed = pl.Closed, Zs = pl.Has3D ? new List<double>(pl.Zs!) : null }),
+        MeshEntity me => Style(e, new MeshEntity(me.Name, me.Verts, me.Tris)),
         _ => null,
     };
 

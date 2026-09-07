@@ -541,6 +541,7 @@ public partial class MainWindow : Window
                 : $"视口 px  X {p.X:0}  Y {p.Y:0}";
 
             _cursorWorld = shown;
+            if (_surfCoordOn && shown != null) CoordText.Text += SurfaceCoordSuffix(shown);
 
             // 夹点拖拽：按当前模式(拉伸/移动/旋转/缩放)实时预览变换后的实体 + 光标旁模式提示
             if (_gripDrag.Active)
@@ -1073,6 +1074,7 @@ public partial class MainWindow : Window
         {
             if (_suppressCmdLog) _suppressCmdLog = false; else LogCommand(cmd);   // 命令回显(转派来的已回显, 跳过)
             if (await TryOpenGeoDbPageAsync(cmd)) return;   // 地质与工程信息数据库 24 页面(按 Ribbon Tag 精确匹配)
+            if (await TryModelingCommandAsync(cmd)) return; // 三维地质建模：场景对象版(选中三角网/点/线 → 结果入场景)
             if (cmd == "新建") { NewDocument(); return; }
             if (cmd == "打开") { await OpenSceneAsync(); return; }
             if (cmd == "保存") { await SaveSceneAsync(); return; }
@@ -1755,6 +1757,7 @@ public partial class MainWindow : Window
         if (ext == ".kdf") { ImportKdfEditable(path); return; }
         if (ext == ".3ds") { ImportTdmStringEditable(path); return; }
 
+        if (ext == ".off") { ImportOffAsMesh(path); return; }   // OFF 三角网 → 场景三角网对象(可选中/建模/存档)
         // OFF 网格 / 3DMine .3dm 三角网 → 显示态线框
         var r = ext == ".3dm" ? Cad.TdmImportService.Load(path) : OffImportService.Load(path);
         if (!r.Success) { StatusMsg.Text = $"导入失败：{r.Error}"; return; }
@@ -1921,9 +1924,9 @@ public partial class MainWindow : Window
         var r = PointDataImportService.Load(path);
         if (!r.Success) { StatusMsg.Text = $"点导入失败：{r.Error}"; return; }
         BeginChange();
-        foreach (var (x, y, _) in r.Points)
+        foreach (var (x, y, z) in r.Points)
         {
-            var pt = new PointEntity { X = x, Y = y };
+            var pt = new PointEntity { X = x, Y = y, Elevation = z };   // 保留高程(创建三角网/赋高程用)
             AssignLayer(pt);
             _scene.Add(pt);
         }
@@ -4506,7 +4509,7 @@ public partial class MainWindow : Window
         BeginChange();
         foreach (var p in r.Points)
         {
-            var pe = new PointEntity { X = p.x, Y = p.y, Cr = 0.75f, Cg = 0.78f, Cb = 0.82f };
+            var pe = new PointEntity { X = p.x, Y = p.y, Elevation = p.z, Cr = 0.75f, Cg = 0.78f, Cb = 0.82f };
             AssignLayer(pe); pe.Cr = 0.75f; pe.Cg = 0.78f; pe.Cb = 0.82f;
             _scene.Add(pe);
         }

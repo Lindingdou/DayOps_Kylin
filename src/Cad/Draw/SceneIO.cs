@@ -34,6 +34,8 @@ public static class SceneIO
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public double Ob { get; set; }      // 文字倾斜角(0)
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public int Ha { get; set; }         // 文字水平对齐(0=左)
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public int Va { get; set; }         // 文字垂直对齐(0=基线)
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public double[]? V { get; set; }    // 三角网顶点 x,y,z 扁平
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public int[]? I { get; set; }       // 三角网三角索引 a,b,c 扁平
     }
 
     private sealed class LayerDto
@@ -81,6 +83,7 @@ public static class SceneIO
                 PolygonEntity pg => new Dto { T = "polygon", N = new[] { pg.Cx, pg.Cy, pg.Radius, pg.Rotation, pg.Sides } },
                 TextEntity tx => new Dto { T = "text", N = new[] { tx.X, tx.Y, tx.Height, tx.Rotation }, S = tx.Text },
                 PolylineEntity pl => PolyDto(pl),
+                MeshEntity me => MeshDto(me),
                 _ => null
             };
             if (d == null) continue;
@@ -115,6 +118,7 @@ public static class SceneIO
                 "polygon" when d.N.Length >= 5 => new PolygonEntity { Cx = d.N[0], Cy = d.N[1], Radius = d.N[2], Rotation = d.N[3], Sides = (int)d.N[4] },
                 "text" when d.N.Length >= 3 => new TextEntity { X = d.N[0], Y = d.N[1], Height = d.N[2], Rotation = d.N.Length >= 4 ? d.N[3] : 0, Text = d.S ?? "" },
                 "poly" => BuildPoly(d),
+                "mesh" when d.V != null && d.I != null => BuildMesh(d),
                 _ => null
             };
             if (e == null) continue;
@@ -180,7 +184,9 @@ public static class SceneIO
     private static Dto PolyDto(PolylineEntity pl)
     {
         var pts = new List<double[]>();
-        foreach (var pt in pl.Points) pts.Add(new[] { pt.x, pt.y });
+        bool z3 = pl.Has3D;
+        for (int i = 0; i < pl.Points.Count; i++)
+            pts.Add(z3 ? new[] { pl.Points[i].x, pl.Points[i].y, pl.Zs![i] } : new[] { pl.Points[i].x, pl.Points[i].y });
         return new Dto { T = "poly", P = pts, Closed = pl.Closed };
     }
 
@@ -188,8 +194,31 @@ public static class SceneIO
     {
         var pl = new PolylineEntity { Closed = d.Closed };
         if (d.P != null)
-            foreach (var p in d.P)
-                if (p.Length >= 2) pl.Points.Add((p[0], p[1]));
+        {
+            bool all3 = d.P.Count > 0;
+            foreach (var p in d.P) { if (p.Length >= 2) pl.Points.Add((p[0], p[1])); if (p.Length < 3) all3 = false; }
+            if (all3) { pl.Zs = new List<double>(); foreach (var p in d.P) if (p.Length >= 3) pl.Zs.Add(p[2]); }
+        }
         return pl;
+    }
+
+    // ── 三角网 DTO(顶点/索引扁平数组, 名称存 S) ─────────────────────────
+    private static Dto MeshDto(MeshEntity me)
+    {
+        var v = new double[me.Verts.Count * 3];
+        for (int i = 0; i < me.Verts.Count; i++) { v[i * 3] = me.Verts[i].x; v[i * 3 + 1] = me.Verts[i].y; v[i * 3 + 2] = me.Verts[i].z; }
+        var idx = new int[me.Tris.Count * 3];
+        for (int i = 0; i < me.Tris.Count; i++) { idx[i * 3] = me.Tris[i].a; idx[i * 3 + 1] = me.Tris[i].b; idx[i * 3 + 2] = me.Tris[i].c; }
+        return new Dto { T = "mesh", V = v, I = idx, S = me.Name, N = new[] { me.Elevation } };
+    }
+
+    private static MeshEntity BuildMesh(Dto d)
+    {
+        var me = new MeshEntity { Name = string.IsNullOrEmpty(d.S) ? "三角网" : d.S! };
+        var v = d.V!; var idx = d.I!;
+        for (int i = 0; i + 2 < v.Length; i += 3) me.Verts.Add((v[i], v[i + 1], v[i + 2]));
+        for (int i = 0; i + 2 < idx.Length; i += 3) me.Tris.Add((idx[i], idx[i + 1], idx[i + 2]));
+        if (d.N.Length >= 1) me.Elevation = d.N[0];
+        return me;
     }
 }
