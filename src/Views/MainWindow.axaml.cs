@@ -1072,6 +1072,7 @@ public partial class MainWindow : Window
         if (sender is Control c && c.Tag is string cmd)
         {
             if (_suppressCmdLog) _suppressCmdLog = false; else LogCommand(cmd);   // 命令回显(转派来的已回显, 跳过)
+            if (await TryOpenGeoDbPageAsync(cmd)) return;   // 地质与工程信息数据库 24 页面(按 Ribbon Tag 精确匹配)
             if (cmd == "新建") { NewDocument(); return; }
             if (cmd == "打开") { await OpenSceneAsync(); return; }
             if (cmd == "保存") { await SaveSceneAsync(); return; }
