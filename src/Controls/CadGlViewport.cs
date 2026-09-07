@@ -568,6 +568,18 @@ public partial class CadGlViewport : OpenGlControlBase
         return p == null ? null : (p.Value.x + _ox, p.Value.y + _oy);
     }
 
+    /// <summary>世界点 → 屏幕像素(相机后方 null)。</summary>
+    public (double sx, double sy)? WorldToScreen(double x, double y, double z)
+        => _camera.WorldToScreen(x - _ox, y - _oy, z, Bounds.Width, Bounds.Height);
+
+    /// <summary>当前相机的世界→屏幕投影函数(矩阵只算一次, 供 3D 框选逐顶点投影)。</summary>
+    public Func<double, double, double, (double sx, double sy)?> WorldToScreenProjector()
+    {
+        var f = _camera.MakeProjector(Bounds.Width, Bounds.Height);
+        double ox = _ox, oy = _oy;
+        return (x, y, z) => f(x - ox, y - oy, z);
+    }
+
     // ---------- 几何（示例内容；接入内核后由 AcDb worldDraw 提供）----------
     private static float[] BuildGrid(int n, float step)
     {

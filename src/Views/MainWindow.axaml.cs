@@ -452,7 +452,8 @@ public partial class MainWindow : Window
             }
 
             // 窗口框选（2D 空闲态 或 编辑选择对象阶段 左键）：拖=选择框，不拖=点选（平移改中键）
-            if (props.IsLeftButtonPressed && Viewport.Is2DView && _tool == null && _measure == null
+            bool navShift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+            if (props.IsLeftButtonPressed && (Viewport.Is2DView || !navShift) && _tool == null && _measure == null
                 && (_editMode == EditMode.None || _editAwaitSelect) && !_offsetActive && !_trimActive && !_breakActive && !_slideActive)
             {
                 _selBoxActive = true; _selBoxStart = _lastPointer; _nav = NavMode.None;
@@ -461,9 +462,9 @@ public partial class MainWindow : Window
             }
 
             if (props.IsMiddleButtonPressed)
-                _nav = NavMode.Pan;                                       // 中键拖拽 = 平移
+                _nav = navShift && !Viewport.Is2DView ? NavMode.Orbit : NavMode.Pan;   // 中键拖拽 = 平移; 3D Shift+中键 = 轨道旋转
             else if (props.IsLeftButtonPressed)
-                _nav = NavMode.Orbit;                                     // 3D 左键旋转
+                _nav = NavMode.Orbit;                                     // 3D Shift+左键 = 轨道旋转(左键拖拽留给框选, 与 2D 一致)
             else
                 _nav = NavMode.None;                                      // 右键留给上下文菜单
             if (_nav != NavMode.None) e.Pointer.Capture(ViewportHost);
@@ -8539,17 +8540,30 @@ public partial class MainWindow : Window
     // 框选：窗口选(左→右,全含)/交叉选(右→左,相交或含)
     private void BoxSelect(Avalonia.Point a, Avalonia.Point b)
     {
+        bool crossing = b.X < a.X;
+        SaveSel();
+        if (!_editAwaitSelect) _selected.Clear();   // 编辑选择阶段累加, 空闲态替换
+        if (!Viewport.Is2DView)
+        {
+            // 3D：透视下 Z=0 平面反投影不代表实体位置, 改在屏幕空间判定(实体边线投影后做窗口/交叉测试)
+            var proj = Viewport.WorldToScreenProjector();
+            foreach (var en in _scene.Entities)
+            {
+                if (!en.Visible || !_layers.IsSelectable(en.LayerName)) continue;
+                if (SelectionBox.MatchScreen(en, a.X, a.Y, b.X, b.Y, crossing, proj) && !_selected.Contains(en)) _selected.Add(en);
+            }
+            HighlightSelection();
+            StatusMsg.Text = _selected.Count > 0 ? $"框选 {_selected.Count} 个（{(crossing ? "交叉" : "窗口")}，3D 屏幕空间）" : "框选：未选中";
+            return;
+        }
         var wa = Viewport.ScreenToWorld(a.X, a.Y);
         var wb = Viewport.ScreenToWorld(b.X, b.Y);
         if (wa == null || wb == null) return;
         double minX = System.Math.Min(wa.Value.x, wb.Value.x), maxX = System.Math.Max(wa.Value.x, wb.Value.x);
         double minY = System.Math.Min(wa.Value.y, wb.Value.y), maxY = System.Math.Max(wa.Value.y, wb.Value.y);
-        bool crossing = b.X < a.X;
-        SaveSel();
-        if (!_editAwaitSelect) _selected.Clear();   // 编辑选择阶段累加, 空闲态替换
         foreach (var en in _scene.Entities)
         {
-            if (!_layers.IsSelectable(en.LayerName)) continue;
+            if (!en.Visible || !_layers.IsSelectable(en.LayerName)) continue;
             if (SelectionBox.Match(en, minX, minY, maxX, maxY, crossing) && !_selected.Contains(en)) _selected.Add(en);
         }
         HighlightSelection();

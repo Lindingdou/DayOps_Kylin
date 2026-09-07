@@ -195,6 +195,25 @@ internal sealed class Camera
         return (near.x + t * (far.x - near.x), near.y + t * (far.y - near.y));
     }
 
+    /// <summary>世界(局部)点 → 屏幕像素(左上原点)。相机后方(w≤0)返回 null。供 3D 屏幕空间框选。</summary>
+    public (double sx, double sy)? WorldToScreen(double x, double y, double z, double vw, double vh)
+        => MakeProjector(vw, vh)(x, y, z);
+
+    /// <summary>一次算好 ViewProj 的投影函数(大网逐顶点投影时避免每点重建矩阵)。</summary>
+    public Func<double, double, double, (double sx, double sy)?> MakeProjector(double vw, double vh)
+    {
+        if (vw < 1 || vh < 1) return (_, _, _) => null;
+        var m = ViewProj((float)(vw / vh));
+        return (x, y, z) =>
+        {
+            double cx = m[0] * x + m[4] * y + m[8] * z + m[12];
+            double cy = m[1] * x + m[5] * y + m[9] * z + m[13];
+            double cw = m[3] * x + m[7] * y + m[11] * z + m[15];
+            if (cw <= 1e-9) return null;
+            return ((cx / cw + 1.0) * 0.5 * vw, (1.0 - cy / cw) * 0.5 * vh);
+        };
+    }
+
     private static (double x, double y, double z) UnprojectNdc(float[] inv, double nx, double ny, double nz)
     {
         double x = inv[0] * nx + inv[4] * ny + inv[8] * nz + inv[12];

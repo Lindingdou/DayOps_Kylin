@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace PitMine3D.Kylin.Cad.Draw;
@@ -65,6 +66,34 @@ public static class SelectionBox
             if (inside) any = true; else all = false;
         }
         return crossing ? any : all;
+    }
+
+    /// <summary>
+    /// 屏幕空间框选(3D 视图)：实体边线两端经 project 投到屏幕后做同样的 窗口/交叉 判定；
+    /// 三角网走边线(不看显示模式)。project 返回 null 视为在相机后方(不计入)。
+    /// </summary>
+    public static bool MatchScreen(SceneEntity e, double sx0, double sy0, double sx1, double sy1, bool crossing,
+        Func<double, double, double, (double sx, double sy)?> project)
+    {
+        var o = new List<float>();
+        if (e is MeshEntity me) me.TessellateEdges(o); else e.Tessellate(o);
+        if (o.Count == 0) return false;
+        double minX = Math.Min(sx0, sx1), maxX = Math.Max(sx0, sx1), minY = Math.Min(sy0, sy1), maxY = Math.Max(sy0, sy1);
+        bool all = true, hit = false;
+        for (int i = 0; i + 11 < o.Count; i += 12)
+        {
+            var a = project(o[i], o[i + 1], o[i + 2]);
+            var b = project(o[i + 6], o[i + 7], o[i + 8]);
+            if (a == null || b == null) { all = false; continue; }
+            bool in0 = In(a.Value.sx, a.Value.sy, minX, minY, maxX, maxY);
+            bool in1 = In(b.Value.sx, b.Value.sy, minX, minY, maxX, maxY);
+            if (!in0 || !in1) all = false;
+            if (in0 || in1) hit = true;
+            else if (SegRect(a.Value.sx, a.Value.sy, b.Value.sx, b.Value.sy, minX, minY, maxX, maxY)) hit = true;
+            if (crossing && hit) return true;
+            if (!crossing && !all) return false;
+        }
+        return crossing ? hit : all;
     }
 
     private static bool In(double x, double y, double minX, double minY, double maxX, double maxY)
