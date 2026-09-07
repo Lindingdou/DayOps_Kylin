@@ -3745,3 +3745,17 @@ Viewport 配色(冷蓝/热亮蓝/选中品红+白描边大一号)。Kylin 此前
 - **状态栏开关选中态**(用户「这个图标的选中状态再优化一下」)：正交/捕捉/栅格/栅格捕捉四个 ToggleButton 原用 Fluent 默认实心蓝(压住图标)，
   改 `status-toggle` 样式：透明底 → 悬停浅灰 → **选中=淡蓝底(15%)+蓝描边**, 圆角 4, 22×22。
 测试 +5(`GridPlanTests`: 1-2-5 换挡、跨 6 个缩放量级屏幕间距 ≥10px、主线对齐与覆盖判定、线数上限、每 5 格主线)。全套 **1801 通过**。
+
+## §三〇九 麒麟 .deb 打包链(Windows 可出包, 依赖随包携带) (2026-09-07)
+
+用户「给我打包一个 deb，我来测试」「把麒麟必要的依赖下载，一起打包」。本机无 Linux/WSL/dpkg-deb/fpm/ar，原 `package-deb.sh` 依赖 fpm 跑不了 —— 新增三个脚本：
+- `build/fetch-deps.sh`：联网取 **app-local ICU**(NuGet `Microsoft.ICU.ICU4C.Runtime.linux-x64` 72.1.0.3 → libicuuc/libicui18n/libicudata, 38MB)。
+  ICU 是 .NET 非 Invariant 全球化的硬依赖, 也是麒麟上最常缺/版本不匹配的一个。
+- `build/make-deb.sh`：交叉发布产物 → deb 树(/opt/pitmine3d + /usr/share/applications + icons + doc) → **纯 tar + 手工 ar 组装**(ar 头 60 字节定长字段自己拼, 成员序 debian-binary→control.tar.gz→data.tar.gz), 因此 Windows(Git Bash) 也能出包。
+  启动器 `pitmine3d.sh`: 系统查不到 `libicuuc.so` 才把随包 ICU 加进 `LD_LIBRARY_PATH`(ldconfig 不在 PATH 时翻常见库目录兜底), 两者都无则退 `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT`; `PITMINE_SOFTWARE_GL=1` 强制软件渲染。
+  postinst 建 `/usr/bin/pitmine3d` 软链 + ICU soname 软链 + 刷新桌面/图标缓存。Depends 只留 libc6, X/GL/fontconfig 走 Recommends(装包不会因缺这些失败, 麒麟桌面本就有)。
+- `build/verify-deb.sh`：本机无 dpkg 时回读校验 —— ar 魔数/成员名与顺序/头结束符、三成员 gzip 完整性、control 必填字段、postinst 755、
+  主程序与启动器 755、桌面项/图标 644、属主全 root/root、包内确有 .NET 运行时。
+**部署修正**：地质数据库原落**临时目录**(重启被清), 且装到 `/opt` 后程序目录属 root 不可写 → 新增 `GeoDatabase.DefaultPath()` 落用户数据目录
+(`~/.local/share/PitMine3D.Kylin/geo.db`), 建不了再退临时目录; +2 测试(路径可写/非程序目录、在该路径建种子库并查到 30+ 表)。
+**产物**: `dist/pitmine3d_0.1.0_amd64.deb` 78MB(985 条目), 校验全通过; 全套 **1803 测试通过**。上机验证仍需用户在麒麟机执行。
