@@ -1,0 +1,75 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="PitMine3D.Kylin.Views.Modeling.VoxelVolumeWindow" x:CompileBindings="False"
+        Classes="geodb" Title="体素格网体积" Width="640" Height="760" WindowStartupLocation="CenterOwner">
+  <Grid Margin="14" RowDefinitions="*,Auto">
+    <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+      <StackPanel Spacing="8">
+        <Border Classes="panel" Padding="12">
+          <StackPanel>
+            <DockPanel LastChildFill="False">
+              <TextBlock Classes="panel-title" Text="选中对象（封闭三角网体）" DockPanel.Dock="Left"/>
+              <Button x:Name="btnReselect" Content="重新选择对象" DockPanel.Dock="Right" Padding="10,3" Click="OnReselect"/>
+            </DockPanel>
+            <TextBlock x:Name="selInfoLabel" TextWrapping="Wrap" Margin="0,6,0,0" Classes="muted" Text="尚未选择对象。"/>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="panel" Padding="12">
+          <StackPanel>
+            <TextBlock Classes="panel-title" Text="体素尺寸（决定体积精度与渲染密度）"/>
+            <Grid Margin="0,6,0,0" ColumnDefinitions="Auto,70,Auto,70,Auto,70,*">
+              <TextBlock Grid.Column="0" Text="X" VerticalAlignment="Center" Margin="0,0,4,0"/>
+              <TextBox x:Name="txtVx" Grid.Column="1" Text="5"/>
+              <TextBlock Grid.Column="2" Text="Y" VerticalAlignment="Center" Margin="10,0,4,0"/>
+              <TextBox x:Name="txtVy" Grid.Column="3" Text="5"/>
+              <TextBlock Grid.Column="4" Text="Z" VerticalAlignment="Center" Margin="10,0,4,0"/>
+              <TextBox x:Name="txtVz" Grid.Column="5" Text="5"/>
+              <Button Grid.Column="6" Content="按标高建议 Z" Margin="10,0,0,0" Padding="8,3" HorizontalAlignment="Left" Click="OnSuggestZ"/>
+            </Grid>
+            <TextBlock x:Name="estimateLabel" TextWrapping="Wrap" Margin="0,8,0,0" Classes="muted" Text="网格规模：—"/>
+            <Grid Margin="0,8,0,0" ColumnDefinitions="Auto,Auto,Auto,*">
+              <CheckBox x:Name="chkAdaptive" Grid.Column="0" Content="次级退化（边界细分子块）" IsChecked="True" VerticalAlignment="Center"/>
+              <TextBlock Grid.Column="1" Text="深度" VerticalAlignment="Center" Margin="16,0,4,0"/>
+              <ComboBox x:Name="cmbDepth" Grid.Column="2" Width="60" SelectedIndex="1">
+                <ComboBoxItem Content="1"/><ComboBoxItem Content="2"/><ComboBoxItem Content="3"/>
+              </ComboBox>
+              <TextBlock Grid.Column="3" VerticalAlignment="Center" Margin="10,0,0,0" Classes="muted" Text="最细子块 = 体素 / 2ᵈ；体积报量计入子块"/>
+            </Grid>
+            <CheckBox x:Name="chkHighTolerance" Margin="0,8,0,0" IsChecked="False" Content="高容错算量（缠绕数 GWN，封闭体有拓扑错误时勾选）"/>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="panel" Padding="12">
+          <StackPanel>
+            <TextBlock Classes="panel-title" Text="分标高水平（标高边界列表）"/>
+            <TextBlock Margin="0,2,0,4" FontSize="11" Classes="muted" Text="每行一个或逗号分隔，按升序去重；N 个边界 → N-1 个标高区间 [低,高)。留空则仅报整体。"/>
+            <TextBox x:Name="txtLevels" MinHeight="72" MaxHeight="140" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas,monospace"/>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="panel" Padding="12">
+          <StackPanel>
+            <TextBlock Classes="panel-title" Text="报量结果"/>
+            <TextBlock x:Name="totalLabel" Margin="0,4,0,6" FontWeight="SemiBold" Text="整体体积：（点「计算」）"/>
+            <DataGrid x:Name="levelGrid" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="120" MaxHeight="220">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="标高区间 (m)" Binding="{Binding Range}" Width="*"/>
+                <DataGridTextColumn Header="cell 数" Binding="{Binding Cells}" Width="Auto"/>
+                <DataGridTextColumn Header="体积 (m³)" Binding="{Binding Volume}" Width="Auto"/>
+                <DataGridTextColumn Header="占比" Binding="{Binding Pct}" Width="Auto"/>
+              </DataGrid.Columns>
+            </DataGrid>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+
+    <DockPanel Grid.Row="1" LastChildFill="False" Margin="0,10,0,0">
+      <Button x:Name="btnCompute" Content="计算" DockPanel.Dock="Left" MinWidth="90" Padding="0,5" Margin="0,0,8,0" Click="OnCompute" FontWeight="SemiBold" Classes="primary"/>
+      <Button x:Name="btnGenerate" Content="生成块体模型" DockPanel.Dock="Left" MinWidth="110" Padding="0,5" Margin="0,0,8,0" Click="OnGenerate" IsEnabled="False"/>
+      <Button x:Name="btnClose" Content="关闭" DockPanel.Dock="Right" MinWidth="80" Padding="0,5" Click="OnClose"/>
+      <Button x:Name="btnExportHtml" Content="导出 HTML" DockPanel.Dock="Right" MinWidth="90" Padding="0,5" Margin="0,0,8,0" Click="OnExportHtml" IsEnabled="False"/>
+      <Button x:Name="btnExportCsv" Content="导出 CSV" DockPanel.Dock="Right" MinWidth="90" Padding="0,5" Margin="0,0,8,0" Click="OnExportCsv" IsEnabled="False"/>
+    </DockPanel>
+  </Grid>
+</Window>

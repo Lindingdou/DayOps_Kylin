@@ -1,0 +1,135 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="PitMine3D.Kylin.Views.Modeling.ColoringWindow" x:CompileBindings="False"
+        Classes="geodb" Title="块体着色" Width="500" Height="640" MinWidth="440" MinHeight="480" WindowStartupLocation="CenterOwner">
+  <Grid Margin="14" RowDefinitions="Auto,*,Auto">
+    <!-- ① 模型 + 着色依据 -->
+    <Border Grid.Row="0" Classes="panel" Padding="12">
+      <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
+        <TextBlock Grid.Row="0" Grid.Column="0" Text="块体模型" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+        <ComboBox Grid.Row="0" Grid.Column="1" x:Name="modelCombo" Margin="0,0,0,8" HorizontalAlignment="Stretch" SelectionChanged="OnModelChanged"/>
+        <TextBlock Grid.Row="1" Grid.Column="0" Text="着色依据" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+        <ComboBox Grid.Row="1" Grid.Column="1" x:Name="sourceCombo" HorizontalAlignment="Stretch" SelectionChanged="OnSourceChanged"/>
+      </Grid>
+    </Border>
+
+    <!-- ② 内容 -->
+    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+      <StackPanel Spacing="8">
+        <!-- (0) 块体边线 -->
+        <Border x:Name="panelEdge" Classes="panel" Padding="12">
+          <StackPanel>
+            <TextBlock Classes="panel-title" Text="块体边线" Margin="0,0,0,8"/>
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+              <TextBlock Text="模式" VerticalAlignment="Center" Margin="0,0,8,0"/>
+              <ComboBox x:Name="edgeModeCombo" Width="160" SelectionChanged="OnEdgeChanged">
+                <ComboBoxItem Content="自动(从填充色派生)"/><ComboBoxItem Content="固定颜色"/><ComboBoxItem Content="隐藏(选中才显)"/>
+              </ComboBox>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+              <TextBlock Text="边线色" VerticalAlignment="Center" Margin="0,0,8,0"/>
+              <ContentControl x:Name="edgePickerHost"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="边宽(px)" VerticalAlignment="Center" Margin="0,0,8,0"/>
+              <TextBox x:Name="edgeWidthBox" Width="80" LostFocus="OnEdgeChanged"/>
+            </StackPanel>
+            <TextBlock FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" Classes="muted" Text="显示每个块的边线（子块尺寸一目了然）。固定模式下用上面的边线色；改完即时生效。"/>
+          </StackPanel>
+        </Border>
+
+        <!-- (a) 单色填充 -->
+        <Border x:Name="panelSingle" Classes="panel" Padding="12" IsVisible="False">
+          <StackPanel>
+            <TextBlock Classes="panel-title" Text="单色填充" Margin="0,0,0,8"/>
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="填充色" VerticalAlignment="Center" Margin="0,0,8,0"/>
+              <ContentControl x:Name="fillPickerHost"/>
+            </StackPanel>
+            <TextBlock FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap" Classes="muted" Text="整个块体用同一颜色。需要按数据着色时，请在上方「着色依据」选属性或高程。"/>
+          </StackPanel>
+        </Border>
+
+        <!-- (b) 连续 / 高程 Z -->
+        <Border x:Name="panelRamp" Classes="panel" Padding="12" IsVisible="False">
+          <StackPanel>
+            <TextBlock Classes="panel-title" Text="连续 / 分级色带" Margin="0,0,0,8"/>
+            <StackPanel x:Name="modeRow" Orientation="Horizontal" Margin="0,0,0,8">
+              <TextBlock Text="方式" VerticalAlignment="Center" Margin="0,0,8,0"/>
+              <RadioButton x:Name="continuousModeRadio" GroupName="RampMode" Content="连续渐变" IsChecked="True" VerticalAlignment="Center" Margin="0,0,14,0"/>
+              <RadioButton x:Name="classifiedModeRadio" GroupName="RampMode" Content="分级区间（自定义颜色）" VerticalAlignment="Center"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+              <TextBlock Text="色带" VerticalAlignment="Center" Margin="0,0,8,0"/>
+              <ComboBox x:Name="rampCombo" Width="240" SelectionChanged="OnRampChanged"/>
+            </StackPanel>
+
+            <StackPanel x:Name="continuousSub">
+              <StackPanel x:Name="rangeRow" Orientation="Horizontal" Margin="0,0,0,8">
+                <TextBlock Text="范围" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <CheckBox x:Name="autoRangeCheck" Content="自动" IsChecked="True" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                <TextBlock Text="最小" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBox x:Name="minBox" Width="80" IsEnabled="False" LostFocus="OnRangeCommitted" KeyDown="OnRangeKeyDown"/>
+                <TextBlock Text="最大" VerticalAlignment="Center" Margin="10,0,8,0"/>
+                <TextBox x:Name="maxBox" Width="80" IsEnabled="False" LostFocus="OnRangeCommitted" KeyDown="OnRangeKeyDown"/>
+              </StackPanel>
+              <TextBlock x:Name="zNote" IsVisible="False" FontSize="11" Margin="0,0,0,8" TextWrapping="Wrap" Classes="muted"
+                         Text="按 cell 高程（Z）自动归一化着色，无需任何属性数据 —— 适合实体转块体 / 体素体积等无属性块体。"/>
+              <TextBlock Text="图例" Margin="0,0,0,4"/>
+              <Border BorderBrush="#FFDCDFE4" BorderThickness="1" CornerRadius="2">
+                <Border x:Name="gradientRect" Height="20"/>
+              </Border>
+              <Grid Margin="0,3,0,0">
+                <TextBlock x:Name="minLabel" HorizontalAlignment="Left" FontSize="11" Classes="muted"/>
+                <TextBlock x:Name="midLabel" HorizontalAlignment="Center" FontSize="11" Classes="muted"/>
+                <TextBlock x:Name="maxLabel" HorizontalAlignment="Right" FontSize="11" Classes="muted"/>
+              </Grid>
+            </StackPanel>
+
+            <StackPanel x:Name="classifiedSub" IsVisible="False">
+              <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                <TextBlock Text="分级数" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBox x:Name="classCountBox" Width="44" Text="5"/>
+                <TextBlock Text="方法" VerticalAlignment="Center" Margin="12,0,8,0"/>
+                <ComboBox x:Name="methodCombo" Width="96" SelectedIndex="0">
+                  <ComboBoxItem Content="等间距"/><ComboBoxItem Content="分位数"/>
+                </ComboBox>
+                <Button Content="生成分级" Margin="12,0,0,0" Click="OnGenerateClasses" Padding="10,3"/>
+              </StackPanel>
+              <TextBlock FontSize="11" Margin="0,0,0,6" TextWrapping="Wrap" Classes="muted" Text="每个区间 [下界, 上界) 一个固定色（即图例）。点色块改色、改上界框调区间边界，改完即时生效。"/>
+              <StackPanel x:Name="classList" Spacing="2"/>
+              <Button Content="+ 添加区间" HorizontalAlignment="Left" Margin="0,8,0,0" Click="OnAddClass" Padding="10,3"/>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <!-- (c) 分类 -->
+        <Border x:Name="panelCategorical" Classes="panel" Padding="12" IsVisible="False">
+          <StackPanel>
+            <Grid Margin="0,0,0,8">
+              <TextBlock Classes="panel-title" Text="类别颜色（图例）"/>
+              <Button HorizontalAlignment="Right" Content="重置为默认调色板" Click="OnResetCategoryColors" Padding="10,3"/>
+            </Grid>
+            <TextBlock FontSize="11" Margin="0,0,0,8" TextWrapping="Wrap" Classes="muted"
+                       Text="每个类别一个固定颜色（导入 .blk 时优先用文件自带颜色表）。点色块可逐类改色，改完即时生效。&#x0a;右侧「类别名」可直接填：块体没带类别名表时（旧版导出的 PMB / 自建块体）这里只有裸码，填上名字后，量驱动模板的「类别」下拉、筛选条件、PMB 导出就都有名字了。"/>
+            <StackPanel x:Name="catList" Spacing="2"/>
+          </StackPanel>
+        </Border>
+
+        <Border x:Name="panelEmpty" Padding="8,6" Background="#FFE3F2FD" CornerRadius="2" IsVisible="False">
+          <TextBlock FontSize="12" TextWrapping="Wrap" Foreground="#FF0D47A1" Text="当前没有块体模型。请先创建或导入块体（功能区：三维地质建模 → 块体模型）。"/>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- ③ 底部 -->
+    <Border Grid.Row="2" Classes="panel" Padding="12" Margin="0,8,0,0">
+      <DockPanel LastChildFill="False">
+        <TextBlock DockPanel.Dock="Left" x:Name="statusLabel" VerticalAlignment="Center" FontSize="12" Foreground="#FF0D47A1" Text=""/>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+          <Button Content="应用" Click="OnApplyClicked" Padding="10,3"/>
+          <Button Content="关闭" Classes="primary" Click="OnCloseClicked" Padding="14,3"/>
+        </StackPanel>
+      </DockPanel>
+    </Border>
+  </Grid>
+</Window>

@@ -1,0 +1,68 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="PitMine3D.Kylin.Views.Modeling.ImportBlockModelWindow" x:CompileBindings="False"
+        Classes="geodb" Title="导入块体" Width="720" Height="540" WindowStartupLocation="CenterOwner" CanResize="False">
+  <Grid Margin="14" RowDefinitions="*,Auto">
+    <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+      <StackPanel Spacing="8">
+        <Border Classes="panel" Padding="12">
+          <StackPanel>
+            <TextBlock Classes="panel-title" Text="文件 + 格式" Margin="0,0,0,8"/>
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <TextBlock Text="文件" VerticalAlignment="Center" Margin="0,0,8,0"/>
+              <TextBox Grid.Column="1" x:Name="filePathBox"/>
+              <Button Grid.Column="2" Content="..." Margin="4,0,0,0" Click="OnBrowse" Padding="10,3"/>
+            </Grid>
+            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+              <TextBlock Text="格式" VerticalAlignment="Center" Margin="0,0,8,0"/>
+              <RadioButton x:Name="fmtAuto" GroupName="Fmt" Content="自动识别" IsChecked="True" Margin="0,0,16,0"/>
+              <RadioButton x:Name="fmtPmb" GroupName="Fmt" Content="PMB" Margin="0,0,16,0"/>
+              <RadioButton x:Name="fmtCsv" GroupName="Fmt" Content="CSV" Margin="0,0,16,0"/>
+              <RadioButton x:Name="fmtJson" GroupName="Fmt" Content="JSON" Margin="0,0,16,0"/>
+              <RadioButton x:Name="fmtFlat" GroupName="Fmt" Content="FlatBuffers"/>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="panel" Padding="12">
+          <StackPanel>
+            <TextBlock Classes="panel-title" Text="CSV 选项（自动识别为 CSV 时启用）" Margin="0,0,0,8"/>
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+              <CheckBox x:Name="csvHeader" Content="含表头" IsChecked="True" Margin="0,0,16,0"/>
+              <TextBlock Text="分隔符" VerticalAlignment="Center" Margin="0,0,8,0"/>
+              <ComboBox Width="60" x:Name="csvSep" SelectedIndex="0">
+                <ComboBoxItem Content=","/><ComboBoxItem Content=";"/><ComboBoxItem Content="\t"/><ComboBoxItem Content="|"/>
+              </ComboBox>
+              <TextBlock Text="编码" VerticalAlignment="Center" Margin="16,0,8,0"/>
+              <ComboBox Width="80" x:Name="csvEnc" SelectedIndex="0">
+                <ComboBoxItem Content="UTF-8"/><ComboBoxItem Content="GBK"/><ComboBoxItem Content="Latin-1"/>
+              </ComboBox>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="panel" Padding="12">
+          <StackPanel>
+            <TextBlock Classes="panel-title" Text="字段映射 / 数据预览" Margin="0,0,0,8"/>
+            <Border Background="#FFF7F8FA" Padding="12" CornerRadius="2">
+              <StackPanel>
+                <TextBlock x:Name="previewHint" Foreground="#FF6B7280" FontSize="11" TextWrapping="Wrap"
+                           Text="选择文件后，将自动检测网格规则性并展示前 10 行预览。&#x0a;字段映射 / 网格规则性检测结果将在 v2 阶段接入。"/>
+                <TextBox x:Name="previewBox" IsReadOnly="True" FontFamily="Consolas,monospace" FontSize="11" AcceptsReturn="True" MinHeight="120" MaxHeight="160" IsVisible="False" Margin="0,6,0,0" TextWrapping="NoWrap"/>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+
+    <Border Grid.Row="1" Classes="panel" Padding="12" Margin="0,8,0,0">
+      <DockPanel LastChildFill="False">
+        <TextBlock x:Name="statusLabel" DockPanel.Dock="Left" Foreground="#FF0D47A1" FontSize="12" VerticalAlignment="Center" Text="ⓘ 选择文件后即估算行数与内存"/>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+          <Button Content="取消" IsCancel="True" Click="OnCancel" Padding="10,3"/>
+          <Button Content="导入" Classes="primary" Click="OnImport" Padding="14,3"/>
+        </StackPanel>
+      </DockPanel>
+    </Border>
+  </Grid>
+</Window>

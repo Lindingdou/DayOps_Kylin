@@ -1,0 +1,59 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="PitMine3D.Kylin.Views.Modeling.ReportWindow" x:CompileBindings="False"
+        Classes="geodb" Title="输出报告" Width="900" Height="640" WindowStartupLocation="CenterOwner" CanResize="False">
+  <Grid Margin="14" RowDefinitions="*,Auto" ColumnDefinitions="280,*">
+    <!-- 左：配置 -->
+    <Border Grid.Row="0" Grid.Column="0" Classes="panel" Padding="12" Margin="0,0,8,0">
+      <StackPanel>
+        <TextBlock Classes="panel-title" Text="报告配置" Margin="0,0,0,8"/>
+        <TextBlock Text="来源块体" Margin="0,0,0,2"/>
+        <ComboBox x:Name="sourceCombo" Margin="0,0,0,8" HorizontalAlignment="Stretch" SelectionChanged="OnSourceChanged"/>
+        <TextBlock Text="模板（v1 储量+属性统计）" Margin="0,0,0,2"/>
+        <ComboBox Margin="0,0,0,8" SelectedIndex="0" IsEnabled="False" HorizontalAlignment="Stretch">
+          <ComboBoxItem Content="储量 + 属性统计（v1 默认）"/>
+          <ComboBoxItem Content="品位分布（v2）"/>
+          <ComboBoxItem Content="矿岩比（v2）"/>
+        </ComboBox>
+        <TextBlock Text="范围" Margin="0,4,0,2"/>
+        <RadioButton x:Name="scopeAll" GroupName="Scope" Content="全部块" IsChecked="True" Margin="0,0,0,2"/>
+        <RadioButton x:Name="scopeFilter" GroupName="Scope" Content="当前筛选（来自『筛选块体』）" Margin="0,0,0,2"/>
+        <TextBlock x:Name="filterInfoText" FontSize="11" Margin="18,0,0,8" TextWrapping="Wrap" Foreground="#FF0D47A1" Text=""/>
+        <Border Padding="8,6" Background="#FFE3F2FD" CornerRadius="2" Margin="0,8,0,0">
+          <TextBlock FontSize="11" Foreground="#FF0D47A1" TextWrapping="Wrap" Text="ⓘ v1 报告内容：汇总（块数/可见/已删/体积/AABB）+ 每个属性列的 min/max/mean/std + 分标高统计。CSV/HTML 可导出；PDF 需 QuestPDF，本机不可用。"/>
+        </Border>
+      </StackPanel>
+    </Border>
+
+    <!-- 右：预览 -->
+    <Border Grid.Row="0" Grid.Column="1" Classes="panel" Padding="12">
+      <Grid RowDefinitions="Auto,*">
+        <DockPanel LastChildFill="False">
+          <TextBlock Classes="panel-title" Text="预览（文本摘要）" DockPanel.Dock="Left"/>
+          <Button DockPanel.Dock="Right" Content="刷新预览" Click="OnRefresh" Padding="10,3"/>
+        </DockPanel>
+        <Border Grid.Row="1" Background="#FFF7F8FA" BorderBrush="#FFDCDFE4" BorderThickness="1" CornerRadius="2" Margin="0,8,0,0">
+          <TextBox x:Name="previewText" Background="Transparent" BorderThickness="0" IsReadOnly="True" FontFamily="Consolas,Microsoft YaHei,monospace" FontSize="12" TextWrapping="NoWrap" AcceptsReturn="True" Padding="14"
+                   Text="选择来源块体并点 『刷新预览』 生成报告内容..."/>
+        </Border>
+      </Grid>
+    </Border>
+
+    <!-- 底部 -->
+    <Border Grid.Row="1" Grid.ColumnSpan="2" Classes="panel" Padding="12" Margin="0,8,0,0">
+      <DockPanel LastChildFill="False">
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
+          <TextBlock Text="输出格式" VerticalAlignment="Center" Margin="0,0,8,0"/>
+          <ComboBox x:Name="formatCombo" Width="160" SelectedIndex="0">
+            <ComboBoxItem Content="HTML (推荐)" Tag="html"/>
+            <ComboBoxItem Content="CSV" Tag="csv"/>
+            <ComboBoxItem Content="PDF（本机不可用）" Tag="pdf" IsEnabled="False"/>
+          </ComboBox>
+        </StackPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+          <Button Content="取消" IsCancel="True" Click="OnCancel" Padding="10,3"/>
+          <Button Content="导出并打开" Classes="primary" Click="OnExport" Padding="14,3"/>
+        </StackPanel>
+      </DockPanel>
+    </Border>
+  </Grid>
+</Window>

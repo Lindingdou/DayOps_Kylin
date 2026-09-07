@@ -1,0 +1,73 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="PitMine3D.Kylin.Views.Modeling.ExportBlockModelWindow" x:CompileBindings="False"
+        Classes="geodb" Title="导出块体" Width="720" Height="640" WindowStartupLocation="CenterOwner" CanResize="False">
+  <Grid Margin="14" RowDefinitions="*,Auto">
+    <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+      <StackPanel Spacing="8">
+        <Border Classes="panel" Padding="12">
+          <Grid ColumnDefinitions="Auto,*">
+            <TextBlock Text="来源块体" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <ComboBox Grid.Column="1" x:Name="sourceCombo" HorizontalAlignment="Stretch" SelectionChanged="OnSourceChanged"/>
+          </Grid>
+        </Border>
+
+        <Border Classes="panel" Padding="12">
+          <StackPanel>
+            <TextBlock Classes="panel-title" Text="导出范围" Margin="0,0,0,8"/>
+            <RadioButton x:Name="scopeAll" GroupName="Scope" Content="全部块" IsChecked="True" Margin="0,0,0,4"/>
+            <RadioButton x:Name="scopeSelection" GroupName="Scope" Content="当前选择集" Margin="0,0,0,4"/>
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+              <RadioButton x:Name="scopeExpr" GroupName="Scope" Content="属性表达式" VerticalAlignment="Center"/>
+              <TextBox x:Name="exprBox" Width="320" Margin="12,0,0,0" Watermark="如 grade &gt; 0.5 AND z &lt; 100"/>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="panel" Padding="12">
+          <StackPanel>
+            <TextBlock Classes="panel-title" Text="导出列" Margin="0,0,0,8"/>
+            <CheckBox Content="✓ 几何（cx, cy, cz, sx, sy, sz）" IsChecked="True" IsEnabled="False" Margin="0,0,0,4"/>
+            <StackPanel x:Name="attrChecks" Spacing="2"/>
+            <TextBlock x:Name="attrHint" Foreground="#FF6B7280" FontSize="11" Margin="0,4,0,0" Text="选定来源块体后，模型的所有属性列将自动列出供勾选。"/>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="panel" Padding="12">
+          <StackPanel>
+            <TextBlock Classes="panel-title" Text="输出" Margin="0,0,0,8"/>
+            <Grid Margin="0,0,0,6" ColumnDefinitions="Auto,*,Auto">
+              <TextBlock Text="格式" VerticalAlignment="Center" Margin="0,0,8,0"/>
+              <ComboBox Grid.Column="1" x:Name="formatCombo" SelectedIndex="0" HorizontalAlignment="Stretch">
+                <ComboBoxItem Content="PMB (推荐)"/>
+                <ComboBoxItem Content="CSV"/>
+                <ComboBoxItem Content="JSON" IsEnabled="False"/>
+                <ComboBoxItem Content="FlatBuffers" IsEnabled="False"/>
+              </ComboBox>
+            </Grid>
+            <Grid Margin="0,0,0,6" ColumnDefinitions="Auto,*,Auto">
+              <TextBlock Text="路径" VerticalAlignment="Center" Margin="0,0,8,0"/>
+              <TextBox Grid.Column="1" x:Name="pathBox"/>
+              <Button Grid.Column="2" Content="..." Margin="4,0,0,0" Click="OnBrowse" Padding="10,3"/>
+            </Grid>
+            <StackPanel Orientation="Horizontal">
+              <CheckBox x:Name="skipAir" Content="跳过 Air 单元" IsChecked="True" Margin="0,0,16,0"/>
+              <CheckBox x:Name="writeSel" Content="写入选择集" IsChecked="True" Margin="0,0,16,0"/>
+              <CheckBox x:Name="writeMeta" Content="写入 Metadata" IsChecked="True"/>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+
+    <Border Grid.Row="1" Classes="panel" Padding="12" Margin="0,8,0,0">
+      <DockPanel LastChildFill="False">
+        <TextBlock x:Name="statusLabel" DockPanel.Dock="Left" Foreground="#FF0D47A1" FontSize="12" VerticalAlignment="Center" Text="ⓘ 预计行数与文件大小将在选定范围后估算"/>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+          <Button Content="预览 5 行" Click="OnPreview" Padding="10,3"/>
+          <Button Content="取消" IsCancel="True" Click="OnCancel" Padding="10,3"/>
+          <Button Content="导出" Classes="primary" Click="OnExport" Padding="14,3"/>
+        </StackPanel>
+      </DockPanel>
+    </Border>
+  </Grid>
+</Window>

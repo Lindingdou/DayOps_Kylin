@@ -1,0 +1,78 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="PitMine3D.Kylin.Views.Modeling.FilterBlocksWindow" x:CompileBindings="False"
+        Classes="geodb" Title="筛选块体" Width="780" Height="560" WindowStartupLocation="CenterOwner" CanResize="False">
+  <Grid Margin="14" RowDefinitions="*,Auto">
+    <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+      <StackPanel Spacing="8">
+        <Border Classes="panel" Padding="12">
+          <Grid ColumnDefinitions="Auto,*">
+            <TextBlock Text="目标块体" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <ComboBox Grid.Column="1" x:Name="targetCombo" HorizontalAlignment="Stretch" SelectionChanged="OnTargetChanged"/>
+          </Grid>
+        </Border>
+
+        <Border Classes="panel" Padding="12">
+          <StackPanel>
+            <DockPanel LastChildFill="False">
+              <TextBlock Classes="panel-title" Text="筛选条件" DockPanel.Dock="Left"/>
+              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4">
+                <Button Content="✚ 加条件" Click="OnAddRow" Padding="10,3"/>
+                <Button Content="− 删除" Click="OnRemoveRow" Padding="10,3"/>
+                <Button Content="✕ 全清" Click="OnClearRows" Padding="10,3"/>
+              </StackPanel>
+            </DockPanel>
+            <StackPanel Orientation="Horizontal" Margin="0,4,0,8">
+              <TextBlock Text="组合方式" VerticalAlignment="Center" Margin="0,0,12,0"/>
+              <RadioButton x:Name="modeAnd" GroupName="Mode" Content="全部满足 (AND)" IsChecked="True" Margin="0,0,16,0"/>
+              <RadioButton x:Name="modeOr" GroupName="Mode" Content="任意满足 (OR)"/>
+            </StackPanel>
+            <DataGrid x:Name="conditionsGrid" Height="240" AutoGenerateColumns="False" IsReadOnly="False" SelectionMode="Single" RowHeight="30" CanUserSortColumns="False">
+              <DataGrid.Columns>
+                <DataGridCheckBoxColumn Header="启用" Width="50" Binding="{Binding Enabled, Mode=TwoWay}"/>
+                <DataGridTemplateColumn Header="属性" Width="*">
+                  <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate>
+                      <ComboBox ItemsSource="{Binding AvailableAttrs}" SelectedItem="{Binding AttributeName, Mode=TwoWay}" BorderThickness="0" Background="Transparent" HorizontalAlignment="Stretch" FontSize="12"/>
+                    </DataTemplate>
+                  </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="操作符" Width="140">
+                  <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate>
+                      <ComboBox ItemsSource="{Binding AvailableOps}" SelectedItem="{Binding Op, Mode=TwoWay}" BorderThickness="0" Background="Transparent" HorizontalAlignment="Stretch" FontSize="12"/>
+                    </DataTemplate>
+                  </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="值 1" Width="150">
+                  <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate>
+                      <Grid>
+                        <ComboBox ItemsSource="{Binding CategoryOptions}" SelectedItem="{Binding Value1Option, Mode=TwoWay}" IsVisible="{Binding IsCategorical}" BorderThickness="0" Background="Transparent" HorizontalAlignment="Stretch" FontSize="12"/>
+                        <TextBox Text="{Binding ValueText, Mode=TwoWay}" IsVisible="{Binding !IsCategorical}" VerticalAlignment="Center" BorderThickness="0" Background="Transparent" FontSize="12"/>
+                      </Grid>
+                    </DataTemplate>
+                  </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTextColumn Header="值 2 (Between)" Width="120" Binding="{Binding Value2Text, Mode=TwoWay}"/>
+              </DataGrid.Columns>
+            </DataGrid>
+          </StackPanel>
+        </Border>
+
+        <Border Padding="8,6" Background="#FFE3F2FD" CornerRadius="2">
+          <TextBlock x:Name="statusLabel" Foreground="#FF0D47A1" FontSize="11" TextWrapping="Wrap" Text="ⓘ 行的 [启用] 勾选才参与计算；未勾选的条件忽略。应用后不满足的 cell 隐藏。"/>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+
+    <Border Grid.Row="1" Classes="panel" Padding="12" Margin="0,8,0,0">
+      <DockPanel LastChildFill="False">
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+          <Button Content="重置" Click="OnReset" Padding="10,3"/>
+          <Button Content="取消" IsCancel="True" Click="OnCancel" Padding="10,3"/>
+          <Button Content="应用" Classes="primary" Click="OnApply" Padding="14,3"/>
+        </StackPanel>
+      </DockPanel>
+    </Border>
+  </Grid>
+</Window>

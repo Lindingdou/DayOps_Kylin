@@ -1,0 +1,133 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="PitMine3D.Kylin.Views.Modeling.DeleteBlockModelWindow" x:CompileBindings="False"
+        Classes="geodb" Title="删除块体" Width="700" Height="620" WindowStartupLocation="CenterOwner" CanResize="False">
+  <Grid Margin="14" RowDefinitions="*,Auto">
+    <TabControl Grid.Row="0" x:Name="mainTab" Padding="0">
+      <!-- Tab 1: 整体删除 -->
+      <TabItem Header="整体删除">
+        <Border Classes="panel" Padding="12" Margin="0,8,0,0">
+          <StackPanel>
+            <TextBlock Classes="panel-title" Text="待删除的块体模型" Margin="0,0,0,8"/>
+            <ListBox x:Name="modelsList" Height="200" SelectionMode="Multiple">
+              <ListBox.ItemTemplate>
+                <DataTemplate>
+                  <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                    <TextBlock Margin="8,0,0,0" Classes="muted" Text="{Binding BlockCount, StringFormat='({0:N0} 块)'}"/>
+                  </StackPanel>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+            <Border Margin="0,8,0,0" Background="#FFF3CD" BorderBrush="#FFC107" BorderThickness="1" CornerRadius="2" Padding="8">
+              <TextBlock Foreground="#856404" FontSize="11" Text="⚠ 该操作不可撤销。从内存与视口中移除整个模型。"/>
+            </Border>
+          </StackPanel>
+        </Border>
+      </TabItem>
+
+      <!-- Tab 2: 删除单元 -->
+      <TabItem Header="删除单元（按表达式 / AABB）">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <StackPanel Spacing="8" Margin="0,8,0,0">
+            <Border Classes="panel" Padding="12">
+              <Grid ColumnDefinitions="Auto,*">
+                <TextBlock Text="目标块体" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <ComboBox Grid.Column="1" x:Name="cellTargetCombo" HorizontalAlignment="Stretch"/>
+              </Grid>
+            </Border>
+            <Border Classes="panel" Padding="12">
+              <StackPanel>
+                <TextBlock Classes="panel-title" Text="删除范围（满足条件的 cell 被删）" Margin="0,0,0,8"/>
+                <RadioButton x:Name="modeExpr" GroupName="CellMode" Content="按表达式" IsChecked="True" Margin="0,0,0,4"/>
+                <StackPanel Orientation="Horizontal" Margin="20,0,0,8">
+                  <TextBox x:Name="exprBox" Width="380" Text="z &gt; 200"/>
+                  <Button Content="校验" Margin="6,0,0,0" Click="OnValidateExpr" Padding="10,3"/>
+                </StackPanel>
+                <TextBlock FontSize="10" Classes="muted" Margin="20,0,0,8" TextWrapping="Wrap"
+                           Text="表达式 &gt; 0 为真。可用变量同公式赋值（i/j/k/x/y/z/属性名）。&#x0a;例子：z &gt; 200（删高于 200m）；grade &lt; 0.1（删低品位）；abs(x - 1000) &lt; 50（删 X 轴中央窄条）"/>
+                <RadioButton x:Name="modeAabb" GroupName="CellMode" Content="按世界 AABB" Margin="0,0,0,4"/>
+                <Grid Margin="20,0,0,4" ColumnDefinitions="40,*,*,*" RowDefinitions="Auto,4,Auto">
+                  <TextBlock Grid.Row="0" Grid.Column="0" Text="Min" VerticalAlignment="Center"/>
+                  <TextBox Grid.Row="0" Grid.Column="1" x:Name="minXBox" Text="0" Margin="2,0,2,0"/>
+                  <TextBox Grid.Row="0" Grid.Column="2" x:Name="minYBox" Text="0" Margin="2,0,2,0"/>
+                  <TextBox Grid.Row="0" Grid.Column="3" x:Name="minZBox" Text="0" Margin="2,0,0,0"/>
+                  <TextBlock Grid.Row="2" Grid.Column="0" Text="Max" VerticalAlignment="Center"/>
+                  <TextBox Grid.Row="2" Grid.Column="1" x:Name="maxXBox" Text="100" Margin="2,0,2,0"/>
+                  <TextBox Grid.Row="2" Grid.Column="2" x:Name="maxYBox" Text="100" Margin="2,0,2,0"/>
+                  <TextBox Grid.Row="2" Grid.Column="3" x:Name="maxZBox" Text="100" Margin="2,0,0,0"/>
+                </Grid>
+              </StackPanel>
+            </Border>
+            <Border Padding="8,6" Background="#FFE3F2FD" CornerRadius="2">
+              <TextBlock x:Name="cellStatusLabel" Foreground="#FF0D47A1" FontSize="11" TextWrapping="Wrap"
+                         Text="ⓘ 删除是永久的（保存到 PMB），与筛选不同；可通过『恢复全部』撤销当前会话内的删除。"/>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <!-- Tab 3: 按多段线范围 -->
+      <TabItem Header="按多段线范围">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <StackPanel Spacing="8" Margin="0,8,0,0">
+            <Border Classes="panel" Padding="12">
+              <Grid ColumnDefinitions="Auto,*">
+                <TextBlock Text="目标块体" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <ComboBox Grid.Column="1" x:Name="polyTargetCombo" HorizontalAlignment="Stretch"/>
+              </Grid>
+            </Border>
+            <Border Classes="panel" Padding="12">
+              <StackPanel>
+                <TextBlock Classes="panel-title" Text="边界多段线（圈定范围）" Margin="0,0,0,8"/>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,6" Spacing="6">
+                  <Button Content="在视口选多段线…" Click="OnPickPolylines" Padding="10,3"/>
+                  <Button Content="用当前选中" Click="OnUseSelectedPolylines" Padding="10,3"/>
+                  <Button Content="清空" Click="OnClearPolylines" Padding="10,3"/>
+                </StackPanel>
+                <TextBlock x:Name="polyInfoLabel" FontSize="11" TextWrapping="Wrap" Classes="muted" Text="尚未拾取。点「在视口选多段线…」后逐条点选边界线，Esc 结束。"/>
+                <TextBlock FontSize="10" Margin="0,4,0,0" TextWrapping="Wrap" Classes="muted"
+                           Text="只按平面(XY)投影判内外，多段线画在哪个标高都一样。未闭合的线首尾自动直连。&#x0a;多条线：互不相交=各圈一片（并集）；一条套在另一条里=里面那条成洞（保护煤柱/采空区）。"/>
+              </StackPanel>
+            </Border>
+            <Border Classes="panel" Padding="12">
+              <StackPanel>
+                <TextBlock Classes="panel-title" Text="处理方式" Margin="0,0,0,8"/>
+                <RadioButton x:Name="polyDeleteOutside" GroupName="PolyMode" Content="删除范围以外（只保留圈内的块）" IsChecked="True" Margin="0,0,0,4"/>
+                <RadioButton x:Name="polyDeleteInside" GroupName="PolyMode" Content="删除范围以内（挖掉圈内的块）" Margin="0,0,0,8"/>
+                <CheckBox x:Name="polyUseZ" Content="只在这段高程内执行（段外的块保持不动）" Margin="0,0,0,4"/>
+                <StackPanel Orientation="Horizontal" Margin="20,0,0,0">
+                  <TextBlock Text="Z 从" VerticalAlignment="Center"/>
+                  <TextBox x:Name="polyMinZBox" Width="90" Text="0" Margin="4,0,4,0"/>
+                  <TextBlock Text="到" VerticalAlignment="Center"/>
+                  <TextBox x:Name="polyMaxZBox" Width="90" Text="1000" Margin="4,0,6,0"/>
+                  <Button Content="取多段线高程" Click="OnFillZFromPolylines" Padding="10,3"/>
+                </StackPanel>
+              </StackPanel>
+            </Border>
+            <Border Classes="panel" Padding="12">
+              <StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Button Content="裁剪" Classes="danger" Click="OnApplyPolyClip" Padding="14,3"/>
+                  <Button Content="撤销本次裁剪" Click="OnUndoPolyClip" Padding="10,3"/>
+                </StackPanel>
+                <TextBlock x:Name="polyStatusLabel" Margin="0,8,0,0" FontSize="11" TextWrapping="Wrap" Foreground="#FF0D47A1"
+                           Text="ⓘ 「撤销本次裁剪」只回退本窗口这条路径加的删除，不动『删除单元』等其它来源。"/>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+    </TabControl>
+
+    <Border Grid.Row="1" Classes="panel" Padding="12" Margin="0,8,0,0">
+      <DockPanel LastChildFill="False">
+        <TextBlock DockPanel.Dock="Left" Foreground="#DC3545" FontSize="12" VerticalAlignment="Center" Text="⚠ 删除操作不可撤销（会话外）"/>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+          <Button Content="恢复全部" Click="OnRestore" Padding="10,3"/>
+          <Button Content="取消" IsCancel="True" Click="OnCancel" Padding="10,3"/>
+          <Button Content="删除" Classes="danger" Click="OnDelete" Padding="14,3"/>
+        </StackPanel>
+      </DockPanel>
+    </Border>
+  </Grid>
+</Window>

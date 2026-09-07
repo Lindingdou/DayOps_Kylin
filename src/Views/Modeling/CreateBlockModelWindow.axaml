@@ -1,0 +1,173 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="PitMine3D.Kylin.Views.Modeling.CreateBlockModelWindow" x:CompileBindings="False"
+        Classes="geodb" Title="创建块体模型" Width="820" Height="760" WindowStartupLocation="CenterOwner" CanResize="False">
+  <Grid Margin="14" RowDefinitions="*,Auto">
+    <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
+      <StackPanel Spacing="8">
+        <!-- 基本信息 -->
+        <Border Classes="panel" Padding="12">
+          <StackPanel>
+            <TextBlock Classes="panel-title" Text="基本信息" Margin="0,0,0,8"/>
+            <Grid ColumnDefinitions="Auto,220,Auto,*" RowDefinitions="Auto,6,Auto">
+              <TextBlock Grid.Row="0" Grid.Column="0" Text="名称" VerticalAlignment="Center" Margin="0,0,8,0"/>
+              <TextBox Grid.Row="0" Grid.Column="1" x:Name="nameBox"/>
+              <TextBlock Grid.Row="0" Grid.Column="2" Text="工程" VerticalAlignment="Center" Margin="16,0,8,0"/>
+              <ComboBox Grid.Row="0" Grid.Column="3" IsEnabled="False" SelectedIndex="0" HorizontalAlignment="Stretch">
+                <ComboBoxItem Content="当前工程"/>
+              </ComboBox>
+              <TextBlock Grid.Row="2" Grid.Column="0" Text="描述" VerticalAlignment="Center" Margin="0,0,8,0"/>
+              <TextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" x:Name="descBox"/>
+            </Grid>
+          </StackPanel>
+        </Border>
+
+        <!-- 几何范围 -->
+        <Border Classes="panel" Padding="12">
+          <StackPanel>
+            <DockPanel LastChildFill="False">
+              <TextBlock Classes="panel-title" Text="几何范围" DockPanel.Dock="Left"/>
+              <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                <RadioButton x:Name="modeExtent" GroupName="InputMode" Content="原点 + 范围 + 块尺寸" IsChecked="True" Margin="0,0,16,0"/>
+                <RadioButton x:Name="modeGrid" GroupName="InputMode" Content="原点 + 网格数 + 块尺寸"/>
+              </StackPanel>
+            </DockPanel>
+            <Grid Margin="0,4,0,0" ColumnDefinitions="80,*,8,*,8,*,36" RowDefinitions="Auto,6,Auto,6,Auto,6,Auto">
+              <TextBlock Grid.Row="0" Grid.Column="0" Text="原点" VerticalAlignment="Center"/>
+              <TextBox Grid.Row="0" Grid.Column="1" x:Name="oxBox" Text="0"/>
+              <TextBox Grid.Row="0" Grid.Column="3" x:Name="oyBox" Text="0"/>
+              <TextBox Grid.Row="0" Grid.Column="5" x:Name="ozBox" Text="0"/>
+              <TextBlock Grid.Row="0" Grid.Column="6" Text="m" VerticalAlignment="Center" Margin="6,0,0,0"/>
+
+              <TextBlock Grid.Row="2" Grid.Column="0" x:Name="extentLabel" Text="范围 (max)" VerticalAlignment="Center"/>
+              <TextBox Grid.Row="2" Grid.Column="1" x:Name="maxXBox" Text="1000"/>
+              <TextBox Grid.Row="2" Grid.Column="3" x:Name="maxYBox" Text="1000"/>
+              <TextBox Grid.Row="2" Grid.Column="5" x:Name="maxZBox" Text="250"/>
+              <TextBlock Grid.Row="2" Grid.Column="6" x:Name="extentUnit" Text="m" VerticalAlignment="Center" Margin="6,0,0,0"/>
+              <TextBlock Grid.Row="2" Grid.Column="0" x:Name="gridLabel" Text="网格数" VerticalAlignment="Center" IsVisible="False"/>
+              <TextBox Grid.Row="2" Grid.Column="1" x:Name="nxBox" Text="50" IsVisible="False"/>
+              <TextBox Grid.Row="2" Grid.Column="3" x:Name="nyBox" Text="50" IsVisible="False"/>
+              <TextBox Grid.Row="2" Grid.Column="5" x:Name="nzBox" Text="25" IsVisible="False"/>
+              <TextBlock Grid.Row="2" Grid.Column="6" x:Name="gridUnit" Text="个" VerticalAlignment="Center" Margin="6,0,0,0" IsVisible="False"/>
+
+              <TextBlock Grid.Row="4" Grid.Column="0" Text="块尺寸" VerticalAlignment="Center"/>
+              <TextBox Grid.Row="4" Grid.Column="1" x:Name="sxBox" Text="20"/>
+              <TextBox Grid.Row="4" Grid.Column="3" x:Name="syBox" Text="20"/>
+              <TextBox Grid.Row="4" Grid.Column="5" x:Name="szBox" Text="10"/>
+              <TextBlock Grid.Row="4" Grid.Column="6" Text="m" VerticalAlignment="Center" Margin="6,0,0,0"/>
+
+              <TextBlock Grid.Row="6" Grid.Column="0" Text="绕 Z 旋转" VerticalAlignment="Center"/>
+              <TextBox Grid.Row="6" Grid.Column="1" x:Name="rotBox" Text="0"/>
+              <TextBlock Grid.Row="6" Grid.Column="2" Grid.ColumnSpan="5" Text="°" VerticalAlignment="Center" Margin="6,0,0,0"/>
+            </Grid>
+            <Border Margin="0,8,0,0" Padding="8,4" Background="#FFE3F2FD" CornerRadius="2">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="gridInfo" Foreground="#FF0D47A1" FontSize="11" Text="→ 网格数: 50 × 50 × 25 = 62,500 块"/>
+                <TextBlock x:Name="aabbInfo" Margin="16,0,0,0" Foreground="#FF0D47A1" FontSize="11" Text="→ AABB: "/>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </Border>
+
+        <!-- 存储模式 -->
+        <Border Classes="panel" Padding="12">
+          <StackPanel>
+            <TextBlock Classes="panel-title" Text="存储模式" Margin="0,0,0,8"/>
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+              <RadioButton x:Name="modeDense" GroupName="Storage" Content="致密 (Dense)" ToolTip.Tip="致密煤层、规则金属矿、网格 ≤5 千万" Margin="0,0,18,0"/>
+              <RadioButton x:Name="modeSparse" GroupName="Storage" Content="稀疏 (Sparse)" IsChecked="True" ToolTip.Tip="大型矿区、约束体后稀疏化（默认）" Margin="0,0,18,0"/>
+              <RadioButton x:Name="modeAdaptive" GroupName="Storage" Content="自适应 (Adaptive)" ToolTip.Tip="煤层尖灭、矿体边界精细"/>
+            </StackPanel>
+            <Grid x:Name="adaptivePanel" IsVisible="False" Margin="20,4,0,0" ColumnDefinitions="Auto,80,Auto,*">
+              <TextBlock Text="最大子块层级" VerticalAlignment="Center" Margin="0,0,8,0"/>
+              <ComboBox Grid.Column="1" x:Name="subDepthCombo" SelectedIndex="1" HorizontalAlignment="Stretch">
+                <ComboBoxItem Content="1"/><ComboBoxItem Content="2"/><ComboBoxItem Content="3"/><ComboBoxItem Content="4"/>
+              </ComboBox>
+              <TextBlock Grid.Column="2" Text="最小子块尺寸" VerticalAlignment="Center" Margin="16,0,8,0"/>
+              <StackPanel Grid.Column="3" Orientation="Horizontal">
+                <TextBox Width="60" x:Name="subMinXBox" Text="5"/>
+                <TextBox Width="60" Margin="4,0,0,0" x:Name="subMinYBox" Text="5"/>
+                <TextBox Width="60" Margin="4,0,0,0" x:Name="subMinZBox" Text="2.5"/>
+                <TextBlock Text="m" VerticalAlignment="Center" Margin="6,0,0,0"/>
+              </StackPanel>
+            </Grid>
+          </StackPanel>
+        </Border>
+
+        <!-- 属性 Schema -->
+        <Border Classes="panel" Padding="12">
+          <StackPanel>
+            <DockPanel LastChildFill="False">
+              <TextBlock Classes="panel-title" Text="属性 Schema" DockPanel.Dock="Left"/>
+              <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center" Spacing="4">
+                <TextBlock Text="模板" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                <ComboBox Width="130" x:Name="templateCombo" SelectedIndex="0">
+                  <ComboBoxItem Content="空模板"/><ComboBoxItem Content="煤质模板"/><ComboBoxItem Content="金属矿模板"/><ComboBoxItem Content="通用模板"/>
+                </ComboBox>
+                <Button Content="+ 新增" Margin="4,0,0,0" Click="OnAddProperty" Padding="10,3"/>
+                <Button Content="− 删除" Click="OnRemoveProperty" Padding="10,3"/>
+              </StackPanel>
+            </DockPanel>
+            <DataGrid x:Name="schemaGrid" AutoGenerateColumns="False" IsReadOnly="False" Height="148" Margin="0,4,0,0" SelectionMode="Single" CanUserSortColumns="False">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="列名" Width="180" Binding="{Binding Name, Mode=TwoWay}"/>
+                <DataGridTemplateColumn Header="类型" Width="130">
+                  <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate>
+                      <ComboBox ItemsSource="{Binding TypeChoices}" SelectedItem="{Binding TypeLabel, Mode=TwoWay}" BorderThickness="0" Background="Transparent" HorizontalAlignment="Stretch" FontSize="12"/>
+                    </DataTemplate>
+                  </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTextColumn Header="单位" Width="90" Binding="{Binding Unit, Mode=TwoWay}"/>
+                <DataGridTextColumn Header="默认值" Width="80" Binding="{Binding DefaultValueText, Mode=TwoWay}"/>
+                <DataGridTextColumn Header="备注" Width="*" Binding="{Binding Description, Mode=TwoWay}"/>
+              </DataGrid.Columns>
+            </DataGrid>
+          </StackPanel>
+        </Border>
+
+        <!-- 显示样式 -->
+        <Border Classes="panel" Padding="12">
+          <StackPanel>
+            <TextBlock Classes="panel-title" Text="显示样式" Margin="0,0,0,8"/>
+            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,6,Auto,6,Auto,6,Auto">
+              <TextBlock Grid.Row="0" Grid.Column="0" Text="填充色" VerticalAlignment="Center" Margin="0,0,8,0"/>
+              <ContentControl Grid.Row="0" Grid.Column="1" x:Name="fillPickerHost" HorizontalAlignment="Left"/>
+              <TextBlock Grid.Row="2" Grid.Column="0" Text="边线模式" VerticalAlignment="Top" Margin="0,4,8,0"/>
+              <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Vertical">
+                <RadioButton x:Name="edgeAuto" GroupName="Edge" Content="自动 (由填充色派生, 推荐)" IsChecked="True" Margin="0,0,0,4"/>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                  <RadioButton x:Name="edgeFixed" GroupName="Edge" Content="自定义" VerticalAlignment="Center"/>
+                  <ContentControl x:Name="edgePickerHost" Margin="14,0,0,0"/>
+                </StackPanel>
+                <RadioButton x:Name="edgeHidden" GroupName="Edge" Content="仅在选中/高亮时显示边"/>
+              </StackPanel>
+              <TextBlock Grid.Row="4" Grid.Column="0" Text="边线宽度" VerticalAlignment="Center" Margin="0,0,8,0"/>
+              <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal">
+                <ComboBox Width="80" x:Name="edgeWidthCombo" SelectedIndex="2">
+                  <ComboBoxItem Content="0.5"/><ComboBoxItem Content="1"/><ComboBoxItem Content="1.2"/><ComboBoxItem Content="1.5"/><ComboBoxItem Content="2"/>
+                </ComboBox>
+                <TextBlock Text="px" VerticalAlignment="Center" Margin="6,0,0,0"/>
+              </StackPanel>
+              <TextBlock Grid.Row="6" Grid.Column="0" Text="默认色带" VerticalAlignment="Center" Margin="0,0,8,0"/>
+              <ComboBox Grid.Row="6" Grid.Column="1" Width="220" HorizontalAlignment="Left" x:Name="colormapCombo"/>
+            </Grid>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- 底部状态条 + 按钮 -->
+    <Border Grid.Row="1" Classes="panel" Padding="12" Margin="0,8,0,0">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+          <TextBlock x:Name="estimateText" Foreground="#FF0D47A1" FontSize="12" Text="ⓘ 预计 62,500 块 · Sparse 存储 ≈ 30.5 KB"/>
+          <TextBlock x:Name="validationText" Margin="16,0,0,0" Foreground="#B45309" FontSize="11" Text=""/>
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+          <Button Content="取消" MinWidth="68" IsCancel="True" Click="OnCancel"/>
+          <Button Content="创建" MinWidth="80" Classes="primary" IsDefault="True" x:Name="createBtn" Click="OnCreate"/>
+        </StackPanel>
+      </Grid>
+    </Border>
+  </Grid>
+</Window>
