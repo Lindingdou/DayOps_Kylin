@@ -1,0 +1,247 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--
+      地质与工程信息数据库 24 个页面的公共外观(对应原 PitMineApp DialogTheme 浅色):
+        Window.geodb      页面窗口底色/字号
+        Border.hdr        渐变顶栏(变体: hdr-indigo hdr-teal hdr-cyan hdr-purple hdr-dark)
+        TextBlock.hdr-title / hdr-sub     顶栏标题/副标题
+        TextBlock.page-title              无顶栏页面的大标题(原 FontSize 18 Bold)
+        Border.panel      白底圆角分区框   Border.panel-hdr 分区标题条(浅蓝; 变体 panel-hdr-warm 浅橙 / panel-hdr-ok 浅绿 / panel-hdr-plain 浅灰)
+        TextBlock.panel-title             分区标题文本(变体 warm / ok / plain)
+        Border.card       KPI 卡(白)  TextBlock.kpi-title / kpi-value / kpi-sub
+        Border.tile       KPI 磁贴(深色底白字, 代码设 Background)  TextBlock.tile-title / tile-value / tile-sub
+        Border.toolbar    工具条底   Border.statusbar 底部状态栏   TextBlock.muted 次级灰字  TextBlock.small 小字
+        Button.primary / success / danger / warn   实心按钮
+    -->
+    <Style Selector="Window.geodb">
+        <Setter Property="Background" Value="#F7F8FA" />
+        <Setter Property="FontSize" Value="12.5" />
+    </Style>
+
+    <Style Selector="Border.hdr">
+        <Setter Property="Padding" Value="16,10" />
+        <Setter Property="Background">
+            <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                <GradientStop Color="#FF0D47A1" Offset="0" />
+                <GradientStop Color="#FF1565C0" Offset="1" />
+            </LinearGradientBrush>
+        </Setter>
+    </Style>
+    <Style Selector="Border.hdr.hdr-indigo">
+        <Setter Property="Background">
+            <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                <GradientStop Color="#FF1A237E" Offset="0" />
+                <GradientStop Color="#FF283593" Offset="0.5" />
+                <GradientStop Color="#FF3949AB" Offset="1" />
+            </LinearGradientBrush>
+        </Setter>
+    </Style>
+    <Style Selector="Border.hdr.hdr-teal">
+        <Setter Property="Background">
+            <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                <GradientStop Color="#FF004D40" Offset="0" />
+                <GradientStop Color="#FF00695C" Offset="0.5" />
+                <GradientStop Color="#FF00897B" Offset="1" />
+            </LinearGradientBrush>
+        </Setter>
+    </Style>
+    <Style Selector="Border.hdr.hdr-cyan">
+        <Setter Property="Background">
+            <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                <GradientStop Color="#FF0F766E" Offset="0" />
+                <GradientStop Color="#FF0E7490" Offset="1" />
+            </LinearGradientBrush>
+        </Setter>
+    </Style>
+    <Style Selector="Border.hdr.hdr-purple">
+        <Setter Property="Background">
+            <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                <GradientStop Color="#FF0D47A1" Offset="0" />
+                <GradientStop Color="#FF4527A0" Offset="0.5" />
+                <GradientStop Color="#FF1565C0" Offset="1" />
+            </LinearGradientBrush>
+        </Setter>
+    </Style>
+    <Style Selector="Border.hdr.hdr-dark">
+        <Setter Property="Background" Value="#FF263238" />
+    </Style>
+    <Style Selector="TextBlock.hdr-title">
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="FontSize" Value="17" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.hdr-sub">
+        <Setter Property="Foreground" Value="#FFB3E5FC" />
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Margin" Value="14,2,0,0" />
+    </Style>
+
+    <Style Selector="TextBlock.page-title">
+        <Setter Property="FontSize" Value="18" />
+        <Setter Property="FontWeight" Value="Bold" />
+    </Style>
+    <Style Selector="TextBlock.muted">
+        <Setter Property="Foreground" Value="#FF6B7280" />
+    </Style>
+    <Style Selector="TextBlock.small">
+        <Setter Property="FontSize" Value="11" />
+    </Style>
+
+    <Style Selector="Border.panel">
+        <Setter Property="Background" Value="White" />
+        <Setter Property="BorderBrush" Value="#FFDCDFE4" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="4" />
+    </Style>
+    <Style Selector="Border.panel-hdr">
+        <Setter Property="Background" Value="#FFE3F2FD" />
+        <Setter Property="Padding" Value="10,6" />
+        <Setter Property="CornerRadius" Value="4,4,0,0" />
+    </Style>
+    <Style Selector="Border.panel-hdr.panel-hdr-warm">
+        <Setter Property="Background" Value="#FFFFF3E0" />
+    </Style>
+    <Style Selector="Border.panel-hdr.panel-hdr-ok">
+        <Setter Property="Background" Value="#FFE8F5E9" />
+    </Style>
+    <Style Selector="Border.panel-hdr.panel-hdr-plain">
+        <Setter Property="Background" Value="#FFF3F4F6" />
+    </Style>
+    <Style Selector="TextBlock.panel-title">
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Foreground" Value="#FF0D47A1" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.panel-title.warm">
+        <Setter Property="Foreground" Value="#FFE65100" />
+    </Style>
+    <Style Selector="TextBlock.panel-title.ok">
+        <Setter Property="Foreground" Value="#FF2E7D32" />
+    </Style>
+    <Style Selector="TextBlock.panel-title.plain">
+        <Setter Property="Foreground" Value="#FF1F2937" />
+    </Style>
+
+    <Style Selector="Border.card">
+        <Setter Property="Background" Value="White" />
+        <Setter Property="BorderBrush" Value="#FFDCDFE4" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="14,10" />
+        <Setter Property="Margin" Value="0,0,8,0" />
+    </Style>
+    <Style Selector="TextBlock.kpi-title">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="#FF6B7280" />
+    </Style>
+    <Style Selector="TextBlock.kpi-value">
+        <Setter Property="FontSize" Value="22" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="Margin" Value="0,4,0,0" />
+    </Style>
+    <Style Selector="TextBlock.kpi-sub">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="Foreground" Value="#FF6B7280" />
+        <Setter Property="Margin" Value="0,2,0,0" />
+    </Style>
+
+    <Style Selector="Border.tile">
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="14,10" />
+        <Setter Property="Margin" Value="0,0,8,0" />
+        <Setter Property="Background" Value="#FF37474F" />
+    </Style>
+    <Style Selector="TextBlock.tile-title">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="Foreground" Value="#DDFFFFFF" />
+    </Style>
+    <Style Selector="TextBlock.tile-value">
+        <Setter Property="FontSize" Value="24" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="Margin" Value="0,4,0,0" />
+    </Style>
+    <Style Selector="TextBlock.tile-sub">
+        <Setter Property="FontSize" Value="10" />
+        <Setter Property="Foreground" Value="#CCFFFFFF" />
+        <Setter Property="Margin" Value="0,3,0,0" />
+    </Style>
+
+    <Style Selector="Border.toolbar">
+        <Setter Property="Background" Value="White" />
+        <Setter Property="BorderBrush" Value="#FFDCDFE4" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+        <Setter Property="Padding" Value="12,8" />
+    </Style>
+    <Style Selector="Border.statusbar">
+        <Setter Property="Background" Value="#FFF3F4F6" />
+        <Setter Property="BorderBrush" Value="#FFDCDFE4" />
+        <Setter Property="BorderThickness" Value="0,1,0,0" />
+        <Setter Property="Padding" Value="10,4" />
+    </Style>
+    <Style Selector="Border.statusbar TextBlock">
+        <Setter Property="FontSize" Value="11.5" />
+        <Setter Property="Foreground" Value="#FF4B5563" />
+    </Style>
+
+    <Style Selector="Button.primary">
+        <Setter Property="Background" Value="#FF1976D2" />
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="#FF1565C0" />
+        <Setter Property="TextElement.Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.success">
+        <Setter Property="Background" Value="#FF388E3C" />
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="Button.success:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="#FF2E7D32" />
+        <Setter Property="TextElement.Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.danger">
+        <Setter Property="Background" Value="#FFD32F2F" />
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="Button.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="#FFC62828" />
+        <Setter Property="TextElement.Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.warn">
+        <Setter Property="Background" Value="#FFF57C00" />
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="Button.warn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="#FFEF6C00" />
+        <Setter Property="TextElement.Foreground" Value="White" />
+    </Style>
+
+    <!-- 表格: 行高/字号收紧, 接近原 WPF DataGrid 观感 -->
+    <Style Selector="Window.geodb DataGrid">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="RowHeight" Value="26" />
+        <Setter Property="GridLinesVisibility" Value="Horizontal" />
+        <Setter Property="HeadersVisibility" Value="Column" />
+        <Setter Property="CanUserReorderColumns" Value="True" />
+        <Setter Property="CanUserResizeColumns" Value="True" />
+        <Setter Property="Background" Value="White" />
+    </Style>
+    <Style Selector="Window.geodb DataGridColumnHeader">
+        <Setter Property="Background" Value="#FFF3F4F6" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Padding" Value="6,4" />
+        <Setter Property="MinHeight" Value="26" />
+    </Style>
+</Styles>

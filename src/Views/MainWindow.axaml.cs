@@ -63,6 +63,15 @@ public partial class MainWindow : Window
                 return;
             }
 
+            // 数据库页面(虚拟钻孔等)挂起的一次性视口拾取：左键一点即回调
+            if (_oneShotPick != null && props.IsLeftButtonPressed)
+            {
+                _nav = NavMode.None;
+                ConsumeOneShotPick(_lastPointer.X, _lastPointer.Y);
+                e.Handled = true;
+                return;
+            }
+
             // 测距模式：左键取点（第一/第二点）
             if (_measure != null && props.IsLeftButtonPressed)
             {
@@ -669,6 +678,7 @@ public partial class MainWindow : Window
                 CancelGripDrag();
                 return;
             }
+            if (e.Key == Key.Escape && CancelOneShotPick()) { e.Handled = true; return; }
             if (e.Key == Key.Escape)
             {
                 // 绘制多段线中途按 Esc：提交已画的多段线(而非丢弃)——符合"Esc 结束并保留"预期(≥2 点才成线)。

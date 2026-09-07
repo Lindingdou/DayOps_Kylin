@@ -8,6 +8,8 @@
         <StyleInclude Source="avares://Dock.Avalonia/Themes/DockFluentTheme.axaml" />
         <StyleInclude Source="avares://PitMine3D.Kylin/Styles/Ribbon.axaml" />
         <StyleInclude Source="avares://PitMine3D.Kylin/Styles/Dock.axaml" />
+        <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />
+        <StyleInclude Source="avares://PitMine3D.Kylin/Styles/GeoDb.axaml" />
     </Application.Styles>
 
     <Application.Resources>
