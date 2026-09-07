@@ -1,0 +1,36 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.GeoDb.BoreholeSelectDialog" x:CompileBindings="False"
+        Classes="geodb" Title="展绘钻孔 — 选择钻孔" Width="400" Height="540" WindowStartupLocation="CenterOwner">
+    <Grid Margin="12" RowDefinitions="Auto,Auto,Auto,*,Auto,Auto">
+        <TextBlock Grid.Row="0" Text="勾选要展绘的钻孔（可多选）" FontWeight="Bold" Margin="0,0,0,6"/>
+
+        <TextBox Grid.Row="1" x:Name="filterBox" Margin="0,0,0,6" Watermark="按孔号或类别筛选" ToolTip.Tip="按孔号或类别筛选"/>
+
+        <!-- 全选总开关（作用于当前筛选出的可展绘钻孔） -->
+        <CheckBox Grid.Row="2" x:Name="selectAllBox" IsThreeState="True" Margin="4,0,0,6"
+                  Content="全选（勾选全部）" Click="OnSelectAllClick"/>
+
+        <Border Grid.Row="3" BorderBrush="#FF555555" BorderThickness="1" Background="White">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ItemsControl x:Name="holeItems">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}" IsEnabled="{Binding Drawable}" Margin="6,3"
+                                      ToolTip.Tip="{Binding Tip}">
+                                <TextBlock Text="{Binding Label}" VerticalAlignment="Center"/>
+                            </CheckBox>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
+
+        <TextBlock Grid.Row="4" x:Name="countText" Margin="0,6,0,0" Opacity="0.75" Text=""/>
+
+        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0" Spacing="8">
+            <Button Content="确定（展绘勾选）" Click="OnOk" IsDefault="True" Padding="14,3" Classes="primary"/>
+            <Button Content="取消" Click="OnCancel" IsCancel="True" Padding="14,3"/>
+        </StackPanel>
+    </Grid>
+</Window>

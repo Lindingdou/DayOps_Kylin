@@ -1,0 +1,40 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.GeoDb.OriginalBoreholeColumnWindow" x:CompileBindings="False"
+        Classes="geodb" Title="原始钻孔柱状图" Width="900" Height="760" WindowStartupLocation="CenterOwner">
+    <Grid Margin="8" ColumnDefinitions="180,*,290">
+        <!-- 左: 孔列表 + 筛选 -->
+        <DockPanel Grid.Column="0" Margin="0,0,8,0">
+            <TextBlock DockPanel.Dock="Top" Text="钻孔" FontWeight="Bold" Margin="0,0,0,4"/>
+            <TextBox DockPanel.Dock="Top" x:Name="filterBox" Margin="0,0,0,4" Watermark="筛选孔号" ToolTip.Tip="筛选孔号"/>
+            <ListBox x:Name="holeList" SelectionChanged="OnHoleSelected" Background="White">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding HoleId}"/>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </DockPanel>
+
+        <!-- 中: 柱状图 -->
+        <Grid Grid.Column="1" Margin="0,0,8,0" RowDefinitions="Auto,*,Auto">
+            <TextBlock x:Name="headerText" Grid.Row="0" FontSize="14" FontWeight="Bold" Margin="4,0,0,6" Text="（选择左侧钻孔）"/>
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Background="White">
+                <Canvas x:Name="columnCanvas" Background="Transparent"/>
+            </ScrollViewer>
+            <TextBlock x:Name="statusText" Grid.Row="2" Margin="4,6,0,0" Text="就绪"/>
+        </Grid>
+
+        <!-- 右: 分层/层位详情 -->
+        <Border Grid.Column="2" Classes="panel">
+            <DockPanel Margin="10">
+                <TextBlock DockPanel.Dock="Top" x:Name="detailTitle" FontSize="14" FontWeight="Bold" Margin="0,0,0,8" TextWrapping="Wrap" Text="层位详情"/>
+                <TextBlock DockPanel.Dock="Top" x:Name="detailHint" Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,6"
+                           Text="点击左侧柱状图任一岩段/煤层，查看该分层的具体层位信息。"/>
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel x:Name="detailPanel"/>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

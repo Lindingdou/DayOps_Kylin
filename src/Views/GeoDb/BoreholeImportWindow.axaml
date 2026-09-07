@@ -1,0 +1,42 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.GeoDb.BoreholeImportWindow" x:CompileBindings="False"
+        Classes="geodb" Title="导入钻孔数据 (CSV)" Width="860" Height="560" WindowStartupLocation="CenterOwner">
+    <Grid Margin="12" RowDefinitions="Auto,Auto,Auto,*,Auto">
+        <TextBlock Grid.Row="0" Classes="page-title" Text="导入钻孔数据 (CSV)" Margin="0,0,0,4"/>
+        <TextBlock Grid.Row="1" Classes="muted" TextWrapping="Wrap" Margin="0,0,0,8"
+                   Text="支持 CSV，表头可任意顺序(兼容本模块导出)：孔号 / 经距X / 纬距Y / 孔口高程 / 总孔深 / 终孔层位 / 施工时间 / 施工单位 / 类别 / 备注。必填：孔号、经距X、纬距Y。&#x0a;首次导入建议先点「下载导入模板」，按模板列填好数据后再选文件导入。"/>
+
+        <Border Grid.Row="2" Classes="toolbar" Margin="0,0,0,8">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+                <Button Content="下载导入模板…" Click="OnDownloadTemplateClick" Padding="8,2"
+                        ToolTip.Tip="生成带表头与示例行的 CSV 模板，填好后再回来导入"/>
+                <Border Width="1" Background="#D0D4DA" Margin="2,2"/>
+                <Button Content="选择文件 (CSV)…" Click="OnPickFileClick" Padding="8,2"/>
+                <Border Width="1" Background="#D0D4DA" Margin="2,2"/>
+                <Button Content="导入入库" Click="OnImportClick" Padding="8,2" Classes="primary"/>
+                <Border Width="1" Background="#D0D4DA" Margin="2,2"/>
+                <CheckBox x:Name="overwriteBox" Content="覆盖已存在孔号" IsChecked="True" VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+
+        <DataGrid x:Name="previewGrid" Grid.Row="3" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="120"/>
+                <DataGridTextColumn Header="孔号" Binding="{Binding HoleId}" Width="80"/>
+                <DataGridTextColumn Header="经距X" Binding="{Binding X}" Width="100"/>
+                <DataGridTextColumn Header="纬距Y" Binding="{Binding Y}" Width="100"/>
+                <DataGridTextColumn Header="孔口高程" Binding="{Binding ZCollar}" Width="80"/>
+                <DataGridTextColumn Header="总孔深" Binding="{Binding DepthTotal}" Width="70"/>
+                <DataGridTextColumn Header="终孔层位" Binding="{Binding TerminateHorizon}" Width="80"/>
+                <DataGridTextColumn Header="施工时间" Binding="{Binding DrillDate}" Width="100"/>
+                <DataGridTextColumn Header="类别" Binding="{Binding Category}" Width="90"/>
+                <DataGridTextColumn Header="备注" Binding="{Binding Remark}" Width="*"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <Border Grid.Row="4" Classes="statusbar" Margin="0,8,0,0">
+            <TextBlock x:Name="statusText" Text="请选择 CSV 文件"/>
+        </Border>
+    </Grid>
+</Window>
