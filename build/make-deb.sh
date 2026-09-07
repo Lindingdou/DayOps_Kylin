@@ -74,7 +74,23 @@ fi
 # 麒麟自带 Mesa 时软件渲染更稳；有独显/驱动就走硬件(不强制)
 [ -n "${PITMINE_SOFTWARE_GL:-}" ] && { LIBGL_ALWAYS_SOFTWARE=1; export LIBGL_ALWAYS_SOFTWARE; }
 
-exec "$APP_DIR/PitMine3D.Kylin" "$@"
+# 运行日志: 始终留一份到用户目录, 闪退时直接回传这个文件
+LOGDIR="${XDG_DATA_HOME:-$HOME/.local/share}/PitMine3D.Kylin"
+mkdir -p "$LOGDIR" 2>/dev/null || LOGDIR=/tmp
+LOG="$LOGDIR/last-run.log"
+echo "=== $(date "+%Y-%m-%d %H:%M:%S") 启动 ===" >> "$LOG"
+
+if command -v tee >/dev/null 2>&1; then
+    "$APP_DIR/PitMine3D.Kylin" "$@" 2>&1 | tee -a "$LOG"
+    RC=${PIPESTATUS:-0}
+else
+    "$APP_DIR/PitMine3D.Kylin" "$@" >> "$LOG" 2>&1
+    RC=$?
+fi
+if [ "$RC" != "0" ]; then
+    echo "PitMine3D 异常退出(码 $RC)。日志: $LOG 与 $LOGDIR/crash.log" >&2
+fi
+exit "$RC"
 LAUNCH
 chmod +x "$APPDIR/pitmine3d.sh" "$APPDIR/PitMine3D.Kylin" 2>/dev/null || true
 
@@ -101,7 +117,8 @@ X11 与 OpenGL 栈: `libx11-6 libice6 libsm6 libgl1 libfontconfig1`。
 
 ## 显示异常时
 - 无 GPU 驱动/花屏: `PITMINE_SOFTWARE_GL=1 pitmine3d`（强制软件渲染）
-- 收集日志: `pitmine3d 2> /tmp/pitmine3d.log`
+- 日志(自动留存): `~/.local/share/PitMine3D.Kylin/last-run.log` 与 `crash.log`
+- 闪退时把这两个文件回传即可定位; 也可前台直接看: `pitmine3d`
 DOC
 
 INSTALLED_KB=$(du -sk "$STAGE/opt" "$STAGE/usr" | awk '{s+=$1} END {print s}')

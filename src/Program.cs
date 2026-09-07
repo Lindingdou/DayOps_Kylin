@@ -13,7 +13,20 @@ internal static class Program
     {
         // 把 Avalonia 日志（含 OpenGL 初始化告警）导到 stderr，便于在麒麟/WSL 上诊断
         Trace.Listeners.Add(new ConsoleTraceListener(true));
-        BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        CrashLog.Install();
+        CrashLog.WriteStartupBanner();
+        try
+        {
+            BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+            CrashLog.Write("EXIT", "正常退出");
+        }
+        catch (Exception ex)
+        {
+            // 启动期异常(平台后端/GL/字体等)在目标机上表现为"双击即闪退"——落盘后给出可读提示再退出。
+            CrashLog.Write("FATAL", ex.ToString());
+            Console.Error.WriteLine($"启动失败。诊断日志: {CrashLog.Path}");
+            Environment.ExitCode = 1;
+        }
     }
 
     // 平台自动探测：Windows 走 ANGLE/WGL，麒麟(Linux) 走 EGL/GLX —— 同一份代码。

@@ -27,39 +27,64 @@ internal sealed class GlRenderer
     private int _uMvp;
     private int _vao;
 
+    /// <summary>着色器实际采用的方言(诊断用)：330 core / 300 es / 110 兼容(老驱动回退)。</summary>
+    public string ShaderProfile { get; private set; } = "(未初始化)";
+
     public void Init(GlInterface gl, GlExtras ext, bool isGles)
     {
         _gl = gl;
         _ext = ext;
 
-        string header = isGles ? "#version 300 es\nprecision highp float;\n" : "#version 330 core\n";
-        string vs = header +
-            "in vec3 aPos;\nin vec3 aColor;\nuniform mat4 uMVP;\nout vec3 vColor;\n" +
-            "void main() { vColor = aColor; gl_Position = uMVP * vec4(aPos, 1.0); }";
-        string fs = header +
-            "in vec3 vColor;\nout vec4 oColor;\n" +
-            "void main() { oColor = vec4(vColor, 1.0); }";
-
-        int vsh = gl.CreateShader(GL_VERTEX_SHADER);
-        string vlog = gl.CompileShaderAndGetError(vsh, vs);
-        if (!string.IsNullOrEmpty(vlog)) Console.WriteLine("[VS] " + vlog);
-
-        int fsh = gl.CreateShader(GL_FRAGMENT_SHADER);
-        string flog = gl.CompileShaderAndGetError(fsh, fs);
-        if (!string.IsNullOrEmpty(flog)) Console.WriteLine("[FS] " + flog);
-
-        _program = gl.CreateProgram();
-        gl.AttachShader(_program, vsh);
-        gl.AttachShader(_program, fsh);
-        gl.BindAttribLocationString(_program, 0, "aPos");
-        gl.BindAttribLocationString(_program, 1, "aColor");
-        string plog = gl.LinkProgramAndGetError(_program);
-        if (!string.IsNullOrEmpty(plog)) Console.WriteLine("[LINK] " + plog);
+        // 信创整机的国产 GPU 驱动常只到 GL 2.1 / GLES 2.0(没有 in/out 与 VAO)。
+        // 先按现代方言(330 core / 300 es)编译, 失败就回退到 110/100 兼容方言(attribute/varying/gl_FragColor)。
+        if (!TryBuildProgram(gl, isGles ? "#version 300 es\nprecision highp float;\n" : "#version 330 core\n",
+                             modern: true, out string err1))
+        {
+            Console.Error.WriteLine($"[GL] 现代着色器不可用, 回退兼容方言。原因: {err1}");
+            if (!TryBuildProgram(gl, isGles ? "precision highp float;\n" : "#version 110\n",
+                                 modern: false, out string err2))
+                throw new InvalidOperationException($"着色器编译失败(现代: {err1} / 兼容: {err2})");
+            ShaderProfile = isGles ? "GLES 100 兼容" : "GLSL 110 兼容";
+        }
+        else ShaderProfile = isGles ? "GLES 300" : "GLSL 330";
 
         _uMvp = gl.GetUniformLocationString(_program, "uMVP");
 
-        _vao = _ext.GenVertexArray();
+        _vao = _ext.GenVertexArray();   // 老驱动没有 VAO 扩展时返回 0, BindVertexArray 变空操作
         _ext.BindVertexArray(_vao);
+    }
+
+    private bool TryBuildProgram(GlInterface gl, string header, bool modern, out string error)
+    {
+        string vs = modern
+            ? header + "in vec3 aPos;\nin vec3 aColor;\nuniform mat4 uMVP;\nout vec3 vColor;\n" +
+                       "void main() { vColor = aColor; gl_Position = uMVP * vec4(aPos, 1.0); }"
+            : header + "attribute vec3 aPos;\nattribute vec3 aColor;\nuniform mat4 uMVP;\nvarying vec3 vColor;\n" +
+                       "void main() { vColor = aColor; gl_Position = uMVP * vec4(aPos, 1.0); }";
+        string fs = modern
+            ? header + "in vec3 vColor;\nout vec4 oColor;\nvoid main() { oColor = vec4(vColor, 1.0); }"
+            : header + "varying vec3 vColor;\nvoid main() { gl_FragColor = vec4(vColor, 1.0); }";
+
+        error = "";
+        int vsh = gl.CreateShader(GL_VERTEX_SHADER);
+        string vlog = gl.CompileShaderAndGetError(vsh, vs);
+        if (!string.IsNullOrEmpty(vlog)) { error = "VS: " + vlog.Trim(); return false; }
+
+        int fsh = gl.CreateShader(GL_FRAGMENT_SHADER);
+        string flog = gl.CompileShaderAndGetError(fsh, fs);
+        if (!string.IsNullOrEmpty(flog)) { error = "FS: " + flog.Trim(); return false; }
+
+        int prog = gl.CreateProgram();
+        gl.AttachShader(prog, vsh);
+        gl.AttachShader(prog, fsh);
+        gl.BindAttribLocationString(prog, 0, "aPos");
+        gl.BindAttribLocationString(prog, 1, "aColor");
+        string plog = gl.LinkProgramAndGetError(prog);
+        if (!string.IsNullOrEmpty(plog)) { error = "LINK: " + plog.Trim(); gl.DeleteProgram(prog); return false; }
+
+        if (_program != 0) _gl.DeleteProgram(_program);
+        _program = prog;
+        return true;
     }
 
     public void Deinit()

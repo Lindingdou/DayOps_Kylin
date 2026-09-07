@@ -107,10 +107,21 @@ public partial class CadGlViewport : OpenGlControlBase
     private int _frameCount;
     private long _statT0;
 
+    /// <summary>GL 初始化失败(老驱动/无 GLX/无 GPU)：不再抛出把程序带崩, 记原因并停掉本视口的绘制。</summary>
+    public bool GlFailed { get; private set; }
+    public string GlFailReason { get; private set; } = "";
+
     protected override void OnOpenGlInit(GlInterface gl)
     {
         try { OnOpenGlInitCore(gl); }
-        catch (Exception ex) { Console.Error.WriteLine("[GLINIT-FAIL] " + ex); throw; }
+        catch (Exception ex)
+        {
+            GlFailed = true;
+            GlFailReason = ex.Message;
+            Console.Error.WriteLine("[GLINIT-FAIL] " + ex);
+            // 不 rethrow —— 抛出会让 Avalonia 拆掉窗口, 表现为"打开即闪退"; 宁可无三维视图也让程序留得住, 便于看提示与日志。
+            Dispatcher.UIThread.Post(() => GlReady?.Invoke($"OpenGL 初始化失败: {ex.Message}"));
+        }
     }
 
     private void OnOpenGlInitCore(GlInterface gl)
@@ -123,6 +134,7 @@ public partial class CadGlViewport : OpenGlControlBase
         Dispatcher.UIThread.Post(() => GlReady?.Invoke(backend));
 
         _renderer.Init(gl, _ext, _isGles);
+        Console.Error.WriteLine($"[GLINIT] renderer ok. shader={_renderer.ShaderProfile}");
         _hasGrid = false; _hasGridPlan = false;   // 上下文重建 → 格网下一帧按当前视图重建
         _cube = _renderer.Upload(BuildCube());
         _gizmo = _renderer.Upload(BuildGizmo());
@@ -139,6 +151,8 @@ public partial class CadGlViewport : OpenGlControlBase
 
     protected override void OnOpenGlDeinit(GlInterface gl)
     {
+        if (GlFailed) return;
+
         if (_hasGrid) _renderer.DeleteMesh(_grid);
         _renderer.DeleteMesh(_cube);
         _renderer.DeleteMesh(_gizmo);
@@ -161,6 +175,8 @@ public partial class CadGlViewport : OpenGlControlBase
 
     protected override void OnOpenGlRender(GlInterface gl, int fb)
     {
+        if (GlFailed) return;   // GL 不可用: 空转(窗口/面板/命令行仍可用)
+
         double scale = VisualRoot?.RenderScaling ?? 1.0;
         int w = Math.Max(1, (int)(Bounds.Width * scale));
         int h = Math.Max(1, (int)(Bounds.Height * scale));
