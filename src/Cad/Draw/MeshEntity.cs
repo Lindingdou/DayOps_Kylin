@@ -28,7 +28,7 @@ public sealed class MeshEntity : SceneEntity
     }
 
     /// <summary>顶点/三角改动后调用，重建边集与包围盒缓存。</summary>
-    public void Invalidate() { _edges = null; _boundsOk = false; }
+    public void Invalidate() { _edges = null; _boundsOk = false; _edgeCache = null; _faceCache = null; }
 
     /// <summary>唯一无向边(i&lt;j)，按三角遍历去重。</summary>
     public IReadOnlyList<(int i, int j)> Edges
@@ -84,7 +84,7 @@ public sealed class MeshEntity : SceneEntity
 
     // ── 显示模式(全局, 原「渲染配置」实体/线框着色管线)：线框 / 着色面 / 着色面+线框 ──
     public enum DisplayMode { Wireframe, Shaded, ShadedWireframe }
-    public static DisplayMode RenderMode = DisplayMode.ShadedWireframe;
+    public static DisplayMode RenderMode = DisplayMode.Shaded;   // 默认直接显示面(用户 2026-09-07: 默认不显示网格线)
     /// <summary>面按高程着色(地形色带), 否则按实体颜色。</summary>
     public static bool ColorByElevation;
     /// <summary>平行光方向(世界系, 单位化)；两面受光。</summary>
@@ -102,24 +102,44 @@ public sealed class MeshEntity : SceneEntity
         }
     }
 
+    // 镶嵌缓存：大网(数万三角)每次 RefreshScene 都重算边线/着色面太慢；按 (模式, 高程着色, 颜色, 标高) 键缓存, 几何改动 Invalidate() 清。
+    private float[]? _edgeCache, _faceCache;
+    private (DisplayMode mode, bool byElev, float r, float g, float b, double elev) _edgeKey, _faceKey;
+
     public override void Tessellate(List<float> o)
     {
         if (RenderMode == DisplayMode.Shaded) return;   // 纯着色面模式不画边线
-        if (RenderMode == DisplayMode.ShadedWireframe)
+        var key = (RenderMode, ColorByElevation, Cr, Cg, Cb, Elevation);
+        if (_edgeCache == null || _edgeKey != key)
         {
-            // 面+线框：边线压暗, 与着色面区分
-            float cr = Cr, cg = Cg, cb = Cb;
-            Cr *= 0.45f; Cg *= 0.45f; Cb *= 0.45f;
-            try { TessellateEdges(o); } finally { Cr = cr; Cg = cg; Cb = cb; }
-            return;
+            var tmp = new List<float>(Edges.Count * 12);
+            if (RenderMode == DisplayMode.ShadedWireframe)
+            {
+                // 面+线框：边线压暗, 与着色面区分
+                float cr = Cr, cg = Cg, cb = Cb;
+                Cr *= 0.45f; Cg *= 0.45f; Cb *= 0.45f;
+                try { TessellateEdges(tmp); } finally { Cr = cr; Cg = cg; Cb = cb; }
+            }
+            else TessellateEdges(tmp);
+            _edgeCache = tmp.ToArray(); _edgeKey = key;
         }
-        TessellateEdges(o);
+        o.AddRange(_edgeCache);
     }
 
     /// <summary>着色三角面：逐三角平面法线 × 平行光(两面受光) 调制基色(或高程色带)。</summary>
     public override void TessellateFaces(List<float> o)
     {
         if (RenderMode == DisplayMode.Wireframe) return;
+        var key = (RenderMode, ColorByElevation, Cr, Cg, Cb, Elevation);
+        if (_faceCache != null && _faceKey == key) { o.AddRange(_faceCache); return; }
+        var tmp = new List<float>(Tris.Count * 18);
+        BuildFaces(tmp);
+        _faceCache = tmp.ToArray(); _faceKey = key;
+        o.AddRange(_faceCache);
+    }
+
+    private void BuildFaces(List<float> o)
+    {
         var b = Bounds; double zr = b.maxZ - b.minZ;
         foreach (var (a, bb, c) in Tris)
         {

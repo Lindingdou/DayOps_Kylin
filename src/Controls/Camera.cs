@@ -122,11 +122,26 @@ internal sealed class Camera
     /// <summary>朝光标缩放：缩放后保持光标下的世界点不动（CAD 标准）。</summary>
     public void ZoomAtScreen(double sx, double sy, double vw, double vh, double factor)
     {
-        var before = ScreenToWorldOnZPlane(sx, sy, vw, vh);
+        if (vw < 1 || vh < 1) { Zoom(factor); return; }
+        if (Is2D)
+        {
+            var before = ScreenToWorldOnZPlane(sx, sy, vw, vh);
+            Zoom(factor);
+            var after = ScreenToWorldOnZPlane(sx, sy, vw, vh);
+            if (before != null && after != null)
+                ShiftTarget(before.Value.x - after.Value.x, before.Value.y - after.Value.y);
+            return;
+        }
+        // 3D：让光标所指、位于注视深度视平面上的点在缩放后仍在光标下（与 3D 平移同一视平面口径）。
+        // 旧实现对 Z=0 平面反投影，斜视时交点飘到远处，缩放后注视点大幅跳动——看起来像"模型旋转后消失"。
+        double upp0 = 2.0 * Dist * Math.Tan(Math.PI / 8) / vh;
+        double dx = (sx - vw / 2) * upp0, dy = (sy - vh / 2) * upp0;   // 光标相对屏幕中心在视平面上的世界偏移
+        var (rx, ry, rz, ux, uy, uz) = ViewAxes();
+        double px = dx * rx - dy * ux, py = dx * ry - dy * uy, pz = dx * rz - dy * uz;
+        double d0 = Dist;
         Zoom(factor);
-        var after = ScreenToWorldOnZPlane(sx, sy, vw, vh);
-        if (before != null && after != null)
-            ShiftTarget(before.Value.x - after.Value.x, before.Value.y - after.Value.y);
+        double k = 1.0 - Dist / d0;   // 实际缩放比(受 Dist 夹紧影响)
+        Target[0] += (float)(px * k); Target[1] += (float)(py * k); Target[2] += (float)(pz * k);
     }
 
     /// <summary>相机位置（球坐标，Z 上）。</summary>

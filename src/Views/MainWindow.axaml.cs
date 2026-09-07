@@ -1759,6 +1759,7 @@ public partial class MainWindow : Window
         if (ext == ".3ds") { ImportTdmStringEditable(path); return; }
 
         if (ext == ".off") { ImportOffAsMesh(path); return; }   // OFF 三角网 → 场景三角网对象(可选中/建模/存档)
+        if (ext == ".3dm" && ImportTdmAsMeshes(path)) return;   // 3DMine 网格 → 场景三角网对象(面模型); 解析失败回退线框显示通道
         // OFF 网格 / 3DMine .3dm 三角网 → 显示态线框
         var r = ext == ".3dm" ? Cad.TdmImportService.Load(path) : OffImportService.Load(path);
         if (!r.Success) { StatusMsg.Text = $"导入失败：{r.Error}"; return; }

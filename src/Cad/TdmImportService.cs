@@ -147,6 +147,46 @@ public static class TdmImportService
         try { return Encoding.GetEncoding("GBK"); } catch { return Encoding.UTF8; }
     }
 
+    /// <summary>解析出的一张三角网(顶点/索引/名称/颜色)，供场景三角网实体直接构造(面模型显示)。</summary>
+    public sealed record MeshData(string Name, bool HasColor, byte R, byte G, byte B, double[] Vx, double[] Vy, double[] Vz, int[] Indices, int Skipped);
+
+    public sealed class MeshLoadResult
+    {
+        public bool Success => Error == null;
+        public string? Error;
+        public List<MeshData> Meshes = new();
+        public List<string> Warnings = new();
+    }
+
+    /// <summary>.3dm(3DMine 二进制 / Solid 文本) → 各网格的顶点与三角索引(不做边线展开; 场景侧建 MeshEntity 面模型)。</summary>
+    public static MeshLoadResult LoadMeshes(string path)
+    {
+        var res = new MeshLoadResult();
+        byte[] data;
+        try { data = File.ReadAllBytes(path); }
+        catch (Exception ex) { res.Error = $"读取失败：{ex.Message}"; return res; }
+        var tmp = new DxfImportService.ImportResult();
+        try
+        {
+            List<Mesh> meshes;
+            if (IsBinary3dm(data)) meshes = ReadBinaryMeshes(data, tmp);
+            else if (LooksLikeSolidFile(data)) meshes = ReadSolidTextMeshes(data, tmp);
+            else { res.Error = "非 3DMine .3dm(既非 3DMine_2011_Bin 二进制，也非 3DMine Solid 文本；Rhino .3dm 不支持)"; return res; }
+            int idx = 0;
+            foreach (var m in meshes)
+            {
+                idx++;
+                if (m.Indices.Length < 3 || m.Vx.Length == 0) continue;
+                bool black = m.HasColor && m.Cr == 0 && m.Cg == 0 && m.Cb == 0;
+                res.Meshes.Add(new MeshData(string.IsNullOrWhiteSpace(m.Tag) ? $"网格{idx}" : m.Tag, m.HasColor && !black, m.Cr, m.Cg, m.Cb, m.Vx, m.Vy, m.Vz, m.Indices, m.Skipped));
+            }
+            res.Warnings.AddRange(tmp.Warnings);
+            if (res.Meshes.Count == 0) res.Error = "未解析到网格三角";
+        }
+        catch (Exception ex) { res.Error = $"3DMine .3dm 解析失败：{ex.Message}"; }
+        return res;
+    }
+
     public static DxfImportService.ImportResult Load(string path)
     {
         var result = new DxfImportService.ImportResult();

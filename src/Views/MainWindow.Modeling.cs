@@ -931,3 +931,43 @@ public partial class MainWindow
         StatusMsg.Text = $"渲染配置：三角网 {m} · 面色 {(MeshEntity.ColorByElevation ? "高程色带" : "实体颜色")}（{AllMeshes().Count} 张网）";
     }
 }
+
+public partial class MainWindow
+{
+    /// <summary>3DMine .3dm → 每张网一个 MeshEntity(名=网格标签, 色=网格色, 图层=名) 入场景, 面模型显示; 失败回退旧线框显示通道。</summary>
+    private bool ImportTdmAsMeshes(string path)
+    {
+        var r = Cad.TdmImportService.LoadMeshes(path);
+        if (!r.Success) return false;
+        BeginChange();
+        var made = new List<MeshEntity>();
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        int tris = 0;
+        foreach (var m in r.Meshes)
+        {
+            var verts = new List<(double x, double y, double z)>(m.Vx.Length);
+            for (int i = 0; i < m.Vx.Length; i++) verts.Add((m.Vx[i], m.Vy[i], m.Vz[i]));
+            var tl = new List<(int a, int b, int c)>(m.Indices.Length / 3);
+            for (int t = 0; t + 2 < m.Indices.Length; t += 3)
+            {
+                int a = m.Indices[t], b = m.Indices[t + 1], c = m.Indices[t + 2];
+                if (a < 0 || b < 0 || c < 0 || a >= verts.Count || b >= verts.Count || c >= verts.Count) continue;
+                tl.Add((a, b, c));
+            }
+            if (tl.Count == 0) continue;
+            var me = new MeshEntity(NewMeshName(m.Name), verts, tl);
+            if (m.HasColor) { me.Cr = m.R / 255f; me.Cg = m.G / 255f; me.Cb = m.B / 255f; }
+            var l = _layers.Get(m.Name) ?? _layers.EnsureImported(m.Name, me.Cr, me.Cg, me.Cb);
+            me.LayerName = l.Name;
+            _scene.Add(me); made.Add(me); tris += tl.Count;
+            var bb = me.Bounds; minX = Math.Min(minX, bb.minX); minY = Math.Min(minY, bb.minY); maxX = Math.Max(maxX, bb.maxX); maxY = Math.Max(maxY, bb.maxY);
+        }
+        if (made.Count == 0) return false;
+        PopulateDrawingLayers();
+        RefreshScene();
+        if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
+        string warn = r.Warnings.Count > 0 ? " · " + r.Warnings[^1] : "";
+        StatusMsg.Text = $"已导入 {System.IO.Path.GetFileName(path)}：{made.Count} 张三角网 · {tris} 三角（场景对象, 面模型显示; 渲染配置可切线框）{warn}";
+        return true;
+    }
+}
