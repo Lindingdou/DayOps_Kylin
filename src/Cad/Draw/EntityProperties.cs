@@ -14,6 +14,15 @@ public static class EntityProperties
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
     private static string N(double v) => v.ToString("0.##", Inv);
     private static string F(double x, double y) => $"({N(x)}, {N(y)})";
+    /// <summary>点相对圆心的极角(度, 0..360)。圆弧起止角显示用。</summary>
+    private static double Deg(double cx, double cy, double px, double py)
+    {
+        // 先按显示精度定值再归一到 [0,360)：否则 0° 会因浮点负零绕成 "360°"(实测踩到)。
+        double d = Math.Round(Math.Atan2(py - cy, px - cx) * 180.0 / Math.PI, 6);
+        if (d == 0) return 0;          // 负零会显示成 "-0"
+        if (d < 0) d += 360;
+        return d >= 360 ? d - 360 : d;
+    }
 
     public static List<(string cat, string label, string value)> Describe(SceneEntity e)
     {
@@ -43,6 +52,11 @@ public static class EntityProperties
                 if (cc != null) { r.Add(("几何", "圆心", F(cc.Value.Item1, cc.Value.Item2))); r.Add(("几何", "半径", N(cc.Value.Item3))); }
                 r.Add(("几何", "起点", F(a.X1, a.Y1)));
                 r.Add(("几何", "端点", F(a.X3, a.Y3)));
+                if (cc != null)   // 起始/终止角(只读派生; 原版圆弧属性有这两行, 那边是可编辑的圆心角表示)
+                {
+                    r.Add(("几何", "起始角度", N(Deg(cc.Value.Item1, cc.Value.Item2, a.X1, a.Y1)) + "°"));
+                    r.Add(("几何", "终止角度", N(Deg(cc.Value.Item1, cc.Value.Item2, a.X3, a.Y3)) + "°"));
+                }
                 break;
             case RectEntity rc:
                 r.Add(("几何", "角点1", F(rc.X0, rc.Y0)));

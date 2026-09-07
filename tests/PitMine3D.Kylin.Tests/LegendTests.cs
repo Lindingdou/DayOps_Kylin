@@ -6,6 +6,7 @@ using Xunit;
 namespace PitMine3D.Kylin.Tests;
 
 /// <summary>色带图例 —— 色条渐变 + 值标签 生成回归。</summary>
+[Collection("TextGeometry")]
 public class LegendTests
 {
     [Fact]

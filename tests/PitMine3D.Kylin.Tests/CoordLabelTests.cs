@@ -6,6 +6,7 @@ using Xunit;
 namespace PitMine3D.Kylin.Tests;
 
 /// <summary>坐标标注(DimTools.BuildCoordLabel)回归 —— 忠实原 CAD「坐标标注」注记(点→引线+X/Y 文字)。</summary>
+[Collection("TextGeometry")]
 public class CoordLabelTests
 {
     [Fact]

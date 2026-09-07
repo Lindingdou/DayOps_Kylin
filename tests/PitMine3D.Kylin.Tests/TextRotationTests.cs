@@ -6,6 +6,7 @@ using Xunit;
 namespace PitMine3D.Kylin.Tests;
 
 /// <summary>文字旋转回归（Tessellate 绕锚点旋转 / Apply 合成 / SceneIO 往返）。</summary>
+[Collection("TextGeometry")]
 public class TextRotationTests
 {
     [Fact]

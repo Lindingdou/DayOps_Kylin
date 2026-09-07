@@ -5,6 +5,7 @@ using Xunit;
 namespace PitMine3D.Kylin.Tests;
 
 /// <summary>单笔画文字 + TextEntity 回归。</summary>
+[Collection("TextGeometry")]
 public class TextEntityTests
 {
     private static float MinY(List<float> o) { float m = float.MaxValue; for (int i = 1; i < o.Count; i += 6) if (o[i] < m) m = o[i]; return m; }

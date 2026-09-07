@@ -8,6 +8,7 @@ using Xunit;
 namespace PitMine3D.Kylin.Tests;
 
 /// <summary>通用 XY 折线图（自动量程归一化 + 外框 + 四角刻度 + 轴名）回归。</summary>
+[Collection("TextGeometry")]
 public class CurvePlotTests
 {
     [Fact]

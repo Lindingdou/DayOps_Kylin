@@ -5,6 +5,7 @@ using Xunit;
 namespace PitMine3D.Kylin.Tests;
 
 /// <summary>实体特性提取回归。</summary>
+[Collection("TextGeometry")]
 public class EntityPropertiesTests
 {
     private static string Val(System.Collections.Generic.List<(string cat, string label, string value)> r, string label)

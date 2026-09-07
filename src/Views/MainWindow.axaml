@@ -16,8 +16,9 @@
             <!-- ===== 开始 ===== -->
             <TabItem Header="开始">
                 <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,0,1">
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                        <StackPanel Orientation="Horizontal" Height="94">
+                    <ScrollViewer x:Name="HomeRibbonScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                        <!-- HorizontalAlignment=Left: 不加会被拉伸到视口宽, 于是超出的组(特性/帮助)被静默裁掉且滚不到(实测踩到) -->
+                        <StackPanel Orientation="Horizontal" Height="94" HorizontalAlignment="Left">
 
                             <!-- 文件 -->
                             <Border Classes="ribbon-group">
@@ -239,7 +240,7 @@
                                 </DockPanel>
                             </Border>
 
-                            <!-- 特性(原版: 剪贴板 SplitButton Large · 测量 SplitButton Large · 线型栏 · 快速选择/创建选择集/调用选择集 Large · 全部选择/最后/上次 Middle) -->
+                            <!-- 特性(原版: 剪贴板 SplitButton Large · 测量 SplitButton Large · 颜色/线宽/线型栏 · 快速选择/创建选择集/调用选择集 Large · 全部选择/最后/上次 Middle) -->
                             <Border Classes="ribbon-group">
                                 <DockPanel>
                                     <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="特性" />
@@ -256,18 +257,41 @@
                                             </Button.Flyout>
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_paste}" /><TextBlock Text="剪贴板 ▾" /></StackPanel>
                                         </Button>
-                                        <Button Classes="ribbon-btn large" ToolTip.Tip="测量：距离 / 角度 / 面积">
+                                        <Button Classes="ribbon-btn large" Tag="快速测量" Click="OnRibbonCommand" ToolTip.Tip="测量（主按钮=快速测距；下拉：快速 / 距离 / 半径 / 角度 / 面积 / 体积）">
                                             <Button.Flyout>
                                                 <MenuFlyout>
+                                                    <MenuItem Header="快速" Tag="快速测量" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_measure_quick}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
                                                     <MenuItem Header="距离" Tag="距离" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_measure}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="半径" Tag="测量半径" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_radial_dimension}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
                                                     <MenuItem Header="角度" Tag="角度" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_measure_angle}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
                                                     <MenuItem Header="面积" Tag="面积" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_measure_area}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="体积" Tag="测量体积" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_measure_volume}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
                                                 </MenuFlyout>
                                             </Button.Flyout>
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_measure}" /><TextBlock Text="测量 ▾" /></StackPanel>
                                         </Button>
-                                        <!-- 线型栏(同原版 特性 组内 颜色/线宽/线型 栏; Kylin 现有命令仅线型) -->
-                                        <StackPanel Width="150" Margin="4,0" VerticalAlignment="Center">
+                                        <!-- 颜色/线宽/线型 栏(忠实原版 特性 组: 每行 图标 + 名称 + 控件; 有选中即写入选中实体) -->
+                                        <StackPanel Width="184" Margin="4,0" VerticalAlignment="Center">
+                                            <DockPanel Height="22" Margin="0,0,0,4">
+                                                <Image Source="{StaticResource icon_color}" Width="15" Height="15" Margin="0,0,5,0" VerticalAlignment="Center" />
+                                                <TextBlock Text="颜色" Width="34" VerticalAlignment="Center" FontSize="12" />
+                                                <Button x:Name="EntityColorButton" MinHeight="22" Height="22" Padding="4,0" FontSize="12"
+                                                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                                        ToolTip.Tip="实体颜色：随层 / 标准色板 / 自定义 RGB（有选中即写入选中实体）">
+                                                    <Button.Flyout>
+                                                        <MenuFlyout Opening="OnEntityColorFlyoutOpening" />
+                                                    </Button.Flyout>
+                                                    <StackPanel Orientation="Horizontal" Spacing="5">
+                                                        <Border x:Name="EntityColorSwatch" Width="13" Height="13" BorderThickness="1" BorderBrush="#8A8F97" VerticalAlignment="Center" />
+                                                        <TextBlock x:Name="EntityColorText" Text="随层" VerticalAlignment="Center" FontSize="12" />
+                                                    </StackPanel>
+                                                </Button>
+                                            </DockPanel>
+                                            <DockPanel Height="22" Margin="0,0,0,4">
+                                                <Image Source="{StaticResource icon_lineweight}" Width="15" Height="15" Margin="0,0,5,0" VerticalAlignment="Center" />
+                                                <TextBlock Text="线宽" Width="34" VerticalAlignment="Center" FontSize="12" />
+                                                <ComboBox x:Name="LineWeightBox" MinHeight="22" Height="22" Padding="6,0" FontSize="12" HorizontalAlignment="Stretch" SelectionChanged="OnLineWeightChanged" />
+                                            </DockPanel>
                                             <DockPanel Height="22">
                                                 <Image Source="{StaticResource icon_linetype}" Width="15" Height="15" Margin="0,0,5,0" VerticalAlignment="Center" />
                                                 <TextBlock Text="线型" Width="34" VerticalAlignment="Center" FontSize="12" />

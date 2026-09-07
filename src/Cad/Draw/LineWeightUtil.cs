@@ -45,4 +45,16 @@ public static class LineWeightUtil
         foreach (var s in Std) { int d = Math.Abs(s - v); if (d < bd) { bd = d; best = s; } }
         return best;
     }
+
+    /// <summary>Ribbon「特性」组线宽下拉的候选值(随层/默认/随块 + 标准档)。顺序即下拉顺序。</summary>
+    public static short[] Choices
+    {
+        get
+        {
+            var a = new short[3 + Std.Length];
+            a[0] = -1; a[1] = -3; a[2] = -2;
+            Array.Copy(Std, 0, a, 3, Std.Length);
+            return a;
+        }
+    }
 }

@@ -8,6 +8,7 @@ using Xunit;
 namespace PitMine3D.Kylin.Tests;
 
 /// <summary>PMX 工程导出回归 —— Kylin 实体 → PmxExportService 写 → PmxImportService 读 → 往返一致(与导入互验)。</summary>
+[Collection("TextGeometry")]
 public class PmxExportServiceTests
 {
     static PmxImportService.Result RoundTrip(IEnumerable<SceneEntity> ents)

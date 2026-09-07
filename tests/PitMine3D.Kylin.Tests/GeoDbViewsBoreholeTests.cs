@@ -9,6 +9,7 @@ using Xunit;
 namespace PitMine3D.Kylin.Tests;
 
 /// <summary>「钻孔管理」组(GeoDbViews.Borehole)查询/导入/柱状/层位/虚拟钻孔逻辑回归(对 SQLite 种子库 + 合成数据)。</summary>
+[Collection("TextGeometry")]
 public class GeoDbViewsBoreholeTests
 {
     // ─────────────────────────── 钻孔表 ───────────────────────────

@@ -4,6 +4,7 @@ using Xunit;
 namespace PitMine3D.Kylin.Tests;
 
 /// <summary>线性标注回归。</summary>
+[Collection("TextGeometry")]
 public class DimToolsTests
 {
     [Fact]

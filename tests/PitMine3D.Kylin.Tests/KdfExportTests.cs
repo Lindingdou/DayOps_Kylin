@@ -6,6 +6,7 @@ using Xunit;
 namespace PitMine3D.Kylin.Tests;
 
 /// <summary>KDF 导出 round-trip: 导出字节 → KdfImportService 回读, 实体/图层/色/文字保真。</summary>
+[Collection("TextGeometry")]
 public class KdfExportTests
 {
     [Fact]

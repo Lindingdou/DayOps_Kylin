@@ -4,6 +4,7 @@ using Xunit;
 namespace PitMine3D.Kylin.Tests;
 
 /// <summary>特性面板编辑（改值→重建实体）回归。</summary>
+[Collection("TextGeometry")]
 public class EntityPropertyEditTests
 {
     [Fact]

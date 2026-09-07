@@ -6,6 +6,7 @@ using Xunit;
 namespace PitMine3D.Kylin.Tests;
 
 /// <summary>绘制场景内部格式（保存/打开）round-trip 回归。</summary>
+[Collection("TextGeometry")]
 public class SceneIOTests
 {
     [Fact]

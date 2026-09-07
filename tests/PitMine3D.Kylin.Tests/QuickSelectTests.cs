@@ -10,6 +10,7 @@ namespace PitMine3D.Kylin.Tests;
 /// 快速选择(QSELECT) 回归 —— 忠实移植原 QuickSelectFilter/Catalog/Model 的已知值验证 +
 /// Kylin 场景实体 → 快照 → 过滤 的端到端。核心正确点: Include/Exclude 的「类型先决条件」语义。
 /// </summary>
+[Collection("TextGeometry")]
 public class QuickSelectTests
 {
     // ── 通配匹配(双指针回溯) ─────────────────────────────────────────────

@@ -14,6 +14,7 @@ namespace PitMine3D.Kylin.Tests;
 /// 地质体建模(QuickModelSampler 采样/直接组装) · 格网质量检测定位(MeshDiagnoseMarkers) · 两期算量封闭体(CutFillSolids) ·
 /// 展点解析 · 构建等值线(ContourEngine) · 创建剖面/动态剖面(SectionEngine/SectionBuilder) · 剖面钻孔投影(种子库)。
 /// </summary>
+[Collection("TextGeometry")]
 public class ModelingMeshEditTests
 {
     // ── 夹具 ──────────────────────────────────────────────────────

@@ -311,4 +311,22 @@ public sealed class MeshEntity : SceneEntity
         }
         return s;
     }
+
+    /// <summary>
+    /// 有向体积(散度定理: 各三角与原点张成四面体的有向体积求和)。
+    /// 闭合网格给真实体积(绕向决定正负, 调用方取绝对值); 非闭合网格无物理意义, 同原版内核口径。
+    /// </summary>
+    public double Volume()
+    {
+        double v = 0;
+        foreach (var (a, b, c) in Tris)
+        {
+            if (a >= Verts.Count || b >= Verts.Count || c >= Verts.Count) continue;
+            var p = Verts[a]; var q = Verts[b]; var r = Verts[c];
+            v += (p.x * (q.y * r.z - q.z * r.y)
+                - p.y * (q.x * r.z - q.z * r.x)
+                + p.z * (q.x * r.y - q.y * r.x)) / 6.0;
+        }
+        return v;
+    }
 }

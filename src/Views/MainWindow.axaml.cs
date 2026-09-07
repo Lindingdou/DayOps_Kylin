@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using Avalonia.VisualTree;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -31,12 +32,13 @@ public partial class MainWindow : Window
         SetDocPath(null);          // 初始标题=未命名
         RenderAssistant(_assistant.Current());   // 智能助手：启动显示欢迎 + 主菜单
         GlyphFontHost.Install();   // 视口文字用系统真字形(含中文), 取不到则退回笔画字体
+        InitPropertyRibbon();      // Ribbon「特性」组 颜色/线宽/线型 三栏(填下拉 + 复位显示)
         Modeling.MeshEditWindows.Register(); Modeling.EstimationWindows.Register(); Modeling.ModelUpdateWindows.Register(); Modeling.BlockModelWindows.Register();   // 三维地质建模独立窗口登记(功能项名 → 窗口)
 
         // 自检钩子: PITMINE_SELFTEST=<Ribbon 命令名> 时, 窗口显示后自动派发一次该命令 ——
         // 供渲染核对(截图比对原版)用; 未设该变量时完全不生效。
         if (System.Environment.GetEnvironmentVariable("PITMINE_SELFTEST") is { Length: > 0 } stCmd)
-            Opened += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(() => { try { DispatchRibbon(stCmd); } catch { } });
+            Opened += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(() => { try { RunSelftest(stCmd); } catch { } });
 
         // 交互提示同步(同原版 jigPromptText)：任一指针/键盘事件处理完后刷新命令行提示与信息栏历史。
         // handledEventsToo=true —— 视口/按钮把事件标记 Handled 后仍要刷新；排队到事件处理完再算(状态已切换)。
@@ -1313,9 +1315,10 @@ public partial class MainWindow : Window
             if (cmd == "剖面分析" || cmd == "剖面" || cmd == "点云剖面") { await SectionProfileAsync(); return; }
             if (cmd == "粗糙度" || cmd == "地表粗糙度") { await RoughnessAsync(); return; }
             if (cmd == "曲率" || cmd == "地表曲率") { await CurvatureAsync(); return; }
-            if (cmd == "面积" || cmd == "面积测量" || cmd == "周长") { MeasureArea(); return; }
-            if (cmd == "距离" || cmd == "测量距离" || cmd == "测距") { _measure = new MeasureState(); _tool = null; StatusMsg.Text = "测距：点第一点"; return; }
-            if (cmd == "角度" || cmd == "测量角度" || cmd == "三点测角") { _angle = new AngleState(); _tool = null; _measure = null; StatusMsg.Text = "测角：点顶点"; return; }
+            if (TryMeasureCommand(cmd)) return;                    // 测量 - 快速 / 半径 / 体积(忠实原版测量 SplitButton)
+            if (cmd == "面积" || cmd == "面积测量" || cmd == "周长") { MeasureBySelection("面积"); return; }
+            if (cmd == "距离" || cmd == "测量距离" || cmd == "测距") { MeasureBySelection("距离"); return; }
+            if (cmd == "角度" || cmd == "测量角度" || cmd == "三点测角") { MeasureBySelection("角度"); return; }
             if (cmd == "等效运距" || cmd == "运输指标" || cmd == "运输指标报表" || cmd == "驱动距离") { await HaulMetricsAsync(); return; }
             if (cmd == "批量台阶扩帮" || cmd == "台阶线生成" || cmd == "台阶扩帮"
                 || cmd.StartsWith("批量台阶扩帮 ") || cmd.StartsWith("台阶线生成 ") || cmd.StartsWith("台阶扩帮 "))
@@ -1580,6 +1583,7 @@ public partial class MainWindow : Window
             if (cmd == "滑动多段线") { StartSlide(); return; }
             if (cmd == "平移" || cmd == "PAN") { StatusMsg.Text = "平移：按住鼠标中键拖拽视图（滚轮朝光标缩放）"; return; }
             if (cmd == "填充十字" || cmd == "交叉填充" || cmd == "十字填充") { _hatchCross = !_hatchCross; StatusMsg.Text = $"图案填充: 十字交叉 {(_hatchCross ? "开" : "关")}（再执行 图案填充）"; return; }
+            if (cmd == "颜色" || cmd.StartsWith("颜色 ")) { ColorCmd(cmd.Length > 2 ? cmd.Substring(2) : ""); return; }
             if (cmd == "线型" || cmd == "实线" || cmd == "虚线" || cmd == "点划线" || cmd == "点线" || cmd == "双点划线" || cmd == "破折线" || cmd.StartsWith("线型 ")) { SetLinetypeCmd(cmd); return; }
             if (cmd == "图案填充" || cmd == "填充" || cmd == "HATCH" || cmd == "剖面线"
                 || cmd.StartsWith("图案填充 ") || cmd.StartsWith("填充 ") || cmd.StartsWith("HATCH ") || cmd.StartsWith("剖面线 "))
@@ -6271,13 +6275,29 @@ public partial class MainWindow : Window
     {
         if (cmd == "线型")
         {
-            StatusMsg.Text = $"线型：当前 {(_currentDash == null ? "实线" : "虚线类")}（可选 实线/虚线/点划线/点线/双点划线，或 线型 <名>；影响新画直线/多段线）";
+            StatusMsg.Text = $"线型：当前 {(_currentDash == null ? "实线" : "虚线类")}（可选 实线/虚线/点划线/点线/双点划线，或 线型 <名>；有选中即写入选中实体，无选中则为新画默认）";
             return;
         }
         int sp = cmd.IndexOf(' ');
         string name = sp >= 0 ? cmd.Substring(sp + 1).Trim() : cmd;
-        _currentDash = Cad.Draw.DashPattern.ByName(name);
-        StatusMsg.Text = $"线型已设：{name}（{(_currentDash == null ? "实线" : $"虚线, {_currentDash.Length} 段样式")}；新画直线/多段线用此线型）";
+        if (!Cad.Draw.DashPattern.IsKnownName(name)) { StatusMsg.Text = $"线型：无法识别「{name}」（实线/虚线/点划线/点线/双点划线）"; return; }
+        var dash = Cad.Draw.DashPattern.ByName(name);
+        // 忠实原版「特性」组: 有选中就写入选中实体(原版 ApplyPropertyToSelection)；无选中才作新建默认。
+        if (_selected.Count > 0)
+        {
+            int ok = 0, locked = 0;
+            BeginChange();
+            foreach (var ent in _selected)
+            {
+                if (IsLayerLocked(ent)) { locked++; continue; }
+                ent.Dash = dash; ok++;
+            }
+            RefreshScene(); HighlightSelection();
+            StatusMsg.Text = $"线型 {name}：已写入 {ok}/{_selected.Count} 个实体" + (locked > 0 ? $"（{locked} 个在锁定图层，跳过）" : "");
+            return;
+        }
+        _currentDash = dash;
+        StatusMsg.Text = $"线型已设：{name}（{(_currentDash == null ? "实线" : $"虚线, {_currentDash.Length} 段样式")}；未选中实体，新画直线/多段线用此线型）";
     }
 
     // 文字：进入模式，下一条命令行输入即文字内容
@@ -8094,6 +8114,7 @@ public partial class MainWindow : Window
     // 线型下拉 → 现有 "线型 <名>" 命令(影响新画直线/多段线)。
     private void OnLinetypeChanged(object? sender, SelectionChangedEventArgs e)
     {
+        if (_suppressPropRibbon) return;   // 回填显示时不当成用户操作(同原版 _suppressPropertyComboEvents)
         if (LinetypeBox?.SelectedItem is ComboBoxItem it && it.Content is string name && _dockFactory != null)
             DispatchRibbon($"线型 {name}");
     }
@@ -8550,16 +8571,41 @@ public partial class MainWindow : Window
     // 右侧特性面板：随选择更新（单选=逐行属性; 多选=计数; 空=提示）
     private void UpdatePropertyPanel()
     {
+        SyncPropertyRibbonFromSelection();   // 选集变了 → 回填 Ribbon「特性」组三栏(同原版 SyncPropertyRibbonFromBag)
         if (PropertyPanel == null || PropertyHint == null) return;
         PropertyPanel.Children.Clear();
-        if (_selected.Count == 0) { PropertyHint.Text = "选中单个实体查看特性"; PropertyHint.IsVisible = true; return; }
-        if (_selected.Count > 1) { PropertyHint.Text = $"选中 {_selected.Count} 个实体（单选查看特性）"; PropertyHint.IsVisible = true; return; }
+        string? cat = null;
+        // 非单选: 多选给「选择」统计, 空选给「文档/视图」状态 —— 忠实原版
+        // MultiSelectionProperties / DocumentProperties(此前 Kylin 两种情况都只有一句提示)。
+        if (_selected.Count != 1)
+        {
+            PropertyHint.Text = _selected.Count > 1 ? $"选中 {_selected.Count} 个实体（单选可逐行编辑特性）" : "未选中实体（显示当前文档状态）";
+            PropertyHint.IsVisible = true;
+            foreach (var (c, label, value) in NonSingleSelectionRows())
+            {
+                if (c != cat) { PropertyPanel.Children.Add(PropGroupHeader(c)); cat = c; }
+                PropertyPanel.Children.Add(PropRow(label, value));
+            }
+            return;
+        }
         PropertyHint.IsVisible = false;
         var ent = _selected[0];
         var editable = Cad.Draw.EntityProperties.EditableLabels(ent);
-        foreach (var (_, label, value) in Cad.Draw.EntityProperties.Describe(ent))
+        foreach (var (c, label, value) in Cad.Draw.EntityProperties.Describe(ent))
+        {
+            if (c != cat) { PropertyPanel.Children.Add(PropGroupHeader(c)); cat = c; }   // 分组标题(原版 PropertyGrid 自带「常规/几何」分组)
             PropertyPanel.Children.Add(editable.Contains(label) ? EditablePropRow(ent, label, value) : PropRow(label, value));
+        }
     }
+
+    /// <summary>特性面板的分组标题行(常规/几何/选择/文档/视图)。</summary>
+    private static Control PropGroupHeader(string text) => new Border
+    {
+        Margin = new Thickness(0, 6, 0, 2),
+        Padding = new Thickness(6, 2, 6, 2),
+        Background = Brush.Parse("#EEF1F5"),
+        Child = new TextBlock { Text = text, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = Brush.Parse("#3A424C") },
+    };
 
     // 可编辑特性行: 值为 TextBox, 回车/失焦提交 → WithEdited 重建实体并替换。
     private Control EditablePropRow(SceneEntity ent, string label, string value)
@@ -8573,6 +8619,7 @@ public partial class MainWindow : Window
         void Commit()
         {
             if (tb.Text == value) return;                       // 未改
+            if (IsLayerLocked(ent)) { tb.Text = value; StatusMsg.Text = $"特性编辑：图层「{ent.LayerName}」已锁定，未修改"; return; }
             var edited = Cad.Draw.EntityProperties.WithEdited(ent, label, tb.Text ?? "");
             if (edited == null) { tb.Text = value; StatusMsg.Text = $"特性编辑：「{label}」输入无效，已还原"; return; }
             BeginChange();
@@ -10017,6 +10064,49 @@ public partial class MainWindow : Window
     // 命令框未识别 → 合成 Tag 转派整条中文命令链(复用 OnRibbonCommand，命令框亦可打中文命令)
     private bool _suppressCmdLog;   // DispatchRibbon 转派时抑制 OnRibbonCommand 重复回显(命令框侧已回显)
     private void DispatchRibbon(string cmd) { _suppressCmdLog = true; OnRibbonCommand(new Button { Tag = cmd }, new RoutedEventArgs()); }
+
+    /// <summary>
+    /// 自检入口(PITMINE_SELFTEST)：分号分隔多条；以 @ 开头的是界面辅助动作(仅为截图核对用)，其余按 Ribbon 命令派发。
+    /// 目前支持 @Ribbon末端 —— 把当前功能区横向滚到最右，好截到排在后面的组(如「特性」)。
+    /// </summary>
+    private void RunSelftest(string script)
+    {
+        foreach (var raw in script.Split(';', System.StringSplitOptions.RemoveEmptyEntries))
+        {
+            string cmd = raw.Trim();
+            if (cmd.Length == 0) continue;
+            if (cmd == "@Ribbon末端") { ScrollRibbonToEnd(); continue; }
+            if (cmd.StartsWith("@窗口 "))   // @窗口 <宽> <高>: 退出最大化并定尺寸(截图核对用)
+            {
+                var a = cmd.Substring(3).Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
+                if (a.Length >= 2 && double.TryParse(a[0], out double w) && double.TryParse(a[1], out double h))
+                { WindowState = WindowState.Normal; Position = new PixelPoint(0, 0); Width = w; Height = h; }
+                continue;
+            }
+            DispatchRibbon(cmd);
+        }
+    }
+
+    private void ScrollRibbonToEnd()
+    {
+        // 窗口刚 Opened 时功能区还没量完(Extent==Viewport), 故隔帧重试几次再放弃。
+        int tries = 0;
+        var t = new Avalonia.Threading.DispatcherTimer { Interval = System.TimeSpan.FromMilliseconds(250) };
+        t.Tick += (_, _) =>
+        {
+            tries++;
+            var sv = HomeRibbonScroll;
+            double overflow = sv == null ? 0 : sv.Extent.Width - sv.Viewport.Width;
+            if (sv != null && overflow > 1)
+            {
+                sv.Offset = new Vector(overflow, sv.Offset.Y);      // 窗口尺寸还在变时溢出量会变, 故持续压到最右
+                StatusMsg.Text = $"自检：功能区已滚到最右（溢出 {overflow:0} px）";
+                if (tries >= 10) { Title += $" [自检 滚动 {overflow:0}px]"; t.Stop(); }
+            }
+            else if (tries >= 12) { StatusMsg.Text = "自检：功能区没有横向溢出，无需滚动"; t.Stop(); }
+        };
+        t.Start();
+    }
 
     // ---------- §四/§八 地质/生产数据库（SQLite 数据基座，本机自带真实种子数据）----------
     private Data.GeoDatabase? EnsureGeoDb()

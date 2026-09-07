@@ -13,6 +13,7 @@ namespace PitMine3D.Kylin.Tests;
 /// 大二进制夹具不入库, 但本机真验解析正确性。
 /// **参照校验**：原始 kdf_export.dxf 有 3611 条 LWPOLYLINE，本移植解析出 ~3615 折线（差 0.1%，证忠实）。
 /// </summary>
+[Collection("TextGeometry")]
 public class KdfImportTests
 {
     private static readonly string[] Candidates =

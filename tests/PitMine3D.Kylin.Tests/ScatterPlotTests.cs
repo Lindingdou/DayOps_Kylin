@@ -8,6 +8,7 @@ using Xunit;
 namespace PitMine3D.Kylin.Tests;
 
 /// <summary>散点图（点标记 + 拟合线 + 离群高亮 + 轴）回归。</summary>
+[Collection("TextGeometry")]
 public class ScatterPlotTests
 {
     [Fact]

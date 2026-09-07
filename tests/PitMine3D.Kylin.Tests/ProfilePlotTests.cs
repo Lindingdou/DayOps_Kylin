@@ -6,6 +6,7 @@ using Xunit;
 namespace PitMine3D.Kylin.Tests;
 
 /// <summary>剖面图框架（里程/标高 轴+网格+刻度）回归。</summary>
+[Collection("TextGeometry")]
 public class ProfilePlotTests
 {
     [Fact]

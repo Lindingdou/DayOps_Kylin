@@ -8,6 +8,7 @@ using Xunit;
 namespace PitMine3D.Kylin.Tests;
 
 /// <summary>箱线图（Q1–Q3 箱 + 中位线 + 须端帽 + 共享量程）回归。</summary>
+[Collection("TextGeometry")]
 public class BoxPlotTests
 {
     [Fact]

@@ -11,6 +11,7 @@ using static PitMine3D.Kylin.Data.GeoDbViews;
 namespace PitMine3D.Kylin.Tests;
 
 /// <summary>「三维地质建模 → 更新地质模型」组(补勘钻孔写实 / 现状写实 / 更新煤层面)的库表往返、CSV IO、煤层结构、引擎与标记几何回归。</summary>
+[Collection("TextGeometry")]
 public class ModelingModelUpdateTests
 {
     // ═════════════════ 补勘写实: 批次 / 孔 / 层位 往返 ═════════════════

@@ -11,6 +11,7 @@ namespace PitMine3D.Kylin.Tests;
 /// MapGIS 6.x .WL/.WT 导入回归（忠实移植 MapGisWlReader/MapGisWtReader）。
 /// 用真实小样本(剖面方向.WL/.WT, A1煤层.WL)作解析夹具——二进制逆向格式无法内联生成。
 /// </summary>
+[Collection("TextGeometry")]
 public class MapGisImportTests
 {
     private static string Fx(string name) =>

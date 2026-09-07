@@ -4,6 +4,7 @@ using Xunit;
 namespace PitMine3D.Kylin.Tests;
 
 /// <summary>钻孔 CSV 解析回归（GeoDataBase 托管切片）。</summary>
+[Collection("TextGeometry")]
 public class BoreholeImportTests
 {
     [Fact]

@@ -10,6 +10,7 @@ namespace PitMine3D.Kylin.Tests;
 /// 真字形文字：TrueType glyf 轮廓解析(cmap 定位 → loca 取范围 → 二次贝塞尔细分)。
 /// 用测试内构造的最小 TTF 验证解析正确, 不依赖系统字体(CI/麒麟都能跑)。
 /// </summary>
+[Collection("TextGeometry")]
 public class GlyphFontTests : IDisposable
 {
     public void Dispose() { GlyphFont.Provider = null; GlyphFont.Reset(); }

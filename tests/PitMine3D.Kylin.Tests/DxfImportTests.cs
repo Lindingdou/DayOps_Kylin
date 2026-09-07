@@ -13,6 +13,7 @@ namespace PitMine3D.Kylin.Tests;
 /// DXF 导入功能回归：用 ACadSharp 生成 DXF → 用 DxfImportService 读回 → 断言几何提取正确。
 /// 全托管、跨平台，Windows 上即可验证（对应"打开图纸看"这项功能）。
 /// </summary>
+[Collection("TextGeometry")]
 public class DxfImportTests
 {
     [Fact]

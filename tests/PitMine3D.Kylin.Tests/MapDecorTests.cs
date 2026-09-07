@@ -6,6 +6,7 @@ using Xunit;
 namespace PitMine3D.Kylin.Tests;
 
 /// <summary>制图装饰（指北针/比例尺）回归。</summary>
+[Collection("TextGeometry")]
 public class MapDecorTests
 {
     [Fact]

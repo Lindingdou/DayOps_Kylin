@@ -5,6 +5,7 @@ using Xunit;
 namespace PitMine3D.Kylin.Tests;
 
 /// <summary>托管绘制工具 + 场景回归。</summary>
+[Collection("TextGeometry")]
 public class DrawToolsTests
 {
     [Fact]

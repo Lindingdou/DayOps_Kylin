@@ -7,6 +7,7 @@ using Xunit;
 namespace PitMine3D.Kylin.Tests;
 
 /// <summary>直方图柱状图（竖条+轴）回归。</summary>
+[Collection("TextGeometry")]
 public class HistogramPlotTests
 {
     [Fact]

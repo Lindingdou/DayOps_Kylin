@@ -8,6 +8,7 @@ using Xunit;
 namespace PitMine3D.Kylin.Tests;
 
 /// <summary>类别柱状图（竖条 ∝ 值/最大值 + 类别标签 + 值轴）回归。</summary>
+[Collection("TextGeometry")]
 public class BarChartPlotTests
 {
     [Fact]
