@@ -1,0 +1,40 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.Modeling.SeamStructureDialog" x:CompileBindings="False"
+        Classes="geodb" Title="煤层结构" Width="440" Height="470" WindowStartupLocation="CenterOwner">
+    <DockPanel Margin="12">
+        <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Opacity="0.8" Margin="0,0,0,8"
+                   Text="指定有几层煤 + 先后顺序（列表从上到下 = 由浅到深，决定谁在上谁在下）。此设置会被记住，下次自动带出。"/>
+
+        <!-- 底部按钮 -->
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+            <Button DockPanel.Dock="Right" Content="确定" Width="80" Click="OnOk" Classes="primary" IsDefault="True"/>
+            <Button DockPanel.Dock="Right" Content="取消" Width="80" Margin="0,0,8,0" Click="OnCancel" IsCancel="True"/>
+            <Button DockPanel.Dock="Left" Content="恢复默认" Width="90" Click="OnResetDefault"
+                    ToolTip.Tip="按煤层字典(coal_seam_def)重置为全部煤层(浅→深)"/>
+            <TextBlock/>
+        </DockPanel>
+
+        <!-- 添加区 -->
+        <Grid DockPanel.Dock="Bottom" Margin="0,8,0,0" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+            <ComboBox Grid.Row="0" Grid.Column="0" x:Name="dictCombo" DisplayMemberBinding="{Binding Name}" Margin="0,0,6,4"
+                      HorizontalAlignment="Stretch" ToolTip.Tip="从煤层字典选一层加入"/>
+            <Button Grid.Row="0" Grid.Column="1" Content="加入所选" Width="90" Click="OnAddFromDict" Margin="0,0,0,4"/>
+            <Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" ColumnDefinitions="70,*,Auto">
+                <TextBox Grid.Column="0" x:Name="customCode" Margin="0,0,6,0" ToolTip.Tip="自定义煤层编号，如 6"/>
+                <TextBox Grid.Column="1" x:Name="customName" Margin="0,0,6,0" ToolTip.Tip="自定义显示名，如 6 号煤层"/>
+                <Button Grid.Column="2" Content="加自定义" Width="90" Click="OnAddCustom"/>
+            </Grid>
+        </Grid>
+
+        <!-- 中部：列表 + 上下移/移除 -->
+        <DockPanel>
+            <StackPanel DockPanel.Dock="Right" Width="72" Margin="8,0,0,0">
+                <Button Content="上移" Click="OnUp" Margin="0,0,0,6" HorizontalAlignment="Stretch"/>
+                <Button Content="下移" Click="OnDown" Margin="0,0,0,6" HorizontalAlignment="Stretch"/>
+                <Button Content="移除" Click="OnRemove" HorizontalAlignment="Stretch"/>
+            </StackPanel>
+            <ListBox x:Name="seamList" DisplayMemberBinding="{Binding Name}"/>
+        </DockPanel>
+    </DockPanel>
+</Window>

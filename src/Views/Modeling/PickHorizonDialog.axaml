@@ -1,0 +1,26 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.Modeling.PickHorizonDialog" x:CompileBindings="False"
+        Classes="geodb" Title="见煤点信息" Width="360" Height="250" WindowStartupLocation="CenterOwner" CanResize="False" ShowInTaskbar="False">
+    <DockPanel Margin="14">
+        <TextBlock DockPanel.Dock="Top" x:Name="ptText" Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,10"/>
+
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,14,0,0">
+            <Button DockPanel.Dock="Right" Content="确定" Width="80" Click="OnOk" IsDefault="True" Classes="primary"/>
+            <Button DockPanel.Dock="Right" Content="取消" Width="80" Margin="0,0,8,0" Click="OnCancel" IsCancel="True"/>
+            <TextBlock/>
+        </DockPanel>
+
+        <Grid ColumnDefinitions="52,*" RowDefinitions="Auto,Auto,Auto">
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="煤层" VerticalAlignment="Center" Opacity="0.75"/>
+            <ComboBox Grid.Row="0" Grid.Column="1" x:Name="seamCombo" DisplayMemberBinding="{Binding Name}" Margin="0,4" HorizontalAlignment="Stretch"/>
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="层位" VerticalAlignment="Center" Opacity="0.75"/>
+            <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,4">
+                <RadioButton x:Name="roofRadio" Content="顶板" IsChecked="True" Margin="0,0,20,0" GroupName="hz"/>
+                <RadioButton x:Name="floorRadio" Content="底板" GroupName="hz"/>
+            </StackPanel>
+            <TextBlock Grid.Row="2" Grid.Column="0" Text="备注" VerticalAlignment="Center" Opacity="0.75"/>
+            <TextBox Grid.Row="2" Grid.Column="1" x:Name="remarkBox" Margin="0,4"/>
+        </Grid>
+    </DockPanel>
+</Window>

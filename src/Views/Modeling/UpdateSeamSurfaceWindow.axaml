@@ -1,0 +1,206 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.Modeling.UpdateSeamSurfaceWindow" x:CompileBindings="False"
+        Classes="geodb" Title="更新煤层面" Width="1000" Height="700" WindowStartupLocation="CenterOwner">
+    <DockPanel Margin="10">
+        <Border DockPanel.Dock="Bottom" Classes="statusbar" Margin="0,6,0,0">
+            <TextBlock x:Name="statusText" Text="就绪：先在视口选中目标顶/底板三角网，点「拾取目标面」（或在下拉里选）" TextWrapping="Wrap"/>
+        </Border>
+
+        <StackPanel DockPanel.Dock="Top">
+            <!-- ① 目标面 -->
+            <Border Classes="panel" Margin="0,0,0,6">
+                <StackPanel>
+                    <Border Classes="panel-hdr"><TextBlock Classes="panel-title" Text="① 目标面（要更新的顶/底板三角网）"/></Border>
+                    <StackPanel Orientation="Horizontal" Margin="8,6" Spacing="8">
+                        <ComboBox x:Name="meshCombo" Width="240" DisplayMemberBinding="{Binding Name}" SelectionChanged="OnMeshComboChanged"
+                                  DropDownOpened="OnMeshComboOpened" ToolTip.Tip="场景里的三角网；也可先在视口选中再点「拾取目标面」"/>
+                        <Button Content="拾取目标面" Click="OnPickTarget" Padding="8,2" ToolTip.Tip="先在视口选中该三角网，再点这里；未选中则在视口点一下拾取"/>
+                        <TextBlock x:Name="targetInfo" Text="未选择" VerticalAlignment="Center" Opacity="0.8"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- ② 观测数据 -->
+            <Border Classes="panel" Margin="0,0,0,6">
+                <StackPanel>
+                    <Border Classes="panel-hdr"><TextBlock Classes="panel-title" Text="② 观测数据（标识数据 · 可按“期/批次”载入）"/></Border>
+                    <WrapPanel Margin="8,6">
+                        <TextBlock Text="煤层" VerticalAlignment="Center" Margin="0,0,4,0" Opacity="0.75"/>
+                        <ComboBox x:Name="seamCombo" DisplayMemberBinding="{Binding Name}" Width="110" Margin="0,0,12,0"/>
+                        <RadioButton x:Name="roofRadio" Content="顶板" IsChecked="True" VerticalAlignment="Center" Margin="0,0,10,0" GroupName="hz"/>
+                        <RadioButton x:Name="floorRadio" Content="底板" VerticalAlignment="Center" Margin="0,0,16,0" GroupName="hz"/>
+                        <CheckBox x:Name="csCheck" Content="现状见煤点" IsChecked="True" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <ComboBox x:Name="csBatchCombo" DisplayMemberBinding="{Binding Label}" Width="130" Margin="0,0,14,0"
+                                  ToolTip.Tip="现状见煤点的期/批次；“全部”=跨批次全取"/>
+                        <CheckBox x:Name="bhCheck" Content="补勘钻孔" IsChecked="True" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <ComboBox x:Name="bhBatchCombo" DisplayMemberBinding="{Binding Label}" Width="130" Margin="0,0,14,0"
+                                  ToolTip.Tip="补勘钻孔的期/批次；“全部”=跨批次全取"/>
+                        <Button x:Name="loadObsBtn" Content="载入观测点" Click="OnLoadObs" Padding="8,2" Margin="0,0,10,0"/>
+                        <Button Content="＋选中点" Click="OnAddSelectedPoints" Padding="8,2" Margin="0,0,6,0"
+                                ToolTip.Tip="把视口里当前选中的点(带高程)追加为观测点（来源“选中”）"/>
+                        <Button Content="＋CSV…" Click="OnAddCsvPoints" Padding="8,2"
+                                ToolTip.Tip="从 CSV/TXT/XYZ 点文件追加观测点（来源“CSV”）"/>
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- ③ 评估与更新 -->
+            <Border Classes="panel" Margin="0,0,0,6">
+                <StackPanel>
+                    <Border Classes="panel-hdr"><TextBlock Classes="panel-title" Text="③ 评估与更新"/></Border>
+                    <WrapPanel Margin="8,6">
+                        <RadioButton x:Name="multiRadio" Content="多点综合" IsChecked="True" VerticalAlignment="Center" Margin="0,0,10,0" GroupName="mode"/>
+                        <RadioButton x:Name="singleRadio" Content="单点(下方选1点)" VerticalAlignment="Center" Margin="0,0,16,0" GroupName="mode"/>
+                        <TextBlock Text="算法" VerticalAlignment="Center" Margin="0,0,4,0" Opacity="0.75"/>
+                        <ComboBox x:Name="algoCombo" Width="140" SelectedIndex="0" Margin="0,0,12,0">
+                            <ComboBoxItem Content="IDW 反距离" Tag="IDW"/>
+                            <ComboBoxItem Content="OK 普通克里金" Tag="OK"/>
+                            <ComboBoxItem Content="SK 简单克里金" Tag="SK"/>
+                            <ComboBoxItem Content="UK 泛克里金" Tag="UK"/>
+                            <ComboBoxItem Content="NN 最近邻" Tag="NN"/>
+                            <ComboBoxItem Content="MA 移动平均" Tag="MA"/>
+                        </ComboBox>
+                        <TextBlock Text="影响半径(m)" VerticalAlignment="Center" Margin="0,0,4,0" Opacity="0.75"/>
+                        <TextBox x:Name="radiusBox" Text="80" Width="56" Margin="0,0,16,0"/>
+                        <Button x:Name="evaluateBtn" Content="评估预览" Click="OnEvaluate" Padding="8,2" Margin="0,0,6,0" Classes="primary"/>
+                        <Button x:Name="applyBtn" Content="确定更新" Click="OnApply" IsEnabled="False" Padding="8,2" Margin="0,0,6,0" Classes="success"/>
+                        <Button x:Name="undoBtn" Content="撤销更新" Click="OnUndo" IsEnabled="False" Padding="8,2" Margin="0,0,10,0"
+                                ToolTip.Tip="把刚更新的面换回原面（也可在主窗口 Ctrl+Z）"/>
+                        <CheckBox x:Name="keepOldCheck" Content="另存新面(保留原面)" VerticalAlignment="Center" Margin="0,0,10,0"
+                                  ToolTip.Tip="勾选：原面不动，另加一张更新后的新面（图层「更新煤层面」）；不勾：删旧面·换新面"/>
+                        <CheckBox x:Name="overlay3DCheck" Content="影响预览" IsChecked="True" VerticalAlignment="Center" Margin="0,0,10,0"
+                                  IsCheckedChanged="OnOverlayChanged"
+                                  ToolTip.Tip="评估后在视口的目标面上贴一层分级着色格（图层「更新影响预览」）：直接在模型里看影响落在哪、有多大&#x0a;采样格自定，着色精度与网面节点疏密无关；只贴「够一级」的区域，不显著处留空露出原面&#x0a;是临时实体，清除预览／确定更新／关窗时自动删除"/>
+                        <Button Content="清除预览" Click="OnClearOverlay" Padding="8,2" ToolTip.Tip="删除视口里的影响预览（图层「更新影响预览」）"/>
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
+            <DockPanel Margin="2,2,0,4">
+                <Button DockPanel.Dock="Right" Content="剔除异常" Click="OnExcludeAnomalies" FontSize="11" Padding="8,1"
+                        ToolTip.Tip="把已勾选的「判级=疑似异常」点取消勾选（可随时勾回）"/>
+                <CheckBox DockPanel.Dock="Right" x:Name="sortByDzCheck" Content="按|Δz|排序" IsChecked="True"
+                          FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0" IsCheckedChanged="OnSortByDzChanged"
+                          ToolTip.Tip="偏差最大的点排在最前，便于先看问题点"/>
+                <Button DockPanel.Dock="Right" Content="全不选" Click="OnUseNone" FontSize="11" Padding="8,1" Margin="0,0,10,0"
+                        ToolTip.Tip="清空全部勾选，重新挑"/>
+                <Button DockPanel.Dock="Right" Content="勾选选中行" Click="OnUseSelected" FontSize="11" Padding="8,1" Margin="0,0,6,0"
+                        ToolTip.Tip="把表格里选中的行（可 Ctrl / Shift 多选）设为参与更新"/>
+                <TextBlock Text="观测点：勾「用」的点才参与更新（载入后默认都不参与）｜ Δz = 实测Z − 现面Z，红条(+)=面需抬升 · 蓝条(−)=面需下调"
+                           Opacity="0.6" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+            </DockPanel>
+        </StackPanel>
+
+        <!-- 预览色阶图例 + 分级直方(评估后显示) -->
+        <Border x:Name="legendBorder" DockPanel.Dock="Bottom" IsVisible="False" BorderBrush="#D0D4DA" BorderThickness="1"
+                CornerRadius="4" Padding="8,5" Margin="0,6,0,0">
+            <Grid ColumnDefinitions="Auto,*,Auto,260">
+                <TextBlock Grid.Column="0" Text="色阶" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Left" x:Name="legendMinText" VerticalAlignment="Center" FontSize="11" Opacity="0.85" Margin="0,0,10,0" Text="-"/>
+                        <TextBlock DockPanel.Dock="Right" x:Name="legendMaxText" VerticalAlignment="Center" FontSize="11" Opacity="0.85" Margin="10,0,0,0" Text="+"/>
+                        <UniformGrid x:Name="legendChips" Rows="1" Height="13"/>
+                    </DockPanel>
+                    <TextBlock x:Name="legendStepText" FontSize="11" Opacity="0.8" Margin="0,3,0,0" HorizontalAlignment="Center" Text="评估后显示分级"/>
+                </StackPanel>
+                <TextBlock Grid.Column="2" Text="分级格数" FontSize="11" Opacity="0.75" VerticalAlignment="Center" Margin="12,0,6,0"/>
+                <ch:ChartView Grid.Column="3" x:Name="histChart" Height="90"/>
+            </Grid>
+        </Border>
+
+        <!-- 观测点表 -->
+        <DockPanel>
+            <!-- 偏差分析带(载入观测点/拾取目标面后即显示: 结论 + 分级分布条 + 关键量) -->
+            <Border x:Name="deviationBorder" DockPanel.Dock="Top" IsVisible="False" CornerRadius="4" Padding="8,6" Margin="0,0,0,4">
+                <StackPanel>
+                    <DockPanel>
+                        <Ellipse x:Name="devDot" DockPanel.Dock="Left" Width="11" Height="11" Margin="0,3,7,0" VerticalAlignment="Top"/>
+                        <TextBlock x:Name="devTitle" FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap"/>
+                    </DockPanel>
+
+                    <!-- 分级分布条: 段宽∝点数(轻微/显著/大幅/异常/离网) -->
+                    <Grid x:Name="devBar" Height="16" Margin="0,6,0,0" ClipToBounds="True"
+                          ToolTip.Tip="按 |Δz| 分级：轻微 ≤2m ｜ 显著 2~10m ｜ 大幅 10~30m ｜ 疑似异常 &gt;30m ｜ 离网 = 该点不在目标面范围内">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="0*"/>
+                            <ColumnDefinition Width="0*"/>
+                            <ColumnDefinition Width="0*"/>
+                            <ColumnDefinition Width="0*"/>
+                            <ColumnDefinition Width="0*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Background="#4CAF50" CornerRadius="2,0,0,2" Margin="0,0,1,0">
+                            <TextBlock x:Name="devSegMinor" FontSize="10" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <Border Grid.Column="1" Background="#F0A800" Margin="0,0,1,0">
+                            <TextBlock x:Name="devSegSig" FontSize="10" Foreground="#222222" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <Border Grid.Column="2" Background="#FB8C00" Margin="0,0,1,0">
+                            <TextBlock x:Name="devSegMajor" FontSize="10" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <Border Grid.Column="3" Background="#E53935" Margin="0,0,1,0">
+                            <TextBlock x:Name="devSegAnom" FontSize="10" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <Border Grid.Column="4" Background="#9E9E9E" CornerRadius="0,2,2,0">
+                            <TextBlock x:Name="devSegOff" FontSize="10" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </Grid>
+
+                    <TextBlock x:Name="devLevelText" FontSize="11" Opacity="0.85" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                    <TextBlock x:Name="devStatsText" FontSize="11" Opacity="0.85" TextWrapping="Wrap" Margin="0,1,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <!-- 评估结论横幅(信号灯+影响范围+片区; 评估后显示) -->
+            <Border x:Name="conclusionBorder" DockPanel.Dock="Top" IsVisible="False" CornerRadius="4" Padding="8,5" Margin="0,0,0,4">
+                <StackPanel>
+                    <DockPanel>
+                        <Ellipse x:Name="conclusionDot" DockPanel.Dock="Left" Width="11" Height="11" Margin="0,3,7,0" VerticalAlignment="Top"/>
+                        <TextBlock x:Name="conclusionTitle" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                    </DockPanel>
+                    <TextBlock x:Name="conclusionLine1" FontSize="11" Opacity="0.9" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                    <TextBlock x:Name="conclusionLine2" FontSize="11" Opacity="0.9" TextWrapping="Wrap" Margin="0,1,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <DataGrid x:Name="obsGrid" AutoGenerateColumns="False" IsReadOnly="False" SelectionMode="Extended" LoadingRow="OnObsLoadingRow">
+                <DataGrid.Columns>
+                    <DataGridCheckBoxColumn Header="用" Binding="{Binding Use, Mode=TwoWay}" Width="40"/>
+                    <DataGridTextColumn Header="经距X" Binding="{Binding XDisp}" IsReadOnly="True" Width="*"/>
+                    <DataGridTextColumn Header="纬距Y" Binding="{Binding YDisp}" IsReadOnly="True" Width="*"/>
+                    <DataGridTextColumn Header="实测Z" Binding="{Binding ZDisp}" IsReadOnly="True" Width="70"/>
+                    <DataGridTextColumn Header="现面Z" Binding="{Binding SurfZDisp}" IsReadOnly="True" Width="70"/>
+
+                    <!-- 偏差Δz: 居中零轴的双向数据条(蓝=面需下调 / 红=面需抬升)+数值 -->
+                    <DataGridTemplateColumn Header="偏差Δz" Width="150" IsReadOnly="True">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Grid Margin="2,0" ColumnDefinitions="40,1,40,*" ToolTip.Tip="{Binding DzTip}">
+                                    <Rectangle Grid.Column="0" HorizontalAlignment="Right" Height="11" RadiusX="1" RadiusY="1" Width="{Binding NegW}" Fill="#4F86E8"/>
+                                    <Rectangle Grid.Column="1" Width="1" Height="14" Fill="#77888888"/>
+                                    <Rectangle Grid.Column="2" HorizontalAlignment="Left" Height="11" RadiusX="1" RadiusY="1" Width="{Binding PosW}" Fill="#E8564F"/>
+                                    <TextBlock Grid.Column="3" Text="{Binding DzDisp}" Margin="5,0,0,0" FontFamily="Consolas" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                </Grid>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- 判级: 彩色徽章 -->
+                    <DataGridTemplateColumn Header="判级" Width="80" IsReadOnly="True">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border Background="{Binding LevelBg}" CornerRadius="8" Padding="6,1" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding LevelVisible}">
+                                    <TextBlock Text="{Binding Level}" FontSize="11" Foreground="{Binding LevelFg}"/>
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <DataGridTextColumn Header="来源" Binding="{Binding Source}" IsReadOnly="True" Width="50"/>
+                    <DataGridTextColumn Header="期" Binding="{Binding Batch}" IsReadOnly="True" Width="90"/>
+                </DataGrid.Columns>
+            </DataGrid>
+        </DockPanel>
+    </DockPanel>
+</Window>
