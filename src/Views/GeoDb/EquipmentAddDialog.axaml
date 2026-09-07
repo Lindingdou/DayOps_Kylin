@@ -1,0 +1,32 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="PitMine3D.Kylin.Views.GeoDb.EquipmentAddDialog" x:CompileBindings="False"
+        Classes="geodb" Title="新增设备" Width="400" Height="320" CanResize="False" WindowStartupLocation="CenterOwner">
+    <Grid Margin="20" RowDefinitions="Auto,Auto,Auto,Auto,*,Auto">
+        <TextBlock Text="录入新设备的基础信息,剩余参数在主界面继续完善。" Classes="muted" TextWrapping="Wrap" Margin="0,0,0,16"/>
+        <Grid Grid.Row="1" Margin="0,4" ColumnDefinitions="90,*">
+            <TextBlock Text="设备编号" VerticalAlignment="Center"/>
+            <TextBox Grid.Column="1" x:Name="txtId" Padding="4"/>
+        </Grid>
+        <Grid Grid.Row="2" Margin="0,8,0,4" ColumnDefinitions="90,*">
+            <TextBlock Text="设备分类" VerticalAlignment="Center"/>
+            <ComboBox Grid.Column="1" x:Name="cmbCategory" Padding="4" HorizontalAlignment="Stretch" SelectedIndex="0">
+                <ComboBoxItem Content="电铲" Tag="Shovel"/>
+                <ComboBoxItem Content="矿用卡车" Tag="Truck"/>
+                <ComboBoxItem Content="钻机" Tag="Drill"/>
+                <ComboBoxItem Content="前装机" Tag="Loader"/>
+                <ComboBoxItem Content="推土机" Tag="Dozer"/>
+                <ComboBoxItem Content="平路机" Tag="Grader"/>
+                <ComboBoxItem Content="水车/水鹤" Tag="WaterTruck"/>
+                <ComboBoxItem Content="其他" Tag="Other"/>
+            </ComboBox>
+        </Grid>
+        <Grid Grid.Row="3" Margin="0,8,0,4" ColumnDefinitions="90,*">
+            <TextBlock Text="型号" VerticalAlignment="Center"/>
+            <TextBox Grid.Column="1" x:Name="txtModel" Padding="4"/>
+        </Grid>
+        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0" Spacing="8">
+            <Button Content="取消" Click="OnCancelClick" Padding="20,6" IsCancel="True"/>
+            <Button Content="确定" Click="OnOkClick" Padding="20,6" Classes="primary" IsDefault="True"/>
+        </StackPanel>
+    </Grid>
+</Window>

@@ -1,0 +1,122 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.GeoDb.EquipmentFleetCockpitWindow" x:CompileBindings="False"
+        Classes="geodb" Title="机群总览 — 领导驾驶舱" Width="1380" Height="840" WindowStartupLocation="CenterOwner">
+    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
+        <!-- Header -->
+        <Border Grid.Row="0" Classes="hdr hdr-indigo" Padding="20,14">
+            <Grid>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="🚦" FontSize="22" Margin="0,0,12,0" Foreground="White"/>
+                    <StackPanel>
+                        <TextBlock Text="机群总览 · 领导驾驶舱" Foreground="White" FontSize="18" FontWeight="Bold"/>
+                        <TextBlock Text="全机群健康度 · 产能瓶颈 · 可解锁产能 · 需关注设备(一屏看全局,再下钻单台)" Foreground="#FFC5CAE9" FontSize="11" Margin="0,2,0,0"/>
+                    </StackPanel>
+                </StackPanel>
+                <TextBlock x:Name="asOfText" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="#FFC5CAE9" FontSize="11" Text=""/>
+            </Grid>
+        </Border>
+
+        <!-- 结论横幅(一句话) -->
+        <Border x:Name="verdictBanner" Grid.Row="1" CornerRadius="6" Padding="18,12" Margin="12,10,12,4" Background="#FF37474F">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock x:Name="verdictIcon" Text="🚦" FontSize="30" VerticalAlignment="Center"/>
+                <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+                    <TextBlock x:Name="verdictHeadline" Text="加载机群数据…" FontSize="17" FontWeight="Bold" Foreground="White"/>
+                    <TextBlock x:Name="verdictAction" Text="" FontSize="12.5" Foreground="#FFCFD8DC" Margin="0,3,0,0"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- KPI 磁贴 -->
+        <UniformGrid Grid.Row="2" Rows="1" Columns="5" Margin="12,4,12,8">
+            <Border Classes="tile" Background="#FF2E7D32">
+                <StackPanel>
+                    <TextBlock Text="🟢 健康(可作主力)" Foreground="#FFC8E6C9" FontSize="11"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                        <TextBlock x:Name="tileGreen" Text="—" Foreground="White" FontSize="24" FontWeight="Bold"/>
+                        <TextBlock Text="台" Foreground="#FFC8E6C9" FontSize="11" VerticalAlignment="Bottom" Margin="4,0,0,3"/>
+                    </StackPanel>
+                    <TextBlock x:Name="tileGreenPct" Text="" Foreground="#FFC8E6C9" FontSize="10" Margin="0,3,0,0"/>
+                </StackPanel>
+            </Border>
+            <Border Classes="tile" Background="#FFEF6C00">
+                <StackPanel>
+                    <TextBlock Text="🟡 关注(需盯)" Foreground="#FFFFE0B2" FontSize="11"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                        <TextBlock x:Name="tileYellow" Text="—" Foreground="White" FontSize="24" FontWeight="Bold"/>
+                        <TextBlock Text="台" Foreground="#FFFFE0B2" FontSize="11" VerticalAlignment="Bottom" Margin="4,0,0,3"/>
+                    </StackPanel>
+                    <TextBlock x:Name="tileYellowPct" Text="" Foreground="#FFFFE0B2" FontSize="10" Margin="0,3,0,0"/>
+                </StackPanel>
+            </Border>
+            <Border Classes="tile" Background="#FFC62828">
+                <StackPanel>
+                    <TextBlock Text="🔴 需大修/重点" Foreground="#FFFFCDD2" FontSize="11"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                        <TextBlock x:Name="tileRed" Text="—" Foreground="White" FontSize="24" FontWeight="Bold"/>
+                        <TextBlock Text="台" Foreground="#FFFFCDD2" FontSize="11" VerticalAlignment="Bottom" Margin="4,0,0,3"/>
+                    </StackPanel>
+                    <TextBlock x:Name="tileRedPct" Text="" Foreground="#FFFFCDD2" FontSize="10" Margin="0,3,0,0"/>
+                </StackPanel>
+            </Border>
+            <Border Classes="tile" Background="#FF00695C">
+                <StackPanel>
+                    <TextBlock Text="综合 OEE / 可用率达标" Foreground="#FFB2DFDB" FontSize="11"/>
+                    <TextBlock x:Name="tileOee" Text="—" Foreground="White" FontSize="24" FontWeight="Bold" Margin="0,4,0,0"/>
+                    <TextBlock x:Name="tileOeeSub" Text="" Foreground="#FFB2DFDB" FontSize="10" Margin="0,3,0,0"/>
+                </StackPanel>
+            </Border>
+            <Border Classes="tile" Background="#FF5E35B1" Margin="0">
+                <StackPanel>
+                    <TextBlock Text="补短板可解锁产能" Foreground="#FFD1C4E9" FontSize="11"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                        <TextBlock x:Name="tileUnlock" Text="—" Foreground="White" FontSize="24" FontWeight="Bold"/>
+                        <TextBlock Text="亿m³/年" Foreground="#FFD1C4E9" FontSize="11" VerticalAlignment="Bottom" Margin="4,0,0,3"/>
+                    </StackPanel>
+                    <TextBlock x:Name="tileUnlockSub" Text="" Foreground="#FFD1C4E9" FontSize="10" Margin="0,3,0,0"/>
+                </StackPanel>
+            </Border>
+        </UniformGrid>
+
+        <!-- 主体:需关注清单 + 类别达标率 -->
+        <Grid Grid.Row="3" Margin="12,0,12,8" ColumnDefinitions="3*,8,2*">
+            <Border Grid.Column="0" Classes="panel">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top" Padding="12,8">
+                        <TextBlock Text="🔧 需关注设备清单(按严重度排序 · 双击下钻)" FontWeight="Bold" FontSize="13" Foreground="#FF283593"/>
+                    </Border>
+                    <DataGrid x:Name="watchList" Margin="4" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single" DoubleTapped="OnWatchDoubleTapped">
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="信号" Width="46">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Icon}" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="设备" Binding="{Binding EquipmentId}" Width="80"/>
+                            <DataGridTextColumn Header="型号" Binding="{Binding Model}" Width="100"/>
+                            <DataGridTextColumn Header="类别" Binding="{Binding Category}" Width="70"/>
+                            <DataGridTextColumn Header="可用率" Binding="{Binding AvailPct}" Width="66"/>
+                            <DataGridTextColumn Header="服役" Binding="{Binding ServiceYears}" Width="56"/>
+                            <DataGridTextColumn Header="关键问题 / 建议" Binding="{Binding KeyIssue}" Width="*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </Border>
+
+            <Border Grid.Column="2" Classes="panel">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="📊 各类别可用率达标率(≥90%)" FontWeight="Bold" FontSize="13" Margin="12,8,12,2" Foreground="#FF283593"/>
+                    <TextBlock DockPanel.Dock="Top" Text="达标率最低者即全机群产能瓶颈环节" Classes="muted" FontSize="10.5" Margin="12,0,12,4"/>
+                    <ch:ChartView x:Name="categoryChart" Margin="6" Legend="Hidden" YTitle="达标率 %" YMin="0" YMax="100"/>
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="4" Classes="statusbar">
+            <TextBlock x:Name="statusText" Text="就绪"/>
+        </Border>
+    </Grid>
+</Window>

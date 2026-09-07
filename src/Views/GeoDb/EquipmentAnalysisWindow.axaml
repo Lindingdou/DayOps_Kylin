@@ -1,0 +1,231 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.GeoDb.EquipmentAnalysisWindow" x:CompileBindings="False"
+        Classes="geodb" Title="设备数据分析" Width="1320" Height="940" WindowStartupLocation="CenterOwner">
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto">
+        <Border Grid.Row="0" Classes="hdr hdr-dark" Padding="16,10">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="设备数据分析" Foreground="White" FontSize="16" FontWeight="Bold"/>
+                <TextBlock Text="OEE 三率 · 故障 Pareto · 时间利用率" Foreground="#FFB0BEC5" FontSize="12" VerticalAlignment="Center" Margin="16,2,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <!-- 设备选择条 -->
+        <Border Grid.Row="1" Classes="toolbar" Padding="14,10">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="设备:" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,8,0"/>
+                <ComboBox x:Name="deviceCombo" Width="180" Margin="0,0,16,0" SelectionChanged="OnDeviceChanged"/>
+                <TextBlock Text="时间范围:" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,8,0"/>
+                <ComboBox x:Name="periodCombo" Width="130" SelectionChanged="OnDeviceChanged"/>
+                <TextBlock Text="班次日期:" VerticalAlignment="Center" FontWeight="Bold" Margin="20,0,8,0"/>
+                <ComboBox x:Name="shiftDateCombo" Width="130" SelectionChanged="OnShiftDateChanged"/>
+                <TextBlock x:Name="deviceMeta" Text="" VerticalAlignment="Center" Classes="muted" Margin="20,0,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <!-- 顶部 KPI 卡片行 -->
+        <Border Grid.Row="2" Classes="toolbar" Padding="14,12">
+            <Grid ColumnDefinitions="*,*,*,*,*,*">
+                <Border Grid.Column="0" Background="#FFE3F2FD" CornerRadius="4" Padding="12,10" Margin="0,0,8,0">
+                    <StackPanel>
+                        <TextBlock Text="可用率" FontSize="11" Classes="muted"/>
+                        <TextBlock x:Name="kpiAvailability" Text="—" FontSize="24" FontWeight="Bold" Foreground="#FF1976D2"/>
+                        <TextBlock Text="(目标 ≥ 90%)" FontSize="10" Classes="muted"/>
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="1" Background="#FFE8F5E9" CornerRadius="4" Padding="12,10" Margin="0,0,8,0">
+                    <StackPanel>
+                        <TextBlock Text="实动率" FontSize="11" Classes="muted"/>
+                        <TextBlock x:Name="kpiActualRun" Text="—" FontSize="24" FontWeight="Bold" Foreground="#FF388E3C"/>
+                        <TextBlock Text="(目标 ≥ 70%)" FontSize="10" Classes="muted"/>
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="2" Background="#FFFFF8E1" CornerRadius="4" Padding="12,10" Margin="0,0,8,0">
+                    <StackPanel>
+                        <TextBlock Text="利用率" FontSize="11" Classes="muted"/>
+                        <TextBlock x:Name="kpiUtilization" Text="—" FontSize="24" FontWeight="Bold" Foreground="#FFF57C00"/>
+                        <TextBlock Text="(目标 ≥ 60%)" FontSize="10" Classes="muted"/>
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="3" Background="#FFE3F2FD" CornerRadius="4" Padding="12,10" Margin="0,0,8,0">
+                    <StackPanel>
+                        <TextBlock Text="OEE 综合" FontSize="11" Classes="muted"/>
+                        <TextBlock x:Name="kpiOee" Text="—" FontSize="24" FontWeight="Bold" Foreground="#FF1565C0"/>
+                        <TextBlock Text="(目标 ≥ 50%)" FontSize="10" Classes="muted"/>
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="4" Background="#FFFFEBEE" CornerRadius="4" Padding="12,10" Margin="0,0,8,0">
+                    <StackPanel>
+                        <TextBlock Text="累计故障" FontSize="11" Classes="muted"/>
+                        <TextBlock x:Name="kpiFaultHours" Text="—" FontSize="24" FontWeight="Bold" Foreground="#FFC62828"/>
+                        <TextBlock x:Name="kpiFaultCount" Text="0 次" FontSize="10" Classes="muted"/>
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="5" Background="#FFF3F4F6" CornerRadius="4" Padding="12,10">
+                    <StackPanel>
+                        <TextBlock Text="MTBF" FontSize="11" Classes="muted"/>
+                        <TextBlock x:Name="kpiMtbf" Text="—" FontSize="24" FontWeight="Bold" Classes="muted"/>
+                        <TextBlock Text="平均故障间隔(h)" FontSize="10" Classes="muted"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- ═══ 班次效率时间轴 ═══ -->
+        <Border Grid.Row="3" Classes="panel" Margin="8,8,8,0" Height="300">
+            <Grid ColumnDefinitions="120,*">
+                <Border Grid.Column="0" Background="#FFF7F8FA" BorderBrush="#FFDCDFE4" BorderThickness="0,0,1,0" Padding="8,12">
+                    <StackPanel HorizontalAlignment="Center">
+                        <TextBlock x:Name="shiftDeviceIcon" Text="⛏" FontSize="36" HorizontalAlignment="Center" Foreground="#FFF57C00"/>
+                        <TextBlock x:Name="shiftDeviceLabel" Text="—" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                        <Border Background="#FFE8F5E9" CornerRadius="2" Padding="4,1" Margin="0,6,0,0">
+                            <TextBlock x:Name="shiftStatusLabel" Text="待命" FontSize="10" Foreground="#FF2E7D32" HorizontalAlignment="Center"/>
+                        </Border>
+                        <TextBlock Text="班次:" FontSize="10" Classes="muted" Margin="0,8,0,0"/>
+                        <TextBlock x:Name="shiftDriverLabel" Text="—" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+                <Grid Grid.Column="1" RowDefinitions="Auto,*,40,22,Auto">
+                    <Border Grid.Row="0" Background="#FFF7F8FA" Padding="8,6" BorderBrush="#FFDCDFE4" BorderThickness="0,0,0,1">
+                        <UniformGrid Rows="1" Columns="6">
+                            <StackPanel Margin="6,0">
+                                <TextBlock Text="车数" FontSize="10" Classes="muted"/>
+                                <TextBlock x:Name="shiftKpiTotalLoads" Text="—" FontWeight="Bold" FontSize="14"/>
+                            </StackPanel>
+                            <StackPanel Margin="6,0">
+                                <TextBlock Text="有效作业时长" FontSize="10" Classes="muted"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock x:Name="shiftKpiWorkHours" Text="—" FontWeight="Bold" FontSize="14" Foreground="#FFC62828"/>
+                                    <TextBlock Text="/24 H" FontSize="11" VerticalAlignment="Bottom" Margin="2,0,0,0"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel Margin="6,0">
+                                <TextBlock Text="日均装车时间" FontSize="10" Classes="muted"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock x:Name="shiftKpiAvgLoadTime" Text="—" FontWeight="Bold" FontSize="14"/>
+                                    <TextBlock Text="/8 分" FontSize="11" VerticalAlignment="Bottom" Margin="2,0,0,0"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel Margin="6,0">
+                                <TextBlock Text="平均效率" FontSize="10" Classes="muted"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock x:Name="shiftKpiAvgEff" Text="—" FontWeight="Bold" FontSize="14" Foreground="#FF1976D2"/>
+                                    <TextBlock Text="/800 m³/h" FontSize="11" VerticalAlignment="Bottom" Margin="2,0,0,0"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel Margin="6,0">
+                                <TextBlock Text="峰值效率" FontSize="10" Classes="muted"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock x:Name="shiftKpiPeakEff" Text="—" FontWeight="Bold" FontSize="14"/>
+                                    <TextBlock Text=" m³/h" FontSize="11" VerticalAlignment="Bottom" Margin="2,0,0,0"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel Margin="6,0">
+                                <TextBlock Text="等待装车时间" FontSize="10" Classes="muted"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock x:Name="shiftKpiWaitTime" Text="—" FontWeight="Bold" FontSize="14"/>
+                                    <TextBlock Text=" 分" FontSize="11" VerticalAlignment="Bottom" Margin="2,0,0,0"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </UniformGrid>
+                    </Border>
+
+                    <ch:ChartView Grid.Row="1" x:Name="shiftEffChart" Margin="8,4,8,0" YTitle="效率 (m³/h)" Legend="Top"/>
+
+                    <Border Grid.Row="2" Margin="80,2,40,2" BorderBrush="#FFCCCCCC" BorderThickness="1" x:Name="statusBarBorder">
+                        <Canvas x:Name="statusCanvas" Background="White" SizeChanged="OnStatusBarSizeChanged"/>
+                    </Border>
+
+                    <Grid Grid.Row="3" Margin="80,0,40,0" ColumnDefinitions="*,*,*,Auto">
+                        <TextBlock Grid.Column="0" Text="06:00 (A班开始)" FontSize="10" Classes="muted"/>
+                        <TextBlock Grid.Column="1" Text="14:00 (B班开始)" FontSize="10" Classes="muted"/>
+                        <TextBlock Grid.Column="2" Text="22:00 (C班开始)" FontSize="10" Classes="muted"/>
+                        <TextBlock Grid.Column="3" Text="次日 06:00" FontSize="10" Classes="muted" Margin="-30,0,0,0"/>
+                    </Grid>
+
+                    <Border Grid.Row="4" Padding="8,6">
+                        <UniformGrid Rows="1" Columns="9">
+                            <StackPanel Margin="4,0"><TextBlock Text="无效出动" FontSize="10" Classes="muted"/><TextBlock x:Name="shiftBottomIneffective" Text="— H" FontWeight="Bold" FontSize="12"/></StackPanel>
+                            <StackPanel Margin="4,0"><TextBlock Text="作业" FontSize="10" Classes="muted"/><TextBlock x:Name="shiftBottomWork" Text="— H" FontWeight="Bold" FontSize="12" Foreground="#FF388E3C"/></StackPanel>
+                            <StackPanel Margin="4,0"><TextBlock Text="待命" FontSize="10" Classes="muted"/><TextBlock x:Name="shiftBottomIdle" Text="— H" FontWeight="Bold" FontSize="12"/></StackPanel>
+                            <StackPanel Margin="4,0"><TextBlock Text="故障" FontSize="10" Classes="muted"/><TextBlock x:Name="shiftBottomFault" Text="— H" FontWeight="Bold" FontSize="12" Foreground="#FFC62828"/></StackPanel>
+                            <StackPanel Margin="4,0"><TextBlock Text="总计时长" FontSize="10" Classes="muted"/><TextBlock x:Name="shiftBottomTotal" Text="— H" FontWeight="Bold" FontSize="12"/></StackPanel>
+                            <StackPanel Margin="4,0"><TextBlock Text="出动率" FontSize="10" Classes="muted"/><TextBlock x:Name="shiftBottomDispatch" Text="— %" FontWeight="Bold" FontSize="12" Foreground="#FF1976D2"/></StackPanel>
+                            <StackPanel Margin="4,0"><TextBlock Text="实动率" FontSize="10" Classes="muted"/><TextBlock x:Name="shiftBottomActual" Text="— %" FontWeight="Bold" FontSize="12" Foreground="#FF1976D2"/></StackPanel>
+                            <StackPanel Margin="4,0"><TextBlock Text="工作面利用率" FontSize="10" Classes="muted"/><TextBlock x:Name="shiftBottomUtil" Text="— %" FontWeight="Bold" FontSize="12" Foreground="#FF1976D2"/></StackPanel>
+                            <StackPanel Margin="4,0"><TextBlock Text="单车均装" FontSize="10" Classes="muted"/><TextBlock x:Name="shiftBottomAvgPerLoad" Text="— m³" FontWeight="Bold" FontSize="12"/></StackPanel>
+                        </UniformGrid>
+                    </Border>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <!-- 图表区:Tab 化 -->
+        <TabControl Grid.Row="4" Margin="8">
+            <TabItem Header="📈 OEE 三率趋势">
+                <ch:ChartView x:Name="kpiTrendChart" Margin="8" Legend="Top" YTitle="三率 %" YMin="0" YMax="100" Y2Title="产量(万m³)" Y2Min="0"/>
+            </TabItem>
+            <TabItem Header="📊 故障 Pareto">
+                <ch:ChartView x:Name="paretoChart" Margin="8" Legend="Top" YTitle="故障时长(h)" Y2Title="累计 %" Y2Min="0" Y2Max="100"/>
+            </TabItem>
+            <TabItem Header="🔍 主控因素分析">
+                <Grid Margin="4" ColumnDefinitions="*,4,*,4,*">
+                    <Border Grid.Column="0" Classes="panel">
+                        <Grid RowDefinitions="Auto,*">
+                            <Border Grid.Row="0" Padding="10,6">
+                                <StackPanel>
+                                    <TextBlock Text="影响因子瀑布 (因素贡献度)" FontWeight="Bold" FontSize="12"/>
+                                    <TextBlock Text="各因素对产能的拉升/拖累(标准差归一化)" Classes="muted" FontSize="10"/>
+                                </StackPanel>
+                            </Border>
+                            <ch:ChartView Grid.Row="1" x:Name="waterfallChart" Margin="4" Legend="Hidden" YTitle="贡献度" YFormat="0"/>
+                        </Grid>
+                    </Border>
+                    <Border Grid.Column="2" Classes="panel">
+                        <Grid RowDefinitions="Auto,*">
+                            <Border Grid.Row="0" Padding="10,6">
+                                <StackPanel>
+                                    <TextBlock Text="因素相关性矩阵 (Pearson)" FontWeight="Bold" FontSize="12"/>
+                                    <TextBlock Text="揭示因素之间的耦合关系" Classes="muted" FontSize="10"/>
+                                </StackPanel>
+                            </Border>
+                            <ch:ChartView Grid.Row="1" x:Name="correlationChart" Margin="4" Legend="Hidden" HeatLow="#EF5350" HeatMid="#F3F6FA" HeatHigh="#1976D2"/>
+                        </Grid>
+                    </Border>
+                    <Border Grid.Column="4" Classes="panel">
+                        <Grid RowDefinitions="Auto,*">
+                            <Border Grid.Row="0" Padding="10,6">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="主控因素 vs 产量 散点回归" FontWeight="Bold" FontSize="12"/>
+                                        <TextBlock x:Name="regressionHint" Text="切换因素 ▶" Classes="muted" FontSize="10"/>
+                                    </StackPanel>
+                                    <ComboBox Grid.Column="1" x:Name="regressionFactorCombo" Width="110" VerticalAlignment="Center" SelectionChanged="OnRegressionFactorChanged"/>
+                                </Grid>
+                            </Border>
+                            <ch:ChartView Grid.Row="1" x:Name="regressionChart" Margin="4" Legend="Top" NumericX="True" YTitle="产能(作业小时)"/>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </TabItem>
+            <TabItem Header="💡 优化建议">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel x:Name="suggestionPanel" Margin="14">
+                        <TextBlock Text="基于多图交叉分析自动生成的可执行建议" FontStyle="Italic" Classes="muted" Margin="0,0,0,12"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+            <TabItem Header="🔧 可靠性与寿命">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel x:Name="reliabilityPanel" Margin="14">
+                        <TextBlock Text="Weibull 失效率 λ(t)=β/η·(t/η)^(β−1) · 浴盆曲线役龄期 · MTBF/MTTR · 大修预警" FontStyle="Italic" Classes="muted" Margin="0,0,0,12"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+
+        <Border Grid.Row="5" Classes="statusbar">
+            <TextBlock x:Name="statusText" Text="就绪"/>
+        </Border>
+    </Grid>
+</Window>

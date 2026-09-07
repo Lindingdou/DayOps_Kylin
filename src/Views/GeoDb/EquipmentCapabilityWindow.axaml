@@ -1,0 +1,172 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.GeoDb.EquipmentCapabilityWindow" x:CompileBindings="False"
+        Classes="geodb" Title="设备能力分析 — 大尺度台年能力诊断" Width="1440" Height="900" WindowStartupLocation="CenterOwner">
+    <Grid RowDefinitions="Auto,*,Auto">
+        <Border Grid.Row="0" Classes="hdr hdr-teal" Padding="20,14">
+            <Grid>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="⚙" FontSize="22" Margin="0,0,12,0" Foreground="White"/>
+                    <StackPanel>
+                        <TextBlock Text="设备能力分析" Foreground="White" FontSize="18" FontWeight="Bold"/>
+                        <TextBlock Text="台年能力趋势 · 衰减诊断 · 同型号对标 · 损失归因" Foreground="#FFE8F5E9" FontSize="11" Margin="0,2,0,0"/>
+                    </StackPanel>
+                </StackPanel>
+                <TextBlock HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="#FFE8F5E9" FontSize="11" Text="数据源:capacity_monthly · 2023–2026 · 当前年不足12月按年化对比"/>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1" Margin="8" ColumnDefinitions="200,8,*">
+            <Border Grid.Column="0" Classes="panel">
+                <Grid RowDefinitions="Auto,*">
+                    <Border Grid.Row="0" Padding="10,8">
+                        <TextBlock Text="选择设备" FontWeight="Bold" FontSize="13"/>
+                    </Border>
+                    <ListBox Grid.Row="1" x:Name="equipmentList" Margin="4" BorderThickness="0" SelectionChanged="OnEquipmentSelectionChanged">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="4">
+                                    <TextBlock Text="{Binding EquipmentId}" FontWeight="Bold" FontSize="13"/>
+                                    <TextBlock Text="{Binding Model}" Classes="muted" FontSize="11"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
+
+            <GridSplitter Grid.Column="1" Width="8" Background="Transparent"/>
+
+            <Grid Grid.Column="2" RowDefinitions="Auto,Auto,*,Auto">
+                <!-- 决策结论横幅 -->
+                <Border x:Name="verdictBanner" Grid.Row="0" CornerRadius="6" Padding="16,11" Margin="0,0,0,8" Background="#FF37474F">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock x:Name="verdictIcon" Text="⚙" FontSize="30" VerticalAlignment="Center"/>
+                        <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+                            <TextBlock x:Name="verdictHeadline" Text="选择左侧设备,给出一句话能力结论" FontSize="17" FontWeight="Bold" Foreground="White"/>
+                            <TextBlock x:Name="verdictAction" Text="" FontSize="12" Foreground="#FFCFD8DC" Margin="0,3,0,0"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- 能力 KPI -->
+                <UniformGrid Grid.Row="1" Rows="1" Columns="4" Margin="0,0,0,8">
+                    <Border CornerRadius="6" Padding="14,10" Margin="0,0,8,0">
+                        <Border.Background><LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%"><GradientStop Color="#FF1A237E" Offset="0"/><GradientStop Color="#FF3F51B5" Offset="1"/></LinearGradientBrush></Border.Background>
+                        <StackPanel>
+                            <TextBlock Text="历史台年峰值" Foreground="#FFC5CAE9" FontSize="11"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                <TextBlock x:Name="kpiPeakYearOutput" Text="—" Foreground="White" FontSize="22" FontWeight="Bold"/>
+                                <TextBlock Text="万 m³" Foreground="#FFC5CAE9" FontSize="11" VerticalAlignment="Bottom" Margin="4,0,0,3"/>
+                            </StackPanel>
+                            <TextBlock x:Name="kpiPeakYearLabel" Text="" Foreground="#FFC5CAE9" FontSize="10" Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Border>
+                    <Border CornerRadius="6" Padding="14,10" Margin="0,0,8,0">
+                        <Border.Background><LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%"><GradientStop Color="#FF004D40" Offset="0"/><GradientStop Color="#FF00897B" Offset="1"/></LinearGradientBrush></Border.Background>
+                        <StackPanel>
+                            <TextBlock x:Name="kpiCurrentYearTitle" Text="当前年台年能力" Foreground="#FFE8F5E9" FontSize="11"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                <TextBlock x:Name="kpiCurrentYearOutput" Text="—" Foreground="White" FontSize="22" FontWeight="Bold"/>
+                                <TextBlock Text="万 m³" Foreground="#FFE8F5E9" FontSize="11" VerticalAlignment="Bottom" Margin="4,0,0,3"/>
+                            </StackPanel>
+                            <TextBlock x:Name="kpiCurrentYearRatio" Text="" Foreground="#FFE8F5E9" FontSize="10" Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Border>
+                    <Border CornerRadius="6" Padding="14,10" Margin="0,0,8,0">
+                        <Border.Background><LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%"><GradientStop Color="#FFBF360C" Offset="0"/><GradientStop Color="#FFF57C00" Offset="1"/></LinearGradientBrush></Border.Background>
+                        <StackPanel>
+                            <TextBlock Text="年均衰减率 (CAGR)" Foreground="#FFFFCCBC" FontSize="11"/>
+                            <TextBlock x:Name="kpiAnnualDecline" Text="—" Foreground="White" FontSize="22" FontWeight="Bold" Margin="0,4,0,0"/>
+                            <TextBlock x:Name="kpiDeclineHint" Text="" Foreground="#FFFFCCBC" FontSize="10" Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Border>
+                    <Border CornerRadius="6" Padding="14,10">
+                        <Border.Background><LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%"><GradientStop Color="#FF0D47A1" Offset="0"/><GradientStop Color="#FF5E35B1" Offset="1"/></LinearGradientBrush></Border.Background>
+                        <StackPanel>
+                            <TextBlock Text="同型号排名" Foreground="#FFD1C4E9" FontSize="11"/>
+                            <TextBlock x:Name="kpiRank" Text="—" Foreground="White" FontSize="22" FontWeight="Bold" Margin="0,4,0,0"/>
+                            <TextBlock x:Name="kpiRankHint" Text="" Foreground="#FFD1C4E9" FontSize="10" Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Border>
+                </UniformGrid>
+
+                <!-- 分析分区 Tab -->
+                <TabControl Grid.Row="2">
+                    <TabItem Header="📉 衰减趋势">
+                        <Grid Margin="2" ColumnDefinitions="*,6,*,6,*">
+                            <Border Grid.Column="0" Classes="panel">
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Top" Text="📊 年累计能力 + 三年滚动均线 + 异常带" FontWeight="Bold" FontSize="12" Margin="10,8,10,2"/>
+                                    <ch:ChartView x:Name="annualTrendChart" Margin="6" Legend="Top" YTitle="万 m³"/>
+                                </DockPanel>
+                            </Border>
+                            <Border Grid.Column="2" Classes="panel">
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Top" Text="📉 环比增长率 (衰退拐点识别)" FontWeight="Bold" FontSize="12" Margin="10,8,10,2"/>
+                                    <ch:ChartView x:Name="declineChart" Margin="6" Legend="Hidden" YTitle="环比 %" YFormat="0'%'"/>
+                                </DockPanel>
+                            </Border>
+                            <Border Grid.Column="4" Classes="panel">
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Top" Text="🔥 月×年 热力图 (季节规律)" FontWeight="Bold" FontSize="12" Margin="10,8,10,2"/>
+                                    <ch:ChartView x:Name="heatmapChart" Margin="6" Legend="Hidden" HeatLow="#E0F2F1" HeatMid="#80CBC4" HeatHigh="#004D40" ShowHeatValues="False"/>
+                                </DockPanel>
+                            </Border>
+                        </Grid>
+                    </TabItem>
+                    <TabItem Header="📦 同类对标">
+                        <Grid Margin="2" ColumnDefinitions="*,6,*">
+                            <Border Grid.Column="0" Classes="panel">
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Top" Text="📊 同类各型号 · 台年产能（谁更能干）" FontWeight="Bold" FontSize="12" Margin="10,8,10,2"/>
+                                    <Border DockPanel.Dock="Bottom" Background="#FFF7F8FA" Padding="10,6" Margin="6,0,6,6" CornerRadius="4">
+                                        <TextBlock x:Name="peerRankCaption" Text="选择设备后,对比同类各型号的台年产能(绿色=本机型号)。" FontSize="12" TextWrapping="Wrap"/>
+                                    </Border>
+                                    <ch:ChartView x:Name="boxplotChart" Margin="6" Legend="Top" YTitle="台年产能 (万 m³)" YMin="0"/>
+                                </DockPanel>
+                            </Border>
+                            <Border Grid.Column="2" Classes="panel">
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Top" Text="📈 同类各型号 · 可用率（谁更可靠）" FontWeight="Bold" FontSize="12" Margin="10,8,10,2"/>
+                                    <Border DockPanel.Dock="Bottom" Background="#FFF7F8FA" Padding="10,6" Margin="6,0,6,6" CornerRadius="4">
+                                        <TextBlock x:Name="peerAgingCaption" Text="与左图同序:对比同类各型号的可用率(绿色=本机型号)。" FontSize="12" TextWrapping="Wrap"/>
+                                    </Border>
+                                    <ch:ChartView x:Name="bubbleChart" Margin="6" Legend="Top" YTitle="可用率 (%)" YMin="0" YMax="100"/>
+                                </DockPanel>
+                            </Border>
+                        </Grid>
+                    </TabItem>
+                    <TabItem Header="🎯 损失归因">
+                        <Border Classes="panel" Margin="2">
+                            <DockPanel>
+                                <Border DockPanel.Dock="Top" Padding="12,8">
+                                    <StackPanel>
+                                        <TextBlock Text="🎯 产能损失归因 (OEE 三率乘性分解)" FontWeight="Bold" FontSize="13" Foreground="#FF00695C"/>
+                                        <TextBlock x:Name="lossSummary" Text="选择设备后,按可用率/作业率/利用率逐级分解理论上限与实际的差距。" Classes="muted" FontSize="11" Margin="0,3,0,0" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </Border>
+                                <ch:ChartView x:Name="lossWaterfallChart" Margin="8" Legend="Hidden" YTitle="万 m³" YMin="0"/>
+                            </DockPanel>
+                        </Border>
+                    </TabItem>
+                </TabControl>
+
+                <!-- 诊断结论(精简) -->
+                <Border Grid.Row="3" Classes="panel" Margin="0,8,0,0">
+                    <DockPanel>
+                        <Border DockPanel.Dock="Top" Padding="12,6" CornerRadius="4,4,0,0">
+                            <Border.Background><LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%"><GradientStop Color="#FFE0F2F1" Offset="0"/><GradientStop Color="#FFFFFFFF" Offset="1"/></LinearGradientBrush></Border.Background>
+                            <TextBlock Text="🔍 自动诊断结论(核心)" FontWeight="Bold" FontSize="12" Foreground="#FF00695C"/>
+                        </Border>
+                        <WrapPanel x:Name="diagnosisPanel" Margin="12,6,12,6" Orientation="Horizontal"/>
+                    </DockPanel>
+                </Border>
+            </Grid>
+        </Grid>
+
+        <Border Grid.Row="2" Classes="statusbar">
+            <TextBlock x:Name="statusText" Text="就绪"/>
+        </Border>
+    </Grid>
+</Window>
