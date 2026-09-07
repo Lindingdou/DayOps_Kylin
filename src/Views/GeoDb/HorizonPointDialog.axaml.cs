@@ -55,7 +55,6 @@ public partial class HorizonPointDialog : Window
         seamList.ItemsSource = _items;
     }
 
-    private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
 
     private void OnSelectAll(object? sender, RoutedEventArgs e) { foreach (var i in _items) i.IsChecked = true; }
     private void OnSelectNone(object? sender, RoutedEventArgs e) { foreach (var i in _items) i.IsChecked = false; }

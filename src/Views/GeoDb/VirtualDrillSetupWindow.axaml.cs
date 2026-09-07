@@ -50,7 +50,6 @@ public partial class VirtualDrillSetupWindow : Window
         UpdateStatus();
     }
 
-    private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
 
     // ── 选面(场景图层 / OFF 文件) ─────────────────────────────────────────
 

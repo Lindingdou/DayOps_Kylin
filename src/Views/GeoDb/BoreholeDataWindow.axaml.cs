@@ -34,7 +34,6 @@ public partial class BoreholeDataWindow : Window
         Opened += (_, _) => LoadData();
     }
 
-    private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
 
     private void LoadData()
     {

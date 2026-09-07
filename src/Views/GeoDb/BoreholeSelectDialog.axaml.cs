@@ -45,7 +45,6 @@ public partial class BoreholeSelectDialog : Window
         Opened += (_, _) => filterBox.Focus();
     }
 
-    private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
 
     private bool FilterPredicate(HoleVm vm)
         => _filter.Length == 0

@@ -36,7 +36,6 @@ public partial class VirtualDrillWindow : Window
         RefreshModelStatus();
     }
 
-    private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
 
     // ── 求交模型(从库构建, 配置变更后重建) ──────────────────────────────
 

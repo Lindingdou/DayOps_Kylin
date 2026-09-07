@@ -56,12 +56,15 @@ public static class GeoDbWindows
         }
         var win = create();
         Open[typeof(T)] = win;
+        Last = win;
         win.Closed += (_, _) => Open.Remove(typeof(T));
         win.Show(ctx.Owner);
         return win;
     }
 
     public static int OpenCount => Open.Count;
+    /// <summary>最近一次 Show 的页面(自检/测试用)。</summary>
+    public static Window? Last { get; private set; }
 
     public static void CloseAll()
     {

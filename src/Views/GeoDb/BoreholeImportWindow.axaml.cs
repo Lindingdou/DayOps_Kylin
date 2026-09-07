@@ -28,7 +28,6 @@ public partial class BoreholeImportWindow : Window
         previewGrid.ItemsSource = _rows;
     }
 
-    private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
 
     private async void OnPickFileClick(object? sender, RoutedEventArgs e)
     {

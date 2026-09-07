@@ -333,7 +333,7 @@ public sealed class ChartView : Control
             if (!string.IsNullOrEmpty(vl.label)) ctx.DrawText(Ft(vl.label, FontSize - 1, new SolidColorBrush(vl.color)), new Point(x + 3, _plot.Y + 2));
         }
 
-        using var clip = ctx.PushClip(new Rect(_plot.X - 1, _plot.Y - 8, _plot.Width + 2, _plot.Height + 10));
+        var clip = ctx.PushClip(new Rect(_plot.X - 1, _plot.Y - 8, _plot.Width + 2, _plot.Height + 10));   // 末尾显式 Dispose(勿 using, 否则双弹栈)
 
         // 柱类系列（分组）
         var barSeries = visible.Select((s, idx) => (s, idx)).Where(t => t.s.Kind is SeriesKind.Bar or SeriesKind.FloatingBar or SeriesKind.Box).ToList();

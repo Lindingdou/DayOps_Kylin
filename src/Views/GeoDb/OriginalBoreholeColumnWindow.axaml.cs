@@ -45,7 +45,6 @@ public partial class OriginalBoreholeColumnWindow : Window
         Opened += (_, _) => LoadHoles();
     }
 
-    private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
 
     // ─────────────────────────── 孔列表 ───────────────────────────
     private void LoadHoles()

@@ -228,6 +228,18 @@
         <Setter Property="TextElement.Foreground" Value="White" />
     </Style>
 
+    <!-- Tab 页签: Fluent 默认 24px 大字, 收到原 WPF TabControl 观感 -->
+    <Style Selector="Window.geodb TabItem">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Padding" Value="12,4" />
+        <Setter Property="MinHeight" Value="28" />
+        <Setter Property="Margin" Value="0" />
+    </Style>
+    <Style Selector="Window.geodb TabItem:selected">
+        <Setter Property="Foreground" Value="#FF0D47A1" />
+    </Style>
+
     <!-- 表格: 行高/字号收紧, 接近原 WPF DataGrid 观感 -->
     <Style Selector="Window.geodb DataGrid">
         <Setter Property="FontSize" Value="12" />
