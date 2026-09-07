@@ -1,0 +1,46 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+             x:Class="PitMine3D.Kylin.Views.Modeling.DataAnalysisPanel" x:CompileBindings="False">
+  <!-- 注意：直方图 / CDF / XY 等值线三块子图给最小高度（MinHeight），父容器空间不足时
+       交给 ScrollViewer 兜底，避免最底下的 XY 投影画布被裁掉显示不出来。 -->
+  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Background="White">
+    <Grid Background="White" RowDefinitions="Auto,Auto,Auto,Auto">
+
+      <!-- 统计摘要 -->
+      <Border Grid.Row="0" Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="1" CornerRadius="4" Padding="10" Margin="8">
+        <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,*,*">
+          <TextBlock x:Name="CountTextBlock" Grid.Row="0" Grid.Column="0" FontSize="12" Margin="0,2"/>
+          <TextBlock x:Name="MeanTextBlock" Grid.Row="0" Grid.Column="1" FontSize="12" Margin="0,2"/>
+          <TextBlock x:Name="StdTextBlock" Grid.Row="0" Grid.Column="2" FontSize="12" Margin="0,2"/>
+          <TextBlock x:Name="MinTextBlock" Grid.Row="1" Grid.Column="0" FontSize="12" Margin="0,2"/>
+          <TextBlock x:Name="MaxTextBlock" Grid.Row="1" Grid.Column="1" FontSize="12" Margin="0,2"/>
+          <TextBlock x:Name="CvTextBlock" Grid.Row="1" Grid.Column="2" FontSize="12" Margin="0,2"/>
+        </Grid>
+      </Border>
+
+      <!-- 直方图 -->
+      <Border Grid.Row="1" BorderBrush="#DCDFE4" BorderThickness="1" CornerRadius="4" Margin="8,4,8,4" MinHeight="130">
+        <Grid RowDefinitions="Auto,*">
+          <TextBlock Grid.Row="0" Text="样品直方图" FontWeight="SemiBold" FontSize="12" Margin="8,4,0,4"/>
+          <ch:ChartView x:Name="HistogramChart" Grid.Row="1" MinHeight="100" Height="140" Margin="4,0,4,4" FontSize="10"/>
+        </Grid>
+      </Border>
+
+      <!-- 累积分布 -->
+      <Border Grid.Row="2" BorderBrush="#DCDFE4" BorderThickness="1" CornerRadius="4" Margin="8,4,8,4" MinHeight="130">
+        <Grid RowDefinitions="Auto,*">
+          <TextBlock Grid.Row="0" Text="累积频率分布" FontWeight="SemiBold" FontSize="12" Margin="8,4,0,4"/>
+          <ch:ChartView x:Name="CdfChart" Grid.Row="1" MinHeight="100" Height="140" Margin="4,0,4,4" FontSize="10"/>
+        </Grid>
+      </Border>
+
+      <!-- 煤层平面等值线预览 -->
+      <Border Grid.Row="3" BorderBrush="#DCDFE4" BorderThickness="1" CornerRadius="4" Margin="8,4,8,8" MinHeight="180">
+        <Grid RowDefinitions="Auto,*">
+          <TextBlock Grid.Row="0" Text="煤层平面等值线预览（XY投影）" FontWeight="SemiBold" FontSize="12" Margin="8,4,0,4"/>
+          <Canvas x:Name="ContourCanvas" Grid.Row="1" Background="White" MinHeight="150" Height="180" ClipToBounds="True" SizeChanged="OnCanvasSizeChanged"/>
+        </Grid>
+      </Border>
+    </Grid>
+  </ScrollViewer>
+</UserControl>

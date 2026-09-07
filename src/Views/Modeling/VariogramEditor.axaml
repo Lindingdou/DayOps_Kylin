@@ -1,0 +1,59 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+             x:Class="PitMine3D.Kylin.Views.Modeling.VariogramEditor" x:CompileBindings="False">
+  <Border Background="White" BorderBrush="#DCDFE4" BorderThickness="1" CornerRadius="4" Padding="12">
+    <StackPanel>
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Text="变异函数模型" FontWeight="Bold" FontSize="13" VerticalAlignment="Center"/>
+        <Button Grid.Column="1" Content="重置" Padding="8,2" FontSize="11" Click="OnResetClicked"/>
+      </Grid>
+
+      <Separator Margin="0,6"/>
+
+      <!-- 模型类型 -->
+      <Grid Margin="0,2" ColumnDefinitions="80,*">
+        <TextBlock Text="模型类型" VerticalAlignment="Center" Margin="0,3"/>
+        <ComboBox x:Name="TypeCombo" Grid.Column="1" SelectedIndex="0" HorizontalAlignment="Stretch" SelectionChanged="OnTypeChanged">
+          <ComboBoxItem Content="球状模型 (Spherical)"/>
+          <ComboBoxItem Content="指数模型 (Exponential)"/>
+          <ComboBoxItem Content="高斯模型 (Gaussian)"/>
+        </ComboBox>
+      </Grid>
+
+      <!-- 理论曲线预览 -->
+      <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="1" CornerRadius="2" Margin="0,6" Padding="6">
+        <StackPanel>
+          <TextBlock Text="理论曲线预览" FontSize="11" Classes="muted" Margin="0,0,0,4"/>
+          <ch:ChartView x:Name="VariogramChart" Height="120" FontSize="10"/>
+          <TextBlock Text="γ(h)" FontSize="10" Classes="muted"/>
+        </StackPanel>
+      </Border>
+
+      <!-- Nugget -->
+      <Grid Margin="0,2" ColumnDefinitions="80,*">
+        <TextBlock Text="* 块金值 C₀" VerticalAlignment="Center" Margin="0,3"/>
+        <TextBox x:Name="NuggetBox" Grid.Column="1" Height="26" MinHeight="26" Padding="4,2" VerticalContentAlignment="Center" LostFocus="OnParamChanged"/>
+      </Grid>
+
+      <!-- Sill -->
+      <Grid Margin="0,2" ColumnDefinitions="80,*">
+        <TextBlock Text="* 基台值 C" VerticalAlignment="Center" Margin="0,3"/>
+        <TextBox x:Name="SillBox" Grid.Column="1" Height="26" MinHeight="26" Padding="4,2" VerticalContentAlignment="Center" LostFocus="OnParamChanged"/>
+      </Grid>
+
+      <!-- Range -->
+      <Grid Margin="0,2" ColumnDefinitions="80,*,30">
+        <TextBlock Text="* 变程 a" VerticalAlignment="Center" Margin="0,3"/>
+        <TextBox x:Name="RangeBox" Grid.Column="1" Height="26" MinHeight="26" Padding="4,2" VerticalContentAlignment="Center" LostFocus="OnParamChanged"/>
+        <TextBlock Grid.Column="2" Text="m" VerticalAlignment="Center" Margin="4,3,0,3"/>
+      </Grid>
+
+      <!-- 验证提示 -->
+      <TextBlock x:Name="ValidationTip" Text="" FontSize="11" Foreground="#DC3545" Margin="0,4,0,0" TextWrapping="Wrap"/>
+
+      <Button Content="从样品自动拟合" Margin="0,8,0,0" Padding="8,4" HorizontalAlignment="Left"
+              Background="#0D6EFD" Foreground="White" BorderBrush="#0D6EFD" Click="OnAutoFitClicked"/>
+      <TextBlock Text="需要 ≥30 个样品，否则按钮不可用" FontSize="10" Classes="muted" Margin="0,2,0,0"/>
+    </StackPanel>
+  </Border>
+</UserControl>

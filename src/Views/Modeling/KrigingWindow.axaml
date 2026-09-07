@@ -1,0 +1,128 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        xmlns:mdl="using:PitMine3D.Kylin.Views.Modeling"
+        x:Class="PitMine3D.Kylin.Views.Modeling.KrigingWindow" x:CompileBindings="False"
+        Classes="geodb" Title="克里金估值（选点插值）" Width="960" Height="760" WindowStartupLocation="CenterOwner">
+  <Grid Margin="12" RowDefinitions="Auto,*,Auto">
+
+    <!-- 顶部：拾取选择集 -->
+    <Border Grid.Row="0" Classes="panel" Padding="12" Margin="0,0,0,8">
+      <Grid ColumnDefinitions="Auto,*">
+        <Button Grid.Column="0" x:Name="PickButton" Content="读取选择集" Width="110" Height="30" Margin="0,0,12,0" FontWeight="SemiBold" Click="OnPickClick"/>
+        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+          <TextBlock x:Name="PickedSummaryText" FontSize="13"/>
+          <TextBlock Text="以选择集中的点 / 多段线顶点为样本（值 = Z 高程）→ 克里金/IDW 水平插值 → 按格网结点真实插入十字点。改选后可重新读取。"
+                     FontSize="11" Classes="muted" Margin="0,2,0,0" TextWrapping="Wrap"/>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- 中间：左侧样点分布 + 右侧参数 -->
+    <Grid Grid.Row="1" Margin="0,0,0,8" ColumnDefinitions="380,*">
+
+      <Border Grid.Column="0" Classes="panel">
+        <mdl:DataAnalysisPanel x:Name="Analysis"/>
+      </Border>
+
+      <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" Margin="8,0,0,0">
+        <StackPanel>
+          <!-- 克里金算法：OK / SK / UK -->
+          <Border Classes="panel" Padding="12" Margin="0,0,0,8">
+            <StackPanel>
+              <TextBlock Text="克里金算法" FontWeight="Bold" FontSize="13" Margin="0,0,0,10"/>
+              <Grid Margin="0,2" ColumnDefinitions="80,140">
+                <TextBlock Text="类型" VerticalAlignment="Center"/>
+                <ComboBox x:Name="AlgorithmCombo" Grid.Column="1" HorizontalAlignment="Stretch" SelectedIndex="0" SelectionChanged="OnAlgorithmChanged">
+                  <ComboBoxItem Content="OK"/>
+                  <ComboBoxItem Content="SK"/>
+                  <ComboBoxItem Content="UK"/>
+                </ComboBox>
+              </Grid>
+              <Grid x:Name="TrendGrid" Margin="0,6,0,0" IsVisible="False" ColumnDefinitions="80,140">
+                <TextBlock Text="趋势阶数" VerticalAlignment="Center"/>
+                <ComboBox x:Name="TrendCombo" Grid.Column="1" HorizontalAlignment="Stretch" SelectedIndex="0">
+                  <ComboBoxItem Content="1"/>
+                  <ComboBoxItem Content="2"/>
+                </ComboBox>
+              </Grid>
+              <TextBlock x:Name="AlgorithmDescText" FontSize="11" Classes="muted" Margin="0,8,0,0" TextWrapping="Wrap"/>
+            </StackPanel>
+          </Border>
+
+          <!-- 变异函数 -->
+          <Border Classes="panel" Padding="12" Margin="0,0,0,8">
+            <StackPanel>
+              <TextBlock Text="变异函数模型" FontWeight="Bold" FontSize="13" Margin="0,0,0,10"/>
+              <mdl:VariogramEditor x:Name="Variogram"/>
+            </StackPanel>
+          </Border>
+
+          <!-- 搜索邻域 -->
+          <Border Classes="panel" Padding="12" Margin="0,0,0,8">
+            <StackPanel>
+              <TextBlock Text="搜索邻域" FontWeight="Bold" FontSize="13" Margin="0,0,0,10"/>
+              <Grid Margin="0,2" ColumnDefinitions="80,*,30">
+                <TextBlock Text="搜索半径" VerticalAlignment="Center"/>
+                <TextBox x:Name="RadiusBox" Grid.Column="1" Text="200.0"/>
+                <TextBlock Grid.Column="2" Text="m" VerticalAlignment="Center" Margin="4,0,0,0"/>
+              </Grid>
+              <Grid Margin="0,2" ColumnDefinitions="80,*">
+                <TextBlock Text="最大样点" VerticalAlignment="Center"/>
+                <TextBox x:Name="MaxSamplesBox" Grid.Column="1" Text="16"/>
+              </Grid>
+              <Grid Margin="0,2" ColumnDefinitions="80,*">
+                <TextBlock Text="最小样点" VerticalAlignment="Center"/>
+                <TextBox x:Name="MinSamplesBox" Grid.Column="1" Text="1"/>
+              </Grid>
+              <Grid Margin="0,2" ColumnDefinitions="80,*">
+                <TextBlock Text="缺省值" VerticalAlignment="Center"/>
+                <TextBox x:Name="DefaultValueBox" Grid.Column="1" Text="-999.00"/>
+              </Grid>
+              <CheckBox x:Name="OctantBox" Content="启用扇区搜索 (Octant)" IsChecked="False" Margin="0,6" IsCheckedChanged="OnOctantChanged"/>
+              <Grid x:Name="OctantGrid" Margin="20,2,0,0" IsEnabled="False" ColumnDefinitions="80,*">
+                <TextBlock Text="每扇区上限" VerticalAlignment="Center"/>
+                <TextBox x:Name="MaxPerOctantBox" Grid.Column="1" Text="2"/>
+              </Grid>
+            </StackPanel>
+          </Border>
+
+          <!-- 输出格网 -->
+          <Border Classes="panel" Padding="12" Margin="0,0,0,8">
+            <StackPanel>
+              <TextBlock Text="输出格网" FontWeight="Bold" FontSize="13" Margin="0,0,0,10"/>
+              <Grid Margin="0,2" ColumnDefinitions="80,*,30">
+                <TextBlock Text="格网间距" VerticalAlignment="Center"/>
+                <TextBox x:Name="SpacingBox" Grid.Column="1" Text="150.0"/>
+                <TextBlock Grid.Column="2" Text="m" VerticalAlignment="Center" Margin="4,0,0,0"/>
+              </Grid>
+              <TextBlock Text="整个平面按此固定距离均匀布点（X/Y 同距、正方形格网），每个有效结点插入一个十字点，高程 = 插值结果。"
+                         FontSize="10" Classes="muted" Margin="80,0,0,4" TextWrapping="Wrap"/>
+
+              <!-- 框选插值范围（不框选 = 样本点包围盒）-->
+              <Separator Margin="0,8,0,6"/>
+              <TextBlock Text="插值范围" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,4"/>
+              <TextBlock x:Name="RangeSummaryText" FontSize="11" Classes="muted" TextWrapping="Wrap" Margin="0,0,0,6"/>
+              <StackPanel Orientation="Horizontal">
+                <Button x:Name="PickRangeButton" Content="框选范围" Width="90" Height="26" Margin="0,0,8,0" Click="OnPickRangeClick"/>
+                <Button x:Name="ClearRangeButton" Content="清除" Width="60" Height="26" IsEnabled="False" Click="OnClearRangeClick"/>
+              </StackPanel>
+              <TextBlock Text="在视口点两个对角点框定矩形范围；不框选则默认用样本点包围盒。" FontSize="10" Classes="muted" Margin="0,4,0,0" TextWrapping="Wrap"/>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+
+    <!-- 底部执行栏 -->
+    <Border Grid.Row="2" Classes="panel" Padding="12">
+      <Grid ColumnDefinitions="*,Auto,Auto">
+        <ProgressBar x:Name="Progress" Grid.Column="0" Value="0" Maximum="100" Height="16" Margin="0,0,12,0" IsVisible="False"/>
+        <TextBlock x:Name="StatusText" Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0" TextTrimming="CharacterEllipsis" MaxWidth="420"/>
+        <StackPanel Grid.Column="2" Orientation="Horizontal">
+          <Button x:Name="RunButton" Content="运行" Width="80" Height="28" Margin="4,0" Click="OnRunClick"/>
+          <Button x:Name="CancelButton" Content="取消" Width="80" Height="28" Margin="4,0" IsEnabled="False" Click="OnCancelClick"/>
+        </StackPanel>
+      </Grid>
+    </Border>
+  </Grid>
+</Window>
