@@ -3644,3 +3644,34 @@ Viewport 配色(冷蓝/热亮蓝/选中品红+白描边大一号)。Kylin 此前
 全部 ok=24 fail=0，目视 16 张确认布局/数据/图表正常；自检块已删。自检抓到并修的坑：① 钻孔组自写 `InitializeComponent() => AvaloniaXamlLoader.Load`
 遮蔽了生成版 → x:Name 字段全 null(NRE)，删自写即可；② ChartView `using var` + 显式 Dispose 双弹 PushClip → "Wrong Push/Pop state order" 崩溃；
 ③ Fluent TabItem 默认 24px 大字 → 样式收到 13px。合并冲突 1 处(两组同名私有 `NullIfEmpty` → 改名)。
+
+## §三〇一 三维地质建模页：功能接入系统（三角网成一等对象 + 25 个独立窗口 + 24 条场景版命令）(2026-09-07)
+
+用户指令「接入三维地质建模部分功能到系统中」。此前该页 49 个功能项(原 MeshEditLib 34 + BlockModelLib 12 + 采矿模型 3)多数只是
+读 OFF/CSV 文件 → 写 OFF 文件的命令行报表，与场景对象无关；原版则以内核 MeshEntity 为一等对象、各功能带对话框/窗口。
+
+**基础层**(e80e546 / 0ec5c8b / 1941fb0)：
+- `Cad/Draw/MeshEntity.cs`：三角网场景实体(顶点 xyz + 三角索引；唯一边线逐顶点真高程渲染 `Seg3`；包围盒粗排斥拾取；Apply/Explode/无夹点；
+  SceneIO `mesh` DTO 存档；特性面板 名称/顶点/三角/范围/高程/表面积；对象树按名称列子项点选)。`PolylineEntity.Zs` 三维多段线(落面/交线/等值线/剖面线)。
+- `MainWindow.Modeling.cs`：选中三角网/点/线 → 算法 → 结果入场景(可撤销/存档)；无选中时从 OFF/CSV 导入即成场景对象。场景版命令 24 条：
+  创建三角网(选中点 + 可选闭合线裁边)·多段线嵌入三角网·闭合线裁剪面/裁剪面·固化成体·侧面三角网·快速建模·地质体建模·基本几何体(视口放置)·
+  修改高程点·修改点样式·赋节点高程/点落到面上·顶点焊接·闭合线裁剪·统一线高程·线落到面上·生成三角网边界·沿线分割三角网·合并三角网·面交线·
+  修复拓扑关系·删除三角面·格网质量检测·补洞·光顺·两期三角网算量·三角网体积·体素格网体积·实体转块体·构建等值线·创建剖面·实时曲面坐标(坐标栏 Z)。
+  新算法 `SurfaceVolume`(两期挖填 + TriGrid 分桶采样)、`PolylineClipper`(凹多边形裁线/三角质心选取)。绕向统一 `OrientUp`(边界环/成体/内外判定依赖)。
+- Ribbon 页按原版重排：建模 · 倾斜摄影 · 编辑(点/线/面/体/工具 下拉) · 地质统计学分析 · 更新地质模型 · 块体模型(12) · 采矿模型(3)。
+  OFF 导入即三角网(开始页「导入」)。`Views/Modeling/ModelingContext.cs` 页面契约 + `ModelingWindowFactory`(功能项名 → 窗口, 登记者优先)。
+
+**独立窗口 25**(四组并行移植, 每组 `Views/Modeling/*Windows.cs` 登记 + `tests/Modeling*Tests.cs`)：
+- 网格编辑(b498f71, +19 测)：地质体建模(QuickModelDialog, `Cad/QuickModelSampler` 逐字移植 1000 行建模器) · 格网质量检测(DiagnoseDialog + `MeshDiagnoseMarkers` 场景高亮/修复)
+  · 两期三角网算量(VolumeSplitDialog + `CutFillSolids` 填/挖封闭体) · 展点(ShowPointsWindow) · 构建等值线(ContourBuilderWindow + `ContourEngine` 逐字移植)
+  · 创建剖面(SectionCutWindow + `SectionEngine`/SectionBuilder 剖面图/钻孔投影) · 动态剖面(DynamicSectionWindow)。
+- 地质统计(534b7b4, +28 测)：快速估值/克里金估值(选点插值版, `Cad/EstimationAlgorithms`+`EstimationEngine` 逐字移植; 数据分析面板/变差函数编辑器)。
+- 更新地质模型(3f52897, +20 测)：补勘钻孔写实(批次/孔/层位/煤层结构/CSV/展绘) · 现状写实(批次/拾取见煤点/标记/建现状面) · 更新煤层面(`Cad/SurfaceUpdateEngine` 全算法路径 + 分级预览 + 应用/撤销)。
+- 块体模型(8f4da21, +20 测)：创建/约束/导入/导出/属性赋值(含煤质联动)/着色/删除/筛选/切面剖切/输出报告/实体转块体/体素格网体积 + 块体模型浏览器
+  (`Cad/BlockModelMeta`/`BlockModelReport`/`BlockVoxelBuilder`/`BlockCoalQualityLink`/`BlockCellPredicate`)。
+
+**记录(仍受阻/等价替代)**：加载倾斜摄影(OSGB 内核渲染)、分割地质体/布尔四则(网格布尔需内核)、采矿模型(CarveStrip 内核)、标识起点/线序(原即占位)；
+沿线分割多段折线按首尾竖直面；报告 PDF(QuestPDF)禁用；块体渲染为平面 RectEntity(无边线样式/实例化)；剖面/等值线/估值格为二维场景实体。
+
+**验证**：全套 **1774 测试通过**(本节 +87)；env 门控自检在真实场景串跑命令链 18 项(两张 TIN → 快速建模水密体 43200 m³ = 两期算量填方 = 散度定理体积 →
+等值线/边界/剖面/落面/裁剪/删面/分割/合并/转块体/体素/存档往返)全通过 + 逐个打开 25 个窗口截图 `chk_modeling/*.png` 25/25；自检块已删。
