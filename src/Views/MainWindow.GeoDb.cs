@@ -125,6 +125,16 @@ public partial class MainWindow
             case "平盘工艺地图": Open(c => new LocationProcessMapWindow(c)); return true;
             case "参数模板库": Open(c => new ParameterTemplateWindow(c)); return true;
             case "现场验收录入": Open(c => new ParameterAcceptanceWindow(c)); return true;
+            // ── 设备管理 ──
+            case "机群总览": Open(c => new EquipmentFleetCockpitWindow(c)); return true;
+            case "设备信息管理": Open(c => new EquipmentManagementWindow(c)); return true;
+            case "设备智能编组": Open(c => new EquipmentDispatchWindow(c)); return true;
+            case "设备数据分析": Open(c => new EquipmentAnalysisWindow(c)); return true;
+            case "设备生产数据": Open(c => new EquipmentProductionDataWindow(c)); return true;
+            case "班次效能预测": Open(c => new EquipmentShiftForecastWindow(c)); return true;
+            case "设备效能预测": Open(c => new EquipmentForecastWindow(c)); return true;
+            case "设备能力": Open(c => new EquipmentCapabilityWindow(c)); return true;
+            case "数据导入导出": Open(c => new DataImportCenterWindow(c)); return true;
         }
         return false;
 
