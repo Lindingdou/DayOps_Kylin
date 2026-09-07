@@ -20,6 +20,26 @@ public sealed class GeoDatabase : IDisposable
 
     private GeoDatabase(SqliteConnection conn) => _conn = conn;
 
+    /// <summary>
+    /// 默认库文件路径：用户数据目录 (Linux: ~/.local/share/PitMine3D.Kylin/geo.db, Windows: %LocalAppData%\PitMine3D.Kylin\geo.db)。
+    /// 装到 /opt 后程序目录属 root 不可写, 临时目录又会被清理(重启丢数据), 故落用户目录; 目录建不了再退临时目录。
+    /// </summary>
+    public static string DefaultPath()
+    {
+        try
+        {
+            string baseDir = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            if (!string.IsNullOrEmpty(baseDir))
+            {
+                string dir = Path.Combine(baseDir, "PitMine3D.Kylin");
+                Directory.CreateDirectory(dir);
+                return Path.Combine(dir, "geo.db");
+            }
+        }
+        catch { }
+        return Path.Combine(Path.GetTempPath(), "pmkylin_geo.db");
+    }
+
     /// <summary>打开并建库(应用全部迁移)。path=null → 内存库(连接存活期内有效)。</summary>
     public static GeoDatabase OpenSeeded(string? path = null)
     {

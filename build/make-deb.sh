@@ -1,0 +1,188 @@
+#!/usr/bin/env bash
+# 打 .deb（麒麟/Debian 系）。与 package-deb.sh 的区别：不依赖 fpm/dpkg-deb/ar，
+# 纯 tar + 手工 ar 归档 —— 因此在 Windows(Git Bash) 上也能出包，方便无 Linux 机时直接交付测试。
+#
+#   ./publish-linux.sh linux-x64            # 先交叉发布(自包含, 目标机无需装 .NET)
+#   ./fetch-deps.sh                         # 取 app-local ICU(麒麟上 .NET 最常缺的依赖)
+#   ./make-deb.sh linux-x64 0.1.0
+#
+# 产物: dist/pitmine3d_<VER>_<ARCH>.deb
+set -euo pipefail
+
+RID="${1:-linux-x64}"
+VER="${2:-0.1.0}"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$HERE/.."
+DIST="$ROOT/dist/$RID"
+
+case "$RID" in
+    linux-x64)         ARCH=amd64;  ICUDIR="$HERE/deps/icu-x64/runtimes/linux-x64/native" ;;
+    linux-arm64)       ARCH=arm64;  ICUDIR="$HERE/deps/icu-arm64/runtimes/linux-arm64/native" ;;
+    linux-loongarch64) ARCH=loong64; ICUDIR="" ;;
+    *) echo "未知 RID: $RID"; exit 1 ;;
+esac
+
+[ -d "$DIST" ] || { echo "缺 $DIST，先跑: ./publish-linux.sh $RID"; exit 1; }
+
+STAGE="$(mktemp -d)"
+APPDIR="$STAGE/opt/pitmine3d"
+mkdir -p "$APPDIR" "$STAGE/usr/share/applications" "$STAGE/usr/share/icons/hicolor/scalable/apps" \
+         "$STAGE/usr/share/doc/pitmine3d" "$STAGE/DEBIAN"
+
+echo ">> 拷贝应用(自包含 .NET + Avalonia/Skia 原生库)"
+cp -r "$DIST"/. "$APPDIR/"
+
+# ── 随包携带的运行时依赖 ───────────────────────────────────────────
+# ICU：.NET 的全球化(非 Invariant)依赖，麒麟上版本常不匹配/缺失 —— 带一份, 系统没有时才用。
+if [ -n "$ICUDIR" ] && [ -d "$ICUDIR" ]; then
+    mkdir -p "$APPDIR/runtime-libs"
+    cp "$ICUDIR"/libicu*.so.* "$APPDIR/runtime-libs/"
+    echo ">> 已带 ICU: $(ls "$APPDIR/runtime-libs" | tr '\n' ' ')"
+else
+    echo "!! 未找到 ICU($ICUDIR)，包内不带 ICU；麒麟若缺 libicu 将回退到 Invariant 模式"
+fi
+
+# ── 启动器：按需补依赖, 再起应用 ───────────────────────────────────
+cat > "$APPDIR/pitmine3d.sh" <<'LAUNCH'
+#!/bin/sh
+# PitMine3D 麒麟版启动器：系统缺 ICU 时用随包携带的一份；再缺就退到 Invariant 模式(仅影响区域格式)。
+APP_DIR=/opt/pitmine3d
+LIBS="$APP_DIR/runtime-libs"
+
+# ldconfig 常在 /sbin, 普通用户 PATH 里可能没有; 都查不到再翻常见库目录
+has_lib() {
+    for LDC in ldconfig /sbin/ldconfig /usr/sbin/ldconfig; do
+        command -v "$LDC" >/dev/null 2>&1 || [ -x "$LDC" ] || continue
+        "$LDC" -p 2>/dev/null | grep -q "$1" && return 0
+    done
+    for D in /usr/lib /usr/lib64 /lib /lib64 /usr/lib/x86_64-linux-gnu /usr/lib/aarch64-linux-gnu; do
+        ls "$D"/$1* >/dev/null 2>&1 && return 0
+    done
+    return 1
+}
+
+if ! has_lib "libicuuc.so"; then
+    if [ -d "$LIBS" ] && ls "$LIBS"/libicuuc.so.* >/dev/null 2>&1; then
+        LD_LIBRARY_PATH="$LIBS${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+        export LD_LIBRARY_PATH
+    else
+        DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+        export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT
+    fi
+fi
+
+# 麒麟自带 Mesa 时软件渲染更稳；有独显/驱动就走硬件(不强制)
+[ -n "${PITMINE_SOFTWARE_GL:-}" ] && { LIBGL_ALWAYS_SOFTWARE=1; export LIBGL_ALWAYS_SOFTWARE; }
+
+exec "$APP_DIR/PitMine3D.Kylin" "$@"
+LAUNCH
+chmod +x "$APPDIR/pitmine3d.sh" "$APPDIR/PitMine3D.Kylin" 2>/dev/null || true
+
+cp "$HERE/pitmine3d.desktop" "$STAGE/usr/share/applications/pitmine3d.desktop"
+sed -i 's|^Exec=.*|Exec=/opt/pitmine3d/pitmine3d.sh %F|' "$STAGE/usr/share/applications/pitmine3d.desktop"
+cp "$HERE/pitmine3d.svg" "$STAGE/usr/share/icons/hicolor/scalable/apps/pitmine3d.svg"
+
+cat > "$STAGE/usr/share/doc/pitmine3d/README.Kylin.md" <<'DOC'
+# PitMine3D 麒麟版
+
+- 安装: `sudo dpkg -i pitmine3d_<版本>_<架构>.deb`
+- 启动: 开始菜单「露天矿三维平台」，或终端 `pitmine3d`
+- 卸载: `sudo dpkg -r pitmine3d`
+
+## 随包携带的依赖
+- **.NET 8 运行时**（自包含发布，目标机无需安装 .NET）
+- **Avalonia / SkiaSharp / HarfBuzz / SQLite 原生库**（随发布产物）
+- **ICU 72**（`/opt/pitmine3d/runtime-libs`）：仅当系统 `ldconfig` 查不到 `libicuuc.so` 时才启用；
+  若两者都没有，启动器自动退到 Invariant 全球化模式（只影响区域格式，程序可正常使用）。
+
+## 需要系统提供（麒麟桌面默认都有）
+X11 与 OpenGL 栈: `libx11-6 libice6 libsm6 libgl1 libfontconfig1`。
+若缺，联网机器执行: `sudo apt-get install -y libx11-6 libice6 libsm6 libgl1 libfontconfig1`
+
+## 显示异常时
+- 无 GPU 驱动/花屏: `PITMINE_SOFTWARE_GL=1 pitmine3d`（强制软件渲染）
+- 收集日志: `pitmine3d 2> /tmp/pitmine3d.log`
+DOC
+
+INSTALLED_KB=$(du -sk "$STAGE/opt" "$STAGE/usr" | awk '{s+=$1} END {print s}')
+cat > "$STAGE/DEBIAN/control" <<CTRL
+Package: pitmine3d
+Version: $VER
+Section: science
+Priority: optional
+Architecture: $ARCH
+Maintainer: DayOps <noreply@example.com>
+Installed-Size: $INSTALLED_KB
+Depends: libc6
+Recommends: libx11-6, libice6, libsm6, libgl1, libfontconfig1
+Description: PitMine3D 露天矿三维平台 (麒麟版)
+ 露天煤矿二三维一体化生产计划决策支撑系统的麒麟/Linux 版本。
+ 基于 Avalonia + OpenGL, 自包含 .NET 8 运行时, 随包携带 ICU, 目标机无需联网装依赖。
+CTRL
+
+cat > "$STAGE/DEBIAN/postinst" <<'POST'
+#!/bin/sh
+set -e
+ln -sf /opt/pitmine3d/pitmine3d.sh /usr/bin/pitmine3d
+chmod +x /opt/pitmine3d/PitMine3D.Kylin /opt/pitmine3d/pitmine3d.sh 2>/dev/null || true
+# ICU soname 软链(.NET 按 libicuuc.so.<主版本> 查找)
+if [ -d /opt/pitmine3d/runtime-libs ]; then
+    for f in /opt/pitmine3d/runtime-libs/libicu*.so.*; do
+        [ -e "$f" ] || continue
+        base=$(basename "$f"); stem=${base%%.so.*}; ver=${base#*.so.}; major=${ver%%.*}
+        ln -sf "$base" "/opt/pitmine3d/runtime-libs/$stem.so.$major"
+        ln -sf "$base" "/opt/pitmine3d/runtime-libs/$stem.so"
+    done
+fi
+command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q /usr/share/applications || true
+command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -q -f /usr/share/icons/hicolor || true
+exit 0
+POST
+
+cat > "$STAGE/DEBIAN/prerm" <<'PRERM'
+#!/bin/sh
+set -e
+rm -f /usr/bin/pitmine3d
+exit 0
+PRERM
+chmod 755 "$STAGE/DEBIAN/postinst" "$STAGE/DEBIAN/prerm"
+
+OUT="$ROOT/dist/pitmine3d_${VER}_${ARCH}.deb"
+mkdir -p "$ROOT/dist"
+
+if command -v dpkg-deb >/dev/null 2>&1; then
+    echo ">> dpkg-deb 打包"
+    dpkg-deb --build --root-owner-group "$STAGE" "$OUT"
+else
+    echo ">> 无 dpkg-deb —— 用 tar + 手工 ar 组装(Windows 可用)"
+    WORK="$(mktemp -d)"
+    # data.tar.gz：/opt 全部 755(内含可执行), /usr/share 644
+    ( cd "$STAGE" && tar --format=gnu --owner=root:0 --group=root:0 --mode=755 -cf "$WORK/data.tar" ./opt )
+    ( cd "$STAGE" && tar --format=gnu --owner=root:0 --group=root:0 --mode=644 -rf "$WORK/data.tar" ./usr )
+    gzip -9n "$WORK/data.tar"
+    # control.tar.gz：control 644, 脚本 755
+    ( cd "$STAGE/DEBIAN" && tar --format=gnu --owner=root:0 --group=root:0 --mode=644 -cf "$WORK/control.tar" ./control )
+    ( cd "$STAGE/DEBIAN" && tar --format=gnu --owner=root:0 --group=root:0 --mode=755 -rf "$WORK/control.tar" ./postinst ./prerm )
+    gzip -9n "$WORK/control.tar"
+    printf '2.0\n' > "$WORK/debian-binary"
+
+    # ar 归档(GNU ar 格式)：成员顺序固定 debian-binary → control.tar.gz → data.tar.gz
+    ar_member() {   # $1=归档文件 $2=成员名 $3=源文件 $4=八进制权限
+        local out="$1" name="$2" src="$3" mode="$4"
+        local size; size=$(wc -c < "$src")
+        printf '%-16s%-12u%-6u%-6u%-8s%-10u\140\n' "$name" "$(date +%s)" 0 0 "$mode" "$size" >> "$out"
+        cat "$src" >> "$out"
+        [ $((size % 2)) -eq 1 ] && printf '\n' >> "$out"
+        return 0
+    }
+    printf '!<arch>\n' > "$OUT"
+    ar_member "$OUT" "debian-binary"   "$WORK/debian-binary"    "100644"
+    ar_member "$OUT" "control.tar.gz"  "$WORK/control.tar.gz"   "100644"
+    ar_member "$OUT" "data.tar.gz"     "$WORK/data.tar.gz"      "100644"
+    rm -rf "$WORK"
+fi
+
+rm -rf "$STAGE"
+SZ=$(du -h "$OUT" | cut -f1)
+echo ">> 生成: $OUT  ($SZ)"
+echo "   安装: sudo dpkg -i $(basename "$OUT")   ·  启动: pitmine3d"

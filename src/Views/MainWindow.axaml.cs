@@ -10016,7 +10016,7 @@ public partial class MainWindow : Window
         if (_geoDb != null) return _geoDb;
         try
         {
-            string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "pmkylin_geo.db");
+            string path = Data.GeoDatabase.DefaultPath();   // 用户数据目录(装到 /opt 后程序目录不可写; 临时目录重启会清)
             _geoDb = Data.GeoDatabase.OpenSeeded(path);   // 文件库：会话间持久, 已应用迁移跳过
             return _geoDb;
         }
