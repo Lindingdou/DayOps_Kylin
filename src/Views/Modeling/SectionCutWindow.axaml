@@ -1,0 +1,134 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.Modeling.SectionCutWindow" x:CompileBindings="False"
+        Classes="geodb" Title="创建剖面" Height="700" Width="580" WindowStartupLocation="CenterOwner">
+    <Grid RowDefinitions="Auto,*,Auto">
+        <Border Grid.Row="0" Padding="16,10">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                    <GradientStop Color="#FF60A5FA" Offset="0"/>
+                    <GradientStop Color="#FF2563EB" Offset="1"/>
+                </LinearGradientBrush>
+            </Border.Background>
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="创建剖面" Foreground="White" FontSize="16" FontWeight="Bold"/>
+                <TextBlock Text="沿剖面线竖直切三角网 → 原位交线 + 展开剖面图（里程-标高）" Foreground="#FFDBEAFE" FontSize="12" VerticalAlignment="Center" Margin="16,2,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="14,10,14,4" Spacing="8">
+
+                <Border Classes="panel" Padding="0">
+                    <StackPanel>
+                        <Border Classes="panel-hdr"><TextBlock Classes="panel-title" Text="① 剖面线（支持折线，逐段竖直切割）"/></Border>
+                        <StackPanel Margin="10">
+                            <DockPanel Margin="0,0,0,6">
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+                                    <Button Content="拾取多段线" MinWidth="88" FontWeight="Bold" Click="OnPickSection"/>
+                                    <Button Content="视口拾取两点" MinWidth="96" Click="OnPickTwoPoints"/>
+                                </StackPanel>
+                                <RadioButton x:Name="secSel" Content="用视口选中的多段线" IsChecked="True" GroupName="sec" VerticalAlignment="Center" IsCheckedChanged="OnSectionModeChanged"/>
+                            </DockPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <RadioButton x:Name="secManual" Content="两点输入" GroupName="sec" VerticalAlignment="Center" IsCheckedChanged="OnSectionModeChanged"/>
+                                <TextBlock Text="X1" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                                <TextBox x:Name="txtX1" Width="76" Margin="6,0,0,0" VerticalAlignment="Center" IsEnabled="False"/>
+                                <TextBlock Text="Y1" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                <TextBox x:Name="txtY1" Width="76" Margin="6,0,0,0" VerticalAlignment="Center" IsEnabled="False"/>
+                                <TextBlock Text="→ X2" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                <TextBox x:Name="txtX2" Width="76" Margin="6,0,0,0" VerticalAlignment="Center" IsEnabled="False"/>
+                                <TextBlock Text="Y2" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                <TextBox x:Name="txtY2" Width="76" Margin="6,0,0,0" VerticalAlignment="Center" IsEnabled="False"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                <TextBlock Text="剖面号" VerticalAlignment="Center"/>
+                                <TextBox x:Name="txtSecName" Width="56" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="（如 A / 1；留空不出图名。图名样式：A-A′ 剖面图）" VerticalAlignment="Center" Margin="8,0,0,0" FontSize="11" Classes="muted"/>
+                            </StackPanel>
+                            <TextBlock x:Name="secStat" TextWrapping="Wrap" Margin="0,6,0,0" FontSize="12" Classes="muted"
+                                       Text="定剖面线：选中一条多段线点「拾取多段线」，或点「视口拾取两点」在视口连点两点，或切「两点输入」手填。"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Classes="panel" Padding="0">
+                    <StackPanel>
+                        <Border Classes="panel-hdr"><TextBlock Classes="panel-title" Text="② 输出"/></Border>
+                        <StackPanel Margin="10">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <CheckBox x:Name="chk3d" Content="原位三维交线" IsChecked="True" VerticalAlignment="Center"/>
+                                <TextBlock Text="图层" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                                <TextBox x:Name="txtLayer3d" Width="100" Text="剖面交线" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                <CheckBox x:Name="chkClearOld" Content="清除旧结果" IsChecked="True" Margin="16,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <CheckBox x:Name="chkProfile" Content="展开剖面图" IsChecked="True" VerticalAlignment="Center"/>
+                                <TextBlock Text="图层" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                                <TextBox x:Name="txtLayerProfile" Width="100" Text="剖面图" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="垂直夸大" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                                <TextBox x:Name="txtVex" Width="44" Text="1" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="×" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="标高网格" VerticalAlignment="Center"/>
+                                <TextBox x:Name="txtGridZ" Width="44" Text="10" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="m   里程刻度" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                <TextBox x:Name="txtGridS" Width="52" Text="100" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="m   字高" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                <TextBox x:Name="txtTextH" Width="40" Text="2" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="m" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Classes="panel" Padding="0">
+                    <StackPanel>
+                        <Border Classes="panel-hdr"><TextBlock Classes="panel-title" Text="③ 地质要素（钻孔投影柱状，展开剖面图上）"/></Border>
+                        <StackPanel Margin="10">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <CheckBox x:Name="chkBoreholes" Content="投影钻孔柱状" IsChecked="True" VerticalAlignment="Center"/>
+                                <TextBlock Text="投影带宽" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                                <TextBox x:Name="txtBand" Width="52" Text="100" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="m   柱宽" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                <TextBox x:Name="txtColW" Width="40" Text="4" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="m" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                <CheckBox x:Name="chkHoleId" Content="孔号" IsChecked="True" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                                <CheckBox x:Name="chkOffsetLabel" Content="偏距" IsChecked="True" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <TextBlock TextWrapping="Wrap" FontSize="11" Classes="muted"
+                                       Text="数据来自地质数据库钻孔库：剖面线两侧带宽内的钻孔投影到剖面上，按岩性/煤层分层画色块柱（分层色取库内配色，缺省煤层深灰、岩性按层名配淡色），孔口上方标孔号与偏距。库为空或未就绪时自动跳过。"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- 剖面预览(里程-标高, 每面一条) + 导出 -->
+                <Border Classes="panel" Padding="0">
+                    <StackPanel>
+                        <Border Classes="panel-hdr"><TextBlock Classes="panel-title" Text="剖面预览（里程 − 标高，每张网一条）"/></Border>
+                        <StackPanel Margin="10">
+                            <ch:ChartView x:Name="chart" Height="200" NumericX="True" XTitle="里程 s (m)" YTitle="标高 z (m)"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,6,0,0">
+                                <Button Content="导出 CSV" MinWidth="84" Click="OnExportCsv"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <Border Grid.Row="2" Classes="statusbar" Padding="14,8">
+            <StackPanel>
+                <TextBlock x:Name="statusText" TextWrapping="Wrap" Margin="0,0,0,8" FontSize="12"
+                           Text="定剖面线（拾取多段线 / 视口拾取两点 / 两点输入）→ 点【生成剖面】：自动切场景全部三角网，算好后在视口点一个插入点定图位。"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
+                    <Button x:Name="btnGenerate" Content="生成剖面" MinWidth="100" FontWeight="Bold" Click="OnGenerate" Classes="primary"/>
+                    <Button Content="清除结果" MinWidth="84" Click="OnClearResult"/>
+                    <Button Content="关闭" MinWidth="70" Click="OnClose"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

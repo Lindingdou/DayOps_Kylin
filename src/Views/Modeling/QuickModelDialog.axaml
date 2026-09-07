@@ -1,0 +1,35 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="PitMine3D.Kylin.Views.Modeling.QuickModelDialog" x:CompileBindings="False"
+        Classes="geodb" Title="地质体建模（连续多层）" Width="500" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner">
+    <StackPanel Margin="16">
+        <TextBlock Text="地质体建模 — 层位面连续多层自动成体" FontSize="15" FontWeight="Bold" Margin="0,0,0,4"/>
+        <TextBlock TextWrapping="Wrap" Margin="0,0,0,12" Classes="muted"
+                   Text="在视口选中层位三角网后点「从选集添加」。层位按均高自动排序,相邻两面夹一层,N 张面一次构建 N−1 个封闭地质体。顶/底面用源网原三角(满精度不采样),提取真实边界环放样出侧壁再焊接成体;断层缝/空洞沿源网轮廓清晰保留,未配上对的留开口交给单独建模。"/>
+
+        <!-- 层位面列表 -->
+        <Border Classes="panel" Padding="10" Margin="0,0,0,10">
+            <StackPanel>
+                <Grid Margin="0,0,0,6" ColumnDefinitions="*,Auto,Auto">
+                    <TextBlock Grid.Column="0" Text="层位面（自上而下）" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <Button Grid.Column="1" Content="从选集添加" MinWidth="86" Margin="0,0,6,0" Click="OnAddFromSelectionClick"/>
+                    <Button Grid.Column="2" Content="清空" MinWidth="52" Click="OnClearLayersClick"/>
+                </Grid>
+                <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto">
+                    <StackPanel x:Name="panelLayers"/>
+                </ScrollViewer>
+                <TextBlock x:Name="txtLayerSummary" Margin="0,6,0,0" FontSize="11" Classes="muted" Text="尚未添加层位面。"/>
+            </StackPanel>
+        </Border>
+
+        <CheckBox x:Name="chkFlipN" Content="翻转法线" Margin="0,0,0,10"/>
+
+        <!-- 构建结果 -->
+        <TextBlock x:Name="txtStatus" TextWrapping="Wrap" Margin="0,0,0,10" FontSize="12" Classes="muted" Text="" IsVisible="False"/>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,2,0,0" Spacing="8">
+            <Button x:Name="btnBuild" Content="构建" MinWidth="84" Click="OnBuildClick" IsDefault="True" Classes="primary"/>
+            <Button Content="关闭" MinWidth="84" Click="OnCloseClick" IsCancel="True"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

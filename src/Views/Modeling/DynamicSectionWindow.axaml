@@ -1,0 +1,48 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="PitMine3D.Kylin.Views.Modeling.DynamicSectionWindow" x:CompileBindings="False"
+        Classes="geodb" Title="动态剖面" Width="880" Height="600" WindowStartupLocation="CenterOwner">
+    <Grid Margin="10" RowDefinitions="Auto,Auto,*,Auto,Auto">
+        <!-- 基准剖面线 -->
+        <WrapPanel Grid.Row="0" Margin="0,0,0,6">
+            <Button Content="视口拾取两点" Click="OnPickTwoPoints" Width="98" Height="26"/>
+            <TextBlock Text="X1" VerticalAlignment="Center" Margin="10,0,3,0"/>
+            <TextBox x:Name="txtX1" Width="80" Height="22"/>
+            <TextBlock Text="Y1" VerticalAlignment="Center" Margin="6,0,3,0"/>
+            <TextBox x:Name="txtY1" Width="80" Height="22"/>
+            <TextBlock Text="X2" VerticalAlignment="Center" Margin="6,0,3,0"/>
+            <TextBox x:Name="txtX2" Width="80" Height="22"/>
+            <TextBlock Text="Y2" VerticalAlignment="Center" Margin="6,0,3,0"/>
+            <TextBox x:Name="txtY2" Width="80" Height="22"/>
+            <Button Content="生成/刷新预览" Click="OnBuildPreview" Width="106" Height="26" Margin="10,0,0,0" Classes="primary"/>
+        </WrapPanel>
+
+        <!-- 平移扫掠 + 厚度分析开关 -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,6" VerticalAlignment="Center">
+            <TextBlock Text="沿法向平移剖面：" VerticalAlignment="Center"/>
+            <Slider x:Name="offsetSlider" Width="380" Minimum="-500" Maximum="500" Value="0" TickFrequency="10" IsSnapToTickEnabled="False" VerticalAlignment="Center" ValueChanged="OnOffsetChanged"/>
+            <TextBlock x:Name="offsetLabel" Text="0 m" VerticalAlignment="Center" Margin="8,0,0,0" Width="60"/>
+            <Button Content="归零" Click="OnResetOffset" Width="48" Height="24" Margin="4,0,0,0"/>
+            <Button Content="展绘到场景" Click="OnBake" Width="92" Height="26" Margin="12,0,0,0"/>
+            <TextBlock Text="垂直夸大" VerticalAlignment="Center" Margin="12,0,3,0"/>
+            <TextBox x:Name="txtVex" Text="1" Width="40" Height="22"/>
+            <CheckBox x:Name="chkThickness" Content="厚度分析" IsChecked="True" VerticalAlignment="Center" Margin="14,0,0,0"
+                      ToolTip.Tip="勾选后，鼠标在剖面上移动即读出该里程处相邻层位之间的厚度（煤厚/夹层厚）"/>
+        </StackPanel>
+
+        <!-- 2D 实时剖面预览（previewCanvas 画剖面；overlayCanvas 叠加鼠标交互层） -->
+        <Border Grid.Row="2" BorderThickness="1" BorderBrush="#FF9CA3AF" CornerRadius="3" Background="#FF1F2937">
+            <Grid>
+                <Canvas x:Name="previewCanvas" Background="Transparent" ClipToBounds="True"/>
+                <Canvas x:Name="overlayCanvas" Background="Transparent" ClipToBounds="True" PointerMoved="OnOverlayPointerMoved" PointerExited="OnOverlayPointerExited"/>
+            </Grid>
+        </Border>
+
+        <!-- 厚度读数 -->
+        <TextBlock x:Name="readoutText" Grid.Row="3" Margin="2,6,2,0" TextWrapping="Wrap" Classes="muted"
+                   Text="勾选「厚度分析」后，把鼠标移到剖面上查看相邻层位间的厚度。"/>
+
+        <Border Grid.Row="4" Classes="statusbar" Margin="0,6,0,0">
+            <TextBlock x:Name="statusText" Text="拾取/输入两点定基准剖面线，点「生成/刷新预览」；拖滑块沿法向平移，剖面实时重算。"/>
+        </Border>
+    </Grid>
+</Window>

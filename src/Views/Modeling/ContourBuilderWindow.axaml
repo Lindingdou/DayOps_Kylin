@@ -1,0 +1,162 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="PitMine3D.Kylin.Views.Modeling.ContourBuilderWindow" x:CompileBindings="False"
+        Classes="geodb" Title="构建等值线" Height="720" Width="560" WindowStartupLocation="CenterOwner">
+    <Grid RowDefinitions="Auto,*,Auto">
+        <Border Grid.Row="0" Padding="16,10">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                    <GradientStop Color="#FF34D399" Offset="0"/>
+                    <GradientStop Color="#FF059669" Offset="1"/>
+                </LinearGradientBrush>
+            </Border.Background>
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="构建等值线" Foreground="White" FontSize="16" FontWeight="Bold"/>
+                <TextBlock Text="点(散点)/线(多段线)/面(三角网) → 等值线；多段线或圆滑曲线输出" Foreground="#FFD1FAE5" FontSize="12" VerticalAlignment="Center" Margin="16,2,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="14,10,14,4" Spacing="8">
+
+                <Border Classes="panel" Padding="0">
+                    <StackPanel>
+                        <Border Classes="panel-hdr"><TextBlock Classes="panel-title" Text="① 数据源（点 / 线 / 面，可混选）"/></Border>
+                        <StackPanel Margin="10">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <RadioButton x:Name="srcPick" Content="视口选择" IsChecked="True" GroupName="src" IsCheckedChanged="OnSourceModeChanged"/>
+                                <RadioButton x:Name="srcLayer" Content="按图层" GroupName="src" Margin="16,0,0,0" IsCheckedChanged="OnSourceModeChanged"/>
+                                <RadioButton x:Name="srcAll" Content="全部实体" GroupName="src" Margin="16,0,0,0" IsCheckedChanged="OnSourceModeChanged"/>
+                                <Button Content="刷新图层" MinWidth="70" Margin="24,0,0,0" Click="OnRefreshLayers"/>
+                            </StackPanel>
+                            <Border BorderBrush="#FFB0B4BA" BorderThickness="1" CornerRadius="2">
+                                <ListBox x:Name="layerList" Height="76" IsEnabled="False">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" Content="{Binding Name}" Margin="2,1"/>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </Border>
+                            <DockPanel Margin="0,8,0,0">
+                                <Button DockPanel.Dock="Right" Content="拾取数据" MinWidth="96" FontWeight="Bold" Click="OnPickData"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="线源加密采样" VerticalAlignment="Center"/>
+                                    <TextBox x:Name="txtDensify" Width="52" Text="5" Margin="8,0,4,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="m（0 = 仅用原顶点）" VerticalAlignment="Center" FontSize="11" Classes="muted"/>
+                                </StackPanel>
+                            </DockPanel>
+                            <TextBlock x:Name="pickStat" TextWrapping="Wrap" Margin="0,6,0,0" FontSize="12" Classes="muted"
+                                       Text="尚未拾取。点/线源经 Delaunay 统一构网后切割；面(三角网)源逐三角形直接切割。"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Classes="panel" Padding="0">
+                    <StackPanel>
+                        <Border Classes="panel-hdr"><TextBlock Classes="panel-title" Text="② 等值取值（标量场 v1 = 高程 Z）"/></Border>
+                        <StackPanel Margin="10">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <TextBlock Text="值域" VerticalAlignment="Center"/>
+                                <TextBox x:Name="txtRangeMin" Width="76" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="~" Margin="6,0,6,0" VerticalAlignment="Center"/>
+                                <TextBox x:Name="txtRangeMax" Width="76" VerticalAlignment="Center"/>
+                                <TextBlock Text="m（拾取后自动探测，可手改裁剪）" Margin="8,0,0,0" VerticalAlignment="Center" FontSize="11" Classes="muted"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <RadioButton x:Name="lvStep" Content="等值距" IsChecked="True" GroupName="lv" VerticalAlignment="Center" IsCheckedChanged="OnLevelModeChanged"/>
+                                <TextBox x:Name="txtInterval" Width="52" Text="5" Margin="8,0,4,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="m   基准" VerticalAlignment="Center"/>
+                                <TextBox x:Name="txtBase" Width="52" Text="0" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="计曲线每" Margin="16,0,0,0" VerticalAlignment="Center"/>
+                                <TextBox x:Name="txtIndexEvery" Width="40" Text="5" Margin="8,0,4,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="条（0 = 不区分）" VerticalAlignment="Center" FontSize="11" Classes="muted"/>
+                            </StackPanel>
+                            <DockPanel>
+                                <RadioButton x:Name="lvList" Content="指定值" GroupName="lv" VerticalAlignment="Center" DockPanel.Dock="Left" IsCheckedChanged="OnLevelModeChanged"/>
+                                <TextBox x:Name="txtLevels" Margin="8,0,0,0" IsEnabled="False" ToolTip.Tip="逗号 / 分号 / 空格分隔，如：1000, 1050, 1100, 1187.5"/>
+                            </DockPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Classes="panel" Padding="0">
+                    <StackPanel>
+                        <Border Classes="panel-hdr"><TextBlock Classes="panel-title" Text="③ 构网（仅点 / 线源；面源直接切割不构网）"/></Border>
+                        <StackPanel Orientation="Horizontal" Margin="10">
+                            <TextBlock Text="长边剔除" VerticalAlignment="Center"/>
+                            <TextBox x:Name="txtLongEdge" Width="52" Text="50" Margin="8,0,4,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="m（剔除凸包外沿的狭长伪三角；绝对米，0 = 不剔除）" VerticalAlignment="Center" FontSize="11" Classes="muted"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Classes="panel" Padding="0">
+                    <StackPanel>
+                        <Border Classes="panel-hdr"><TextBlock Classes="panel-title" Text="④ 输出形态"/></Border>
+                        <StackPanel Margin="10">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <RadioButton x:Name="outPoly" Content="多段线" IsChecked="True" GroupName="out" VerticalAlignment="Center" IsCheckedChanged="OnOutputModeChanged"/>
+                                <RadioButton x:Name="outChaikin" Content="Chaikin 圆滑" GroupName="out" Margin="16,0,0,0" VerticalAlignment="Center" IsCheckedChanged="OnOutputModeChanged"/>
+                                <ComboBox x:Name="cmbChaikin" Width="70" Margin="8,0,0,0" SelectedIndex="1" IsEnabled="False">
+                                    <ComboBoxItem Content="1 次"/><ComboBoxItem Content="2 次"/>
+                                    <ComboBoxItem Content="3 次"/><ComboBoxItem Content="4 次"/>
+                                </ComboBox>
+                                <RadioButton x:Name="outSpline" Content="样条(过点)" GroupName="out" Margin="16,0,0,0" VerticalAlignment="Center" IsCheckedChanged="OnOutputModeChanged"/>
+                                <TextBox x:Name="txtSplineStep" Width="44" Text="2" Margin="8,0,4,0" VerticalAlignment="Center" IsEnabled="False"/>
+                                <TextBlock Text="m" VerticalAlignment="Center" FontSize="11" Classes="muted"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="简化容差" VerticalAlignment="Center"/>
+                                <TextBox x:Name="txtSimplify" Width="52" Text="0.2" Margin="8,0,4,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="m" VerticalAlignment="Center"/>
+                                <TextBlock Text="碎线过滤" Margin="16,0,0,0" VerticalAlignment="Center"/>
+                                <TextBox x:Name="txtMinLen" Width="52" Text="10" Margin="8,0,4,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="m（更短的丢弃；样条自交自动回退多段线）" VerticalAlignment="Center" FontSize="11" Classes="muted"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Classes="panel" Padding="0">
+                    <StackPanel>
+                        <Border Classes="panel-hdr"><TextBlock Classes="panel-title" Text="⑤ 落地与显示"/></Border>
+                        <StackPanel Margin="10">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <TextBlock Text="目标图层" VerticalAlignment="Center"/>
+                                <TextBox x:Name="txtLayer" Width="110" Text="等值线" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="颜色" Margin="16,0,0,0" VerticalAlignment="Center"/>
+                                <ComboBox x:Name="cmbColor" Width="180" Margin="8,0,0,0" SelectedIndex="0">
+                                    <ComboBoxItem Content="首曲线 / 计曲线双色"/>
+                                    <ComboBoxItem Content="单色（随层）"/>
+                                    <ComboBoxItem Content="高程色带（蓝→红）"/>
+                                </ComboBox>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <CheckBox x:Name="chkLabel" Content="高程标注" IsChecked="True" VerticalAlignment="Center"/>
+                                <TextBlock Text="字高" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                                <TextBox x:Name="txtTextH" Width="40" Text="2" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="间隔" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                                <TextBox x:Name="txtLabelGap" Width="48" Text="150" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                <CheckBox x:Name="chkIndexOnly" Content="仅计曲线" IsChecked="True" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                                <CheckBox x:Name="chkClearOld" Content="清除旧结果" IsChecked="True" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <Border Grid.Row="2" Classes="statusbar" Padding="14,8">
+            <StackPanel>
+                <TextBlock x:Name="statusText" TextWrapping="Wrap" Margin="0,0,0,8" FontSize="12"
+                           Text="① 选数据源方式 → 点【拾取数据】(看到统计) → ② 调参 → 点【生成等值线】。必须先拾取数据！"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
+                    <Button x:Name="btnGenerate" Content="生成等值线" MinWidth="100" FontWeight="Bold" Click="OnGenerate" Classes="primary"/>
+                    <Button x:Name="btnClearResult" Content="清除结果" MinWidth="84" Click="OnClearResult"/>
+                    <Button Content="关闭" MinWidth="70" Click="OnClose"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>
