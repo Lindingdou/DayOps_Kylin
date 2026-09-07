@@ -29,8 +29,12 @@ internal static class Program
         W("PitMine3D 麒麟环境体检器  " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
         W("(独立程序, 不改动也不需要主程序; 把本报告回传即可定位闪退原因)");
 
+        string scanDir = "/opt/pitmine3d";
+        foreach (var a in args) if (a.StartsWith("--dir=")) scanDir = a.Substring(6);
+
         System();
         Libraries();
+        ScanElfDeps(scanDir);
         Icu();
         Session();
         Graphics();
@@ -72,6 +76,161 @@ internal static class Program
 
     [DllImport("libc", EntryPoint = "gnu_get_libc_version")]
     private static extern IntPtr gnu_get_libc_version();
+
+    // ─────────────── ELF 依赖全量扫描(一次性把"真实需要什么"列全) ───────────────
+    // 直接读发布产物里每个 .so / 可执行文件的 DT_NEEDED, 汇总成权威依赖表,
+    // 再按 "包内自带 / 系统已有 / 缺失" 三分 —— 不靠手写清单, 换版本也不会漏。
+    private static void ScanElfDeps(string dir)
+    {
+        Head($"依赖全量扫描 (解析 {dir} 内 ELF 的 DT_NEEDED)");
+        if (!Directory.Exists(dir)) { W($"  (目录不存在, 跳过: {dir}) —— 未安装主程序时可用 --dir=<发布目录> 指定"); return; }
+
+        var files = new List<string>();
+        try
+        {
+            files.AddRange(Directory.GetFiles(dir, "*.so", SearchOption.AllDirectories));
+            files.AddRange(Directory.GetFiles(dir, "*.so.*", SearchOption.AllDirectories));
+            foreach (var f in Directory.GetFiles(dir, "*", SearchOption.TopDirectoryOnly))
+                if (!f.EndsWith(".dll") && !f.EndsWith(".json") && !f.EndsWith(".pdb") && !files.Contains(f)) files.Add(f);
+        }
+        catch (Exception ex) { Warn("扫描目录", ex.Message); return; }
+
+        var needed = new SortedDictionary<string, List<string>>(StringComparer.Ordinal);   // soname → 谁需要它
+        var provided = new HashSet<string>(StringComparer.Ordinal);                        // 包内自带的 soname
+        int elfCount = 0;
+        foreach (var f in files)
+        {
+            var (sonames, self) = ElfNeeded(f);
+            if (sonames == null) continue;   // 非 ELF
+            elfCount++;
+            if (!string.IsNullOrEmpty(self)) provided.Add(self!);
+            provided.Add(Path.GetFileName(f));
+            foreach (var s in sonames)
+            {
+                if (!needed.TryGetValue(s, out var users)) needed[s] = users = new List<string>();
+                if (users.Count < 3) users.Add(Path.GetFileName(f));
+            }
+        }
+        W($"  扫描 ELF 文件 {elfCount} 个, 汇总外部依赖 {needed.Count} 项");
+
+        bool isLinux = RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+        var missing = new List<string>();
+        foreach (var (so, users) in needed)
+        {
+            if (provided.Contains(so)) { continue; }                       // 包内自带, 不需要系统提供
+            string who = string.Join(", ", users) + (users.Count >= 3 ? " …" : "");
+            bool core = so.StartsWith("libc.so") || so.StartsWith("libm.so") || so.StartsWith("libdl.so")
+                     || so.StartsWith("libpthread.so") || so.StartsWith("librt.so") || so.StartsWith("ld-linux")
+                     || so.StartsWith("libgcc_s.so");
+            bool optional = so.StartsWith("liblttng") || so.StartsWith("libnuma") || so.StartsWith("libgssapi");
+            if (NativeLibrary.TryLoad(so, out var h)) { NativeLibrary.Free(h); Ok(so, (core ? "系统基础库, 已有" : "系统已有") + " ← " + who); }
+            else if (File.Exists(Path.Combine(dir, so)) || File.Exists(Path.Combine(dir, "runtime-libs", so))) Ok(so, "包内自带");
+            else if (!isLinux) W($"  [ 跳过 ] {so} — 本机非 Linux, 无法判断 ← {who}");
+            else if (optional) Warn(so, "可选(缺了也能跑, 只少了诊断/追踪能力) ← " + who);
+            else { missing.Add(so); Bad(so, (core ? "系统基础库缺失(极罕见, 说明系统不完整)" : "系统缺失") + " ← 需要它的: " + who); }
+        }
+        if (missing.Count == 0) W("  → 所有外部依赖均可满足");
+        else
+        {
+            W("  → 缺失清单(按此装包即可):");
+            W("     " + string.Join(" ", missing));
+            W("     Debian/麒麟: sudo apt-get install -y " + string.Join(" ", GuessPackages(missing)));
+        }
+    }
+
+    /// <summary>soname → Debian 包名(常见映射; 猜不到就原样列出让用户 apt-file 查)。</summary>
+    private static IEnumerable<string> GuessPackages(IEnumerable<string> sonames)
+    {
+        var map = new Dictionary<string, string>
+        {
+            ["libstdc++.so.6"] = "libstdc++6", ["libgcc_s.so.1"] = "libgcc-s1",
+            ["libX11.so.6"] = "libx11-6", ["libXext.so.6"] = "libxext6", ["libXi.so.6"] = "libxi6",
+            ["libXrandr.so.2"] = "libxrandr2", ["libXcursor.so.1"] = "libxcursor1", ["libXrender.so.1"] = "libxrender1",
+            ["libXfixes.so.3"] = "libxfixes3", ["libXinerama.so.1"] = "libxinerama1", ["libxcb.so.1"] = "libxcb1",
+            ["libICE.so.6"] = "libice6", ["libSM.so.6"] = "libsm6",
+            ["libfontconfig.so.1"] = "libfontconfig1", ["libfreetype.so.6"] = "libfreetype6",
+            ["libGL.so.1"] = "libgl1", ["libEGL.so.1"] = "libegl1", ["libGLX.so.0"] = "libglx0",
+            ["libssl.so.1.1"] = "libssl1.1", ["libcrypto.so.1.1"] = "libssl1.1",
+            ["libssl.so.3"] = "libssl3", ["libcrypto.so.3"] = "libssl3",
+            ["libz.so.1"] = "zlib1g", ["libexpat.so.1"] = "libexpat1", ["libpng16.so.16"] = "libpng16-16",
+            ["libuuid.so.1"] = "uuid-runtime", ["libdbus-1.so.3"] = "libdbus-1-3",
+            ["libc.so.6"] = "libc6", ["libm.so.6"] = "libc6", ["libdl.so.2"] = "libc6",
+            ["libpthread.so.0"] = "libc6", ["librt.so.1"] = "libc6", ["ld-linux-x86-64.so.2"] = "libc6",
+            ["ld-linux-aarch64.so.1"] = "libc6", ["liblttng-ust.so.0"] = "liblttng-ust0",
+        };
+        var outp = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var s in sonames) outp.Add(map.TryGetValue(s, out var p) ? p : $"<查: apt-file search {s}>");
+        return outp;
+    }
+
+    /// <summary>读 ELF64 的 DT_NEEDED 与 DT_SONAME。非 ELF/32 位返回 (null, null)。</summary>
+    private static (List<string>? needed, string? soname) ElfNeeded(string path)
+    {
+        try
+        {
+            using var fs = File.OpenRead(path);
+            using var br = new BinaryReader(fs);
+            if (fs.Length < 64) return (null, null);
+            var ident = br.ReadBytes(16);
+            if (ident[0] != 0x7F || ident[1] != 'E' || ident[2] != 'L' || ident[3] != 'F') return (null, null);
+            if (ident[4] != 2) return (null, null);            // 只处理 64 位(x64/arm64/loongarch64 皆是)
+            fs.Position = 32;                                   // e_phoff
+            long phoff = br.ReadInt64();
+            fs.Position = 54;                                   // e_phentsize
+            int phentsize = br.ReadUInt16();
+            int phnum = br.ReadUInt16();
+
+            var loads = new List<(ulong vaddr, ulong off, ulong filesz)>();
+            (ulong off, ulong size) dyn = (0, 0);
+            for (int i = 0; i < phnum; i++)
+            {
+                fs.Position = phoff + (long)i * phentsize;
+                uint ptype = br.ReadUInt32();
+                br.ReadUInt32();                                 // p_flags
+                ulong poff = br.ReadUInt64(), pvaddr = br.ReadUInt64();
+                br.ReadUInt64();                                 // p_paddr
+                ulong pfilesz = br.ReadUInt64();
+                if (ptype == 1) loads.Add((pvaddr, poff, pfilesz));      // PT_LOAD
+                else if (ptype == 2) dyn = (poff, pfilesz);              // PT_DYNAMIC
+            }
+            if (dyn.size == 0) return (new List<string>(), null);
+
+            ulong VaddrToOff(ulong va)
+            {
+                foreach (var (v, o, sz) in loads)
+                    if (va >= v && va < v + sz) return va - v + o;
+                return va;   // 兜底: 有些文件 vaddr==offset
+            }
+
+            var neededOffs = new List<ulong>();
+            ulong strtabVa = 0, sonameOff = 0;
+            for (ulong p = dyn.off; p + 16 <= dyn.off + dyn.size; p += 16)
+            {
+                fs.Position = (long)p;
+                long tag = br.ReadInt64();
+                ulong val = br.ReadUInt64();
+                if (tag == 0) break;                       // DT_NULL
+                if (tag == 1) neededOffs.Add(val);         // DT_NEEDED
+                else if (tag == 5) strtabVa = val;         // DT_STRTAB
+                else if (tag == 14) sonameOff = val;       // DT_SONAME
+            }
+            if (strtabVa == 0) return (new List<string>(), null);
+            ulong strOff = VaddrToOff(strtabVa);
+
+            string ReadStr(ulong rel)
+            {
+                fs.Position = (long)(strOff + rel);
+                var sb = new StringBuilder();
+                for (int i = 0; i < 512; i++) { int c = fs.ReadByte(); if (c <= 0) break; sb.Append((char)c); }
+                return sb.ToString();
+            }
+            var list = new List<string>();
+            foreach (var o in neededOffs) { var s = ReadStr(o); if (s.Length > 0) list.Add(s); }
+            string? self = sonameOff != 0 ? ReadStr(sonameOff) : null;
+            return (list, self);
+        }
+        catch { return (null, null); }
+    }
 
     // ────────────────────────── 动态库 ──────────────────────────
     private static void Libraries()

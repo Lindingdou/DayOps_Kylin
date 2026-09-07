@@ -167,37 +167,7 @@ chmod 755 "$STAGE/DEBIAN/postinst" "$STAGE/DEBIAN/prerm"
 OUT="$ROOT/dist/pitmine3d_${VER}_${ARCH}.deb"
 mkdir -p "$ROOT/dist"
 
-if command -v dpkg-deb >/dev/null 2>&1; then
-    echo ">> dpkg-deb 打包"
-    dpkg-deb --build --root-owner-group "$STAGE" "$OUT"
-else
-    echo ">> 无 dpkg-deb —— 用 tar + 手工 ar 组装(Windows 可用)"
-    WORK="$(mktemp -d)"
-    # data.tar.gz：/opt 全部 755(内含可执行), /usr/share 644
-    ( cd "$STAGE" && tar --format=gnu --owner=root:0 --group=root:0 --mode=755 -cf "$WORK/data.tar" ./opt )
-    ( cd "$STAGE" && tar --format=gnu --owner=root:0 --group=root:0 --mode=644 -rf "$WORK/data.tar" ./usr )
-    gzip -9n "$WORK/data.tar"
-    # control.tar.gz：control 644, 脚本 755
-    ( cd "$STAGE/DEBIAN" && tar --format=gnu --owner=root:0 --group=root:0 --mode=644 -cf "$WORK/control.tar" ./control )
-    ( cd "$STAGE/DEBIAN" && tar --format=gnu --owner=root:0 --group=root:0 --mode=755 -rf "$WORK/control.tar" ./postinst ./prerm )
-    gzip -9n "$WORK/control.tar"
-    printf '2.0\n' > "$WORK/debian-binary"
-
-    # ar 归档(GNU ar 格式)：成员顺序固定 debian-binary → control.tar.gz → data.tar.gz
-    ar_member() {   # $1=归档文件 $2=成员名 $3=源文件 $4=八进制权限
-        local out="$1" name="$2" src="$3" mode="$4"
-        local size; size=$(wc -c < "$src")
-        printf '%-16s%-12u%-6u%-6u%-8s%-10u\140\n' "$name" "$(date +%s)" 0 0 "$mode" "$size" >> "$out"
-        cat "$src" >> "$out"
-        [ $((size % 2)) -eq 1 ] && printf '\n' >> "$out"
-        return 0
-    }
-    printf '!<arch>\n' > "$OUT"
-    ar_member "$OUT" "debian-binary"   "$WORK/debian-binary"    "100644"
-    ar_member "$OUT" "control.tar.gz"  "$WORK/control.tar.gz"   "100644"
-    ar_member "$OUT" "data.tar.gz"     "$WORK/data.tar.gz"      "100644"
-    rm -rf "$WORK"
-fi
+bash "$HERE/deb-pack.sh" "$STAGE" "$OUT"
 
 rm -rf "$STAGE"
 SZ=$(du -h "$OUT" | cut -f1)

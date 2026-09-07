@@ -2,7 +2,8 @@
 # 校验 .deb 结构(本机无 dpkg 时用)：ar 成员顺序/名字/长度 + 三个成员各自内容 + 关键文件权限。
 #   ./verify-deb.sh dist/pitmine3d_0.1.0_amd64.deb
 set -euo pipefail
-DEB="${1:?用法: verify-deb.sh <deb 文件>}"
+DEB="${1:?用法: verify-deb.sh <deb 文件> [app|doctor]}"
+PROFILE="${2:-app}"   # app=主程序包, doctor=体检器包
 [ -s "$DEB" ] || { echo "FAIL 文件不存在/为空: $DEB"; exit 1; }
 
 fail=0
@@ -55,17 +56,25 @@ chk() { # $1=路径正则 $2=期望权限前缀 $3=说明
     [ -n "$line" ] || { bad "$3 缺失"; return; }
     case "$line" in $2*) ok "$3 ($(echo "$line" | awk '{print $1, $2}'))";; *) bad "$3 权限异常: $line";; esac
 }
-chk '/opt/pitmine3d/PitMine3D.Kylin$'  '-rwxr-xr-x' "主程序 PitMine3D.Kylin"
-chk '/opt/pitmine3d/pitmine3d.sh$'     '-rwxr-xr-x' "启动器 pitmine3d.sh"
-chk 'libSkiaSharp.so$'                 '-rwxr-xr-x' "SkiaSharp 原生库"
-chk 'libicuuc.so'                      '-rwxr-xr-x' "随包 ICU"
-chk 'pitmine3d.desktop$'               '-rw-r--r--' "桌面项"
-chk 'pitmine3d.svg$'                   '-rw-r--r--' "图标"
+if [ "$PROFILE" = "doctor" ]; then
+    chk '/opt/pitmine3d-doctor/pitmine3d-doctor.sh$' '-rwxr-xr-x' "体检脚本"
+    chk '/opt/pitmine3d-doctor/pitmine3d-doctor$'    '-rwxr-xr-x' "体检器(读 GL 用)"
+    chk 'README.md$'                                 '-rw-r--r--' "说明文档"
+else
+    chk '/opt/pitmine3d/PitMine3D.Kylin$'  '-rwxr-xr-x' "主程序 PitMine3D.Kylin"
+    chk '/opt/pitmine3d/pitmine3d.sh$'     '-rwxr-xr-x' "启动器 pitmine3d.sh"
+    chk 'libSkiaSharp.so$'                 '-rwxr-xr-x' "SkiaSharp 原生库"
+    chk 'libicuuc.so'                      '-rwxr-xr-x' "随包 ICU"
+    chk 'pitmine3d.desktop$'               '-rw-r--r--' "桌面项"
+    chk 'pitmine3d.svg$'                   '-rw-r--r--' "图标"
+fi
 owners=$(echo "$list" | awk '{print $2}' | sort -u | tr '\n' ' ')
 [ "$owners" = "root/root " ] && ok "属主全为 root/root" || bad "属主异常: $owners"
 n=$(echo "$list" | wc -l); echo "  data 条目数: $n"
-dotnet_dll=$(echo "$list" | grep -c 'System.Private.CoreLib.dll' || true)
-[ "$dotnet_dll" -ge 1 ] && ok "自包含 .NET 运行时在包内" || bad "包内缺 .NET 运行时"
+if [ "$PROFILE" = "app" ]; then
+    dotnet_dll=$(echo "$list" | grep -c 'System.Private.CoreLib.dll' || true)
+    [ "$dotnet_dll" -ge 1 ] && ok "自包含 .NET 运行时在包内" || bad "包内缺 .NET 运行时"
+fi
 
 echo
 [ $fail -eq 0 ] && echo "== 校验通过: $DEB" || { echo "== 校验失败"; exit 1; }
