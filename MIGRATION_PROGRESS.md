@@ -3702,3 +3702,11 @@ Viewport 配色(冷蓝/热亮蓝/选中品红+白描边大一号)。Kylin 此前
 1. `SelectionBox.Match` 靠 `Tessellate` 出的线段判定，三角网默认「着色面」模式下 Tessellate 不出边线 → 永远选不中。改 `MatchMesh`(包围盒全含=窗口选；交叉选=顶点在框内/边穿框/框心落在面内)，圈选与屏幕空间判定改走 `TessellateEdges`。
 2. 3D 视图原本左键拖拽=轨道旋转，根本没有框选。改为 2D/3D 一致：左键拖拽=框选(3D 在屏幕空间判定：`Camera.MakeProjector` 世界→屏幕投影, `SelectionBox.MatchScreen`)，轨道旋转改 Shift+左键 或 Shift+中键；帮助文案同步。
 测试 +4(`SelectionBoxMeshTests`/`BoxSelect3DTests`：着色面模式窗口/交叉/圈选、面内框心、投影与反投影互逆、透视下三角网与抬高多段线的窗口/交叉判定)。全套 1783 通过。
+
+## §三〇五 3D 点选/选框落到视平面与屏幕空间 (2026-09-07)
+
+用户反馈「选择框没有，点击也选不中模型」(3D 视图、3dm 模型在高程 1000+)：点选与选框都还在用 Z=0 平面反投影。
+- 点选：3D 走 `SelectionBox.PickScreen`——实体边线投影后按像素距离(容差=捕捉像素)命中；三角网另按"点击落在某三角投影内"命中并取深度最前者(着色面模式点在面内即选)，边线优先于面；隐藏/锁定层排除。2D 也补了"点在面内选中三角网"。
+- 选框：四角改落到视平面(`Camera.ScreenToViewPlane`：过注视点、垂直视线；2D 退化为 Z=0 平面)，`BoxRect` 带 z。
+- 投影：`Camera.MakeProjectorDepth`(屏幕坐标 + NDC 深度)，`CadGlViewport.WorldToScreenDepthProjector/ScreenToViewPlane`。
+测试 +2(面命中取最前/网外空/贴线优先/隐藏排除；视平面落点与投影互逆、中心=注视点)。全套 1785 通过。
