@@ -3710,3 +3710,10 @@ Viewport 配色(冷蓝/热亮蓝/选中品红+白描边大一号)。Kylin 此前
 - 选框：四角改落到视平面(`Camera.ScreenToViewPlane`：过注视点、垂直视线；2D 退化为 Z=0 平面)，`BoxRect` 带 z。
 - 投影：`Camera.MakeProjectorDepth`(屏幕坐标 + NDC 深度)，`CadGlViewport.WorldToScreenDepthProjector/ScreenToViewPlane`。
 测试 +2(面命中取最前/网外空/贴线优先/隐藏排除；视平面落点与投影互逆、中心=注视点)。全套 1785 通过。
+
+## §三〇六 2D 交互全失效根因(矩阵求逆阈值) + 选中高亮突出 (2026-09-07)
+
+用户反馈「选择框没有，点击也选不中模型」，截图为 2D 视图。env 门控自检(导入真实 4-2底面.3dm 后直接设选框/调 BoxSelect/PickAt 打印判定值)定位：
+- **根因**：`Mat4.Invert` 用固定阈值 `|det| < 1e-12` 判奇异。大坐标场景的 2D 正交投影(halfH≈1e4、far≈2.6e5)各轴尺度悬殊，行列式本就 ~4e-14 却完全可逆 → 被误判 → `ScreenToWorld` 全线返回 null → **2D 下选框(BoxRect 空)/点选/对象捕捉/坐标读数全部失效**。改为相对阈值：`|det| <= 1e-9 × Hadamard上界(各列范数之积)`，并加 NaN/Inf 防护。自检复测：2D 窗口选/交叉选/点选各命中 1；3D 交叉选/点选各命中 1(窗口选 0 因模型大于选框，语义正确)。
+- **选中高亮突出**(用户「突出一下各个模型选中后的高亮显示」)：三角网选中后在其表面盖一层高亮**青色着色面**(`MeshEntity.TessellateHighlightFaces`，保留平行光明暗；`HighlightPass` 深度开 + **负** polygon offset 压住原面免 z-fighting)，再叠**三维包围盒线框**；边线仅在 ≤30000 条时叠加(大网靠色面+包围盒即可辨识)。高亮色由黄(1,0.9,0.2)改青(0.15,0.95,1.0)——与黄色地形、深色背景都拉得开。所有清高亮处同步清高亮面。
+测试 +4(`Mat4InvertScaleTests` 大场景可逆 + 真奇异仍 null；`HighlightFacesTests` 三顶点/青色主导/明暗/模式无关/标高偏移)。全套 1789 通过。截图 `chk_box/highlight3d.png`。
