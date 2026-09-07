@@ -1,0 +1,87 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.GeoDb.CoalSampleEditDialog" x:CompileBindings="False"
+        Classes="geodb" Title="编辑采样段" Width="640" Height="560" CanResize="False" WindowStartupLocation="CenterOwner">
+  <Grid Margin="14" RowDefinitions="Auto,*,Auto">
+    <TextBlock x:Name="titleText" Text="编辑采样段" FontSize="16" FontWeight="Bold" Margin="0,0,0,10"/>
+
+    <TabControl Grid.Row="1">
+      <TabItem Header="基本">
+        <Grid Margin="14" ColumnDefinitions="110,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,*">
+          <TextBlock Text="孔号 *" Grid.Row="0" VerticalAlignment="Center"/>
+          <ComboBox x:Name="cbHole" Grid.Row="0" Grid.Column="1" Margin="0,4" HorizontalAlignment="Stretch"/>
+          <TextBlock Text="煤层 *" Grid.Row="1" VerticalAlignment="Center"/>
+          <ComboBox x:Name="cbSeam" Grid.Row="1" Grid.Column="1" Margin="0,4" HorizontalAlignment="Stretch"/>
+          <TextBlock Text="采样起深 (m) *" Grid.Row="2" VerticalAlignment="Center"/>
+          <TextBox x:Name="tbFrom" Grid.Row="2" Grid.Column="1" Margin="0,4"/>
+          <TextBlock Text="采样止深 (m) *" Grid.Row="3" VerticalAlignment="Center"/>
+          <TextBox x:Name="tbTo" Grid.Row="3" Grid.Column="1" Margin="0,4"/>
+          <TextBlock Text="采样厚度 (m)" Grid.Row="4" VerticalAlignment="Center"/>
+          <TextBox x:Name="tbThickness" Grid.Row="4" Grid.Column="1" Margin="0,4"/>
+          <TextBlock Text="备注" Grid.Row="5" VerticalAlignment="Center"/>
+          <TextBox x:Name="tbRemark" Grid.Row="5" Grid.Column="1" Margin="0,4"/>
+        </Grid>
+      </TabItem>
+
+      <TabItem Header="工业分析 (原/浮)">
+        <Grid Margin="14" ColumnDefinitions="120,*,20,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,*">
+          <TextBlock Grid.Row="0" Grid.Column="1" Text="原煤" HorizontalAlignment="Center" FontWeight="Bold"/>
+          <TextBlock Grid.Row="0" Grid.Column="3" Text="浮煤" HorizontalAlignment="Center" FontWeight="Bold"/>
+          <TextBlock Text="Mad 水分 (%)" Grid.Row="1" VerticalAlignment="Center"/>
+          <TextBox x:Name="tbMadR" Grid.Row="1" Grid.Column="1" Margin="0,3"/>
+          <TextBox x:Name="tbMadC" Grid.Row="1" Grid.Column="3" Margin="0,3"/>
+          <TextBlock Text="Ad 灰分 (%)" Grid.Row="2" VerticalAlignment="Center"/>
+          <TextBox x:Name="tbAdR" Grid.Row="2" Grid.Column="1" Margin="0,3"/>
+          <TextBox x:Name="tbAdC" Grid.Row="2" Grid.Column="3" Margin="0,3"/>
+          <TextBlock Text="Vdaf 挥发分 (%)" Grid.Row="3" VerticalAlignment="Center"/>
+          <TextBox x:Name="tbVdafR" Grid.Row="3" Grid.Column="1" Margin="0,3"/>
+          <TextBox x:Name="tbVdafC" Grid.Row="3" Grid.Column="3" Margin="0,3"/>
+          <TextBlock Text="FCd 固定碳 (%)" Grid.Row="4" VerticalAlignment="Center"/>
+          <TextBox x:Name="tbFcdR" Grid.Row="4" Grid.Column="1" Margin="0,3"/>
+          <TextBox x:Name="tbFcdC" Grid.Row="4" Grid.Column="3" Margin="0,3"/>
+        </Grid>
+      </TabItem>
+
+      <TabItem Header="发热量 + 全硫">
+        <Grid Margin="14" ColumnDefinitions="180,*" RowDefinitions="Auto,Auto,Auto,Auto,*">
+          <TextBlock Text="原煤 S_t,d (%)" Grid.Row="0" VerticalAlignment="Center"/>
+          <TextBox x:Name="tbSR" Grid.Row="0" Grid.Column="1" Margin="0,3"/>
+          <TextBlock Text="浮煤 S_t,d (%)" Grid.Row="1" VerticalAlignment="Center"/>
+          <TextBox x:Name="tbSC" Grid.Row="1" Grid.Column="1" Margin="0,3"/>
+          <TextBlock Text="Q_gr,v,d 干基弹筒 (MJ/kg)" Grid.Row="2" VerticalAlignment="Center"/>
+          <TextBox x:Name="tbQgr" Grid.Row="2" Grid.Column="1" Margin="0,3"/>
+          <TextBlock Text="Q_net,v,ad 低位 (MJ/kg)" Grid.Row="3" VerticalAlignment="Center"/>
+          <TextBox x:Name="tbQnet" Grid.Row="3" Grid.Column="1" Margin="0,3"/>
+        </Grid>
+      </TabItem>
+
+      <TabItem Header="胶质 / 焦渣 / 煤类">
+        <Grid Margin="14" ColumnDefinitions="200,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,*">
+          <TextBlock Text="胶质层 X (mm)" Grid.Row="0" VerticalAlignment="Center"/>
+          <TextBox x:Name="tbX" Grid.Row="0" Grid.Column="1" Margin="0,3"/>
+          <TextBlock Text="胶质层 Y (mm)" Grid.Row="1" VerticalAlignment="Center"/>
+          <TextBox x:Name="tbY" Grid.Row="1" Grid.Column="1" Margin="0,3"/>
+          <TextBlock Text="粘结指数 G" Grid.Row="2" VerticalAlignment="Center"/>
+          <TextBox x:Name="tbG" Grid.Row="2" Grid.Column="1" Margin="0,3"/>
+          <TextBlock Text="原煤焦渣 (1-8)" Grid.Row="3" VerticalAlignment="Center"/>
+          <TextBox x:Name="tbCharR" Grid.Row="3" Grid.Column="1" Margin="0,3"/>
+          <TextBlock Text="浮煤焦渣 (1-8)" Grid.Row="4" VerticalAlignment="Center"/>
+          <TextBox x:Name="tbCharC" Grid.Row="4" Grid.Column="1" Margin="0,3"/>
+          <TextBlock Text="浮煤回收率 (%)" Grid.Row="5" VerticalAlignment="Center"/>
+          <TextBox x:Name="tbYield" Grid.Row="5" Grid.Column="1" Margin="0,3"/>
+          <TextBlock Text="煤类 (GB/T 5751)" Grid.Row="6" VerticalAlignment="Top" Margin="0,8,0,0"/>
+          <StackPanel Grid.Row="6" Grid.Column="1" Margin="0,3" Orientation="Horizontal">
+            <ComboBox x:Name="cbCoalType" Width="160"/>
+            <Button Content="🔍 反推" Click="OnInferCoalTypeClick" Padding="6,2" Margin="6,0,0,0"/>
+            <TextBlock x:Name="inferResult" VerticalAlignment="Center" Margin="8,0,0,0" Classes="muted"/>
+          </StackPanel>
+        </Grid>
+      </TabItem>
+    </TabControl>
+
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0" Spacing="8">
+      <Button Content="保存" Click="OnSaveClick" Padding="14,5" Classes="primary" IsDefault="True"/>
+      <Button Content="取消" Click="OnCancelClick" Padding="14,5" IsCancel="True"/>
+    </StackPanel>
+  </Grid>
+</Window>

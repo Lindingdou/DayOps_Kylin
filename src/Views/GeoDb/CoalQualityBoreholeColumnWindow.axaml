@@ -1,0 +1,105 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.GeoDb.CoalQualityBoreholeColumnWindow" x:CompileBindings="False"
+        Classes="geodb" Title="钻孔煤质柱状图 (3D)" Width="1280" Height="760" WindowStartupLocation="CenterOwner">
+  <Grid Margin="10" RowDefinitions="Auto,*,Auto">
+
+    <StackPanel Orientation="Horizontal">
+      <TextBlock Text="钻孔煤质柱状图" Classes="page-title"/>
+      <TextBlock x:Name="subtitleText" Margin="14,4,0,0" Classes="muted" FontSize="12"/>
+    </StackPanel>
+
+    <!-- 主体: 左孔列表 + 中 3D 视图 + 右详情 -->
+    <Grid Grid.Row="1" Margin="0,10,0,0" ColumnDefinitions="220,5,*,5,300">
+
+      <!-- 左：孔列表 -->
+      <Border Classes="panel">
+        <DockPanel>
+          <Border DockPanel.Dock="Top" Classes="panel-hdr panel-hdr-plain">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="化验孔" Classes="panel-title plain"/>
+              <TextBlock x:Name="holeCountText" Margin="6,0,0,0" Classes="muted" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Border>
+          <ListBox x:Name="holeList" SelectionChanged="OnHoleSelected" BorderThickness="0" SelectionMode="Multiple"/>
+        </DockPanel>
+      </Border>
+
+      <GridSplitter Grid.Column="1" ResizeDirection="Columns" Background="Transparent"/>
+
+      <!-- 中：3D 视图 -->
+      <Border Grid.Column="2" Classes="panel">
+        <DockPanel>
+          <Border DockPanel.Dock="Top" Classes="panel-hdr panel-hdr-plain">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="3D 视图 (转: 鼠标拖；缩放: 滚轮)" Classes="panel-title plain"/>
+              <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <TextBlock Text="着色 " VerticalAlignment="Center"/>
+                <ComboBox x:Name="colorScheme" Width="120" SelectionChanged="OnColorChanged" SelectedIndex="0">
+                  <ComboBoxItem Content="按煤层" Tag="seam"/>
+                  <ComboBoxItem Content="按 Ad 灰分" Tag="ad"/>
+                  <ComboBoxItem Content="按 S 硫分" Tag="s"/>
+                </ComboBox>
+                <Button Content="🔁 全部" Click="OnSelectAllClick" Padding="8,2" Margin="6,0,0,0"/>
+                <Button Content="📌 居中" Click="OnZoomExtentsClick" Padding="8,2" Margin="6,0,0,0"/>
+              </StackPanel>
+            </Grid>
+          </Border>
+          <ch:Scene3DView x:Name="viewport3D"/>
+        </DockPanel>
+      </Border>
+
+      <GridSplitter Grid.Column="3" ResizeDirection="Columns" Background="Transparent"/>
+
+      <!-- 右：详情 + 图例 -->
+      <Border Grid.Column="4" Classes="panel">
+        <DockPanel Margin="10">
+          <TextBlock DockPanel.Dock="Top" Text="选中孔详情" FontWeight="Bold" Margin="0,0,0,6"/>
+          <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+              <TextBlock x:Name="detailHole" FontWeight="Bold" Margin="0,0,0,4"/>
+              <TextBlock x:Name="detailLocation" Classes="muted" TextWrapping="Wrap"/>
+
+              <Border x:Name="holeSummaryBox" Margin="0,10,0,0" Padding="9,6" CornerRadius="4" Background="#F7F8FA"
+                      BorderBrush="#DCDFE4" BorderThickness="1" IsVisible="False">
+                <StackPanel>
+                  <TextBlock Text="煤质小结" FontSize="11" FontWeight="Bold" Classes="muted"/>
+                  <TextBlock x:Name="holeSummary" TextWrapping="Wrap" Margin="0,3,0,0" FontSize="12"/>
+                </StackPanel>
+              </Border>
+
+              <TextBlock Text="煤层段" FontWeight="Bold" Margin="0,12,0,4"/>
+              <ItemsControl x:Name="seamList">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border Background="{Binding ColorBrush}" Margin="0,1" Padding="6,3" CornerRadius="2">
+                      <TextBlock Text="{Binding Label}" Foreground="White" FontSize="11"/>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <TextBlock Text="化验段" FontWeight="Bold" Margin="0,12,0,4"/>
+              <ItemsControl x:Name="sampleList">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Grid Margin="0,1" ColumnDefinitions="14,*">
+                      <Border Background="{Binding ColorBrush}"/>
+                      <TextBlock Grid.Column="1" Text="{Binding Label}" Margin="6,2,0,2" FontSize="11" TextWrapping="Wrap"/>
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <TextBlock x:Name="detailFooter" Margin="0,12,0,0" Classes="muted" FontStyle="Italic" TextWrapping="Wrap"/>
+            </StackPanel>
+          </ScrollViewer>
+        </DockPanel>
+      </Border>
+    </Grid>
+
+    <Border Grid.Row="2" Classes="statusbar" Margin="0,6,0,0">
+      <TextBlock x:Name="statusText" Text="加载中..."/>
+    </Border>
+  </Grid>
+</Window>

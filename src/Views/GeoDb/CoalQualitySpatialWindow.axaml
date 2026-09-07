@@ -1,0 +1,121 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.GeoDb.CoalQualitySpatialWindow" x:CompileBindings="False"
+        Classes="geodb" Title="煤质空间分布 (3D)" Width="1320" Height="780" WindowStartupLocation="CenterOwner">
+  <Grid Margin="10" RowDefinitions="Auto,*,Auto">
+
+    <StackPanel Orientation="Horizontal">
+      <TextBlock Text="煤质空间分布" Classes="page-title"/>
+      <TextBlock x:Name="subtitleText" Margin="14,4,0,0" Classes="muted" FontSize="12"/>
+    </StackPanel>
+
+    <Grid Grid.Row="1" Margin="0,10,0,0" ColumnDefinitions="260,5,*">
+
+      <!-- 左控制面板 -->
+      <Border Classes="panel">
+        <DockPanel>
+          <Border DockPanel.Dock="Top" Classes="panel-hdr panel-hdr-plain">
+            <TextBlock Text="控制面板" Classes="panel-title plain"/>
+          </Border>
+          <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="10">
+              <TextBlock Text="煤层" FontWeight="Bold"/>
+              <ComboBox x:Name="seamSelect" Margin="0,3,0,8" HorizontalAlignment="Stretch"/>
+
+              <TextBlock Text="指标"/>
+              <ComboBox x:Name="indicatorSelect" Margin="0,3,0,8" HorizontalAlignment="Stretch" SelectedIndex="0">
+                <ComboBoxItem Content="Ad 灰分" Tag="ad_raw"/>
+                <ComboBoxItem Content="Vdaf 挥发分" Tag="vdaf_raw"/>
+                <ComboBoxItem Content="S 全硫" Tag="std_raw"/>
+                <ComboBoxItem Content="Qnet 低位发热" Tag="qnet_ad"/>
+                <ComboBoxItem Content="G 粘结指数" Tag="caking_g"/>
+              </ComboBox>
+
+              <TextBlock Text="着色模式"/>
+              <ComboBox x:Name="colorModeSelect" Margin="0,3,0,8" HorizontalAlignment="Stretch" SelectedIndex="0" SelectionChanged="OnColorModeChanged">
+                <ComboBoxItem Content="GB 分级 (离散)" Tag="grade"/>
+                <ComboBoxItem Content="连续色带 · 冷暖" Tag="warm"/>
+                <ComboBoxItem Content="连续色带 · 光谱" Tag="spectral"/>
+              </ComboBox>
+
+              <TextBlock Text="插值方法"/>
+              <ComboBox x:Name="methodSelect" Margin="0,3,0,8" HorizontalAlignment="Stretch"/>
+
+              <TextBlock Text="网格分辨率 (m)"/>
+              <TextBox x:Name="resolutionBox" Text="100" Margin="0,3,0,8"/>
+
+              <Expander Header="算法参数" IsExpanded="False" Margin="0,4,0,8">
+                <StackPanel Margin="0,4">
+                  <TextBlock Text="IDW p 幂指数"/>
+                  <TextBox x:Name="paramP" Text="2" Margin="0,2,0,6"/>
+                  <TextBlock Text="近邻数 k"/>
+                  <TextBox x:Name="paramK" Text="5"/>
+                </StackPanel>
+              </Expander>
+
+              <Separator Margin="0,4"/>
+              <CheckBox x:Name="showPoints" Content="显示实测点" IsChecked="True" Margin="0,4" Click="OnRenderToggle"/>
+              <CheckBox x:Name="showField" Content="显示插值场" IsChecked="True" Margin="0,4" Click="OnRenderToggle"/>
+              <CheckBox x:Name="showCoverage" Content="化验区边界" IsChecked="True" Margin="0,4" Click="OnRenderToggle"/>
+              <CheckBox x:Name="showGrid" Content="底图网格" IsChecked="True" Margin="0,4" Click="OnRenderToggle"/>
+              <CheckBox x:Name="showConfidence" Content="置信度淡出" IsChecked="False" Margin="0,4" Click="OnRenderToggle"
+                        ToolTip.Tip="离实测点越远的插值体素越透明"/>
+
+              <Separator Margin="0,8"/>
+              <Button Content="▶ 运行插值" Click="OnRunClick" Padding="10,5" Classes="primary" HorizontalAlignment="Stretch"/>
+              <Button Content="🔄 仅刷新点云" Click="OnRefreshPointsClick" Padding="10,5" Margin="0,4,0,0" HorizontalAlignment="Stretch"/>
+              <Button Content="📌 居中视图" Click="OnZoomExtentsClick" Padding="10,5" Margin="0,4,0,0" HorizontalAlignment="Stretch"/>
+
+              <Border Background="#FFFBEC" BorderBrush="#F0D499" BorderThickness="1" CornerRadius="3" Margin="0,12,0,0" Padding="8">
+                <StackPanel>
+                  <TextBlock Text="化验区统计" FontWeight="Bold"/>
+                  <TextBlock x:Name="coverageInfo" TextWrapping="Wrap" FontSize="11" Classes="muted" Margin="0,4,0,0"/>
+                </StackPanel>
+              </Border>
+
+              <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="1" CornerRadius="3" Margin="0,10,0,0" Padding="8">
+                <StackPanel>
+                  <TextBlock Text="空间分布结论" FontWeight="Bold"/>
+                  <TextBlock x:Name="spatialConclusion" TextWrapping="Wrap" FontSize="11" Margin="0,4,0,0"
+                             Text="运行插值后给出：值域 + 平面/垂向趋势 + 控制程度。"/>
+                </StackPanel>
+              </Border>
+            </StackPanel>
+          </ScrollViewer>
+        </DockPanel>
+      </Border>
+
+      <GridSplitter Grid.Column="1" ResizeDirection="Columns" Background="Transparent"/>
+
+      <!-- 右 3D 视图 -->
+      <Border Grid.Column="2" Classes="panel">
+        <DockPanel>
+          <Border DockPanel.Dock="Bottom" Background="#F7F8FA">
+            <StackPanel Orientation="Horizontal" Margin="10,4">
+              <TextBlock Text="图例：" VerticalAlignment="Center" Margin="0,0,6,0"/>
+              <ItemsControl x:Name="legendItems">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal"/>
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border Background="{Binding ColorBrush}" Margin="3,1" Padding="6,2" CornerRadius="2">
+                      <TextBlock Text="{Binding Label}" Foreground="White" FontSize="11"/>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Border>
+          <ch:Scene3DView x:Name="viewport3D"/>
+        </DockPanel>
+      </Border>
+    </Grid>
+
+    <Border Grid.Row="2" Classes="statusbar" Margin="0,6,0,0">
+      <TextBlock x:Name="statusText" Text="就绪 — 选煤层 + 指标 后点 运行插值"/>
+    </Border>
+  </Grid>
+</Window>
