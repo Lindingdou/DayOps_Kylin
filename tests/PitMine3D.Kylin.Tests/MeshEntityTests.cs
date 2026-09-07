@@ -6,6 +6,7 @@ using Xunit;
 namespace PitMine3D.Kylin.Tests;
 
 /// <summary>三角网场景实体：边去重镶嵌、拾取距离、存档往返、分解、特性描述。</summary>
+[Collection("MeshRenderMode")]
 public class MeshEntityTests
 {
     private static MeshEntity Quad()
@@ -22,7 +23,7 @@ public class MeshEntityTests
         var m = Quad();
         Assert.Equal(5, m.Edges.Count);
         var o = new List<float>();
-        m.Tessellate(o);
+        m.TessellateEdges(o);   // 不受全局显示模式影响
         Assert.Equal(5 * 12, o.Count);
         var zs = new HashSet<float>();
         for (int i = 2; i < o.Count; i += 6) zs.Add(o[i]);

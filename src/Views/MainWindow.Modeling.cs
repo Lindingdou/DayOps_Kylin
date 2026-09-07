@@ -276,6 +276,12 @@ public partial class MainWindow
             case "构建等值线": await MdlContourAsync(); return true;
             case "创建剖面": case "网格剖面": await MdlSectionAsync(); return true;
             case "实时曲面坐标": MdlToggleSurfaceCoord(); return true;
+            // 渲染配置(开始页 视图组)：三角网显示模式 线框/着色面/着色面+线框, 高程着色
+            case "渲染配置": case "显示模式": await MdlRenderConfigAsync(); return true;
+            case "线框显示": case "线框模式": SetMeshDisplay(MeshEntity.DisplayMode.Wireframe, null); return true;
+            case "着色显示": case "面模型": case "实体显示": SetMeshDisplay(MeshEntity.DisplayMode.Shaded, null); return true;
+            case "面加线框": case "着色加线框": SetMeshDisplay(MeshEntity.DisplayMode.ShadedWireframe, null); return true;
+            case "高程着色面": SetMeshDisplay(null, !MeshEntity.ColorByElevation); return true;
             // 采矿模型
             case "体积算量": await MdlMeshVolumeAsync(); return true;
             case "采矿模型": StatusMsg.Text = "采矿模型：条带划分(CarveStrip)走 IPitDesignCapability 内核，本机记录为受阻"; return true;
@@ -897,5 +903,31 @@ public partial class MainWindow
         }
         if (s < 0) for (int i = 0; i < r.Count; i++) r[i] = (r[i].a, r[i].c, r[i].b);
         return r;
+    }
+}
+
+public partial class MainWindow
+{
+    /// <summary>渲染配置：三角网显示模式 + 高程着色（原「渲染配置」实体/线框着色管线的托管等价）。</summary>
+    private async Task MdlRenderConfigAsync()
+    {
+        string cur = MeshEntity.RenderMode switch { MeshEntity.DisplayMode.Wireframe => "线框", MeshEntity.DisplayMode.Shaded => "着色面", _ => "着色面+线框" };
+        var dlg = await PromptDialog.AskAsync(this, "渲染配置", new[]
+        {
+            new PromptDialog.Field("mode", "三角网显示", cur, null, "线框=只画边线; 着色面=平行光着色的面模型; 着色面+线框=面上叠压暗边线", false, new[] { "线框", "着色面", "着色面+线框" }),
+            new PromptDialog.Field("elev", "面着色依据", MeshEntity.ColorByElevation ? "高程色带" : "实体颜色", null, "高程色带: 低绿→黄→棕→高白", false, new[] { "实体颜色", "高程色带" }),
+        }, "作用于场景中全部三角网(含地质体/块体外的面模型)，改完即时重绘");
+        if (dlg == null) return;
+        var mode = dlg.S("mode") switch { "线框" => MeshEntity.DisplayMode.Wireframe, "着色面" => MeshEntity.DisplayMode.Shaded, _ => MeshEntity.DisplayMode.ShadedWireframe };
+        SetMeshDisplay(mode, dlg.S("elev") == "高程色带");
+    }
+
+    private void SetMeshDisplay(MeshEntity.DisplayMode? mode, bool? byElevation)
+    {
+        if (mode.HasValue) MeshEntity.RenderMode = mode.Value;
+        if (byElevation.HasValue) MeshEntity.ColorByElevation = byElevation.Value;
+        RefreshScene();
+        string m = MeshEntity.RenderMode switch { MeshEntity.DisplayMode.Wireframe => "线框", MeshEntity.DisplayMode.Shaded => "着色面", _ => "着色面+线框" };
+        StatusMsg.Text = $"渲染配置：三角网 {m} · 面色 {(MeshEntity.ColorByElevation ? "高程色带" : "实体颜色")}（{AllMeshes().Count} 张网）";
     }
 }

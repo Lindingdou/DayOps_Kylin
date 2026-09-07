@@ -82,13 +82,72 @@ public sealed class MeshEntity : SceneEntity
         return (v, t);
     }
 
-    public override void Tessellate(List<float> o)
+    // ── 显示模式(全局, 原「渲染配置」实体/线框着色管线)：线框 / 着色面 / 着色面+线框 ──
+    public enum DisplayMode { Wireframe, Shaded, ShadedWireframe }
+    public static DisplayMode RenderMode = DisplayMode.ShadedWireframe;
+    /// <summary>面按高程着色(地形色带), 否则按实体颜色。</summary>
+    public static bool ColorByElevation;
+    /// <summary>平行光方向(世界系, 单位化)；两面受光。</summary>
+    private static readonly (double x, double y, double z) Light = Normalize((0.35, 0.25, 0.9));
+    private static (double x, double y, double z) Normalize((double x, double y, double z) v)
+    { double l = Math.Sqrt(v.x * v.x + v.y * v.y + v.z * v.z); return l < 1e-12 ? (0, 0, 1) : (v.x / l, v.y / l, v.z / l); }
+
+    /// <summary>边线(不看显示模式, 供选择高亮/导出)。</summary>
+    public void TessellateEdges(List<float> o)
     {
         foreach (var (i, j) in Edges)
         {
             var p = Verts[i]; var q = Verts[j];
             Seg3(o, p.x, p.y, p.z + Elevation, q.x, q.y, q.z + Elevation);
         }
+    }
+
+    public override void Tessellate(List<float> o)
+    {
+        if (RenderMode == DisplayMode.Shaded) return;   // 纯着色面模式不画边线
+        if (RenderMode == DisplayMode.ShadedWireframe)
+        {
+            // 面+线框：边线压暗, 与着色面区分
+            float cr = Cr, cg = Cg, cb = Cb;
+            Cr *= 0.45f; Cg *= 0.45f; Cb *= 0.45f;
+            try { TessellateEdges(o); } finally { Cr = cr; Cg = cg; Cb = cb; }
+            return;
+        }
+        TessellateEdges(o);
+    }
+
+    /// <summary>着色三角面：逐三角平面法线 × 平行光(两面受光) 调制基色(或高程色带)。</summary>
+    public override void TessellateFaces(List<float> o)
+    {
+        if (RenderMode == DisplayMode.Wireframe) return;
+        var b = Bounds; double zr = b.maxZ - b.minZ;
+        foreach (var (a, bb, c) in Tris)
+        {
+            if (a >= Verts.Count || bb >= Verts.Count || c >= Verts.Count) continue;
+            var p = Verts[a]; var q = Verts[bb]; var r = Verts[c];
+            double ux = q.x - p.x, uy = q.y - p.y, uz = q.z - p.z, vx = r.x - p.x, vy = r.y - p.y, vz = r.z - p.z;
+            var n = Normalize((uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx));
+            double lambert = Math.Abs(n.x * Light.x + n.y * Light.y + n.z * Light.z);
+            float k = (float)(0.42 + 0.58 * lambert);
+            void V((double x, double y, double z) w)
+            {
+                float cr = Cr, cg = Cg, cb = Cb;
+                if (ColorByElevation) { var t = zr > 1e-9 ? (w.z - b.minZ) / zr : 0.5; (cr, cg, cb) = TerrainRamp(t); }
+                o.Add((float)w.x); o.Add((float)w.y); o.Add((float)(w.z + Elevation));
+                o.Add(Math.Min(1f, cr * k)); o.Add(Math.Min(1f, cg * k)); o.Add(Math.Min(1f, cb * k));
+            }
+            V(p); V(q); V(r);
+        }
+    }
+
+    /// <summary>地形色带：低=绿 → 黄 → 棕 → 高=白。</summary>
+    public static (float r, float g, float b) TerrainRamp(double t)
+    {
+        t = Math.Clamp(t, 0, 1);
+        (float, float, float)[] stops = { (0.20f, 0.55f, 0.25f), (0.85f, 0.85f, 0.35f), (0.65f, 0.45f, 0.25f), (0.95f, 0.95f, 0.95f) };
+        double s = t * (stops.Length - 1); int i = Math.Min(stops.Length - 2, (int)Math.Floor(s)); float f = (float)(s - i);
+        var (r0, g0, b0) = stops[i]; var (r1, g1, b1) = stops[i + 1];
+        return (r0 + (r1 - r0) * f, g0 + (g1 - g0) * f, b0 + (b1 - b0) * f);
     }
 
     /// <summary>拾取距离：先包围盒粗排斥(避免大网逐边计算)，再逐边 2D 距离取最小。</summary>

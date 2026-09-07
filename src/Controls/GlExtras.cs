@@ -16,11 +16,13 @@ internal sealed class GlExtras
     public delegate void GlBindVertexArray(int array);
     public delegate void GlDeleteVertexArrays(int n, int[] arrays);
     public delegate void GlUniformMatrix4fv(int location, int count, int transpose, float[] value);
+    public delegate void GlPolygonOffset(float factor, float units);
 
     private readonly GlGenVertexArrays? _gen;
     private readonly GlBindVertexArray? _bind;
     private readonly GlDeleteVertexArrays? _del;
     private readonly GlUniformMatrix4fv _uniformMatrix4fv;
+    private readonly GlPolygonOffset? _polygonOffset;
 
     public GlExtras(GlInterface gl)
     {
@@ -29,7 +31,11 @@ internal sealed class GlExtras
         _del = Load<GlDeleteVertexArrays>(gl, "glDeleteVertexArrays", "glDeleteVertexArraysOES");
         _uniformMatrix4fv = Load<GlUniformMatrix4fv>(gl, "glUniformMatrix4fv")
                             ?? throw new InvalidOperationException("glUniformMatrix4fv 不可用");
+        _polygonOffset = Load<GlPolygonOffset>(gl, "glPolygonOffset");
     }
+
+    /// <summary>多边形深度偏移(着色面后退, 让边线/高亮浮在面上)；GL/GLES 均有。</summary>
+    public void PolygonOffset(float factor, float units) => _polygonOffset?.Invoke(factor, units);
 
     private static T? Load<T>(GlInterface gl, params string[] names) where T : Delegate
     {

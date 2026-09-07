@@ -20,6 +20,9 @@ public abstract class SceneEntity
     /// <summary>把自身镶嵌为线段（交错 P3_C3）追加到 o。</summary>
     public abstract void Tessellate(List<float> o);
 
+    /// <summary>把自身镶嵌为着色三角面（交错 P3_C3, 每三角 3 顶点）追加到 o。默认无面(仅三角网等面实体覆盖)。</summary>
+    public virtual void TessellateFaces(List<float> o) { }
+
     protected void Seg(List<float> o, double x0, double y0, double x1, double y1)
     {
         float z = (float)Elevation;
@@ -937,6 +940,15 @@ public sealed class Scene
         var o = new List<float>();
         foreach (var e in Entities)
             if (e.Visible && (isShown == null || isShown(e.LayerName))) e.Tessellate(o);
+        return o.ToArray();
+    }
+
+    /// <summary>可见实体的着色三角面(交错 P3_C3, GL_TRIANGLES)。</summary>
+    public float[] BuildFaces(Func<string, bool>? isShown = null)
+    {
+        var o = new List<float>();
+        foreach (var e in Entities)
+            if (e.Visible && (isShown == null || isShown(e.LayerName))) e.TessellateFaces(o);
         return o.ToArray();
     }
 

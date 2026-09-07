@@ -105,6 +105,14 @@ internal sealed class GlRenderer
 
     public void EndPass() { }
 
+    private const int GL_POLYGON_OFFSET_FILL = 0x8037;
+    /// <summary>着色面深度偏移开/关：面向后偏移一点, 同一位置的边线/高亮线不被面吃掉(z-fighting)。</summary>
+    public void SetPolygonOffset(bool on)
+    {
+        if (on) { _gl.Enable(GL_POLYGON_OFFSET_FILL); _ext.PolygonOffset(1.0f, 1.0f); }
+        else _gl.Disable(GL_POLYGON_OFFSET_FILL);
+    }
+
     /// <summary>叠加层用：临时改视口（如左下角罗盘区）。</summary>
     public void SetViewport(int x, int y, int w, int h) => _gl.Viewport(x, y, w, h);
 

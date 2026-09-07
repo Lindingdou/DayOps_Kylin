@@ -8326,6 +8326,7 @@ public partial class MainWindow : Window
                 new LineEntity { X0 = _editPts[0].x, Y0 = _editPts[0].y, X1 = _cursorWorld.Value.x, Y1 = _cursorWorld.Value.y, Cr = 0.85f, Cg = 0.6f, Cb = 0.3f }.Tessellate(list);
         }
         Viewport.SetSceneGeometry(list.ToArray());
+        Viewport.SetSceneFaces(_scene.BuildFaces(_layers.IsShown));   // 三角网着色面(面模型显示)
         if (_scene.Count != _lastSceneCount) { _lastSceneCount = _scene.Count; RefreshObjectTree(); }
     }
 
@@ -8360,7 +8361,7 @@ public partial class MainWindow : Window
     {
         if (_selected.Count == 0) { Viewport.SetHighlight(null); return; }
         var ent = new List<float>();
-        foreach (var e in _selected) e.Tessellate(ent);
+        foreach (var e in _selected) { if (e is MeshEntity me) me.TessellateEdges(ent); else e.Tessellate(ent); }   // 三角网高亮总画边线(纯面模式也能看到选中)
         var o = new List<float>(Controls.CadGlViewport.Recolor(ent.ToArray(), 1f, 0.9f, 0.2f));   // 实体=高亮黄；夹点保留自身配色
         if (_gripsOn) AppendGripTable(o);
         Viewport.SetHighlight(o.ToArray(), recolor: false);

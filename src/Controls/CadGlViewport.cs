@@ -18,9 +18,10 @@ namespace PitMine3D.Kylin.Controls;
 /// 绘制经 <see cref="GlRenderer"/>(对应内核 Renderer) 抽象，相机经 <see cref="Camera"/>。
 /// 着色器兼容 GLES 3.00(麒麟国产 GPU / ANGLE) 与桌面 GL 3.30 —— 同一份代码。
 /// </summary>
-public class CadGlViewport : OpenGlControlBase
+public partial class CadGlViewport : OpenGlControlBase
 {
     private const int GL_LINES = 0x0001;   // GlConsts 未定义，本地补
+    private const int GL_TRIANGLES = 0x0004;
 
     private readonly GlRenderer _renderer = new();
     private readonly Camera _camera = new();
@@ -43,6 +44,13 @@ public class CadGlViewport : OpenGlControlBase
     private bool _hasScene;
     private float[]? _pendingScene;
     private bool _sceneDirty;
+
+    // 托管场景着色三角面(三角网面模型, GL_TRIANGLES)
+    private GlRenderer.Mesh _faces;
+    private bool _hasFaces;
+    private float[]? _pendingFaces;
+    private bool _facesDirty;
+    private double _sceneZc;          // 场景几何高程中心(供 ZE/FitBounds 把注视点放到模型高度)
 
     // 图层显隐：图层名 → 该层几何；隐藏集
     private Dictionary<string, float[]>? _layerGeom;
@@ -113,6 +121,7 @@ public class CadGlViewport : OpenGlControlBase
         if (_pendingImport is { Length: > 0 }) _importedDirty = true;
         if (_pendingScene != null) _sceneDirty = true;
         if (_pendingHighlight != null) _highlightDirty = true;
+        if (_pendingFaces != null) _facesDirty = true;
         if (_pendingSnap != null) _snapDirty = true;
     }
 
@@ -125,11 +134,13 @@ public class CadGlViewport : OpenGlControlBase
         if (_hasHighlight) _renderer.DeleteMesh(_highlight);
         if (_hasSnap) _renderer.DeleteMesh(_snap);
         if (_hasScene) _renderer.DeleteMesh(_scene);
+        if (_hasFaces) _renderer.DeleteMesh(_faces);
         if (_hasCursor) _renderer.DeleteMesh(_cursor);
         _renderer.Deinit();
         // 上下文销毁——句柄失效, 复位标志; 否则重建后旧 id 可能撞上新网格(grid/cube/gizmo)致误删/花屏。
         // 保留的托管源(_pendingImport/_pendingScene/…)不动, OnOpenGlInit 会据此重新入队重传。
-        _hasImported = _hasScene = _hasHighlight = _hasSnap = false;
+        _hasImported = _hasScene = _hasHighlight = _hasSnap = _hasFaces = false;
+        if (_pendingFaces != null) _facesDirty = true;
         _hasCursor = false; _curBuiltSx = double.NaN;   // 十字光标下次移动即按当前上下文重建
     }
 
@@ -167,6 +178,14 @@ public class CadGlViewport : OpenGlControlBase
             if (_hasSnap) _renderer.DeleteMesh(_snap);
             _snap = _renderer.Upload(Localize(_pendingSnap!));
             _hasSnap = !_snap.IsEmpty;
+        }
+
+        if (_facesDirty)
+        {
+            _facesDirty = false;
+            if (_hasFaces) _renderer.DeleteMesh(_faces);
+            _faces = _renderer.Upload(Localize(_pendingFaces!));
+            _hasFaces = !_faces.IsEmpty;
         }
 
         if (_sceneDirty)
@@ -243,6 +262,7 @@ public class CadGlViewport : OpenGlControlBase
     private void ScenePass(float[] vp)
     {
         _renderer.BeginPass(depthTest: true);
+        if (_hasFaces) { _renderer.SetPolygonOffset(true); _renderer.Draw(_faces, GL_TRIANGLES, vp); _renderer.SetPolygonOffset(false); }   // 着色面先画, 深度偏移让边线浮在面上
         if (_hasImported) _renderer.Draw(_imported, GL_LINES, vp);
         if (_hasScene) _renderer.Draw(_scene, GL_LINES, vp);
         _renderer.EndPass();
@@ -321,6 +341,7 @@ public class CadGlViewport : OpenGlControlBase
     {
         _pendingScene = verts ?? Array.Empty<float>();
         _sceneBounds = ComputeXYBounds(_pendingScene);   // 手绘/编辑后更新 ZE 目标包围盒
+        _sceneZc = ComputeZCenter(_pendingScene);
         _sceneDirty = true;
         RequestNextFrameRendering();
     }
@@ -402,7 +423,7 @@ public class CadGlViewport : OpenGlControlBase
         // 框住 导入几何 ∪ 手绘场景几何；无任何几何才不动。(LocalizeBounds 按当前原点态一致换算)
         var b = UnionBounds(_lastBounds, _sceneBounds);
         if (b == null) return;
-        _camera.FitBounds(LocalizeBounds(b));
+        var lb = LocalizeBounds(b)!; _camera.FitBounds(lb[0], lb[1], lb[2], lb[3], _sceneZc);
         RequestNextFrameRendering();
     }
 
@@ -412,7 +433,7 @@ public class CadGlViewport : OpenGlControlBase
         if (bounds == null || bounds.Length < 4) return;
         _lastBounds = bounds;
         EnsureOrigin(bounds);
-        _camera.FitBounds(LocalizeBounds(bounds));
+        var lb2 = LocalizeBounds(bounds)!; _camera.FitBounds(lb2[0], lb2[1], lb2[2], lb2[3], _sceneZc);
         RequestNextFrameRendering();
     }
 
@@ -608,4 +629,35 @@ public class CadGlViewport : OpenGlControlBase
         0,0,0, 0.30f,0.85f,0.35f,  0,1,0, 0.30f,0.85f,0.35f, // Y 绿
         0,0,0, 0.35f,0.55f,0.95f,  0,0,1, 0.35f,0.55f,0.95f  // Z 蓝
     };
+}
+
+public partial class CadGlViewport
+{
+    /// <summary>设置托管场景的着色三角面（P3_C3, GL_TRIANGLES）；空 → 清除。</summary>
+    public void SetSceneFaces(float[] tris)
+    {
+        _pendingFaces = tris ?? Array.Empty<float>();
+        _facesDirty = true;
+        RequestNextFrameRendering();
+    }
+
+    // 顶点缓冲 Z 的中值近似(极值中点)，供注视点落到模型高度；空缓冲为 0。
+    private static double ComputeZCenter(float[] v)
+    {
+        if (v == null || v.Length < 6) return 0;
+        double minZ = double.MaxValue, maxZ = double.MinValue;
+        for (int i = 2; i < v.Length; i += 6) { double z = v[i]; if (z < minZ) minZ = z; if (z > maxZ) maxZ = z; }
+        return minZ == double.MaxValue ? 0 : (minZ + maxZ) / 2;
+    }
+}
+
+public partial class CadGlViewport
+{
+    /// <summary>相机/包围盒调试串(自检用)。</summary>
+    public string CameraDebug()
+    {
+        var s = _camera.Snapshot();
+        string B(double[]? b) => b == null ? "null" : $"[{b[0]:0.#},{b[1]:0.#},{b[2]:0.#},{b[3]:0.#}]";
+        return $"yaw={s.Yaw:0.##} pitch={s.Pitch:0.##} dist={s.Dist:0.#} target=({s.Tx:0.#},{s.Ty:0.#},{s.Tz:0.#}) 2D={s.Is2D} origin=({_ox:0.#},{_oy:0.#},{_originSet}) scene={B(_sceneBounds)} last={B(_lastBounds)} zc={_sceneZc:0.#} bounds={Bounds.Width:0}x{Bounds.Height:0}";
+    }
 }

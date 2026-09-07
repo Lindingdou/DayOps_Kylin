@@ -60,11 +60,11 @@ internal sealed class Camera
         FitBounds(bounds[0], bounds[1], bounds[2], bounds[3]);
     }
 
-    public void FitBounds(double minX, double minY, double maxX, double maxY)
+    public void FitBounds(double minX, double minY, double maxX, double maxY, double zCenter = 0)
     {
         Target[0] = (float)((minX + maxX) * 0.5);
         Target[1] = (float)((minY + maxY) * 0.5);
-        Target[2] = 0f;
+        Target[2] = (float)zCenter;   // 注视点取几何高程中心(三维地形/三角网), 轨道旋转绕模型而非 Z=0
         double span = Math.Max(maxX - minX, maxY - minY);
         if (span < 1e-6) span = 10;
         Dist = Math.Clamp(span * 1.4, 2.0, 100000.0);
@@ -77,13 +77,46 @@ internal sealed class Camera
         Target[1] += (float)dy;
     }
 
-    /// <summary>屏幕拖拽平移：让光标抓住的世界点跟随光标（2D/3D 通用，基于反投影）。</summary>
+    /// <summary>
+    /// 屏幕拖拽平移。2D：光标抓住的 Z=0 平面世界点跟随光标（反投影）。
+    /// 3D：在过注视点、垂直视线的视平面内平移(相机右/上向量 × 注视距离处的每像素世界量)——
+    /// 不再对 Z=0 平面反投影：斜视时该平面交点离模型很远、近地平线射线一像素跨越巨大距离，会把模型直接甩出视图。
+    /// </summary>
     public void PanScreen(double sx0, double sy0, double sx1, double sy1, double vw, double vh)
     {
-        var w0 = ScreenToWorldOnZPlane(sx0, sy0, vw, vh);
-        var w1 = ScreenToWorldOnZPlane(sx1, sy1, vw, vh);
-        if (w0 != null && w1 != null)
-            ShiftTarget(w0.Value.x - w1.Value.x, w0.Value.y - w1.Value.y);
+        if (vw < 1 || vh < 1) return;
+        if (Is2D)
+        {
+            var w0 = ScreenToWorldOnZPlane(sx0, sy0, vw, vh);
+            var w1 = ScreenToWorldOnZPlane(sx1, sy1, vw, vh);
+            if (w0 != null && w1 != null)
+                ShiftTarget(w0.Value.x - w1.Value.x, w0.Value.y - w1.Value.y);
+            return;
+        }
+        double unitsPerPx = 2.0 * Dist * Math.Tan(Math.PI / 8) / vh;   // fovY=45° 时注视距离处一像素的世界长度
+        double dx = (sx1 - sx0) * unitsPerPx, dy = (sy1 - sy0) * unitsPerPx;
+        var (rx, ry, rz, ux, uy, uz) = ViewAxes();
+        // 光标向右拖 → 场景跟着向右 → 注视点向左(−右向量); 向下拖 → 注视点向上(+上向量)
+        Target[0] += (float)(-dx * rx + dy * ux);
+        Target[1] += (float)(-dx * ry + dy * uy);
+        Target[2] += (float)(-dx * rz + dy * uz);
+    }
+
+    /// <summary>3D 相机的右向量与上向量（世界系, 单位化）。</summary>
+    public (double rx, double ry, double rz, double ux, double uy, double uz) ViewAxes()
+    {
+        float[] e = Eye();
+        double fx = Target[0] - e[0], fy = Target[1] - e[1], fz = Target[2] - e[2];
+        double fl = Math.Sqrt(fx * fx + fy * fy + fz * fz); if (fl < 1e-12) fl = 1;
+        fx /= fl; fy /= fl; fz /= fl;
+        // right = forward × worldUp(0,0,1)
+        double rx = fy * 1 - fz * 0, ry = fz * 0 - fx * 1, rz = fx * 0 - fy * 0;
+        double rl = Math.Sqrt(rx * rx + ry * ry + rz * rz);
+        if (rl < 1e-9) { rx = 1; ry = 0; rz = 0; rl = 1; }
+        rx /= rl; ry /= rl; rz /= rl;
+        // up = right × forward
+        double ux = ry * fz - rz * fy, uy = rz * fx - rx * fz, uz = rx * fy - ry * fx;
+        return (rx, ry, rz, ux, uy, uz);
     }
 
     /// <summary>朝光标缩放：缩放后保持光标下的世界点不动（CAD 标准）。</summary>
