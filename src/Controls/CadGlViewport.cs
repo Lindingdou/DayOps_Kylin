@@ -6,6 +6,7 @@ using Avalonia.Input;
 using Avalonia.OpenGL;
 using Avalonia.OpenGL.Controls;
 using Avalonia.Threading;
+using PitMine3D.Kylin.Cad.Draw;
 using static Avalonia.OpenGL.GlConsts;
 
 namespace PitMine3D.Kylin.Controls;
@@ -30,6 +31,10 @@ public partial class CadGlViewport : OpenGlControlBase
 
     // 静态网格：地面网格+轴 / 示例实体 / 罗盘
     private GlRenderer.Mesh _grid, _cube, _gizmo;
+    private bool _hasGrid;                    // 自适应格网已上传(随缩放/平移重建)
+    private GridPlan _gridPlan;
+    private bool _hasGridPlan, _gridIs2D;
+    private double _gridWpp;                  // 建网时的 世界长度/像素(挡位判定)
 
     // 导入的图纸线框（世界坐标 P3_C3 线段）。上传须在 GL 线程，故 UI 线程只挂起数据，下一帧消费。
     // _pendingImport 保留世界坐标源(不清空)——切换标签会销毁并重建 GL 上下文, 需据此重传, 否则线框丢失。
@@ -118,7 +123,7 @@ public partial class CadGlViewport : OpenGlControlBase
         Dispatcher.UIThread.Post(() => GlReady?.Invoke(backend));
 
         _renderer.Init(gl, _ext, _isGles);
-        _grid = _renderer.Upload(BuildGrid(10, 1f));
+        _hasGrid = false; _hasGridPlan = false;   // 上下文重建 → 格网下一帧按当前视图重建
         _cube = _renderer.Upload(BuildCube());
         _gizmo = _renderer.Upload(BuildGizmo());
 
@@ -134,7 +139,7 @@ public partial class CadGlViewport : OpenGlControlBase
 
     protected override void OnOpenGlDeinit(GlInterface gl)
     {
-        _renderer.DeleteMesh(_grid);
+        if (_hasGrid) _renderer.DeleteMesh(_grid);
         _renderer.DeleteMesh(_cube);
         _renderer.DeleteMesh(_gizmo);
         if (_hasImported) _renderer.DeleteMesh(_imported);
@@ -148,6 +153,7 @@ public partial class CadGlViewport : OpenGlControlBase
         // 上下文销毁——句柄失效, 复位标志; 否则重建后旧 id 可能撞上新网格(grid/cube/gizmo)致误删/花屏。
         // 保留的托管源(_pendingImport/_pendingScene/…)不动, OnOpenGlInit 会据此重新入队重传。
         _hasImported = _hasScene = _hasHighlight = _hasSnap = _hasFaces = _hasHighlightFaces = false;
+        _hasGrid = false; _hasGridPlan = false;
         if (_pendingFaces != null) _facesDirty = true;
         if (_pendingHighlightFaces != null) _highlightFacesDirty = true;
         _hasCursor = false; _curBuiltSx = double.NaN;   // 十字光标下次移动即按当前上下文重建
@@ -238,6 +244,8 @@ public partial class CadGlViewport : OpenGlControlBase
 
         float[] vp = _camera.ViewProj(aspect);
 
+        EnsureGrid(aspect);   // 自适应格网: 缩放换挡/平移出界时重建(必须在 GL 线程)
+
         _renderer.BeginFrame(w, h, 0.13f, 0.14f, 0.16f);
         GridPass(vp);
         ScenePass(vp);
@@ -266,7 +274,7 @@ public partial class CadGlViewport : OpenGlControlBase
     /// <summary>地面自适应网格 + XYZ 轴。深度关 —— 作背景，永远在实体之后。</summary>
     private void GridPass(float[] vp)
     {
-        if (!_showGrid) return;
+        if (!_showGrid || !_hasGrid) return;
         _renderer.BeginPass(depthTest: false);
         _renderer.Draw(_grid, GL_LINES, vp);
         _renderer.EndPass();
@@ -621,26 +629,64 @@ public partial class CadGlViewport : OpenGlControlBase
     }
 
     // ---------- 几何（示例内容；接入内核后由 AcDb worldDraw 提供）----------
-    private static float[] BuildGrid(int n, float step)
+    /// <summary>
+    /// 按当前可见范围重建自适应格网(AutoCAD 式无限栅格)：随缩放 1-2-5 换挡、每 5 格一条主线、
+    /// 主线对齐世界原点、铺满视口看不到边界；X/Y 轴单独着色。间距或可见区超出已覆盖范围时才重建。
+    /// 几何用渲染局部坐标(世界 − 原点), 与其它几何同一坐标系。
+    /// </summary>
+    private void EnsureGrid(float aspect)
     {
-        var v = new List<float>();
-        float ext = n * step;
-        void Line(float x0, float y0, float x1, float y1, float r, float g, float b)
+        if (!_showGrid || Bounds.Height < 1) return;
+        bool is2D = _camera.Is2D;
+        // 2D 正交: 半高 = Dist; 3D: 取注视平面上的可见范围(与平移/缩放同口径)
+        double halfH = is2D ? _camera.Dist : _camera.Dist * Math.Tan(Math.PI / 8);
+        double viewH = halfH * 2, viewW = viewH * aspect;
+        double wpp = viewH / Bounds.Height;                    // 世界长度/像素
+        double cxL = _camera.Target[0], cyL = _camera.Target[1];   // 局部坐标中心
+        double cx = cxL + _ox, cy = cyL + _oy;                 // 世界坐标中心(主线要对齐世界原点)
+        double coverage = is2D ? 1.15 : 3.0;                   // 3D 多铺一些, 边界落到视野外
+
+        if (_hasGridPlan && Math.Abs(_gridWpp - wpp) < _gridWpp * 0.15 && _gridIs2D == is2D
+            && GridPlanner.Covers(_gridPlan, cx, cy, viewW, viewH))
+            return;                                            // 缩放挡位未变且仍罩得住 → 复用
+
+        var plan = GridPlanner.For(wpp, viewW, viewH, cx, cy, minPx: 10, majorEvery: 5, coverage: coverage);
+        _gridPlan = plan; _gridWpp = wpp; _gridIs2D = is2D; _hasGridPlan = true;
+
+        var v = new List<float>((plan.TotalLines + 4) * 12);
+        void Line(double x0, double y0, double x1, double y1, float r, float g, float b)
         {
-            v.AddRange(new[] { x0, y0, 0f, r, g, b, x1, y1, 0f, r, g, b });
+            v.Add((float)(x0 - _ox)); v.Add((float)(y0 - _oy)); v.Add(0); v.Add(r); v.Add(g); v.Add(b);
+            v.Add((float)(x1 - _ox)); v.Add((float)(y1 - _oy)); v.Add(0); v.Add(r); v.Add(g); v.Add(b);
         }
-        for (int i = -n; i <= n; i++)
+        // 细线 / 主线(主线更亮)；轴线单独画在最后, 盖住同位置的格线
+        const float mnR = 0.185f, mnG = 0.200f, mnB = 0.225f;   // 细线: 比背景(0.13,0.14,0.16)略亮
+        const float mjR = 0.300f, mjG = 0.325f, mjB = 0.360f;   // 主线
+        for (int i = 0; i < plan.VerticalLines; i++)
         {
-            float c = i == 0 ? 0.30f : 0.24f;
-            Line(i * step, -ext, i * step, ext, c, c, c);
-            Line(-ext, i * step, ext, i * step, c, c, c);
+            double x = plan.X0 + i * plan.Minor;
+            bool major = GridPlanner.IsMajor(x, plan.Major);
+            Line(x, plan.Y0, x, plan.Y1, major ? mjR : mnR, major ? mjG : mnG, major ? mjB : mnB);
         }
-        // 轴：X 红 Y 绿 Z 蓝
-        v.AddRange(new[] { 0f, 0f, 0f, 0.85f, 0.20f, 0.20f, ext, 0f, 0f, 0.85f, 0.20f, 0.20f });
-        v.AddRange(new[] { 0f, 0f, 0f, 0.25f, 0.75f, 0.25f, 0f, ext, 0f, 0.25f, 0.75f, 0.25f });
-        v.AddRange(new[] { 0f, 0f, 0f, 0.30f, 0.50f, 0.95f, 0f, 0f, ext * 0.5f, 0.30f, 0.50f, 0.95f });
-        return v.ToArray();
+        for (int j = 0; j < plan.HorizontalLines; j++)
+        {
+            double y = plan.Y0 + j * plan.Minor;
+            bool major = GridPlanner.IsMajor(y, plan.Major);
+            Line(plan.X0, y, plan.X1, y, major ? mjR : mnR, major ? mjG : mnG, major ? mjB : mnB);
+        }
+        // 世界坐标轴(在视野内才画)：X 红 / Y 绿
+        if (plan.Y0 <= 0 && plan.Y1 >= 0) Line(plan.X0, 0, plan.X1, 0, 0.62f, 0.26f, 0.26f);
+        if (plan.X0 <= 0 && plan.X1 >= 0) Line(0, plan.Y0, 0, plan.Y1, 0.26f, 0.55f, 0.30f);
+
+        if (_hasGrid) _renderer.DeleteMesh(_grid);
+        _grid = _renderer.Upload(v.ToArray());
+        _hasGrid = !_grid.IsEmpty;
     }
+
+    /// <summary>当前格网挡位说明(状态栏/自检用)：细线间距 · 主线间距 · 线数。</summary>
+    public string GridInfo => _hasGridPlan
+        ? $"minor={_gridPlan.Minor:0.###} major={_gridPlan.Major:0.###} lines={_gridPlan.TotalLines} cover=({_gridPlan.X0:0}..{_gridPlan.X1:0})"
+        : "(未建)";
 
     private static float[] BuildCube()
     {

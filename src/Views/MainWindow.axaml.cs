@@ -974,43 +974,44 @@ public partial class MainWindow : Window
     {
         var m = new ContextMenu();
         m.Opening += OnCtxMenuOpening;
-        void Item(string header, System.EventHandler<RoutedEventArgs> click) { var mi = new MenuItem { Header = header }; mi.Click += click; m.Items.Add(mi); }
-        void Cmd(string header, string tag) { var mi = new MenuItem { Header = header, Tag = tag }; mi.Click += OnCtxCommand; m.Items.Add(mi); }
+        Image? Ico(string key) => MenuIcon(key);
+        void Item(string header, System.EventHandler<RoutedEventArgs> click, string? icon = null)
+        { var mi = new MenuItem { Header = header, Icon = icon == null ? null : Ico(icon) }; mi.Click += click; m.Items.Add(mi); }
+        void Cmd(string header, string tag, string? icon = null)
+        { var mi = new MenuItem { Header = header, Tag = tag, Icon = icon == null ? null : Ico(icon) }; mi.Click += OnCtxCommand; m.Items.Add(mi); }
         void Sep() => m.Items.Add(new Separator());
         // 视图模式三项(忠实原版右键顶部)：2D 视图 / 3D Orbit / 3D 选择模式；
         // 弹出时隐藏当前所处那一项，用户看到的总是"另外两种可切目标"。
         MenuItem ModeItem(string header, string iconKey, System.EventHandler<RoutedEventArgs> click)
         {
-            var mi = new MenuItem { Header = header };
-            if (this.TryFindResource(iconKey, out var res) && res is Avalonia.Media.IImage img)
-                mi.Icon = new Image { Source = img, Width = 16, Height = 16 };
+            var mi = new MenuItem { Header = header, Icon = Ico(iconKey) };
             mi.Click += click; m.Items.Add(mi); return mi;
         }
         _ctxTo2D = ModeItem("切换到 2D 视图", "icon_2D", OnCtx2D);
         _ctxToOrbit = ModeItem("切换到 3D Orbit", "icon_3D", OnCtxModeToOrbit);
         _ctxToSelect = ModeItem("切换到 3D 选择模式", "icon_select_mode", OnCtxModeToSelect);
-        Item("范围缩放", OnCtxZoomExtents);
-        Item("网格 / 轴 开关", OnCtxGrid);
+        Item("范围缩放", OnCtxZoomExtents, "icon_Zoom");
+        Item("网格 / 轴 开关", OnCtxGrid, "icon_grid");
         Sep();
-        Cmd("特性", "特性");
-        Cmd("快速选择（选类似）", "快速选择");
-        Cmd("全部选择", "全部选择");
-        m.Items.Add(new MenuItem { Header = "调用选择集", Name = "CtxSelSets" });
+        Cmd("特性", "特性", "icon_settings");
+        Cmd("快速选择（选类似）", "快速选择", "icon_quick_select");
+        Cmd("全部选择", "全部选择", "icon_select_all");
+        m.Items.Add(new MenuItem { Header = "调用选择集", Name = "CtxSelSets", Icon = Ico("icon_recall_selection") });
         Sep();
-        Cmd("复制", "复制到剪贴板");
-        Cmd("剪切", "剪切");
-        Cmd("粘贴", "粘贴");
-        Cmd("删除", "删除");
+        Cmd("复制", "复制到剪贴板", "icon_copy");
+        Cmd("剪切", "剪切", "icon_cut");
+        Cmd("粘贴", "粘贴", "icon_paste");
+        Cmd("删除", "删除", "icon_delete");
         Sep();
-        Cmd("隐藏对象", "隐藏对象");
-        Cmd("隐藏同一图层对象", "隐藏同一图层对象");
-        Cmd("结束隐藏", "结束隐藏");
+        Cmd("隐藏对象", "隐藏对象", "icon_hide_object");
+        Cmd("隐藏同一图层对象", "隐藏同一图层对象", "icon_hide_layer");
+        Cmd("结束隐藏", "结束隐藏", "icon_show_all");
         Sep();
-        Cmd("测距", "距离");
-        Cmd("测角", "角度");
-        Cmd("面积", "面积");
+        Cmd("测距", "距离", "icon_measure");
+        Cmd("测角", "角度", "icon_measure_angle");
+        Cmd("面积", "面积", "icon_measure_area");
         Sep();
-        Item("清除高亮", OnCtxClearHighlight);
+        Item("清除高亮", OnCtxClearHighlight, "icon_clear_marks");
         return m;
     }
 
@@ -8002,6 +8003,10 @@ public partial class MainWindow : Window
     // ── Ribbon 开始页(复刻原版 Fluent Ribbon Home)专用处理 ──
     private DMC.Tool? _propsTool, _assistantTool;
 
+    /// <summary>按资源键取 16px 菜单图标(找不到返回 null)。</summary>
+    private Image? MenuIcon(string key)
+        => this.TryFindResource(key, out var r) && r is Avalonia.Media.IImage img ? new Image { Source = img, Width = 16, Height = 16 } : null;
+
     // 「切换窗口」下拉展开：动态列出已打开的全部文档(同原版 btnSwitchView)，点选即切换；下方附标准视图预设。
     private void OnSwitchViewFlyoutOpening(object? sender, System.EventArgs e)
     {
@@ -8010,22 +8015,22 @@ public partial class MainWindow : Window
         foreach (var st in _docs)
         {
             var d = st;
-            var mi = new MenuItem { Header = (ReferenceEquals(d, _active) ? "● " : "　") + d.Title };
+            var mi = new MenuItem { Header = (ReferenceEquals(d, _active) ? "● " : "　") + d.Title, Icon = MenuIcon("icon_doc") };
             mi.Click += (_, _) => _dockFactory.SetActiveDockable(d.Vm);
             fl.Items.Add(mi);
         }
         fl.Items.Add(new Separator());
-        var views = new MenuItem { Header = "标准视图" };
+        var views = new MenuItem { Header = "标准视图", Icon = MenuIcon("icon_Ori") };
         foreach (var v in new[] { "俯视", "仰视", "主视", "后视", "左视", "右视", "西南等轴测", "东南等轴测", "东北等轴测", "西北等轴测" })
         {
             var name = v;
-            var mi = new MenuItem { Header = name };
+            var mi = new MenuItem { Header = name, Icon = MenuIcon("icon_view") };
             mi.Click += (_, _) => DispatchRibbon(name);
             views.Items.Add(mi);
         }
         fl.Items.Add(views);
-        var ze = new MenuItem { Header = "范围缩放" }; ze.Click += (_, _) => DispatchRibbon("范围缩放"); fl.Items.Add(ze);
-        var pv = new MenuItem { Header = "上一视图" }; pv.Click += (_, _) => DispatchRibbon("上一视图"); fl.Items.Add(pv);
+        var ze = new MenuItem { Header = "范围缩放", Icon = MenuIcon("icon_Zoom") }; ze.Click += (_, _) => DispatchRibbon("范围缩放"); fl.Items.Add(ze);
+        var pv = new MenuItem { Header = "上一视图", Icon = MenuIcon("icon_undo") }; pv.Click += (_, _) => DispatchRibbon("上一视图"); fl.Items.Add(pv);
     }
 
     // 「调用选择集」下拉展开：列出命名选择集(与右键菜单同源 _selSets)。

@@ -78,10 +78,10 @@
                                             <Button Classes="ribbon-btn small" ToolTip.Tip="圆的多种画法">
                                                 <Button.Flyout>
                                                     <MenuFlyout>
-                                                        <MenuItem Header="圆心、半径" Tag="圆" Click="OnRibbonCommand" />
-                                                        <MenuItem Header="两点 (2P)" Tag="圆2P" Click="OnRibbonCommand" />
-                                                        <MenuItem Header="三点 (3P)" Tag="圆3P" Click="OnRibbonCommand" />
-                                                        <MenuItem Header="切、切、半径 (TTR)" Tag="圆TTR" Click="OnRibbonCommand" />
+                                                        <MenuItem Header="圆心、半径" Tag="圆" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_circle}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                        <MenuItem Header="两点 (2P)" Tag="圆2P" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_circle}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                        <MenuItem Header="三点 (3P)" Tag="圆3P" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_circle}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                        <MenuItem Header="切、切、半径 (TTR)" Tag="圆TTR" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_circle}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
                                                     </MenuFlyout>
                                                 </Button.Flyout>
                                                 <StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_circle}" /><TextBlock Text="圆 ▾" /></StackPanel>
@@ -89,10 +89,10 @@
                                             <Button Classes="ribbon-btn small" ToolTip.Tip="圆弧的多种画法">
                                                 <Button.Flyout>
                                                     <MenuFlyout>
-                                                        <MenuItem Header="三点" Tag="圆弧" Click="OnRibbonCommand" />
-                                                        <MenuItem Header="起点、圆心、端点" Tag="圆弧SCE" Click="OnRibbonCommand" />
-                                                        <MenuItem Header="圆心、起点、端点" Tag="圆弧CSE" Click="OnRibbonCommand" />
-                                                        <MenuItem Header="起点、端点、半径" Tag="圆弧SER" Click="OnRibbonCommand" />
+                                                        <MenuItem Header="三点" Tag="圆弧" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_arc}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                        <MenuItem Header="起点、圆心、端点" Tag="圆弧SCE" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_arc}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                        <MenuItem Header="圆心、起点、端点" Tag="圆弧CSE" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_arc}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                        <MenuItem Header="起点、端点、半径" Tag="圆弧SER" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_arc}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
                                                     </MenuFlyout>
                                                 </Button.Flyout>
                                                 <StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_arc}" /><TextBlock Text="圆弧 ▾" /></StackPanel>
@@ -201,11 +201,11 @@
                                         <Button Classes="ribbon-btn large" ToolTip.Tip="标注：对齐 / 连续 / 半径 · 标注样式">
                                             <Button.Flyout>
                                                 <MenuFlyout>
-                                                    <MenuItem Header="对齐标注" Tag="对齐标注" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="连续标注" Tag="连续标注" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="半径标注" Tag="半径标注" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="对齐标注" Tag="对齐标注" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_linear_dimension}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="连续标注" Tag="连续标注" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_continuous_dimension}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="半径标注" Tag="半径标注" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_radial_dimension}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
                                                     <Separator />
-                                                    <MenuItem Header="标注样式" Tag="标注样式" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="标注样式" Tag="标注样式" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_dimension_style}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
                                                 </MenuFlyout>
                                             </Button.Flyout>
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_linear_dimension}" /><TextBlock Text="标注 ▾" /></StackPanel>
@@ -213,9 +213,9 @@
                                         <Button Classes="ribbon-btn large" ToolTip.Tip="填充：按右侧 比例(间距)/角度 生成剖面线；十字 = 交叉填充开关">
                                             <Button.Flyout>
                                                 <MenuFlyout>
-                                                    <MenuItem Header="图案填充" Click="OnHatchFillClick" />
+                                                    <MenuItem Header="图案填充" Click="OnHatchFillClick"><MenuItem.Icon><Image Source="{StaticResource icon_hatch}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
                                                     <Separator />
-                                                    <MenuItem Header="十字交叉(开/关)" Tag="填充十字" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="十字交叉(开/关)" Tag="填充十字" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_hatch}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
                                                 </MenuFlyout>
                                             </Button.Flyout>
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_hatch}" /><TextBlock Text="填充 ▾" /></StackPanel>
@@ -247,11 +247,11 @@
                                         <Button Classes="ribbon-btn large" ToolTip.Tip="剪贴板：剪切 / 复制 / 粘贴 / 基点粘贴 / 原坐标粘贴">
                                             <Button.Flyout>
                                                 <MenuFlyout>
-                                                    <MenuItem Header="剪切" Tag="剪切" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="复制" Tag="复制到剪贴板" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="粘贴" Tag="粘贴" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="基点粘贴" Tag="基点粘贴" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="原坐标粘贴" Tag="原坐标粘贴" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="剪切" Tag="剪切" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_cut}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="复制" Tag="复制到剪贴板" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_copy}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="粘贴" Tag="粘贴" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_paste}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="基点粘贴" Tag="基点粘贴" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_paste_base}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="原坐标粘贴" Tag="原坐标粘贴" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_paste_origin}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
                                                 </MenuFlyout>
                                             </Button.Flyout>
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_paste}" /><TextBlock Text="剪贴板 ▾" /></StackPanel>
@@ -259,9 +259,9 @@
                                         <Button Classes="ribbon-btn large" ToolTip.Tip="测量：距离 / 角度 / 面积">
                                             <Button.Flyout>
                                                 <MenuFlyout>
-                                                    <MenuItem Header="距离" Tag="距离" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="角度" Tag="角度" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="面积" Tag="面积" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="距离" Tag="距离" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_measure}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="角度" Tag="角度" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_measure_angle}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="面积" Tag="面积" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_measure_area}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
                                                 </MenuFlyout>
                                             </Button.Flyout>
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_measure}" /><TextBlock Text="测量 ▾" /></StackPanel>
@@ -481,9 +481,9 @@
                                             <Button Classes="ribbon-btn small" ToolTip.Tip="基本几何体：在视口点位放置拓扑闭合的立方体/球体/圆柱">
                                                 <Button.Flyout>
                                                     <MenuFlyout>
-                                                        <MenuItem Header="立方体" Tag="立方体" Click="OnRibbonCommand" />
-                                                        <MenuItem Header="球体" Tag="球体" Click="OnRibbonCommand" />
-                                                        <MenuItem Header="圆柱" Tag="圆柱" Click="OnRibbonCommand" />
+                                                        <MenuItem Header="立方体" Tag="立方体" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource mb_prim_box}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                        <MenuItem Header="球体" Tag="球体" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource mb_prim_sphere}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                        <MenuItem Header="圆柱" Tag="圆柱" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource mb_prim_cylinder}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
                                                     </MenuFlyout>
                                                 </Button.Flyout>
                                                 <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mb_primitives}" /><TextBlock Text="基本几何体 ▾" /></StackPanel>
@@ -520,12 +520,12 @@
                                         <Button Classes="ribbon-btn large" ToolTip.Tip="点编辑">
                                             <Button.Flyout>
                                                 <MenuFlyout>
-                                                    <MenuItem Header="修改高程点" Tag="修改高程点" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="删除重复点" Tag="删除重复点" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="修改点样式" Tag="修改点样式" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="赋节点高程" Tag="赋节点高程" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="点落到面上" Tag="点落到面上" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="顶点焊接" Tag="顶点焊接" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="修改高程点" Tag="修改高程点" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource me_edit_z}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="删除重复点" Tag="删除重复点" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource me_dedupe_pt}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="修改点样式" Tag="修改点样式" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource me_pt_style}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="赋节点高程" Tag="赋节点高程" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource me_assign_z}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="点落到面上" Tag="点落到面上" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource me_pt_to_surf}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="顶点焊接" Tag="顶点焊接" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource te_weld_vertex}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
                                                 </MenuFlyout>
                                             </Button.Flyout>
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource edit_point}" /><TextBlock Text="点编辑 ▾" /></StackPanel>
@@ -533,18 +533,18 @@
                                         <Button Classes="ribbon-btn large" ToolTip.Tip="线编辑">
                                             <Button.Flyout>
                                                 <MenuFlyout>
-                                                    <MenuItem Header="删除重复线" Tag="删除重复线" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="闭合线裁剪" Tag="闭合线裁剪" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="统一线高程" Tag="统一线高程" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="闭合多段线" Tag="闭合多段线" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="加密多段线" Tag="加密多段线" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="抽稀等值线" Tag="抽稀等值线" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="标识起点" Tag="标识起点" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="标识线序" Tag="标识线序" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="连接多段线" Tag="连接多段线" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="两线交点" Tag="两线交点" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="线落到面上" Tag="线落到面上" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="多段线嵌入三角网" Tag="多段线嵌入三角网" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="删除重复线" Tag="删除重复线" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource me_dedupe_line}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="闭合线裁剪" Tag="闭合线裁剪" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource me_clip_loop}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="统一线高程" Tag="统一线高程" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource me_unify_z}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="闭合多段线" Tag="闭合多段线" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource me_close_pline}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="加密多段线" Tag="加密多段线" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource me_densify}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="抽稀等值线" Tag="抽稀等值线" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource me_simplify}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="标识起点" Tag="标识起点" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource me_mark_start}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="标识线序" Tag="标识线序" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource me_mark_order}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="连接多段线" Tag="连接多段线" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource me_connect_lines}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="两线交点" Tag="两线交点" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource me_intersect_pts}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="线落到面上" Tag="线落到面上" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource me_line_to_surf}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="多段线嵌入三角网" Tag="多段线嵌入三角网" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource te_embed_pline}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
                                                 </MenuFlyout>
                                             </Button.Flyout>
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource edit_line}" /><TextBlock Text="线编辑 ▾" /></StackPanel>
@@ -552,15 +552,15 @@
                                         <Button Classes="ribbon-btn large" ToolTip.Tip="面编辑">
                                             <Button.Flyout>
                                                 <MenuFlyout>
-                                                    <MenuItem Header="生成三角网边界" Tag="生成三角网边界" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="闭合线裁剪面" Tag="闭合线裁剪面" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="沿线分割三角网" Tag="沿线分割三角网" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="合并三角网" Tag="合并三角网" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="面交线" Tag="面交线" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="裁剪面" Tag="裁剪面" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="修复拓扑关系" Tag="修复拓扑关系" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="删除三角面" Tag="删除三角面" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="格网质量检测" Tag="格网质量检测" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="生成三角网边界" Tag="生成三角网边界" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource te_gen_boundary}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="闭合线裁剪面" Tag="闭合线裁剪面" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource te_clip_loop_face}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="沿线分割三角网" Tag="沿线分割三角网" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource te_split_along}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="合并三角网" Tag="合并三角网" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource te_merge_mesh}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="面交线" Tag="面交线" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource te_face_intersect}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="裁剪面" Tag="裁剪面" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource te_clip_face}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="修复拓扑关系" Tag="修复拓扑关系" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource te_repair_topo}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="删除三角面" Tag="删除三角面" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource te_delete_tri}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="格网质量检测" Tag="格网质量检测" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource te_quality}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
                                                 </MenuFlyout>
                                             </Button.Flyout>
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource edit_face}" /><TextBlock Text="面编辑 ▾" /></StackPanel>
@@ -568,15 +568,15 @@
                                         <Button Classes="ribbon-btn large" ToolTip.Tip="体编辑">
                                             <Button.Flyout>
                                                 <MenuFlyout>
-                                                    <MenuItem Header="两期三角网算量" Tag="两期三角网算量" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="分割地质体" Tag="分割地质体" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="布尔-并集" Tag="布尔-并集" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="布尔-交集" Tag="布尔-交集" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="布尔-差集" Tag="布尔-差集" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="布尔-补集" Tag="布尔-补集" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="三角网体积" Tag="三角网体积" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="体素格网体积" Tag="体素格网体积" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="实体转块体" Tag="实体转块体" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="两期三角网算量" Tag="两期三角网算量" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource te_volume_diff}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="分割地质体" Tag="分割地质体" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource te_split_body}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="布尔-并集" Tag="布尔-并集" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource te_boolean}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="布尔-交集" Tag="布尔-交集" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource te_boolean}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="布尔-差集" Tag="布尔-差集" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource te_boolean}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="布尔-补集" Tag="布尔-补集" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource te_boolean}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="三角网体积" Tag="三角网体积" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_measure_volume}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="体素格网体积" Tag="体素格网体积" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource te_voxel_volume}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="实体转块体" Tag="实体转块体" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource mb_prim_box}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
                                                 </MenuFlyout>
                                             </Button.Flyout>
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource edit_body}" /><TextBlock Text="体编辑 ▾" /></StackPanel>
@@ -584,10 +584,10 @@
                                         <Button Classes="ribbon-btn large" ToolTip.Tip="工具：构建等值线 / 创建剖面 / 动态剖面 / 实时曲面坐标">
                                             <Button.Flyout>
                                                 <MenuFlyout>
-                                                    <MenuItem Header="构建等值线" Tag="构建等值线" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="创建剖面" Tag="创建剖面" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="动态剖面" Tag="动态剖面" Click="OnRibbonCommand" />
-                                                    <MenuItem Header="实时曲面坐标" Tag="实时曲面坐标" Click="OnRibbonCommand" />
+                                                    <MenuItem Header="构建等值线" Tag="构建等值线" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource me_contour}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="创建剖面" Tag="创建剖面" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource me_section}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="动态剖面" Tag="动态剖面" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource me_section}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="实时曲面坐标" Tag="实时曲面坐标" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_measure_quick}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
                                                 </MenuFlyout>
                                             </Button.Flyout>
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource me_contour}" /><TextBlock Text="工具 ▾" /></StackPanel>
@@ -1406,35 +1406,35 @@
                 <TextBlock Grid.Column="4" x:Name="StatusMsg" Text="就绪" Foreground="#3A3F46" VerticalAlignment="Center" Margin="12,0" FontSize="12" TextTrimming="CharacterEllipsis" />
                 <!-- extend(右侧): 正交 · 捕捉(左键开关, 右键捕捉模式) · 栅格 · 栅格捕捉 · 选项 —— 20x20 图标按钮同原版 -->
                 <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
-                    <ToggleButton x:Name="OrthoToggle" Width="20" Height="20" Padding="0" Background="Transparent" BorderThickness="0"
+                    <ToggleButton x:Name="OrthoToggle" Classes="status-toggle" Width="22" Height="22" Padding="0"
                                   IsCheckedChanged="OnOrthoToggle" ToolTip.Tip="正交 (F8)">
                         <Image Source="{StaticResource icon_ortho}" Width="16" Height="16" />
                     </ToggleButton>
                     <Border Width="1" Background="#DCDFE4" Margin="4,2" />
-                    <ToggleButton x:Name="SnapToggle" Width="20" Height="20" Padding="0" Background="Transparent" BorderThickness="0"
+                    <ToggleButton x:Name="SnapToggle" Classes="status-toggle" Width="22" Height="22" Padding="0"
                                   ToolTip.Tip="对象捕捉 (左键开关, 右键设置捕捉模式)">
                         <Image Source="{StaticResource icon_snap}" Width="16" Height="16" />
                         <ToggleButton.ContextMenu>
                             <ContextMenu Opening="OnSnapModeMenuOpening">
-                                <MenuItem Header="端点 (Endpoint)" IsEnabled="False" ToolTip.Tip="恒开" />
-                                <MenuItem Header="中点 (Midpoint)" IsEnabled="False" ToolTip.Tip="恒开" />
-                                <MenuItem Header="圆心 (Center)" IsEnabled="False" ToolTip.Tip="恒开" />
-                                <MenuItem x:Name="MiSnapIntersection" Header="交点 (Intersection)" Tag="3" Click="OnSnapModeMenuClick" />
-                                <MenuItem x:Name="MiSnapPerpendicular" Header="垂足 (Perpendicular)" Tag="4" Click="OnSnapModeMenuClick" />
-                                <MenuItem x:Name="MiSnapNearest" Header="最近 (Nearest)" Tag="5" Click="OnSnapModeMenuClick" />
+                                <MenuItem Header="端点 (Endpoint)" IsEnabled="False" ToolTip.Tip="恒开"><MenuItem.Icon><Image Source="{StaticResource icon_snap}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                <MenuItem Header="中点 (Midpoint)" IsEnabled="False" ToolTip.Tip="恒开"><MenuItem.Icon><Image Source="{StaticResource icon_snap}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                <MenuItem Header="圆心 (Center)" IsEnabled="False" ToolTip.Tip="恒开"><MenuItem.Icon><Image Source="{StaticResource icon_snap}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                <MenuItem x:Name="MiSnapIntersection" Header="交点 (Intersection)" Tag="3" Click="OnSnapModeMenuClick"><MenuItem.Icon><Image Source="{StaticResource icon_snap}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                <MenuItem x:Name="MiSnapPerpendicular" Header="垂足 (Perpendicular)" Tag="4" Click="OnSnapModeMenuClick"><MenuItem.Icon><Image Source="{StaticResource icon_snap}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                <MenuItem x:Name="MiSnapNearest" Header="最近 (Nearest)" Tag="5" Click="OnSnapModeMenuClick"><MenuItem.Icon><Image Source="{StaticResource icon_snap}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
                                 <Separator />
-                                <MenuItem Header="全部开启" Click="OnSnapModeAllOnClick" />
-                                <MenuItem Header="全部关闭" Click="OnSnapModeAllOffClick" />
+                                <MenuItem Header="全部开启" Click="OnSnapModeAllOnClick"><MenuItem.Icon><Image Source="{StaticResource icon_show_all}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                <MenuItem Header="全部关闭" Click="OnSnapModeAllOffClick"><MenuItem.Icon><Image Source="{StaticResource icon_visible_off}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
                             </ContextMenu>
                         </ToggleButton.ContextMenu>
                     </ToggleButton>
                     <Border Width="1" Background="#DCDFE4" Margin="4,2" />
-                    <ToggleButton x:Name="GridToggle" Width="20" Height="20" Padding="0" Background="Transparent" BorderThickness="0"
+                    <ToggleButton x:Name="GridToggle" Classes="status-toggle" Width="22" Height="22" Padding="0"
                                   IsChecked="True" IsCheckedChanged="OnGridToggle" ToolTip.Tip="栅格开关">
                         <Image Source="{StaticResource icon_grid}" Width="16" Height="16" />
                     </ToggleButton>
                     <Border Width="1" Background="#DCDFE4" Margin="4,2" />
-                    <ToggleButton x:Name="GridSnapToggle" Width="20" Height="20" Padding="0" Background="Transparent" BorderThickness="0"
+                    <ToggleButton x:Name="GridSnapToggle" Classes="status-toggle" Width="22" Height="22" Padding="0"
                                   IsCheckedChanged="OnGridSnapToggle" ToolTip.Tip="栅格捕捉 (F9)">
                         <Image Source="{StaticResource icon_point}" Width="16" Height="16" />
                     </ToggleButton>
