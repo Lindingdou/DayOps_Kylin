@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Avalonia.OpenGL;
 using static Avalonia.OpenGL.GlConsts;
 
@@ -30,27 +31,43 @@ internal sealed class GlRenderer
     /// <summary>着色器实际采用的方言(诊断用)：330 core / 300 es / 110 兼容(老驱动回退)。</summary>
     public string ShaderProfile { get; private set; } = "(未初始化)";
 
-    public void Init(GlInterface gl, GlExtras ext, bool isGles)
+    /// <summary>
+    /// 按实际协商到的 GL 版本挑着色器方言并编译(逐个尝试, 第一个成功的为准)：
+    ///   桌面 ≥3.3 → 330 core · 3.0~3.2 → 130 · 2.x → 110 兼容(attribute/varying/gl_FragColor)
+    ///   GLES ≥3.0 → 300 es · 2.0 → ESSL 100 兼容
+    /// 信创整机的国产 GPU 驱动常只到 GL 2.1 / GLES 2.0, 兼容方言那条就是为它们留的。
+    /// </summary>
+    public void Init(GlInterface gl, GlExtras ext, bool isGles, int major = 3, int minor = 3)
     {
         _gl = gl;
         _ext = ext;
 
-        // 信创整机的国产 GPU 驱动常只到 GL 2.1 / GLES 2.0(没有 in/out 与 VAO)。
-        // 先按现代方言(330 core / 300 es)编译, 失败就回退到 110/100 兼容方言(attribute/varying/gl_FragColor)。
-        if (!TryBuildProgram(gl, isGles ? "#version 300 es\nprecision highp float;\n" : "#version 330 core\n",
-                             modern: true, out string err1))
+        var attempts = new List<(string header, bool modern, string name)>();
+        if (isGles)
         {
-            Console.Error.WriteLine($"[GL] 现代着色器不可用, 回退兼容方言。原因: {err1}");
-            if (!TryBuildProgram(gl, isGles ? "precision highp float;\n" : "#version 110\n",
-                                 modern: false, out string err2))
-                throw new InvalidOperationException($"着色器编译失败(现代: {err1} / 兼容: {err2})");
-            ShaderProfile = isGles ? "GLES 100 兼容" : "GLSL 110 兼容";
+            if (major >= 3) attempts.Add(("#version 300 es\nprecision highp float;\n", true, "GLES 300"));
+            attempts.Add(("precision highp float;\n", false, "GLES 100 兼容"));
         }
-        else ShaderProfile = isGles ? "GLES 300" : "GLSL 330";
+        else
+        {
+            if (major > 3 || (major == 3 && minor >= 3)) attempts.Add(("#version 330 core\n", true, "GLSL 330"));
+            if (major >= 3) attempts.Add(("#version 130\n", true, "GLSL 130"));
+            attempts.Add(("#version 110\n", false, "GLSL 110 兼容"));
+        }
+
+        var errs = new List<string>();
+        foreach (var (header, modern, name) in attempts)
+        {
+            if (TryBuildProgram(gl, header, modern, out string err)) { ShaderProfile = name; break; }
+            errs.Add($"{name}: {err}");
+        }
+        if (_program == 0)
+            throw new InvalidOperationException("着色器全部方言均编译失败 —— " + string.Join(" | ", errs));
+        if (errs.Count > 0) Console.Error.WriteLine($"[GL] 回退到 {ShaderProfile}(前面失败: {string.Join(" | ", errs)})");
 
         _uMvp = gl.GetUniformLocationString(_program, "uMVP");
 
-        _vao = _ext.GenVertexArray();   // 老驱动没有 VAO 扩展时返回 0, BindVertexArray 变空操作
+        _vao = _ext.GenVertexArray();   // 老驱动无 VAO 扩展时返回 0, BindVertexArray 变空操作(每次 Draw 都重设属性指针, 不依赖 VAO)
         _ext.BindVertexArray(_vao);
     }
 

@@ -118,7 +118,7 @@ public partial class CadGlViewport : OpenGlControlBase
         {
             GlFailed = true;
             GlFailReason = ex.Message;
-            Console.Error.WriteLine("[GLINIT-FAIL] " + ex);
+            PitMine3D.Kylin.CrashLog.Write("GL-FAIL", ex.ToString());
             // 不 rethrow —— 抛出会让 Avalonia 拆掉窗口, 表现为"打开即闪退"; 宁可无三维视图也让程序留得住, 便于看提示与日志。
             Dispatcher.UIThread.Post(() => GlReady?.Invoke($"OpenGL 初始化失败: {ex.Message}"));
         }
@@ -126,15 +126,15 @@ public partial class CadGlViewport : OpenGlControlBase
 
     private void OnOpenGlInitCore(GlInterface gl)
     {
-        Console.Error.WriteLine($"[GLINIT] called. type={GlVersion.Type} {GlVersion.Major}.{GlVersion.Minor}");
+        PitMine3D.Kylin.CrashLog.Write("GL", $"上下文: {GlVersion.Type} {GlVersion.Major}.{GlVersion.Minor}");
         _ext = new GlExtras(gl);
         _isGles = GlVersion.Type == GlProfileType.OpenGLES;
 
         string backend = $"{(_isGles ? "OpenGL ES" : "OpenGL")} {GlVersion.Major}.{GlVersion.Minor}";
         Dispatcher.UIThread.Post(() => GlReady?.Invoke(backend));
 
-        _renderer.Init(gl, _ext, _isGles);
-        Console.Error.WriteLine($"[GLINIT] renderer ok. shader={_renderer.ShaderProfile}");
+        _renderer.Init(gl, _ext, _isGles, GlVersion.Major, GlVersion.Minor);
+        PitMine3D.Kylin.CrashLog.Write("GL", $"渲染器就绪, 着色器方言={_renderer.ShaderProfile}");
         _hasGrid = false; _hasGridPlan = false;   // 上下文重建 → 格网下一帧按当前视图重建
         _cube = _renderer.Upload(BuildCube());
         _gizmo = _renderer.Upload(BuildGizmo());
