@@ -1,0 +1,56 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.GeoDb.BoreholeDataWindow" x:CompileBindings="False"
+        Classes="geodb" Title="开孔坐标管理" Width="960" Height="560" WindowStartupLocation="CenterOwner">
+    <Grid Margin="12" RowDefinitions="Auto,Auto,Auto,*,Auto">
+        <!-- 标题 -->
+        <TextBlock Grid.Row="0" Classes="page-title" Text="开孔坐标管理" Margin="0,0,0,2"/>
+        <TextBlock Grid.Row="1" Classes="muted" TextWrapping="Wrap" Margin="0,0,0,8"
+                   Text="管理钻孔开孔坐标与基础信息：可 CSV 批量导入(支持下载模板)，也可在表格中直接双击单元格修改，提交即同步入库。必填：孔号、经距X、纬距Y。"/>
+
+        <!-- 工具栏 -->
+        <Border Grid.Row="2" Classes="toolbar" Margin="0,0,0,8">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+                <Button Content="下载模板…" Click="OnDownloadTemplateClick" Padding="8,2"
+                        ToolTip.Tip="生成带表头与示例行的 CSV 模板，填好后导入"/>
+                <Button Content="导入 CSV…" Click="OnImportClick" Padding="8,2"
+                        ToolTip.Tip="从 CSV 批量导入并同步入库"/>
+                <CheckBox x:Name="overwriteBox" Content="覆盖同名孔" IsChecked="True" VerticalAlignment="Center" Margin="4,0"/>
+                <Border Width="1" Background="#D0D4DA" Margin="2,2"/>
+                <Button Content="新增" Click="OnAddClick" Padding="8,2"/>
+                <Button Content="删除选中" Click="OnDeleteClick" Padding="8,2" Classes="danger"/>
+                <Border Width="1" Background="#D0D4DA" Margin="2,2"/>
+                <Button Content="导出 CSV" Click="OnExportCsvClick" Padding="8,2"/>
+                <Border Width="1" Background="#D0D4DA" Margin="2,2"/>
+                <TextBlock Text="筛选:" VerticalAlignment="Center" Margin="4,0,2,0"/>
+                <TextBox x:Name="filterBox" Width="170" VerticalContentAlignment="Center" ToolTip.Tip="按孔号或类别筛选"/>
+            </StackPanel>
+        </Border>
+
+        <!-- 数据表格(直接绑真库钻孔行; 编辑提交即存库) -->
+        <DataGrid x:Name="boreholeGrid" Grid.Row="3" AutoGenerateColumns="False" IsReadOnly="False" SelectionMode="Single"
+                  CellEditEnding="OnCellEditEnding" RowEditEnded="OnRowEditEnded">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="孔号" Binding="{Binding HoleId, Mode=TwoWay}" Width="80"/>
+                <DataGridTextColumn Header="经距 X" Binding="{Binding XStr, Mode=TwoWay}" Width="100"/>
+                <DataGridTextColumn Header="纬距 Y" Binding="{Binding YStr, Mode=TwoWay}" Width="100"/>
+                <DataGridTextColumn Header="孔口高程" Binding="{Binding ZCollarStr, Mode=TwoWay}" Width="80"/>
+                <DataGridTextColumn Header="总孔深" Binding="{Binding DepthTotalStr, Mode=TwoWay}" Width="70"/>
+                <DataGridTextColumn Header="终孔层位" Binding="{Binding TerminateHorizon, Mode=TwoWay}" Width="80"/>
+                <DataGridTextColumn Header="施工时间" Binding="{Binding DrillDate, Mode=TwoWay}" Width="90"/>
+                <DataGridTextColumn Header="施工单位" Binding="{Binding DrillUnit, Mode=TwoWay}" Width="120"/>
+                <DataGridTextColumn Header="钻探评级" Binding="{Binding DrillRating, Mode=TwoWay}" Width="70"/>
+                <DataGridTextColumn Header="测井评级" Binding="{Binding LogRating, Mode=TwoWay}" Width="70"/>
+                <DataGridTextColumn Header="综合评级" Binding="{Binding OverallRating, Mode=TwoWay}" Width="70"/>
+                <DataGridTextColumn Header="类别" Binding="{Binding Category, Mode=TwoWay}" Width="90"/>
+                <DataGridTextColumn Header="坐标标记" Binding="{Binding CoordFilled}" Width="80" IsReadOnly="True"/>
+                <DataGridTextColumn Header="备注" Binding="{Binding Remark, Mode=TwoWay}" Width="*"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- 状态栏 -->
+        <Border Grid.Row="4" Classes="statusbar" Margin="0,8,0,0">
+            <TextBlock x:Name="statusText" Text="就绪"/>
+        </Border>
+    </Grid>
+</Window>

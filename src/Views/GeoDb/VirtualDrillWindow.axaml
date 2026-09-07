@@ -1,0 +1,55 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.GeoDb.VirtualDrillWindow" x:CompileBindings="False"
+        Classes="geodb" Title="虚拟钻孔" Width="820" Height="560" WindowStartupLocation="CenterOwner">
+    <Grid Margin="12" RowDefinitions="Auto,Auto,*,Auto">
+        <!-- 工具条 -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8" Spacing="8">
+            <Button Content="配置地质模型" Click="OnConfig" Padding="12,4" Margin="0,0,4,0"
+                    ToolTip.Tip="指定地表 / 煤层顶底板三角网并存库（首次使用必做，可随时重配/改色）"/>
+            <Button x:Name="pickBtn" Content="视口拾取孔位" Click="OnPick" Padding="12,4"/>
+            <TextBlock Text="X" VerticalAlignment="Center"/>
+            <TextBox x:Name="txtX" Width="110" VerticalAlignment="Center"/>
+            <TextBlock Text="Y" VerticalAlignment="Center"/>
+            <TextBox x:Name="txtY" Width="110" VerticalAlignment="Center"/>
+            <Button Content="手动计算" Click="OnDrillManual" Padding="14,4" FontWeight="Bold" Classes="primary"
+                    ToolTip.Tip="用手动输入的 X/Y 坐标计算钻孔（视口拾取孔位会自动计算，无需再点此）"/>
+            <Button x:Name="gen3dBtn" Content="生成三维柱" Click="OnGenerate3D" Padding="12,4"
+                    ToolTip.Tip="把当前计算结果以分色柱状图导入主场景（可选中/可删除，一步撤销）"/>
+        </StackPanel>
+
+        <!-- 汇总 -->
+        <Border Grid.Row="1" Classes="panel" Padding="10,6" Margin="0,0,0,8">
+            <TextBlock x:Name="summaryText" TextWrapping="Wrap"
+                       Text="请先「配置地质模型」，再拾取孔位（自动计算）或输入 X/Y 后点「手动计算」。"/>
+        </Border>
+
+        <!-- 结果表 + 2D 柱状预览 -->
+        <Grid Grid.Row="2" ColumnDefinitions="*,220">
+            <DataGrid x:Name="grid" Grid.Column="0" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single">
+                <DataGrid.Columns>
+                    <DataGridTemplateColumn Header="" Width="30">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border Width="14" Height="14" Margin="4,0" BorderBrush="Gray" BorderThickness="0.5" Background="{Binding Swatch}"/>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTextColumn Header="煤层" Binding="{Binding Name}" Width="70"/>
+                    <DataGridTextColumn Header="顶板高程" Binding="{Binding RoofZ}" Width="*"/>
+                    <DataGridTextColumn Header="底板高程" Binding="{Binding FloorZ}" Width="*"/>
+                    <DataGridTextColumn Header="煤厚" Binding="{Binding Thickness}" Width="70"/>
+                    <DataGridTextColumn Header="层间距" Binding="{Binding Interval}" Width="70"/>
+                    <DataGridTextColumn Header="状态" Binding="{Binding State}" Width="90"/>
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <Border Grid.Column="1" Margin="10,0,0,0" BorderBrush="#55808080" BorderThickness="1" CornerRadius="4" Background="#FF2B2D31">
+                <Canvas x:Name="colCanvas" ClipToBounds="True"/>
+            </Border>
+        </Grid>
+
+        <!-- 状态 -->
+        <TextBlock x:Name="statusText" Grid.Row="3" Margin="0,8,0,0" TextWrapping="Wrap" Classes="muted" Text="就绪。"/>
+    </Grid>
+</Window>

@@ -1,0 +1,73 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.GeoDb.VirtualDrillSetupWindow" x:CompileBindings="False"
+        Classes="geodb" Title="虚拟钻孔 — 地质模型配置" Width="720" Height="580" WindowStartupLocation="CenterOwner">
+    <Grid Margin="14" RowDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto">
+        <!-- 说明 -->
+        <TextBlock Grid.Row="0" Classes="muted" TextWrapping="Wrap" Margin="0,0,0,10"
+                   Text="选择三角网面来识别地质模型：先选「地表面」，再逐层选择各煤层的顶板 / 底板面（面来源：场景图层顶点重建三角网，或 OFF 文件）。保存时程序读取所选三角网的节点与连接顺序存入数据库，之后在任意位置做虚拟钻孔即从库中取几何求交。"/>
+
+        <!-- 地表面 -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,10" VerticalAlignment="Center" Spacing="8">
+            <TextBlock Text="地表面：" VerticalAlignment="Center" FontWeight="Bold"/>
+            <Button x:Name="pickSurfaceBtn" Content="选择地表面…" Click="OnPickSurface" Padding="12,4"/>
+            <Button Content="清除" Click="OnClearSurface" Padding="10,4"/>
+            <TextBlock x:Name="surfaceInfoText" VerticalAlignment="Center" Classes="muted" Text="（未指定；可空）"/>
+        </StackPanel>
+
+        <!-- 煤层工具条 -->
+        <TextBlock Grid.Row="2" Text="煤层顶/底板（自上而下）：" FontWeight="Bold" Margin="0,2,0,4"/>
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,6" Spacing="8">
+            <Button Content="添加煤层" Click="OnAddSeam" Padding="12,4"/>
+            <Button Content="上移" Click="OnMoveUp" Padding="12,4" ToolTip.Tip="把选中煤层在层序中上移"/>
+            <Button Content="下移" Click="OnMoveDown" Padding="12,4" ToolTip.Tip="把选中煤层在层序中下移"/>
+            <Button Content="删除选中" Click="OnRemoveSeam" Padding="12,4"/>
+            <Button Content="自动识别" Click="OnAutoDetect" Padding="12,4"
+                    ToolTip.Tip="按图层名(含 顶板/底板/地表 等)自动配对并读取三角网，生成初始配置"/>
+        </StackPanel>
+
+        <!-- 煤层表 -->
+        <DataGrid x:Name="seamGrid" Grid.Row="4" AutoGenerateColumns="False" IsReadOnly="False" SelectionMode="Single">
+            <DataGrid.Columns>
+                <DataGridTemplateColumn Header="颜色" Width="120">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" Margin="4,2" Spacing="6">
+                                <Border Width="16" Height="16" BorderBrush="Gray" BorderThickness="0.5" VerticalAlignment="Center"
+                                        Background="{Binding Swatch}"/>
+                                <TextBox Text="{Binding ColorHex, Mode=TwoWay}" Width="72" VerticalAlignment="Center" MinHeight="22" Padding="4,1"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTextColumn Header="煤层名" Binding="{Binding SeamName, Mode=TwoWay}" Width="90"/>
+                <DataGridTextColumn Header="层序" Binding="{Binding Order}" IsReadOnly="True" Width="50"/>
+                <DataGridTemplateColumn Header="顶板面" Width="*">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Button Content="{Binding RoofInfo}" Click="OnPickRoof" Margin="3,2" Padding="6,2" HorizontalContentAlignment="Left"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="底板面" Width="*">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Button Content="{Binding FloorInfo}" Click="OnPickFloor" Margin="3,2" Padding="6,2" HorizontalContentAlignment="Left"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- 状态 -->
+        <TextBlock x:Name="statusText" Grid.Row="5" Margin="0,10,0,0" TextWrapping="Wrap" Classes="muted" Text="就绪。"/>
+
+        <!-- 底部按钮 -->
+        <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0" Spacing="8">
+            <Button Content="清空模型" Click="OnClearModel" Padding="14,5" Classes="danger"
+                    ToolTip.Tip="删除数据库中已保存的全部虚拟钻孔地质模型面"/>
+            <Button Content="保存到数据库" Click="OnSave" Padding="18,5" FontWeight="Bold" Classes="primary"/>
+            <Button Content="关闭" Click="OnClose" Padding="18,5"/>
+        </StackPanel>
+    </Grid>
+</Window>

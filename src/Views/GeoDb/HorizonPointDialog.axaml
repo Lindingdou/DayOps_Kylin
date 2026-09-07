@@ -1,0 +1,41 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
+        x:Class="PitMine3D.Kylin.Views.GeoDb.HorizonPointDialog" x:CompileBindings="False"
+        Classes="geodb" Title="层位展点 — 选择煤层" Width="360" Height="460" WindowStartupLocation="CenterOwner" CanResize="False">
+    <Grid Margin="12" RowDefinitions="Auto,Auto,*,Auto,Auto">
+        <TextBlock Grid.Row="0" Text="选择要展绘的煤层(可多选)" FontWeight="Bold" Margin="0,0,0,6"/>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,6" Spacing="6">
+            <Button Content="全选" Click="OnSelectAll" Padding="8,2"/>
+            <Button Content="全不选" Click="OnSelectNone" Padding="8,2"/>
+        </StackPanel>
+
+        <Border Grid.Row="2" BorderBrush="#FF555555" BorderThickness="1" Background="White">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ItemsControl x:Name="seamList">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}" Margin="6,3">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <Border Width="14" Height="14" Background="{Binding ColorBrush}" BorderBrush="Gray" BorderThickness="0.5" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding Label}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </CheckBox>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,10,0,0" Spacing="8">
+            <TextBlock Text="提取：" VerticalAlignment="Center"/>
+            <CheckBox x:Name="floorBox" Content="底板" IsChecked="True" Margin="0,0,8,0"/>
+            <CheckBox x:Name="roofBox" Content="顶板" IsChecked="True"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0" Spacing="8">
+            <Button Content="确定" Click="OnOk" IsDefault="True" Padding="16,3" Classes="primary"/>
+            <Button Content="取消" Click="OnCancel" IsCancel="True" Padding="16,3"/>
+        </StackPanel>
+    </Grid>
+</Window>
