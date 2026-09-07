@@ -819,61 +819,63 @@ public sealed class TextEntity : SceneEntity
     public bool ScreenFacing;
     public string Text = "";
 
-    /// <summary>字符笔画 → 局部二维线段(锚点为原点, 未旋转/未平移)。公告板与普通文字共用同一套排版。</summary>
+    /// <summary>
+    /// 字形 → 局部二维线段(锚点为原点, 未旋转/未平移)。公告板与普通文字共用同一套排版。
+    /// 有真字体(<see cref="GlyphFont"/>, 支持中文)就用其轮廓与步进宽度; 缺字/未启用退回 <see cref="StrokeFont"/>。
+    /// </summary>
     public List<(double x0, double y0, double x1, double y1)> LocalStrokes()
     {
         var outp = new List<(double, double, double, double)>();
         double wf = WidthFactor <= 0 ? 1 : WidthFactor;
         double tanOb = Math.Tan(ObliqueAngle);
-        double adv = Height * 0.8 * wf;
+        double fallbackAdv = Height * 0.8 * wf;
         var lines = (Text ?? "").Split('\n');
         double lineH = Height * 1.5;
         for (int li = 0; li < lines.Length; li++)
         {
             string line = lines[li];
-            double width = line.Length * adv;
+            double width = 0;
+            foreach (char ch in line) width += AdvanceOf(ch, wf);
             double hOff = HAlign == 1 ? -width / 2 : HAlign == 2 ? -width : 0;
             double vOff = (VAlign == 1 ? -Height / 2 : VAlign == 2 ? -Height : 0) - li * lineH;
             double cursor = hOff;
             foreach (char ch in line)
             {
-                foreach (var (sx0, sy0, sx1, sy1) in StrokeFont.Strokes(ch))
-                    outp.Add((cursor + sx0 * Height * wf + sy0 * Height * tanOb, vOff + sy0 * Height,
-                              cursor + sx1 * Height * wf + sy1 * Height * tanOb, vOff + sy1 * Height));
-                cursor += adv;
+                var contours = GlyphFont.Outline(ch);
+                if (contours != null && contours.Count > 0)
+                {
+                    foreach (var c in contours)
+                        for (int i = 0; i + 1 < c.Count; i++)
+                        {
+                            double x0 = c[i].x * Height * wf + c[i].y * Height * tanOb, y0 = c[i].y * Height;
+                            double x1 = c[i + 1].x * Height * wf + c[i + 1].y * Height * tanOb, y1 = c[i + 1].y * Height;
+                            outp.Add((cursor + x0, vOff + y0, cursor + x1, vOff + y1));
+                        }
+                }
+                else
+                {
+                    foreach (var (sx0, sy0, sx1, sy1) in StrokeFont.Strokes(ch))
+                        outp.Add((cursor + sx0 * Height * wf + sy0 * Height * tanOb, vOff + sy0 * Height,
+                                  cursor + sx1 * Height * wf + sy1 * Height * tanOb, vOff + sy1 * Height));
+                }
+                cursor += AdvanceOf(ch, wf);
             }
         }
         return outp;
+
+        double AdvanceOf(char ch, double widthFactor)
+        {
+            var o = GlyphFont.Outline(ch);
+            return o != null ? GlyphFont.Advance(ch) * Height * widthFactor : fallbackAdv;
+        }
     }
     public override void Tessellate(List<float> o)
     {
         if (ScreenFacing) return;   // 公告板文字由视口按相机基向量单独绘制
         double c = Math.Cos(Rotation), s = Math.Sin(Rotation);
-        double wf = WidthFactor <= 0 ? 1 : WidthFactor;
-        double tanOb = Math.Tan(ObliqueAngle);
-        double adv = Height * 0.8 * wf;
-        var lines = (Text ?? "").Split('\n');                            // 多行文字: 按 \n 分行, 逐行下落
-        double lineH = Height * 1.5;                                     // 行距
-        for (int li = 0; li < lines.Length; li++)
-        {
-            string line = lines[li];
-            double width = line.Length * adv;
-            double hOff = HAlign == 1 ? -width / 2 : HAlign == 2 ? -width : 0;   // 对齐偏移(局部, 逐行)
-            double lineBase = -li * lineH;                              // 第 li 行基线相对首行下移
-            double vOff = (VAlign == 1 ? -Height / 2 : VAlign == 2 ? -Height : 0) + lineBase;
-            double cursor = hOff;
-            foreach (char ch in line)
-            {
-                foreach (var (sx0, sy0, sx1, sy1) in StrokeFont.Strokes(ch))
-                {
-                    double lx0 = cursor + sx0 * Height * wf + sy0 * Height * tanOb, ly0 = vOff + sy0 * Height;   // x 按字宽缩放 + 倾斜斜切
-                    double lx1 = cursor + sx1 * Height * wf + sy1 * Height * tanOb, ly1 = vOff + sy1 * Height;
-                    Seg(o, X + lx0 * c - ly0 * s, Y + lx0 * s + ly0 * c,      // 旋转后平移到锚点
-                           X + lx1 * c - ly1 * s, Y + lx1 * s + ly1 * c);
-                }
-                cursor += adv;
-            }
-        }
+        foreach (var (lx0, ly0, lx1, ly1) in LocalStrokes())
+            Seg(o, X + lx0 * c - ly0 * s, Y + lx0 * s + ly0 * c,
+                   X + lx1 * c - ly1 * s, Y + lx1 * s + ly1 * c);   // 旋转后平移到锚点
     }
     public override SceneEntity Apply(Affine2 m)
     {

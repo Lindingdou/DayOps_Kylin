@@ -30,6 +30,7 @@ public partial class MainWindow : Window
         PopulateDrawingLayers();   // 启动即显示绘制图层("0")，可管理
         SetDocPath(null);          // 初始标题=未命名
         RenderAssistant(_assistant.Current());   // 智能助手：启动显示欢迎 + 主菜单
+        GlyphFontHost.Install();   // 视口文字用系统真字形(含中文), 取不到则退回笔画字体
         Modeling.MeshEditWindows.Register(); Modeling.EstimationWindows.Register(); Modeling.ModelUpdateWindows.Register(); Modeling.BlockModelWindows.Register();   // 三维地质建模独立窗口登记(功能项名 → 窗口)
 
         // 交互提示同步(同原版 jigPromptText)：任一指针/键盘事件处理完后刷新命令行提示与信息栏历史。

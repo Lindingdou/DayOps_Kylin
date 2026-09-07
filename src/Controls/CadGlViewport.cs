@@ -42,6 +42,7 @@ public partial class CadGlViewport : OpenGlControlBase
     private List<BillboardText>? _pendingBillboards;
     private bool _billboardsDirty;
     private double _bbYaw = double.NaN, _bbPitch, _bbTx, _bbTy, _bbTz;
+    private bool _bb2D;
 
     // 导入的图纸线框（世界坐标 P3_C3 线段）。上传须在 GL 线程，故 UI 线程只挂起数据，下一帧消费。
     // _pendingImport 保留世界坐标源(不清空)——切换标签会销毁并重建 GL 上下文, 需据此重传, 否则线框丢失。
@@ -724,14 +725,15 @@ public partial class CadGlViewport : OpenGlControlBase
             _billboardsDirty = false;
             return;
         }
-        // 2D 正交俯视时基向量恒定; 3D 随相机转动
-        var (rx, ry, rz, ux, uy, uz) = _camera.ViewAxes();
+        // 2D 正交俯视: 屏幕 X/Y 就是世界 X/Y(ViewAxes 按球坐标算, 2D 下会把字斜过来甚至镜像); 3D 才随相机转
+        var (rx, ry, rz, ux, uy, uz) = _camera.Is2D ? (1.0, 0.0, 0.0, 0.0, 1.0, 0.0) : _camera.ViewAxes();
         bool camMoved = double.IsNaN(_bbYaw) || Math.Abs(_camera.Yaw - _bbYaw) > 1e-6 || Math.Abs(_camera.Pitch - _bbPitch) > 1e-6
-                        || _bbTx != _camera.Target[0] || _bbTy != _camera.Target[1] || _bbTz != _camera.Target[2];
+                        || _bbTx != _camera.Target[0] || _bbTy != _camera.Target[1] || _bbTz != _camera.Target[2]
+                        || _bb2D != _camera.Is2D;
         if (!_billboardsDirty && !camMoved) return;
         _billboardsDirty = false;
         _bbYaw = _camera.Yaw; _bbPitch = _camera.Pitch;
-        _bbTx = _camera.Target[0]; _bbTy = _camera.Target[1]; _bbTz = _camera.Target[2];
+        _bbTx = _camera.Target[0]; _bbTy = _camera.Target[1]; _bbTz = _camera.Target[2]; _bb2D = _camera.Is2D;
 
         var v = new List<float>();
         foreach (var t in src)
