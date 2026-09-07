@@ -3717,3 +3717,18 @@ Viewport 配色(冷蓝/热亮蓝/选中品红+白描边大一号)。Kylin 此前
 - **根因**：`Mat4.Invert` 用固定阈值 `|det| < 1e-12` 判奇异。大坐标场景的 2D 正交投影(halfH≈1e4、far≈2.6e5)各轴尺度悬殊，行列式本就 ~4e-14 却完全可逆 → 被误判 → `ScreenToWorld` 全线返回 null → **2D 下选框(BoxRect 空)/点选/对象捕捉/坐标读数全部失效**。改为相对阈值：`|det| <= 1e-9 × Hadamard上界(各列范数之积)`，并加 NaN/Inf 防护。自检复测：2D 窗口选/交叉选/点选各命中 1；3D 交叉选/点选各命中 1(窗口选 0 因模型大于选框，语义正确)。
 - **选中高亮突出**(用户「突出一下各个模型选中后的高亮显示」)：三角网选中后在其表面盖一层高亮**青色着色面**(`MeshEntity.TessellateHighlightFaces`，保留平行光明暗；`HighlightPass` 深度开 + **负** polygon offset 压住原面免 z-fighting)，再叠**三维包围盒线框**；边线仅在 ≤30000 条时叠加(大网靠色面+包围盒即可辨识)。高亮色由黄(1,0.9,0.2)改青(0.15,0.95,1.0)——与黄色地形、深色背景都拉得开。所有清高亮处同步清高亮面。
 测试 +4(`Mat4InvertScaleTests` 大场景可逆 + 真奇异仍 null；`HighlightFacesTests` 三顶点/青色主导/明暗/模式无关/标高偏移)。全套 1789 通过。截图 `chk_box/highlight3d.png`。
+
+## §三〇七 视口右键三态(2D / 3D Orbit / 3D 选择模式) + 大网首次点选卡顿修正 (2026-09-07)
+
+- **右键三态(忠实原版)**：用户指出选择模式应在右键而非 Ribbon。照原 `MainWindow.ContextMenu.cs` 的 `RefreshCtxToggleViewState`，
+  视口右键菜单顶部三项 `切换到 2D 视图 / 切换到 3D Orbit / 切换到 3D 选择模式`(各带图标)，**弹出时隐藏当前所处那一项**。
+  绑定规则落到纯函数 `Cad/Draw/NavBinding.OnPress`(可单测)：2D 左键=框选/点选；3D 默认左键拖=轨道旋转、单击(<4px)=点选；
+  3D 选择模式下左键只框选/点选(不旋转)；Shift+左键=临时框选；中键恒平移。撤掉此前加的 Ribbon「选择模式」按钮。
+- **大网首次点选卡顿**：症状「第一次点击超级慢，之后正常」= 首次触发的懒构建。逐项计时定位并修：
+  ① `MeshEntity.DistanceTo` 与 `SelectionBox.MatchMesh` 原先遍历 `Edges`(4 万三角 → 6.5 万边去重表，**冷构建 43ms**)，
+     改为逐三角 + 三角包围盒早退 + 点在面内直判 0；② 3D `PickScreen` 顶点只投影一次(原逐三角投影 3 倍)+ 三角屏幕包围盒排斥；
+     ③ `TessellateHighlightFaces` 加缓存(键=高亮色+标高)；④ 高亮边线判定改按 `TriangleCount`(原按 `Edges.Count`，为判定而建表)。
+  实测(Debug, 4-2底面.3dm 43018 三角)：冷 2D 点选 **16ms**(且不再建边表)、3D `PickScreen` **2ms**、高亮面 0ms(缓存)、热点选 6ms。
+- **顺带**：框选浮标松开即收起(单击一下不再残留「框选中」提示)；选中高亮去掉外层包围盒线(用户要求)，只保留高亮青色面 + 小网边线。
+测试 +11(`NavBindingTests` 5 项绑定矩阵、`MeshPickPerfTests` 2 项性能回归锁(拾取/框选/屏幕点选后 `HasEdgeCache` 必须为 false)、
+`HighlightFacesTests`/`SelectionBoxMeshTests`/`Mat4InvertScaleTests` 承前)。全套 **1796 通过**。右键三态经 env 自检 7/7。
