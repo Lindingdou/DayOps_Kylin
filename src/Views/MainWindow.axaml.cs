@@ -477,8 +477,13 @@ public partial class MainWindow : Window
             // 窗口框选：画选框(交叉=蓝，窗口=绿)
             if (_selBoxActive)
             {
-                Viewport.SetSnapMarker(BoxRect(_selBoxStart, p, p.X < _selBoxStart.X));
+                bool crossing = p.X < _selBoxStart.X;
+                Viewport.SetSnapMarker(BoxRect(_selBoxStart, p, crossing));
                 _snapShown = true;
+                // 拖框期间引导不消失：编辑命令的"选择对象"操作说明 + 当前框选模式
+                ShowTipAt(p, (_editAwaitSelect ? $"{_editName}：选择对象 · " : "")
+                    + $"框选中 {(crossing ? "交叉(右→左, 碰到即选)" : "窗口(左→右, 全含才选)")} · 松开完成"
+                    + (_editAwaitSelect ? $" · 右键确定（已选 {_selected.Count}）" : ""));
                 _lastPointer = p;
                 return;
             }
@@ -8007,7 +8012,7 @@ public partial class MainWindow : Window
     private string CurrentPrompt()
     {
         if (_tool != null) return _tool.Prompt;
-        if (_editAwaitSelect) return $"{_editName}：选择对象 或 [右键确定]（已选 {_selected.Count}）";
+        if (_editAwaitSelect) return $"{_editName}：选择对象 — 单击选取 · 按住拖动框选 · 再点取消选 · 右键确定（已选 {_selected.Count}）";
         if (_editMode != EditMode.None)
             return _editPts.Count == 0
                 ? $"{_editName}：{(_editMode == EditMode.Mirror ? "指定镜像线的第一点" : "指定基点 或 [位移(D)]")}"
@@ -9322,6 +9327,17 @@ public partial class MainWindow : Window
         HighlightSelection();
         StatusMsg.Text = $"{_editName}：{(_editMode == EditMode.Mirror ? "指定镜像线第一点" : "指定基点")}（已选 {_selected.Count}）";
         RefreshScene();
+    }
+
+    // 在光标右下显示浮标文字(拖框/夹点等提前 return 的分支也能给引导)
+    private void ShowTipAt(Avalonia.Point p, string text)
+    {
+        var tip = _active.DragTip;
+        if (tip == null) return;
+        ((TextBlock)tip.Child!).Text = text;
+        tip.Margin = new Avalonia.Thickness(p.X + 18, p.Y + 20, 0, 0);
+        tip.Opacity = 1;
+        (tip.Parent as Control)?.InvalidateVisual();
     }
 
     private void HideDragTip()
