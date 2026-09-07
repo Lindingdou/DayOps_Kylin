@@ -200,6 +200,9 @@ public class GeoDbViewsBoreholeTests
     {
         using var db = GeoDatabase.OpenSeeded();
         var holes = GeoDbViews.LoadBoreholes(db.Connection);
+        // 展绘钻孔的数据来自随包 SQLite 种子库(迁移 V013, 真实平朔地质数据), 不是造的:
+        Assert.Equal(241, holes.Count);                                        // borehole 表 241 孔
+        Assert.True(GeoDbViews.LoadSeamResultsByStatus(db.Connection, "正常").Count > 100);   // 见煤成果("正常")
         var r = GeoDbViews.BuildBoreholeColumns(db.Connection);
         int drawable = holes.Count(h => h.ZCollar is not null && h.DepthTotal is > 0);
         Assert.Equal(drawable, r.HoleCount);
@@ -209,7 +212,11 @@ public class GeoDbViewsBoreholeTests
         Assert.NotNull(r.Bounds);
         Assert.Equal(r.HoleCount, r.Entities.OfType<TextEntity>().Count(t => t.Height == 34.0));   // 每孔一个孔号
         Assert.Equal(r.SeamCount, r.Entities.OfType<TextEntity>().Count(t => t.Height == 19.0));   // 每煤层段一个煤层名
-        Assert.All(r.Entities.OfType<RectEntity>(), rc => Assert.Equal(14.0, Math.Abs(rc.X1 - rc.X0), 6));   // 柱宽 = 2×半径
+        // 真三维柱: 每种颜色一张合并三角网(岩色 + 各煤层编码), 柱径 = 2×半径
+        var meshes = r.Entities.OfType<MeshEntity>().ToList();
+        Assert.Equal(r.MeshGroups, meshes.Count);
+        Assert.Contains(meshes, m => m.Name == "钻孔柱-岩层");
+        Assert.All(meshes, m => Assert.True(m.TriangleCount > 0 && m.VertexCount > 0));
 
         var subset = GeoDbViews.BuildBoreholeColumns(db.Connection, holes.Where(h => h.ZCollar != null && h.DepthTotal > 0).Take(3).ToList());
         Assert.Equal(3, subset.HoleCount);
@@ -230,16 +237,30 @@ public class GeoDbViewsBoreholeTests
         };
         var r = GeoDbViews.BuildBoreholeColumns(new[] { hole }, seams);
         Assert.Equal(1, r.HoleCount); Assert.Equal(1, r.SeamCount); Assert.Equal(2, r.SkippedSeams);
-        var rects = r.Entities.OfType<RectEntity>().ToList();
-        Assert.Equal(3, rects.Count);   // 下岩段 / 煤 / 上覆岩层
-        // 1:1 垂向: 孔口 z=500 在 y=2000, 孔底 z=400 在 y=1900; 煤 450..455 → y 1950..1955
-        Assert.Equal(1900, rects[0].Y0, 6); Assert.Equal(1950, rects[0].Y1, 6);
-        Assert.Equal(1950, rects[1].Y0, 6); Assert.Equal(1955, rects[1].Y1, 6);
-        Assert.Equal((0x3C / 255f), rects[1].Cr, 3);   // 煤色
-        Assert.Equal(1955, rects[2].Y0, 6); Assert.Equal(2000, rects[2].Y1, 6);
-        Assert.Contains(r.Entities.OfType<TextEntity>(), t => t.Text == "4煤");
-        Assert.Contains(r.Entities.OfType<TextEntity>(), t => t.Text == "H1" && t.HAlign == 1);
-        Assert.Contains(r.Entities.OfType<LineEntity>(), l => l.Dash != null);   // 引线虚线
+        // 真三维柱: 岩段(400..450) + 煤段(450..455) + 上覆岩层(455..500), 按颜色合并成 2 张三角网
+        var meshes = r.Entities.OfType<MeshEntity>().ToDictionary(m => m.Name);
+        Assert.Equal(2, meshes.Count);
+        var rock = meshes["钻孔柱-岩层"]; var coal = meshes["钻孔柱-4煤"];
+        Assert.Equal(0x3C / 255f, coal.Cr, 3);   // 煤色
+        Assert.Equal(0x5F / 255f, rock.Cr, 3);   // 岩色
+        // 28 棱: 每段 56 顶点/56 三角; 岩=2 段 + 底盖 + 顶盖(各 +1 顶点/28 三角), 煤=中间段不封盖
+        Assert.Equal(56, coal.VertexCount); Assert.Equal(56, coal.TriangleCount);
+        Assert.Equal(114, rock.VertexCount); Assert.Equal(168, rock.TriangleCount);
+        var cb = coal.Bounds; var rb = rock.Bounds;
+        Assert.Equal(450, cb.minZ, 6); Assert.Equal(455, cb.maxZ, 6);            // 煤层段落在真实高程
+        Assert.Equal(400, rb.minZ, 6); Assert.Equal(500, rb.maxZ, 6);            // 孔底 → 孔口
+        Assert.Equal(1000 - 7, cb.minX, 6); Assert.Equal(1000 + 7, cb.maxX, 6);  // 柱径 = 2×7m
+        // 注记始终朝屏幕(原版 screenFacing), 放在真实高程上
+        var seamTxt = Assert.Single(r.Entities.OfType<TextEntity>().Where(t => t.Text == "4煤"));
+        Assert.True(seamTxt.ScreenFacing); Assert.Equal(452.5, seamTxt.Elevation, 6);
+        var holeTxt = Assert.Single(r.Entities.OfType<TextEntity>().Where(t => t.Text == "H1"));
+        Assert.True(holeTxt.ScreenFacing); Assert.Equal(1, holeTxt.HAlign);
+        Assert.Equal(500 + 34 * 0.6, holeTxt.Elevation, 6);
+        // 引线: 柱面 → 标注锚点, 三维虚线
+        var leader = Assert.Single(r.Entities.OfType<PolylineEntity>().Where(p => p.Dash != null));
+        Assert.True(leader.Has3D);
+        Assert.Equal(1000 + 7, leader.Points[0].x, 6);
+        Assert.Equal(452.5, leader.Zs![0], 6);
     }
 
     // ─────────────────────────── 原始钻孔柱状图 ───────────────────────────

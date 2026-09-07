@@ -36,6 +36,13 @@ public partial class CadGlViewport : OpenGlControlBase
     private bool _hasGridPlan, _gridIs2D;
     private double _gridWpp;                  // 建网时的 世界长度/像素(挡位判定)
 
+    // 公告板文字(始终朝屏幕, 忠实原版 screenFacing 注记): 按相机基向量重建, 相机没动就复用
+    private GlRenderer.Mesh _billboards;
+    private bool _hasBillboards;
+    private List<BillboardText>? _pendingBillboards;
+    private bool _billboardsDirty;
+    private double _bbYaw = double.NaN, _bbPitch, _bbTx, _bbTy, _bbTz;
+
     // 导入的图纸线框（世界坐标 P3_C3 线段）。上传须在 GL 线程，故 UI 线程只挂起数据，下一帧消费。
     // _pendingImport 保留世界坐标源(不清空)——切换标签会销毁并重建 GL 上下文, 需据此重传, 否则线框丢失。
     private GlRenderer.Mesh _imported;
@@ -162,12 +169,14 @@ public partial class CadGlViewport : OpenGlControlBase
         if (_hasScene) _renderer.DeleteMesh(_scene);
         if (_hasFaces) _renderer.DeleteMesh(_faces);
         if (_hasHighlightFaces) _renderer.DeleteMesh(_highlightFaces);
+        if (_hasBillboards) _renderer.DeleteMesh(_billboards);
         if (_hasCursor) _renderer.DeleteMesh(_cursor);
         _renderer.Deinit();
         // 上下文销毁——句柄失效, 复位标志; 否则重建后旧 id 可能撞上新网格(grid/cube/gizmo)致误删/花屏。
         // 保留的托管源(_pendingImport/_pendingScene/…)不动, OnOpenGlInit 会据此重新入队重传。
         _hasImported = _hasScene = _hasHighlight = _hasSnap = _hasFaces = _hasHighlightFaces = false;
         _hasGrid = false; _hasGridPlan = false;
+        _hasBillboards = false; _bbYaw = double.NaN;
         if (_pendingFaces != null) _facesDirty = true;
         if (_pendingHighlightFaces != null) _highlightFacesDirty = true;
         _hasCursor = false; _curBuiltSx = double.NaN;   // 十字光标下次移动即按当前上下文重建
@@ -260,6 +269,7 @@ public partial class CadGlViewport : OpenGlControlBase
 
         float[] vp = _camera.ViewProj(aspect);
 
+        EnsureBillboards();   // 公告板文字: 相机转了才重建
         EnsureGrid(aspect);   // 自适应格网: 缩放换挡/平移出界时重建(必须在 GL 线程)
 
         _renderer.BeginFrame(w, h, 0.13f, 0.14f, 0.16f);
@@ -306,6 +316,7 @@ public partial class CadGlViewport : OpenGlControlBase
         if (_hasFaces) { _renderer.SetPolygonOffset(true); _renderer.Draw(_faces, GL_TRIANGLES, vp); _renderer.SetPolygonOffset(false); }   // 着色面先画, 深度偏移让边线浮在面上
         if (_hasImported) _renderer.Draw(_imported, GL_LINES, vp);
         if (_hasScene) _renderer.Draw(_scene, GL_LINES, vp);
+        if (_hasBillboards) _renderer.Draw(_billboards, GL_LINES, vp);   // 注记始终朝屏幕
         _renderer.EndPass();
     }
 
@@ -697,6 +708,56 @@ public partial class CadGlViewport : OpenGlControlBase
         if (_hasGrid) _renderer.DeleteMesh(_grid);
         _grid = _renderer.Upload(v.ToArray());
         _hasGrid = !_grid.IsEmpty;
+    }
+
+    /// <summary>
+    /// 公告板文字：把每条注记的笔画放到「相机右向量 × 上向量」张成的平面上, 锚点为世界点 ——
+    /// 忠实原版 PmbiWriter.WriteText(screenFacing: true)：三维里注记不随模型倾倒, 永远正对观察者。
+    /// 相机朝向/注视点没变就复用已上传的几何(旋转/缩放时才重建)。
+    /// </summary>
+    private void EnsureBillboards()
+    {
+        var src = _pendingBillboards;
+        if (src == null || src.Count == 0)
+        {
+            if (_billboardsDirty && _hasBillboards) { _renderer.DeleteMesh(_billboards); _hasBillboards = false; }
+            _billboardsDirty = false;
+            return;
+        }
+        // 2D 正交俯视时基向量恒定; 3D 随相机转动
+        var (rx, ry, rz, ux, uy, uz) = _camera.ViewAxes();
+        bool camMoved = double.IsNaN(_bbYaw) || Math.Abs(_camera.Yaw - _bbYaw) > 1e-6 || Math.Abs(_camera.Pitch - _bbPitch) > 1e-6
+                        || _bbTx != _camera.Target[0] || _bbTy != _camera.Target[1] || _bbTz != _camera.Target[2];
+        if (!_billboardsDirty && !camMoved) return;
+        _billboardsDirty = false;
+        _bbYaw = _camera.Yaw; _bbPitch = _camera.Pitch;
+        _bbTx = _camera.Target[0]; _bbTy = _camera.Target[1]; _bbTz = _camera.Target[2];
+
+        var v = new List<float>();
+        foreach (var t in src)
+        {
+            double ax = t.X - _ox, ay = t.Y - _oy, az = t.Z;
+            foreach (var (x0, y0, x1, y1) in t.Strokes)
+            {
+                // 局部 (x,y) → 世界: 锚点 + x·右 + y·上
+                v.Add((float)(ax + x0 * rx + y0 * ux)); v.Add((float)(ay + x0 * ry + y0 * uy)); v.Add((float)(az + x0 * rz + y0 * uz));
+                v.Add(t.Cr); v.Add(t.Cg); v.Add(t.Cb);
+                v.Add((float)(ax + x1 * rx + y1 * ux)); v.Add((float)(ay + x1 * ry + y1 * uy)); v.Add((float)(az + x1 * rz + y1 * uz));
+                v.Add(t.Cr); v.Add(t.Cg); v.Add(t.Cb);
+            }
+        }
+        if (_hasBillboards) _renderer.DeleteMesh(_billboards);
+        _billboards = _renderer.Upload(v.ToArray());
+        _hasBillboards = !_billboards.IsEmpty;
+    }
+
+    /// <summary>设置公告板文字(始终朝屏幕的注记)；空/null → 清除。</summary>
+    public void SetBillboards(List<BillboardText>? texts)
+    {
+        _pendingBillboards = texts;
+        _billboardsDirty = true;
+        _bbYaw = double.NaN;
+        RequestNextFrameRendering();
     }
 
     /// <summary>当前格网挡位说明(状态栏/自检用)：细线间距 · 主线间距 · 线数。</summary>

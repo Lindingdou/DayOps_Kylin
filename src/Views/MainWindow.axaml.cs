@@ -8390,7 +8390,9 @@ public partial class MainWindow : Window
                 new LineEntity { X0 = _editPts[0].x, Y0 = _editPts[0].y, X1 = _cursorWorld.Value.x, Y1 = _cursorWorld.Value.y, Cr = 0.85f, Cg = 0.6f, Cb = 0.3f }.Tessellate(list);
         }
         Viewport.SetSceneGeometry(list.ToArray());
-        Viewport.SetSceneFaces(_scene.BuildFaces(_layers.IsShown));   // 三角网着色面(面模型显示)
+        Viewport.SetSceneFaces(_scene.BuildFaces(_layers.IsShown));
+
+        Viewport.SetBillboards(_scene.BuildBillboards(_layers.IsShown));   // 注记始终朝屏幕(原版 screenFacing)
         if (_scene.Count != _lastSceneCount) { _lastSceneCount = _scene.Count; RefreshObjectTree(); }
     }
 

@@ -111,6 +111,7 @@ public partial class BoreholeSelectDialog : Window
         if (r.HoleCount == 0) { ctx.Status($"展绘钻孔：没有可展绘的钻孔（跳过 {r.SkippedHoles} 孔，缺孔口高程或孔深）"); return; }
         ctx.RemoveLayerEntities(GeoDbViews.BoreholeColumnLayerName);
         ctx.AddToScene(r.Entities, GeoDbViews.BoreholeColumnLayerName, r.Bounds);
+        ctx.RunCommand("3D");   // 柱体是竖直三维几何, 俯视只看得到圆截面 —— 同原版, 展绘后进三维视图
         string tail = (r.SkippedHoles > 0 || r.SkippedSeams > 0) ? $"（跳过 {r.SkippedHoles} 孔 / {r.SkippedSeams} 层：缺高程或厚度）" : "";
         ctx.Status($"展绘钻孔：已生成 {r.HoleCount} 孔柱状图，{r.SeamCount} 个煤层段，{r.MeshGroups} 个合并网格 → 图层「{GeoDbViews.BoreholeColumnLayerName}」{tail}");
     }

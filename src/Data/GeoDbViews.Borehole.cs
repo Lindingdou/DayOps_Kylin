@@ -530,13 +530,27 @@ public static partial class GeoDbViews
         return BuildBoreholeColumns(holes, seamsByHole);
     }
 
-    /// <summary>纯逻辑版(可单测): holes + 按孔分组的"正常"煤层。</summary>
+    /// <summary>
+    /// 纯逻辑版(可单测): holes + 按孔分组的"正常"煤层 → 真三维柱体(与原版几何一致)。
+    /// 每孔一根圆柱(半径 7m、28 棱), 孔口高程 → 孔底按高程分段铺满: 无煤处岩色、煤层段煤色, 同半径平齐;
+    /// 按颜色把所有孔的同色段合并成一张三角网(岩 1 张 + 每个煤层编码各 1 张);
+    /// 整柱只在最底封底、最顶封顶, 中间接缝不封(柱内不可见, 省一半端面);
+    /// 孔号置柱顶、煤层名置柱侧(带引线, 竖向避让), 注记始终朝屏幕。
+    /// </summary>
     public static BoreholeColumnResult BuildBoreholeColumns(IReadOnlyList<BoreholeRow> holes, IReadOnlyDictionary<long, List<BoreholeSeamRow>> seamsByHole)
     {
         var result = new BoreholeColumnResult();
-        var groups = new HashSet<string>();
         double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
         void Bound(double x, double y) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
+
+        // 按颜色/煤层编码分桶合并(原版同款: 岩色一桶, 每个煤层编码一桶)
+        var buckets = new Dictionary<string, (List<(double x, double y, double z)> v, List<(int a, int b, int c)> t, (byte r, byte g, byte b) col)>();
+        (List<(double x, double y, double z)> v, List<(int a, int b, int c)> t, (byte r, byte g, byte b) col) Bucket(string key, (byte r, byte g, byte b) col)
+        {
+            if (!buckets.TryGetValue(key, out var bkt))
+                buckets[key] = bkt = (new List<(double, double, double)>(), new List<(int, int, int)>(), col);
+            return bkt;
+        }
 
         foreach (var h in holes)
         {
@@ -544,7 +558,6 @@ public static partial class GeoDbViews
             double baseX = h.X, baseY = h.Y, baseZ = h.ZCollar.Value;
             double zTop = baseZ, zBot = baseZ - h.DepthTotal.Value;
             double labelX = baseX + BcRadius + BcLabelGap;
-            double YOf(double z) => baseY - (zTop - z);   // 1:1 垂向, 向下(−Y)
 
             var bands = new List<(double f, double t, string code)>();
             if (seamsByHole.TryGetValue(h.Id, out var seams))
@@ -561,51 +574,106 @@ public static partial class GeoDbViews
                 bands.Sort((a, b) => a.f.CompareTo(b.f));
             }
 
-            groups.Add("rock");
+            // 自底向上铺段, 段先收齐再统一封盖(只封整柱最底/最顶)
+            var segs = new List<(string key, (byte r, byte g, byte b) col, double zb, double zt)>();
             double cursor = zBot, lastSeamLabelZ = double.NegativeInfinity;
             foreach (var band in bands)
             {
                 double bf = band.f, bt = band.t;
                 if (bf < cursor) bf = cursor;
                 if (bt <= cursor) continue;
-                if (bf > cursor) result.Entities.Add(BcRect(baseX, YOf(cursor), YOf(bf), BcRockColor));
-                result.Entities.Add(BcRect(baseX, YOf(bf), YOf(bt), BcCoalColor));
-                groups.Add(band.code);
+                if (bf > cursor) segs.Add(("rock", BcRockColor, cursor, bf));       // 煤层下方岩段
+                segs.Add((band.code, BcCoalColor, bf, bt));                          // 煤层段
 
                 double seamMidZ = (bf + bt) * 0.5;
                 double labelZ = Math.Max(seamMidZ, lastSeamLabelZ + BcSeamLabelZGap);
                 lastSeamLabelZ = labelZ;
                 string seamName = string.IsNullOrWhiteSpace(band.code) ? "煤" : band.code + "煤";
-                result.Entities.Add(new LineEntity   // 引线: 柱面煤层段 → 标注锚点(黄色虚线)
-                {
-                    X0 = baseX + BcRadius, Y0 = YOf(seamMidZ), X1 = labelX, Y1 = YOf(labelZ),
-                    Cr = 1f, Cg = 0.88f, Cb = 0f, Dash = new[] { 3.0, 2.0 },
-                });
+                var leader = new PolylineEntity { Cr = 1f, Cg = 0.88f, Cb = 0f, Dash = new[] { 3.0, 2.0 } };   // 引线: 柱面 → 标注
+                leader.Points.Add((baseX + BcRadius, baseY)); leader.Points.Add((labelX, baseY));
+                leader.Zs = new List<double> { seamMidZ, labelZ };
+                result.Entities.Add(leader);
                 result.Entities.Add(new TextEntity
                 {
-                    X = labelX, Y = YOf(labelZ), Height = BcSeamLabelHeight, HAlign = 0, VAlign = 1, Text = seamName,
+                    X = labelX, Y = baseY, Elevation = labelZ, Height = BcSeamLabelHeight,
+                    HAlign = 0, VAlign = 1, Text = seamName, ScreenFacing = true,
                     Cr = 0xF0 / 255f, Cg = 0xF0 / 255f, Cb = 0xF0 / 255f,
                 });
                 result.SeamCount++;
                 cursor = bt;
             }
-            if (cursor < zTop) result.Entities.Add(BcRect(baseX, YOf(cursor), YOf(zTop), BcRockColor));   // 上覆岩层段
+            if (cursor < zTop) segs.Add(("rock", BcRockColor, cursor, zTop));        // 上覆岩层段
+            if (segs.Count == 0) segs.Add(("rock", BcRockColor, zBot, zTop));        // 无煤孔: 整柱岩色
 
-            result.Entities.Add(new TextEntity   // 孔号(柱顶正上方, 居中)
+            for (int i = 0; i < segs.Count; i++)
             {
-                X = baseX, Y = YOf(zTop) + BcHoleLabelHeight * 0.6, Height = BcHoleLabelHeight, HAlign = 1, VAlign = 1, Text = h.HoleId,
+                var (key, col, zb, zt) = segs[i];
+                var bkt = Bucket(key, col);
+                AppendCylinder(bkt.v, bkt.t, baseX, baseY, zt, zb, BcRadius,
+                               capBottom: i == 0, capTop: i == segs.Count - 1);
+            }
+
+            result.Entities.Add(new TextEntity   // 孔号(柱顶正上方, 居中, 朝屏幕)
+            {
+                X = baseX, Y = baseY, Elevation = zTop + BcHoleLabelHeight * 0.6, Height = BcHoleLabelHeight,
+                HAlign = 1, VAlign = 1, Text = h.HoleId, ScreenFacing = true,
                 Cr = 1f, Cg = 0xE0 / 255f, Cb = 0f,
             });
-            Bound(baseX - BcRadius, YOf(zBot)); Bound(labelX + BcSeamLabelHeight * 4, YOf(zTop) + BcHoleLabelHeight * 1.2);
+            Bound(baseX - BcRadius, baseY - BcRadius);
+            Bound(labelX + BcSeamLabelHeight * 4, baseY + BcRadius);
             result.HoleCount++;
         }
-        result.MeshGroups = result.HoleCount > 0 ? groups.Count : 0;
+
+        foreach (var (key, bkt) in buckets)
+        {
+            if (bkt.v.Count == 0) continue;
+            var me = new MeshEntity(key == "rock" ? "钻孔柱-岩层" : $"钻孔柱-{key}煤", bkt.v, bkt.t)
+            {
+                Cr = bkt.col.r / 255f, Cg = bkt.col.g / 255f, Cb = bkt.col.b / 255f,
+            };
+            result.Entities.Add(me);
+            result.MeshGroups++;
+        }
         if (result.HoleCount > 0) result.Bounds = new[] { minX, minY, maxX, maxY };
         return result;
     }
 
-    private static RectEntity BcRect(double cx, double y0, double y1, (byte r, byte g, byte b) c)
-        => new() { X0 = cx - BcRadius, Y0 = y0, X1 = cx + BcRadius, Y1 = y1, Cr = c.r / 255f, Cg = c.g / 255f, Cb = c.b / 255f };
+    private const int BcSegments = 28;   // 圆柱棱数(原版同值)
+    private static readonly double[] BcCos = new double[BcSegments], BcSin = new double[BcSegments];
+    static GeoDbViews()
+    {
+        for (int i = 0; i < BcSegments; i++)
+        { double a = 2.0 * Math.PI * i / BcSegments; BcCos[i] = Math.Cos(a); BcSin[i] = Math.Sin(a); }
+    }
+
+    /// <summary>
+    /// 一段圆柱累加进 (verts, tris)：底环 + 顶环 + 外向侧面；capBottom/capTop 控制是否封端面。
+    /// 忠实原版 AppendCylinder(相邻段同半径衔接 → 整柱侧面连续平滑; 中间接缝不封盖)。
+    /// </summary>
+    public static void AppendCylinder(List<(double x, double y, double z)> v, List<(int a, int b, int c)> idx,
+        double holeX, double holeY, double zTop, double zBot, double radius, bool capBottom, bool capTop)
+    {
+        int seg = BcSegments, baseIndex = v.Count;
+        for (int i = 0; i < seg; i++) v.Add((holeX + radius * BcCos[i], holeY + radius * BcSin[i], zBot));
+        for (int i = 0; i < seg; i++) v.Add((holeX + radius * BcCos[i], holeY + radius * BcSin[i], zTop));
+        for (int i = 0; i < seg; i++)
+        {
+            int j = (i + 1) % seg;
+            int bi = baseIndex + i, bj = baseIndex + j, ti = baseIndex + seg + i, tj = baseIndex + seg + j;
+            idx.Add((bi, bj, tj));
+            idx.Add((bi, tj, ti));
+        }
+        if (capBottom)
+        {
+            int botC = v.Count; v.Add((holeX, holeY, zBot));
+            for (int i = 0; i < seg; i++) { int j = (i + 1) % seg; idx.Add((botC, baseIndex + j, baseIndex + i)); }
+        }
+        if (capTop)
+        {
+            int topC = v.Count; v.Add((holeX, holeY, zTop));
+            for (int i = 0; i < seg; i++) { int j = (i + 1) % seg; idx.Add((topC, baseIndex + seg + i, baseIndex + seg + j)); }
+        }
+    }
 
     // ═════════════════════════════════════════════════════════════════════
     //  原始钻孔柱状图(原 OriginalBoreholeColumnWindow.BuildSegments)

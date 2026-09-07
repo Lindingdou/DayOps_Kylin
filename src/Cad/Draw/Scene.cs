@@ -811,9 +811,43 @@ public sealed class TextEntity : SceneEntity
     public int VAlign;        // 垂直对齐: 0=底(基线)/1=中/2=顶
     public double WidthFactor = 1;   // 字宽系数(水平缩放); 1=正常(向后兼容)
     public double ObliqueAngle;      // 倾斜角(弧度, 正=向右倾/斜体); 0=直立(向后兼容)
+    /// <summary>
+    /// 始终朝屏幕(公告板)——忠实原版 PmbiWriter.WriteText(screenFacing: true) 的注记策略:
+    /// 三维里注记不随模型倾倒, 永远正对观察者; 2D 视图下与普通文字一致。
+    /// 由视口按相机基向量逐帧(相机变了才)重建, 不进静态场景缓冲。
+    /// </summary>
+    public bool ScreenFacing;
     public string Text = "";
+
+    /// <summary>字符笔画 → 局部二维线段(锚点为原点, 未旋转/未平移)。公告板与普通文字共用同一套排版。</summary>
+    public List<(double x0, double y0, double x1, double y1)> LocalStrokes()
+    {
+        var outp = new List<(double, double, double, double)>();
+        double wf = WidthFactor <= 0 ? 1 : WidthFactor;
+        double tanOb = Math.Tan(ObliqueAngle);
+        double adv = Height * 0.8 * wf;
+        var lines = (Text ?? "").Split('\n');
+        double lineH = Height * 1.5;
+        for (int li = 0; li < lines.Length; li++)
+        {
+            string line = lines[li];
+            double width = line.Length * adv;
+            double hOff = HAlign == 1 ? -width / 2 : HAlign == 2 ? -width : 0;
+            double vOff = (VAlign == 1 ? -Height / 2 : VAlign == 2 ? -Height : 0) - li * lineH;
+            double cursor = hOff;
+            foreach (char ch in line)
+            {
+                foreach (var (sx0, sy0, sx1, sy1) in StrokeFont.Strokes(ch))
+                    outp.Add((cursor + sx0 * Height * wf + sy0 * Height * tanOb, vOff + sy0 * Height,
+                              cursor + sx1 * Height * wf + sy1 * Height * tanOb, vOff + sy1 * Height));
+                cursor += adv;
+            }
+        }
+        return outp;
+    }
     public override void Tessellate(List<float> o)
     {
+        if (ScreenFacing) return;   // 公告板文字由视口按相机基向量单独绘制
         double c = Math.Cos(Rotation), s = Math.Sin(Rotation);
         double wf = WidthFactor <= 0 ? 1 : WidthFactor;
         double tanOb = Math.Tan(ObliqueAngle);
@@ -943,6 +977,22 @@ public sealed class Scene
         return o.ToArray();
     }
 
+    /// <summary>
+    /// 可见的公告板文字(始终朝屏幕, 忠实原版 screenFacing 注记): 交给视口按相机基向量绘制。
+    /// 每项 = (锚点 x,y,z, 字高, 水平对齐, 垂直对齐, 颜色 rgb, 笔画局部线段)。
+    /// </summary>
+    public List<BillboardText> BuildBillboards(Func<string, bool>? isShown = null)
+    {
+        var list = new List<BillboardText>();
+        foreach (var e in Entities)
+        {
+            if (e is not TextEntity t || !t.ScreenFacing) continue;
+            if (!t.Visible || (isShown != null && !isShown(t.LayerName))) continue;
+            list.Add(new BillboardText(t.X, t.Y, t.Elevation, t.Cr, t.Cg, t.Cb, t.LocalStrokes()));
+        }
+        return list;
+    }
+
     /// <summary>可见实体的着色三角面(交错 P3_C3, GL_TRIANGLES)。</summary>
     public float[] BuildFaces(Func<string, bool>? isShown = null)
     {
@@ -989,3 +1039,8 @@ public sealed class Scene
         return n;
     }
 }
+
+/// <summary>一条公告板文字(始终朝屏幕)：世界锚点 + 颜色 + 已排版好的局部笔画线段。</summary>
+public readonly record struct BillboardText(
+    double X, double Y, double Z, float Cr, float Cg, float Cb,
+    List<(double x0, double y0, double x1, double y1)> Strokes);
