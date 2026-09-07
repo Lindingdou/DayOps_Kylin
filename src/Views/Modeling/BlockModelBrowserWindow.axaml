@@ -1,0 +1,22 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="PitMine3D.Kylin.Views.Modeling.BlockModelBrowserWindow" x:CompileBindings="False"
+        Classes="geodb" Title="块体浏览器" Width="360" Height="600" WindowStartupLocation="CenterOwner">
+  <DockPanel>
+    <Border DockPanel.Dock="Top" Background="#1E3A5F" Padding="10,6">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Text="块体浏览器" FontSize="13" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center"/>
+        <TextBlock Grid.Column="1" x:Name="countLabel" Text="共 0 个" FontSize="11" Foreground="#A8C7FA" VerticalAlignment="Center"/>
+      </Grid>
+    </Border>
+    <Border DockPanel.Dock="Bottom" Classes="statusbar">
+      <TextBlock x:Name="statusLabel" Text="尚未创建任何块体模型"/>
+    </Border>
+    <Grid>
+      <TextBlock x:Name="emptyHint" IsVisible="False" TextAlignment="Center" FontSize="12" Classes="muted" VerticalAlignment="Center" HorizontalAlignment="Center" LineHeight="20" Padding="20"
+                 Text="尚未创建任何块体模型&#x0a;&#x0a;从功能区&#x0a;&quot;三维地质建模 → 块体模型 → 创建块体&quot;&#x0a;开始"/>
+      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel x:Name="modelsList"/>
+      </ScrollViewer>
+    </Grid>
+  </DockPanel>
+</Window>

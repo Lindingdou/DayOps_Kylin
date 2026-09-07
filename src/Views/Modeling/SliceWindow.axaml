@@ -1,0 +1,42 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="PitMine3D.Kylin.Views.Modeling.SliceWindow" x:CompileBindings="False"
+        Classes="geodb" Title="切面剖切" Width="420" Height="400" WindowStartupLocation="CenterOwner" CanResize="False" ShowInTaskbar="False">
+  <Grid Margin="14" RowDefinitions="Auto,*,Auto">
+    <Border Grid.Row="0" Classes="panel" Padding="12">
+      <StackPanel>
+        <CheckBox x:Name="enableBox" Content="启用切面剖切" FontWeight="SemiBold" FontSize="13" Foreground="#FF0D47A1"/>
+        <TextBlock Text="切面会对所有块体模型生效（全局态）。滑动位置时实时刷新视口。" FontSize="11" Classes="muted" Margin="20,4,0,0" TextWrapping="Wrap"/>
+      </StackPanel>
+    </Border>
+
+    <Border Grid.Row="1" Classes="panel" Padding="12" Margin="0,8,0,0" x:Name="paramPanel">
+      <Grid ColumnDefinitions="72,*,84" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
+        <TextBlock Grid.Row="0" Grid.Column="0" Text="法线轴" VerticalAlignment="Center"/>
+        <StackPanel Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal">
+          <RadioButton x:Name="axisX" GroupName="Axis" Content="X" Margin="0,0,16,0"/>
+          <RadioButton x:Name="axisY" GroupName="Axis" Content="Y" Margin="0,0,16,0"/>
+          <RadioButton x:Name="axisZ" GroupName="Axis" Content="Z（高程）" IsChecked="True"/>
+        </StackPanel>
+        <TextBlock Grid.Row="1" Grid.Column="0" Text="切的方向" VerticalAlignment="Center" Margin="0,12,8,0"/>
+        <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,12,0,0">
+          <RadioButton x:Name="dirPositive" GroupName="Dir" Content="切正向（保留负向）" IsChecked="True"/>
+          <RadioButton x:Name="dirNegative" GroupName="Dir" Content="切负向（保留正向）" Margin="16,0,0,0"/>
+        </StackPanel>
+        <TextBlock Grid.Row="2" Grid.Column="0" Text="范围" VerticalAlignment="Center" Margin="0,12,8,0"/>
+        <TextBlock Grid.Row="2" Grid.Column="1" x:Name="rangeLabel" Text="(请先创建块体模型)" FontSize="11" Classes="muted" VerticalAlignment="Center" Margin="0,12,0,0"/>
+        <TextBlock Grid.Row="3" Grid.Column="0" Text="位置" VerticalAlignment="Center" Margin="0,12,8,0"/>
+        <Slider Grid.Row="3" Grid.Column="1" x:Name="posSlider" Margin="0,14,8,0" Minimum="0" Maximum="1000"/>
+        <TextBox Grid.Row="3" Grid.Column="2" x:Name="posBox" Margin="0,12,0,0" Height="26" VerticalContentAlignment="Center" KeyDown="OnPosBoxKeyDown" LostFocus="OnPosBoxLostFocus"/>
+        <Border Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="3" Padding="8,6" Background="#FFE3F2FD" CornerRadius="2" Margin="0,16,0,0">
+          <TextBlock TextWrapping="Wrap" FontSize="11" Text="ⓘ 矿业典型用法：法线 Z + 切正向 → 切掉指定高程以上，俯视剖面图。&#x0a;关闭剖切只需取消顶部勾选，或点底部「关闭剖切」按钮。"/>
+        </Border>
+        <TextBlock Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="3" x:Name="planeEqLabel" FontFamily="Consolas,monospace" FontSize="11" Foreground="#0D6EFD" Margin="0,8,0,0"/>
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="2" Margin="0,8,0,0" ColumnDefinitions="*,Auto">
+      <Button Grid.Column="0" Content="关闭剖切" HorizontalAlignment="Left" Click="OnDisable" Padding="10,3"/>
+      <Button Grid.Column="1" Content="关闭" Width="80" Click="OnClose" IsCancel="True"/>
+    </Grid>
+  </Grid>
+</Window>

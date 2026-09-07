@@ -1,0 +1,48 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="PitMine3D.Kylin.Views.Modeling.EntityToBlocksWindow" x:CompileBindings="False"
+        Classes="geodb" Title="实体转块体" Width="560" Height="450" WindowStartupLocation="CenterOwner">
+  <Grid Margin="14" RowDefinitions="*,Auto">
+    <StackPanel Grid.Row="0" Spacing="8">
+      <Border Classes="panel" Padding="12">
+        <StackPanel>
+          <DockPanel LastChildFill="False">
+            <TextBlock Classes="panel-title" Text="选中对象（封闭三角网体）" DockPanel.Dock="Left"/>
+            <Button x:Name="btnReselect" Content="重新选择对象" DockPanel.Dock="Right" Padding="10,3" Click="OnReselect"/>
+          </DockPanel>
+          <TextBlock x:Name="selInfoLabel" TextWrapping="Wrap" Margin="0,6,0,0" Classes="muted" Text="尚未选择对象。"/>
+        </StackPanel>
+      </Border>
+      <Border Classes="panel" Padding="12">
+        <StackPanel>
+          <TextBlock Classes="panel-title" Text="块体参数"/>
+          <Grid Margin="0,6,0,0" ColumnDefinitions="Auto,60,Auto,60,Auto,60,*">
+            <TextBlock Grid.Column="0" Text="块尺寸 X" VerticalAlignment="Center" Margin="0,0,4,0"/>
+            <TextBox x:Name="txtVx" Grid.Column="1" Text="5"/>
+            <TextBlock Grid.Column="2" Text="Y" VerticalAlignment="Center" Margin="10,0,4,0"/>
+            <TextBox x:Name="txtVy" Grid.Column="3" Text="5"/>
+            <TextBlock Grid.Column="4" Text="Z" VerticalAlignment="Center" Margin="10,0,4,0"/>
+            <TextBox x:Name="txtVz" Grid.Column="5" Text="5"/>
+          </Grid>
+          <Grid Margin="0,8,0,0" ColumnDefinitions="Auto,*">
+            <TextBlock Grid.Column="0" Text="模型名称" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <TextBox x:Name="txtName" Grid.Column="1" Text="实体块体"/>
+          </Grid>
+          <Grid Margin="0,8,0,0" ColumnDefinitions="Auto,Auto,Auto,*">
+            <CheckBox x:Name="chkAdaptive" Grid.Column="0" Content="次级退化（边界细分子块）" IsChecked="True" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="1" Text="深度" VerticalAlignment="Center" Margin="16,0,4,0"/>
+            <ComboBox x:Name="cmbDepth" Grid.Column="2" Width="60" SelectedIndex="1">
+              <ComboBoxItem Content="1"/><ComboBoxItem Content="2"/><ComboBoxItem Content="3"/>
+            </ComboBox>
+            <TextBlock Grid.Column="3" VerticalAlignment="Center" Margin="10,0,0,0" Classes="muted" Text="最细子块 = 块尺寸 / 2ᵈ"/>
+          </Grid>
+          <CheckBox x:Name="chkHighTolerance" Margin="0,8,0,0" IsChecked="False" Content="高容错算量（缠绕数 GWN，封闭体有拓扑错误时勾选）"/>
+          <TextBlock x:Name="estimateLabel" TextWrapping="Wrap" Margin="0,8,0,0" Classes="muted" Text="网格规模：—"/>
+        </StackPanel>
+      </Border>
+    </StackPanel>
+    <DockPanel Grid.Row="1" LastChildFill="False" Margin="0,10,0,0">
+      <Button x:Name="btnGenerate" Content="生成块体" DockPanel.Dock="Left" MinWidth="100" Padding="0,5" Click="OnGenerate" FontWeight="SemiBold" Classes="primary" IsEnabled="False"/>
+      <Button x:Name="btnClose" Content="关闭" DockPanel.Dock="Right" MinWidth="80" Padding="0,5" Click="OnClose"/>
+    </DockPanel>
+  </Grid>
+</Window>

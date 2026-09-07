@@ -1,0 +1,116 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="PitMine3D.Kylin.Views.Modeling.ConstrainBlockModelWindow" x:CompileBindings="False"
+        Classes="geodb" Title="约束块体" Width="780" Height="820" WindowStartupLocation="CenterOwner" CanResize="False">
+  <Grid Margin="14" RowDefinitions="*,Auto">
+    <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+      <StackPanel Spacing="8">
+        <!-- 目标块体 -->
+        <Border Classes="panel" Padding="12">
+          <Grid ColumnDefinitions="Auto,*">
+            <TextBlock Text="目标块体" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <ComboBox Grid.Column="1" x:Name="targetCombo" HorizontalAlignment="Stretch" SelectionChanged="OnTargetChanged"/>
+          </Grid>
+        </Border>
+
+        <!-- 约束 AABB 列表 -->
+        <Border Classes="panel" Padding="12">
+          <StackPanel>
+            <DockPanel LastChildFill="False">
+              <TextBlock Classes="panel-title" Text="约束 AABB 列表" DockPanel.Dock="Left"/>
+              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4">
+                <Button Content="✚ 加 AABB" Click="OnAddAabb" Padding="10,3"/>
+                <Button Content="✚ 整模型" Click="OnAddFull" Padding="10,3" ToolTip.Tip="加一行 = 整个模型 AABB（便于做差集）"/>
+                <Button Content="✚ 从选中实体" Click="OnAddFromSelection" Padding="10,3" ToolTip.Tip="读视口中已选中的实体（三角网/多段线/点），每个实体的 AABB 加一行"/>
+                <Button Content="− 删除" Click="OnRemoveRow" Padding="10,3"/>
+                <Button Content="✕ 全清" Click="OnClearRows" Padding="10,3"/>
+              </StackPanel>
+            </DockPanel>
+            <DataGrid x:Name="aabbGrid" Height="200" AutoGenerateColumns="False" IsReadOnly="False" SelectionMode="Single" Margin="0,4,0,0" CanUserSortColumns="False">
+              <DataGrid.Columns>
+                <DataGridCheckBoxColumn Header="启用" Width="44" Binding="{Binding Enabled, Mode=TwoWay}"/>
+                <DataGridTextColumn Header="标签" Width="*" Binding="{Binding Label, Mode=TwoWay}"/>
+                <DataGridTextColumn Header="Min X" Width="80" Binding="{Binding MinXText, Mode=TwoWay}"/>
+                <DataGridTextColumn Header="Min Y" Width="80" Binding="{Binding MinYText, Mode=TwoWay}"/>
+                <DataGridTextColumn Header="Min Z" Width="80" Binding="{Binding MinZText, Mode=TwoWay}"/>
+                <DataGridTextColumn Header="Max X" Width="80" Binding="{Binding MaxXText, Mode=TwoWay}"/>
+                <DataGridTextColumn Header="Max Y" Width="80" Binding="{Binding MaxYText, Mode=TwoWay}"/>
+                <DataGridTextColumn Header="Max Z" Width="80" Binding="{Binding MaxZText, Mode=TwoWay}"/>
+              </DataGrid.Columns>
+            </DataGrid>
+          </StackPanel>
+        </Border>
+
+        <!-- 约束规则 -->
+        <Border Classes="panel" Padding="12">
+          <StackPanel>
+            <TextBlock Classes="panel-title" Text="约束规则" Margin="0,0,0,8"/>
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+              <TextBlock Text="组合方式" Width="100" VerticalAlignment="Center"/>
+              <RadioButton x:Name="combineOr" GroupName="Combine" Content="任一 AABB 内 (OR)" IsChecked="True" Margin="0,0,16,0"/>
+              <RadioButton x:Name="combineAnd" GroupName="Combine" Content="全部 AABB 内 (AND)"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+              <TextBlock Text="处理方式" Width="100" VerticalAlignment="Center"/>
+              <RadioButton x:Name="actionKeep" GroupName="Action" Content="保留满足条件的 cell（删其他）" IsChecked="True" Margin="0,0,16,0"/>
+              <RadioButton x:Name="actionRemove" GroupName="Action" Content="删除满足条件的 cell"/>
+            </StackPanel>
+            <Border Margin="0,8,0,0" Padding="8,6" Background="#FFE3F2FD" CornerRadius="2">
+              <TextBlock FontSize="11" Foreground="#FF0D47A1" TextWrapping="Wrap"
+                         Text="ⓘ AABB 约束：以多 AABB 组合做粗略裁剪。&#x0a;典型用法：① 1 个矿体外包络 AABB + 保留满足 → 切除界外&#x0a;② 多个 AABB OR + 删除满足 → 切除多个矿柱孔"/>
+            </Border>
+          </StackPanel>
+        </Border>
+
+        <!-- Mesh 几何精确约束 -->
+        <Border Classes="panel" Padding="12">
+          <StackPanel>
+            <TextBlock Classes="panel-title" Text="Mesh 几何精确约束（A）" Margin="0,0,0,8"/>
+            <Grid Margin="0,0,0,8" ColumnDefinitions="80,*,Auto">
+              <TextBlock Text="参考 mesh" VerticalAlignment="Center"/>
+              <Border Grid.Column="1" Background="White" BorderBrush="#FFCED4DA" BorderThickness="1" Padding="8,4" CornerRadius="2">
+                <TextBlock x:Name="meshInfoLabel" Text="（尚未选择）" Foreground="#FF6B7280" FontSize="11" TextTrimming="CharacterEllipsis"/>
+              </Border>
+              <Button Grid.Column="2" Content="拾取选中 mesh" Margin="6,0,0,0" Click="OnPickMesh" Padding="10,3"/>
+            </Grid>
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+              <TextBlock Text="保留" Width="80" VerticalAlignment="Center"/>
+              <RadioButton x:Name="meshKeepAbove" GroupName="MeshMode" Content="mesh 之上（地表以上，如排土场）" Margin="0,0,16,0"/>
+              <RadioButton x:Name="meshKeepBelow" GroupName="MeshMode" Content="mesh 之下（地表切矿体·默认）" IsChecked="True" Margin="0,0,16,0"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Margin="80,4,0,0">
+              <RadioButton x:Name="meshKeepInside" GroupName="MeshMode" Content="mesh 内部（闭合外包络）" Margin="0,0,16,0"/>
+              <RadioButton x:Name="meshKeepOutside" GroupName="MeshMode" Content="mesh 外部"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+              <TextBlock Text="选项" Width="80" VerticalAlignment="Center"/>
+              <CheckBox x:Name="meshHighTolerance" Content="高容错 GWN（破洞/自交/未焊接的外包络）" IsChecked="True" Margin="0,0,16,0"
+                        ToolTip.Tip="仅内部/外部模式生效：用缠绕数代替射线奇偶，非水密网格也能判对内外（略慢）"/>
+              <CheckBox x:Name="meshKeepOutsideProj" Content="地表未覆盖区：保留" IsChecked="True"
+                        ToolTip.Tip="仅上方/下方模式生效：地表 mesh 的 XY 投影没盖到的 cell 保留(勾)还是删除(不勾)"/>
+            </StackPanel>
+            <Border Margin="0,10,0,0" Padding="8,6" Background="#FFE3F2FD" CornerRadius="2">
+              <TextBlock FontSize="11" Foreground="#FF0D47A1" TextWrapping="Wrap"
+                         Text="ⓘ 算法：每个 cell 中心沿 +Z 发射线计相交。开放面 (地表) 用上下方判别；闭合 mesh 用奇偶性或缠绕数(高容错)。&#x0a;ⓘ 上/下方模式下地表投影外的 cell 由「地表未覆盖区」选项决定保留/删除；内部/外部模式不受影响。"/>
+            </Border>
+            <DockPanel LastChildFill="False" Margin="0,10,0,0">
+              <TextBlock x:Name="meshStatusLabel" DockPanel.Dock="Left" FontSize="11" VerticalAlignment="Center"/>
+              <Button DockPanel.Dock="Right" Classes="primary" Content="应用 Mesh 约束" Click="OnApplyMesh" Padding="14,4"/>
+            </DockPanel>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- 底部按钮 -->
+    <Border Grid.Row="1" Classes="panel" Padding="12" Margin="0,8,0,0">
+      <DockPanel LastChildFill="False">
+        <TextBlock x:Name="statusLabel" DockPanel.Dock="Left" Foreground="#FF0D47A1" FontSize="12" VerticalAlignment="Center" Text=""/>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+          <Button Content="撤销本次" Click="OnRestore" Padding="10,3" ToolTip.Tip="只回退本次对话框由约束新增的删除，不影响『删除单元』『体素生成块体』造成的删除"/>
+          <Button Content="取消" IsCancel="True" Click="OnCancel" Padding="10,3"/>
+          <Button Content="应用" Classes="primary" Click="OnApply" Padding="14,3"/>
+        </StackPanel>
+      </DockPanel>
+    </Border>
+  </Grid>
+</Window>
