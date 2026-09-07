@@ -451,10 +451,12 @@ public partial class MainWindow : Window
                 }
             }
 
-            // 窗口框选（2D 空闲态 或 编辑选择对象阶段 左键）：拖=选择框，不拖=点选（平移改中键）
+            // 选择：2D 左键拖=选择框；3D 默认左键拖=轨道旋转，开「选择模式」后左键只做框选/点选(不旋转)。
+            // Shift+左键作临时选择(不必开模式)。两种情形单击不拖都=点选。
             bool navShift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
-            if (props.IsLeftButtonPressed && (Viewport.Is2DView || !navShift) && _tool == null && _measure == null
-                && (_editMode == EditMode.None || _editAwaitSelect) && !_offsetActive && !_trimActive && !_breakActive && !_slideActive)
+            bool selectable = props.IsLeftButtonPressed && _tool == null && _measure == null
+                && (_editMode == EditMode.None || _editAwaitSelect) && !_offsetActive && !_trimActive && !_breakActive && !_slideActive;
+            if (selectable && (Viewport.Is2DView || _selectMode || navShift))
             {
                 _selBoxActive = true; _selBoxStart = _lastPointer; _nav = NavMode.None;
                 e.Pointer.Capture(ViewportHost);
@@ -462,9 +464,12 @@ public partial class MainWindow : Window
             }
 
             if (props.IsMiddleButtonPressed)
-                _nav = navShift && !Viewport.Is2DView ? NavMode.Orbit : NavMode.Pan;   // 中键拖拽 = 平移; 3D Shift+中键 = 轨道旋转
+                _nav = NavMode.Pan;                                       // 中键拖拽 = 平移
             else if (props.IsLeftButtonPressed)
-                _nav = NavMode.Orbit;                                     // 3D Shift+左键 = 轨道旋转(左键拖拽留给框选, 与 2D 一致)
+            {
+                _nav = NavMode.Orbit;                                     // 3D 左键拖拽 = 轨道旋转(原版一致)
+                _orbitPickStart = selectable ? _lastPointer : null;       // 未拖动则松开时按点选处理
+            }
             else
                 _nav = NavMode.None;                                      // 右键留给上下文菜单
             if (_nav != NavMode.None) e.Pointer.Capture(ViewportHost);
@@ -595,12 +600,26 @@ public partial class MainWindow : Window
         {
             var rel = e.GetPosition(ViewportHost);
 
+            // 3D 左键：拖过 = 轨道旋转(已在 Moved 里做完)，几乎没动 = 点选
+            if (_orbitPickStart is { } ops)
+            {
+                _orbitPickStart = null;
+                if (System.Math.Abs(rel.X - ops.X) < 4 && System.Math.Abs(rel.Y - ops.Y) < 4)
+                {
+                    _nav = NavMode.None;
+                    e.Pointer.Capture(null);
+                    PickAt(rel);
+                    return;
+                }
+            }
+
             // 窗口框选：松开 → 拖动成框则框选，未拖动则点选
             if (_selBoxActive)
             {
                 _selBoxActive = false;
                 e.Pointer.Capture(null);
                 Viewport.SetSnapMarker(null); _snapShown = false;
+                HideDragTip();   // 收起"框选中…"浮标(否则单击一下也会留着框选提示)
                 if (System.Math.Abs(rel.X - _selBoxStart.X) < 4 && System.Math.Abs(rel.Y - _selBoxStart.Y) < 4)
                     PickAt(rel);                    // 无拖动 → 点选
                 else
@@ -958,8 +977,18 @@ public partial class MainWindow : Window
         void Item(string header, System.EventHandler<RoutedEventArgs> click) { var mi = new MenuItem { Header = header }; mi.Click += click; m.Items.Add(mi); }
         void Cmd(string header, string tag) { var mi = new MenuItem { Header = header, Tag = tag }; mi.Click += OnCtxCommand; m.Items.Add(mi); }
         void Sep() => m.Items.Add(new Separator());
-        Item("2D 平面视图", OnCtx2D);
-        Item("3D 轨道视图", OnCtx3D);
+        // 视图模式三项(忠实原版右键顶部)：2D 视图 / 3D Orbit / 3D 选择模式；
+        // 弹出时隐藏当前所处那一项，用户看到的总是"另外两种可切目标"。
+        MenuItem ModeItem(string header, string iconKey, System.EventHandler<RoutedEventArgs> click)
+        {
+            var mi = new MenuItem { Header = header };
+            if (this.TryFindResource(iconKey, out var res) && res is Avalonia.Media.IImage img)
+                mi.Icon = new Image { Source = img, Width = 16, Height = 16 };
+            mi.Click += click; m.Items.Add(mi); return mi;
+        }
+        _ctxTo2D = ModeItem("切换到 2D 视图", "icon_2D", OnCtx2D);
+        _ctxToOrbit = ModeItem("切换到 3D Orbit", "icon_3D", OnCtxModeToOrbit);
+        _ctxToSelect = ModeItem("切换到 3D 选择模式", "icon_select_mode", OnCtxModeToSelect);
         Item("范围缩放", OnCtxZoomExtents);
         Item("网格 / 轴 开关", OnCtxGrid);
         Sep();
@@ -1063,6 +1092,9 @@ public partial class MainWindow : Window
     private readonly Cad.Draw.DimStyle _dimStyle = new();   // 标注样式(DIM 变量：字高/小数位/箭头比/延伸线)，影响新建标注
     private bool _selBoxActive;                     // 窗口框选拖拽中
     private Avalonia.Point _selBoxStart;            // 框选起点(屏幕)
+    private bool _selectMode;                        // 选择模式(3D)：左键只框选/点选, 不旋转视图(右键菜单切换, 同原版)
+    private MenuItem? _ctxTo2D, _ctxToOrbit, _ctxToSelect;   // 右键顶部视图模式三项(当前态那项隐藏)
+    private Avalonia.Point? _orbitPickStart;         // 3D 左键按下点：松开时若几乎没动则按点选处理
     private bool _ttrActive, _ttrAwaitRadius;       // 圆 TTR：选两相切参照(线/圆) → 输半径
     private SceneEntity? _ttrRef1, _ttrRef2;
     private (double x, double y) _ttrPick1, _ttrPick2;
@@ -1528,6 +1560,7 @@ public partial class MainWindow : Window
             if (cmd == "圆TTR" || cmd == "圆(切切半径)") { StartTTR(); return; }
             if (cmd == "圆弧SER" || cmd == "圆弧(起点端点半径)") { StartArcSer(); return; }
             if (cmd == "打断") { StartBreak(); return; }
+            if (cmd == "选择模式" || cmd == "框选模式" || cmd == "SELECTMODE") { if (Viewport.Is2DView) Viewport.SetViewMode(false); SetSelectMode(!_selectMode); return; }
             if (cmd == "夹点开关" || cmd == "夹点" || cmd == "Gizmo" || cmd == "GIZMO") { ToggleGizmo(); return; }
             if (cmd == "正交" || cmd == "正交开关") { _orthoOn = !_orthoOn; SyncDraftToggles(); StatusMsg.Text = _orthoOn ? "正交: 开" : "正交: 关"; return; }
             if (cmd == "栅格" || cmd == "栅格显示" || cmd == "显示栅格" || cmd == "GRID") { SetGrid(!_gridOn); StatusMsg.Text = _gridOn ? "栅格: 开" : "栅格: 关"; return; }
@@ -7903,8 +7936,21 @@ public partial class MainWindow : Window
     private void OnCtxZoomExtents(object? s, RoutedEventArgs e) => Viewport.ZoomExtents();
     // 通用右键菜单项 → 按 Tag 派发命令（复用既有命令处理，忠实原丰富上下文菜单）
     private void OnCtxCommand(object? s, RoutedEventArgs e) { if (s is MenuItem { Tag: string cmd }) DispatchRibbon(cmd); }
-    private void OnCtx2D(object? s, RoutedEventArgs e) { Viewport.SetViewMode(true); StatusMsg.Text = "视图: 2D 平面"; }
+    private void OnCtx2D(object? s, RoutedEventArgs e) { Viewport.SetViewMode(true); SetSelectMode(false, quiet: true); StatusMsg.Text = "视图: 2D 平面（左键拖=框选, 单击=点选）"; }
     private void OnCtx3D(object? s, RoutedEventArgs e) { Viewport.SetViewMode(false); StatusMsg.Text = "视图: 3D 轨道"; }
+
+    // 忠实原版右键三态：3D Orbit(左键拖=旋转) ↔ 3D 选择模式(左键只框选/点选)
+    private void OnCtxModeToOrbit(object? s, RoutedEventArgs e)
+    {
+        if (Viewport.Is2DView) Viewport.SetViewMode(false);
+        SetSelectMode(false);
+    }
+
+    private void OnCtxModeToSelect(object? s, RoutedEventArgs e)
+    {
+        if (Viewport.Is2DView) Viewport.SetViewMode(false);
+        SetSelectMode(true);
+    }
     private void OnCtxGrid(object? s, RoutedEventArgs e) => SetGrid(!_gridOn);
 
     // 网格显隐(保持 _gridOn 与视口一致)
@@ -8000,6 +8046,17 @@ public partial class MainWindow : Window
     }
 
     // 「AI 助手」切换：选中 → 右侧停靠切到 AI 助手页；取消 → 切回属性对话框(同原版 btnAiChat 切换 aiChatAnchorable)。
+    // 3D 选择模式(右键菜单切换, 忠实原版三态)：开 → 左键只框选/点选(不旋转)；关 → 左键拖拽轨道旋转。2D 左键本就框选。
+    private void SetSelectMode(bool on, bool quiet = false)
+    {
+        _selectMode = on;
+        if (!quiet)
+            StatusMsg.Text = on
+                ? "3D 选择模式：左键拖=框选、单击=点选（不旋转视图）；右键菜单可切回 3D Orbit"
+                : "3D Orbit：左键拖=旋转视图、单击=点选；右键菜单可切到 3D 选择模式（或按住 Shift 临时框选）";
+        SyncPrompt();
+    }
+
     private void OnAiChatToggle(object? sender, RoutedEventArgs e)
     {
         if (_dockFactory == null) return;
@@ -8376,7 +8433,7 @@ public partial class MainWindow : Window
     private void RedrawHighlight()
     {
         if (_selected.Count == 0) { Viewport.SetHighlight(null); Viewport.SetHighlightFaces(null); return; }
-        // 三角网：表面盖一层高亮色面 + 三维包围盒 + 轮廓边线(大网省边线, 靠色面与包围盒即可辨识);
+        // 三角网：表面盖一层高亮色面 + 轮廓边线(大网省边线, 靠高亮色面即可辨识);
         // 其它实体：自身线框重着色。高亮色取青(与黄色地形/深色背景都拉得开)。
         const float hr = 0.15f, hg = 0.95f, hb = 1.0f;
         var ent = new List<float>();
@@ -8386,8 +8443,7 @@ public partial class MainWindow : Window
             if (e is MeshEntity me)
             {
                 me.TessellateHighlightFaces(faces, hr, hg, hb);
-                AppendBoundingBox(ent, me);
-                if (me.Edges.Count <= 30000) me.TessellateEdges(ent);
+                if (me.TriangleCount <= 20000) me.TessellateEdges(ent);   // 大网只用高亮色面(避免为判定而构建整张边表)
             }
             else e.Tessellate(ent);
         }
@@ -8395,25 +8451,6 @@ public partial class MainWindow : Window
         Viewport.SetHighlightFaces(faces.Count > 0 ? faces.ToArray() : null);
         if (_gripsOn) AppendGripTable(o);
         Viewport.SetHighlight(o.ToArray(), recolor: false);
-    }
-
-    // 选中三角网的三维包围盒线框(12 条棱)——远看/小目标时也能一眼看到"选中了哪个模型"
-    private static void AppendBoundingBox(List<float> o, MeshEntity me)
-    {
-        var b = me.Bounds;
-        double z0 = b.minZ + me.Elevation, z1 = b.maxZ + me.Elevation;
-        void Seg(double x0, double y0, double zz0, double x1, double y1, double zz1)
-        {
-            o.Add((float)x0); o.Add((float)y0); o.Add((float)zz0); o.Add(0); o.Add(0); o.Add(0);
-            o.Add((float)x1); o.Add((float)y1); o.Add((float)zz1); o.Add(0); o.Add(0); o.Add(0);
-        }
-        foreach (double z in new[] { z0, z1 })
-        {
-            Seg(b.minX, b.minY, z, b.maxX, b.minY, z); Seg(b.maxX, b.minY, z, b.maxX, b.maxY, z);
-            Seg(b.maxX, b.maxY, z, b.minX, b.maxY, z); Seg(b.minX, b.maxY, z, b.minX, b.minY, z);
-        }
-        Seg(b.minX, b.minY, z0, b.minX, b.minY, z1); Seg(b.maxX, b.minY, z0, b.maxX, b.minY, z1);
-        Seg(b.maxX, b.maxY, z0, b.maxX, b.maxY, z1); Seg(b.minX, b.maxY, z0, b.minX, b.maxY, z1);
     }
 
     // 夹点方块配色忠实原版 Viewport.cpp：冷=蓝、热(悬停)=亮蓝；多选选中=品红 + 白描边 + 大一号(拖任一个整组动，"要动几个点"一眼可见)
@@ -8727,6 +8764,11 @@ public partial class MainWindow : Window
     {
         // 编辑"选择对象"阶段: 右键 = 确定选择集(不弹菜单), 转入取点阶段。
         if (_editAwaitSelect) { e.Cancel = true; ConfirmEditSelection(); return; }
+        // 视图模式三项：隐藏当前所处那一项(忠实原版 RefreshCtxToggleViewState)
+        bool is2D = Viewport.Is2DView;
+        if (_ctxTo2D != null) _ctxTo2D.IsVisible = !is2D;
+        if (_ctxToOrbit != null) _ctxToOrbit.IsVisible = is2D || _selectMode;
+        if (_ctxToSelect != null) _ctxToSelect.IsVisible = is2D || !_selectMode;
         // 每文档独立右键菜单——从正在打开的菜单里取本份「调用选择集」子项(按 Name 定位)。
         var ctxSelSets = (sender as ContextMenu)?.Items.OfType<MenuItem>().FirstOrDefault(mi => mi.Name == "CtxSelSets");
         if (ctxSelSets == null) return;

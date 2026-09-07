@@ -28,7 +28,7 @@ public sealed class MeshEntity : SceneEntity
     }
 
     /// <summary>顶点/三角改动后调用，重建边集与包围盒缓存。</summary>
-    public void Invalidate() { _edges = null; _boundsOk = false; _edgeCache = null; _faceCache = null; }
+    public void Invalidate() { _edges = null; _boundsOk = false; _edgeCache = null; _faceCache = null; _hlCache = null; }
 
     /// <summary>唯一无向边(i&lt;j)，按三角遍历去重。</summary>
     public IReadOnlyList<(int i, int j)> Edges
@@ -69,6 +69,9 @@ public sealed class MeshEntity : SceneEntity
             return (_minX, _minY, _maxX, _maxY, _minZ, _maxZ);
         }
     }
+
+    /// <summary>边表是否已构建(自检用: 确认拾取路径不再触发大网边表构建)。</summary>
+    public bool HasEdgeCache => _edges != null;
 
     public int VertexCount => Verts.Count;
     public int TriangleCount => Tris.Count;
@@ -181,12 +184,27 @@ public sealed class MeshEntity : SceneEntity
         if (py > b.maxY) outside = Math.Max(outside, py - b.maxY);
         // 包围盒外：真距离 ≥ outside；用 outside 作下界即可(超容差就落选)
         if (outside > 0) return outside + 1e9;   // 明确落选(不做逐边), 避免误选大网外围
+        // 逐三角(不走 Edges——为一次拾取构建整张去重边表会让首次点选明显卡顿)，
+        // 先用三角包围盒早退, 点落在三角内直接判 0(面上任意处都可点中)。
         double best = double.MaxValue;
-        foreach (var (i, j) in Edges)
+        foreach (var (a, b2, c) in Tris)
         {
-            var p = Verts[i]; var q = Verts[j];
-            double d = SegDist(px, py, p.x, p.y, q.x, q.y);
-            if (d < best) best = d;
+            if (a >= Verts.Count || b2 >= Verts.Count || c >= Verts.Count) continue;
+            var p = Verts[a]; var q = Verts[b2]; var r = Verts[c];
+            double tx0 = Math.Min(p.x, Math.Min(q.x, r.x)), tx1 = Math.Max(p.x, Math.Max(q.x, r.x));
+            double ty0 = Math.Min(p.y, Math.Min(q.y, r.y)), ty1 = Math.Max(p.y, Math.Max(q.y, r.y));
+            if (px < tx0 - best || px > tx1 + best || py < ty0 - best || py > ty1 + best) continue;
+            double d = (q.y - r.y) * (p.x - r.x) + (r.x - q.x) * (p.y - r.y);
+            if (Math.Abs(d) > 1e-15)
+            {
+                double w0 = ((q.y - r.y) * (px - r.x) + (r.x - q.x) * (py - r.y)) / d;
+                double w1 = ((r.y - p.y) * (px - r.x) + (p.x - r.x) * (py - r.y)) / d;
+                double w2 = 1 - w0 - w1;
+                if (w0 >= -1e-9 && w1 >= -1e-9 && w2 >= -1e-9) return 0;   // 点在面内
+            }
+            double e0 = SegDist(px, py, p.x, p.y, q.x, q.y); if (e0 < best) best = e0;
+            double e1 = SegDist(px, py, q.x, q.y, r.x, r.y); if (e1 < best) best = e1;
+            double e2 = SegDist(px, py, r.x, r.y, p.x, p.y); if (e2 < best) best = e2;
         }
         return best;
     }
@@ -229,6 +247,19 @@ public sealed class MeshEntity : SceneEntity
     /// 选中高亮面：三角面按高亮色出，仍保留平行光明暗(看得出起伏), 不受显示模式影响(线框模式选中也上色)。
     /// </summary>
     public void TessellateHighlightFaces(List<float> o, float hr, float hg, float hb)
+    {
+        var key = (hr, hg, hb, Elevation);
+        if (_hlCache != null && _hlKey == key) { o.AddRange(_hlCache); return; }
+        var tmp = new List<float>(Tris.Count * 18);
+        BuildHighlightFaces(tmp, hr, hg, hb);
+        _hlCache = tmp.ToArray(); _hlKey = key;
+        o.AddRange(_hlCache);
+    }
+
+    private float[]? _hlCache;
+    private (float r, float g, float b, double elev) _hlKey;
+
+    private void BuildHighlightFaces(List<float> o, float hr, float hg, float hb)
     {
         foreach (var (a, bb, c) in Tris)
         {

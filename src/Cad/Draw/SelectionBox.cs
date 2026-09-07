@@ -42,10 +42,14 @@ public static class SelectionBox
         if (boxInside) return true;
         if (b.maxX < minX || b.minX > maxX || b.maxY < minY || b.minY > maxY) return false;
         foreach (var (x, y, _) in me.Verts) if (In(x, y, minX, minY, maxX, maxY)) return true;
-        foreach (var (i, j) in me.Edges)
+        // 逐三角的三条边(不走 me.Edges——那会为一次判定构建整张去重边表, 大网首次很慢)
+        foreach (var (ia, ib, ic) in me.Tris)
         {
-            var p = me.Verts[i]; var q = me.Verts[j];
+            if (ia >= me.Verts.Count || ib >= me.Verts.Count || ic >= me.Verts.Count) continue;
+            var p = me.Verts[ia]; var q = me.Verts[ib]; var r = me.Verts[ic];
             if (SegRect(p.x, p.y, q.x, q.y, minX, minY, maxX, maxY)) return true;
+            if (SegRect(q.x, q.y, r.x, r.y, minX, minY, maxX, maxY)) return true;
+            if (SegRect(r.x, r.y, p.x, p.y, minX, minY, maxX, maxY)) return true;
         }
         // 框整个落在某个三角内部(无顶点/无边穿过)：框中心落在网内也算碰到
         double cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
@@ -122,20 +126,29 @@ public static class SelectionBox
                     bx0 = Math.Min(bx0, s.Value.sx); bx1 = Math.Max(bx1, s.Value.sx); by0 = Math.Min(by0, s.Value.sy); by1 = Math.Max(by1, s.Value.sy);
                 }
                 if (!anyCorner || sx < bx0 - tolPx || sx > bx1 + tolPx || sy < by0 - tolPx || sy > by1 + tolPx) continue;
+                // 顶点只投影一次(逐三角投影会重复 3 倍, 4 万三角时首次点选明显卡顿)
+                int nv = me.Verts.Count;
+                var px = new double[nv]; var py = new double[nv]; var pz = new double[nv]; var okv = new bool[nv];
+                for (int i = 0; i < nv; i++)
+                {
+                    var s = project(me.Verts[i].x, me.Verts[i].y, me.Verts[i].z + me.Elevation);
+                    if (s == null) continue;
+                    px[i] = s.Value.sx; py[i] = s.Value.sy; pz[i] = s.Value.depth; okv[i] = true;
+                }
                 foreach (var (a, bb, c) in me.Tris)
                 {
-                    if (a >= me.Verts.Count || bb >= me.Verts.Count || c >= me.Verts.Count) continue;
-                    var p = project(me.Verts[a].x, me.Verts[a].y, me.Verts[a].z + me.Elevation);
-                    var q = project(me.Verts[bb].x, me.Verts[bb].y, me.Verts[bb].z + me.Elevation);
-                    var r = project(me.Verts[c].x, me.Verts[c].y, me.Verts[c].z + me.Elevation);
-                    if (p == null || q == null || r == null) continue;
-                    double d = (q.Value.sy - r.Value.sy) * (p.Value.sx - r.Value.sx) + (r.Value.sx - q.Value.sx) * (p.Value.sy - r.Value.sy);
+                    if (a >= nv || bb >= nv || c >= nv || !okv[a] || !okv[bb] || !okv[c]) continue;
+                    double ax = px[a], ay = py[a], bx = px[bb], by = py[bb], cx2 = px[c], cy2 = py[c];
+                    // 三角屏幕包围盒快速排斥
+                    if (sx < Math.Min(ax, Math.Min(bx, cx2)) || sx > Math.Max(ax, Math.Max(bx, cx2)) ||
+                        sy < Math.Min(ay, Math.Min(by, cy2)) || sy > Math.Max(ay, Math.Max(by, cy2))) continue;
+                    double d = (by - cy2) * (ax - cx2) + (cx2 - bx) * (ay - cy2);
                     if (Math.Abs(d) < 1e-12) continue;
-                    double w0 = ((q.Value.sy - r.Value.sy) * (sx - r.Value.sx) + (r.Value.sx - q.Value.sx) * (sy - r.Value.sy)) / d;
-                    double w1 = ((r.Value.sy - p.Value.sy) * (sx - r.Value.sx) + (p.Value.sx - r.Value.sx) * (sy - r.Value.sy)) / d;
+                    double w0 = ((by - cy2) * (sx - cx2) + (cx2 - bx) * (sy - cy2)) / d;
+                    double w1 = ((cy2 - ay) * (sx - cx2) + (ax - cx2) * (sy - cy2)) / d;
                     double w2 = 1 - w0 - w1;
                     if (w0 < -1e-9 || w1 < -1e-9 || w2 < -1e-9) continue;
-                    double depth = w0 * p.Value.depth + w1 * q.Value.depth + w2 * r.Value.depth;
+                    double depth = w0 * pz[a] + w1 * pz[bb] + w2 * pz[c];
                     if (depth < bestDepth) { bestDepth = depth; bestFace = me; }
                 }
                 if (MeshEntity.RenderMode != MeshEntity.DisplayMode.Shaded) me.TessellateEdges(o);   // 有线框显示时边线也可点中

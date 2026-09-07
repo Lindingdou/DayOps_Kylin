@@ -1912,6 +1912,24 @@
     </DrawingImage>
 
     <!-- Gizmo（三轴变换手柄）— 原 key 为 icon_Gazimo 拼写错误，已修正 -->
+    <!-- 选择模式：箭头指针 + 虚线选框 -->
+    <DrawingImage x:Key="icon_select_mode">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#00000000" Geometry="M2,2 L30,2 L30,30 L2,30 Z">
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#FF2563EB" Thickness="2">
+                            <Pen.DashStyle>
+                                <DashStyle Dashes="3,2" />
+                            </Pen.DashStyle>
+                        </Pen>
+                    </GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF1E293B" Geometry="M12,9 L23,19 L17.5,19 L20,25.5 L17,26.8 L14.6,20.4 L11,23.6 Z" />
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
     <DrawingImage x:Key="icon_gizmo">
         <DrawingImage.Drawing>
             <DrawingGroup>
