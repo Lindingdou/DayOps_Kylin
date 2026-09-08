@@ -227,9 +227,9 @@ public partial class CadGlViewport : OpenGlControlBase
 
         if (_snapDirty)
         {
+            // 捕捉标记同十字光标: 鼠标一动就换一次, 复用同一 VBO 重灌, 不再每次删一个缓冲再建一个
             _snapDirty = false;
-            if (_hasSnap) _renderer.DeleteMesh(_snap);
-            _snap = _renderer.Upload(Localize(_pendingSnap!));
+            _renderer.UpdateMesh(ref _snap, Localize(_pendingSnap!));
             _hasSnap = !_snap.IsEmpty;
         }
 
@@ -286,16 +286,27 @@ public partial class CadGlViewport : OpenGlControlBase
 
         float[] vp = _camera.ViewProj(aspect);
 
+        // 逐步断点(PITMINE_TRACE=1 才开)：原生崩溃没有堆栈, 靠最后一条 TRACE 定位崩在哪一趟
+        var T = PitMine3D.Kylin.CrashLog.TraceOn;
+        if (T) PitMine3D.Kylin.CrashLog.Trace("帧 公告板");
         EnsureBillboards();   // 公告板文字: 相机转了才重建
+        if (T) PitMine3D.Kylin.CrashLog.Trace("帧 格网");
         EnsureGrid(aspect);   // 自适应格网: 缩放换挡/平移出界时重建(必须在 GL 线程)
 
+        if (T) PitMine3D.Kylin.CrashLog.Trace("帧 开始");
         _renderer.BeginFrame(w, h, 0.13f, 0.14f, 0.16f);
+        if (T) PitMine3D.Kylin.CrashLog.Trace("帧 格网趟");
         GridPass(vp);
+        if (T) PitMine3D.Kylin.CrashLog.Trace("帧 场景趟");
         ScenePass(vp);
+        if (T) PitMine3D.Kylin.CrashLog.Trace("帧 高亮趟");
         HighlightPass(vp);
+        if (T) PitMine3D.Kylin.CrashLog.Trace("帧 叠加趟");
         OverlayPass(w, h);
+        if (T) PitMine3D.Kylin.CrashLog.Trace("帧 光标趟");
         CursorPass();
         _renderer.EndFrame();
+        if (T) PitMine3D.Kylin.CrashLog.Trace("帧 结束");
 
         // 帧时间采样：每秒汇总一次 FPS / 平均帧时(ms) → 状态栏 Performance 项(同原版 FrameProfiler)
         _frameCount++;
@@ -403,8 +414,14 @@ public partial class CadGlViewport : OpenGlControlBase
     /// <summary>更新 CAD 十字光标屏幕位置（DIP）并显示；宿主 Panel 的 PointerMoved 转发。</summary>
     public void SetCursorScreen(double sx, double sy)
     {
-        _cursorSx = sx; _cursorSy = sy; _showCursor = true;
-        RequestNextFrameRendering();
+        // X11 一秒能派上百个移动事件, 逐个触发整帧重绘在软件渲染(麒麟常是 Mesa llvmpipe)上就是肉眼可见的卡顿。
+        // 十字光标按整像素画, 位置没跨过一个像素就没有可见变化 —— 直接不重绘。
+        bool moved = (int)sx != (int)_cursorSx || (int)sy != (int)_cursorSy;
+        _cursorSx = sx; _cursorSy = sy;
+        bool wasHidden = !_showCursor;
+        _showCursor = true;
+        if (NoCursor) return;                       // 关了十字光标就没有重绘理由
+        if (moved || wasHidden) RequestNextFrameRendering();
     }
 
     /// <summary>隐藏十字光标（光标离开视口）。</summary>

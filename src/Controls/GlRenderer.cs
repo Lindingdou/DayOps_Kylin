@@ -133,6 +133,7 @@ internal sealed class GlRenderer
     public unsafe void UpdateMesh(ref Mesh m, float[] p3c3)
     {
         if (m.Vbo == 0) { m = Upload(p3c3); return; }
+        if (p3c3.Length == 0) { m = new Mesh(m.Vbo, 0); return; }   // 清空: 留着缓冲下次再用
         _gl.BindBuffer(GL_ARRAY_BUFFER, m.Vbo);
         fixed (float* p = p3c3)
             _gl.BufferData(GL_ARRAY_BUFFER, new IntPtr(p3c3.Length * sizeof(float)), new IntPtr(p), GL_STATIC_DRAW);

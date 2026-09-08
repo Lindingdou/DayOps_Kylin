@@ -43,6 +43,10 @@ internal static class Program
             .With(new X11PlatformOptions
             {
                 GlxRendererBlacklist = Array.Empty<string>(),
+                // 麒麟(UKUI)没有全局菜单服务 com.canonical.AppMenu.Registrar, Avalonia 默认会去 DBus
+                // 导出应用菜单并抛 ServiceUnknown, 由终结器线程重抛(crash.log 里的 [TASK] 那条)。
+                // 我们的菜单本来就画在窗口内, 不需要全局菜单 —— 直接关掉这条 DBus 通路。
+                UseDBusMenu = false,
                 GlProfiles = new List<GlVersion>
                 {
                     new(GlProfileType.OpenGL, 4, 0),

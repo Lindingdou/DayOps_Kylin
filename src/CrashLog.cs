@@ -61,6 +61,22 @@ public static class CrashLog
     {
         var sb = new StringBuilder();
         sb.AppendLine("──────── PitMine3D 麒麟版启动 ────────");
+        // 版本戳: 排查时第一件事就是确认"跑的到底是哪一版"(收到过旧版日志, 白查半天)
+        try
+        {
+            var asm = System.Reflection.Assembly.GetEntryAssembly();
+            string ver = asm?.GetName().Version?.ToString() ?? "?";
+            string built = "?";
+            var loc = asm?.Location;
+            if (!string.IsNullOrEmpty(loc) && File.Exists(loc)) built = File.GetLastWriteTime(loc).ToString("yyyy-MM-dd HH:mm");
+            else
+            {
+                string exe = Environment.ProcessPath ?? "";
+                if (exe.Length > 0 && File.Exists(exe)) built = File.GetLastWriteTime(exe).ToString("yyyy-MM-dd HH:mm");
+            }
+            sb.AppendLine($"  程序版本: {ver}   构建时间: {built}");
+        }
+        catch { }
         sb.AppendLine($"  版本目录: {AppContext.BaseDirectory}");
         sb.AppendLine($"  OS      : {RuntimeInformation.OSDescription} / {RuntimeInformation.OSArchitecture}");
         sb.AppendLine($"  运行时  : {RuntimeInformation.FrameworkDescription} ({RuntimeInformation.ProcessArchitecture})");
