@@ -52,7 +52,9 @@ public sealed class MeshEntity : SceneEntity
         {
             if (EdgeOverride != null) return EdgeOverride;
             if (_edges != null) return _edges;
-            var set = new HashSet<long>();
+            // 预留容量: 三角网的唯一边约为三角数的 1.5 倍。不预留的话 30 万条边要反复扩容重哈希,
+            // 近 20 万三角形的地形网上实测这一步要好几秒(选中/线框首次触发时表现为卡顿)。
+            var set = new HashSet<long>(Tris.Count * 2);
             var list = new List<(int, int)>(Tris.Count * 2);
             void Add(int a, int b)
             {

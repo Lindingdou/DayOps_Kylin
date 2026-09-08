@@ -88,7 +88,7 @@ public partial class MainWindow
         log($"剖分完成: 三角={tris.Count} 约束嵌入={insCnt} 跳过={skipCnt}");
         if (tris.Count == 0) { StatusMsg.Text = $"创建三角网：{source}的顶点共线，无法剖分"; log("止步: 剖分结果为空(共线?)"); return false; }
 
-        tris = OrientUp(verts, tris);   // 统一绕向(法线朝上), 边界环/成体/内外判定都依赖一致绕向
+        tris = OrientUpPlanar(verts, tris);   // 平面 TIN: 按有向面积统一朝上(见方法说明, 走通用版会卡 37 秒)(法线朝上), 边界环/成体/内外判定都依赖一致绕向
         var me = new MeshEntity(NewMeshName("三角网"), verts, tris)
         {
             LayerName = TinLayerName,
@@ -1043,6 +1043,27 @@ public partial class MainWindow
 public partial class MainWindow
 {
     /// <summary>统一三角绕向且法线朝上(XY 投影有向面积和为正)。开放面用；闭合体请用 MeshOrient.MakeConsistent(外向)。</summary>
+    /// <summary>
+    /// 平面三角网(2D Delaunay 出来的 TIN)的统一绕向：直接按 XY 有向面积把每个三角形摆正，法线朝上。
+    ///
+    /// 不能走 <see cref="MeshOrient.MakeConsistent"/>：那套是按邻接关系逐个三角形传播绕向，
+    /// 给任意曲面(可能折叠、可能多连通)用的，代价很大 —— 实测 19.6 万三角形要 **37 秒**，
+    /// 用户看到的"建网卡死"就卡在这一步(日志正好断在剖分完成之后)。
+    /// 平面剖分的结果不可能折叠, 每个三角形自己的有向面积就唯一决定了朝向, 一遍扫完即可。
+    /// </summary>
+    private static List<(int a, int b, int c)> OrientUpPlanar(
+        IReadOnlyList<(double x, double y, double z)> v, IReadOnlyList<(int a, int b, int c)> t)
+    {
+        var r = new List<(int a, int b, int c)>(t.Count);
+        foreach (var (a, b, c) in t)
+        {
+            if (a >= v.Count || b >= v.Count || c >= v.Count) continue;
+            double cross = (v[b].x - v[a].x) * (v[c].y - v[a].y) - (v[c].x - v[a].x) * (v[b].y - v[a].y);
+            r.Add(cross < 0 ? (a, c, b) : (a, b, c));   // 统一成逆时针(法线朝上)
+        }
+        return r;
+    }
+
     private static List<(int a, int b, int c)> OrientUp(IReadOnlyList<(double x, double y, double z)> v, IReadOnlyList<(int a, int b, int c)> t)
     {
         var r = MeshOrient.MakeConsistent(v, t);
