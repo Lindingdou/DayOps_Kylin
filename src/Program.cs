@@ -14,6 +14,10 @@ internal static class Program
     public static void Main(string[] args)
     {
         // 把 Avalonia 日志（含 OpenGL 初始化告警）导到 stderr，便于在麒麟/WSL 上诊断
+        // 无界面导入(服务器上批量入库)：识别到就干完退出, 不起图形界面
+        int? cliExit = Data.ImportCli.TryRun(args);
+        if (cliExit.HasValue) { Environment.Exit(cliExit.Value); return; }
+
         Trace.Listeners.Add(new ConsoleTraceListener(true));
         CrashLog.Install();
         NativeCrashHandler.Install(CrashLog.Path);   // 段错误时把原生调用栈写进日志(不依赖 gdb)
