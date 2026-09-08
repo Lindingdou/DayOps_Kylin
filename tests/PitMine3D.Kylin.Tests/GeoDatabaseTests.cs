@@ -4,7 +4,7 @@ using Xunit;
 namespace PitMine3D.Kylin.Tests;
 
 /// <summary>
-/// §四/§八 数据基座回归：内嵌 50 迁移 SQL 建 SQLite 库 + 真实种子数据。
+/// §四/§八 数据基座回归：内嵌迁移 SQL 建 SQLite 库 + 真实种子数据。
 /// 证明该层非 DM8 阻——SQLite 嵌入式, 本机(Windows)全可跑可验证。
 /// </summary>
 public class GeoDatabaseTests
@@ -13,7 +13,9 @@ public class GeoDatabaseTests
     public void Builds_all_migrations_in_memory()
     {
         using var db = GeoDatabase.OpenSeeded();
-        Assert.Equal(50, db.AppliedMigrationCount());          // 全部 50 个迁移应用成功
+        // 断言"内嵌几个就应用几个", 不写死数字 —— 写死的话每加一个迁移这里都要红一次,
+        // 而它想守的其实是"没有迁移被漏掉", 与总数具体是多少无关。
+        Assert.Equal(EmbeddedMigrationCount(), db.AppliedMigrationCount());
     }
 
     [Fact]
@@ -45,9 +47,19 @@ public class GeoDatabaseTests
         string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"pm_geo_test_{System.Guid.NewGuid():N}.db");
         try
         {
-            using (var db1 = GeoDatabase.OpenSeeded(path)) Assert.Equal(50, db1.AppliedMigrationCount());
-            using (var db2 = GeoDatabase.OpenSeeded(path)) Assert.Equal(50, db2.AppliedMigrationCount());  // 重开不重复应用
+            int n = EmbeddedMigrationCount();
+            using (var db1 = GeoDatabase.OpenSeeded(path)) Assert.Equal(n, db1.AppliedMigrationCount());
+            using (var db2 = GeoDatabase.OpenSeeded(path)) Assert.Equal(n, db2.AppliedMigrationCount());  // 重开不重复应用
         }
         finally { try { System.IO.File.Delete(path); } catch { /* 清理失败无碍 */ } }
+    }
+
+    /// <summary>程序内嵌的 SQLite 迁移份数(资源名形如 ….Data.Migrations.V001_initial.sql)。</summary>
+    private static int EmbeddedMigrationCount()
+    {
+        int n = 0;
+        foreach (var r in typeof(GeoDatabase).Assembly.GetManifestResourceNames())
+            if (r.Contains(".Data.Migrations.") && r.EndsWith(".sql", System.StringComparison.OrdinalIgnoreCase)) n++;
+        return n;
     }
 }

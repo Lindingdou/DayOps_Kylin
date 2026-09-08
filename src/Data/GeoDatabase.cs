@@ -13,7 +13,7 @@ namespace PitMine3D.Kylin.Data;
 /// 此忠实移植其数据基座: 内嵌 50 个迁移 SQL(与原逐字一致) → 运行时建库自足, 跨平台、可单测。
 ///
 /// 具体用哪种库已抽到 <see cref="GeoDbDialect"/>: 默认 SQLite(嵌入式, 本机全可跑, 无需外部服务),
-/// 设 PITMINE_DB=dm 则连达梦。本类只负责"按版本号顺序把迁移喂进去"这件与库无关的事。
+/// 设 PITMINE_DB=opengauss 则连 openGauss。本类只负责"按版本号顺序把迁移喂进去"这件与库无关的事。
 /// </summary>
 public sealed class GeoDatabase : IDisposable
 {
@@ -42,13 +42,65 @@ public sealed class GeoDatabase : IDisposable
         return Path.Combine(Path.GetTempPath(), "pmkylin_geo.db");
     }
 
-    /// <summary>打开并建库(应用全部迁移)。path=null → 内存库(连接存活期内有效)。</summary>
+    /// <summary>
+    /// 打开数据库。path=null → 内存库(连接存活期内有效)。
+    ///
+    /// 嵌入式库(SQLite)照旧: 顺手把迁移跑完, 一人一个文件, 自足。
+    /// 共享的服务器库(openGauss 等)则**不在启动时跑迁移** —— 那是部署动作:
+    /// 部署方带 PITMINE_DB_MIGRATE=1 跑一次建好库, 之后各客户端启动只校验版本。
+    /// 否则十几台机器早上同时开机会同时建表灌种子, 首次部署就打架。
+    /// </summary>
     public static GeoDatabase OpenSeeded(string? path = null)
     {
         var conn = GeoDbDialect.Current.CreateConnection(path);
         conn.Open();
-        ApplyMigrations(conn);
+
+        if (GeoDbDialect.Current.MigrateOnOpen || IsMigrateRequested())
+            ApplyMigrations(conn);
+        else
+            VerifySchemaUpToDate(conn);
+
         return new GeoDatabase(conn);
+    }
+
+    /// <summary>部署方显式要求执行迁移(PITMINE_DB_MIGRATE=1)。</summary>
+    private static bool IsMigrateRequested()
+    {
+        string? v = Environment.GetEnvironmentVariable("PITMINE_DB_MIGRATE");
+        return v is "1" or "true" or "TRUE" or "yes";
+    }
+
+    /// <summary>
+    /// 共享库上客户端启动时的校验: 库里登记的迁移版本必须覆盖本程序内嵌的全部版本。
+    /// 缺哪个就报哪个 —— 与其让程序带着不匹配的 schema 半死不活地跑, 不如当场说清楚。
+    /// </summary>
+    private static void VerifySchemaUpToDate(DbConnection conn)
+    {
+        var d = GeoDbDialect.Current;
+        var embedded = EmbeddedMigrations(d).Select(t => t.ver).ToList();
+
+        var applied = new HashSet<string>(StringComparer.Ordinal);
+        try
+        {
+            using var q = conn.CreateCommand();
+            q.CommandText = $"SELECT version FROM {d.SchemaMigrationTable}";
+            using var rd = q.ExecuteReader();
+            while (rd.Read()) applied.Add(rd.GetString(0));
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(
+                $"连上了 {d.Name} 库, 但读不到迁移登记表 {d.SchemaMigrationTable} —— 这个库还没初始化过。\n" +
+                $"请在部署机上执行一次: PITMINE_DB_MIGRATE=1 <启动程序>\n原始错误: {ex.Message}", ex);
+        }
+
+        var missing = MissingMigrations(embedded, applied);
+        if (missing.Count > 0)
+            throw new InvalidOperationException(
+                $"数据库 schema 落后于本程序: 缺 {missing.Count} 个迁移 " +
+                $"({string.Join(", ", missing.Take(5))}{(missing.Count > 5 ? " …" : "")})。\n" +
+                $"请由部署方执行一次升级: PITMINE_DB_MIGRATE=1 <启动程序>；" +
+                $"在升级完成前请勿使用本客户端, 以免写入与 schema 不符的数据。");
     }
 
     /// <summary>已应用的迁移版本数（用于校验建库成功）。</summary>
@@ -84,17 +136,7 @@ public sealed class GeoDatabase : IDisposable
         }
 
         var asm = typeof(GeoDatabase).Assembly;
-        // 资源名形如 PitMine3D.Kylin.Data.Migrations.V001_initial.sql(DM 版在 .MigrationsDm.)
-        var migrations = asm.GetManifestResourceNames()
-            .Where(n => n.Contains(d.MigrationMarker) && n.EndsWith(".sql", StringComparison.OrdinalIgnoreCase))
-            .Select(n => (res: n, ver: VersionKey(n, d.MigrationMarker)))
-            .OrderBy(t => t.ver, StringComparer.Ordinal)
-            .ToList();
-
-        if (migrations.Count == 0)
-            throw new InvalidOperationException(
-                $"没有找到 {d.Name} 方言的迁移脚本(资源标记 {d.MigrationMarker})。" +
-                "DM 版迁移需先由 SQLite 版翻译生成。");
+        var migrations = EmbeddedMigrations(d);
 
         foreach (var (res, ver) in migrations)
         {
@@ -103,9 +145,9 @@ public sealed class GeoDatabase : IDisposable
             using var tx = conn.BeginTransaction();
             try
             {
-                // SQLite 可以一次吃整批; 达梦一次只吃一条, 故按方言拆开喂。
-                foreach (var stmt in d.SplitBatch(sql))
-                    Exec(conn, stmt, tx);
+                // 整份脚本一次执行: SQLite 的 Provider 与 Npgsql 都支持一个命令里多条语句
+                // (Npgsql 还能正确识别 $$ 美元引用的函数体, 不会在函数里的分号处断开)。
+                Exec(conn, sql, tx);
 
                 using var ins = conn.CreateCommand();
                 ins.Transaction = tx;
@@ -122,6 +164,40 @@ public sealed class GeoDatabase : IDisposable
         }
 
         d.AfterMigrations(conn);                  // SQLite: 恢复外键(仅约束后续写入, 不校验既有行)
+    }
+
+    /// <summary>
+    /// 库里已登记的版本相对本程序内嵌版本, 缺了哪些。
+    /// 纯函数, 不碰连接也不碰任何全局状态 —— 校验逻辑的单测打这里，
+    /// 不必为了测它去改可变 static(本仓库有过共享 static 引发并发测试偶发失败的前科)。
+    /// </summary>
+    public static List<string> MissingMigrations(IEnumerable<string> embedded, ICollection<string> applied)
+    {
+        var miss = new List<string>();
+        foreach (var v in embedded) if (!applied.Contains(v)) miss.Add(v);
+        return miss;
+    }
+
+    /// <summary>
+    /// 本程序内嵌的、属于当前方言的全部迁移(按版本号排序)。
+    /// 应用迁移和校验版本都要用, 故提出来共用 —— 两边口径必须一致,
+    /// 否则会出现"校验说缺, 执行又不跑"这种自相矛盾。
+    /// </summary>
+    private static List<(string res, string ver)> EmbeddedMigrations(GeoDbDialect d)
+    {
+        var asm = typeof(GeoDatabase).Assembly;
+        // 资源名形如 PitMine3D.Kylin.Data.Migrations.V001_initial.sql(openGauss 版在 .MigrationsPg.)
+        var list = asm.GetManifestResourceNames()
+            .Where(n => n.Contains(d.MigrationMarker) && n.EndsWith(".sql", StringComparison.OrdinalIgnoreCase))
+            .Select(n => (res: n, ver: VersionKey(n, d.MigrationMarker)))
+            .OrderBy(t => t.ver, StringComparer.Ordinal)
+            .ToList();
+
+        if (list.Count == 0)
+            throw new InvalidOperationException(
+                $"没有找到 {d.Name} 方言的迁移脚本(资源标记 {d.MigrationMarker})。" +
+                "openGauss 版迁移需先由 SQLite 版翻译生成: python build/sqlite2pg.py");
+        return list;
     }
 
     // 从资源名取版本键（"…Migrations.V001_initial.sql" → "V001_initial"）。

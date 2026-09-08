@@ -3,7 +3,7 @@ using PitMine3D.Kylin.Data;
 namespace System.Data.Common;
 
 /// <summary>
-/// ADO.NET 基类的缺口补齐 —— 移植到达梦 DM 的地基。
+/// ADO.NET 基类的缺口补齐 —— 换库(SQLite → openGauss)的地基。
 ///
 /// 全库原先直接吃 <c>SqliteConnection</c> 具体类型（269 处），换库要改到吐血。
 /// 改法是统一降到 <see cref="DbConnection"/>/<see cref="DbCommand"/> 这一层：
@@ -28,8 +28,8 @@ public static class DbCompatExtensions
     public static DbParameter AddWithValue(this DbCommand cmd, string name, object? value)
     {
         var p = cmd.CreateParameter();
-        // 调用点一律写 '@x'(SQLite 系习惯)。达梦要 ':x', 在这个唯一入口统一改写,
-        // 129 处调用点因此不必关心自己跑在哪种库上。
+        // 调用点一律写 '@x'。Npgsql 也认 '@', 故当前两种方言无需改写; 留这个唯一入口是为将来换库
+        // (某些驱动要 ":x"), 129 处调用点因此不必关心自己跑在哪种库上。
         p.ParameterName = GeoDbDialect.Current.NormalizeParamName(name);
         p.Value = value ?? DBNull.Value;
         cmd.Parameters.Add(p);

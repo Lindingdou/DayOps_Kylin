@@ -37,6 +37,35 @@ public static class PolylineTin
         public int MergedVertices;
     }
 
+    /// <summary>
+    /// 从「显示态线框」缓冲收集（交错 P3_C3，每段 2 顶点 × 6 float）。
+    /// 导入的 .3dm/OFF 等值线走的是显示通道，不是场景实体、选不中 ——
+    /// 没有它这类图纸就"建不出三角网"。端点按同一精度合并，等值线的每段成为一条约束。
+    /// </summary>
+    public static Result CollectSegments(IReadOnlyList<float> p3c3)
+    {
+        var res = new Result();
+        if (p3c3 == null || p3c3.Count < 12) return res;
+        var index = new Dictionary<(long, long), int>();
+
+        int Vertex(int off)
+        {
+            double x = p3c3[off], y = p3c3[off + 1], z = p3c3[off + 2];
+            var k = Key(x, y);
+            if (index.TryGetValue(k, out int hit)) { res.MergedVertices++; return hit; }
+            index[k] = res.Verts.Count;
+            res.Verts.Add((x, y, z));
+            return res.Verts.Count - 1;
+        }
+
+        for (int i = 0; i + 11 < p3c3.Count; i += 12)
+        {
+            int a = Vertex(i), b = Vertex(i + 6);
+            if (a != b) res.Constraints.Add((a, b));
+        }
+        return res;
+    }
+
     /// <summary>平面去重精度（毫米级；矿区坐标 1e7 量级下仍不溢出 long）。</summary>
     private static (long, long) Key(double x, double y) => ((long)Math.Round(x * 1e3), (long)Math.Round(y * 1e3));
 

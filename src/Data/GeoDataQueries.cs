@@ -1341,6 +1341,9 @@ public static class GeoDataQueries
     public static ImportOutcome ImportProductionRecords(DbConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
     {
         int ins = 0, upd = 0, skip = 0, err = 0;
+
+        // 既有主键一次性预取, 逐行的 exists 查询就不必再发往数据库。
+        var existing = LoadKeySet(conn, "SELECT equipment_id, date, shift FROM production_record");
         foreach (var row in rows)
         {
             string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
@@ -1350,13 +1353,7 @@ public static class GeoDataQueries
             ParseD(Get("work_hours"), out double wh);
             ParseD(Get("fault_hours"), out double fh);
             string reason = Get("fault_reason");
-            bool exists;
-            using (var q = conn.CreateCommand())
-            {
-                q.CommandText = "SELECT COUNT(*) FROM production_record WHERE equipment_id=@e AND date=@d AND shift=@s";
-                q.AddWithValue("@e", eq); q.AddWithValue("@d", date); q.AddWithValue("@s", shift);
-                exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0;
-            }
+            bool exists = existing.Contains(Key(eq, date, shift));
             using var cmd = conn.CreateCommand();
             if (exists)
             {
@@ -1372,7 +1369,12 @@ public static class GeoDataQueries
             cmd.AddWithValue("@e", eq); cmd.AddWithValue("@d", date); cmd.AddWithValue("@s", shift);
             cmd.AddWithValue("@o", outp); cmd.AddWithValue("@w", wh); cmd.AddWithValue("@f", fh);
             cmd.AddWithValue("@r", reason.Length == 0 ? (object)System.DBNull.Value : reason);
-            try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
+            try
+            {
+                cmd.ExecuteNonQuery();
+                if (!exists) existing.Add(Key(eq, date, shift));   // 同份 CSV 内重复键要能看到前一行已写入
+            }
+            catch { err++; if (exists) upd--; else ins--; }
         }
         return new ImportOutcome(ins, upd, skip, err);
     }
@@ -1381,24 +1383,26 @@ public static class GeoDataQueries
     public static ImportOutcome ImportCapacityMonthly(DbConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
     {
         int ins = 0, upd = 0, skip = 0, err = 0;
+
+        // 既有主键一次性预取, 逐行的 exists 查询就不必再发往数据库。
+        var existing = LoadKeySet(conn, "SELECT equipment_id, year, month FROM capacity_monthly");
         foreach (var row in rows)
         {
             string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
             string eq = Get("equipment_id");
             if (eq.Length == 0 || !ParseI(Get("year"), out int yr) || !ParseI(Get("month"), out int mo)) { err++; continue; }
             ParseD(Get("output_m3"), out double outp);
-            bool exists;
-            using (var q = conn.CreateCommand())
-            {
-                q.CommandText = "SELECT COUNT(*) FROM capacity_monthly WHERE equipment_id=@e AND year=@y AND month=@m";
-                q.AddWithValue("@e", eq); q.AddWithValue("@y", yr); q.AddWithValue("@m", mo);
-                exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0;
-            }
+            bool exists = existing.Contains(Key(eq, yr, mo));
             using var cmd = conn.CreateCommand();
             if (exists) { if (!overwrite) { skip++; continue; } cmd.CommandText = "UPDATE capacity_monthly SET output_m3=@o WHERE equipment_id=@e AND year=@y AND month=@m"; upd++; }
             else { cmd.CommandText = "INSERT INTO capacity_monthly (equipment_id, year, month, output_m3) VALUES (@e,@y,@m,@o)"; ins++; }
             cmd.AddWithValue("@e", eq); cmd.AddWithValue("@y", yr); cmd.AddWithValue("@m", mo); cmd.AddWithValue("@o", outp);
-            try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
+            try
+            {
+                cmd.ExecuteNonQuery();
+                if (!exists) existing.Add(Key(eq, yr, mo));   // 同份 CSV 内重复键要能看到前一行已写入
+            }
+            catch { err++; if (exists) upd--; else ins--; }
         }
         return new ImportOutcome(ins, upd, skip, err);
     }
@@ -1490,15 +1494,16 @@ public static class GeoDataQueries
     public static ImportOutcome ImportKpiMonthly(DbConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
     {
         int ins = 0, upd = 0, skip = 0, err = 0;
+
+        // 既有主键一次性预取, 逐行的 exists 查询就不必再发往数据库。
+        var existing = LoadKeySet(conn, "SELECT equipment_id, year, month FROM equipment_kpi_monthly");
         foreach (var row in rows)
         {
             string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
             string eq = Get("equipment_id");
             if (eq.Length == 0 || !ParseI(Get("year"), out int yr) || !ParseI(Get("month"), out int mo)) { err++; continue; }
             double D(string k) { ParseD(Get(k), out double v); return v; }
-            bool exists;
-            using (var q = conn.CreateCommand())
-            { q.CommandText = "SELECT COUNT(*) FROM equipment_kpi_monthly WHERE equipment_id=@e AND year=@y AND month=@m"; q.AddWithValue("@e", eq); q.AddWithValue("@y", yr); q.AddWithValue("@m", mo); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
+            bool exists = existing.Contains(Key(eq, yr, mo));
             using var cmd = conn.CreateCommand();
             // 无损全列: 补此前漏的 idle_hours(待机)/delay_hours(延误) + internal/external_fault_rate_pct(内/外部故障率, 故障归因)
             if (exists) { if (!overwrite) { skip++; continue; } cmd.CommandText = "UPDATE equipment_kpi_monthly SET plan_hours=@p, work_hours=@w, fault_hours=@f, idle_hours=@ih, delay_hours=@dh, availability=@a, actual_run_rate=@r, utilization_rate=@u, internal_fault_rate_pct=@ifr, external_fault_rate_pct=@efr WHERE equipment_id=@e AND year=@y AND month=@m"; upd++; }
@@ -1508,7 +1513,12 @@ public static class GeoDataQueries
             cmd.AddWithValue("@ih", D("idle_hours")); cmd.AddWithValue("@dh", D("delay_hours"));
             cmd.AddWithValue("@a", D("availability")); cmd.AddWithValue("@r", D("actual_run_rate")); cmd.AddWithValue("@u", D("utilization_rate"));
             cmd.AddWithValue("@ifr", D("internal_fault_rate_pct")); cmd.AddWithValue("@efr", D("external_fault_rate_pct"));
-            try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
+            try
+            {
+                cmd.ExecuteNonQuery();
+                if (!exists) existing.Add(Key(eq, yr, mo));   // 同份 CSV 内重复键要能看到前一行已写入
+            }
+            catch { err++; if (exists) upd--; else ins--; }
         }
         return new ImportOutcome(ins, upd, skip, err);
     }
@@ -1654,6 +1664,9 @@ public static class GeoDataQueries
     public static ImportOutcome ImportObservationPoints(DbConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
     {
         int ins = 0, upd = 0, skip = 0, err = 0;
+
+        // 既有主键一次性预取, 逐行的 exists 查询就不必再发往数据库。
+        var existing = LoadKeySet(conn, "SELECT point_id, seam_code FROM coal_observation_point");
         foreach (var row in rows)
         {
             string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
@@ -1661,14 +1674,18 @@ public static class GeoDataQueries
             if (pid.Length == 0 || seam.Length == 0 || !ParseD(Get("x"), out double x) || !ParseD(Get("y"), out double y)) { err++; continue; }
             object Num(string k) => ParseD(Get(k), out double v) ? v : (object)System.DBNull.Value;
             int yfmt = ParseI(Get("original_y_format"), out int yf) ? yf : 8;
-            bool exists;
-            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM coal_observation_point WHERE point_id=@p AND seam_code=@s"; q.AddWithValue("@p", pid); q.AddWithValue("@s", seam); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
+            bool exists = existing.Contains(Key(pid, seam));
             using var cmd = conn.CreateCommand();
             if (exists) { if (!overwrite) { skip++; continue; } cmd.CommandText = "UPDATE coal_observation_point SET x=@x, y=@y, seam_thickness=@t, floor_elevation=@f, original_y_format=@yf WHERE point_id=@p AND seam_code=@s"; upd++; }
             else { cmd.CommandText = "INSERT INTO coal_observation_point (point_id, seam_code, x, y, original_y_format, seam_thickness, floor_elevation) VALUES (@p,@s,@x,@y,@yf,@t,@f)"; ins++; }
             cmd.AddWithValue("@p", pid); cmd.AddWithValue("@s", seam); cmd.AddWithValue("@x", x); cmd.AddWithValue("@y", y);
             cmd.AddWithValue("@yf", yfmt); cmd.AddWithValue("@t", Num("seam_thickness")); cmd.AddWithValue("@f", Num("floor_elevation"));
-            try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
+            try
+            {
+                cmd.ExecuteNonQuery();
+                if (!exists) existing.Add(Key(pid, seam));   // 同份 CSV 内重复键要能看到前一行已写入
+            }
+            catch { err++; if (exists) upd--; else ins--; }
         }
         return new ImportOutcome(ins, upd, skip, err);
     }
@@ -1678,14 +1695,16 @@ public static class GeoDataQueries
     public static ImportOutcome ImportMonthlyPlans(DbConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
     {
         int ins = 0, upd = 0, skip = 0, err = 0;
+
+        // 既有主键一次性预取, 逐行的 exists 查询就不必再发往数据库。
+        var existing = LoadKeySet(conn, "SELECT year, month FROM monthly_plan");
         var cols = new[] { "plan_strip_wan_m3", "plan_coal_wan_t", "plan_outsource_strip_wan_m3", "ratio_strip_coal", "avg_distance_km", "avg_height_m" };
         foreach (var row in rows)
         {
             string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
             if (!ParseI(Get("year"), out int yr) || !ParseI(Get("month"), out int mo)) { err++; continue; }
             double D(string k) { ParseD(Get(k), out double v); return v; }
-            bool exists;
-            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM monthly_plan WHERE year=@y AND month=@m"; q.AddWithValue("@y", yr); q.AddWithValue("@m", mo); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
+            bool exists = existing.Contains(Key(yr, mo));
             using var cmd = conn.CreateCommand();
             if (exists)
             {
@@ -1702,7 +1721,12 @@ public static class GeoDataQueries
             }
             cmd.AddWithValue("@y", yr); cmd.AddWithValue("@m", mo);
             foreach (var col in cols) cmd.AddWithValue("@" + col, D(col));
-            try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
+            try
+            {
+                cmd.ExecuteNonQuery();
+                if (!exists) existing.Add(Key(yr, mo));   // 同份 CSV 内重复键要能看到前一行已写入
+            }
+            catch { err++; if (exists) upd--; else ins--; }
         }
         return new ImportOutcome(ins, upd, skip, err);
     }

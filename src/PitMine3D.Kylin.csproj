@@ -23,7 +23,6 @@
     <PackageReference Include="Avalonia.Fonts.Inter" Version="11.2.1" />
     <!-- DXF/DWG 读取(纯托管, 跨平台) —— 与 Windows 版同版本 -->
     <PackageReference Include="ACadSharp" Version="3.5.7" />
-    <PackageReference Include="DM.DmProvider" Version="8.3.1.47463" />
     <PackageReference Include="Dock.Avalonia" Version="11.2.0" />
     <PackageReference Include="Dock.Model.Avalonia" Version="11.2.0" />
     <PackageReference Include="Dock.Model.Mvvm" Version="11.2.0" />
@@ -32,6 +31,7 @@
     <!-- 地质/生产数据库(§四/§八): SQLite 嵌入式, 跨平台可移(非 DM8) + Dapper POCO 映射 —— 与原 SqlLib 同版本 -->
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.10" />
     <PackageReference Include="Dapper" Version="2.1.35" />
+    <PackageReference Include="Npgsql" Version="8.0.9" />
     <!-- GBK 中文编码(MapGIS .WT 注记字符串池) —— .NET Core 默认不含 GB 系列代码页 -->
     <PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0" />
 
@@ -43,8 +43,8 @@
   <!-- §四/§八 数据库迁移(建表 + 真实种子数据)作嵌入资源, 运行时建库自足, 无需外部 DB -->
   <ItemGroup>
     <EmbeddedResource Include="Data\Migrations\*.sql" />
-    <!-- 达梦版迁移: 由 build/sqlite2dm.py 从上面那套生成, 勿手改。方言选择见 GeoDbDialect。 -->
-    <EmbeddedResource Include="Data\MigrationsDm\*.sql" />
+    <!-- openGauss 版迁移: 由 build/sqlite2pg.py 从上面那套生成, 勿手改。方言选择见 GeoDbDialect。 -->
+    <EmbeddedResource Include="Data\MigrationsPg\*.sql" />
   </ItemGroup>
 
   <!-- 设备信息管理「三维展示」: 原 GeoDataBase/Models3D 的 PNG 转台序列帧(12 类 × 60 帧), 随程序输出 -->

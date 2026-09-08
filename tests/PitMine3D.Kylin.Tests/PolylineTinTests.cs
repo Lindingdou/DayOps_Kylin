@@ -103,4 +103,41 @@ public class PolylineTinTests
         Assert.Empty(r.Verts);
         Assert.Empty(r.Constraints);
     }
+
+    // ── 显示态线框缓冲(交错 P3_C3, 每段 2 顶点 × 6 float) ──
+    private static float[] Seg(params (double x, double y, double z)[] pts)
+    {
+        var v = new List<float>();
+        foreach (var p in pts) { v.Add((float)p.x); v.Add((float)p.y); v.Add((float)p.z); v.Add(0); v.Add(1); v.Add(1); }
+        return v.ToArray();
+    }
+
+    [Fact]
+    public void ImportedWireframe_becomesVertsAndConstraints()
+    {
+        // 导入的 .3dm/OFF 等值线走显示通道、选不中；没有这条路这类图纸建不出三角网
+        var buf = new List<float>();
+        buf.AddRange(Seg((0, 0, 10), (10, 0, 10)));      // 段1
+        buf.AddRange(Seg((10, 0, 10), (10, 10, 20)));    // 段2, 与段1 共端点
+        var r = PolylineTin.CollectSegments(buf);
+        Assert.Equal(3, r.Verts.Count);                   // 共端点合并, 不是 4
+        Assert.Equal(1, r.MergedVertices);
+        Assert.Equal(2, r.Constraints.Count);
+        Assert.Equal(20, r.Verts[2].z, 9);                // 高程取自缓冲第 3 个 float
+    }
+
+    [Fact]
+    public void ImportedWireframe_zeroLengthSegment_producesNoConstraint()
+    {
+        var r = PolylineTin.CollectSegments(Seg((5, 5, 0), (5, 5, 0)));
+        Assert.Single(r.Verts);
+        Assert.Empty(r.Constraints);
+    }
+
+    [Fact]
+    public void ImportedWireframe_tooShortBuffer_isIgnored()
+    {
+        Assert.Empty(PolylineTin.CollectSegments(new float[] { 1, 2, 3 }).Verts);
+        Assert.Empty(PolylineTin.CollectSegments(Array.Empty<float>()).Verts);
+    }
 }

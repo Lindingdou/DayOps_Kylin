@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Data.Common;
 using Microsoft.Data.Sqlite;
 
@@ -28,9 +27,6 @@ public sealed class SqliteDialect : GeoDbDialect
     public override void BeforeMigrations(DbConnection conn) => Exec(conn, "PRAGMA foreign_keys=OFF;");
     public override void AfterMigrations(DbConnection conn) => Exec(conn, "PRAGMA foreign_keys=ON;");
 
-    // Microsoft.Data.Sqlite 的 ExecuteNonQuery 会执行整批多语句(含触发器 BEGIN…END), 不拆。
-    public override IReadOnlyList<string> SplitBatch(string script) => new[] { script };
-
     private static void Exec(DbConnection conn, string sql)
     {
         using var cmd = conn.CreateCommand();
@@ -40,53 +36,72 @@ public sealed class SqliteDialect : GeoDbDialect
 }
 
 /// <summary>
-/// 达梦 DM(DM8 / DM9)。驱动走达梦官方 NuGet 包 DM.DmProvider(有 net8.0 目标)。
+/// openGauss（华为系, PostgreSQL 内核衍生）—— 局域网内一个共享库 + 多客户端的目标形态。
 ///
-/// 与 SQLite 的实质差异, 全在这个类里:
+/// 相比 SQLite 的实质差异都收在这里:
 ///   1. 要连接串(外部服务器), 不是本地文件;
-///   2. 没有 CREATE TABLE IF NOT EXISTS —— 先查数据字典;
-///   3. 一次 ExecuteNonQuery 只吃一条语句 —— 迁移脚本必须拆开喂;
-///   4. 参数前缀是 ':' 不是 '@';
-///   5. 没有 PRAGMA foreign_keys 这种全局外键总开关。
+///   2. 库是**共享**的 —— 迁移不在启动时跑, 见 <see cref="MigrateOnOpen"/>;
+///   3. 迁移期没有 SQLite 那种外键总开关, 改用会话级 session_replication_role。
+///
+/// 而下面这些原以为要改的, 实际都不用:
+///   · 参数前缀仍是 '@' —— Npgsql 原生认, 全库 407 处参数一处不动;
+///   · TEXT/INTEGER 是 PG 原生类型, 列定义基本照搬;
+///   · date/status/value/year 这些列名在 PG 里是非保留关键字, 不必加引号;
+///   · Npgsql 能在一个命令里执行多条语句(且正确识别 $$ 美元引用), 迁移脚本不必拆开喂。
+///
+/// 驱动用主流 Npgsql 而非 openGauss 专用分支。代价是 openGauss 默认的 SHA256 认证
+/// 标准 PG 驱动握不了手, 需在服务端设 password_encryption_type=1 并**重设一次用户密码**
+/// 以启用 MD5(见 db/pg/DEPLOY.md)。若现场不允许开 MD5, 把本类的 NpgsqlConnection
+/// 换成 OpenGauss.NET 的连接类型即可 —— 方言层就是为这种替换准备的。
 /// </summary>
-public sealed class DmDialect : GeoDbDialect
+public sealed class OpenGaussDialect : GeoDbDialect
 {
-    public override string Name => "dm";
-    public override char ParamPrefix => ':';
-    public override string MigrationMarker => ".Data.MigrationsDm.";
-    public override string SchemaMigrationTable => "\"_schema_migration\"";
+    public override string Name => "opengauss";
+    public override char ParamPrefix => '@';          // Npgsql 原生支持 @, 与既有 SQL 文本一致
+    public override string MigrationMarker => ".Data.MigrationsPg.";
+    public override bool MigrateOnOpen => false;      // 共享库: 迁移是部署动作, 见基类说明
 
     public override DbConnection CreateConnection(string? path)
     {
-        // path 对 DM 无意义(不是文件库)。连接串必须由环境给, 不硬编码任何凭据。
+        // path 对 openGauss 无意义(不是文件库)。连接串必须由环境给, 不硬编码任何凭据。
         string? cs = Environment.GetEnvironmentVariable("PITMINE_DB_CONN");
         if (string.IsNullOrWhiteSpace(cs))
             throw new InvalidOperationException(
-                "PITMINE_DB=dm 但没给 PITMINE_DB_CONN。" +
-                "例: Server=192.168.1.10:5236;User Id=SYSDBA;PWD=***;Schema=PITMINE");
-        return new Dm.DmConnection(cs);
+                "PITMINE_DB=opengauss 但没给 PITMINE_DB_CONN。" +
+                "例: Host=192.168.1.10;Port=5432;Database=pitmine;Username=pitmine;Password=***");
+        return new Npgsql.NpgsqlConnection(cs);
     }
 
     public override void EnsureSchemaMigrationTable(DbConnection conn)
     {
-        // 达梦没有 IF NOT EXISTS: 先问数据字典(Oracle 兼容视图), 没有再建。
-        using (var q = conn.CreateCommand())
-        {
-            q.CommandText = "SELECT COUNT(*) FROM USER_TABLES WHERE TABLE_NAME = '_schema_migration'";
-            if (Convert.ToInt32(q.ExecuteScalar()) > 0) return;
-        }
         using var c = conn.CreateCommand();
-        c.CommandText = @"CREATE TABLE ""_schema_migration"" (
+        c.CommandText = @"CREATE TABLE IF NOT EXISTS _schema_migration (
             version    VARCHAR(128) NOT NULL PRIMARY KEY,
             applied_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
         )";
         c.ExecuteNonQuery();
     }
 
-    // 达梦无全局外键开关。种子数据的插入顺序因此必须自洽 —— 这一点由 DM 版迁移脚本保证,
-    // 而不是靠运行期把约束关掉。
-    public override void BeforeMigrations(DbConnection conn) { }
-    public override void AfterMigrations(DbConnection conn) { }
+    /// <summary>
+    /// 迁移期关外键。PG 没有 SQLite 的 PRAGMA foreign_keys, 但把会话的
+    /// session_replication_role 设成 replica 会跳过触发器与外键检查, 效果等价;
+    /// 只作用于当前会话, 不影响其它客户端。需要相应权限, 拿不到就跳过 ——
+    /// 那时种子的跨表插入顺序必须自洽, 由迁移脚本自身保证。
+    /// </summary>
+    public override void BeforeMigrations(DbConnection conn) => TrySet(conn, "replica");
+    public override void AfterMigrations(DbConnection conn) => TrySet(conn, "origin");
 
-    public override IReadOnlyList<string> SplitBatch(string script) => SplitOnSemicolons(script);
+    private static void TrySet(DbConnection conn, string role)
+    {
+        try
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = $"SET session_replication_role = '{role}'";
+            cmd.ExecuteNonQuery();
+        }
+        catch
+        {
+            // 权限不足: 不致命, 继续跑迁移。真有外键顺序问题会在具体那条语句上报错。
+        }
+    }
 }

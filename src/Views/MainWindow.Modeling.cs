@@ -346,7 +346,29 @@ public partial class MainWindow
             return;
         }
 
-        // ② 只有点：散点 Delaunay(向后兼容; 选中闭合线时按其裁边, 见上一分支已接管)
+        // ② 什么都没选, 但有「显示态线框」导入(.3dm/OFF 等值线走的是显示通道, 不是场景实体、
+        //    选不中) —— 直接拿这份线段建面, 否则这类图纸永远"建不出三角网"。
+        if (selPts.Count == 0 && _lastImport is { LineVertices.Length: >= 12 })
+        {
+            var col = PolylineTin.CollectSegments(_lastImport.LineVertices);
+            if (col.Verts.Count >= 3)
+            {
+                var xy = col.Verts.Select(v => (v.x, v.y)).ToList();
+                bool drop = col.Verts.Count > TinConstraintVertexLimit;
+                var wt = drop ? Delaunay.Triangulate(xy) : Delaunay.TriangulateConstrained(xy, col.Constraints);
+                if (wt.Count == 0) { StatusMsg.Text = "创建三角网：导入线的顶点共线，无法剖分"; return; }
+                wt = OrientUp(col.Verts, wt);
+                var wm = AddMesh(new MeshEntity(NewMeshName("三角网"), col.Verts, wt), true);
+                SelectEntities(new SceneEntity[] { wm });
+                var wst = TinSurface.Describe(col.Verts, wt);
+                StatusMsg.Text = $"创建三角网「{wm.Name}」：取自导入图形 {col.Verts.Count} 顶点"
+                               + (drop ? $"(超 {TinConstraintVertexLimit:N0}，已退为无约束剖分)" : $"({col.Constraints.Count} 段约束)")
+                               + $" → {wt.Count} 三角 · 投影面积 {wst.ProjectedAreaXY:0.#} · 高程 {wst.ZMin:0.#}~{wst.ZMax:0.#}";
+                return;
+            }
+        }
+
+        // ③ 只有点：散点 Delaunay
         var pts = await PickPointsAsync("创建三角网", 3);
         if (pts.Count < 3) { StatusMsg.Text = "创建三角网：需 ≥3 个点或 ≥1 条多段线(先在场景中选中, 或从 CSV 导入点)"; return; }
         var p3 = Pts3(pts);
