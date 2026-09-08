@@ -49,6 +49,21 @@ public static class CrashLog
         catch { }
     }
 
+    /// <summary>
+    /// 启动器在启动前放的「本次尝试硬件 GL」标记；首帧画出来就撤掉它。
+    /// 启动时若发现标记还在，说明上次连一帧都没画出来(硬件驱动里崩了)，
+    /// 启动器就自动改用软件渲染 —— 崩一次之后至少还能用。
+    /// </summary>
+    public static void ClearHardwareGlAttempt()
+    {
+        try
+        {
+            string dir = System.IO.Path.GetDirectoryName(Path) ?? "";
+            if (dir.Length > 0) File.Delete(System.IO.Path.Combine(dir, ".hw-gl-attempt"));
+        }
+        catch { }
+    }
+
     public static void Write(string tag, string text)
     {
         string line = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [{tag}] {text}";

@@ -320,6 +320,7 @@ public partial class CadGlViewport : OpenGlControlBase
         {
             _firstFrameLogged = true;
             PitMine3D.Kylin.CrashLog.Write("GL", $"首帧完成 {w}x{h}");
+            PitMine3D.Kylin.CrashLog.ClearHardwareGlAttempt();   // 硬件 GL 走通了, 撤掉启动器的"尝试中"标记
         }
 
         // 帧时间采样：每秒汇总一次 FPS / 平均帧时(ms) → 状态栏 Performance 项(同原版 FrameProfiler)

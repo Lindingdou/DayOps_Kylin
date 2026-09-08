@@ -47,17 +47,44 @@ internal static class Program
                 // 导出应用菜单并抛 ServiceUnknown, 由终结器线程重抛(crash.log 里的 [TASK] 那条)。
                 // 我们的菜单本来就画在窗口内, 不需要全局菜单 —— 直接关掉这条 DBus 通路。
                 UseDBusMenu = false,
-                GlProfiles = new List<GlVersion>
-                {
-                    new(GlProfileType.OpenGL, 4, 0),
-                    new(GlProfileType.OpenGL, 3, 2),
-                    new(GlProfileType.OpenGL, 3, 0),
-                    new(GlProfileType.OpenGLES, 3, 2),
-                    new(GlProfileType.OpenGLES, 3, 0),
-                    new(GlProfileType.OpenGL, 2, 1, true),   // ← 老驱动兜底(兼容配置)
-                    new(GlProfileType.OpenGLES, 2, 0),
-                }
+                GlProfiles = BuildGlProfiles(),
             })
             .WithInterFont()
             .LogToTrace(LogEventLevel.Warning);
+
+    /// <summary>
+    /// 请求的 GL 版本档位。默认从高到低试；PITMINE_GL_PROFILE 可把指定档位顶到最前，
+    /// 用来在有问题的驱动上快速二分（实测格兰菲 Arise1020 + Mesa 25.0 在 GL 4.0 下首帧段错误）。
+    /// 取值: 4.0 / 3.2 / 3.0 / 2.1 / es3.2 / es3.0 / es2.0
+    /// </summary>
+    private static List<GlVersion> BuildGlProfiles()
+    {
+        var list = new List<GlVersion>
+        {
+            new(GlProfileType.OpenGL, 4, 0),
+            new(GlProfileType.OpenGL, 3, 2),
+            new(GlProfileType.OpenGL, 3, 0),
+            new(GlProfileType.OpenGLES, 3, 2),
+            new(GlProfileType.OpenGLES, 3, 0),
+            new(GlProfileType.OpenGL, 2, 1, true),   // ← 老驱动兜底(兼容配置)
+            new(GlProfileType.OpenGLES, 2, 0),
+        };
+        string? want = Environment.GetEnvironmentVariable("PITMINE_GL_PROFILE");
+        if (string.IsNullOrWhiteSpace(want)) return list;
+
+        want = want.Trim().ToLowerInvariant();
+        bool es = want.StartsWith("es");
+        string num = es ? want.Substring(2) : want;
+        var parts = num.Split('.');
+        if (parts.Length == 2 && int.TryParse(parts[0], out int maj) && int.TryParse(parts[1], out int min))
+        {
+            var type = es ? GlProfileType.OpenGLES : GlProfileType.OpenGL;
+            var pick = new GlVersion(type, maj, min, !es && maj == 2);
+            list.RemoveAll(v => v.Type == type && v.Major == maj && v.Minor == min);
+            list.Insert(0, pick);
+            CrashLog.Write("GL", $"按 PITMINE_GL_PROFILE={want} 优先请求 {type} {maj}.{min}");
+        }
+        else CrashLog.Write("GL", $"PITMINE_GL_PROFILE={want} 解析不了, 用默认档位表");
+        return list;
+    }
 }

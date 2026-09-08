@@ -102,6 +102,21 @@ mkdir -p "$LOGDIR" 2>/dev/null || LOGDIR=/tmp
 LOG="$LOGDIR/last-run.log"
 echo "=== $(date "+%Y-%m-%d %H:%M:%S") 启动 ===" >> "$LOG"
 
+# ── 安全模式: 硬件 GL 上次崩在首帧之前, 这次自动改软件渲染 ──────────────────
+# 实测格兰菲 Arise1020 + Mesa 25.0 上, GL 初始化成功、第一帧却直接段错误。
+# 启动前放一个"正在尝试硬件 GL"标记, 主程序画出首帧就把它删掉；
+# 下次启动若发现标记还在, 说明上次连一帧都没画出来 —— 直接退到软件渲染, 保证程序能用。
+HWFLAG="$LOGDIR/.hw-gl-attempt"
+if [ -z "${LIBGL_ALWAYS_SOFTWARE:-}" ]; then
+    if [ -f "$HWFLAG" ]; then
+        LIBGL_ALWAYS_SOFTWARE=1; export LIBGL_ALWAYS_SOFTWARE
+        echo "上次启动未能画出首帧(硬件 OpenGL 驱动崩溃), 本次自动改用软件渲染。" | tee -a "$LOG" >&2
+        echo "如需再试硬件渲染: rm $HWFLAG" >&2
+    else
+        : > "$HWFLAG" 2>/dev/null || true
+    fi
+fi
+
 # ── 一键诊断模式: PITMINE_DIAG=1 pitmine3d ────────────────────────────────
 # 原生崩溃(段错误)不走托管异常钩子, crash.log 里什么都不会有。这里把所有能逼出线索的开关
 # 一次性打开: Mesa/GLX verbose、core dump、.NET 崩溃转储；有 gdb 就直接在 gdb 里跑, 崩了
