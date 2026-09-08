@@ -6,7 +6,7 @@ using System.IO;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Microsoft.Data.Sqlite;
+using System.Data.Common;
 using PitMine3D.Kylin.Cad;
 using PitMine3D.Kylin.Cad.Draw;
 using PitMine3D.Kylin.Data;
@@ -24,7 +24,7 @@ namespace PitMine3D.Kylin.Views.Modeling;
 public partial class CurrentStateRealisticWindow : Window
 {
     private readonly ModelingContext _ctx;
-    private readonly SqliteConnection? _conn;
+    private readonly DbConnection? _conn;
 
     private const string MarkSettingsKey = "geo.realistic.currentstate.mark";
     public const string SurfaceLayer = "现状面";

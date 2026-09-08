@@ -8,7 +8,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using Dapper;
-using Microsoft.Data.Sqlite;
+using System.Data.Common;
 using PitMine3D.Kylin.Cad;
 using PitMine3D.Kylin.Cad.Draw;
 
@@ -67,15 +67,15 @@ public static partial class GeoDbViews
         FROM borehole";
 
     /// <summary>全部钻孔(原 IBoreholeService.All, 按孔号不区分大小写排序)。</summary>
-    public static List<BoreholeRow> LoadBoreholes(SqliteConnection conn)
+    public static List<BoreholeRow> LoadBoreholes(DbConnection conn)
         => conn.Query<BoreholeRow>(BoreholeSelect).OrderBy(b => b.HoleId, StringComparer.OrdinalIgnoreCase).ToList();
 
     /// <summary>按孔号取一孔(原 GetByHoleId); 无则 null。</summary>
-    public static BoreholeRow? GetBoreholeByHoleId(SqliteConnection conn, string holeId)
+    public static BoreholeRow? GetBoreholeByHoleId(DbConnection conn, string holeId)
         => conn.Query<BoreholeRow>(BoreholeSelect + " WHERE hole_id = @h", new { h = holeId }).FirstOrDefault();
 
     /// <summary>新增钻孔(原 Insert), 返回自增 id。</summary>
-    public static long InsertBorehole(SqliteConnection conn, BoreholeRow b)
+    public static long InsertBorehole(DbConnection conn, BoreholeRow b)
     {
         conn.Execute(@"INSERT INTO borehole(hole_id, x, y, z_collar, depth_total, terminate_horizon, drill_date, drill_unit,
                        drill_rating, log_rating, overall_rating, category, coord_filled, remark)
@@ -86,14 +86,14 @@ public static partial class GeoDbViews
     }
 
     /// <summary>更新钻孔全部可编辑列(原 Update)。</summary>
-    public static int UpdateBorehole(SqliteConnection conn, BoreholeRow b)
+    public static int UpdateBorehole(DbConnection conn, BoreholeRow b)
         => conn.Execute(@"UPDATE borehole SET hole_id=@HoleId, x=@X, y=@Y, z_collar=@ZCollar, depth_total=@DepthTotal,
                           terminate_horizon=@TerminateHorizon, drill_date=@DrillDate, drill_unit=@DrillUnit, drill_rating=@DrillRating,
                           log_rating=@LogRating, overall_rating=@OverallRating, category=@Category, coord_filled=@CoordFilled, remark=@Remark
                           WHERE id=@Id", b);
 
     /// <summary>删除钻孔(原 Delete; 见煤成果随外键级联)。</summary>
-    public static int DeleteBorehole(SqliteConnection conn, long id)
+    public static int DeleteBorehole(DbConnection conn, long id)
         => conn.Execute("DELETE FROM borehole WHERE id=@id", new { id });
 
     // ═════════════════════════════════════════════════════════════════════
@@ -233,7 +233,7 @@ public static partial class GeoDbViews
     /// <summary>
     /// 表头映射 + 逐行校验 + 冲突检测(原 LoadRecords)。返回预览行与状态栏文案; rows 为空表示表头/文件问题。
     /// </summary>
-    public static (List<BoreholeImportRow> rows, string message) BoreholePreviewImport(SqliteConnection conn, List<List<string>> records)
+    public static (List<BoreholeImportRow> rows, string message) BoreholePreviewImport(DbConnection conn, List<List<string>> records)
     {
         var rows = new List<BoreholeImportRow>();
         if (records.Count < 2) return (rows, "文件为空或只有表头");
@@ -277,7 +277,7 @@ public static partial class GeoDbViews
     public sealed record BoreholeImportOutcome(int Inserted, int Updated, int Skipped, int Failed, string? FirstError);
 
     /// <summary>预览行入库(原 OnImportClick): 有效行按孔号 upsert(覆盖开关), 失败行状态回写。</summary>
-    public static BoreholeImportOutcome BoreholeApplyImport(SqliteConnection conn, IEnumerable<BoreholeImportRow> rows, bool overwrite)
+    public static BoreholeImportOutcome BoreholeApplyImport(DbConnection conn, IEnumerable<BoreholeImportRow> rows, bool overwrite)
     {
         int ins = 0, upd = 0, skip = 0, fail = 0;
         string? firstError = null;
@@ -323,7 +323,7 @@ public static partial class GeoDbViews
     /// 开孔坐标管理的直接导入(原 BoreholeDataWindow.OnImportClick): 缺必填/文件内重复直接跳过, 按孔号 upsert。
     /// 返回 null 表示表头问题(message 给出原因)。
     /// </summary>
-    public static BoreholeImportOutcome? BoreholeImportDirect(SqliteConnection conn, List<List<string>> records, bool overwrite, out string message)
+    public static BoreholeImportOutcome? BoreholeImportDirect(DbConnection conn, List<List<string>> records, bool overwrite, out string message)
     {
         message = "";
         if (records.Count < 2) { message = "文件为空或只有表头"; return null; }
@@ -436,11 +436,11 @@ public static partial class GeoDbViews
         FROM borehole_seam_result";
 
     /// <summary>按状态取见煤成果(原 SeamResultsByStatus)。</summary>
-    public static List<BoreholeSeamRow> LoadSeamResultsByStatus(SqliteConnection conn, string status)
+    public static List<BoreholeSeamRow> LoadSeamResultsByStatus(DbConnection conn, string status)
         => conn.Query<BoreholeSeamRow>(SeamSelect + " WHERE status = @s", new { s = status }).ToList();
 
     /// <summary>按钻孔取见煤成果(原 SeamResultsByBorehole)。</summary>
-    public static List<BoreholeSeamRow> LoadSeamResultsByBorehole(SqliteConnection conn, long boreholeId)
+    public static List<BoreholeSeamRow> LoadSeamResultsByBorehole(DbConnection conn, long boreholeId)
         => conn.Query<BoreholeSeamRow>(SeamSelect + " WHERE borehole_id = @id", new { id = boreholeId }).ToList();
 
     /// <summary>煤层字典行(coal_seam_def)。</summary>
@@ -454,7 +454,7 @@ public static partial class GeoDbViews
         public string? ColorHex { get; set; }
     }
 
-    public static List<SeamDefRow> LoadSeamDefs(SqliteConnection conn)
+    public static List<SeamDefRow> LoadSeamDefs(DbConnection conn)
         => conn.Query<SeamDefRow>("SELECT code AS Code, name AS Name, sort_order AS SortOrder, color_hex AS ColorHex FROM coal_seam_def ORDER BY sort_order").ToList();
 
     /// <summary>煤层调色板(原 SeamPalette.FromReference): code → RGB, 未知/坏 hex 回退 #555555。</summary>
@@ -518,7 +518,7 @@ public static partial class GeoDbViews
     /// 真实钻孔 → 柱状图实体(原 Build): 每孔一柱, 孔口 z_collar → 孔底, 无煤处岩色、"正常" 煤层段煤色;
     /// 孔号置柱顶、煤层名置柱侧(带引线, 竖向避让)。Kylin 场景为 2D 平面: 柱在孔位 (x,y) 竖直向下按 1:1 垂向展开。
     /// </summary>
-    public static BoreholeColumnResult BuildBoreholeColumns(SqliteConnection conn, IReadOnlyList<BoreholeRow>? holesFilter = null)
+    public static BoreholeColumnResult BuildBoreholeColumns(DbConnection conn, IReadOnlyList<BoreholeRow>? holesFilter = null)
     {
         var holes = holesFilter ?? LoadBoreholes(conn);
         var seamsByHole = new Dictionary<long, List<BoreholeSeamRow>>();
@@ -767,7 +767,7 @@ public static partial class GeoDbViews
         => HpSeamColorMap.TryGetValue(code, out var c) ? c : HpFallback;
 
     /// <summary>提取有底板标高数据的可用煤层编号(供 UI 勾选); 按地质顺序(浅→深)排。</summary>
-    public static List<string> HorizonAvailableSeams(SqliteConnection conn)
+    public static List<string> HorizonAvailableSeams(DbConnection conn)
     {
         var set = new HashSet<string>();
         foreach (var sr in LoadSeamResultsByStatus(conn, "正常")) if (!string.IsNullOrWhiteSpace(sr.SeamCode)) set.Add(sr.SeamCode);
@@ -798,7 +798,7 @@ public static partial class GeoDbViews
     /// 分煤层提取顶板 / 底板高程点(原 Build): ① borehole_seam_result(status=正常, join 孔位): 底=floor_elevation, 顶=底+采用厚度;
     /// ② coal_observation_point: 底=floor_elevation, 顶=底+见煤厚度(退化估算厚)。图层「层位_{煤层}_顶板/底板」按煤层分色。
     /// </summary>
-    public static HorizonBuildResult BuildHorizonPoints(SqliteConnection conn, ISet<string>? seams = null, bool includeRoof = true, bool includeFloor = true)
+    public static HorizonBuildResult BuildHorizonPoints(DbConnection conn, ISet<string>? seams = null, bool includeRoof = true, bool includeFloor = true)
     {
         var result = new HorizonBuildResult();
         var holeXY = new Dictionary<long, (double x, double y)>();
@@ -887,17 +887,17 @@ public static partial class GeoDbViews
         min_x AS MinX, min_y AS MinY, min_z AS MinZ, max_x AS MaxX, max_y AS MaxY, max_z AS MaxZ FROM virtual_drill_surface";
 
     /// <summary>全部已捕获面, 按 seam_order、role 排序。</summary>
-    public static List<VdSurfaceRow> VdAllSurfaces(SqliteConnection conn)
+    public static List<VdSurfaceRow> VdAllSurfaces(DbConnection conn)
         => conn.Query<VdSurfaceRow>(VdSelect + " ORDER BY seam_order, role").ToList();
 
-    public static VdSurfaceRow? VdGetByKey(SqliteConnection conn, string role, string seamName)
+    public static VdSurfaceRow? VdGetByKey(DbConnection conn, string role, string seamName)
         => conn.Query<VdSurfaceRow>(VdSelect + " WHERE role = @r AND seam_name = @s", new { r = role ?? "", s = seamName ?? "" }).FirstOrDefault();
 
-    public static bool VdHasAnySurface(SqliteConnection conn)
+    public static bool VdHasAnySurface(DbConnection conn)
         => conn.ExecuteScalar<long>("SELECT COUNT(*) FROM virtual_drill_surface") > 0;
 
     /// <summary>保存一张面(按 (role, seamName) upsert)。verts 扁平 [x,y,z,...], tris 三角索引。非法几何不写返回 0。</summary>
-    public static long VdSaveSurface(SqliteConnection conn, string role, string seamName, int seamOrder, string colorHex,
+    public static long VdSaveSurface(DbConnection conn, string role, string seamName, int seamOrder, string colorHex,
                                      string sourceLayer, double[] verts, int[] tris)
     {
         string b64 = VdPack(verts, tris);
@@ -923,7 +923,7 @@ public static partial class GeoDbViews
     }
 
     /// <summary>取某面几何: 解包 base64 → 顶点 + 三角索引。缺行 / 坏数据 false。</summary>
-    public static bool VdTryGetGeometry(SqliteConnection conn, long id, out double[] verts, out int[] tris)
+    public static bool VdTryGetGeometry(DbConnection conn, long id, out double[] verts, out int[] tris)
     {
         verts = Array.Empty<double>(); tris = Array.Empty<int>();
         var b64 = conn.ExecuteScalar<string?>("SELECT geometry_b64 FROM virtual_drill_surface WHERE id=@id", new { id });
@@ -931,17 +931,17 @@ public static partial class GeoDbViews
     }
 
     /// <summary>改某煤层(顶+底同步)的层序与颜色, 返回受影响行数。</summary>
-    public static int VdUpdateSeamMeta(SqliteConnection conn, string seamName, int seamOrder, string colorHex)
+    public static int VdUpdateSeamMeta(DbConnection conn, string seamName, int seamOrder, string colorHex)
     {
         colorHex = string.IsNullOrWhiteSpace(colorHex) ? "#3C3C3C" : colorHex;
         return conn.Execute("UPDATE virtual_drill_surface SET seam_order=@o, color_hex=@c, updated_at=@now WHERE seam_name=@s",
             new { o = seamOrder, c = colorHex, now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), s = seamName ?? "" });
     }
 
-    public static int VdDelete(SqliteConnection conn, long id) => conn.Execute("DELETE FROM virtual_drill_surface WHERE id=@id", new { id });
+    public static int VdDelete(DbConnection conn, long id) => conn.Execute("DELETE FROM virtual_drill_surface WHERE id=@id", new { id });
 
     /// <summary>清空全部地质模型面, 返回删除行数。</summary>
-    public static int VdClearAll(SqliteConnection conn) => conn.Execute("DELETE FROM virtual_drill_surface");
+    public static int VdClearAll(DbConnection conn) => conn.Execute("DELETE FROM virtual_drill_surface");
 
     private const int VdMagic = 0x56445431;   // 'VDT1'
     private const int VdVersion = 1;
@@ -1161,7 +1161,7 @@ public static partial class GeoDbViews
     public static string VdColorToHex(byte r, byte g, byte b) => $"#{r:X2}{g:X2}{b:X2}";
 
     /// <summary>读库中全部面, 解包几何建采样器: 地表 1 张 + 各煤层顶/底板按 seam_name 配对(按 Order 自上而下)。</summary>
-    public static VdModel VdBuildModel(SqliteConnection conn)
+    public static VdModel VdBuildModel(DbConnection conn)
     {
         var model = new VdModel();
         var seams = new Dictionary<string, VdSeamModel>(StringComparer.Ordinal);

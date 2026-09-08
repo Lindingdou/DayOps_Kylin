@@ -4,7 +4,7 @@ using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
-using Microsoft.Data.Sqlite;
+using System.Data.Common;
 using PitMine3D.Kylin.Views.GeoDb;
 using static PitMine3D.Kylin.Data.GeoDbViews;
 
@@ -14,13 +14,13 @@ namespace PitMine3D.Kylin.Views.Modeling;
 /// 双击名称改名; 删除批次连带删该批孔+层位。ShowDialog 关闭后调用方重载批次。</summary>
 public partial class SupplementaryBatchManagerWindow : Window
 {
-    private readonly SqliteConnection? _conn;
+    private readonly DbConnection? _conn;
     private ObservableCollection<SupBatchRow> _rows = new();
 
     /// <summary>XAML 编译器/设计器用。</summary>
     public SupplementaryBatchManagerWindow() { InitializeComponent(); }
 
-    public SupplementaryBatchManagerWindow(SqliteConnection? conn)
+    public SupplementaryBatchManagerWindow(DbConnection? conn)
     {
         InitializeComponent();
         _conn = conn;

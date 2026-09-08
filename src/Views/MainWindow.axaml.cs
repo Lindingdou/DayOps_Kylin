@@ -7812,8 +7812,8 @@ public partial class MainWindow : Window
         var scaleRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { scaleLabel, scaleBox } };
         var scaleHint = new TextBlock
         {
-            Text = "功能区按 1:1 需要约 2300px 宽，1080p 及以下放不下。选「自动」按当前窗口宽度缩放，"
-                 + "保证一屏显示完整；选固定分辨率则按该宽度缩放，适合投屏或多屏切换。选中即可预览。",
+            Text = "功能区按 1:1 需要约 2300px 宽，1080p 放不下故默认缩放。选固定分辨率按该宽度缩放，"
+                 + "适合投屏或多屏切换；选「自动」则跟随当前窗口宽度。选中即可预览。",
             FontSize = 11, Foreground = Brush.Parse("#666"), TextWrapping = TextWrapping.Wrap, MaxWidth = 380,
         };
 
@@ -11784,13 +11784,13 @@ public partial class MainWindow : Window
     /// <summary>
     /// 屏幕挡位 → 目标宽度(像素)。缩放不写死百分比，而是按「目标宽度 ÷ 功能区实际需要的宽度」算，
     /// 以后功能区增删按钮也不用改这张表。0 = 自动，跟随当前窗口宽度。
+    /// 旧配置里若存着已取消的挡位(如 1366)，匹配不上就回落到第一项 1080p。
     /// </summary>
     private static readonly (string label, double targetWidth)[] RibbonScalePresets =
     {
         ("1080p  1920×1080（默认）", 1920),
         ("2K  2560×1440", 2560),
         ("4K  3840×2160", 3840),
-        ("1K  1366×768", 1366),
         ("自动（跟随窗口宽度）", 0),
     };
 

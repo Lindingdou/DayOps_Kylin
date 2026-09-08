@@ -6,7 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using Dapper;
-using Microsoft.Data.Sqlite;
+using System.Data.Common;
 using PitMine3D.Kylin.Cad.Draw;
 
 namespace PitMine3D.Kylin.Data;
@@ -63,7 +63,7 @@ public static partial class GeoDbViews
     private const string SupHorizonSelect = "SELECT id AS Id, sup_borehole_id AS SupBoreholeId, seam_code AS SeamCode, roof_elevation AS RoofElevation, floor_elevation AS FloorElevation, sort_order AS SortOrder, remark AS Remark FROM supplementary_seam_horizon";
 
     /// <summary>全部批次(按标签倒序 = 最新在前, 含 HoleCount)。</summary>
-    public static List<SupBatchRow> SupAllBatches(SqliteConnection conn)
+    public static List<SupBatchRow> SupAllBatches(DbConnection conn)
     {
         var list = conn.Query<SupBatchRow>(SupBatchSelect + " ORDER BY label DESC").ToList();
         foreach (var b in list)
@@ -71,11 +71,11 @@ public static partial class GeoDbViews
         return list;
     }
 
-    public static SupBatchRow? SupGetBatch(SqliteConnection conn, long id)
+    public static SupBatchRow? SupGetBatch(DbConnection conn, long id)
         => conn.Query<SupBatchRow>(SupBatchSelect + " WHERE id = @id", new { id }).FirstOrDefault();
 
     /// <summary>新建批次: 系统唯一时间标签 SBW-yyyyMMdd-HHmmss[-nn], 友好名默认 "{来源} yyyy-MM-dd HH:mm"; 返回 id。</summary>
-    public static long SupCreateBatch(SqliteConnection conn, string source, string? name = null, DateTime? now = null)
+    public static long SupCreateBatch(DbConnection conn, string source, string? name = null, DateTime? now = null)
     {
         string label = MuUniqueLabel(conn, "supplementary_batch", "SBW", now ?? DateTime.Now);
         return conn.ExecuteScalar<long>(
@@ -83,11 +83,11 @@ public static partial class GeoDbViews
             new { label, name = string.IsNullOrWhiteSpace(name) ? MuDefaultBatchName(source, label) : name!, source });
     }
 
-    public static void SupRenameBatch(SqliteConnection conn, long id, string name)
+    public static void SupRenameBatch(DbConnection conn, long id, string name)
         => conn.Execute("UPDATE supplementary_batch SET name = @name WHERE id = @id", new { id, name = name ?? "" });
 
     /// <summary>删除批次: 连带删该批全部孔+层位, 返回删除的孔数。</summary>
-    public static int SupDeleteBatch(SqliteConnection conn, long id)
+    public static int SupDeleteBatch(DbConnection conn, long id)
     {
         var holeIds = conn.Query<long>("SELECT id FROM supplementary_borehole WHERE batch_id = @b", new { b = id }).ToList();
         foreach (var hid in holeIds)
@@ -98,7 +98,7 @@ public static partial class GeoDbViews
     }
 
     // 系统唯一时间标签: {prefix}-yyyyMMdd-HHmmss, 同秒并发再加 -nn 直到唯一。
-    private static string MuUniqueLabel(SqliteConnection conn, string table, string prefix, DateTime now)
+    private static string MuUniqueLabel(DbConnection conn, string table, string prefix, DateTime now)
     {
         string head = prefix + "-" + now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
         string label = head;
@@ -118,39 +118,39 @@ public static partial class GeoDbViews
     }
 
     /// <summary>列出补勘孔(batchId=null 则全部; 否则仅该批次), 按孔号排序。</summary>
-    public static List<SupHoleRow> SupAllHoles(SqliteConnection conn, long? batchId = null)
+    public static List<SupHoleRow> SupAllHoles(DbConnection conn, long? batchId = null)
         => batchId is { } b
             ? conn.Query<SupHoleRow>(SupHoleSelect + " WHERE batch_id = @b ORDER BY hole_id", new { b }).ToList()
             : conn.Query<SupHoleRow>(SupHoleSelect + " ORDER BY hole_id").ToList();
 
-    public static SupHoleRow? SupGetHole(SqliteConnection conn, long id)
+    public static SupHoleRow? SupGetHole(DbConnection conn, long id)
         => conn.Query<SupHoleRow>(SupHoleSelect + " WHERE id = @id", new { id }).FirstOrDefault();
 
-    public static SupHoleRow? SupGetHoleByHoleId(SqliteConnection conn, string holeId)
+    public static SupHoleRow? SupGetHoleByHoleId(DbConnection conn, string holeId)
         => conn.Query<SupHoleRow>(SupHoleSelect + " WHERE hole_id = @h", new { h = holeId }).FirstOrDefault();
 
-    public static long SupInsertHole(SqliteConnection conn, SupHoleRow h)
+    public static long SupInsertHole(DbConnection conn, SupHoleRow h)
     {
         h.Id = conn.ExecuteScalar<long>(
             "INSERT INTO supplementary_borehole(hole_id, x, y, z_collar, remark, batch_id) VALUES(@HoleId, @X, @Y, @ZCollar, @Remark, @BatchId); SELECT last_insert_rowid();", h);
         return h.Id;
     }
 
-    public static int SupUpdateHole(SqliteConnection conn, SupHoleRow h)
+    public static int SupUpdateHole(DbConnection conn, SupHoleRow h)
         => conn.Execute("UPDATE supplementary_borehole SET hole_id = @HoleId, x = @X, y = @Y, z_collar = @ZCollar, remark = @Remark, batch_id = @BatchId WHERE id = @Id", h);
 
     /// <summary>删除补勘孔(显式先删层位, 不依赖 PRAGMA foreign_keys)。</summary>
-    public static void SupDeleteHole(SqliteConnection conn, long id)
+    public static void SupDeleteHole(DbConnection conn, long id)
     {
         conn.Execute("DELETE FROM supplementary_seam_horizon WHERE sup_borehole_id = @id", new { id });
         conn.Execute("DELETE FROM supplementary_borehole WHERE id = @id", new { id });
     }
 
-    public static List<SupHorizonRow> SupHorizonsByHole(SqliteConnection conn, long supBoreholeId)
+    public static List<SupHorizonRow> SupHorizonsByHole(DbConnection conn, long supBoreholeId)
         => conn.Query<SupHorizonRow>(SupHorizonSelect + " WHERE sup_borehole_id = @id ORDER BY sort_order", new { id = supBoreholeId }).ToList();
 
     /// <summary>整体替换某孔的层位(先删旧层再批量插新层), 保证一孔层位一致。</summary>
-    public static void SupReplaceHorizons(SqliteConnection conn, long supBoreholeId, IEnumerable<SupHorizonRow> horizons)
+    public static void SupReplaceHorizons(DbConnection conn, long supBoreholeId, IEnumerable<SupHorizonRow> horizons)
     {
         conn.Execute("DELETE FROM supplementary_seam_horizon WHERE sup_borehole_id = @id", new { id = supBoreholeId });
         foreach (var h in horizons)
@@ -162,14 +162,14 @@ public static partial class GeoDbViews
     }
 
     /// <summary>全部层位(按孔、层序), 用于按煤层聚合作观测数据。</summary>
-    public static List<SupHorizonRow> SupAllHorizons(SqliteConnection conn)
+    public static List<SupHorizonRow> SupAllHorizons(DbConnection conn)
         => conn.Query<SupHorizonRow>(SupHorizonSelect + " ORDER BY sup_borehole_id, sort_order").ToList();
 
     /// <summary>
     /// 「更新煤层面」观测点: 某煤层某层位(顶板/底板)的补勘孔高程 (x, y, z, 批次名)。
     /// 忠实原 UpdateSeamSurfaceWindow.OnLoadObs 的补勘分支(bhBatch=null 跨批次全取)。
     /// </summary>
-    public static List<(double x, double y, double z, string batch)> SupObservations(SqliteConnection conn, string seamCode, string horizon, long? batchId)
+    public static List<(double x, double y, double z, string batch)> SupObservations(DbConnection conn, string seamCode, string horizon, long? batchId)
     {
         var names = SupAllBatches(conn).ToDictionary(b => b.Id, b => MuBatchName(b.Name, b.Label));
         var holes = SupAllHoles(conn, batchId);
@@ -219,7 +219,7 @@ public static partial class GeoDbViews
     private const string CsBatchSelect = "SELECT id AS Id, label AS Label, name AS Name, source AS Source, remark AS Remark FROM current_state_batch";
     private const string CsPointSelect = "SELECT id AS Id, batch_id AS BatchId, x AS X, y AS Y, z AS Z, remark AS Remark, seam_code AS SeamCode, horizon AS Horizon FROM current_state_point";
 
-    public static List<CsBatchRow> CsAllBatches(SqliteConnection conn)
+    public static List<CsBatchRow> CsAllBatches(DbConnection conn)
     {
         var list = conn.Query<CsBatchRow>(CsBatchSelect + " ORDER BY label DESC").ToList();
         foreach (var b in list)
@@ -227,11 +227,11 @@ public static partial class GeoDbViews
         return list;
     }
 
-    public static CsBatchRow? CsGetBatch(SqliteConnection conn, long id)
+    public static CsBatchRow? CsGetBatch(DbConnection conn, long id)
         => conn.Query<CsBatchRow>(CsBatchSelect + " WHERE id = @id", new { id }).FirstOrDefault();
 
     /// <summary>新建现状批次: 标签 CSR-yyyyMMdd-HHmmss[-nn]; 返回 id。</summary>
-    public static long CsCreateBatch(SqliteConnection conn, string source, string? name = null, DateTime? now = null)
+    public static long CsCreateBatch(DbConnection conn, string source, string? name = null, DateTime? now = null)
     {
         string label = MuUniqueLabel(conn, "current_state_batch", "CSR", now ?? DateTime.Now);
         return conn.ExecuteScalar<long>(
@@ -239,11 +239,11 @@ public static partial class GeoDbViews
             new { label, name = string.IsNullOrWhiteSpace(name) ? MuDefaultBatchName(source, label) : name!, source });
     }
 
-    public static void CsRenameBatch(SqliteConnection conn, long id, string name)
+    public static void CsRenameBatch(DbConnection conn, long id, string name)
         => conn.Execute("UPDATE current_state_batch SET name = @name WHERE id = @id", new { id, name = name ?? "" });
 
     /// <summary>删除批次: 连带删该批全部现状点, 返回删除的点数。</summary>
-    public static int CsDeleteBatch(SqliteConnection conn, long id)
+    public static int CsDeleteBatch(DbConnection conn, long id)
     {
         int n = conn.ExecuteScalar<int>("SELECT COUNT(*) FROM current_state_point WHERE batch_id = @b", new { b = id });
         conn.Execute("DELETE FROM current_state_point WHERE batch_id = @b", new { b = id });
@@ -251,15 +251,15 @@ public static partial class GeoDbViews
         return n;
     }
 
-    public static List<CsPointRow> CsPointsByBatch(SqliteConnection conn, long batchId)
+    public static List<CsPointRow> CsPointsByBatch(DbConnection conn, long batchId)
         => conn.Query<CsPointRow>(CsPointSelect + " WHERE batch_id = @b ORDER BY id", new { b = batchId }).ToList();
 
     /// <summary>全部现状点(跨批次; 供按煤层+顶/底筛选作观测数据)。</summary>
-    public static List<CsPointRow> CsAllPoints(SqliteConnection conn)
+    public static List<CsPointRow> CsAllPoints(DbConnection conn)
         => conn.Query<CsPointRow>(CsPointSelect + " ORDER BY id").ToList();
 
     /// <summary>整体替换某批次的点(先删旧点再批量插)。</summary>
-    public static void CsReplacePoints(SqliteConnection conn, long batchId, IEnumerable<CsPointRow> points)
+    public static void CsReplacePoints(DbConnection conn, long batchId, IEnumerable<CsPointRow> points)
     {
         conn.Execute("DELETE FROM current_state_point WHERE batch_id = @b", new { b = batchId });
         foreach (var p in points)
@@ -271,7 +271,7 @@ public static partial class GeoDbViews
     }
 
     /// <summary>「更新煤层面」观测点: 某煤层某层位的现状见煤点 (x, y, z, 批次名); csBatch=null 跨批次全取。</summary>
-    public static List<(double x, double y, double z, string batch)> CsObservations(SqliteConnection conn, string seamCode, string horizon, long? batchId)
+    public static List<(double x, double y, double z, string batch)> CsObservations(DbConnection conn, string seamCode, string horizon, long? batchId)
     {
         var names = CsAllBatches(conn).ToDictionary(b => b.Id, b => MuBatchName(b.Name, b.Label));
         var list = new List<(double, double, double, string)>();
@@ -348,7 +348,7 @@ public static partial class GeoDbViews
         }
 
         /// <summary>读已记住的结构; 没有则从煤层字典(coal_seam_def, 按 sort_order 浅→深)生成默认。</summary>
-        public static SeamStructureConfig LoadOrDefault(SqliteConnection? conn)
+        public static SeamStructureConfig LoadOrDefault(DbConnection? conn)
         {
             var cfg = MuSettingsGet<SeamStructureConfig>(SettingsKey);
             if (cfg != null && cfg.Seams.Count > 0) return cfg;
@@ -356,7 +356,7 @@ public static partial class GeoDbViews
         }
 
         /// <summary>默认结构 = 煤层字典全部煤层(浅→深)。字典不可用则留空, 交用户手动增删。</summary>
-        public static SeamStructureConfig Default(SqliteConnection? conn)
+        public static SeamStructureConfig Default(DbConnection? conn)
         {
             var cfg = new SeamStructureConfig();
             try
@@ -477,7 +477,7 @@ public static partial class GeoDbViews
     }
 
     /// <summary>把某批次(或全部)补勘孔 + 层位导出为与模板同列头的 CSV(逐孔一行)。</summary>
-    public static string SupExportCsv(SqliteConnection conn, long? batchId, IReadOnlyList<(string code, string name)> seams)
+    public static string SupExportCsv(DbConnection conn, long? batchId, IReadOnlyList<(string code, string name)> seams)
     {
         var sb = new StringBuilder();
         sb.AppendLine(string.Join(",", SupCsvHeaders(seams).Select(BoreholeCsvField)));
@@ -500,7 +500,7 @@ public static partial class GeoDbViews
     /// 把解析结果入库(原 OnImportExcel 主体): 新建「CSV导入」批次, 孔号已存在则整孔覆盖(归入导入批次),
     /// 层位按煤层结构顺序整体替换; 一孔都没成则删掉空批次。返回 (批次 id 或 null, 新增, 更新, 失败)。
     /// </summary>
-    public static (long? batchId, int ins, int upd, int fail) SupImportParsed(SqliteConnection conn, IReadOnlyList<SupParsedHole> parsed, SeamStructureConfig config, string source = "CSV导入")
+    public static (long? batchId, int ins, int upd, int fail) SupImportParsed(DbConnection conn, IReadOnlyList<SupParsedHole> parsed, SeamStructureConfig config, string source = "CSV导入")
     {
         long importBatch = SupCreateBatch(conn, source);
         int ins = 0, upd = 0, fail = 0;

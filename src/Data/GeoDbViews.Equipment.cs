@@ -6,7 +6,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using Dapper;
-using Microsoft.Data.Sqlite;
+using System.Data.Common;
 
 namespace PitMine3D.Kylin.Data;
 
@@ -132,7 +132,7 @@ public static partial class GeoDbViews
     private static string Num(double? v) => v.HasValue ? v.Value.ToString("0.###", Inv) : "";
 
     /// <summary>台账全表(原 EquipmentRepository.Load: equipment ⋈ equipment_model 型号参数), 按编号排序。</summary>
-    public static List<EquipmentLedgerItem> EqLoadLedger(SqliteConnection conn)
+    public static List<EquipmentLedgerItem> EqLoadLedger(DbConnection conn)
     {
         var rows = conn.Query<EqLedgerRaw>(@"SELECT e.equipment_id AS EquipmentId, e.category AS Category, e.model AS Model, e.manufacturer AS Manufacturer,
                    e.origin AS Origin, e.serial_number AS SerialNumber, e.asset_code AS AssetCode, e.status AS Status,
@@ -155,7 +155,7 @@ public static partial class GeoDbViews
     }
 
     /// <summary>保存台账(原 EquipmentRepository.Save): 库中不在列表里的编号删除, 其余逐条 upsert(仅 equipment 表字段; 型号级参数来自字典不回写)。返回 (删除数, 写入数)。</summary>
-    public static (int deleted, int upserted) EqSaveLedger(SqliteConnection conn, IEnumerable<EquipmentLedgerItem> items)
+    public static (int deleted, int upserted) EqSaveLedger(DbConnection conn, IEnumerable<EquipmentLedgerItem> items)
     {
         var list = items.ToList();
         var keep = new HashSet<string>(list.Select(e => e.Id), StringComparer.OrdinalIgnoreCase);
@@ -190,7 +190,7 @@ public static partial class GeoDbViews
     public sealed record EqWorkingFace(string FaceCode, string? LocationCode, double BenchHeightM, double? WorkingPlatformWidthM,
         string? Material, string? RockHardness, double? AdvanceRateMPerMonth);
 
-    public static EqWorkingFace? EqActiveWorkingFace(SqliteConnection conn, string equipmentId)
+    public static EqWorkingFace? EqActiveWorkingFace(DbConnection conn, string equipmentId)
         => conn.Query<EqWorkingFace>(@"SELECT face_code AS FaceCode, location_code AS LocationCode, bench_height_m AS BenchHeightM,
                    working_platform_width_m AS WorkingPlatformWidthM, material AS Material, rock_hardness AS RockHardness,
                    advance_rate_m_per_month AS AdvanceRateMPerMonth
@@ -264,7 +264,7 @@ public static partial class GeoDbViews
     }
 
     /// <summary>产能历史(原 GetCapacityHistory: capacity_monthly ⋈ equipment 型号/类别)。</summary>
-    public static List<EqCapacityRow> EqLoadCapacity(SqliteConnection conn)
+    public static List<EqCapacityRow> EqLoadCapacity(DbConnection conn)
         => conn.Query<EqCapacityRow>(@"SELECT c.equipment_id AS EquipmentId, COALESCE(e.model,'') AS Model, COALESCE(e.category,'') AS Category,
                    c.year AS Year, c.month AS Month, c.output_m3 AS OutputM3
             FROM capacity_monthly c LEFT JOIN equipment e ON e.equipment_id = c.equipment_id
@@ -288,7 +288,7 @@ public static partial class GeoDbViews
     }
 
     /// <summary>月度 KPI(原 GetKpiRecords: 仅在籍设备的 KPI, 型号自台账)。</summary>
-    public static List<EqKpiRow> EqLoadKpi(SqliteConnection conn)
+    public static List<EqKpiRow> EqLoadKpi(DbConnection conn)
         => conn.Query<EqKpiRow>(@"SELECT k.equipment_id AS EquipmentId, COALESCE(e.model,'') AS Model, k.year AS Year, k.month AS Month,
                    k.plan_hours AS PlanHours, k.work_hours AS WorkHours, k.fault_hours AS FaultHours, k.idle_hours AS IdleHours,
                    k.availability AS Availability, k.actual_run_rate AS ActualRunRate, k.utilization_rate AS UtilizationRate
@@ -307,7 +307,7 @@ public static partial class GeoDbViews
     private sealed class EqFaultRaw { public string EquipmentId { get; set; } = ""; public string? Date { get; set; } public string FaultType { get; set; } = ""; public double DurationHours { get; set; } public string? Description { get; set; } }
 
     /// <summary>故障事件(原 GetFaultRecords)。</summary>
-    public static List<EqFaultRow> EqLoadFaults(SqliteConnection conn)
+    public static List<EqFaultRow> EqLoadFaults(DbConnection conn)
         => conn.Query<EqFaultRaw>(@"SELECT equipment_id AS EquipmentId, date AS Date, fault_type AS FaultType, duration_hours AS DurationHours, description AS Description
                                      FROM fault_event ORDER BY equipment_id, date, id")
             .Select(r => new EqFaultRow { EquipmentId = r.EquipmentId, Date = EqParseDate(r.Date)?.DateTime ?? DateTime.MinValue, FaultType = r.FaultType, DurationHours = r.DurationHours, Description = r.Description ?? "" })
@@ -341,7 +341,7 @@ public static partial class GeoDbViews
     private sealed class EqProdRaw { public string EquipmentId { get; set; } = ""; public string? Date { get; set; } public string Shift { get; set; } = ""; public double OutputM3 { get; set; } public double WorkHours { get; set; } public double FaultHours { get; set; } public string? FaultReason { get; set; } }
 
     /// <summary>生产记录全表(原 GetProductionRecords)。</summary>
-    public static List<EqProductionRecord> EqLoadProduction(SqliteConnection conn)
+    public static List<EqProductionRecord> EqLoadProduction(DbConnection conn)
         => conn.Query<EqProdRaw>(@"SELECT equipment_id AS EquipmentId, date AS Date, shift AS Shift, output_m3 AS OutputM3, work_hours AS WorkHours,
                                     fault_hours AS FaultHours, fault_reason AS FaultReason FROM production_record ORDER BY equipment_id, date, shift")
             .Select(r => new EqProductionRecord
@@ -351,7 +351,7 @@ public static partial class GeoDbViews
             }).ToList();
 
     /// <summary>保存生产记录(原 SaveProductionRecords: 全删后重灌, 与"整文件覆盖"对齐)。返回写入行数。</summary>
-    public static int EqSaveProduction(SqliteConnection conn, IEnumerable<EqProductionRecord> records)
+    public static int EqSaveProduction(DbConnection conn, IEnumerable<EqProductionRecord> records)
     {
         using var tx = conn.BeginTransaction();
         conn.Execute("DELETE FROM production_record", transaction: tx);
@@ -383,7 +383,7 @@ public static partial class GeoDbViews
         };
     }
 
-    public static List<EqDispatchRule> EqLoadDispatchRules(SqliteConnection conn)
+    public static List<EqDispatchRule> EqLoadDispatchRules(DbConnection conn)
         => conn.Query<EqDispatchRule>(@"SELECT r.shovel_model AS ShovelModel, COALESCE(sm.bucket_m3,0) AS ShovelBucketM3, COALESCE(sm.load_t,0) AS ShovelPayloadT,
                    r.truck_model AS TruckModel, COALESCE(tm.load_t,0) AS TruckPayloadT, r.bucket_loads_per_truck AS BucketLoadsPerTruck,
                    r.recommended_truck_count AS RecommendedTruckCount, r.cycle_time_min AS CycleTimeMin, r.efficiency_score AS EfficiencyScore
@@ -393,7 +393,7 @@ public static partial class GeoDbViews
             WHERE r.is_active = 1 ORDER BY r.id").ToList();
 
     /// <summary>在籍设备按型号台数(原 GetInventoryByModel, 编组优化的在籍约束)。</summary>
-    public static Dictionary<string, int> EqInventoryByModel(SqliteConnection conn)
+    public static Dictionary<string, int> EqInventoryByModel(DbConnection conn)
     {
         var d = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         foreach (var r in conn.Query<(string model, int n)>("SELECT model, COUNT(*) FROM equipment WHERE model IS NOT NULL AND TRIM(model) <> '' GROUP BY model"))
@@ -440,7 +440,7 @@ public static partial class GeoDbViews
     }
 
     /// <summary>机群总览(逐字移植原 LoadData): 在用/租赁设备 × 最新月 KPI 三率 × 最新年年化产能 × 役龄 → 红绿灯/瓶颈/可解锁/清单/横幅。</summary>
-    public static EqFleetCockpitResult EqComputeFleetCockpit(SqliteConnection conn, int curYear = 2026)
+    public static EqFleetCockpitResult EqComputeFleetCockpit(DbConnection conn, int curYear = 2026)
     {
         var res = new EqFleetCockpitResult();
         var equip = conn.Query<(string id, string? model, string? category, int? commissionYear)>(
@@ -1319,9 +1319,9 @@ public static partial class GeoDbViews
     public static string EqTemplateCsv(EqImportSpec spec) => EqCsvOf(spec.Headers, new[] { spec.Example });
 
     /// <summary>导出当前库内全部记录(与模板同列, 可再导入)。</summary>
-    public static string EqExportCsv(SqliteConnection conn, EqImportSpec spec) => EqCsvOf(spec.Headers, EqExportRows(conn, spec.Key));
+    public static string EqExportCsv(DbConnection conn, EqImportSpec spec) => EqCsvOf(spec.Headers, EqExportRows(conn, spec.Key));
 
-    public static List<string[]> EqExportRows(SqliteConnection conn, string key)
+    public static List<string[]> EqExportRows(DbConnection conn, string key)
     {
         string DT(string? s) => EqParseDate(s)?.ToString("yyyy-MM-dd", Inv) ?? "";
         switch (key)
@@ -1359,7 +1359,7 @@ public static partial class GeoDbViews
     }
 
     /// <summary>导入 CSV 文本(原 ImportSpec.Import): 表头去 BOM/星号/单位后缀, 缺必填列即拒; 逐行按去重键 + 策略(跳过/覆盖)写库。</summary>
-    public static EqImportOutcome EqImportCsv(SqliteConnection conn, EqImportSpec spec, string csvText, bool overwrite)
+    public static EqImportOutcome EqImportCsv(DbConnection conn, EqImportSpec spec, string csvText, bool overwrite)
     {
         var records = GeoDataQueries.ParseCsv(csvText);
         if (records.Count < 1) throw new InvalidOperationException("文件至少需要 1 行表头 + 1 行数据。");
@@ -1392,7 +1392,7 @@ public static partial class GeoDbViews
         return outcome;
     }
 
-    private static HashSet<string> EqExistingKeys(SqliteConnection conn, string key)
+    private static HashSet<string> EqExistingKeys(DbConnection conn, string key)
     {
         string sql = key switch
         {
@@ -1406,7 +1406,7 @@ public static partial class GeoDbViews
         return conn.Query<string>(sql).ToHashSet(key == "equipment" ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
     }
 
-    private static void EqImportRow(SqliteConnection conn, SqliteTransaction tx, string key, Func<string, string> cell, bool overwrite, EqImportOutcome o, HashSet<string> existing)
+    private static void EqImportRow(DbConnection conn, DbTransaction tx, string key, Func<string, string> cell, bool overwrite, EqImportOutcome o, HashSet<string> existing)
     {
         switch (key)
         {

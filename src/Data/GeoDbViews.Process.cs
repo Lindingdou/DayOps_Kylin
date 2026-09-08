@@ -5,7 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using Dapper;
-using Microsoft.Data.Sqlite;
+using System.Data.Common;
 
 namespace PitMine3D.Kylin.Data;
 
@@ -177,49 +177,49 @@ public static partial class GeoDbViews
     private const string ConstraintCols = "id AS Id, param_id AS ParamId, equipment_model AS EquipmentModel, constraint_type AS ConstraintType, limit_value AS LimitValue, limit_min AS LimitMin, limit_max AS LimitMax, text_value AS TextValue, consequence AS Consequence, priority AS Priority, description AS Description, is_active AS IsActive FROM equipment_constraint";
 
     /// <summary>全部工艺系统(activeOnly=true 仅 is_active), ORDER BY display_order, system_id。</summary>
-    public static List<ProcSystem> ProcessSystems(SqliteConnection conn, bool activeOnly = true)
+    public static List<ProcSystem> ProcessSystems(DbConnection conn, bool activeOnly = true)
         => conn.Query<ProcSystem>("SELECT " + SystemCols + (activeOnly ? " WHERE is_active = 1" : "") + " ORDER BY display_order, system_id").ToList();
 
-    public static ProcSystem? ProcessGetSystem(SqliteConnection conn, long systemId)
+    public static ProcSystem? ProcessGetSystem(DbConnection conn, long systemId)
         => conn.QueryFirstOrDefault<ProcSystem>("SELECT " + SystemCols + " WHERE system_id = @id", new { id = systemId });
 
-    public static long ProcessInsertSystem(SqliteConnection conn, string code, string name, int displayOrder = 99)
+    public static long ProcessInsertSystem(DbConnection conn, string code, string name, int displayOrder = 99)
         => conn.ExecuteScalar<long>("INSERT INTO process_system (code, name, display_order, is_active) VALUES (@c, @n, @o, 1); SELECT last_insert_rowid();",
             new { c = code, n = name, o = displayOrder });
 
     /// <summary>删除系统(FK ON DELETE CASCADE: 环节→参数→约束/模板值/绑定/验收 级联)。</summary>
-    public static int ProcessDeleteSystem(SqliteConnection conn, long systemId)
+    public static int ProcessDeleteSystem(DbConnection conn, long systemId)
         => conn.Execute("DELETE FROM process_system WHERE system_id = @id", new { id = systemId });
 
     /// <summary>某系统下环节, ORDER BY sequence_order, phase_id。</summary>
-    public static List<ProcPhase> ProcessPhasesBySystem(SqliteConnection conn, long systemId)
+    public static List<ProcPhase> ProcessPhasesBySystem(DbConnection conn, long systemId)
         => conn.Query<ProcPhase>("SELECT " + PhaseCols + " WHERE system_id = @s ORDER BY sequence_order, phase_id", new { s = systemId }).ToList();
 
     /// <summary>全部环节(activeOnly=true 仅 is_active), ORDER BY system_id, sequence_order。</summary>
-    public static List<ProcPhase> ProcessAllPhases(SqliteConnection conn, bool activeOnly = true)
+    public static List<ProcPhase> ProcessAllPhases(DbConnection conn, bool activeOnly = true)
         => conn.Query<ProcPhase>("SELECT " + PhaseCols + (activeOnly ? " WHERE is_active = 1" : "") + " ORDER BY system_id, sequence_order").ToList();
 
-    public static ProcPhase? ProcessGetPhase(SqliteConnection conn, long phaseId)
+    public static ProcPhase? ProcessGetPhase(DbConnection conn, long phaseId)
         => conn.QueryFirstOrDefault<ProcPhase>("SELECT " + PhaseCols + " WHERE phase_id = @id", new { id = phaseId });
 
-    public static long ProcessInsertPhase(SqliteConnection conn, long systemId, string code, string name, int sequenceOrder)
+    public static long ProcessInsertPhase(DbConnection conn, long systemId, string code, string name, int sequenceOrder)
         => conn.ExecuteScalar<long>("INSERT INTO process_phase (system_id, code, name, sequence_order, is_active) VALUES (@s, @c, @n, @o, 1); SELECT last_insert_rowid();",
             new { s = systemId, c = code, n = name, o = sequenceOrder });
 
-    public static int ProcessDeletePhase(SqliteConnection conn, long phaseId)
+    public static int ProcessDeletePhase(DbConnection conn, long phaseId)
         => conn.Execute("DELETE FROM process_phase WHERE phase_id = @id", new { id = phaseId });
 
     /// <summary>某环节下参数定义, ORDER BY display_order, param_id。</summary>
-    public static List<ProcParamDef> ProcessParamsByPhase(SqliteConnection conn, long phaseId)
+    public static List<ProcParamDef> ProcessParamsByPhase(DbConnection conn, long phaseId)
         => conn.Query<ProcParamDef>("SELECT " + ParamCols + " WHERE phase_id = @p ORDER BY display_order, param_id", new { p = phaseId }).ToList();
 
-    public static int ProcessParamCountByPhase(SqliteConnection conn, long phaseId)
+    public static int ProcessParamCountByPhase(DbConnection conn, long phaseId)
         => conn.ExecuteScalar<int>("SELECT COUNT(*) FROM parameter_definition WHERE phase_id = @p", new { p = phaseId });
 
-    public static ProcParamDef? ProcessGetParam(SqliteConnection conn, long paramId)
+    public static ProcParamDef? ProcessGetParam(DbConnection conn, long paramId)
         => conn.QueryFirstOrDefault<ProcParamDef>("SELECT " + ParamCols + " WHERE param_id = @id", new { id = paramId });
 
-    public static long ProcessInsertParam(SqliteConnection conn, ProcParamDef p)
+    public static long ProcessInsertParam(DbConnection conn, ProcParamDef p)
         => conn.ExecuteScalar<long>(@"INSERT INTO parameter_definition
             (phase_id, code, name, unit, value_type, standard_min, standard_max, standard_default, alarm_low, alarm_high,
              is_required, calc_formula, source_table, source_column, description, display_order, is_active)
@@ -227,7 +227,7 @@ public static partial class GeoDbViews
              @IsRequired, @CalcFormula, @SourceTable, @SourceColumn, @Description, @DisplayOrder, @IsActive);
             SELECT last_insert_rowid();", p);
 
-    public static int ProcessUpdateParam(SqliteConnection conn, ProcParamDef p)
+    public static int ProcessUpdateParam(DbConnection conn, ProcParamDef p)
         => conn.Execute(@"UPDATE parameter_definition SET
             phase_id=@PhaseId, code=@Code, name=@Name, unit=@Unit, value_type=@ValueType,
             standard_min=@StandardMin, standard_max=@StandardMax, standard_default=@StandardDefault,
@@ -236,11 +236,11 @@ public static partial class GeoDbViews
             display_order=@DisplayOrder, is_active=@IsActive
             WHERE param_id=@ParamId", p);
 
-    public static int ProcessDeleteParam(SqliteConnection conn, long paramId)
+    public static int ProcessDeleteParam(DbConnection conn, long paramId)
         => conn.Execute("DELETE FROM parameter_definition WHERE param_id = @id", new { id = paramId });
 
     /// <summary>某参数的在用设备约束(is_active=1)。</summary>
-    public static List<ProcConstraint> ProcessConstraintsByParam(SqliteConnection conn, long paramId)
+    public static List<ProcConstraint> ProcessConstraintsByParam(DbConnection conn, long paramId)
         => conn.Query<ProcConstraint>("SELECT " + ConstraintCols + " WHERE param_id = @p AND is_active = 1", new { p = paramId }).ToList();
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -251,37 +251,37 @@ public static partial class GeoDbViews
     private const string TplValueCols = "id AS Id, template_id AS TemplateId, param_id AS ParamId, recommended_value AS RecommendedValue, min_value AS MinValue, max_value AS MaxValue, text_value AS TextValue, notes AS Notes FROM template_param_value";
 
     /// <summary>模板列表(activeOnly=true 仅 status='active'), ORDER BY applicable_material, name。</summary>
-    public static List<ProcTemplate> ProcTemplates(SqliteConnection conn, bool activeOnly = true)
+    public static List<ProcTemplate> ProcTemplates(DbConnection conn, bool activeOnly = true)
         => conn.Query<ProcTemplate>("SELECT " + TemplateCols + (activeOnly ? " WHERE status = 'active'" : "") + " ORDER BY applicable_material, name").ToList();
 
-    public static ProcTemplate? ProcGetTemplate(SqliteConnection conn, long templateId)
+    public static ProcTemplate? ProcGetTemplate(DbConnection conn, long templateId)
         => conn.QueryFirstOrDefault<ProcTemplate>("SELECT " + TemplateCols + " WHERE template_id = @id", new { id = templateId });
 
-    public static long ProcInsertTemplate(SqliteConnection conn, ProcTemplate t)
+    public static long ProcInsertTemplate(DbConnection conn, ProcTemplate t)
         => conn.ExecuteScalar<long>(@"INSERT INTO process_template
             (code, name, description, applicable_material, applicable_hardness, version, is_current, status, created_by, notes)
             VALUES (@Code, @Name, @Description, @ApplicableMaterial, @ApplicableHardness, @Version, @IsCurrent, @Status, @CreatedBy, @Notes);
             SELECT last_insert_rowid();", t);
 
     /// <summary>归档: status='archived', is_current=0。</summary>
-    public static int ProcArchiveTemplate(SqliteConnection conn, long templateId)
+    public static int ProcArchiveTemplate(DbConnection conn, long templateId)
         => conn.Execute("UPDATE process_template SET status = 'archived', is_current = 0 WHERE template_id = @id", new { id = templateId });
 
     /// <summary>彻底删除模板(参数值级联)。</summary>
-    public static int ProcDeleteTemplate(SqliteConnection conn, long templateId)
+    public static int ProcDeleteTemplate(DbConnection conn, long templateId)
     {
         conn.Execute("DELETE FROM template_param_value WHERE template_id = @id", new { id = templateId });
         return conn.Execute("DELETE FROM process_template WHERE template_id = @id", new { id = templateId });
     }
 
-    public static List<ProcTemplateValue> ProcValuesByTemplate(SqliteConnection conn, long templateId)
+    public static List<ProcTemplateValue> ProcValuesByTemplate(DbConnection conn, long templateId)
         => conn.Query<ProcTemplateValue>("SELECT " + TplValueCols + " WHERE template_id = @t", new { t = templateId }).ToList();
 
-    public static ProcTemplateValue? ProcGetTemplateValue(SqliteConnection conn, long templateId, long paramId)
+    public static ProcTemplateValue? ProcGetTemplateValue(DbConnection conn, long templateId, long paramId)
         => conn.QueryFirstOrDefault<ProcTemplateValue>("SELECT " + TplValueCols + " WHERE template_id = @t AND param_id = @p", new { t = templateId, p = paramId });
 
     /// <summary>按 (template_id, param_id) 有则更新、无则插入。</summary>
-    public static void ProcUpsertTemplateValue(SqliteConnection conn, ProcTemplateValue v)
+    public static void ProcUpsertTemplateValue(DbConnection conn, ProcTemplateValue v)
     {
         var existing = ProcGetTemplateValue(conn, v.TemplateId, v.ParamId);
         if (existing != null)
@@ -301,7 +301,7 @@ public static partial class GeoDbViews
     /// 复制模板参数值到另一模板(原 OnCloneTemplate 逐行 UpsertValue)。
     /// 只复制参数定义仍存在的值(种子迁移期外键关闭, 历史模板可能残留已删参数的孤值, 逐行插入会违反外键)。返回复制条数。
     /// </summary>
-    public static int ProcCloneTemplateValues(SqliteConnection conn, long srcTemplateId, long dstTemplateId)
+    public static int ProcCloneTemplateValues(DbConnection conn, long srcTemplateId, long dstTemplateId)
         => conn.Execute(@"INSERT OR REPLACE INTO template_param_value (template_id, param_id, recommended_value, min_value, max_value, text_value, notes)
             SELECT @dst, v.param_id, v.recommended_value, v.min_value, v.max_value, v.text_value, v.notes
             FROM template_param_value v JOIN parameter_definition d ON d.param_id = v.param_id
@@ -348,7 +348,7 @@ public static partial class GeoDbViews
     }
 
     /// <summary>引用此模板的现行绑定: (平盘编码, 环节名)。</summary>
-    public static List<(string LocationCode, string PhaseName)> ProcTemplateUsage(SqliteConnection conn, long templateId)
+    public static List<(string LocationCode, string PhaseName)> ProcTemplateUsage(DbConnection conn, long templateId)
         => conn.Query<(string, string)>(@"SELECT b.location_code, COALESCE(p.name, '未知') FROM phase_location_binding b
             LEFT JOIN process_phase p ON p.phase_id = b.phase_id
             WHERE b.is_active = 1 AND b.bound_template_id = @t ORDER BY b.location_code, b.phase_id", new { t = templateId }).ToList();
@@ -361,24 +361,24 @@ public static partial class GeoDbViews
     private const string ActiveBindingWhere = "is_active = 1 AND (ended_at IS NULL OR ended_at >= date('now'))";
 
     /// <summary>平盘列表(activeOnly=true 仅 is_active, ORDER BY elevation_m)。</summary>
-    public static List<ProcLocation> ProcLocations(SqliteConnection conn, bool activeOnly = true)
+    public static List<ProcLocation> ProcLocations(DbConnection conn, bool activeOnly = true)
         => conn.Query<ProcLocation>("SELECT location_code AS LocationCode, name AS Name, elevation_m AS ElevationM, team AS Team FROM mine_location"
             + (activeOnly ? " WHERE is_active = 1 ORDER BY elevation_m" : "")).ToList();
 
-    public static ProcLocation? ProcGetLocation(SqliteConnection conn, string locationCode)
+    public static ProcLocation? ProcGetLocation(DbConnection conn, string locationCode)
         => conn.QueryFirstOrDefault<ProcLocation>("SELECT location_code AS LocationCode, name AS Name, elevation_m AS ElevationM, team AS Team FROM mine_location WHERE location_code = @c", new { c = locationCode });
 
     /// <summary>某平盘现行绑定(is_active 且未到期), ORDER BY phase_id。</summary>
-    public static List<ProcBinding> ProcActiveBindingsByLocation(SqliteConnection conn, string locationCode)
+    public static List<ProcBinding> ProcActiveBindingsByLocation(DbConnection conn, string locationCode)
         => conn.Query<ProcBinding>("SELECT " + BindingCols + " WHERE location_code = @c AND " + ActiveBindingWhere + " ORDER BY phase_id", new { c = locationCode }).ToList();
 
-    public static ProcBinding? ProcActiveBinding(SqliteConnection conn, string locationCode, long phaseId)
+    public static ProcBinding? ProcActiveBinding(DbConnection conn, string locationCode, long phaseId)
         => conn.QueryFirstOrDefault<ProcBinding>("SELECT " + BindingCols + " WHERE location_code = @c AND phase_id = @p AND " + ActiveBindingWhere, new { c = locationCode, p = phaseId });
 
-    public static List<ProcBinding> ProcAllBindings(SqliteConnection conn, bool activeOnly = true)
+    public static List<ProcBinding> ProcAllBindings(DbConnection conn, bool activeOnly = true)
         => conn.Query<ProcBinding>("SELECT " + BindingCols + (activeOnly ? " WHERE is_active = 1" : "")).ToList();
 
-    public static long ProcInsertBinding(SqliteConnection conn, long phaseId, string locationCode, long? templateId, DateTime? startedAt = null)
+    public static long ProcInsertBinding(DbConnection conn, long phaseId, string locationCode, long? templateId, DateTime? startedAt = null)
         => conn.ExecuteScalar<long>(@"INSERT INTO phase_location_binding (phase_id, location_code, bound_template_id, started_at, is_active)
             VALUES (@p, @c, @t, @s, 1); SELECT last_insert_rowid();",
             new { p = phaseId, c = locationCode, t = templateId, s = D(startedAt ?? DateTime.Today) });
@@ -387,7 +387,7 @@ public static partial class GeoDbViews
     /// 切换模板: 事务内关闭旧绑定(is_active=0, ended_at=今日)并插入新绑定(原 RebindTemplate)。
     /// 同日二次切换会撞 UNIQUE(phase_id, location_code, started_at): 用 INSERT OR REPLACE 以当日最新一次为准。
     /// </summary>
-    public static void ProcRebindTemplate(SqliteConnection conn, string locationCode, long phaseId, long? newTemplateId, DateTime? today = null)
+    public static void ProcRebindTemplate(DbConnection conn, string locationCode, long phaseId, long? newTemplateId, DateTime? today = null)
     {
         var d = D(today ?? DateTime.Today);
         using var tx = conn.BeginTransaction();
@@ -405,27 +405,27 @@ public static partial class GeoDbViews
     private const string AcceptCols = "id AS Id, param_id AS ParamId, location_code AS LocationCode, phase_id AS PhaseId, measure_date AS MeasureDate, measured_value AS MeasuredValue, measured_text AS MeasuredText, template_value AS TemplateValue, deviation_pct AS DeviationPct, status AS Status, equipment_id AS EquipmentId, accepted_by AS AcceptedBy, acceptance_date AS AcceptanceDate, conclusion AS Conclusion, scope_code AS ScopeCode, notes AS Notes FROM parameter_acceptance";
 
     /// <summary>某平盘+环节全部验收记录, ORDER BY measure_date DESC, id DESC。</summary>
-    public static List<ProcAcceptance> ProcAcceptanceByLocationPhase(SqliteConnection conn, string locationCode, long phaseId)
+    public static List<ProcAcceptance> ProcAcceptanceByLocationPhase(DbConnection conn, string locationCode, long phaseId)
         => conn.Query<ProcAcceptance>("SELECT " + AcceptCols + " WHERE location_code = @c AND phase_id = @p ORDER BY measure_date DESC, id DESC", new { c = locationCode, p = phaseId }).ToList();
 
     /// <summary>某参数最新一条实测。</summary>
-    public static ProcAcceptance? ProcLatestAcceptance(SqliteConnection conn, string locationCode, long phaseId, long paramId)
+    public static ProcAcceptance? ProcLatestAcceptance(DbConnection conn, string locationCode, long phaseId, long paramId)
         => conn.QueryFirstOrDefault<ProcAcceptance>("SELECT " + AcceptCols + " WHERE location_code = @c AND phase_id = @p AND param_id = @pid ORDER BY measure_date DESC, id DESC LIMIT 1",
             new { c = locationCode, p = phaseId, pid = paramId });
 
     /// <summary>近 N 天某状态记录, ORDER BY measure_date DESC。</summary>
-    public static List<ProcAcceptance> ProcRecentAcceptanceByStatus(SqliteConnection conn, string status, int days = 30)
+    public static List<ProcAcceptance> ProcRecentAcceptanceByStatus(DbConnection conn, string status, int days = 30)
         => conn.Query<ProcAcceptance>("SELECT " + AcceptCols + " WHERE status = @s AND measure_date >= date('now', @d) ORDER BY measure_date DESC",
             new { s = status, d = $"-{days} days" }).ToList();
 
-    public static long ProcInsertAcceptance(SqliteConnection conn, ProcAcceptance a)
+    public static long ProcInsertAcceptance(DbConnection conn, ProcAcceptance a)
         => conn.ExecuteScalar<long>(@"INSERT INTO parameter_acceptance
             (param_id, location_code, phase_id, measure_date, measured_value, measured_text, template_value, deviation_pct, status,
              equipment_id, accepted_by, acceptance_date, conclusion, scope_code, notes)
             VALUES (@ParamId, @LocationCode, @PhaseId, @MeasureDate, @MeasuredValue, @MeasuredText, @TemplateValue, @DeviationPct, @Status,
              @EquipmentId, @AcceptedBy, @AcceptanceDate, @Conclusion, @ScopeCode, @Notes); SELECT last_insert_rowid();", a);
 
-    public static int ProcUpdateAcceptance(SqliteConnection conn, ProcAcceptance a)
+    public static int ProcUpdateAcceptance(DbConnection conn, ProcAcceptance a)
         => conn.Execute(@"UPDATE parameter_acceptance SET param_id=@ParamId, location_code=@LocationCode, phase_id=@PhaseId, measure_date=@MeasureDate,
             measured_value=@MeasuredValue, measured_text=@MeasuredText, template_value=@TemplateValue, deviation_pct=@DeviationPct, status=@Status,
             equipment_id=@EquipmentId, accepted_by=@AcceptedBy, acceptance_date=@AcceptanceDate, conclusion=@Conclusion, scope_code=@ScopeCode, notes=@Notes
@@ -471,7 +471,7 @@ public static partial class GeoDbViews
     /// <summary>
     /// 现状视图参数对照: 每个参数 → 标准范围 / 模板值(无则默认值) / 最新实测 / 偏差 / 状态 / 测量日期(MM-dd, 未验收)。
     /// </summary>
-    public static List<ProcParamCompareRow> ProcParamCompareRows(SqliteConnection conn, string locationCode, long phaseId, long? boundTemplateId)
+    public static List<ProcParamCompareRow> ProcParamCompareRows(DbConnection conn, string locationCode, long phaseId, long? boundTemplateId)
     {
         var paramDefs = ProcessParamsByPhase(conn, phaseId);
         var templateValues = boundTemplateId.HasValue
@@ -508,7 +508,7 @@ public static partial class GeoDbViews
     /// 只列环节典型设备类别(typical_equipment_category)的机型, 类别为空则列全部。Pass=适用。
     /// 无候选机型返回空表(界面按 typical 提示「(无型号数据)」/「(无 X 类型号)」)。
     /// </summary>
-    public static List<ProcCompatModel> ProcCompatibleEquipment(SqliteConnection conn, long phaseId, long? boundTemplateId)
+    public static List<ProcCompatModel> ProcCompatibleEquipment(DbConnection conn, long phaseId, long? boundTemplateId)
     {
         var phase = ProcessGetPhase(conn, phaseId);
         var paramDefs = ProcessParamsByPhase(conn, phaseId);
@@ -565,7 +565,7 @@ public static partial class GeoDbViews
     }
 
     /// <summary>现行边坡设计的最小安全系数(effective_to 为空或未到期; 无记录返回 null; safety_factor NULL 按 0)。</summary>
-    public static double? ProcMinSlopeSafetyFactor(SqliteConnection conn)
+    public static double? ProcMinSlopeSafetyFactor(DbConnection conn)
     {
         var vals = conn.Query<double?>("SELECT safety_factor FROM slope_design WHERE effective_to IS NULL OR effective_to >= date('now')").ToList();
         if (vals.Count == 0) return null;
@@ -573,7 +573,7 @@ public static partial class GeoDbViews
     }
 
     /// <summary>设备台账某类别(Shovel/Truck/...)在册台数。</summary>
-    public static int ProcEquipmentCountByCategory(SqliteConnection conn, string category)
+    public static int ProcEquipmentCountByCategory(DbConnection conn, string category)
         => conn.ExecuteScalar<int>("SELECT COUNT(*) FROM equipment WHERE category = @c", new { c = category });
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -648,7 +648,7 @@ public static partial class GeoDbViews
     /// 现场验收录入: 装载某平盘+环节+日期的参数行(模板值来自现行绑定模板, 当日已有记录带出)。
     /// 返回 (行, 模板名文本)。
     /// </summary>
-    public static (List<ProcAcceptanceRow> rows, string templateName) ProcLoadAcceptanceRows(SqliteConnection conn, string locationCode, long phaseId, DateTime measureDate)
+    public static (List<ProcAcceptanceRow> rows, string templateName) ProcLoadAcceptanceRows(DbConnection conn, string locationCode, long phaseId, DateTime measureDate)
     {
         var binding = ProcActiveBinding(conn, locationCode, phaseId);
         var paramDefs = ProcessParamsByPhase(conn, phaseId);
@@ -679,7 +679,7 @@ public static partial class GeoDbViews
     /// 提交验收(原 OnSubmitAcceptance): 实测为空跳过; 数值型算偏差/状态, 文本型 status=pass;
     /// 已有当日记录则 UPDATE 否则 INSERT(并回填 ExistingRecord)。
     /// </summary>
-    public static ProcSubmitResult ProcSubmitAcceptance(SqliteConnection conn, IEnumerable<ProcAcceptanceRow> rows,
+    public static ProcSubmitResult ProcSubmitAcceptance(DbConnection conn, IEnumerable<ProcAcceptanceRow> rows,
         string locationCode, long phaseId, DateTime measureDate, string conclusion, string? acceptedBy, string? scope, string? remark, DateTime? acceptanceDate = null)
     {
         int inserted = 0, updated = 0, skipped = 0;

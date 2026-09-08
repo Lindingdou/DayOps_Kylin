@@ -4,7 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using Dapper;
-using Microsoft.Data.Sqlite;
+using System.Data.Common;
 using PitMine3D.Kylin.Cad;
 
 namespace PitMine3D.Kylin.Data;
@@ -81,15 +81,15 @@ public static partial class GeoDbViews
           FROM coal_sample cs LEFT JOIN borehole b ON b.id = cs.borehole_id";
 
     /// <summary>全部化验段(忠实原 CoalQualityService.All + 孔号映射), 按 孔号/煤层/起深 排。</summary>
-    public static List<CoalSampleRow> CoalLoadSamples(SqliteConnection conn)
+    public static List<CoalSampleRow> CoalLoadSamples(DbConnection conn)
         => conn.Query<CoalSampleRow>(CoalSampleSelect + " ORDER BY HoleId, cs.seam_code, cs.depth_from").ToList();
 
     /// <summary>按主键取一条(忠实原 GetSample); 不存在返回 null。</summary>
-    public static CoalSampleRow? CoalGetSample(SqliteConnection conn, long id)
+    public static CoalSampleRow? CoalGetSample(DbConnection conn, long id)
         => conn.Query<CoalSampleRow>(CoalSampleSelect + " WHERE cs.id = @id", new { id }).FirstOrDefault();
 
     /// <summary>某孔全部化验段(忠实原 SamplesByBorehole: ORDER BY depth_from)。</summary>
-    public static List<CoalSampleRow> CoalSamplesByBorehole(SqliteConnection conn, long boreholeId)
+    public static List<CoalSampleRow> CoalSamplesByBorehole(DbConnection conn, long boreholeId)
         => conn.Query<CoalSampleRow>(CoalSampleSelect + " WHERE cs.borehole_id = @b ORDER BY cs.depth_from", new { b = boreholeId }).ToList();
 
     private const string CoalSampleCols =
@@ -102,14 +102,14 @@ public static partial class GeoDbViews
         "@PlasticXMm, @PlasticYMm, @PlastometricCurve, @CakingG, @CharResidueRaw, @CharResidueClean, @CleanCoalYield, @CoalType, @SourcePage, @Remark";
 
     /// <summary>新增化验段(忠实原 InsertSample), 返回新 id。煤类非字典码置 NULL(免外键失败)。</summary>
-    public static long CoalInsertSample(SqliteConnection conn, CoalSampleRow row)
+    public static long CoalInsertSample(DbConnection conn, CoalSampleRow row)
     {
         row.CoalType = CoalValidType(conn, row.CoalType);
         return conn.ExecuteScalar<long>($"INSERT INTO coal_sample ({CoalSampleCols}) VALUES ({CoalSampleVals}); SELECT last_insert_rowid();", row);
     }
 
     /// <summary>更新化验段全部字段(忠实原 UpdateSample)。返回受影响行数。</summary>
-    public static int CoalUpdateSample(SqliteConnection conn, CoalSampleRow row)
+    public static int CoalUpdateSample(DbConnection conn, CoalSampleRow row)
     {
         row.CoalType = CoalValidType(conn, row.CoalType);
         return conn.Execute(@"UPDATE coal_sample SET borehole_id=@BoreholeId, seam_code=@SeamCode, depth_from=@DepthFrom, depth_to=@DepthTo,
@@ -122,10 +122,10 @@ public static partial class GeoDbViews
     }
 
     /// <summary>删除化验段(忠实原 DeleteSample)。</summary>
-    public static int CoalDeleteSample(SqliteConnection conn, long id)
+    public static int CoalDeleteSample(DbConnection conn, long id)
         => conn.Execute("DELETE FROM coal_sample WHERE id=@id", new { id });
 
-    private static string? CoalValidType(SqliteConnection conn, string? code)
+    private static string? CoalValidType(DbConnection conn, string? code)
     {
         if (string.IsNullOrWhiteSpace(code)) return null;
         var c = code.Trim();
@@ -139,15 +139,15 @@ public static partial class GeoDbViews
     public sealed record CoalGradeRuleFull(string RuleType, string LevelCode, string LevelName, double? ValueMin, double? ValueMax, string? ColorHex);
 
     /// <summary>煤层字典(ORDER BY sort_order)。</summary>
-    public static List<CoalSeamDefRow> CoalSeamDefs(SqliteConnection conn)
+    public static List<CoalSeamDefRow> CoalSeamDefs(DbConnection conn)
         => conn.Query<CoalSeamDefRow>("SELECT code AS Code, COALESCE(name,'') AS Name, COALESCE(sort_order,0) AS SortOrder, color_hex AS ColorHex FROM coal_seam_def ORDER BY sort_order, code").ToList();
 
     /// <summary>GB/T 5751 煤类字典(ORDER BY sort_order)。</summary>
-    public static List<CoalClassRefRow> CoalClassRefs(SqliteConnection conn)
+    public static List<CoalClassRefRow> CoalClassRefs(DbConnection conn)
         => conn.Query<CoalClassRefRow>("SELECT code AS Code, COALESCE(name_cn,'') AS NameCn FROM coal_classification ORDER BY sort_order, code").ToList();
 
     /// <summary>某类型分级规则(含色标, ORDER BY sort_order)。ruleType ∈ ash/sulfur/qnet。</summary>
-    public static List<CoalGradeRuleFull> CoalGradeRules(SqliteConnection conn, string ruleType)
+    public static List<CoalGradeRuleFull> CoalGradeRules(DbConnection conn, string ruleType)
         => conn.Query<CoalGradeRuleFull>("SELECT rule_type AS RuleType, level_code AS LevelCode, level_name AS LevelName, value_min AS ValueMin, value_max AS ValueMax, color_hex AS ColorHex FROM coal_grade_rule WHERE rule_type=@t ORDER BY sort_order", new { t = ruleType }).ToList();
 
     /// <summary>忠实原 FindLevel: [min,max) 首命中(min=null −∞, max=null +∞)。</summary>
@@ -190,24 +190,24 @@ public static partial class GeoDbViews
     public sealed record CoalBoreholeRow(long Id, string HoleId, double X, double Y, double? ZCollar, double? DepthTotal, string CoordFilled);
 
     /// <summary>全部钻孔(Id/孔号/坐标/孔口高程/孔深), 按孔号。</summary>
-    public static List<CoalBoreholeRow> CoalBoreholes(SqliteConnection conn)
+    public static List<CoalBoreholeRow> CoalBoreholes(DbConnection conn)
         => conn.Query<CoalBoreholeRow>("SELECT id AS Id, hole_id AS HoleId, COALESCE(x,0.0) AS X, COALESCE(y,0.0) AS Y, z_collar AS ZCollar, depth_total AS DepthTotal, COALESCE(coord_filled,'原始') AS CoordFilled FROM borehole ORDER BY hole_id").ToList();
 
     /// <summary>化验孔(只列在 coal_sample 出现过的孔; 忠实原 IBoreholeService.WithCoalSamples)。</summary>
-    public static List<CoalBoreholeRow> CoalBoreholesWithSamples(SqliteConnection conn)
+    public static List<CoalBoreholeRow> CoalBoreholesWithSamples(DbConnection conn)
         => conn.Query<CoalBoreholeRow>(@"SELECT b.id AS Id, b.hole_id AS HoleId, COALESCE(b.x,0.0) AS X, COALESCE(b.y,0.0) AS Y, b.z_collar AS ZCollar, b.depth_total AS DepthTotal, COALESCE(b.coord_filled,'原始') AS CoordFilled
             FROM borehole b WHERE EXISTS (SELECT 1 FROM coal_sample cs WHERE cs.borehole_id = b.id) ORDER BY b.hole_id").ToList();
 
     public sealed record CoalSeamResultRow(long BoreholeId, string SeamCode, double? LogEndDepth, double? OverallThickness, double? FloorElevation, string Status);
 
     /// <summary>全部见煤成果(柱状图煤层段用; 忠实原 SeamResultsByBorehole 的整表版)。</summary>
-    public static List<CoalSeamResultRow> CoalSeamResults(SqliteConnection conn)
+    public static List<CoalSeamResultRow> CoalSeamResults(DbConnection conn)
         => conn.Query<CoalSeamResultRow>("SELECT borehole_id AS BoreholeId, seam_code AS SeamCode, log_end_depth AS LogEndDepth, overall_thickness AS OverallThickness, floor_elevation AS FloorElevation, COALESCE(status,'正常') AS Status FROM borehole_seam_result ORDER BY borehole_id, log_end_depth").ToList();
 
     // ═══════════════════════════ 重算层平均(忠实原 RebuildSummary) ═══════════════════════════
 
     /// <summary>清空 coal_sample_summary 后按 (孔, 煤层) 重灌平均行; 返回写入行数。</summary>
-    public static int CoalRebuildSummary(SqliteConnection conn)
+    public static int CoalRebuildSummary(DbConnection conn)
     {
         var rows = CoalLoadSamples(conn);
         using var tx = conn.BeginTransaction();
@@ -347,7 +347,7 @@ public static partial class GeoDbViews
         => s.IndexOfAny(new[] { ',', '"', '\n', '\r' }) >= 0 ? "\"" + s.Replace("\"", "\"\"") + "\"" : s;
 
     /// <summary>读 CSV 文本 → 映射煤样 → 解析孔号 FK → 去重入库 → 重算层平均(忠实原 Import)。</summary>
-    public static CoalImportReport CoalImportCsv(SqliteConnection conn, string text, CoalConflict policy)
+    public static CoalImportReport CoalImportCsv(DbConnection conn, string text, CoalConflict policy)
     {
         var records = GeoDataQueries.ParseCsv(text);
         if (records.Count < 1) throw new InvalidOperationException("文件至少需 1 行表头 + 1 行数据。");

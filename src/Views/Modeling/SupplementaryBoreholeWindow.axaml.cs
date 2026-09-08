@@ -13,7 +13,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
-using Microsoft.Data.Sqlite;
+using System.Data.Common;
 using PitMine3D.Kylin.Cad.Draw;
 using PitMine3D.Kylin.Data;
 using PitMine3D.Kylin.Views.GeoDb;
@@ -29,7 +29,7 @@ namespace PitMine3D.Kylin.Views.Modeling;
 public partial class SupplementaryBoreholeWindow : Window
 {
     private readonly ModelingContext _ctx;
-    private readonly SqliteConnection? _conn;
+    private readonly DbConnection? _conn;
 
     private SeamStructureConfig _config = new();
     private List<SeamDefRow> _defs = new();

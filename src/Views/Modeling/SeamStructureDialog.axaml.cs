@@ -3,7 +3,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Microsoft.Data.Sqlite;
+using System.Data.Common;
 using PitMine3D.Kylin.Data;
 using static PitMine3D.Kylin.Data.GeoDbViews;
 
@@ -14,7 +14,7 @@ namespace PitMine3D.Kylin.Views.Modeling;
 public partial class SeamStructureDialog : Window
 {
     private readonly ObservableCollection<SeamStructureConfig.SeamItem> _items = new();
-    private readonly SqliteConnection? _conn;
+    private readonly DbConnection? _conn;
 
     /// <summary>确定后的结果(取消为 null)。</summary>
     public SeamStructureConfig? Result { get; private set; }
@@ -22,7 +22,7 @@ public partial class SeamStructureDialog : Window
     /// <summary>XAML 编译器/设计器用。</summary>
     public SeamStructureDialog() { InitializeComponent(); }
 
-    public SeamStructureDialog(SqliteConnection? conn, SeamStructureConfig current)
+    public SeamStructureDialog(DbConnection? conn, SeamStructureConfig current)
     {
         InitializeComponent();
         _conn = conn;

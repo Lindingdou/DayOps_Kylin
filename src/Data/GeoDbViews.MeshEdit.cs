@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Dapper;
-using Microsoft.Data.Sqlite;
+using System.Data.Common;
 using PitMine3D.Kylin.Cad;
 
 namespace PitMine3D.Kylin.Data;
@@ -16,7 +16,7 @@ public static partial class GeoDbViews
     public sealed record SectionBoreRow(long Id, string HoleId, double X, double Y, double? ZCollar, double? DepthTotal);
 
     /// <summary>包围盒内有平面坐标的钻孔(原 BoreholeService.InBounds)。</summary>
-    public static List<SectionBoreRow> SectionBoreholesInBounds(SqliteConnection conn, double xMin, double xMax, double yMin, double yMax)
+    public static List<SectionBoreRow> SectionBoreholesInBounds(DbConnection conn, double xMin, double xMax, double yMin, double yMax)
     {
         const string sql = @"SELECT id AS Id, hole_id AS HoleId, x AS X, y AS Y, z_collar AS ZCollar, depth_total AS DepthTotal
                              FROM borehole WHERE x IS NOT NULL AND y IS NOT NULL
@@ -25,14 +25,14 @@ public static partial class GeoDbViews
     }
 
     /// <summary>钻孔岩性分层段(原 BoreholeService.GetSegments): 深度 从/到、层名、配色、类型(coal=煤层)。</summary>
-    public static List<SectionBuilder.BoreSeg> SectionBoreholeSegments(SqliteConnection conn, long boreholeId)
+    public static List<SectionBuilder.BoreSeg> SectionBoreholeSegments(DbConnection conn, long boreholeId)
     {
         const string sql = @"SELECT depth_from, depth_to, COALESCE(lithology_name, lithology_code, ''), color_hex, lithology_code
                              FROM borehole_lithology_segment WHERE borehole_id = @id ORDER BY depth_from, sort_order";
         var list = new List<SectionBuilder.BoreSeg>();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = sql;
-        cmd.Parameters.AddWithValue("@id", boreholeId);
+        cmd.AddWithValue("@id", boreholeId);
         using var rd = cmd.ExecuteReader();
         while (rd.Read())
         {
@@ -44,7 +44,7 @@ public static partial class GeoDbViews
     }
 
     /// <summary>剖面线两侧带宽内的钻孔 → 投影(全局里程+偏距) + 分层段(忠实原 CollectBoreholes)。库未就绪/为空自动跳过。</summary>
-    public static List<SectionBuilder.BoreProj> CollectSectionBoreholes(SqliteConnection? conn, double[] section, double band, out string warn)
+    public static List<SectionBuilder.BoreProj> CollectSectionBoreholes(DbConnection? conn, double[] section, double band, out string warn)
     {
         warn = "";
         var list = new List<SectionBuilder.BoreProj>();

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia.Controls;
-using Microsoft.Data.Sqlite;
+using System.Data.Common;
 using PitMine3D.Kylin.Cad.Draw;
 
 namespace PitMine3D.Kylin.Views.GeoDb;
@@ -14,7 +14,7 @@ namespace PitMine3D.Kylin.Views.GeoDb;
 public sealed class GeoDbContext
 {
     /// <summary>已建库(含 50 迁移 + 种子)的 SQLite 连接(会话级共享)。</summary>
-    public required SqliteConnection Conn { get; init; }
+    public required DbConnection Conn { get; init; }
     /// <summary>所属主窗口(作 Owner)。</summary>
     public required Window Owner { get; init; }
     /// <summary>写主窗口状态栏。</summary>

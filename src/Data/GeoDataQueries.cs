@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using Microsoft.Data.Sqlite;
+using System.Data.Common;
 
 namespace PitMine3D.Kylin.Data;
 
@@ -20,7 +20,7 @@ public static class GeoDataQueries
     /// 排土场台账: 各排土场 设计容量/已填/充填率(=已填÷设计×100, 忠实原 DumpSite.FillRate)/整体坡角/剩余年限/状态。
     /// 内/外排(dump_type)。数据: dump_site(V003 建 + 种子)。
     /// </summary>
-    public static List<DumpSiteRow> GetDumpSites(SqliteConnection conn)
+    public static List<DumpSiteRow> GetDumpSites(DbConnection conn)
     {
         var rows = new List<DumpSiteRow>();
         using var cmd = conn.CreateCommand();
@@ -39,7 +39,7 @@ public static class GeoDataQueries
     }
 
     /// <summary>运输道路网总里程 km(忠实原 HaulRoadService.TotalNetworkKm: Σ length_m / 1000)。仅在役(condition≠closed)。</summary>
-    public static double GetHaulRoadNetworkKm(SqliteConnection conn)
+    public static double GetHaulRoadNetworkKm(DbConnection conn)
         => ScalarDouble(conn, "SELECT COALESCE(SUM(length_m),0)/1000.0 FROM haul_road WHERE COALESCE(condition,'') != 'closed'");
 
     /// <summary>台阶设计基准(DB parameter_definition 标准默认值 H/α/W/采宽)。FromDb=H/α/W 三者齐备(可作设计基准)。</summary>
@@ -50,7 +50,7 @@ public static class GeoDataQueries
     /// 从 DB 取台阶设计基准(忠实原 BenchTemplateReader 按 code 取值: bench_height/bench_slope_angle/
     /// safety_platform_width/mining_width 的 standard_default)。供 参数校核 用真实设计参数(V026 初设说明书)替兜底规范默认。
     /// </summary>
-    public static BenchDesignBaseline GetBenchDesignBaseline(SqliteConnection conn)
+    public static BenchDesignBaseline GetBenchDesignBaseline(DbConnection conn)
     {
         double? V(string code) => GetParameterNorm(conn, code)?.StandardDefault;
         var h = V("bench_height"); var a = V("bench_slope_angle");
@@ -59,12 +59,12 @@ public static class GeoDataQueries
     }
 
     /// <summary>按 code 取参数定义的标准/报警范围(供 DB-norm 参数验收判定)。无则 null。</summary>
-    public static ParameterNorm? GetParameterNorm(SqliteConnection conn, string code)
+    public static ParameterNorm? GetParameterNorm(DbConnection conn, string code)
     {
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "SELECT code, name, unit, standard_min, standard_max, standard_default, alarm_low, alarm_high " +
                           "FROM parameter_definition WHERE code = @c AND is_active = 1 LIMIT 1";
-        cmd.Parameters.AddWithValue("@c", code);
+        cmd.AddWithValue("@c", code);
         using var r = cmd.ExecuteReader();
         if (!r.Read()) return null;
         double? D(int i) => r.IsDBNull(i) ? (double?)null : r.GetDouble(i);
@@ -110,13 +110,13 @@ public static class GeoDataQueries
     /// 全机型 − 违反该参数【硬约束】者。数据: equipment_constraint(V012 种子) + equipment_model。
     /// </summary>
     public static (List<string> compatible, List<string> blocked) CompatibleModels(
-        SqliteConnection conn, string paramCode, double measuredValue)
+        DbConnection conn, string paramCode, double measuredValue)
     {
         long? paramId = null;
         using (var c = conn.CreateCommand())
         {
             c.CommandText = "SELECT param_id FROM parameter_definition WHERE code = @c AND is_active = 1 LIMIT 1";
-            c.Parameters.AddWithValue("@c", paramCode);
+            c.AddWithValue("@c", paramCode);
             var o = c.ExecuteScalar();
             if (o != null && o != System.DBNull.Value) paramId = System.Convert.ToInt64(o);
         }
@@ -126,7 +126,7 @@ public static class GeoDataQueries
             using var cmd = conn.CreateCommand();
             cmd.CommandText = "SELECT equipment_model, constraint_type, limit_value, limit_min, limit_max " +
                               "FROM equipment_constraint WHERE param_id = @p AND consequence = 'hard' AND is_active = 1";
-            cmd.Parameters.AddWithValue("@p", paramId.Value);
+            cmd.AddWithValue("@p", paramId.Value);
             using var r = cmd.ExecuteReader();
             while (r.Read())
             {
@@ -149,7 +149,7 @@ public static class GeoDataQueries
     public sealed record EquipmentRoster(int Total, IReadOnlyList<CategoryCount> ByCategory, int InService);
 
     /// <summary>设备台账概览：总数 / 分类计数 / 在役数。</summary>
-    public static EquipmentRoster GetEquipmentRoster(SqliteConnection conn)
+    public static EquipmentRoster GetEquipmentRoster(DbConnection conn)
     {
         var byCat = new List<CategoryCount>();
         using (var cmd = conn.CreateCommand())
@@ -169,7 +169,7 @@ public static class GeoDataQueries
         double AvgEfficiencyM3PerH = 0, double PeakEfficiencyM3PerH = 0);   // 效率(产量/工时): 均值 + 峰值(忠实原 peakEff)
 
     /// <summary>生产数据统计：记录数 / 总产量 / 工时 / 故障工时 / 作业率(工时/(工时+故障)) + 台效(产量/工时)均值·峰值。</summary>
-    public static ProductionStats GetProductionStats(SqliteConnection conn)
+    public static ProductionStats GetProductionStats(DbConnection conn)
     {
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"SELECT COUNT(*), COALESCE(SUM(output_m3),0), COALESCE(SUM(work_hours),0), COALESCE(SUM(fault_hours),0),
@@ -187,14 +187,14 @@ public static class GeoDataQueries
     public sealed record CapacityRow(string EquipmentId, string Model, double TotalOutputM3);
 
     /// <summary>产能排名：按设备累计产量降序(join 型号)。取前 topN。</summary>
-    public static List<CapacityRow> GetCapacityRanking(SqliteConnection conn, int topN = 10)
+    public static List<CapacityRow> GetCapacityRanking(DbConnection conn, int topN = 10)
     {
         var rows = new List<CapacityRow>();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"SELECT c.equipment_id, COALESCE(e.model,''), SUM(c.output_m3) AS tot
                             FROM capacity_monthly c LEFT JOIN equipment e ON e.equipment_id = c.equipment_id
                             GROUP BY c.equipment_id ORDER BY tot DESC LIMIT @n";
-        cmd.Parameters.AddWithValue("@n", topN);
+        cmd.AddWithValue("@n", topN);
         using var rd = cmd.ExecuteReader();
         while (rd.Read()) rows.Add(new CapacityRow(rd.GetString(0), rd.GetString(1), rd.GetDouble(2)));
         return rows;
@@ -203,7 +203,7 @@ public static class GeoDataQueries
     public sealed record CapacityCategoryRow(string Category, int Units, double TotalOutputM3, double SharePct);
 
     /// <summary>产能分类对比：按设备类型(铲/车/钻…)聚合累计产量 + 台数 + 占比，降序。</summary>
-    public static List<CapacityCategoryRow> GetCapacityByCategory(SqliteConnection conn)
+    public static List<CapacityCategoryRow> GetCapacityByCategory(DbConnection conn)
     {
         var raw = new List<(string cat, int units, double tot)>();
         using (var cmd = conn.CreateCommand())
@@ -226,7 +226,7 @@ public static class GeoDataQueries
         bool OverhaulWarn = false, double AvailTrendPtPerMonth = 0, double LatestAvailPct = 0);   // 大修预警: 可用率趋势/最新/稳态判恶化
 
     /// <summary>故障分析（设备状态·故障报修）：事件数 / 累计停机时 / 未修复数 / 最多故障类型 + 可靠性 MTBF·MTTR·A_ss + Weibull β/η。</summary>
-    public static FaultStats GetFaultStats(SqliteConnection conn)
+    public static FaultStats GetFaultStats(DbConnection conn)
     {
         int events = (int)Scalar(conn, "SELECT COUNT(*) FROM fault_event");
         double downtime = ScalarDouble(conn, "SELECT COALESCE(SUM(duration_hours),0) FROM fault_event");
@@ -287,7 +287,7 @@ public static class GeoDataQueries
 
     /// <summary>设备五维综合评分（忠实原 EquipmentShiftForecastWindow §2.5 熵权法客观赋权）：
     /// 产能强度(均产/峰产)/稳定性(1−CV)/可用率/效率(作业率)/可靠性(1−0.08·故障数) 五维 → 熵权 → 综合得分, 降序。</summary>
-    public static List<EquipmentScoreRow> GetEquipmentScores(SqliteConnection conn, int topN = 0)
+    public static List<EquipmentScoreRow> GetEquipmentScores(DbConnection conn, int topN = 0)
     {
         var cap = new Dictionary<string, (double mean, double max, double cv)>();
         using (var cmd = conn.CreateCommand())
@@ -350,7 +350,7 @@ public static class GeoDataQueries
         double AvgRunRatePct = 0, double OeePct = 0);   // 故障归因: 内/外部故障率均值; 作业率 + OEE(=可用率×作业率×利用率)
 
     /// <summary>KPI 分析：equipment_kpi_monthly 平均可用率/作业率/利用率 + OEE(三率积) + 内/外部故障率(故障归因) + 最新期。</summary>
-    public static KpiStats GetKpiStats(SqliteConnection conn)
+    public static KpiStats GetKpiStats(DbConnection conn)
     {
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"SELECT COUNT(*), COALESCE(AVG(availability),0), COALESCE(AVG(utilization_rate),0),
@@ -382,7 +382,7 @@ public static class GeoDataQueries
     /// 投影年产 = 基线月产 × 12 × **产出设备数**(非全在役——基线口径是"每产出设备月均"，须乘产出设备
     /// 数才口径一致；乘全在役含卡车/钻机等非独立产出者会高估)。ActiveEquipment=在役总数(参考)。
     /// </summary>
-    public static EfficiencyForecast GetEfficiencyForecast(SqliteConnection conn)
+    public static EfficiencyForecast GetEfficiencyForecast(DbConnection conn)
     {
         double baseMonthly = ScalarDouble(conn, "SELECT COALESCE(AVG(output_m3),0)/10000.0 FROM capacity_monthly WHERE output_m3 > 0");
         // 在役 = 在用 + 租赁(种子词表 在用/待报废/租赁/报废/退租); NULL 按默认在用计。
@@ -405,7 +405,7 @@ public static class GeoDataQueries
     public sealed record BoreholeStats(int Holes, double TotalDepthM, double AvgDepthM, int SeamResults, IReadOnlyList<CategoryCount> ByCategory);
 
     /// <summary>钻孔管理概览：孔数 / 总孔深 / 均深 / 见煤结果数 / 按类别。</summary>
-    public static BoreholeStats GetBoreholeStats(SqliteConnection conn)
+    public static BoreholeStats GetBoreholeStats(DbConnection conn)
     {
         int holes = (int)Scalar(conn, "SELECT COUNT(*) FROM borehole");
         double totDepth = ScalarDouble(conn, "SELECT COALESCE(SUM(depth_total),0) FROM borehole");
@@ -425,7 +425,7 @@ public static class GeoDataQueries
         double AvgCakingG = 0, int CakingN = 0);          // 平均粘结指数 G + 有 G 的样本数(第 5 KPI, 忠实原看板)
 
     /// <summary>煤质统计：样本数 / 煤层数 / 平均 灰分Ad / 挥发分Vdaf / 发热量Qnet / 全硫St + 灰分变异系数(均匀性)。</summary>
-    public static CoalQualityStats GetCoalQualityStats(SqliteConnection conn)
+    public static CoalQualityStats GetCoalQualityStats(DbConnection conn)
     {
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"SELECT COUNT(*), COUNT(DISTINCT seam_code),
@@ -450,7 +450,7 @@ public static class GeoDataQueries
 
     /// <summary>爆破统计：总次数/爆破方量/炸药量/综合单耗(总炸药÷总方量, 体积加权) + 孔进尺 + 逐月聚合(忠实原 BlastService.GetMonthlyAggregate)。</summary>
     /// <summary>故障工时占计划工时比(ΣFault/ΣPlan, 供 What-if 故障降低杠杆)。无计划工时→0.1 缺省。</summary>
-    public static double GetFaultShare(SqliteConnection conn)
+    public static double GetFaultShare(DbConnection conn)
     {
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "SELECT COALESCE(SUM(fault_hours),0), COALESCE(SUM(plan_hours),0) FROM equipment_kpi_monthly";
@@ -460,7 +460,7 @@ public static class GeoDataQueries
     }
 
     /// <summary>设备月度因素 ⋈ 产能(equipment_id,year,month 对齐)→ 因素相关分析行(供 EquipmentFactorAnalysis)。</summary>
-    public static List<EquipmentFactorAnalysis.FactorRow> GetEquipmentFactorRows(SqliteConnection conn)
+    public static List<EquipmentFactorAnalysis.FactorRow> GetEquipmentFactorRows(DbConnection conn)
     {
         var rows = new List<EquipmentFactorAnalysis.FactorRow>();
         using var cmd = conn.CreateCommand();
@@ -476,7 +476,7 @@ public static class GeoDataQueries
         return rows;
     }
 
-    public static BlastStats GetBlastStats(SqliteConnection conn)
+    public static BlastStats GetBlastStats(DbConnection conn)
     {
         int events = 0, locs = 0; double totVol = 0, totExp = 0, totLen = 0;
         using (var cmd = conn.CreateCommand())
@@ -504,7 +504,7 @@ public static class GeoDataQueries
     public sealed record CumHoursStats(int Equipment, double FleetTotalHours, IReadOnlyList<CumHoursRow> Top);
 
     /// <summary>设备累计运行工时(忠实原 EquipmentService.CalculateCumulativeHours): 台账基准 cumulative_hours + 生产记录 work_hours 累加, 按总时降序(检修优先)。</summary>
-    public static CumHoursStats GetCumulativeHours(SqliteConnection conn, int topN = 8)
+    public static CumHoursStats GetCumulativeHours(DbConnection conn, int topN = 8)
     {
         var all = new List<CumHoursRow>();
         using (var cmd = conn.CreateCommand())
@@ -524,7 +524,7 @@ public static class GeoDataQueries
     public sealed record KpiModelRow(string Model, int Units, double AvgAvailPct, double AvgRunRatePct, double AvgUtilPct, int MonthRecords);
 
     /// <summary>分机型 KPI(忠实原 KpiService.ByModelMonthly 的机型聚合, 这里再滚到机型总均): 各型号 台数 + 平均 可用率/作业率/利用率, 按可用率降序(选型/淘汰参考)。</summary>
-    public static List<KpiModelRow> GetKpiByModel(SqliteConnection conn)
+    public static List<KpiModelRow> GetKpiByModel(DbConnection conn)
     {
         var rows = new List<KpiModelRow>();
         using var cmd = conn.CreateCommand();
@@ -539,7 +539,7 @@ public static class GeoDataQueries
     }
 
     /// <summary>钻探-测井煤厚对比行(borehole_seam_result JOIN borehole 取 hole_id)供 <see cref="CoalAudit.CheckDrillLogConsistency"/>。</summary>
-    public static List<CoalAudit.DrillLogRow> GetDrillLogRows(SqliteConnection conn)
+    public static List<CoalAudit.DrillLogRow> GetDrillLogRows(DbConnection conn)
     {
         var rows = new List<CoalAudit.DrillLogRow>();
         using var cmd = conn.CreateCommand();
@@ -547,13 +547,13 @@ public static class GeoDataQueries
                             FROM borehole_seam_result r LEFT JOIN borehole b ON b.id = r.borehole_id
                             WHERE r.drill_seam_thickness IS NOT NULL AND r.log_seam_thickness IS NOT NULL";
         using var rd = cmd.ExecuteReader();
-        static double? Nd(SqliteDataReader r, int i) => r.IsDBNull(i) ? (double?)null : r.GetDouble(i);
+        static double? Nd(DbDataReader r, int i) => r.IsDBNull(i) ? (double?)null : r.GetDouble(i);
         while (rd.Read()) rows.Add(new CoalAudit.DrillLogRow(rd.GetString(0), rd.GetString(1), Nd(rd, 2), Nd(rd, 3)));
         return rows;
     }
 
     /// <summary>工业分析行(coal_sample mad/ad/vdaf/fcd raw + hole_id)供 <see cref="CoalAudit.CheckProximateConsistency"/>。四项俱全者才返回。</summary>
-    public static List<CoalAudit.ProximateRow> GetProximateRows(SqliteConnection conn)
+    public static List<CoalAudit.ProximateRow> GetProximateRows(DbConnection conn)
     {
         var rows = new List<CoalAudit.ProximateRow>();
         using var cmd = conn.CreateCommand();
@@ -561,7 +561,7 @@ public static class GeoDataQueries
                             FROM coal_sample cs LEFT JOIN borehole b ON b.id = cs.borehole_id
                             WHERE cs.mad_raw IS NOT NULL AND cs.ad_raw IS NOT NULL AND cs.vdaf_raw IS NOT NULL AND cs.fcd_raw IS NOT NULL";
         using var rd = cmd.ExecuteReader();
-        static double? Nd(SqliteDataReader r, int i) => r.IsDBNull(i) ? (double?)null : r.GetDouble(i);
+        static double? Nd(DbDataReader r, int i) => r.IsDBNull(i) ? (double?)null : r.GetDouble(i);
         while (rd.Read()) rows.Add(new CoalAudit.ProximateRow(rd.GetString(0), rd.GetString(1), Nd(rd, 2), Nd(rd, 3), Nd(rd, 4), Nd(rd, 5)));
         return rows;
     }
@@ -569,7 +569,7 @@ public static class GeoDataQueries
     public sealed record SeamRow(string SeamCode, string Name, int SampleCount);
 
     /// <summary>煤层管理：各煤层定义 + 煤样计数。</summary>
-    public static List<SeamRow> GetCoalSeams(SqliteConnection conn)
+    public static List<SeamRow> GetCoalSeams(DbConnection conn)
     {
         var rows = new List<SeamRow>();
         using var cmd = conn.CreateCommand();
@@ -586,7 +586,7 @@ public static class GeoDataQueries
     public sealed record DispatchSummary(int Active, IReadOnlyList<DispatchRuleRow> Top);
 
     /// <summary>设备智能编组 / 调度规则：铲-车配比(装载次数/建议车数/循环时间/评分), 取评分高的在役规则。</summary>
-    public static DispatchSummary GetDispatchRules(SqliteConnection conn, int topN = 8)
+    public static DispatchSummary GetDispatchRules(DbConnection conn, int topN = 8)
     {
         int active = (int)Scalar(conn, "SELECT COUNT(*) FROM dispatch_rule WHERE is_active = 1");
         var top = new List<DispatchRuleRow>();
@@ -594,7 +594,7 @@ public static class GeoDataQueries
         cmd.CommandText = @"SELECT COALESCE(shovel_model,''), COALESCE(truck_model,''), COALESCE(bucket_loads_per_truck,0),
                             COALESCE(recommended_truck_count,0), COALESCE(cycle_time_min,0), COALESCE(efficiency_score,0)
                             FROM dispatch_rule WHERE is_active = 1 ORDER BY efficiency_score DESC LIMIT @n";
-        cmd.Parameters.AddWithValue("@n", topN);
+        cmd.AddWithValue("@n", topN);
         using var rd = cmd.ExecuteReader();
         while (rd.Read()) top.Add(new DispatchRuleRow(rd.GetString(0), rd.GetString(1), rd.GetDouble(2), (int)rd.GetDouble(3), rd.GetDouble(4), rd.GetDouble(5)));
         return new DispatchSummary(active, top);
@@ -603,7 +603,7 @@ public static class GeoDataQueries
     public sealed record ProcessArchitecture(int Systems, int Phases, int Templates, IReadOnlyList<string> SystemNames);
 
     /// <summary>工艺架构：系统数 / 工序数 / 模板数 + 系统名。</summary>
-    public static ProcessArchitecture GetProcessArchitecture(SqliteConnection conn)
+    public static ProcessArchitecture GetProcessArchitecture(DbConnection conn)
     {
         int sys = (int)Scalar(conn, "SELECT COUNT(*) FROM process_system");
         int ph = (int)Scalar(conn, "SELECT COUNT(*) FROM process_phase");
@@ -621,7 +621,7 @@ public static class GeoDataQueries
     public sealed record AcceptanceStats(int Records, double PassPct, double AvgAbsDeviationPct, IReadOnlyList<CategoryCount> ByStatus);
 
     /// <summary>现场验收 / 参数验收：记录数 / 合格率 / 平均绝对偏差 / 按状态。</summary>
-    public static AcceptanceStats GetAcceptanceStats(SqliteConnection conn)
+    public static AcceptanceStats GetAcceptanceStats(DbConnection conn)
     {
         int n = (int)Scalar(conn, "SELECT COUNT(*) FROM parameter_acceptance");
         // status 枚举为英文 pass/warning/fail/pending（见 V011 CHECK 约束）。合格=pass。
@@ -640,7 +640,7 @@ public static class GeoDataQueries
     public sealed record AcceptancePhaseRow(string Phase, int Records, int Passed, double PassPct);
 
     /// <summary>分工序验收合格率：parameter_acceptance join process_phase，按工序统计合格率(升序找薄弱环节)。</summary>
-    public static List<AcceptancePhaseRow> GetAcceptanceByPhase(SqliteConnection conn)
+    public static List<AcceptancePhaseRow> GetAcceptanceByPhase(DbConnection conn)
     {
         var rows = new List<AcceptancePhaseRow>();
         using var cmd = conn.CreateCommand();
@@ -660,7 +660,7 @@ public static class GeoDataQueries
     public sealed record WorkingFaceRow(string FaceCode, double BenchHeight, double SlopeAngle, double MiningWidth, double AdvanceRate);
 
     /// <summary>作业面台账：各工作面台阶/坡角/采宽/推进度。</summary>
-    public static List<WorkingFaceRow> GetWorkingFaces(SqliteConnection conn)
+    public static List<WorkingFaceRow> GetWorkingFaces(DbConnection conn)
     {
         var rows = new List<WorkingFaceRow>();
         using var cmd = conn.CreateCommand();
@@ -675,7 +675,7 @@ public static class GeoDataQueries
     public sealed record ParamTemplateStats(int Definitions, int TemplateValues, int Phases, int Required);
 
     /// <summary>参数模板库 / 参数化模板：参数定义数 / 模板取值数 / 涉及工序 / 必填数。</summary>
-    public static ParamTemplateStats GetParamTemplates(SqliteConnection conn)
+    public static ParamTemplateStats GetParamTemplates(DbConnection conn)
     {
         int defs = (int)Scalar(conn, "SELECT COUNT(*) FROM parameter_definition");
         int vals = (int)Scalar(conn, "SELECT COUNT(*) FROM template_param_value");
@@ -688,7 +688,7 @@ public static class GeoDataQueries
 
     /// <summary>月度计划：各期 计划剥离(万m³)/计划煤量(万t)/剥采比/平均运距/平均台阶高。
     /// 剥采比: 存值>0 用存值, 否则由 剥离量/煤量 推导(单位 万m³÷万t=m³/t), 均无则 0。</summary>
-    public static List<MonthlyPlanRow> GetMonthlyPlans(SqliteConnection conn)
+    public static List<MonthlyPlanRow> GetMonthlyPlans(DbConnection conn)
     {
         var rows = new List<MonthlyPlanRow>();
         using var cmd = conn.CreateCommand();
@@ -706,7 +706,7 @@ public static class GeoDataQueries
     public sealed record HaulRoadRow(string RoadId, string Name, double LengthM, double MaxSlopePct, double WidthM, string Condition);
 
     /// <summary>路况显示 / 运输道路：各路段 长度/最大坡度/宽度/路况。</summary>
-    public static List<HaulRoadRow> GetHaulRoads(SqliteConnection conn)
+    public static List<HaulRoadRow> GetHaulRoads(DbConnection conn)
     {
         var rows = new List<HaulRoadRow>();
         using var cmd = conn.CreateCommand();
@@ -722,7 +722,7 @@ public static class GeoDataQueries
         string SideType = "", double FrictionAngle = 0, double Cohesion = 0);
 
     /// <summary>边坡设计：各帮 工作帮坡角/最终帮坡角/最大深度/安全系数 + 帮别/内摩擦角/黏聚力(供边坡安全系数校核)。</summary>
-    public static List<SlopeDesignRow> GetSlopeDesigns(SqliteConnection conn)
+    public static List<SlopeDesignRow> GetSlopeDesigns(DbConnection conn)
     {
         var rows = new List<SlopeDesignRow>();
         using var cmd = conn.CreateCommand();
@@ -740,7 +740,7 @@ public static class GeoDataQueries
         double? AvgQgrDMjKg, string? DominantCoalType);
 
     /// <summary>每孔每层化验平均汇总(衍生表 coal_sample_summary)——供钻孔煤质汇总(忠实原 CoalQualityService.AllSummary)。</summary>
-    public static List<CoalSampleSummaryRow> GetCoalSampleSummaries(SqliteConnection conn)
+    public static List<CoalSampleSummaryRow> GetCoalSampleSummaries(DbConnection conn)
     {
         var rows = new List<CoalSampleSummaryRow>();
         using var cmd = conn.CreateCommand();
@@ -758,7 +758,7 @@ public static class GeoDataQueries
     public sealed record FleetOverview(int Total, IReadOnlyList<CategoryCount> ByStatus, IReadOnlyList<CategoryCount> ByModel);
 
     /// <summary>机群总览：设备总数 + 按状态 + 按型号(Top)。</summary>
-    public static FleetOverview GetFleetOverview(SqliteConnection conn)
+    public static FleetOverview GetFleetOverview(DbConnection conn)
     {
         int total = (int)Scalar(conn, "SELECT COUNT(*) FROM equipment");
         var byStatus = GroupCount(conn, "SELECT COALESCE(status,'(未填)'), COUNT(*) c FROM equipment GROUP BY status ORDER BY c DESC");
@@ -773,7 +773,7 @@ public static class GeoDataQueries
 
     /// <summary>机群领导驾驶舱（忠实原 EquipmentFleetCockpitWindow）：健康度红绿灯 / 平均OEE / 可解锁产能(补各机最短板) /
     /// 产能瓶颈(按可用率达标率最低的类别) / 需关注设备清单。全数据驱动(KPI+产能+役龄), 无需调度引擎。</summary>
-    public static FleetCockpit GetFleetCockpit(SqliteConnection conn)
+    public static FleetCockpit GetFleetCockpit(DbConnection conn)
     {
         // 逐设备 KPI 均值(归一 0..1)
         var kpi = new Dictionary<string, (double a, double r, double u)>();
@@ -852,7 +852,7 @@ public static class GeoDataQueries
     public sealed record CoalClassRow(string Code, string NameCn, double VdafMin, double VdafMax);
 
     /// <summary>煤种分类：各煤种 代码/名称/挥发分区间(Vdaf)。</summary>
-    public static List<CoalClassRow> GetCoalClassification(SqliteConnection conn)
+    public static List<CoalClassRow> GetCoalClassification(DbConnection conn)
     {
         var rows = new List<CoalClassRow>();
         using var cmd = conn.CreateCommand();
@@ -864,14 +864,14 @@ public static class GeoDataQueries
     }
 
     /// <summary>煤类分类完整区间(Vdaf/G/Y 三维)供 GB/T 5751 反推(<see cref="CoalTypeInference"/>)。按 sort_order 排序保首命中优先级。</summary>
-    public static List<CoalTypeInference.ClassRange> GetCoalClassificationRanges(SqliteConnection conn)
+    public static List<CoalTypeInference.ClassRange> GetCoalClassificationRanges(DbConnection conn)
     {
         var rows = new List<CoalTypeInference.ClassRange>();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"SELECT COALESCE(code,''), vdaf_min, vdaf_max, g_min, g_max, y_min, y_max
                             FROM coal_classification ORDER BY COALESCE(sort_order,0), code";
         using var rd = cmd.ExecuteReader();
-        static double? Nd(SqliteDataReader r, int i) => r.IsDBNull(i) ? (double?)null : r.GetDouble(i);
+        static double? Nd(DbDataReader r, int i) => r.IsDBNull(i) ? (double?)null : r.GetDouble(i);
         while (rd.Read())
             rows.Add(new CoalTypeInference.ClassRange(rd.GetString(0),
                 Nd(rd, 1), Nd(rd, 2), Nd(rd, 3), Nd(rd, 4), Nd(rd, 5), Nd(rd, 6)));
@@ -881,7 +881,7 @@ public static class GeoDataQueries
     public sealed record CoalTypeShareRow(string CoalType, int Samples, double SharePct);
 
     /// <summary>煤种分布(忠实原「煤类饼」的量化)：coal_sample 按实际 coal_type 分组计样本数 + 占比, 降序。</summary>
-    public static List<CoalTypeShareRow> GetCoalTypeDistribution(SqliteConnection conn)
+    public static List<CoalTypeShareRow> GetCoalTypeDistribution(DbConnection conn)
     {
         var raw = new List<(string t, int n)>();
         using (var cmd = conn.CreateCommand())
@@ -903,7 +903,7 @@ public static class GeoDataQueries
 
     /// <summary>煤质数据健康度（忠实原 CoalQualityDashboardWindow「数据健康度」）：样品数 / 煤类标注率 /
     /// 化验孔覆盖率 / 工分自洽率(M+A+V+FC≈100±3, 仅四项齐全样本)。数值数据质量指标。</summary>
-    public static CoalDataHealth GetCoalDataHealth(SqliteConnection conn)
+    public static CoalDataHealth GetCoalDataHealth(DbConnection conn)
     {
         int total = (int)Scalar(conn, "SELECT COUNT(*) FROM coal_sample");
         int withType = (int)Scalar(conn, "SELECT COUNT(*) FROM coal_sample WHERE coal_type IS NOT NULL AND TRIM(coal_type) <> ''");
@@ -931,7 +931,7 @@ public static class GeoDataQueries
 
     /// <summary>灰分纵向趋势（忠实原 CoalQualityBoreholeColumnWindow）：按样品高程降序取浅/深三分位灰分均值,
     /// 差 |d|&lt;3 判较稳定, d&gt;0 向深部增高, d&lt;0 向浅部增高。反映灰分随埋深变化。</summary>
-    public static AshVerticalTrend GetAshVerticalTrend(SqliteConnection conn)
+    public static AshVerticalTrend GetAshVerticalTrend(DbConnection conn)
     {
         var zt = new List<(double z, double ad)>();
         using (var cmd = conn.CreateCommand())
@@ -953,7 +953,7 @@ public static class GeoDataQueries
     public sealed record SeamBenchRow(string SeamCode, double BenchHeight, double SlopeAngle, double BermWidth, double MinThick);
 
     /// <summary>煤层台阶参数：各煤层 台阶高/坡角/平台宽/最小可采厚。</summary>
-    public static List<SeamBenchRow> GetSeamBenchParams(SqliteConnection conn)
+    public static List<SeamBenchRow> GetSeamBenchParams(DbConnection conn)
     {
         var rows = new List<SeamBenchRow>();
         using var cmd = conn.CreateCommand();
@@ -968,7 +968,7 @@ public static class GeoDataQueries
     public sealed record ConstraintStats(int Total, int Active, IReadOnlyList<CategoryCount> ByType);
 
     /// <summary>设备约束条件：约束总数 / 在役 / 按约束类型。</summary>
-    public static ConstraintStats GetEquipmentConstraints(SqliteConnection conn)
+    public static ConstraintStats GetEquipmentConstraints(DbConnection conn)
     {
         int total = (int)Scalar(conn, "SELECT COUNT(*) FROM equipment_constraint");
         int active = (int)Scalar(conn, "SELECT COUNT(*) FROM equipment_constraint WHERE is_active = 1");
@@ -979,7 +979,7 @@ public static class GeoDataQueries
     public sealed record GradeRuleRow(string Type, string LevelCode, string LevelName, double Min, double Max);
 
     /// <summary>煤质分级规则：各分级(类型/级别/区间)。</summary>
-    public static List<GradeRuleRow> GetCoalGradeRules(SqliteConnection conn)
+    public static List<GradeRuleRow> GetCoalGradeRules(DbConnection conn)
     {
         var rows = new List<GradeRuleRow>();
         using var cmd = conn.CreateCommand();
@@ -991,20 +991,20 @@ public static class GeoDataQueries
     }
 
     /// <summary>某指标(ash/sulfur/qnet)的分级规则(保留 NULL=±∞ 开区间)供 <see cref="CoalTypeInference.FindGradeLevel"/> 给均值贴等级。</summary>
-    public static List<CoalTypeInference.GradeRule> GetGradeRulesByType(SqliteConnection conn, string ruleType)
+    public static List<CoalTypeInference.GradeRule> GetGradeRulesByType(DbConnection conn, string ruleType)
     {
         var rows = new List<CoalTypeInference.GradeRule>();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "SELECT COALESCE(level_name,''), value_min, value_max FROM coal_grade_rule WHERE rule_type=@t ORDER BY COALESCE(sort_order,0)";
-        cmd.Parameters.AddWithValue("@t", ruleType);
+        cmd.AddWithValue("@t", ruleType);
         using var rd = cmd.ExecuteReader();
-        static double? Nd(SqliteDataReader r, int i) => r.IsDBNull(i) ? (double?)null : r.GetDouble(i);
+        static double? Nd(DbDataReader r, int i) => r.IsDBNull(i) ? (double?)null : r.GetDouble(i);
         while (rd.Read()) rows.Add(new CoalTypeInference.GradeRule(rd.GetString(0), Nd(rd, 1), Nd(rd, 2)));
         return rows;
     }
 
     /// <summary>把一张表整表导出为 CSV 文本(表头 + 数据行, 逗号分隔, 值内含逗号/引号/换行则加引号转义)。可单测。</summary>
-    public static string ExportTableToCsv(SqliteConnection conn, string tableName)
+    public static string ExportTableToCsv(DbConnection conn, string tableName)
     {
         // 表名只允许标识符字符, 防注入。
         foreach (char c in tableName) if (!char.IsLetterOrDigit(c) && c != '_') throw new System.ArgumentException($"非法表名: {tableName}");
@@ -1034,7 +1034,7 @@ public static class GeoDataQueries
     }
 
     /// <summary>库内所有用户表名(排除 sqlite 内部表)，按名排序。忠实原 SqlLib「查看所有表结构」。</summary>
-    public static List<string> ListTables(SqliteConnection conn)
+    public static List<string> ListTables(DbConnection conn)
     {
         var tables = new List<string>();
         using var cmd = conn.CreateCommand();
@@ -1045,7 +1045,7 @@ public static class GeoDataQueries
     }
 
     /// <summary>数据字典导出（原 SqlLib「导出数据字典」）：全部用户表 → 每列(表,列,类型,非空,主键) CSV。</summary>
-    public static string DataDictionaryCsv(SqliteConnection conn)
+    public static string DataDictionaryCsv(DbConnection conn)
     {
         var sb = new System.Text.StringBuilder();
         sb.Append("table,column,type,notnull,pk\n");
@@ -1087,7 +1087,7 @@ public static class GeoDataQueries
     /// 只读 SQL 查询执行（原 SqlLib「SQL Console」的查询侧）：跑 SELECT/PRAGMA/WITH → 结果表头+行 CSV。
     /// 非只读语句拒绝(保护数据)。返回 (ok, csv 或错误信息, 行数)。maxRows 截断超大结果。
     /// </summary>
-    public static (bool ok, string text, int rows) RunSelectCsv(SqliteConnection conn, string sql, int maxRows = 10000)
+    public static (bool ok, string text, int rows) RunSelectCsv(DbConnection conn, string sql, int maxRows = 10000)
     {
         if (conn == null) return (false, "无数据库连接", 0);
         if (string.IsNullOrWhiteSpace(sql)) return (false, "空查询", 0);
@@ -1120,7 +1120,7 @@ public static class GeoDataQueries
     public sealed record KpiTrendRow(int Year, double AvgAvailabilityPct, double AvgUtilizationPct, double AvgRunRatePct = 0);   // 三率齐: +作业率
 
     /// <summary>KPI 趋势：equipment_kpi_monthly 按年平均 三率 可用率/作业率/利用率（比率自适应 0..1 或 0..100）。</summary>
-    public static List<KpiTrendRow> GetKpiTrend(SqliteConnection conn)
+    public static List<KpiTrendRow> GetKpiTrend(DbConnection conn)
     {
         var rows = new List<KpiTrendRow>();
         using var cmd = conn.CreateCommand();
@@ -1139,7 +1139,7 @@ public static class GeoDataQueries
         double EfficiencyM3PerH = 0);   // 班次台效(产量/工时) —— 供班次生产率对比
 
     /// <summary>班次产量对比：各班次 记录数/产量/工时/作业率/台效（production_record 按 shift 分组）。</summary>
-    public static List<ShiftOutputRow> GetProductionByShift(SqliteConnection conn)
+    public static List<ShiftOutputRow> GetProductionByShift(DbConnection conn)
     {
         var rows = new List<ShiftOutputRow>();
         using var cmd = conn.CreateCommand();
@@ -1160,13 +1160,13 @@ public static class GeoDataQueries
     public sealed record FaultRankRow(string EquipmentId, int Events, double DowntimeHours);
 
     /// <summary>设备故障排名：按累计停机时降序取 topN（找最需检修的设备）。</summary>
-    public static List<FaultRankRow> GetFaultByEquipment(SqliteConnection conn, int topN = 8)
+    public static List<FaultRankRow> GetFaultByEquipment(DbConnection conn, int topN = 8)
     {
         var rows = new List<FaultRankRow>();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"SELECT equipment_id, COUNT(*), COALESCE(SUM(duration_hours),0) dt
                             FROM fault_event GROUP BY equipment_id ORDER BY dt DESC LIMIT @n";
-        cmd.Parameters.AddWithValue("@n", topN);
+        cmd.AddWithValue("@n", topN);
         using var rd = cmd.ExecuteReader();
         while (rd.Read()) rows.Add(new FaultRankRow(rd.GetString(0), rd.GetInt32(1), rd.GetDouble(2)));
         return rows;
@@ -1175,7 +1175,7 @@ public static class GeoDataQueries
     public sealed record FaultTypeRow(string FaultType, int Events, double DowntimeHours, double DowntimeSharePct, double CumulativeSharePct = 0);
 
     /// <summary>故障类型分布(Pareto)：按 fault_type 统计事件数 + 累计停机时 + 停机占比 + 累计占比(帕累托 80/20)，按停机时降序。</summary>
-    public static List<FaultTypeRow> GetFaultByType(SqliteConnection conn)
+    public static List<FaultTypeRow> GetFaultByType(DbConnection conn)
     {
         var raw = new List<(string t, int n, double dt)>();
         using (var cmd = conn.CreateCommand())
@@ -1284,7 +1284,7 @@ public static class GeoDataQueries
 
     /// <summary>生产班次记录 CSV 入库（忠实 DataImportCenter.ProductionRecordSpec）：按 设备+日期+班次 键 upsert。
     /// rows=逐行列名→值(表头大小写不敏感)。overwrite=true 覆盖既有, false 跳过。列: equipment_id,date,shift,output_m3,work_hours,fault_hours[,fault_reason]。</summary>
-    public static ImportOutcome ImportProductionRecords(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
+    public static ImportOutcome ImportProductionRecords(DbConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
     {
         int ins = 0, upd = 0, skip = 0, err = 0;
         foreach (var row in rows)
@@ -1300,7 +1300,7 @@ public static class GeoDataQueries
             using (var q = conn.CreateCommand())
             {
                 q.CommandText = "SELECT COUNT(*) FROM production_record WHERE equipment_id=@e AND date=@d AND shift=@s";
-                q.Parameters.AddWithValue("@e", eq); q.Parameters.AddWithValue("@d", date); q.Parameters.AddWithValue("@s", shift);
+                q.AddWithValue("@e", eq); q.AddWithValue("@d", date); q.AddWithValue("@s", shift);
                 exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0;
             }
             using var cmd = conn.CreateCommand();
@@ -1315,16 +1315,16 @@ public static class GeoDataQueries
                 cmd.CommandText = "INSERT INTO production_record (equipment_id, date, shift, output_m3, work_hours, fault_hours, fault_reason) VALUES (@e,@d,@s,@o,@w,@f,@r)";
                 ins++;
             }
-            cmd.Parameters.AddWithValue("@e", eq); cmd.Parameters.AddWithValue("@d", date); cmd.Parameters.AddWithValue("@s", shift);
-            cmd.Parameters.AddWithValue("@o", outp); cmd.Parameters.AddWithValue("@w", wh); cmd.Parameters.AddWithValue("@f", fh);
-            cmd.Parameters.AddWithValue("@r", reason.Length == 0 ? (object)System.DBNull.Value : reason);
+            cmd.AddWithValue("@e", eq); cmd.AddWithValue("@d", date); cmd.AddWithValue("@s", shift);
+            cmd.AddWithValue("@o", outp); cmd.AddWithValue("@w", wh); cmd.AddWithValue("@f", fh);
+            cmd.AddWithValue("@r", reason.Length == 0 ? (object)System.DBNull.Value : reason);
             try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
         }
         return new ImportOutcome(ins, upd, skip, err);
     }
 
     /// <summary>月度产能 CSV 入库（忠实 CapacityMonthlySpec）：按 设备+年+月 键 upsert。列: equipment_id,year,month,output_m3。</summary>
-    public static ImportOutcome ImportCapacityMonthly(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
+    public static ImportOutcome ImportCapacityMonthly(DbConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
     {
         int ins = 0, upd = 0, skip = 0, err = 0;
         foreach (var row in rows)
@@ -1337,20 +1337,20 @@ public static class GeoDataQueries
             using (var q = conn.CreateCommand())
             {
                 q.CommandText = "SELECT COUNT(*) FROM capacity_monthly WHERE equipment_id=@e AND year=@y AND month=@m";
-                q.Parameters.AddWithValue("@e", eq); q.Parameters.AddWithValue("@y", yr); q.Parameters.AddWithValue("@m", mo);
+                q.AddWithValue("@e", eq); q.AddWithValue("@y", yr); q.AddWithValue("@m", mo);
                 exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0;
             }
             using var cmd = conn.CreateCommand();
             if (exists) { if (!overwrite) { skip++; continue; } cmd.CommandText = "UPDATE capacity_monthly SET output_m3=@o WHERE equipment_id=@e AND year=@y AND month=@m"; upd++; }
             else { cmd.CommandText = "INSERT INTO capacity_monthly (equipment_id, year, month, output_m3) VALUES (@e,@y,@m,@o)"; ins++; }
-            cmd.Parameters.AddWithValue("@e", eq); cmd.Parameters.AddWithValue("@y", yr); cmd.Parameters.AddWithValue("@m", mo); cmd.Parameters.AddWithValue("@o", outp);
+            cmd.AddWithValue("@e", eq); cmd.AddWithValue("@y", yr); cmd.AddWithValue("@m", mo); cmd.AddWithValue("@o", outp);
             try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
         }
         return new ImportOutcome(ins, upd, skip, err);
     }
 
     /// <summary>故障记录 CSV 入库（忠实 FaultEventSpec）：事件表, 插入型(无自然键)。列: equipment_id,date,fault_type[,shift,duration_hours,description,is_resolved,repair_team]。</summary>
-    public static ImportOutcome ImportFaultEvents(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows)
+    public static ImportOutcome ImportFaultEvents(DbConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows)
     {
         int ins = 0, err = 0;
         foreach (var row in rows)
@@ -1362,12 +1362,12 @@ public static class GeoDataQueries
             int resolved = Get("is_resolved") is "1" or "true" or "是" or "已修复" ? 1 : 0;
             using var cmd = conn.CreateCommand();
             cmd.CommandText = "INSERT INTO fault_event (equipment_id, date, shift, fault_type, duration_hours, description, is_resolved, repair_team) VALUES (@e,@d,@s,@t,@u,@desc,@r,@team)";
-            cmd.Parameters.AddWithValue("@e", eq); cmd.Parameters.AddWithValue("@d", date);
-            cmd.Parameters.AddWithValue("@s", Get("shift") is { Length: > 0 } sh ? sh : (object)System.DBNull.Value);
-            cmd.Parameters.AddWithValue("@t", ft); cmd.Parameters.AddWithValue("@u", dur);
-            cmd.Parameters.AddWithValue("@desc", Get("description") is { Length: > 0 } de ? de : (object)System.DBNull.Value);
-            cmd.Parameters.AddWithValue("@r", resolved);
-            cmd.Parameters.AddWithValue("@team", Get("repair_team") is { Length: > 0 } tm ? tm : (object)System.DBNull.Value);
+            cmd.AddWithValue("@e", eq); cmd.AddWithValue("@d", date);
+            cmd.AddWithValue("@s", Get("shift") is { Length: > 0 } sh ? sh : (object)System.DBNull.Value);
+            cmd.AddWithValue("@t", ft); cmd.AddWithValue("@u", dur);
+            cmd.AddWithValue("@desc", Get("description") is { Length: > 0 } de ? de : (object)System.DBNull.Value);
+            cmd.AddWithValue("@r", resolved);
+            cmd.AddWithValue("@team", Get("repair_team") is { Length: > 0 } tm ? tm : (object)System.DBNull.Value);
             try { cmd.ExecuteNonQuery(); ins++; } catch { err++; }
         }
         return new ImportOutcome(ins, 0, 0, err);
@@ -1375,7 +1375,7 @@ public static class GeoDataQueries
 
     /// <summary>爆破事件 CSV 入库。必填 blast_date; 余选填。缺 unit_consumption_kg_m3 时由 explosive_kg/blast_volume_m3 计算。
     /// 列: blast_date[,blast_time,drill_id,location_code,material,diameter_mm,hole_count,total_hole_length_m,explosive_kg,blast_volume_m3,unit_consumption_kg_m3]。</summary>
-    public static ImportOutcome ImportBlastEvents(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows)
+    public static ImportOutcome ImportBlastEvents(DbConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows)
     {
         int ins = 0, err = 0;
         foreach (var row in rows)
@@ -1393,14 +1393,14 @@ public static class GeoDataQueries
             object Null(string s) => s is { Length: > 0 } ? s : (object)System.DBNull.Value;
             using var cmd = conn.CreateCommand();
             cmd.CommandText = "INSERT INTO blast_event (blast_date, blast_time, drill_id, location_code, material, diameter_mm, hole_count, total_hole_length_m, explosive_kg, blast_volume_m3, unit_consumption_kg_m3) VALUES (@d,@t,@dr,@loc,@m,@dia,@hc,@thl,@exp,@vol,@unit)";
-            cmd.Parameters.AddWithValue("@d", date);
-            cmd.Parameters.AddWithValue("@t", Null(Get("blast_time")));
-            cmd.Parameters.AddWithValue("@dr", Null(Get("drill_id")));
-            cmd.Parameters.AddWithValue("@loc", Null(Get("location_code")));
-            cmd.Parameters.AddWithValue("@m", Null(Get("material")));
-            cmd.Parameters.AddWithValue("@dia", dia); cmd.Parameters.AddWithValue("@hc", holes);
-            cmd.Parameters.AddWithValue("@thl", thl); cmd.Parameters.AddWithValue("@exp", exp);
-            cmd.Parameters.AddWithValue("@vol", vol); cmd.Parameters.AddWithValue("@unit", unit);
+            cmd.AddWithValue("@d", date);
+            cmd.AddWithValue("@t", Null(Get("blast_time")));
+            cmd.AddWithValue("@dr", Null(Get("drill_id")));
+            cmd.AddWithValue("@loc", Null(Get("location_code")));
+            cmd.AddWithValue("@m", Null(Get("material")));
+            cmd.AddWithValue("@dia", dia); cmd.AddWithValue("@hc", holes);
+            cmd.AddWithValue("@thl", thl); cmd.AddWithValue("@exp", exp);
+            cmd.AddWithValue("@vol", vol); cmd.AddWithValue("@unit", unit);
             try { cmd.ExecuteNonQuery(); ins++; } catch { err++; }
         }
         return new ImportOutcome(ins, 0, 0, err);
@@ -1408,7 +1408,7 @@ public static class GeoDataQueries
 
     /// <summary>设备型号 CSV 入库(按 model 主键 upsert; 供机型 KPI/FleetOptimizer 规格)。必填 model,category。
     /// 列: model,category[,working_weight_t,power_kw,bucket_m3,load_t,dimensions_lwh,drill_diameter_mm,tire_spec,std_daily_cap_wan_m3]。</summary>
-    public static ImportOutcome ImportEquipmentModels(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows)
+    public static ImportOutcome ImportEquipmentModels(DbConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows)
     {
         int ins = 0, err = 0;
         foreach (var row in rows)
@@ -1422,18 +1422,18 @@ public static class GeoDataQueries
             object Null(string s) => s is { Length: > 0 } ? s : (object)System.DBNull.Value;
             using var cmd = conn.CreateCommand();
             cmd.CommandText = "INSERT OR REPLACE INTO equipment_model (model, category, working_weight_t, power_kw, bucket_m3, load_t, dimensions_lwh, drill_diameter_mm, tire_spec, std_daily_cap_wan_m3) VALUES (@m,@c,@ww,@pw,@bk,@ld,@dim,@dd,@tire,@cap)";
-            cmd.Parameters.AddWithValue("@m", model); cmd.Parameters.AddWithValue("@c", cat);
-            cmd.Parameters.AddWithValue("@ww", ww); cmd.Parameters.AddWithValue("@pw", pw);
-            cmd.Parameters.AddWithValue("@bk", bk); cmd.Parameters.AddWithValue("@ld", ld);
-            cmd.Parameters.AddWithValue("@dim", Null(Get("dimensions_lwh"))); cmd.Parameters.AddWithValue("@dd", dd);
-            cmd.Parameters.AddWithValue("@tire", Null(Get("tire_spec"))); cmd.Parameters.AddWithValue("@cap", cap);
+            cmd.AddWithValue("@m", model); cmd.AddWithValue("@c", cat);
+            cmd.AddWithValue("@ww", ww); cmd.AddWithValue("@pw", pw);
+            cmd.AddWithValue("@bk", bk); cmd.AddWithValue("@ld", ld);
+            cmd.AddWithValue("@dim", Null(Get("dimensions_lwh"))); cmd.AddWithValue("@dd", dd);
+            cmd.AddWithValue("@tire", Null(Get("tire_spec"))); cmd.AddWithValue("@cap", cap);
             try { cmd.ExecuteNonQuery(); ins++; } catch { err++; }
         }
         return new ImportOutcome(ins, 0, 0, err);
     }
 
     /// <summary>月度可用率 KPI CSV 入库（忠实 KpiMonthlySpec）：按 设备+年+月 键 upsert。列: equipment_id,year,month,plan_hours,work_hours,fault_hours,availability,actual_run_rate,utilization_rate。</summary>
-    public static ImportOutcome ImportKpiMonthly(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
+    public static ImportOutcome ImportKpiMonthly(DbConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
     {
         int ins = 0, upd = 0, skip = 0, err = 0;
         foreach (var row in rows)
@@ -1444,16 +1444,16 @@ public static class GeoDataQueries
             double D(string k) { ParseD(Get(k), out double v); return v; }
             bool exists;
             using (var q = conn.CreateCommand())
-            { q.CommandText = "SELECT COUNT(*) FROM equipment_kpi_monthly WHERE equipment_id=@e AND year=@y AND month=@m"; q.Parameters.AddWithValue("@e", eq); q.Parameters.AddWithValue("@y", yr); q.Parameters.AddWithValue("@m", mo); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
+            { q.CommandText = "SELECT COUNT(*) FROM equipment_kpi_monthly WHERE equipment_id=@e AND year=@y AND month=@m"; q.AddWithValue("@e", eq); q.AddWithValue("@y", yr); q.AddWithValue("@m", mo); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
             using var cmd = conn.CreateCommand();
             // 无损全列: 补此前漏的 idle_hours(待机)/delay_hours(延误) + internal/external_fault_rate_pct(内/外部故障率, 故障归因)
             if (exists) { if (!overwrite) { skip++; continue; } cmd.CommandText = "UPDATE equipment_kpi_monthly SET plan_hours=@p, work_hours=@w, fault_hours=@f, idle_hours=@ih, delay_hours=@dh, availability=@a, actual_run_rate=@r, utilization_rate=@u, internal_fault_rate_pct=@ifr, external_fault_rate_pct=@efr WHERE equipment_id=@e AND year=@y AND month=@m"; upd++; }
             else { cmd.CommandText = "INSERT INTO equipment_kpi_monthly (equipment_id, year, month, plan_hours, work_hours, fault_hours, idle_hours, delay_hours, availability, actual_run_rate, utilization_rate, internal_fault_rate_pct, external_fault_rate_pct) VALUES (@e,@y,@m,@p,@w,@f,@ih,@dh,@a,@r,@u,@ifr,@efr)"; ins++; }
-            cmd.Parameters.AddWithValue("@e", eq); cmd.Parameters.AddWithValue("@y", yr); cmd.Parameters.AddWithValue("@m", mo);
-            cmd.Parameters.AddWithValue("@p", D("plan_hours")); cmd.Parameters.AddWithValue("@w", D("work_hours")); cmd.Parameters.AddWithValue("@f", D("fault_hours"));
-            cmd.Parameters.AddWithValue("@ih", D("idle_hours")); cmd.Parameters.AddWithValue("@dh", D("delay_hours"));
-            cmd.Parameters.AddWithValue("@a", D("availability")); cmd.Parameters.AddWithValue("@r", D("actual_run_rate")); cmd.Parameters.AddWithValue("@u", D("utilization_rate"));
-            cmd.Parameters.AddWithValue("@ifr", D("internal_fault_rate_pct")); cmd.Parameters.AddWithValue("@efr", D("external_fault_rate_pct"));
+            cmd.AddWithValue("@e", eq); cmd.AddWithValue("@y", yr); cmd.AddWithValue("@m", mo);
+            cmd.AddWithValue("@p", D("plan_hours")); cmd.AddWithValue("@w", D("work_hours")); cmd.AddWithValue("@f", D("fault_hours"));
+            cmd.AddWithValue("@ih", D("idle_hours")); cmd.AddWithValue("@dh", D("delay_hours"));
+            cmd.AddWithValue("@a", D("availability")); cmd.AddWithValue("@r", D("actual_run_rate")); cmd.AddWithValue("@u", D("utilization_rate"));
+            cmd.AddWithValue("@ifr", D("internal_fault_rate_pct")); cmd.AddWithValue("@efr", D("external_fault_rate_pct"));
             try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
         }
         return new ImportOutcome(ins, upd, skip, err);
@@ -1461,7 +1461,7 @@ public static class GeoDataQueries
 
     /// <summary>设备台账 CSV 入库（忠实 EquipmentLedgerSpec/DataImportCenter，无损全列）：按 equipment_id 键 upsert。category 必填。
     /// 列: equipment_id,category[,model,manufacturer,origin,status,serial_number,asset_code,acquisition_date,commission_year,cumulative_hours,last_overhaul_date,operating_area,notes]。</summary>
-    public static ImportOutcome ImportEquipmentLedger(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
+    public static ImportOutcome ImportEquipmentLedger(DbConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
     {
         int ins = 0, upd = 0, skip = 0, err = 0;
         foreach (var row in rows)
@@ -1474,11 +1474,11 @@ public static class GeoDataQueries
             object FkOpt(string k, string tbl, string pcol)
             {
                 string v = Get(k); if (v.Length == 0) return System.DBNull.Value;
-                using var q = conn.CreateCommand(); q.CommandText = $"SELECT 1 FROM {tbl} WHERE {pcol}=@v LIMIT 1"; q.Parameters.AddWithValue("@v", v);
+                using var q = conn.CreateCommand(); q.CommandText = $"SELECT 1 FROM {tbl} WHERE {pcol}=@v LIMIT 1"; q.AddWithValue("@v", v);
                 return q.ExecuteScalar() != null ? (object)v : System.DBNull.Value;
             }
             bool exists;
-            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM equipment WHERE equipment_id=@equipment_id"; q.Parameters.AddWithValue("@equipment_id", eq); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
+            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM equipment WHERE equipment_id=@equipment_id"; q.AddWithValue("@equipment_id", eq); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
             // 台账全列(忠实原 EquipmentLedgerSpec/DataImportCenter): 型号/厂商/产权/状态 + 出厂编号/资产编码/购置·投产/累计台时/大修/所属矿/备注
             var cols = new[] { "model", "manufacturer", "origin", "status", "serial_number", "asset_code",
                 "acquisition_date", "commission_year", "cumulative_hours", "last_overhaul_date", "operating_area", "notes" };
@@ -1497,13 +1497,13 @@ public static class GeoDataQueries
                 cmd.CommandText = $"INSERT INTO equipment ({names}) VALUES ({vals})";
                 ins++;
             }
-            cmd.Parameters.AddWithValue("@equipment_id", eq); cmd.Parameters.AddWithValue("@category", cat);
+            cmd.AddWithValue("@equipment_id", eq); cmd.AddWithValue("@category", cat);
             foreach (var col in cols)
             {
                 object val = col == "model" ? FkOpt("model", "equipment_model", "model")
                            : col == "operating_area" ? FkOpt("operating_area", "mine_location", "location_code")
                            : Opt(col);
-                cmd.Parameters.AddWithValue("@" + col, val);
+                cmd.AddWithValue("@" + col, val);
             }
             try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
         }
@@ -1514,7 +1514,7 @@ public static class GeoDataQueries
     /// 全工业分析列(M/A/V/FC 原煤+浮煤): hole_id,seam_code,depth_from[,depth_to,sample_thickness,z_sample,apparent_density,true_density,
     /// mad_raw,ad_raw,vdaf_raw,fcd_raw,mad_clean,ad_clean,vdaf_clean,fcd_clean,std_raw,std_clean,qgr_d,qnet_ad,
     /// plastic_x_mm,plastic_y_mm,caking_g,char_residue_raw,char_residue_clean,clean_coal_yield,coal_type,plastometric_curve]。缺列留空。</summary>
-    public static ImportOutcome ImportCoalSamples(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
+    public static ImportOutcome ImportCoalSamples(DbConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
     {
         int ins = 0, upd = 0, skip = 0, err = 0;
         foreach (var row in rows)
@@ -1523,18 +1523,18 @@ public static class GeoDataQueries
             string hole = Get("hole_id"), seam = Get("seam_code");
             if (hole.Length == 0 || seam.Length == 0 || !ParseD(Get("depth_from"), out double df)) { err++; continue; }
             long bhId;
-            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT id FROM borehole WHERE hole_id=@h"; q.Parameters.AddWithValue("@h", hole); var o = q.ExecuteScalar(); if (o == null || o is System.DBNull) { err++; continue; } bhId = System.Convert.ToInt64(o); }
+            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT id FROM borehole WHERE hole_id=@h"; q.AddWithValue("@h", hole); var o = q.ExecuteScalar(); if (o == null || o is System.DBNull) { err++; continue; } bhId = System.Convert.ToInt64(o); }
             object Num(string k) => ParseD(Get(k), out double v) ? v : (object)System.DBNull.Value;
             object Txt(string k) => Get(k) is { Length: > 0 } s ? s : (object)System.DBNull.Value;
             // coal_type→coal_classification(code) 有外键: 非有效码则置 NULL(无损降级, 免整行 FK 失败——用户填煤种中文名/未知码不丢整条化验)
             object FkTxt(string k, string tbl, string pcol)
             {
                 string v = Get(k); if (v.Length == 0) return System.DBNull.Value;
-                using var q = conn.CreateCommand(); q.CommandText = $"SELECT 1 FROM {tbl} WHERE {pcol}=@v LIMIT 1"; q.Parameters.AddWithValue("@v", v);
+                using var q = conn.CreateCommand(); q.CommandText = $"SELECT 1 FROM {tbl} WHERE {pcol}=@v LIMIT 1"; q.AddWithValue("@v", v);
                 return q.ExecuteScalar() != null ? (object)v : System.DBNull.Value;
             }
             bool exists;
-            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM coal_sample WHERE borehole_id=@b AND seam_code=@s AND depth_from=@d"; q.Parameters.AddWithValue("@b", bhId); q.Parameters.AddWithValue("@s", seam); q.Parameters.AddWithValue("@d", df); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
+            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM coal_sample WHERE borehole_id=@b AND seam_code=@s AND depth_from=@d"; q.AddWithValue("@b", bhId); q.AddWithValue("@s", seam); q.AddWithValue("@d", df); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
             // 数值列: 工业分析 M/A/V/FC(原煤 raw + 浮煤 clean 全齐) + 密度(视/真) + 全硫 + 发热量 + 胶质层 X/Y + 粘结 G + 焦渣 + 浮煤回收率
             var cols = new[] { "depth_to", "sample_thickness", "z_sample", "apparent_density", "true_density",
                 "mad_raw", "ad_raw", "vdaf_raw", "fcd_raw", "mad_clean", "ad_clean", "vdaf_clean", "fcd_clean",
@@ -1559,16 +1559,16 @@ public static class GeoDataQueries
                 cmd.CommandText = $"INSERT INTO coal_sample ({names}) VALUES ({vals})";
                 ins++;
             }
-            cmd.Parameters.AddWithValue("@b", bhId); cmd.Parameters.AddWithValue("@s", seam); cmd.Parameters.AddWithValue("@d", df);
-            foreach (var col in cols) cmd.Parameters.AddWithValue("@" + col, Num(col));
-            foreach (var col in txtCols) cmd.Parameters.AddWithValue("@" + col, col == "coal_type" ? FkTxt("coal_type", "coal_classification", "code") : Txt(col));
+            cmd.AddWithValue("@b", bhId); cmd.AddWithValue("@s", seam); cmd.AddWithValue("@d", df);
+            foreach (var col in cols) cmd.AddWithValue("@" + col, Num(col));
+            foreach (var col in txtCols) cmd.AddWithValue("@" + col, col == "coal_type" ? FkTxt("coal_type", "coal_classification", "code") : Txt(col));
             try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
         }
         return new ImportOutcome(ins, upd, skip, err);
     }
 
     /// <summary>见煤观测点 CSV 入库（忠实 CurrentStatePointExcelIo，CSV 替 Excel）：按 point_id+seam_code upsert。列: point_id,seam_code,x,y[,seam_thickness,floor_elevation,original_y_format]。</summary>
-    public static ImportOutcome ImportObservationPoints(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
+    public static ImportOutcome ImportObservationPoints(DbConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
     {
         int ins = 0, upd = 0, skip = 0, err = 0;
         foreach (var row in rows)
@@ -1579,12 +1579,12 @@ public static class GeoDataQueries
             object Num(string k) => ParseD(Get(k), out double v) ? v : (object)System.DBNull.Value;
             int yfmt = ParseI(Get("original_y_format"), out int yf) ? yf : 8;
             bool exists;
-            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM coal_observation_point WHERE point_id=@p AND seam_code=@s"; q.Parameters.AddWithValue("@p", pid); q.Parameters.AddWithValue("@s", seam); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
+            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM coal_observation_point WHERE point_id=@p AND seam_code=@s"; q.AddWithValue("@p", pid); q.AddWithValue("@s", seam); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
             using var cmd = conn.CreateCommand();
             if (exists) { if (!overwrite) { skip++; continue; } cmd.CommandText = "UPDATE coal_observation_point SET x=@x, y=@y, seam_thickness=@t, floor_elevation=@f, original_y_format=@yf WHERE point_id=@p AND seam_code=@s"; upd++; }
             else { cmd.CommandText = "INSERT INTO coal_observation_point (point_id, seam_code, x, y, original_y_format, seam_thickness, floor_elevation) VALUES (@p,@s,@x,@y,@yf,@t,@f)"; ins++; }
-            cmd.Parameters.AddWithValue("@p", pid); cmd.Parameters.AddWithValue("@s", seam); cmd.Parameters.AddWithValue("@x", x); cmd.Parameters.AddWithValue("@y", y);
-            cmd.Parameters.AddWithValue("@yf", yfmt); cmd.Parameters.AddWithValue("@t", Num("seam_thickness")); cmd.Parameters.AddWithValue("@f", Num("floor_elevation"));
+            cmd.AddWithValue("@p", pid); cmd.AddWithValue("@s", seam); cmd.AddWithValue("@x", x); cmd.AddWithValue("@y", y);
+            cmd.AddWithValue("@yf", yfmt); cmd.AddWithValue("@t", Num("seam_thickness")); cmd.AddWithValue("@f", Num("floor_elevation"));
             try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
         }
         return new ImportOutcome(ins, upd, skip, err);
@@ -1592,7 +1592,7 @@ public static class GeoDataQueries
 
     /// <summary>月度计划 CSV 入库：按 year+month upsert。列: year,month[,plan_strip_wan_m3,plan_coal_wan_t,plan_outsource_strip_wan_m3,ratio_strip_coal,avg_distance_km,avg_height_m]。
     /// 种子 monthly_plan 大半空(煤量/剥采比缺)，导入填充后 月度计划/达成度评价 才有意义。</summary>
-    public static ImportOutcome ImportMonthlyPlans(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
+    public static ImportOutcome ImportMonthlyPlans(DbConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
     {
         int ins = 0, upd = 0, skip = 0, err = 0;
         var cols = new[] { "plan_strip_wan_m3", "plan_coal_wan_t", "plan_outsource_strip_wan_m3", "ratio_strip_coal", "avg_distance_km", "avg_height_m" };
@@ -1602,7 +1602,7 @@ public static class GeoDataQueries
             if (!ParseI(Get("year"), out int yr) || !ParseI(Get("month"), out int mo)) { err++; continue; }
             double D(string k) { ParseD(Get(k), out double v); return v; }
             bool exists;
-            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM monthly_plan WHERE year=@y AND month=@m"; q.Parameters.AddWithValue("@y", yr); q.Parameters.AddWithValue("@m", mo); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
+            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM monthly_plan WHERE year=@y AND month=@m"; q.AddWithValue("@y", yr); q.AddWithValue("@m", mo); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
             using var cmd = conn.CreateCommand();
             if (exists)
             {
@@ -1617,8 +1617,8 @@ public static class GeoDataQueries
                 cmd.CommandText = $"INSERT INTO monthly_plan (year, month, {string.Join(", ", cols)}) VALUES (@y, @m, {string.Join(", ", System.Array.ConvertAll(cols, c => "@" + c))})";
                 ins++;
             }
-            cmd.Parameters.AddWithValue("@y", yr); cmd.Parameters.AddWithValue("@m", mo);
-            foreach (var col in cols) cmd.Parameters.AddWithValue("@" + col, D(col));
+            cmd.AddWithValue("@y", yr); cmd.AddWithValue("@m", mo);
+            foreach (var col in cols) cmd.AddWithValue("@" + col, D(col));
             try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
         }
         return new ImportOutcome(ins, upd, skip, err);
@@ -1626,7 +1626,7 @@ public static class GeoDataQueries
 
     /// <summary>钻孔见煤成果 CSV 入库：hole_id→borehole.id 查找，按 孔+煤层 upsert。列: hole_id,seam_code[,floor_elevation,adopted_thickness,drill_seam_thickness,status]。
     /// feeds 见煤统计/层位展点/确定可采区域。</summary>
-    public static ImportOutcome ImportSeamResults(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
+    public static ImportOutcome ImportSeamResults(DbConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
     {
         int ins = 0, upd = 0, skip = 0, err = 0;
         foreach (var row in rows)
@@ -1635,23 +1635,23 @@ public static class GeoDataQueries
             string hole = Get("hole_id"), seam = Get("seam_code");
             if (hole.Length == 0 || seam.Length == 0) { err++; continue; }
             long bhId;
-            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT id FROM borehole WHERE hole_id=@h"; q.Parameters.AddWithValue("@h", hole); var o = q.ExecuteScalar(); if (o == null || o is System.DBNull) { err++; continue; } bhId = System.Convert.ToInt64(o); }
+            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT id FROM borehole WHERE hole_id=@h"; q.AddWithValue("@h", hole); var o = q.ExecuteScalar(); if (o == null || o is System.DBNull) { err++; continue; } bhId = System.Convert.ToInt64(o); }
             object Num(string k) => ParseD(Get(k), out double v) ? v : (object)System.DBNull.Value;
             string status = Get("status") is { Length: > 0 } st ? st : "正常";
             bool exists;
-            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM borehole_seam_result WHERE borehole_id=@b AND seam_code=@s"; q.Parameters.AddWithValue("@b", bhId); q.Parameters.AddWithValue("@s", seam); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
+            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM borehole_seam_result WHERE borehole_id=@b AND seam_code=@s"; q.AddWithValue("@b", bhId); q.AddWithValue("@s", seam); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
             using var cmd = conn.CreateCommand();
             if (exists) { if (!overwrite) { skip++; continue; } cmd.CommandText = "UPDATE borehole_seam_result SET floor_elevation=@f, adopted_thickness=@a, drill_seam_thickness=@d, status=@st WHERE borehole_id=@b AND seam_code=@s"; upd++; }
             else { cmd.CommandText = "INSERT INTO borehole_seam_result (borehole_id, seam_code, floor_elevation, adopted_thickness, drill_seam_thickness, status) VALUES (@b,@s,@f,@a,@d,@st)"; ins++; }
-            cmd.Parameters.AddWithValue("@b", bhId); cmd.Parameters.AddWithValue("@s", seam);
-            cmd.Parameters.AddWithValue("@f", Num("floor_elevation")); cmd.Parameters.AddWithValue("@a", Num("adopted_thickness")); cmd.Parameters.AddWithValue("@d", Num("drill_seam_thickness")); cmd.Parameters.AddWithValue("@st", status);
+            cmd.AddWithValue("@b", bhId); cmd.AddWithValue("@s", seam);
+            cmd.AddWithValue("@f", Num("floor_elevation")); cmd.AddWithValue("@a", Num("adopted_thickness")); cmd.AddWithValue("@d", Num("drill_seam_thickness")); cmd.AddWithValue("@st", status);
             try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
         }
         return new ImportOutcome(ins, upd, skip, err);
     }
 
     /// <summary>运输道路 CSV 入库：按 road_id upsert。列: road_id,name,road_type(main/branch/dump/temp),length_m[,max_slope_pct,avg_slope_pct,road_width_m,start_location,end_location]。</summary>
-    public static ImportOutcome ImportHaulRoads(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
+    public static ImportOutcome ImportHaulRoads(DbConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
     {
         int ins = 0, upd = 0, skip = 0, err = 0;
         foreach (var row in rows)
@@ -1662,7 +1662,7 @@ public static class GeoDataQueries
             object Num(string k) => ParseD(Get(k), out double v) ? v : (object)System.DBNull.Value;
             object Txt(string k) => Get(k) is { Length: > 0 } s ? s : (object)System.DBNull.Value;
             bool exists;
-            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM haul_road WHERE road_id=@i"; q.Parameters.AddWithValue("@i", id); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
+            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM haul_road WHERE road_id=@i"; q.AddWithValue("@i", id); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
             // 无损全列: 补此前漏的 turning_radius/max_load/pavement/maintenance/notes + 路况 condition + 主力车型
             var extras = new System.Collections.Generic.List<(string col, object val)>
             {
@@ -1675,7 +1675,7 @@ public static class GeoDataQueries
             string cond = Get("condition").ToLowerInvariant();   // CHECK: good/fair/poor/closed; 无效留 DEFAULT 'good'(此前恒默认→路况列表全空, 现载真值)
             if (cond is "good" or "fair" or "poor" or "closed") extras.Add(("condition", cond));
             string tm = Get("primary_truck_model");              // FK→equipment_model: 父表有该型号才写(免整行 FK 失败, 无损降级)
-            if (tm.Length > 0) { using var qm = conn.CreateCommand(); qm.CommandText = "SELECT 1 FROM equipment_model WHERE model=@m LIMIT 1"; qm.Parameters.AddWithValue("@m", tm); if (qm.ExecuteScalar() != null) extras.Add(("primary_truck_model", (object)tm)); }
+            if (tm.Length > 0) { using var qm = conn.CreateCommand(); qm.CommandText = "SELECT 1 FROM equipment_model WHERE model=@m LIMIT 1"; qm.AddWithValue("@m", tm); if (qm.ExecuteScalar() != null) extras.Add(("primary_truck_model", (object)tm)); }
 
             using var cmd = conn.CreateCommand();
             if (exists)
@@ -1692,15 +1692,15 @@ public static class GeoDataQueries
                 cmd.CommandText = $"INSERT INTO haul_road ({names}) VALUES ({vals})";
                 ins++;
             }
-            cmd.Parameters.AddWithValue("@road_id", id); cmd.Parameters.AddWithValue("@name", name); cmd.Parameters.AddWithValue("@road_type", type); cmd.Parameters.AddWithValue("@length_m", len);
-            foreach (var e in extras) cmd.Parameters.AddWithValue("@" + e.col, e.val);
+            cmd.AddWithValue("@road_id", id); cmd.AddWithValue("@name", name); cmd.AddWithValue("@road_type", type); cmd.AddWithValue("@length_m", len);
+            foreach (var e in extras) cmd.AddWithValue("@" + e.col, e.val);
             try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
         }
         return new ImportOutcome(ins, upd, skip, err);
     }
 
     /// <summary>边坡设计 CSV 入库（插入型，无自然键）：列: side_name,side_type(working/final/transition)[,working_slope_angle_deg,final_slope_angle_deg,max_depth_m,safety_factor,cohesion_kpa,friction_angle_deg,rock_type]。</summary>
-    public static ImportOutcome ImportSlopeDesigns(SqliteConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows)
+    public static ImportOutcome ImportSlopeDesigns(DbConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows)
     {
         int ins = 0, err = 0;
         foreach (var row in rows)
@@ -1711,10 +1711,10 @@ public static class GeoDataQueries
             object Num(string k) => ParseD(Get(k), out double v) ? v : (object)System.DBNull.Value;
             using var cmd = conn.CreateCommand();
             cmd.CommandText = "INSERT INTO slope_design (side_name, side_type, working_slope_angle_deg, final_slope_angle_deg, max_depth_m, safety_factor, cohesion_kpa, friction_angle_deg, rock_type) VALUES (@s,@t,@w,@f,@d,@sf,@c,@fr,@r)";
-            cmd.Parameters.AddWithValue("@s", side); cmd.Parameters.AddWithValue("@t", type);
-            cmd.Parameters.AddWithValue("@w", Num("working_slope_angle_deg")); cmd.Parameters.AddWithValue("@f", Num("final_slope_angle_deg")); cmd.Parameters.AddWithValue("@d", Num("max_depth_m"));
-            cmd.Parameters.AddWithValue("@sf", Num("safety_factor")); cmd.Parameters.AddWithValue("@c", Num("cohesion_kpa")); cmd.Parameters.AddWithValue("@fr", Num("friction_angle_deg"));
-            cmd.Parameters.AddWithValue("@r", Get("rock_type") is { Length: > 0 } rk ? rk : (object)System.DBNull.Value);
+            cmd.AddWithValue("@s", side); cmd.AddWithValue("@t", type);
+            cmd.AddWithValue("@w", Num("working_slope_angle_deg")); cmd.AddWithValue("@f", Num("final_slope_angle_deg")); cmd.AddWithValue("@d", Num("max_depth_m"));
+            cmd.AddWithValue("@sf", Num("safety_factor")); cmd.AddWithValue("@c", Num("cohesion_kpa")); cmd.AddWithValue("@fr", Num("friction_angle_deg"));
+            cmd.AddWithValue("@r", Get("rock_type") is { Length: > 0 } rk ? rk : (object)System.DBNull.Value);
             try { cmd.ExecuteNonQuery(); ins++; } catch { err++; }
         }
         return new ImportOutcome(ins, 0, 0, err);
@@ -1724,7 +1724,7 @@ public static class GeoDataQueries
 
     /// <summary>层位展点（忠实 HorizonPointBuilder 双源）：① borehole_seam_result join 孔位(底=floor_elevation, 顶=底+采用厚度)
     /// ② coal_observation_point 见煤点(自带 x/y; 底=floor_elevation, 顶=底+见煤厚度 seam_thickness)。分煤层顶/底板高程点。</summary>
-    public static List<HorizonPoint> GetHorizonPoints(SqliteConnection conn, bool includeRoof = true, bool includeFloor = true)
+    public static List<HorizonPoint> GetHorizonPoints(DbConnection conn, bool includeRoof = true, bool includeFloor = true)
     {
         var pts = new List<HorizonPoint>();
         // ① 钻孔见煤成果 borehole_seam_result(join 孔位取 x/y)
@@ -1763,7 +1763,7 @@ public static class GeoDataQueries
     }
 
     /// <summary>煤质化验段（join borehole 取坐标/孔号）——供 CoalAnalytics 商品煤符合性等分析。</summary>
-    public static List<CoalSample> GetCoalSamples(SqliteConnection conn)
+    public static List<CoalSample> GetCoalSamples(DbConnection conn)
     {
         var rows = new List<CoalSample>();
         using var cmd = conn.CreateCommand();
@@ -1781,7 +1781,7 @@ public static class GeoDataQueries
     }
 
     /// <summary>编组优化规则：dispatch_rule join equipment_model 取 卡车载重/电铲斗容（供 FleetOptimizer）。</summary>
-    public static List<FleetDispatchRule> GetFleetDispatchRules(SqliteConnection conn)
+    public static List<FleetDispatchRule> GetFleetDispatchRules(DbConnection conn)
     {
         var rows = new List<FleetDispatchRule>();
         using var cmd = conn.CreateCommand();
@@ -1805,7 +1805,7 @@ public static class GeoDataQueries
     }
 
     /// <summary>月度总产量时间序列（万m³，按年月升序）——供 ForecastModels 时序预测。</summary>
-    public static List<double> GetMonthlyOutputSeries(SqliteConnection conn)
+    public static List<double> GetMonthlyOutputSeries(DbConnection conn)
     {
         var series = new List<double>();
         using var cmd = conn.CreateCommand();
@@ -1818,7 +1818,7 @@ public static class GeoDataQueries
     public sealed record AnnualOutputRow(int Year, double OutputWanM3);
 
     /// <summary>年度产量趋势：capacity_monthly 按年聚合总产量（万m³）。</summary>
-    public static List<AnnualOutputRow> GetAnnualOutput(SqliteConnection conn)
+    public static List<AnnualOutputRow> GetAnnualOutput(DbConnection conn)
     {
         var rows = new List<AnnualOutputRow>();
         using var cmd = conn.CreateCommand();
@@ -1847,7 +1847,7 @@ public static class GeoDataQueries
         double AvgMoisturePct = 0, double AvgFixedCarbonPct = 0);   // Mad 水分 + FCd 固定碳 —— 补全工业分析 M/A/V/FC
 
     /// <summary>分煤层煤质：各煤层 煤样数 / 平均 灰分Ad / 挥发分Vdaf / 发热量Qnet（coal_sample 按 seam_code 分组）。</summary>
-    public static List<SeamQualityRow> GetCoalQualityBySeam(SqliteConnection conn)
+    public static List<SeamQualityRow> GetCoalQualityBySeam(DbConnection conn)
     {
         var rows = new List<SeamQualityRow>();
         using var cmd = conn.CreateCommand();
@@ -1864,7 +1864,7 @@ public static class GeoDataQueries
     public sealed record SeamIntersectRow(string SeamCode, int Holes, double AvgThicknessM, int PinchCount);
 
     /// <summary>见煤统计 / 煤层对比：各煤层 见煤钻孔数 / 平均采用厚度 / 尖灭孔数（borehole_seam_result 778 行）。</summary>
-    public static List<SeamIntersectRow> GetSeamIntersections(SqliteConnection conn)
+    public static List<SeamIntersectRow> GetSeamIntersections(DbConnection conn)
     {
         var rows = new List<SeamIntersectRow>();
         using var cmd = conn.CreateCommand();
@@ -1878,7 +1878,7 @@ public static class GeoDataQueries
         return rows;
     }
 
-    private static List<CategoryCount> GroupCount(SqliteConnection conn, string sql)
+    private static List<CategoryCount> GroupCount(DbConnection conn, string sql)
     {
         var list = new List<CategoryCount>();
         using var cmd = conn.CreateCommand();
@@ -1889,7 +1889,7 @@ public static class GeoDataQueries
     }
 
     /// <summary>煤层观测点坐标 + 煤厚：供展绘 + 统计。</summary>
-    public static List<(string pointId, double x, double y, double thickness, string seam)> GetObservationPoints(SqliteConnection conn)
+    public static List<(string pointId, double x, double y, double thickness, string seam)> GetObservationPoints(DbConnection conn)
     {
         var rows = new List<(string, double, double, double, string)>();
         using var cmd = conn.CreateCommand();
@@ -1903,7 +1903,7 @@ public static class GeoDataQueries
     public sealed record MineLocationRow(string Code, string Name, double Elevation, string Team, bool Active);
 
     /// <summary>采区/采场位置列表。</summary>
-    public static List<MineLocationRow> GetMineLocations(SqliteConnection conn)
+    public static List<MineLocationRow> GetMineLocations(DbConnection conn)
     {
         var rows = new List<MineLocationRow>();
         using var cmd = conn.CreateCommand();
@@ -1915,7 +1915,7 @@ public static class GeoDataQueries
     }
 
     /// <summary>开孔坐标：读所有有平面坐标的钻孔 (hole_id, x, y, z_collar)。供展绘点位。</summary>
-    public static List<(string holeId, double x, double y, double z)> GetBoreholeCoords(SqliteConnection conn)
+    public static List<(string holeId, double x, double y, double z)> GetBoreholeCoords(DbConnection conn)
     {
         var rows = new List<(string, double, double, double)>();
         using var cmd = conn.CreateCommand();
@@ -1926,7 +1926,7 @@ public static class GeoDataQueries
         return rows;
     }
 
-    private static double ScalarDouble(SqliteConnection conn, string sql)
+    private static double ScalarDouble(DbConnection conn, string sql)
     {
         using var cmd = conn.CreateCommand();
         cmd.CommandText = sql;
@@ -1934,7 +1934,7 @@ public static class GeoDataQueries
         return v == null || v is System.DBNull ? 0 : System.Convert.ToDouble(v);
     }
 
-    private static long Scalar(SqliteConnection conn, string sql)
+    private static long Scalar(DbConnection conn, string sql)
     {
         using var cmd = conn.CreateCommand();
         cmd.CommandText = sql;

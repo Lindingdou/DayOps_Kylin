@@ -3,22 +3,24 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using Microsoft.Data.Sqlite;
+using System.Data.Common;
 
 namespace PitMine3D.Kylin.Data;
 
 /// <summary>
 /// 地质/生产数据库（§四 地质数据库 / §八 日常生产组织的数据层）。
-/// 原 PitMine3D 走 SqlLib(**SQLite**, 非 DM8) + GeoDataBase 迁移(建表 + 真实种子数据)。
+/// 原 PitMine3D 走 SqlLib(**SQLite**) + GeoDataBase 迁移(建表 + 真实种子数据)。
 /// 此忠实移植其数据基座: 内嵌 50 个迁移 SQL(与原逐字一致) → 运行时建库自足, 跨平台、可单测。
-/// 数据本机全可跑（SQLite 嵌入式, 无需外部数据库服务器）。
+///
+/// 具体用哪种库已抽到 <see cref="GeoDbDialect"/>: 默认 SQLite(嵌入式, 本机全可跑, 无需外部服务),
+/// 设 PITMINE_DB=dm 则连达梦。本类只负责"按版本号顺序把迁移喂进去"这件与库无关的事。
 /// </summary>
 public sealed class GeoDatabase : IDisposable
 {
-    private readonly SqliteConnection _conn;
-    public SqliteConnection Connection => _conn;
+    private readonly DbConnection _conn;
+    public DbConnection Connection => _conn;
 
-    private GeoDatabase(SqliteConnection conn) => _conn = conn;
+    private GeoDatabase(DbConnection conn) => _conn = conn;
 
     /// <summary>
     /// 默认库文件路径：用户数据目录 (Linux: ~/.local/share/PitMine3D.Kylin/geo.db, Windows: %LocalAppData%\PitMine3D.Kylin\geo.db)。
@@ -43,8 +45,7 @@ public sealed class GeoDatabase : IDisposable
     /// <summary>打开并建库(应用全部迁移)。path=null → 内存库(连接存活期内有效)。</summary>
     public static GeoDatabase OpenSeeded(string? path = null)
     {
-        var connStr = string.IsNullOrEmpty(path) ? "Data Source=:memory:" : $"Data Source={path}";
-        var conn = new SqliteConnection(connStr);
+        var conn = GeoDbDialect.Current.CreateConnection(path);
         conn.Open();
         ApplyMigrations(conn);
         return new GeoDatabase(conn);
@@ -54,7 +55,7 @@ public sealed class GeoDatabase : IDisposable
     public int AppliedMigrationCount()
     {
         using var cmd = _conn.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM _schema_migration";
+        cmd.CommandText = $"SELECT COUNT(*) FROM {GeoDbDialect.Current.SchemaMigrationTable}";
         return Convert.ToInt32(cmd.ExecuteScalar());
     }
 
@@ -67,31 +68,33 @@ public sealed class GeoDatabase : IDisposable
         return v == null || v is DBNull ? 0 : Convert.ToInt64(v);
     }
 
-    private static void ApplyMigrations(SqliteConnection conn)
+    private static void ApplyMigrations(DbConnection conn)
     {
-        // 迁移期关外键(种子跨表插入顺序会临时违约; 原 SqlLib.MigrationRunner 同此)。PRAGMA 须在事务外设。
-        Exec(conn, "PRAGMA foreign_keys=OFF;");
+        var d = GeoDbDialect.Current;
 
-        Exec(conn, @"CREATE TABLE IF NOT EXISTS _schema_migration (
-            version TEXT NOT NULL PRIMARY KEY,
-            applied_at TEXT NOT NULL DEFAULT (datetime('now'))
-        );");
+        d.BeforeMigrations(conn);                 // SQLite: 迁移期临时关外键(种子跨表插入顺序会临时违约)
+        d.EnsureSchemaMigrationTable(conn);
 
         var applied = new HashSet<string>(StringComparer.Ordinal);
         using (var q = conn.CreateCommand())
         {
-            q.CommandText = "SELECT version FROM _schema_migration";
+            q.CommandText = $"SELECT version FROM {d.SchemaMigrationTable}";
             using var rd = q.ExecuteReader();
             while (rd.Read()) applied.Add(rd.GetString(0));
         }
 
         var asm = typeof(GeoDatabase).Assembly;
-        // 资源名形如 PitMine3D.Kylin.Data.Migrations.V001_initial.sql
+        // 资源名形如 PitMine3D.Kylin.Data.Migrations.V001_initial.sql(DM 版在 .MigrationsDm.)
         var migrations = asm.GetManifestResourceNames()
-            .Where(n => n.Contains(".Data.Migrations.") && n.EndsWith(".sql", StringComparison.OrdinalIgnoreCase))
-            .Select(n => (res: n, ver: VersionKey(n)))
+            .Where(n => n.Contains(d.MigrationMarker) && n.EndsWith(".sql", StringComparison.OrdinalIgnoreCase))
+            .Select(n => (res: n, ver: VersionKey(n, d.MigrationMarker)))
             .OrderBy(t => t.ver, StringComparer.Ordinal)
             .ToList();
+
+        if (migrations.Count == 0)
+            throw new InvalidOperationException(
+                $"没有找到 {d.Name} 方言的迁移脚本(资源标记 {d.MigrationMarker})。" +
+                "DM 版迁移需先由 SQLite 版翻译生成。");
 
         foreach (var (res, ver) in migrations)
         {
@@ -100,11 +103,14 @@ public sealed class GeoDatabase : IDisposable
             using var tx = conn.BeginTransaction();
             try
             {
-                Exec(conn, sql, tx);
+                // SQLite 可以一次吃整批; 达梦一次只吃一条, 故按方言拆开喂。
+                foreach (var stmt in d.SplitBatch(sql))
+                    Exec(conn, stmt, tx);
+
                 using var ins = conn.CreateCommand();
                 ins.Transaction = tx;
-                ins.CommandText = "INSERT INTO _schema_migration(version) VALUES(@v)";
-                ins.Parameters.AddWithValue("@v", ver);
+                ins.CommandText = $"INSERT INTO {d.SchemaMigrationTable}(version) VALUES({d.ParamPrefix}v)";
+                ins.AddWithValue("v", ver);
                 ins.ExecuteNonQuery();
                 tx.Commit();
             }
@@ -115,13 +121,12 @@ public sealed class GeoDatabase : IDisposable
             }
         }
 
-        Exec(conn, "PRAGMA foreign_keys=ON;");   // 迁移完恢复外键(仅约束后续写入, 不校验既有行)
+        d.AfterMigrations(conn);                  // SQLite: 恢复外键(仅约束后续写入, 不校验既有行)
     }
 
     // 从资源名取版本键（"…Migrations.V001_initial.sql" → "V001_initial"）。
-    private static string VersionKey(string resourceName)
+    private static string VersionKey(string resourceName, string marker)
     {
-        const string marker = ".Data.Migrations.";
         int i = resourceName.IndexOf(marker, StringComparison.Ordinal);
         string tail = i >= 0 ? resourceName.Substring(i + marker.Length) : resourceName;
         return tail.EndsWith(".sql", StringComparison.OrdinalIgnoreCase) ? tail[..^4] : tail;
@@ -135,8 +140,8 @@ public sealed class GeoDatabase : IDisposable
         return r.ReadToEnd();
     }
 
-    // Microsoft.Data.Sqlite 的 ExecuteNonQuery 会执行整批多语句（含触发器 BEGIN…END）。
-    private static void Exec(SqliteConnection conn, string sql, SqliteTransaction? tx = null)
+    // 一条(或 SQLite 下的一批)语句。批量与否由方言的 SplitBatch 决定。
+    private static void Exec(DbConnection conn, string sql, DbTransaction? tx = null)
     {
         using var cmd = conn.CreateCommand();
         if (tx != null) cmd.Transaction = tx;

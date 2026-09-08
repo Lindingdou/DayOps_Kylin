@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia.Controls;
-using Microsoft.Data.Sqlite;
+using System.Data.Common;
 using PitMine3D.Kylin.Cad;
 using PitMine3D.Kylin.Cad.Draw;
 
@@ -18,7 +18,7 @@ public sealed class ModelingContext
     public required Window Owner { get; init; }
     public required Action<string> Status { get; init; }
     /// <summary>地质/生产数据库(§四/§八 SQLite, 补勘钻孔/现状点等表在此); 打开失败为 null。</summary>
-    public required Func<SqliteConnection?> Conn { get; init; }
+    public required Func<DbConnection?> Conn { get; init; }
 
     // ── 场景对象 ──
     public required Func<IReadOnlyList<MeshEntity>> Meshes { get; init; }

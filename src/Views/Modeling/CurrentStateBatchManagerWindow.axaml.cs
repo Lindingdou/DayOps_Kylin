@@ -4,7 +4,7 @@ using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
-using Microsoft.Data.Sqlite;
+using System.Data.Common;
 using PitMine3D.Kylin.Views.GeoDb;
 using static PitMine3D.Kylin.Data.GeoDbViews;
 
@@ -13,13 +13,13 @@ namespace PitMine3D.Kylin.Views.Modeling;
 /// <summary>现状写实数据管理(原 MeshEditLib.ModelUpdate.CurrentStateBatchManagerWindow): 按批次列出; 双击名称改名; 删批次连带删该批点。</summary>
 public partial class CurrentStateBatchManagerWindow : Window
 {
-    private readonly SqliteConnection? _conn;
+    private readonly DbConnection? _conn;
     private ObservableCollection<CsBatchRow> _rows = new();
 
     /// <summary>XAML 编译器/设计器用。</summary>
     public CurrentStateBatchManagerWindow() { InitializeComponent(); }
 
-    public CurrentStateBatchManagerWindow(SqliteConnection? conn)
+    public CurrentStateBatchManagerWindow(DbConnection? conn)
     {
         InitializeComponent();
         _conn = conn;

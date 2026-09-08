@@ -11,7 +11,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
-using Microsoft.Data.Sqlite;
+using System.Data.Common;
 using PitMine3D.Kylin.Cad;
 using PitMine3D.Kylin.Cad.Draw;
 using PitMine3D.Kylin.Controls.Charts;
@@ -30,7 +30,7 @@ namespace PitMine3D.Kylin.Views.Modeling;
 public partial class UpdateSeamSurfaceWindow : Window
 {
     private readonly ModelingContext _ctx;
-    private readonly SqliteConnection? _conn;
+    private readonly DbConnection? _conn;
 
     private SeamStructureConfig _config = new();
     private MeshEntity? _mesh;
