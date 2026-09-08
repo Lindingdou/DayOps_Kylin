@@ -32,6 +32,7 @@ public partial class MainWindow : Window
         SetDocPath(null);          // 初始标题=未命名
         RenderAssistant(_assistant.Current());   // 智能助手：启动显示欢迎 + 主菜单
         GlyphFontHost.Install();   // 视口文字用系统真字形(含中文), 取不到则退回笔画字体
+        Opened += (_, _) => ReportGraphicsDowngrade();   // 图形被自动降级时在信息栏说明
         InitPropertyRibbon();      // Ribbon「特性」组 颜色/线宽/线型 三栏(填下拉 + 复位显示)
         Modeling.MeshEditWindows.Register(); Modeling.EstimationWindows.Register(); Modeling.ModelUpdateWindows.Register(); Modeling.BlockModelWindows.Register();   // 三维地质建模独立窗口登记(功能项名 → 窗口)
 
@@ -11684,6 +11685,26 @@ public partial class MainWindow : Window
                 return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// 启动时把「图形降级」情况报到信息栏与状态栏 —— 降级是静默发生的(启动器按上次崩溃自动降档),
+    /// 不说清楚用户只会觉得"怎么变慢了/三维没了"。
+    /// </summary>
+    private void ReportGraphicsDowngrade()
+    {
+        string? prof = System.Environment.GetEnvironmentVariable("PITMINE_GL_PROFILE");
+        bool soft = !string.IsNullOrEmpty(System.Environment.GetEnvironmentVariable("LIBGL_ALWAYS_SOFTWARE"));
+        bool nogl = !string.IsNullOrEmpty(System.Environment.GetEnvironmentVariable("PITMINE_NO_GL"));
+        string? msg = null;
+        if (nogl) msg = "图形已降级：三维视口已停用（图形驱动反复崩溃）。数据库、表单、报表、命令行均可正常使用。";
+        else if (soft) msg = "图形已降级：正在使用软件渲染（硬件 OpenGL 驱动崩溃过）。画面较慢但稳定。";
+        else if (!string.IsNullOrEmpty(prof)) msg = $"图形已降级：按 OpenGL {prof} 运行（更高档位崩溃过），仍是硬件渲染。";
+        if (msg == null) return;
+        msg += "  恢复默认：删除 ~/.local/share/PitMine3D.Kylin/.gl-level 后重启。";
+        LogCommand(msg);
+        StatusMsg.Text = msg;
+        PitMine3D.Kylin.CrashLog.Write("GL", msg);
     }
 
     // 命令历史/输出面板：回显执行的命令（▸ cmd），滚动到底，上限 100 行

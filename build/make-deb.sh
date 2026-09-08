@@ -132,6 +132,7 @@ else
     case "$LEVEL" in
         auto) ;;                                                        # 默认协商表(GL 4.0 优先)
         soft) LIBGL_ALWAYS_SOFTWARE=1; export LIBGL_ALWAYS_SOFTWARE; USING_SOFTWARE=1 ;;
+        nogl) PITMINE_NO_GL=1; export PITMINE_NO_GL; USING_SOFTWARE=1 ;;   # 停三维视口, 其余功能照常
         *)    PITMINE_GL_PROFILE="$LEVEL"; export PITMINE_GL_PROFILE ;;
     esac
     if [ "$LEVEL" != "auto" ]; then
@@ -187,13 +188,26 @@ if [ -n "$LADDER_ON" ] && [ "$RC" -gt 128 ] 2>/dev/null; then
         auto) NEXT=3.0 ;;
         3.0)  NEXT=2.1 ;;
         2.1)  NEXT=soft ;;
-        *)    NEXT=soft ;;
+        soft) NEXT=nogl ;;
+        *)    NEXT=nogl ;;
     esac
     echo "$NEXT" > "$LEVELFILE" 2>/dev/null || true
-    if [ "$NEXT" = "soft" ]; then
-        echo "硬件 OpenGL 各档位都崩, 下次启动改用软件渲染(慢但稳)。" >&2
-    else
-        echo "本档图形驱动崩溃, 下次启动降到 OpenGL $NEXT 再试(仍是硬件渲染)。" >&2
+    case "$NEXT" in
+        soft) echo "硬件 OpenGL 各档位都崩, 下次启动改用软件渲染(慢但稳)。" >&2 ;;
+        nogl) echo "软件渲染也崩, 下次启动将停用三维视口 —— 数据库/表单/命令行等仍可正常使用。" >&2 ;;
+        *)    echo "本档图形驱动崩溃, 下次启动降到 OpenGL $NEXT 再试(仍是硬件渲染)。" >&2 ;;
+    esac
+
+    # 不直接闪退: 就地按降后的档位自动重启一次, 让用户看到的是"程序还在"而不是窗口消失
+    # 最多自动重启 4 次(阶梯共 4 级), 逐级降到能跑为止; 到顶就不再重启, 避免死循环。
+    TRIES=${PITMINE_RESTART_N:-0}
+    if [ "$TRIES" -lt 4 ] 2>/dev/null; then
+        echo "正在按降级档位($NEXT)自动重启…" >&2
+        PITMINE_RESTART_N=$((TRIES + 1)); export PITMINE_RESTART_N
+        # 必须清掉本轮由阶梯导出的变量: 否则重启后被继承, 阶梯会当成"用户手动指定"而让路,
+        # 结果卡在同一档反复崩(实测踩到)。清掉后由重启的实例按 .gl-level 重新决定。
+        unset PITMINE_GL_PROFILE LIBGL_ALWAYS_SOFTWARE PITMINE_NO_GL
+        exec "$0" "$@"
     fi
 fi
 

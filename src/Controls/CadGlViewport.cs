@@ -128,8 +128,19 @@ public partial class CadGlViewport : OpenGlControlBase
     private static readonly bool NoCursor =
         !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PITMINE_NO_CURSOR"));
 
+    /// <summary>PITMINE_NO_GL=1: 完全不初始化三维视口(降级最后一档 —— 图形反复崩时保住程序可用)。</summary>
+    private static readonly bool NoGl =
+        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PITMINE_NO_GL"));
+
     protected override void OnOpenGlInit(GlInterface gl)
     {
+        if (NoGl)
+        {
+            GlFailed = true;
+            GlFailReason = "已按 PITMINE_NO_GL 停用三维视口(图形驱动反复崩溃后的自动降级)";
+            PitMine3D.Kylin.CrashLog.Write("GL", GlFailReason);
+            return;
+        }
         try { OnOpenGlInitCore(gl); }
         catch (Exception ex)
         {

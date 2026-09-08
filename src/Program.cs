@@ -16,6 +16,7 @@ internal static class Program
         // 把 Avalonia 日志（含 OpenGL 初始化告警）导到 stderr，便于在麒麟/WSL 上诊断
         Trace.Listeners.Add(new ConsoleTraceListener(true));
         CrashLog.Install();
+        NativeCrashHandler.Install(CrashLog.Path);   // 段错误时把原生调用栈写进日志(不依赖 gdb)
         CrashLog.WriteStartupBanner();
         try
         {
