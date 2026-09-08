@@ -51,6 +51,47 @@ public partial class MainWindow
         for (int i = 2; ; i++) if (!names.Contains($"{prefix}{i}")) return $"{prefix}{i}";
     }
 
+
+    /// <summary>
+    /// 由收集好的顶点/约束建三角网并入场景 —— 创建三角网的几条输入通路(选中的线 / 场景全部可见线 /
+    /// 导入线框)共用这一段收尾，口径对齐原版：
+    ///   · 先预清洗约束(剔退化/重复/交叉)并把剔除数报给用户；
+    ///   · 顶点超上限退为无约束剖分(原版同样在十万点处分流)；
+    ///   · 结果落图层「格网」、用原版那支橙(ACI 30)；
+    ///   · 不按闭合线裁边界(原版 close_convex_hull=true, 结果填满凸包; 裁剪另用「闭合线裁剪面」)。
+    /// </summary>
+    private bool BuildTinFromConstraints(PolylineTin.Result col, string source)
+    {
+        if (col.Verts.Count < 3) { StatusMsg.Text = $"创建三角网：{source}的顶点不足 3 个"; return false; }
+
+        var cons = PolylineTin.Clean(col.Verts, col.Constraints, out var clean);
+        var xy = col.Verts.Select(v => (v.x, v.y)).ToList();
+        bool dropped = col.Verts.Count > TinConstraintVertexLimit;
+        var tris = dropped ? Delaunay.Triangulate(xy) : Delaunay.TriangulateConstrained(xy, cons);
+        if (tris.Count == 0) { StatusMsg.Text = $"创建三角网：{source}的顶点共线，无法剖分"; return false; }
+
+        tris = OrientUp(col.Verts, tris);   // 统一绕向(法线朝上), 边界环/成体/内外判定都依赖一致绕向
+        var me = new MeshEntity(NewMeshName("三角网"), col.Verts, tris)
+        {
+            LayerName = TinLayerName,
+            Cr = 0xFF / 255f, Cg = 0x7F / 255f, Cb = 0x00,   // 原版结果色: ACI 30 橙
+        };
+        _layers.EnsureImported(TinLayerName, 1f, 0x7F / 255f, 0f);   // 结果落「格网」层(同原版), 用同一支橙
+        AddMesh(me, true);
+        SelectEntities(new SceneEntity[] { me });
+
+        var st = TinSurface.Describe(col.Verts, tris);
+        StatusMsg.Text = $"创建三角网「{me.Name}」：{source} {col.Verts.Count} 顶点"
+                       + (dropped ? $"(超 {TinConstraintVertexLimit:N0}，已退为无约束剖分，线形约束未保留；可先用「抽稀等值线」减点)"
+                                  : $"，{cons.Count} 段约束")
+                       + (clean.Total > 0 ? $"，已清洗剔除 {clean.Total} 处问题约束(重复 {clean.Duplicate}/交叉 {clean.Crossing}/退化 {clean.Degenerate})" : "")
+                       + $" → {tris.Count} 三角 · 投影面积 {st.ProjectedAreaXY:0.#} · 高程 {st.ZMin:0.#}~{st.ZMax:0.#}";
+        return true;
+    }
+
+    /// <summary>三角网结果图层名（同原版 Layer="格网"）。</summary>
+    private const string TinLayerName = "格网";
+
     private MeshEntity AddMesh(MeshEntity me, bool fit, bool beginChange = true)
     {
         if (beginChange) BeginChange();
@@ -351,26 +392,11 @@ public partial class MainWindow
             }));
             var col = PolylineTin.Collect(input);
 
-            // 同时选中的散点一并作为输入(点线混选)
+            // 同时选中的散点一并作为输入(点线混选; 原版 AcDbPoint 走 StandalonePoint)
             foreach (var pe in selPts) col.Verts.Add((pe.X, pe.Y, pe.Elevation));
 
-            if (col.Verts.Count < 3) { StatusMsg.Text = "创建三角网：线的顶点不足 3 个"; return; }
-
-            // 顶点太多时退约束(同原版 10 万点阈值): 约束剖分在这个量级上不可行, 会把界面卡死。
-            // 等值线足够密时无约束结果与约束结果几乎一致 —— 但形状约束确实丢了, 故明确回报。
-            var xy = col.Verts.Select(v => (v.x, v.y)).ToList();
-            bool dropped = col.Verts.Count > TinConstraintVertexLimit;
-            var lineTris = dropped ? Delaunay.Triangulate(xy)
-                                   : Delaunay.TriangulateConstrained(xy, col.Constraints);
-            if (lineTris.Count == 0) { StatusMsg.Text = "创建三角网：顶点共线或约束自交，无法剖分"; return; }
-            lineTris = OrientUp(col.Verts, lineTris);
-            var lineMesh = AddMesh(new MeshEntity(NewMeshName("三角网"), col.Verts, lineTris), true);
-            SelectEntities(new SceneEntity[] { lineMesh });
-            var lst = TinSurface.Describe(col.Verts, lineTris);
-            StatusMsg.Text = $"创建三角网「{lineMesh.Name}」：{(usingAll ? "未选中对象, 取场景全部可见线 " : "")}{selLines.Count + selSegs.Count} 条线 {col.Verts.Count} 顶点"
-                           + (dropped ? $"(顶点超 {TinConstraintVertexLimit:N0}，已退为无约束剖分，线形约束未保留；可先用「抽稀等值线」减点)"
-                                      : $"({col.Constraints.Count} 段约束{(selPts.Count > 0 ? $" + {selPts.Count} 散点" : "")})")
-                           + $" → {lineTris.Count} 三角 · 投影面积 {lst.ProjectedAreaXY:0.#} · 高程 {lst.ZMin:0.#}~{lst.ZMax:0.#}";
+            string src = (usingAll ? "未选中对象, 取场景全部可见线 " : "") + $"{selLines.Count + selSegs.Count} 条线";
+            if (!BuildTinFromConstraints(col, src)) return;
             return;
         }
 
@@ -379,21 +405,7 @@ public partial class MainWindow
         if (selPts.Count == 0 && _lastImport is { LineVertices.Length: >= 12 })
         {
             var col = PolylineTin.CollectSegments(_lastImport.LineVertices);
-            if (col.Verts.Count >= 3)
-            {
-                var xy = col.Verts.Select(v => (v.x, v.y)).ToList();
-                bool drop = col.Verts.Count > TinConstraintVertexLimit;
-                var wt = drop ? Delaunay.Triangulate(xy) : Delaunay.TriangulateConstrained(xy, col.Constraints);
-                if (wt.Count == 0) { StatusMsg.Text = "创建三角网：导入线的顶点共线，无法剖分"; return; }
-                wt = OrientUp(col.Verts, wt);
-                var wm = AddMesh(new MeshEntity(NewMeshName("三角网"), col.Verts, wt), true);
-                SelectEntities(new SceneEntity[] { wm });
-                var wst = TinSurface.Describe(col.Verts, wt);
-                StatusMsg.Text = $"创建三角网「{wm.Name}」：取自导入图形 {col.Verts.Count} 顶点"
-                               + (drop ? $"(超 {TinConstraintVertexLimit:N0}，已退为无约束剖分)" : $"({col.Constraints.Count} 段约束)")
-                               + $" → {wt.Count} 三角 · 投影面积 {wst.ProjectedAreaXY:0.#} · 高程 {wst.ZMin:0.#}~{wst.ZMax:0.#}";
-                return;
-            }
+            if (col.Verts.Count >= 3) { BuildTinFromConstraints(col, "取自导入图形"); return; }
         }
 
         // ③ 只有点：散点 Delaunay

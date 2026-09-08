@@ -140,4 +140,57 @@ public class PolylineTinTests
         Assert.Empty(PolylineTin.CollectSegments(new float[] { 1, 2, 3 }).Verts);
         Assert.Empty(PolylineTin.CollectSegments(Array.Empty<float>()).Verts);
     }
+
+    // ── 约束预清洗(对应原版 preclean_*): 剔退化/重复/交叉并统计 ──
+    private static List<(double x, double y, double z)> V(params (double x, double y)[] p)
+        => p.Select(q => (q.x, q.y, 0.0)).ToList();
+
+    [Fact]
+    public void Clean_dropsDuplicateSegments()
+    {
+        var verts = V((0, 0), (10, 0));
+        var kept = PolylineTin.Clean(verts, new[] { (0, 1), (1, 0), (0, 1) }, out var st);
+        Assert.Single(kept);                 // 同一对端点只留一条(方向不论)
+        Assert.Equal(2, st.Duplicate);
+        Assert.Equal(2, st.Total);
+    }
+
+    [Fact]
+    public void Clean_dropsDegenerateSegments()
+    {
+        var verts = V((0, 0), (10, 0));
+        var kept = PolylineTin.Clean(verts, new[] { (0, 0), (1, 1), (-1, 0), (0, 9) }, out var st);
+        Assert.Empty(kept);
+        Assert.Equal(4, st.Degenerate);
+    }
+
+    [Fact]
+    public void Clean_dropsTheLaterOfTwoCrossingSegments()
+    {
+        // 两条等值线真交叉 = 数据本身矛盾; 保留先来的那条, 丢后来的(比两条都丢少开洞)
+        var verts = V((0, 0), (10, 10), (0, 10), (10, 0));
+        var kept = PolylineTin.Clean(verts, new[] { (0, 1), (2, 3) }, out var st);
+        Assert.Single(kept);
+        Assert.Equal((0, 1), kept[0]);
+        Assert.Equal(1, st.Crossing);
+    }
+
+    [Fact]
+    public void Clean_keepsSegmentsThatOnlyShareAnEndpoint()
+    {
+        // 共端点是等值线的正常形态, 不能当成交叉剔掉
+        var verts = V((0, 0), (10, 0), (10, 10));
+        var kept = PolylineTin.Clean(verts, new[] { (0, 1), (1, 2) }, out var st);
+        Assert.Equal(2, kept.Count);
+        Assert.Equal(0, st.Total);
+    }
+
+    [Fact]
+    public void Clean_keepsDisjointSegments()
+    {
+        var verts = V((0, 0), (10, 0), (0, 50), (10, 50));
+        var kept = PolylineTin.Clean(verts, new[] { (0, 1), (2, 3) }, out var st);
+        Assert.Equal(2, kept.Count);
+        Assert.Equal(0, st.Total);
+    }
 }

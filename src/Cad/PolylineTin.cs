@@ -66,6 +66,99 @@ public static class PolylineTin
         return res;
     }
 
+    /// <summary>清洗统计（对应原版 preclean_* 计数，用于回报"剔除了多少处问题约束"）。</summary>
+    public sealed class CleanStat
+    {
+        /// <summary>零长/两端同点。</summary>
+        public int Degenerate;
+        /// <summary>同一对端点重复出现。</summary>
+        public int Duplicate;
+        /// <summary>与已保留的约束真交叉（等值线互相穿越，数据本身矛盾）。</summary>
+        public int Crossing;
+        public int Total => Degenerate + Duplicate + Crossing;
+    }
+
+    /// <summary>
+    /// 约束边预清洗 —— 忠实原版：三角化前先剔掉退化/重复/交叉的约束段，并统计剔除数回报用户。
+    ///
+    /// 为什么必须做：等值线数据里线与线相交、同一段被画两遍很常见。带着这种约束去做
+    /// 约束三角化，轻则结果乱，重则嵌入过程反复删三角形而卡住。原版对应
+    /// preclean_dup_segs / preclean_bad_segs(cross/T/overlap) 那几个计数。
+    ///
+    /// 交叉的取舍：按输入顺序贪心保留，后来的那条与已保留的真交叉就丢掉 ——
+    /// 比两条都丢更保守（少开洞），且结果与输入顺序一一对应、可复现。
+    /// 候选对用均匀网格找，不做 m² 的两两比对（三万条约束时那是九亿次）。
+    /// </summary>
+    public static List<(int u, int v)> Clean(
+        IReadOnlyList<(double x, double y, double z)> verts,
+        IReadOnlyList<(int u, int v)> constraints,
+        out CleanStat stat)
+    {
+        stat = new CleanStat();
+        var kept = new List<(int u, int v)>(constraints?.Count ?? 0);
+        if (verts == null || constraints == null || constraints.Count == 0) return kept;
+
+        var seen = new HashSet<(int, int)>();
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        foreach (var v in verts)
+        {
+            if (v.x < minX) minX = v.x; if (v.x > maxX) maxX = v.x;
+            if (v.y < minY) minY = v.y; if (v.y > maxY) maxY = v.y;
+        }
+        int g = Math.Clamp((int)Math.Sqrt(constraints.Count / 2.0), 1, 512);
+        double gw = maxX - minX > 1e-12 ? (maxX - minX) / g : 1;
+        double gh = maxY - minY > 1e-12 ? (maxY - minY) / g : 1;
+        var cells = new List<int>[g * g];
+        int Gx(double x) => Math.Clamp((int)((x - minX) / gw), 0, g - 1);
+        int Gy(double y) => Math.Clamp((int)((y - minY) / gh), 0, g - 1);
+
+        foreach (var (u, v) in constraints)
+        {
+            if (u < 0 || v < 0 || u >= verts.Count || v >= verts.Count || u == v) { stat.Degenerate++; continue; }
+            var key = u < v ? (u, v) : (v, u);
+            if (!seen.Add(key)) { stat.Duplicate++; continue; }
+
+            var a = verts[u]; var b = verts[v];
+            int x0 = Gx(Math.Min(a.x, b.x)), x1 = Gx(Math.Max(a.x, b.x));
+            int y0 = Gy(Math.Min(a.y, b.y)), y1 = Gy(Math.Max(a.y, b.y));
+
+            bool crosses = false;
+            for (int gy = y0; gy <= y1 && !crosses; gy++)
+                for (int gx = x0; gx <= x1 && !crosses; gx++)
+                {
+                    var bucket = cells[gy * g + gx];
+                    if (bucket == null) continue;
+                    for (int i = 0; i < bucket.Count; i++)
+                    {
+                        var (pu, pv) = kept[bucket[i]];
+                        if (pu == u || pu == v || pv == u || pv == v) continue;   // 共端点不算交叉
+                        if (ProperlyCross(verts[pu], verts[pv], a, b)) { crosses = true; break; }
+                    }
+                }
+            if (crosses) { stat.Crossing++; continue; }
+
+            int id = kept.Count;
+            kept.Add((u, v));
+            for (int gy = y0; gy <= y1; gy++)
+                for (int gx = x0; gx <= x1; gx++)
+                    (cells[gy * g + gx] ??= new List<int>()).Add(id);
+        }
+        return kept;
+    }
+
+    /// <summary>两段是否真交叉（严格相交于各自内部；共端点、共线重叠都不算）。</summary>
+    private static bool ProperlyCross((double x, double y, double z) p1, (double x, double y, double z) p2,
+                                      (double x, double y, double z) q1, (double x, double y, double z) q2)
+    {
+        double d1 = Cross(q1, q2, p1), d2 = Cross(q1, q2, p2);
+        double d3 = Cross(p1, p2, q1), d4 = Cross(p1, p2, q2);
+        return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+               ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+
+        static double Cross((double x, double y, double z) a, (double x, double y, double z) b, (double x, double y, double z) c)
+            => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    }
+
     /// <summary>平面去重精度（毫米级；矿区坐标 1e7 量级下仍不溢出 long）。</summary>
     private static (long, long) Key(double x, double y) => ((long)Math.Round(x * 1e3), (long)Math.Round(y * 1e3));
 
