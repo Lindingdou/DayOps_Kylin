@@ -2,7 +2,10 @@
 # 把一个已备好的 deb 目录树(含 DEBIAN/control 等)打成 .deb。
 # 有 dpkg-deb 就用它；没有(Windows/Git Bash)就 tar + 手工 ar 组装。
 #   ./deb-pack.sh <stage-dir> <out.deb>
-# 约定: stage 下 opt/ 内全部 755(含可执行), usr/ 内 644; DEBIAN/ 里 control 644、脚本 755。
+# 约定: stage 下 opt/ 内全部 755(含可执行); usr/ 内用符号权限 u+rwX,go=rX ——
+#   目录与可执行文件 755、普通文件 644。**不能对 usr/ 硬套 644**: 那会把 ./usr ./usr/share 这些
+#   目录也打成 drw-r--r--, dpkg 安装时会把目标机的 /usr 一并改成无执行位, 非 root 从此进不去
+#   /usr, /usr/bin 里的命令全部"找不到"(踩过)。DEBIAN/ 里 control 644、脚本 755。
 set -euo pipefail
 
 STAGE="${1:?用法: deb-pack.sh <stage-dir> <out.deb>}"
@@ -30,7 +33,7 @@ add_tree() {   # $1=子树(opt/usr) $2=权限
     fi
 }
 add_tree opt 755
-add_tree usr 644
+add_tree usr 'u+rwX,go=rX'      # 目录/可执行 755, 普通文件 644(见顶部约定)
 gzip -9n "$WORK/data.tar"
 
 ( cd "$STAGE/DEBIAN" && tar --format=gnu --owner=root:0 --group=root:0 --mode=644 -cf "$WORK/control.tar" ./control )

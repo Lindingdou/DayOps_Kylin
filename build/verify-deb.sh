@@ -68,6 +68,17 @@ else
     chk 'pitmine3d.desktop$'               '-rw-r--r--' "桌面项"
     chk 'pitmine3d.svg$'                   '-rw-r--r--' "图标"
 fi
+# 目录必须带执行位：曾经对 usr/ 子树硬套 --mode=644, 把 ./usr ./usr/share 打成 drw-r--r--,
+# dpkg 安装时会把目标机的 /usr 一并改成无执行位 —— 非 root 进不去 /usr, /usr/bin 里的命令
+# 全部"找不到"。这条守住, 别再复发。
+baddirs=$(echo "$list" | awk '$1 ~ /^d/ && $1 !~ /^d..x..x..x/ {print $1" "$NF}')
+if [ -n "$baddirs" ]; then
+    bad "目录缺执行位(装上去会锁死目标机对应目录):"
+    echo "$baddirs" | sed 's/^/      /'
+else
+    ok "所有目录 755(可进入)"
+fi
+
 owners=$(echo "$list" | awk '{print $2}' | sort -u | tr '\n' ' ')
 [ "$owners" = "root/root " ] && ok "属主全为 root/root" || bad "属主异常: $owners"
 n=$(echo "$list" | wc -l); echo "  data 条目数: $n"
