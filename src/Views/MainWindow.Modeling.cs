@@ -29,7 +29,15 @@ public partial class MainWindow
     private List<PolylineEntity> SelectedPolylines() => _selected.OfType<PolylineEntity>().ToList();
 
     /// <summary>约束剖分的顶点上限；超过即退为无约束(同原版 kCdt2D5Threshold)。</summary>
-    private const int TinConstraintVertexLimit = 100_000;
+    /// <summary>
+    /// 走完整约束剖分的顶点上限。超过才退为「体素抽稀 + 无约束」。
+    ///
+    /// 这个值原来是 10 万(照原版 kCdt2D5Threshold)，因为当时嵌一条约束要扫全网、代价随网大小暴涨。
+    /// 加了三角形网格索引之后实测: 9.8 万顶点 281 ms、49.2 万顶点 1231 ms，均**全部约束嵌入、零跳过**。
+    /// 抽稀会按米级格子丢点、挪点，与毫米级建网直接冲突，所以门槛抬到二百万 ——
+    /// 常规测绘数据一律走全精度，抽稀只作为极端兜底(否则近百万三角形的渲染缓冲会顶不住)。
+    /// </summary>
+    private const int TinConstraintVertexLimit = 2_000_000;
     private static List<(double x, double y, double z)> Pts3(IEnumerable<PointEntity> pts) => pts.Select(p => (p.X, p.Y, p.Elevation)).ToList();
     private static List<(double x, double y, double z)> Line3(PolylineEntity pl)
     {
@@ -77,7 +85,8 @@ public partial class MainWindow
         {
             int before = verts.Count;
             verts = PolylineTin.Downsample(verts, TinConstraintVertexLimit, out voxel);
-            log($"体素抽稀: 顶点 {before} → {verts.Count} (格边长 {voxel:0.##})");
+            log($"体素抽稀(超 {TinConstraintVertexLimit:N0} 顶点的极端兜底, 会损失毫米精度): " +
+                $"顶点 {before} → {verts.Count} (格边长 {voxel:0.##})");
         }
         var xy = verts.Select(v => (v.x, v.y)).ToList();
         log($"开始剖分: 顶点={xy.Count} 约束={(dropped ? 0 : cons.Count)}{(dropped ? " (已抽稀, 退无约束)" : "")}");

@@ -76,6 +76,7 @@ public static class Delaunay
         foreach (var t in tris) AddTriEdges(edges, t, +1);
 
         var grid = new PointGrid(input);
+        var tg = new TriGrid(input, tris);
         long work = 0;
         foreach (var (u, v) in constraints)
         {
@@ -83,11 +84,85 @@ public static class Delaunay
             var key = u < v ? (u, v) : (v, u);
             if (edges.ContainsKey(key)) { inserted++; continue; }        // 已是网中的边: O(1)
             if (work >= budget) { skipped++; continue; }                  // 预算用尽: 跳过, 但面照建
-            work += tris.Count;                                           // 这条要扫一遍整张网
-            InsertConstraint(input, tris, edges, u, v, grid);
+            work += InsertConstraint(input, tris, edges, u, v, grid, tg);
             inserted++;
         }
-        return tris;
+        // 压实：去掉墓碑(嵌约束时删掉的槽位)
+        var live = new List<(int a, int b, int c)>(tris.Count);
+        foreach (var t in tris) if (t.a >= 0) live.Add(t);
+        return live;
+    }
+
+
+    /// <summary>
+    /// 三角形的均匀网格索引 —— 嵌约束时只看约束边包围盒覆盖的那几个格子，不再扫全网。
+    ///
+    /// 这是"由线建面慢"的最后一个大头：实测一张 19.6 万三角形的地形网上，
+    /// 6186 条需要真嵌入的约束 × 全网扫描 = **12 亿次**三角形判定，约 5 秒。
+    /// 原版调的 Triangle 库靠半边邻接只碰约束真正穿过的十几个三角形，与全网规模无关；
+    /// 我们用网格索引达到同样效果，同时不必改动已验证的"删洞+耳切"主体。
+    ///
+    /// 三角形会增删，故用**墓碑**而非 RemoveAt：删除只把该槽位标记为空(索引里的陈旧编号读时过滤)，
+    /// 新三角形追加到末尾并登记进格子，全部处理完再压实一次。
+    /// 顺带解决了 RemoveAt 的 O(t) 搬移开销。
+    /// </summary>
+    private sealed class TriGrid
+    {
+        private readonly IReadOnlyList<(double x, double y)> _pts;
+        private readonly List<int>[] _cells;
+        private readonly int _g;
+        private readonly double _minX, _minY, _cw, _ch;
+
+        public TriGrid(IReadOnlyList<(double x, double y)> pts, List<(int a, int b, int c)> tris)
+        {
+            _pts = pts;
+            double maxX = double.MinValue, maxY = double.MinValue;
+            _minX = double.MaxValue; _minY = double.MaxValue;
+            foreach (var p in pts)
+            {
+                if (p.x < _minX) _minX = p.x; if (p.x > maxX) maxX = p.x;
+                if (p.y < _minY) _minY = p.y; if (p.y > maxY) maxY = p.y;
+            }
+            _g = System.Math.Clamp((int)System.Math.Sqrt(System.Math.Max(tris.Count, 1) / 2.0), 1, 1024);
+            _cw = maxX - _minX > 1e-12 ? (maxX - _minX) / _g : 1;
+            _ch = maxY - _minY > 1e-12 ? (maxY - _minY) / _g : 1;
+            _cells = new List<int>[_g * _g];
+            for (int i = 0; i < tris.Count; i++) Register(tris[i], i);
+        }
+
+        private int Ix(double x) => System.Math.Clamp((int)((x - _minX) / _cw), 0, _g - 1);
+        private int Iy(double y) => System.Math.Clamp((int)((y - _minY) / _ch), 0, _g - 1);
+
+        private void Box((int a, int b, int c) t, out int x0, out int y0, out int x1, out int y1)
+        {
+            var p0 = _pts[t.a]; var p1 = _pts[t.b]; var p2 = _pts[t.c];
+            x0 = Ix(System.Math.Min(System.Math.Min(p0.x, p1.x), p2.x));
+            x1 = Ix(System.Math.Max(System.Math.Max(p0.x, p1.x), p2.x));
+            y0 = Iy(System.Math.Min(System.Math.Min(p0.y, p1.y), p2.y));
+            y1 = Iy(System.Math.Max(System.Math.Max(p0.y, p1.y), p2.y));
+        }
+
+        public void Register((int a, int b, int c) t, int id)
+        {
+            Box(t, out int x0, out int y0, out int x1, out int y1);
+            for (int gy = y0; gy <= y1; gy++)
+                for (int gx = x0; gx <= x1; gx++)
+                    (_cells[gy * _g + gx] ??= new List<int>(4)).Add(id);
+        }
+
+        /// <summary>枚举线段 ab 包围盒覆盖格子里的三角形编号(可能有重复与陈旧编号，调用方过滤)。</summary>
+        public IEnumerable<int> Candidates((double x, double y) a, (double x, double y) b)
+        {
+            int x0 = Ix(System.Math.Min(a.x, b.x)), x1 = Ix(System.Math.Max(a.x, b.x));
+            int y0 = Iy(System.Math.Min(a.y, b.y)), y1 = Iy(System.Math.Max(a.y, b.y));
+            for (int gy = y0; gy <= y1; gy++)
+                for (int gx = x0; gx <= x1; gx++)
+                {
+                    var c = _cells[gy * _g + gx];
+                    if (c == null) continue;
+                    for (int i = 0; i < c.Count; i++) yield return c[i];
+                }
+        }
     }
 
     /// <summary>
@@ -153,22 +228,30 @@ public static class Delaunay
     private static bool HasEdge(Dictionary<(int, int), int> edges, int u, int v)
         => edges.ContainsKey(u < v ? (u, v) : (v, u));
 
-    private static void InsertConstraint(IReadOnlyList<(double x, double y)> pts, List<(int a, int b, int c)> tris,
-                                         Dictionary<(int, int), int> edges, int u, int v, PointGrid grid)
+    /// <summary>嵌入一条约束；返回本次实际考察的三角形数(供上层记账限额)。</summary>
+    private static long InsertConstraint(IReadOnlyList<(double x, double y)> pts, List<(int a, int b, int c)> tris,
+                                         Dictionary<(int, int), int> edges, int u, int v, PointGrid grid, TriGrid tg)
     {
-        if (HasEdge(edges, u, v)) return;
+        if (HasEdge(edges, u, v)) return 1;
         // 若有顶点落在约束边上(共线且严格居中)→ 在该点分段递归(breakline 穿过网点很常见)
         int mid = VertexOnSegment(pts, u, v, grid);
-        if (mid >= 0) { InsertConstraint(pts, tris, edges, u, mid, grid); InsertConstraint(pts, tris, edges, mid, v, grid); return; }
+        if (mid >= 0)
+            return InsertConstraint(pts, tris, edges, u, mid, grid, tg)
+                 + InsertConstraint(pts, tris, edges, mid, v, grid, tg);
         // 找被约束边穿过内部的三角形。先用包围盒粗筛: 等值线的约束段都很短,
         // 绝大多数三角形连包围盒都不重叠, 几次比较就排掉, 不必做完整的相交判定。
         var pa = pts[u]; var pb = pts[v];
         double sminX = System.Math.Min(pa.x, pb.x), smaxX = System.Math.Max(pa.x, pb.x);
         double sminY = System.Math.Min(pa.y, pb.y), smaxY = System.Math.Max(pa.y, pb.y);
         var crossed = new List<int>();
-        for (int i = 0; i < tris.Count; i++)
+        var seenTri = new HashSet<int>();
+        long examined = 0;
+        foreach (int i in tg.Candidates(pa, pb))          // 只看附近格子, 不再扫全网
         {
+            if (!seenTri.Add(i)) continue;                 // 同一三角形可能落在多个格子里
             var t = tris[i];
+            if (t.a < 0) continue;                          // 墓碑(已删)
+            examined++;
             var p0 = pts[t.a]; var p1 = pts[t.b]; var p2 = pts[t.c];
             if (System.Math.Min(System.Math.Min(p0.x, p1.x), p2.x) > smaxX) continue;
             if (System.Math.Max(System.Math.Max(p0.x, p1.x), p2.x) < sminX) continue;
@@ -176,7 +259,7 @@ public static class Delaunay
             if (System.Math.Max(System.Math.Max(p0.y, p1.y), p2.y) < sminY) continue;
             if (TriangleCrossed(pts, t, u, v)) crossed.Add(i);
         }
-        if (crossed.Count == 0) return;   // 退化/共线：跳过该约束(无破坏)
+        if (crossed.Count == 0) return System.Math.Max(examined, 1);   // 退化/共线：跳过该约束(无破坏)
         // 孔洞边界 = 被删三角集里只出现一次的边
         var edgeCnt = new Dictionary<(int, int), int>();
         void Bump2(int a, int b) { var k = a < b ? (a, b) : (b, a); edgeCnt[k] = edgeCnt.TryGetValue(k, out int c) ? c + 1 : 1; }
@@ -187,9 +270,9 @@ public static class Delaunay
         // 网上留下一个大洞 —— 几千条硬约束下来整张网被啃光(实测 14400 点只剩 749 个三角形,
         // 表现就是"建不出来")。宁可这条约束不嵌, 也不能把已经建好的面破坏掉。
         var loop = OrderLoop(boundary);
-        if (loop == null || loop.Count < 3) return;
+        if (loop == null || loop.Count < 3) return System.Math.Max(examined, 1);
         int iu = loop.IndexOf(u), iv = loop.IndexOf(v);
-        if (iu < 0 || iv < 0) return;
+        if (iu < 0 || iv < 0) return System.Math.Max(examined, 1);
 
         var refill = new List<(int a, int b, int c)>();
         EarClip(pts, refill, SubLoop(loop, iu, iv));   // u..v 侧
@@ -199,12 +282,20 @@ public static class Delaunay
         double removedArea = 0, refillArea = 0;
         foreach (int ci in crossed) removedArea += TriArea(pts, tris[ci]);
         foreach (var t in refill) refillArea += TriArea(pts, t);
-        if (refill.Count == 0 || System.Math.Abs(refillArea - removedArea) > removedArea * 1e-6 + 1e-9) return;
+        if (refill.Count == 0 || System.Math.Abs(refillArea - removedArea) > removedArea * 1e-6 + 1e-9)
+            return System.Math.Max(examined, 1);
 
-        // 到这一步才真正提交: 删被穿三角(降序删), 同步维护边计数
-        crossed.Sort((a, b) => b.CompareTo(a));
-        foreach (int ci in crossed) { AddTriEdges(edges, tris[ci], -1); tris.RemoveAt(ci); }
-        foreach (var t in refill) { tris.Add(t); AddTriEdges(edges, t, +1); }
+        // 到这一步才真正提交: 被穿的三角形打墓碑(不用 RemoveAt, 否则后面的编号全变、索引作废),
+        // 新三角形追加并登记进网格索引
+        foreach (int ci in crossed) { AddTriEdges(edges, tris[ci], -1); tris[ci] = (-1, -1, -1); }
+        foreach (var t in refill)
+        {
+            int id = tris.Count;
+            tris.Add(t);
+            AddTriEdges(edges, t, +1);
+            tg.Register(t, id);
+        }
+        return System.Math.Max(examined, 1);
     }
 
     /// <summary>三角形面积(绝对值)。用于校验重剖是否把删掉的区域填满。</summary>

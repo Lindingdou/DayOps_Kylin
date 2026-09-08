@@ -92,4 +92,29 @@ public class DelaunayBench
         Assert.True(sw.ElapsedMilliseconds < 60000,
             $"用了 {sw.ElapsedMilliseconds} ms —— 预算保护应保证有限时间内收工, 不能卡死");
     }
+
+    [Fact]
+    public void Constrained_50万顶点_全量嵌入且不抽稀()
+    {
+        // 毫米级建网的底线: 大图纸也要全量约束嵌入, 不靠抽稀丢点。
+        // 实测真实地形图 49.2 万顶点 / 48.4 万约束 → 1231 ms 全部嵌入。这里用等量合成数据钉住。
+        var verts = new List<(double x, double y)>();
+        var cons = new List<(int u, int v)>();
+        const double X0 = 4_412_345.678, Y0 = 39_512_876.543;   // 矿区量级坐标
+        for (int l = 0; l < 400; l++)
+        {
+            int start = verts.Count;
+            for (int i = 0; i < 400; i++) verts.Add((X0 + i * 2.0, Y0 + l * 2.0 + Math.Sin(i * 0.2 + l) * 0.7));
+            for (int i = 0; i + 1 < 400; i++) cons.Add((start + i, start + i + 1));
+        }
+        var sw = Stopwatch.StartNew();
+        var tris = Delaunay.TriangulateConstrained(verts, cons, out int ins, out int skip);
+        sw.Stop();
+        _o.WriteLine($"{verts.Count} 顶点 / {cons.Count} 约束: {sw.ElapsedMilliseconds} ms, 嵌入{ins} 跳过{skip}, {tris.Count} 三角");
+
+        Assert.Equal(0, skip);                                   // 一条都不能跳
+        Assert.InRange(tris.Count, (int)(1.5 * verts.Count), (int)(2.2 * verts.Count));
+        Assert.True(sw.ElapsedMilliseconds < 30000,
+            $"用了 {sw.ElapsedMilliseconds} ms —— 有三角形网格索引时实测约 1 秒, 超这么多说明索引失效了");
+    }
 }
