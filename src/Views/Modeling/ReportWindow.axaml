@@ -1,4 +1,4 @@
-<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+﻿<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="PitMine3D.Kylin.Views.Modeling.ReportWindow" x:CompileBindings="False"
         Classes="geodb" Title="输出报告" Width="900" Height="640" WindowStartupLocation="CenterOwner" CanResize="False">
   <Grid Margin="14" RowDefinitions="*,Auto" ColumnDefinitions="280,*">
@@ -19,7 +19,7 @@
         <RadioButton x:Name="scopeFilter" GroupName="Scope" Content="当前筛选（来自『筛选块体』）" Margin="0,0,0,2"/>
         <TextBlock x:Name="filterInfoText" FontSize="11" Margin="18,0,0,8" TextWrapping="Wrap" Foreground="#FF0D47A1" Text=""/>
         <Border Padding="8,6" Background="#FFE3F2FD" CornerRadius="2" Margin="0,8,0,0">
-          <TextBlock FontSize="11" Foreground="#FF0D47A1" TextWrapping="Wrap" Text="ⓘ v1 报告内容：汇总（块数/可见/已删/体积/AABB）+ 每个属性列的 min/max/mean/std + 分标高统计。CSV/HTML 可导出；PDF 需 QuestPDF，本机不可用。"/>
+          <TextBlock FontSize="11" Foreground="#FF0D47A1" TextWrapping="Wrap" Text="ⓘ v1 报告内容：汇总（块数/可见/已删/体积/AABB）+ 每个属性列的 min/max/mean/std + 分标高统计。HTML / CSV / PDF 均可导出。"/>
         </Border>
       </StackPanel>
     </Border>
@@ -46,7 +46,7 @@
           <ComboBox x:Name="formatCombo" Width="160" SelectedIndex="0">
             <ComboBoxItem Content="HTML (推荐)" Tag="html"/>
             <ComboBoxItem Content="CSV" Tag="csv"/>
-            <ComboBoxItem Content="PDF（本机不可用）" Tag="pdf" IsEnabled="False"/>
+            <ComboBoxItem Content="PDF" Tag="pdf"/>
           </ComboBox>
         </StackPanel>
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">

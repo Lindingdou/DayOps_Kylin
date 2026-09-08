@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -102,14 +102,19 @@ public partial class ImportBlockModelWindow : Window
             string fmt = Format(path);
             List<BlockModel.Block> blocks; Dictionary<string, double[]>? attrs = null; string note;
             string baseName = Path.GetFileNameWithoutExtension(path);
+            PmbImportService.Result? pmb = null;
             switch (fmt)
             {
                 case "pmb":
                 {
                     var r = PmbImportService.Load(path);
                     if (!r.Success) { await BlockMsgBox.WarnAsync(this, "块体文件无效", r.Error); return; }
+                    pmb = r;
                     blocks = r.Blocks; attrs = r.AllAttrs.Count > 0 ? r.AllAttrs : null;
+                    if (!string.IsNullOrWhiteSpace(r.ModelName)) baseName = r.ModelName;
                     note = $"\n网格 {r.Nx}×{r.Ny}×{r.Nz}，含 {r.AttrNames.Count} 个属性列的 cell 数据。";
+                    if (r.Schema.Count > 0) note += $"\n属性表 {r.Schema.Count} 列（类型/单位/默认值/分类码名）已随文件恢复。";
+                    if (r.DeletedCells.Count > 0) note += $"\n含 {r.DeletedCells.Count:N0} 个已删除 cell。";
                     break;
                 }
                 case "blk":
@@ -142,6 +147,7 @@ public partial class ImportBlockModelWindow : Window
             var meta = BlockModelMeta.FromBlocks(BlockModelStore.UniqueName(baseName), blocks, attrs);
             meta.DisplayStyle.FillColor = BlockDefaultPalette.Next(BlockModelStore.Models.Count);
             if (meta.PropertySchema.Count > 0) { meta.ActiveColormapAttribute = meta.PropertySchema[0].Name; meta.ColormapRange = null; }
+            if (pmb != null) ApplyPmbMetadata(meta, pmb);
             var err = BlockModelStore.Create(_ctx, meta);
             if (err != null) { await BlockMsgBox.WarnAsync(this, "导入失败", err); return; }
             await BlockMsgBox.InfoAsync(this, "导入成功", $"模型 {meta.Name} 已导入（{meta.BlockCount:N0} 块）。{note}\n来源: {path}");
@@ -149,6 +155,55 @@ public partial class ImportBlockModelWindow : Window
             Close(true);
         }
         catch (Exception ex) { await BlockMsgBox.WarnAsync(this, "导入块体", ex.Message); }
+    }
+
+    /// <summary>
+    /// 把 PMB 里随文件存的模型元数据落回模型（同原 PmbmReader → BlockModelSpec 装配）：
+    /// 属性表（类型/单位/默认值/备注/分类码名）、显示样式 + 活动着色属性、已删 cell、旋转 / 存储模式 / 子块参数。
+    /// </summary>
+    private static void ApplyPmbMetadata(BlockModelMeta meta, PmbImportService.Result r)
+    {
+        meta.Description = r.Description;
+        meta.RotationZDeg = r.RotationZDeg;
+        meta.StorageMode = r.StorageMode;
+        if (r.SubBlockDepthMax > 0) meta.SubBlockDepthMax = r.SubBlockDepthMax;
+        if (r.SubMinX > 0) { meta.SubMinX = r.SubMinX; meta.SubMinY = r.SubMinY; meta.SubMinZ = r.SubMinZ; }
+
+        // 属性表：文件里的列信息覆盖「按数据推」的那份（同名列补齐类型/单位/默认值/备注/分类标签）
+        foreach (var col in r.Schema)
+        {
+            var exist = meta.PropertySchema.Find(c => c.Name == col.Name);
+            if (exist == null) meta.PropertySchema.Add(col);
+            else
+            {
+                exist.DataType = col.DataType; exist.Unit = col.Unit; exist.DefaultValue = col.DefaultValue;
+                exist.Description = col.Description; exist.IsCategorical = col.IsCategorical;
+                if (col.CategoryLabels is { Count: > 0 }) exist.CategoryLabels = col.CategoryLabels;
+            }
+        }
+
+        if (r.Style is { } st)
+        {
+            meta.DisplayStyle.FillColor = st.FillColor;
+            meta.DisplayStyle.EdgeColor = st.EdgeColor;
+            meta.DisplayStyle.EdgeMode = st.EdgeMode;
+            meta.DisplayStyle.EdgeWidthPx = st.EdgeWidthPx;
+            meta.DisplayStyle.DefaultColormap = st.DefaultColormap;
+            foreach (var kv in st.CategoryColors)
+            {
+                var map = meta.DisplayStyle.EnsureCategoryColors(kv.Key);
+                foreach (var c in kv.Value) map[c.Key] = c.Value;
+            }
+        }
+        if (!string.IsNullOrEmpty(r.ActiveColormapAttribute) && meta.PropertySchema.Exists(c => c.Name == r.ActiveColormapAttribute))
+        {
+            meta.ActiveColormapAttribute = r.ActiveColormapAttribute;
+            meta.ColormapRange = null;
+        }
+
+        // 已删 cell：PMB 的线性下标 = 本次导入的块序（reader 按 x-fastest 生成整个网格）
+        foreach (var id in r.DeletedCells)
+            if (id >= 0 && id < meta.Blocks.Count) meta.DeletedIds.Add((int)id);
     }
 
     private void OnCancel(object? sender, RoutedEventArgs e) => Close(false);

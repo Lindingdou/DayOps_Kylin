@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -23,7 +23,18 @@ public static class BlockVoxelBuilder
 
     public sealed class MeshInput
     {
-        public required WindingNumberTester Tester { get; init; }
+        /// <summary>默认判据：奇偶射线 + XY 分箱（水密体精确且快）。</summary>
+        public required MeshContainmentTester Tester { get; init; }
+        /// <summary>高容错判据：广义缠绕数（破洞/自交/未焊接才用；懒建缓存，见 <see cref="TesterFor"/>）。</summary>
+        public double[] Verts { get; init; } = Array.Empty<double>();
+        public int[] Tris { get; init; } = Array.Empty<int>();
+        private WindingNumberTester? _gwn;
+        /// <summary>按「高容错」开关取判据：忠实原版——只有开了高容错**且**网格非闭合才上 GWN。</summary>
+        public IInsideTester TesterFor(bool highTolerance)
+        {
+            if (!highTolerance || Closed || Verts.Length < 9 || Tris.Length < 3) return Tester;
+            return _gwn ??= new WindingNumberTester(Verts, Tris);
+        }
         public bool Closed { get; init; }
         public string Name { get; init; } = "";
         public int VertexCount { get; init; }
@@ -32,7 +43,7 @@ public static class BlockVoxelBuilder
         public double ExactVolume { get; init; }
     }
 
-    /// <summary>从场景三角网建输入（一致朝向 → GWN；闭合性由 MeshDiagnose 判）。</summary>
+    /// <summary>从场景三角网建输入（一致朝向；闭合性由 MeshDiagnose 判。默认奇偶射线判据，高容错时才建 GWN）。</summary>
     public static MeshInput FromMesh(string name, IReadOnlyList<(double x, double y, double z)> verts, IReadOnlyList<(int a, int b, int c)> tris)
     {
         var mt = MeshOrient.MakeConsistent(verts, tris);
@@ -43,7 +54,7 @@ public static class BlockVoxelBuilder
         var diag = MeshDiagnose.Analyze(verts, tris);
         return new MeshInput
         {
-            Tester = new WindingNumberTester(fv, ft), Closed = diag.IsClosed, Name = name,
+            Tester = new MeshContainmentTester(fv, ft), Verts = fv, Tris = ft, Closed = diag.IsClosed, Name = name,
             VertexCount = verts.Count, TriangleCount = tris.Count, ExactVolume = diag.IsClosed ? MeshMetrics.RobustVolume(verts, mt) : 0,
         };
     }
@@ -95,14 +106,16 @@ public static class BlockVoxelBuilder
     /// 失败返回 null + error。
     /// </summary>
     public static Result? Build(IReadOnlyList<MeshInput> meshes, double vx, double vy, double vz, out string error,
-        int depth = 0, int sampleN = 4, long maxSubCells = 4_000_000, CancellationToken ct = default)
+        int depth = 0, int sampleN = 4, long maxSubCells = 4_000_000, CancellationToken ct = default, bool highTolerance = false)
     {
         error = "";
         var est = EstimateGrid(meshes, vx, vy, vz);
         if (est == null) { error = "无有效封闭网格，或体素尺寸非法（须 > 0）。"; return null; }
         var (nx, ny, nz, cells, bb) = est.Value;
         if (cells > MaxCellsCompute) { error = $"网格 cell 数 {cells:N0} 超上限 {MaxCellsCompute:N0}，请增大体素尺寸。"; return null; }
-        var testers = meshes.Select(m => m.Tester).ToArray();
+        // 内外测试器选择（忠实原 VoxelVolumeBuilder）：默认奇偶射线；「高容错」只对**非闭合**网格换 GWN——
+        // 水密体的奇偶射线本就精确，无需上昂贵的缠绕数。
+        var testers = meshes.Select(m => m.TesterFor(highTolerance)).ToArray();
         bool InsideAny(double x, double y, double z)
         {
             for (int mi = 0; mi < testers.Length; mi++) if (testers[mi].IsInsideClosed(x, y, z)) return true;

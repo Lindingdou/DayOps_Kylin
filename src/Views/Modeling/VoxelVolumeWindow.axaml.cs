@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -110,7 +110,7 @@ public partial class VoxelVolumeWindow : Window
         try
         {
             string err = "";
-            var res = await Task.Run(() => BlockVoxelBuilder.Build(inputs, vx, vy, vz, out err, depth));
+            var res = await Task.Run(() => BlockVoxelBuilder.Build(inputs, vx, vy, vz, out err, depth, highTolerance: highTol));
             SetBusy(false);
             if (res == null) { totalLabel.Text = "整体体积：（计算失败）"; await Warn(string.IsNullOrEmpty(err) ? "体素化失败。" : err); return; }
             _result = res;

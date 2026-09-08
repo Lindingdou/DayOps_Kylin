@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -13,7 +13,7 @@ namespace PitMine3D.Kylin.Views.Modeling;
 
 /// <summary>
 /// 约束块体对话框（忠实原 ConstrainBlockModelDialog）：多 AABB 组合（AND/OR + 保留/删除）粗裁 +
-/// Mesh 几何精确约束（保留 mesh 之上/之下/内部/外部；上下靠面高程采样，内外靠广义缠绕数）。
+/// Mesh 几何精确约束（保留 mesh 之上/之下/内部/外部；判据同原版 —— +Z 射线 + XY 分箱，闭合内外勾「高容错」才换缠绕数）。
 /// 「撤销本次」只回退本窗新增的删除。非模态（原为模态，Kylin 改非模态以便视口选 mesh）。
 /// </summary>
 public partial class ConstrainBlockModelWindow : Window
@@ -46,7 +46,8 @@ public partial class ConstrainBlockModelWindow : Window
     private readonly BlockDeleteRecord _session = new();
     private MeshEntity? _mesh;
     private double[]? _meshVerts; private int[]? _meshTris;
-    private WindingNumberTester? _gwn;
+    private MeshContainmentTester? _parity;   // 默认判据: 奇偶射线 + XY 分箱(上/下方也靠它)
+    private WindingNumberTester? _gwn;        // 「高容错」勾选时的闭合内外判据(懒建)
 
     public ConstrainBlockModelWindow() { _ctx = null!; InitializeComponent(); }
 
@@ -228,6 +229,7 @@ public partial class ConstrainBlockModelWindow : Window
             _meshTris = new int[mt.Count * 3];
             for (int i = 0; i < mt.Count; i++) { _meshTris[i * 3] = mt[i].a; _meshTris[i * 3 + 1] = mt[i].b; _meshTris[i * 3 + 2] = mt[i].c; }
             _gwn = null;
+            _parity = new MeshContainmentTester(_meshVerts, _meshTris);
             var b = me.Bounds;
             meshInfoLabel.Text = $"{me.Name}  顶点 {me.Verts.Count:N0}  三角 {me.Tris.Count:N0}  AABB X[{b.minX:0.#},{b.maxX:0.#}] Y[{b.minY:0.#},{b.maxY:0.#}] Z[{b.minZ:0.#},{b.maxZ:0.#}]";
             meshInfoLabel.Foreground = Avalonia.Media.Brushes.Black;
@@ -241,14 +243,17 @@ public partial class ConstrainBlockModelWindow : Window
         try
         {
             if (Target is not { } m) { await BlockMsgBox.WarnAsync(this, "Mesh 约束", "请选择目标块体。"); return; }
-            if (_mesh == null || _meshVerts == null || _meshTris == null) { await BlockMsgBox.WarnAsync(this, "Mesh 约束", "请先点「拾取选中 mesh」选取一个参考三角网。"); return; }
+            if (_mesh == null || _meshVerts == null || _meshTris == null || _parity == null) { await BlockMsgBox.WarnAsync(this, "Mesh 约束", "请先点「拾取选中 mesh」选取一个参考三角网。"); return; }
             var mode = meshKeepAbove.IsChecked == true ? MeshConstraintMode.KeepAboveSurface : meshKeepBelow.IsChecked == true ? MeshConstraintMode.KeepBelowSurface
                 : meshKeepInside.IsChecked == true ? MeshConstraintMode.KeepInsideClosed : MeshConstraintMode.KeepOutsideClosed;
             bool closedMode = mode is MeshConstraintMode.KeepInsideClosed or MeshConstraintMode.KeepOutsideClosed;
             bool keepOutsideProj = meshKeepOutsideProj.IsChecked == true;
             var verts = _meshVerts; var tris = _meshTris;
-            WindingNumberTester? wn = null;
-            if (closedMode) { _gwn ??= new WindingNumberTester(verts, tris); wn = _gwn; }
+            var surface = _parity;
+            // 闭合内外：勾了「高容错」才上缠绕数(破洞/自交/未焊接的外包络也判得对)，否则同原版走射线奇偶。
+            bool usedGwn = closedMode && meshHighTolerance.IsChecked == true;
+            IInsideTester closedTester = surface;
+            if (usedGwn) { _gwn ??= new WindingNumberTester(verts, tris); closedTester = _gwn; }
             var mb = _mesh.Bounds;
             int affected = await System.Threading.Tasks.Task.Run(() => m.ApplyKeep((_, b) =>
             {
@@ -256,23 +261,24 @@ public partial class ConstrainBlockModelWindow : Window
                 {
                     case MeshConstraintMode.KeepAboveSurface:
                     {
-                        var s = MineableAreaIdentifier.SampleMeshZ(verts, tris, b.X, b.Y);
-                        return s.HasValue ? b.Z >= s.Value : keepOutsideProj;
+                        // 原版语义：投影内且上方没有三角 = 在面之上
+                        bool inProj = surface.RaycastAbove(b.X, b.Y, b.Z, out int cr, out double _z);
+                        return inProj ? cr == 0 : keepOutsideProj;
                     }
                     case MeshConstraintMode.KeepBelowSurface:
                     {
-                        var s = MineableAreaIdentifier.SampleMeshZ(verts, tris, b.X, b.Y);
-                        return s.HasValue ? s.Value > b.Z : keepOutsideProj;
+                        bool inProj = surface.RaycastAbove(b.X, b.Y, b.Z, out int _cr, out double mz);
+                        return inProj ? !double.IsNaN(mz) && mz > b.Z : keepOutsideProj;
                     }
-                    case MeshConstraintMode.KeepInsideClosed: return wn!.IsInsideClosed(b.X, b.Y, b.Z);
-                    default: return !wn!.IsInsideClosed(b.X, b.Y, b.Z);
+                    case MeshConstraintMode.KeepInsideClosed: return closedTester.IsInsideClosed(b.X, b.Y, b.Z);
+                    default: return !closedTester.IsInsideClosed(b.X, b.Y, b.Z);
                 }
             }, _session));
             BlockModelStore.RefreshDisplay(_ctx, m);
 
-            string testerNote = closedMode ? "缠绕数(高容错)" : "面高程采样";
+            string testerNote = closedMode ? (usedGwn ? "缠绕数(高容错)" : "射线奇偶") : "射线奇偶";
             string projNote = closedMode ? "" : $"\n  地表未覆盖区: {(keepOutsideProj ? "保留" : "删除")}{CoverageNote(m, mb, keepOutsideProj)}";
-            string diag = affected == 0 && !closedMode ? DiagnoseSurfaceNoop(m, verts, tris, mb, keepOutsideProj) : "";
+            string diag = affected == 0 && !closedMode ? DiagnoseSurfaceNoop(m, surface, mb, keepOutsideProj) : "";
             string body = $"模型 {m.Name}\n  参考 mesh: {_mesh.Name}, {_mesh.Tris.Count:N0} 三角\n  模式:     {ModeLabel(mode)}（{testerNote}）{projNote}\n  本次新增删除: {affected:N0} cell\n  累计已删:   {m.DeletedBlockCount:N0} / {m.RealBlockCount:N0}" + diag;
             if (affected == 0) await BlockMsgBox.WarnAsync(this, "Mesh 约束未删除任何 cell", body); else await BlockMsgBox.InfoAsync(this, "Mesh 约束已应用", body);
             meshStatusLabel.Text = $"上次新增删除 {affected:N0}；累计 {m.DeletedBlockCount:N0} / {m.RealBlockCount:N0}";
@@ -295,7 +301,7 @@ public partial class ConstrainBlockModelWindow : Window
         return note;
     }
 
-    private static string DiagnoseSurfaceNoop(BlockModelMeta m, double[] verts, int[] tris, (double minX, double minY, double maxX, double maxY, double minZ, double maxZ) mb, bool keepOutsideProj)
+    private static string DiagnoseSurfaceNoop(BlockModelMeta m, MeshContainmentTester surface, (double minX, double minY, double maxX, double maxY, double minZ, double maxZ) mb, bool keepOutsideProj)
     {
         const int MaxSamples = 200_000;
         long outProj = 0, above = 0, below = 0, sampled = 0;
@@ -304,9 +310,8 @@ public partial class ConstrainBlockModelWindow : Window
         {
             if (m.DeletedIds.Contains(i)) continue;
             var b = m.Blocks[i]; sampled++;
-            var s = MineableAreaIdentifier.SampleMeshZ(verts, tris, b.X, b.Y);
-            if (!s.HasValue) { outProj++; continue; }
-            if (s.Value > b.Z) below++; else above++;
+            if (!surface.RaycastAbove(b.X, b.Y, b.Z, out int _cr, out double mz)) { outProj++; continue; }
+            if (!double.IsNaN(mz) && mz > b.Z) below++; else above++;
         }
         if (sampled == 0) return "\n\n诊断：当前没有可见块可抽样——模型多半已被之前的操作全部删除，先点「撤销本次」或「恢复全部」。";
         double P(long v) => v * 100.0 / sampled;

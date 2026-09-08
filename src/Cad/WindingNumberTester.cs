@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace PitMine3D.Kylin.Cad;
@@ -9,7 +9,7 @@ namespace PitMine3D.Kylin.Cad;
 /// (Van Oosterom–Strackee)。三角 BVH + Barnes-Hut 偶极远场近似(~O(log F)/点)。前提：三角朝向一致。
 /// 纯几何、可单测。
 /// </summary>
-public sealed class WindingNumberTester
+public sealed class WindingNumberTester : IInsideTester
 {
     private const double Inv4Pi = 0.07957747154594767;   // 1/(4π)
     private const double Inv8Pi = 0.03978873577297383;   // 1/(8π)

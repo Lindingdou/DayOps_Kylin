@@ -29,11 +29,12 @@
     <!-- 地质与工程信息数据库页面(§四/§八 24 个窗口)的表格控件 -->
     <PackageReference Include="Avalonia.Controls.DataGrid" Version="11.2.1" />
     <!-- 地质/生产数据库(§四/§八): SQLite 嵌入式, 跨平台可移(非 DM8) + Dapper POCO 映射 —— 与原 SqlLib 同版本 -->
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.10" />
     <PackageReference Include="Dapper" Version="2.1.35" />
     <PackageReference Include="Npgsql" Version="8.0.9" />
     <!-- GBK 中文编码(MapGIS .WT 注记字符串池) —— .NET Core 默认不含 GB 系列代码页 -->
     <PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0" />
+    <!-- 「输出报告」的 PDF 导出 —— 与 Windows 版 BlockModelLib 同版本; 自带 linux-x64/arm64 原生件, 无 SkiaSharp 依赖冲突 -->
+    <PackageReference Include="QuestPDF" Version="2024.7.1" />
 
     <PackageReference Include="Avalonia.Diagnostics" Version="11.2.1">
       <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
@@ -42,7 +43,8 @@
 
   <!-- §四/§八 数据库迁移(建表 + 真实种子数据)作嵌入资源, 运行时建库自足, 无需外部 DB -->
   <ItemGroup>
-    <EmbeddedResource Include="Data\Migrations\*.sql" />
+    <!-- SQLite 版迁移**不进产品**: 它只是生成 openGauss 版的输入, 以及测试用的种子。
+         交付物里不含 SQLite(信创要求), 这套脚本改由测试工程嵌入。 -->
     <!-- openGauss 版迁移: 由 build/sqlite2pg.py 从上面那套生成, 勿手改。方言选择见 GeoDbDialect。 -->
     <EmbeddedResource Include="Data\MigrationsPg\*.sql" />
   </ItemGroup>

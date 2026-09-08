@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
@@ -10,7 +10,7 @@ namespace PitMine3D.Kylin.Views.Modeling;
 
 /// <summary>
 /// 输出报告对话框（忠实原 ReportDialog）：来源块体 / 模板（v1 固定）/ 范围（全部·当前筛选）→ 右侧文本预览；
-/// 底部选 HTML/CSV 导出并打开（PDF 依赖 QuestPDF，Kylin 不提供）。统计走 <see cref="BlockModelReport.Compute"/>。
+/// 底部选 HTML/CSV/PDF 导出并打开。统计走 <see cref="BlockModelReport.Compute"/>，PDF 走 <see cref="BlockModelReportPdf"/>（同原版 QuestPDF）。
 /// </summary>
 public partial class ReportWindow : Window
 {
@@ -96,11 +96,23 @@ public partial class ReportWindow : Window
                 try { report = await Task.Run(() => BlockModelReport.Compute(m, scope)); _lastReport = report; _lastModel = m; _lastScope = scope; }
                 finally { _busy = false; }
             }
-            string ext = fmt == "csv" ? ".csv" : ".html";
+            string ext = fmt switch { "csv" => ".csv", "pdf" => ".pdf", _ => ".html" };
             string name = $"{m.Name}_报告_{DateTime.Now:yyyyMMdd_HHmmss}{ext}";
-            string content = fmt == "csv" ? BlockModelReport.RenderCsv(report) : BlockModelReport.RenderHtml(report);
-            var path = await _ctx.SaveTextAsync("导出报告", name, content);
-            if (path == null) return;
+            string? path;
+            if (fmt == "pdf")
+            {
+                // PDF 是二进制：先占位存一个空文本拿到落盘路径，再用 QuestPDF 覆写
+                path = await _ctx.SaveTextAsync("导出报告", name, "");
+                if (path == null) return;
+                var rep = report;
+                await Task.Run(() => BlockModelReportPdf.Write(rep, path));
+            }
+            else
+            {
+                string content = fmt == "csv" ? BlockModelReport.RenderCsv(report) : BlockModelReport.RenderHtml(report);
+                path = await _ctx.SaveTextAsync("导出报告", name, content);
+                if (path == null) return;
+            }
             try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = path, UseShellExecute = true }); }
             catch (Exception ex) { await BlockMsgBox.InfoAsync(this, "导出成功", $"报告已保存到：\n{path}\n\n(自动打开失败：{ex.Message})"); }
             _ctx.Status($"输出报告：{Path.GetFileName(path)}");

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -198,19 +198,10 @@ public partial class ExportBlockModelWindow : Window
             }
             else
             {
-                var blocks = new List<BlockModel.Block>(idx.Count);
-                var sub = new Dictionary<string, double[]>(StringComparer.Ordinal);
-                foreach (var a in attrs) sub[a] = new double[idx.Count];
-                for (int n = 0; n < idx.Count; n++)
-                {
-                    var b = m.Blocks[idx[n]];
-                    b.Size = m.Sx;
-                    if (attrs.Count > 0) b.Grade = m.GetValue(attrs[0], idx[n]);
-                    blocks.Add(b);
-                    foreach (var a in attrs) sub[a][n] = m.GetValue(a, idx[n]);
-                }
-                var (grid, pattrs) = PmbExportService.FromBlocks(blocks, sub);
-                File.WriteAllBytes(path, PmbExportService.ToBytes(grid, pattrs, m.Name));
+                // 「全部块」= 整模型原样落盘（网格 + 属性表 + 样式 + 已删集合 + 分类元数据，同原版 PmbmWriter.Write）；
+                // 选了更窄的范围才按子集重建网格。
+                bool whole = scopeAll.IsChecked == true;
+                File.WriteAllBytes(path, PmbExportService.FromModel(m, whole ? null : idx, attrs));
             }
             await BlockMsgBox.InfoAsync(this, "导出成功", $"模型 {m.Name} 已导出到：\n{path}\n\n大小: {new FileInfo(path).Length / 1024.0:F1} KB");
             _ctx.Status($"导出块体 {m.Name}：{idx.Count:N0} 块 → {Path.GetFileName(path)}");

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -102,7 +102,7 @@ public partial class EntityToBlocksWindow : Window
         try
         {
             string err = "";
-            var res = await Task.Run(() => BlockVoxelBuilder.Build(inputs, vx, vy, vz, out err, depth));
+            var res = await Task.Run(() => BlockVoxelBuilder.Build(inputs, vx, vy, vz, out err, depth, highTolerance: highTol));
             if (res == null) { SetBusy(false); UpdateEstimate(); await Warn(string.IsNullOrEmpty(err) ? "体素化失败。" : err); return; }
             if (res.KeepCount + res.SubCells.Count == 0) { SetBusy(false); UpdateEstimate(); await Warn("体内无 cell（块尺寸过大或网格非封闭），未生成块体。"); return; }
             long n = res.KeepCount + res.SubCells.Count;
