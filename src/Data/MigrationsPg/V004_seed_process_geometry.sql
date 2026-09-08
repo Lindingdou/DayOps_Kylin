@@ -21,11 +21,10 @@ INSERT INTO mine_location (location_code, name, elevation_m, team, is_active) VA
     ('1210', '1210 平盘', 1210, 'team1',     1),
     ('1225', '1225 平盘', 1225, 'team1',     1),
     ('1240', '1240 平盘', 1240, 'team1',     1),
-    ('1270', '1270 平盘', 1270, 'team1',     1);
+    ('1270', '1270 平盘', 1270, 'team1',     1) ON CONFLICT (location_code) DO UPDATE SET name = EXCLUDED.name, elevation_m = EXCLUDED.elevation_m, team = EXCLUDED.team, is_active = EXCLUDED.is_active;
 
 -- ─── 工作面(5 个活跃)──────────────────────────────────────────────────────
-INSERT INTO working_face
-    (face_code, location_code, equipment_id, bench_height_m, bench_slope_angle_deg,
+INSERT INTO working_face (face_code, location_code, equipment_id, bench_height_m, bench_slope_angle_deg,
      working_platform_width_m, safety_platform_width_m, mining_width_m, face_length_m,
      advance_rate_m_per_month, material, rock_hardness, effective_from, status, notes) VALUES
     ('WF-1195-A', '1195', '1748', 15.0, 70, 45, 8, 50, 220, 45, 'rh', 'hard',
@@ -40,8 +39,7 @@ INSERT INTO working_face
         '2023-06-01', 'active', '4100XPC 高位剥离工作面');
 
 -- ─── 排土场(2 个)─────────────────────────────────────────────────────────
-INSERT INTO dump_site
-    (dump_id, name, dump_type, design_capacity_wan_m3, current_filled_wan_m3,
+INSERT INTO dump_site (dump_id, name, dump_type, design_capacity_wan_m3, current_filled_wan_m3,
      max_height_m, bench_height_m, overall_slope_angle_deg, bench_slope_angle_deg,
      service_years_remaining, start_date, responsible_dozer_id, status, notes) VALUES
     ('D-N1', '北排土场', 'external', 12000, 8500, 60, 15, 32, 38, 8.5,
@@ -49,11 +47,10 @@ INSERT INTO dump_site
         '外排土场,主排土,容量充足'),
     ('D-I1', '内排土场', 'internal', 5000, 3200, 45, 12, 30, 36, 4.0,
         '2018-09-01', 'D10N-01', 'active',
-        '内排土,减少运距,优先排土区');
+        '内排土,减少运距,优先排土区') ON CONFLICT (dump_id) DO UPDATE SET name = EXCLUDED.name, dump_type = EXCLUDED.dump_type, design_capacity_wan_m3 = EXCLUDED.design_capacity_wan_m3, current_filled_wan_m3 = EXCLUDED.current_filled_wan_m3, max_height_m = EXCLUDED.max_height_m, bench_height_m = EXCLUDED.bench_height_m, overall_slope_angle_deg = EXCLUDED.overall_slope_angle_deg, bench_slope_angle_deg = EXCLUDED.bench_slope_angle_deg, service_years_remaining = EXCLUDED.service_years_remaining, start_date = EXCLUDED.start_date, responsible_dozer_id = EXCLUDED.responsible_dozer_id, status = EXCLUDED.status, notes = EXCLUDED.notes;
 
 -- ─── 边坡设计(4 帮)───────────────────────────────────────────────────────
-INSERT INTO slope_design
-    (side_name, side_type, working_slope_angle_deg, final_slope_angle_deg,
+INSERT INTO slope_design (side_name, side_type, working_slope_angle_deg, final_slope_angle_deg,
      max_depth_m, safety_factor, cohesion_kpa, friction_angle_deg, rock_type,
      groundwater_level_m, effective_from, design_version, designed_by, notes) VALUES
     ('东帮',   'final',     28, 42, 350, 1.35, 85, 35, '砂岩为主', -45,
@@ -70,8 +67,7 @@ INSERT INTO slope_design
         '工作帮,推进中');
 
 -- ─── 道路网络(6 段)───────────────────────────────────────────────────────
-INSERT INTO haul_road
-    (road_id, name, road_type, start_location, end_location, length_m,
+INSERT INTO haul_road (road_id, name, road_type, start_location, end_location, length_m,
      max_slope_pct, avg_slope_pct, road_width_m, turning_radius_m,
      pavement_type, max_load_t, primary_truck_model, maintenance_team,
      last_maintenance_date, condition, notes) VALUES
@@ -92,4 +88,4 @@ INSERT INTO haul_road
         '排土场内部道路'),
     ('R-DUMP-02', '内排土通道',     'dump',   '采坑', '内排土场', 1500, 8, 6, 30, 35,
         'gravel',   172, '730E',  '排土工区', '2023-10-12', 'fair',
-        '内排土,运距短');
+        '内排土,运距短') ON CONFLICT (road_id) DO UPDATE SET name = EXCLUDED.name, road_type = EXCLUDED.road_type, start_location = EXCLUDED.start_location, end_location = EXCLUDED.end_location, length_m = EXCLUDED.length_m, max_slope_pct = EXCLUDED.max_slope_pct, avg_slope_pct = EXCLUDED.avg_slope_pct, road_width_m = EXCLUDED.road_width_m, turning_radius_m = EXCLUDED.turning_radius_m, pavement_type = EXCLUDED.pavement_type, max_load_t = EXCLUDED.max_load_t, primary_truck_model = EXCLUDED.primary_truck_model, maintenance_team = EXCLUDED.maintenance_team, last_maintenance_date = EXCLUDED.last_maintenance_date, condition = EXCLUDED.condition, notes = EXCLUDED.notes;

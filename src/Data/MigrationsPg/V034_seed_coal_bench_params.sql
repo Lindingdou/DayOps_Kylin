@@ -17,8 +17,7 @@
 -- 备注: phase_id=201(采装/工作面规划),与 bench_height 等同组,便于模板编辑器一屏取全。
 -- =============================================================================
 
-INSERT INTO parameter_definition
-    (param_id, phase_id, code, name, unit, value_type,
+INSERT INTO parameter_definition (param_id, phase_id, code, name, unit, value_type,
      standard_min, standard_max, standard_default, alarm_low, alarm_high, is_required,
      calc_formula, source_table, source_column, description, display_order) VALUES
     (2007, 201, 'coal_bench_height',      '煤台阶高度',   'm', 'numeric',  5, 15, 15,  3, 20, 0, NULL, NULL, NULL,
@@ -26,4 +25,4 @@ INSERT INTO parameter_definition
     (2008, 201, 'coal_bench_slope_angle', '煤台阶坡面角', '°', 'numeric', 60, 70, 65, 55, 80, 0, NULL, NULL, NULL,
         '采煤台阶面与水平夹角(初设5-4 煤65°);煤层放坡专用,岩台阶走 bench_slope_angle',        8),
     (2009, 201, 'coal_platform_width',    '煤台阶平盘宽', 'm', 'numeric',  6, 12,  6,  5, 15, 0, NULL, NULL, NULL,
-        '采煤台阶平盘净宽(按保安平台不低于 6m);煤层放坡专用,岩台阶走 safety_platform_width', 9);
+        '采煤台阶平盘净宽(按保安平台不低于 6m);煤层放坡专用,岩台阶走 safety_platform_width', 9) ON CONFLICT (param_id) DO UPDATE SET phase_id = EXCLUDED.phase_id, code = EXCLUDED.code, name = EXCLUDED.name, unit = EXCLUDED.unit, value_type = EXCLUDED.value_type, standard_min = EXCLUDED.standard_min, standard_max = EXCLUDED.standard_max, standard_default = EXCLUDED.standard_default, alarm_low = EXCLUDED.alarm_low, alarm_high = EXCLUDED.alarm_high, is_required = EXCLUDED.is_required, calc_formula = EXCLUDED.calc_formula, source_table = EXCLUDED.source_table, source_column = EXCLUDED.source_column, description = EXCLUDED.description, display_order = EXCLUDED.display_order;

@@ -394,17 +394,17 @@ WHERE bsr.status NOT IN ('未达', '尖灭', '空巷');
 -- =============================================================================
 
 -- 煤层定义 (按沉积深度排序，浅 → 深)
-INSERT INTO coal_seam_def(code, name, sort_order, color_hex, description) VALUES
+INSERT INTO coal_seam_def (code, name, sort_order, color_hex, description) VALUES
     ('4',        '4 号煤层',         10, '#D4A017', '主采煤层'),
     ('4-1',      '4-1 号煤层',       11, '#E5B622', '主采煤层（4 号分层）'),
     ('4-2',      '4-2 号煤层',       12, '#C99518', '4 号分层'),
     ('4（4-1）', '4(4-1) 合并煤层',  13, '#D4A017', '4 与 4-1 合并'),
     ('7-1',      '7-1 号煤层',       20, '#8B6914', ''),
     ('9',        '9 号煤层',         30, '#4A7C2E', '主采煤层'),
-    ('11',       '11 号煤层',        40, '#2C5F8D', '主采煤层');
+    ('11',       '11 号煤层',        40, '#2C5F8D', '主采煤层') ON CONFLICT DO NOTHING;
 
 -- GB/T 5751 煤类 (节选 14 种)
-INSERT INTO coal_classification(code, name_cn, name_short, vdaf_min, vdaf_max, g_min, g_max, y_min, y_max, sort_order, description) VALUES
+INSERT INTO coal_classification (code, name_cn, name_short, vdaf_min, vdaf_max, g_min, g_max, y_min, y_max, sort_order, description) VALUES
     ('WY1',   '无烟煤一号',  '无烟', 0,    3.5,  NULL, NULL, NULL, NULL, 10, ''),
     ('WY2',   '无烟煤二号',  '无烟', 3.5,  6.5,  NULL, NULL, NULL, NULL, 11, ''),
     ('WY3',   '无烟煤三号',  '无烟', 6.5,  10,   NULL, NULL, NULL, NULL, 12, ''),
@@ -420,10 +420,10 @@ INSERT INTO coal_classification(code, name_cn, name_short, vdaf_min, vdaf_max, g
     ('RN',    '弱粘煤',      '弱粘', 20,   37,   5,    35,   NULL, NULL, 50, ''),
     ('BN',    '不粘煤',      '不粘', 20,   37,   0,    5,    NULL, NULL, 51, ''),
     ('CY',    '长焰煤',      '长焰', 37,   NULL, 0,    35,   NULL, NULL, 60, ''),
-    ('HM',    '褐煤',        '褐',   37,   NULL, NULL, NULL, NULL, NULL, 70, '另需透光率指标');
+    ('HM',    '褐煤',        '褐',   37,   NULL, NULL, NULL, NULL, NULL, 70, '另需透光率指标') ON CONFLICT DO NOTHING;
 
 -- 分级规则 (灰分 / 硫分 / 发热量, 颜色用于空间分布着色)
-INSERT INTO coal_grade_rule(rule_type, level_code, level_name, value_min, value_max, color_hex, sort_order) VALUES
+INSERT INTO coal_grade_rule (rule_type, level_code, level_name, value_min, value_max, color_hex, sort_order) VALUES
     -- 灰分 (GB/T 15224.1)
     ('ash',    'extra_low',  '特低灰', NULL, 10,   '#1B5E20', 10),
     ('ash',    'low',        '低灰',   10,   20,   '#558B2F', 20),
@@ -441,4 +441,4 @@ INSERT INTO coal_grade_rule(rule_type, level_code, level_name, value_min, value_
     ('qnet',   'low',        '中低',   17,   21,   '#F57C00', 20),
     ('qnet',   'medium',     '中',     21,   24,   '#FBC02D', 30),
     ('qnet',   'high',       '中高',   24,   27,   '#558B2F', 40),
-    ('qnet',   'extra_high', '高热值', 27,   NULL, '#1B5E20', 50);
+    ('qnet',   'extra_high', '高热值', 27,   NULL, '#1B5E20', 50) ON CONFLICT DO NOTHING;

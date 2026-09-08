@@ -15,7 +15,7 @@ INSERT INTO process_system (system_id, code, name, category, description, displa
     (5, 'slope',     '边坡稳定系统',   'slope',     '工作帮设计 + 最终帮设计 + 边坡监测',                 50),
     (6, 'aux',       '辅助系统',       'aux',       '道路维护 + 给排水 + 防尘洒水',                       60),
     (7, 'economic',  '经济系统',       'economic',  '成本核算 + 单价管理',                                70),
-    (8, 'safety',    '安全环保系统',   'safety',    '振动 / 粉尘 / 噪声监测 + 安全规程',                  80);
+    (8, 'safety',    '安全环保系统',   'safety',    '振动 / 粉尘 / 噪声监测 + 安全规程',                  80) ON CONFLICT (system_id) DO UPDATE SET code = EXCLUDED.code, name = EXCLUDED.name, category = EXCLUDED.category, description = EXCLUDED.description, display_order = EXCLUDED.display_order;
 
 -- ─── 28 个工艺环节 ─────────────────────────────────────────────────────────
 INSERT INTO process_phase (phase_id, system_id, code, name, sequence_order, typical_equipment_category, description) VALUES
@@ -52,12 +52,11 @@ INSERT INTO process_phase (phase_id, system_id, code, name, sequence_order, typi
     (801, 8, 'vibration_mon',    '振动监测',        1, NULL,        '爆破振动速度'),
     (802, 8, 'dust_mon',         '粉尘监测',        2, NULL,        '工作区粉尘浓度'),
     (803, 8, 'noise_mon',        '噪声监测',        3, NULL,        '边界噪声'),
-    (804, 8, 'safety_rules',     '安全规程',        4, NULL,        '操作规程与隐患排查');
+    (804, 8, 'safety_rules',     '安全规程',        4, NULL,        '操作规程与隐患排查') ON CONFLICT (phase_id) DO UPDATE SET system_id = EXCLUDED.system_id, code = EXCLUDED.code, name = EXCLUDED.name, sequence_order = EXCLUDED.sequence_order, typical_equipment_category = EXCLUDED.typical_equipment_category, description = EXCLUDED.description;
 
 -- ─── 60+ 参数定义 ─────────────────────────────────────────────────────────
 -- 穿爆 / 钻孔
-INSERT INTO parameter_definition
-    (param_id, phase_id, code, name, unit, value_type,
+INSERT INTO parameter_definition (param_id, phase_id, code, name, unit, value_type,
      standard_min, standard_max, standard_default, alarm_low, alarm_high, is_required,
      calc_formula, source_table, source_column, description, display_order) VALUES
     (1001, 101, 'hole_diameter',         '孔径',         'mm',     'numeric', 165, 250, 220, 150, 280, 1, NULL, 'blast_event', 'diameter_mm',  '炮孔直径',           1),
@@ -66,29 +65,26 @@ INSERT INTO parameter_definition
     (1004, 101, 'row_spacing',           '排距',         'm',      'numeric',   4,   8,   6,   3,   9, 1, NULL, NULL,           NULL,            '排间距',             4),
     (1005, 101, 'subdrill_depth',        '超钻',         'm',      'numeric',   1,   2, 1.5, 0.5,  2.5, 1, NULL, NULL,           NULL,            '抗反弹超钻',         5),
     (1006, 101, 'hole_inclination',      '钻孔倾角',     '°',      'numeric',   0,  20,   0, -10,  30, 0, NULL, NULL,           NULL,            '0=垂直',             6),
-    (1007, 101, 'hole_count',            '单炮孔数',     '个',     'numeric',  50, 300, 174,  20, 500, 0, NULL, 'blast_event', 'hole_count',    '单次爆破炮孔总数',   7);
+    (1007, 101, 'hole_count',            '单炮孔数',     '个',     'numeric',  50, 300, 174,  20, 500, 0, NULL, 'blast_event', 'hole_count',    '单次爆破炮孔总数',   7) ON CONFLICT (param_id) DO UPDATE SET phase_id = EXCLUDED.phase_id, code = EXCLUDED.code, name = EXCLUDED.name, unit = EXCLUDED.unit, value_type = EXCLUDED.value_type, standard_min = EXCLUDED.standard_min, standard_max = EXCLUDED.standard_max, standard_default = EXCLUDED.standard_default, alarm_low = EXCLUDED.alarm_low, alarm_high = EXCLUDED.alarm_high, is_required = EXCLUDED.is_required, calc_formula = EXCLUDED.calc_formula, source_table = EXCLUDED.source_table, source_column = EXCLUDED.source_column, description = EXCLUDED.description, display_order = EXCLUDED.display_order;
 
 -- 穿爆 / 装药
-INSERT INTO parameter_definition
-    (param_id, phase_id, code, name, unit, value_type,
+INSERT INTO parameter_definition (param_id, phase_id, code, name, unit, value_type,
      standard_min, standard_max, standard_default, alarm_low, alarm_high, is_required,
      calc_formula, source_table, source_column, description, display_order) VALUES
     (1101, 102, 'charge_density',        '装药密度',     'kg/m',   'numeric',  6,  10,  8.5,   5,  12, 1, NULL, NULL,           NULL,            '单米孔装药量',      1),
     (1102, 102, 'stemming_length',       '堵塞长度',     'm',      'numeric',  3,   5,   4,   2,   6, 1, NULL, NULL,           NULL,            '孔口堵塞段',         2),
     (1103, 102, 'charge_total_kg',       '总装药量',     'kg',     'numeric',  NULL, NULL, NULL, NULL, NULL, 0, NULL, 'blast_event', 'explosive_kg', '单炮总炸药',         3),
-    (1104, 102, 'explosive_type',        '炸药类型',     '',       'text',     NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL,           NULL,            '乳化/铵油/电子',     4);
+    (1104, 102, 'explosive_type',        '炸药类型',     '',       'text',     NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL,           NULL,            '乳化/铵油/电子',     4) ON CONFLICT (param_id) DO UPDATE SET phase_id = EXCLUDED.phase_id, code = EXCLUDED.code, name = EXCLUDED.name, unit = EXCLUDED.unit, value_type = EXCLUDED.value_type, standard_min = EXCLUDED.standard_min, standard_max = EXCLUDED.standard_max, standard_default = EXCLUDED.standard_default, alarm_low = EXCLUDED.alarm_low, alarm_high = EXCLUDED.alarm_high, is_required = EXCLUDED.is_required, calc_formula = EXCLUDED.calc_formula, source_table = EXCLUDED.source_table, source_column = EXCLUDED.source_column, description = EXCLUDED.description, display_order = EXCLUDED.display_order;
 
 -- 穿爆 / 起爆
-INSERT INTO parameter_definition
-    (param_id, phase_id, code, name, unit, value_type,
+INSERT INTO parameter_definition (param_id, phase_id, code, name, unit, value_type,
      standard_min, standard_max, standard_default, alarm_low, alarm_high, is_required,
      calc_formula, source_table, source_column, description, display_order) VALUES
     (1201, 103, 'detonation_method',     '起爆方式',     '',       'enum',     NULL, NULL, NULL, NULL, NULL, 1, NULL, NULL, NULL, '电雷管/导爆管/电子雷管', 1),
-    (1202, 103, 'delay_ms',               '雷管延期',     'ms',     'numeric',  25, 100,  50,  10, 200, 0, NULL, NULL, NULL, '毫秒延期',                 2);
+    (1202, 103, 'delay_ms',               '雷管延期',     'ms',     'numeric',  25, 100,  50,  10, 200, 0, NULL, NULL, NULL, '毫秒延期',                 2) ON CONFLICT (param_id) DO UPDATE SET phase_id = EXCLUDED.phase_id, code = EXCLUDED.code, name = EXCLUDED.name, unit = EXCLUDED.unit, value_type = EXCLUDED.value_type, standard_min = EXCLUDED.standard_min, standard_max = EXCLUDED.standard_max, standard_default = EXCLUDED.standard_default, alarm_low = EXCLUDED.alarm_low, alarm_high = EXCLUDED.alarm_high, is_required = EXCLUDED.is_required, calc_formula = EXCLUDED.calc_formula, source_table = EXCLUDED.source_table, source_column = EXCLUDED.source_column, description = EXCLUDED.description, display_order = EXCLUDED.display_order;
 
 -- 穿爆 / 爆破效果验收
-INSERT INTO parameter_definition
-    (param_id, phase_id, code, name, unit, value_type,
+INSERT INTO parameter_definition (param_id, phase_id, code, name, unit, value_type,
      standard_min, standard_max, standard_default, alarm_low, alarm_high, is_required,
      calc_formula, source_table, source_column, description, display_order) VALUES
     (1301, 104, 'unit_consumption',      '单耗',         'kg/m³',  'numeric',  0.3, 0.6, 0.50, 0.2, 0.8, 1,
@@ -96,11 +92,10 @@ INSERT INTO parameter_definition
     (1302, 104, 'blast_volume',          '爆破方量',     'm³',     'numeric',  NULL, NULL, NULL, NULL, NULL, 0, NULL,
         'blast_event', 'blast_volume_m3', '单炮爆破方量',                                                  2),
     (1303, 104, 'oversized_rate_pct',    '大块率',       '%',      'numeric',  0,   5,    3,   0,   8, 1, NULL, NULL, NULL, '大块占比',                3),
-    (1304, 104, 'toe_rate_pct',          '根底率',       '%',      'numeric',  0,   3,    2,   0,   5, 1, NULL, NULL, NULL, '根底占比',                4);
+    (1304, 104, 'toe_rate_pct',          '根底率',       '%',      'numeric',  0,   3,    2,   0,   5, 1, NULL, NULL, NULL, '根底占比',                4) ON CONFLICT (param_id) DO UPDATE SET phase_id = EXCLUDED.phase_id, code = EXCLUDED.code, name = EXCLUDED.name, unit = EXCLUDED.unit, value_type = EXCLUDED.value_type, standard_min = EXCLUDED.standard_min, standard_max = EXCLUDED.standard_max, standard_default = EXCLUDED.standard_default, alarm_low = EXCLUDED.alarm_low, alarm_high = EXCLUDED.alarm_high, is_required = EXCLUDED.is_required, calc_formula = EXCLUDED.calc_formula, source_table = EXCLUDED.source_table, source_column = EXCLUDED.source_column, description = EXCLUDED.description, display_order = EXCLUDED.display_order;
 
 -- 采装 / 工作面规划
-INSERT INTO parameter_definition
-    (param_id, phase_id, code, name, unit, value_type,
+INSERT INTO parameter_definition (param_id, phase_id, code, name, unit, value_type,
      standard_min, standard_max, standard_default, alarm_low, alarm_high, is_required,
      calc_formula, source_table, source_column, description, display_order) VALUES
     (2001, 201, 'bench_height',          '台阶高度',     'm',      'numeric',  12, 15,   15,  10,  18, 1, NULL, 'working_face', 'bench_height_m',        '台阶垂直高度',     1),
@@ -108,82 +103,73 @@ INSERT INTO parameter_definition
     (2003, 201, 'safety_platform_width', '安全平台宽',   'm',      'numeric',   6, 12,    8,   5,  15, 1, NULL, 'working_face', 'safety_platform_width_m', '安全平台净宽',    3),
     (2004, 201, 'working_platform_width','工作平台宽',   'm',      'numeric',  30, 50,   45,  25,  60, 1, NULL, 'working_face', 'working_platform_width_m','作业平台净宽',    4),
     (2005, 201, 'mining_width',          '采宽',         'm',      'numeric',  35, 60,   50,  30,  70, 1, NULL, 'working_face', 'mining_width_m',         '工作面采宽',     5),
-    (2006, 201, 'face_length',           '工作面长度',   'm',      'numeric', 150,300,  220, 120, 400, 0, NULL, 'working_face', 'face_length_m',          '工作面延展长度', 6);
+    (2006, 201, 'face_length',           '工作面长度',   'm',      'numeric', 150,300,  220, 120, 400, 0, NULL, 'working_face', 'face_length_m',          '工作面延展长度', 6) ON CONFLICT (param_id) DO UPDATE SET phase_id = EXCLUDED.phase_id, code = EXCLUDED.code, name = EXCLUDED.name, unit = EXCLUDED.unit, value_type = EXCLUDED.value_type, standard_min = EXCLUDED.standard_min, standard_max = EXCLUDED.standard_max, standard_default = EXCLUDED.standard_default, alarm_low = EXCLUDED.alarm_low, alarm_high = EXCLUDED.alarm_high, is_required = EXCLUDED.is_required, calc_formula = EXCLUDED.calc_formula, source_table = EXCLUDED.source_table, source_column = EXCLUDED.source_column, description = EXCLUDED.description, display_order = EXCLUDED.display_order;
 
 -- 采装 / 剥离
-INSERT INTO parameter_definition
-    (param_id, phase_id, code, name, unit, value_type,
+INSERT INTO parameter_definition (param_id, phase_id, code, name, unit, value_type,
      standard_min, standard_max, standard_default, alarm_low, alarm_high, is_required,
      calc_formula, source_table, source_column, description, display_order) VALUES
     (2101, 202, 'advance_rate',          '月推进度',     'm/月',   'numeric',  20, 60,   45,  15,  80, 1, NULL, 'working_face', 'advance_rate_m_per_month','月推进距离',     1),
     (2102, 202, 'shovel_cycle_time',     '电铲循环时间', 's',      'numeric',  35, 55,   45,  30,  70, 0, NULL, NULL, NULL, '装-回转-卸-回转',           2),
-    (2103, 202, 'bucket_fill_factor',    '装满系数',     '',       'numeric', 0.85, 1.0, 0.92, 0.7, 1.1, 0, NULL, NULL, NULL, '铲斗实际装满率',           3);
+    (2103, 202, 'bucket_fill_factor',    '装满系数',     '',       'numeric', 0.85, 1.0, 0.92, 0.7, 1.1, 0, NULL, NULL, NULL, '铲斗实际装满率',           3) ON CONFLICT (param_id) DO UPDATE SET phase_id = EXCLUDED.phase_id, code = EXCLUDED.code, name = EXCLUDED.name, unit = EXCLUDED.unit, value_type = EXCLUDED.value_type, standard_min = EXCLUDED.standard_min, standard_max = EXCLUDED.standard_max, standard_default = EXCLUDED.standard_default, alarm_low = EXCLUDED.alarm_low, alarm_high = EXCLUDED.alarm_high, is_required = EXCLUDED.is_required, calc_formula = EXCLUDED.calc_formula, source_table = EXCLUDED.source_table, source_column = EXCLUDED.source_column, description = EXCLUDED.description, display_order = EXCLUDED.display_order;
 
 -- 运输 / 主道运输
-INSERT INTO parameter_definition
-    (param_id, phase_id, code, name, unit, value_type,
+INSERT INTO parameter_definition (param_id, phase_id, code, name, unit, value_type,
      standard_min, standard_max, standard_default, alarm_low, alarm_high, is_required,
      calc_formula, source_table, source_column, description, display_order) VALUES
     (3001, 302, 'haul_distance_km',      '运距',         'km',     'numeric',  2,    6,    4,   1,    8, 1, NULL, 'haul_road', 'length_m',         '平均运距',           1),
     (3002, 302, 'road_max_slope_pct',    '最大坡度',     '%',      'numeric',  0,   10,    8,   0,   12, 1, NULL, 'haul_road', 'max_slope_pct',     '道路最大坡度',       2),
     (3003, 302, 'road_width',            '路宽',         'm',      'numeric',  30,  40,   36,  25,   50, 1, NULL, 'haul_road', 'road_width_m',      '路面宽度',           3),
-    (3004, 302, 'cycle_time_min',        '单循环分钟',   'min',    'numeric',  15,  30,   20,  10,   45, 0, NULL, 'dispatch_rule', 'cycle_time_min', '装-运-卸-返循环时长', 4);
+    (3004, 302, 'cycle_time_min',        '单循环分钟',   'min',    'numeric',  15,  30,   20,  10,   45, 0, NULL, 'dispatch_rule', 'cycle_time_min', '装-运-卸-返循环时长', 4) ON CONFLICT (param_id) DO UPDATE SET phase_id = EXCLUDED.phase_id, code = EXCLUDED.code, name = EXCLUDED.name, unit = EXCLUDED.unit, value_type = EXCLUDED.value_type, standard_min = EXCLUDED.standard_min, standard_max = EXCLUDED.standard_max, standard_default = EXCLUDED.standard_default, alarm_low = EXCLUDED.alarm_low, alarm_high = EXCLUDED.alarm_high, is_required = EXCLUDED.is_required, calc_formula = EXCLUDED.calc_formula, source_table = EXCLUDED.source_table, source_column = EXCLUDED.source_column, description = EXCLUDED.description, display_order = EXCLUDED.display_order;
 
 -- 运输 / 装车
-INSERT INTO parameter_definition
-    (param_id, phase_id, code, name, unit, value_type,
+INSERT INTO parameter_definition (param_id, phase_id, code, name, unit, value_type,
      standard_min, standard_max, standard_default, alarm_low, alarm_high, is_required,
      calc_formula, source_table, source_column, description, display_order) VALUES
     (3101, 301, 'bucket_loads_per_truck','装满铲数',     '铲',     'numeric',   3,   6,    4,   2,   8, 1, NULL, 'dispatch_rule', 'bucket_loads_per_truck', '几铲装满一车',  1),
-    (3102, 301, 'recommended_truck_cnt','推荐配车数',   '辆',     'numeric',   3,   8,    5,   2,  12, 1, NULL, 'dispatch_rule', 'recommended_truck_count', '单铲推荐车数',  2);
+    (3102, 301, 'recommended_truck_cnt','推荐配车数',   '辆',     'numeric',   3,   8,    5,   2,  12, 1, NULL, 'dispatch_rule', 'recommended_truck_count', '单铲推荐车数',  2) ON CONFLICT (param_id) DO UPDATE SET phase_id = EXCLUDED.phase_id, code = EXCLUDED.code, name = EXCLUDED.name, unit = EXCLUDED.unit, value_type = EXCLUDED.value_type, standard_min = EXCLUDED.standard_min, standard_max = EXCLUDED.standard_max, standard_default = EXCLUDED.standard_default, alarm_low = EXCLUDED.alarm_low, alarm_high = EXCLUDED.alarm_high, is_required = EXCLUDED.is_required, calc_formula = EXCLUDED.calc_formula, source_table = EXCLUDED.source_table, source_column = EXCLUDED.source_column, description = EXCLUDED.description, display_order = EXCLUDED.display_order;
 
 -- 排土 / 外排
-INSERT INTO parameter_definition
-    (param_id, phase_id, code, name, unit, value_type,
+INSERT INTO parameter_definition (param_id, phase_id, code, name, unit, value_type,
      standard_min, standard_max, standard_default, alarm_low, alarm_high, is_required,
      calc_formula, source_table, source_column, description, display_order) VALUES
     (4001, 402, 'dump_max_height',       '最大堆高',     'm',      'numeric',  30,  60,   45,  20,   80, 1, NULL, 'dump_site', 'max_height_m',         '排土场最大堆高',     1),
     (4002, 402, 'dump_bench_height',     '单层堆高',     'm',      'numeric',  10,  15,   12,   8,   18, 1, NULL, 'dump_site', 'bench_height_m',       '单层排土高度',       2),
     (4003, 402, 'dump_slope_angle',      '排土场坡角',   '°',      'numeric',  30,  35,   32,  25,   40, 1, NULL, 'dump_site', 'overall_slope_angle_deg', '排土场整体坡角',  3),
-    (4004, 402, 'dump_fill_rate',        '充填率',       '',       'numeric',   0,   1, 0.6,   0,    1, 0, NULL, NULL, NULL, '已堆/设计',                4);
+    (4004, 402, 'dump_fill_rate',        '充填率',       '',       'numeric',   0,   1, 0.6,   0,    1, 0, NULL, NULL, NULL, '已堆/设计',                4) ON CONFLICT (param_id) DO UPDATE SET phase_id = EXCLUDED.phase_id, code = EXCLUDED.code, name = EXCLUDED.name, unit = EXCLUDED.unit, value_type = EXCLUDED.value_type, standard_min = EXCLUDED.standard_min, standard_max = EXCLUDED.standard_max, standard_default = EXCLUDED.standard_default, alarm_low = EXCLUDED.alarm_low, alarm_high = EXCLUDED.alarm_high, is_required = EXCLUDED.is_required, calc_formula = EXCLUDED.calc_formula, source_table = EXCLUDED.source_table, source_column = EXCLUDED.source_column, description = EXCLUDED.description, display_order = EXCLUDED.display_order;
 
 -- 边坡 / 工作帮设计
-INSERT INTO parameter_definition
-    (param_id, phase_id, code, name, unit, value_type,
+INSERT INTO parameter_definition (param_id, phase_id, code, name, unit, value_type,
      standard_min, standard_max, standard_default, alarm_low, alarm_high, is_required,
      calc_formula, source_table, source_column, description, display_order) VALUES
     (5001, 501, 'working_slope_angle',   '工作帮坡角',   '°',      'numeric',  20,  35,   28,  15,   40, 1, NULL, 'slope_design', 'working_slope_angle_deg', '工作帮整体坡角', 1),
-    (5002, 501, 'safety_factor_F',       '安全系数 F',   '',       'numeric',  1.30, 2.0, 1.35, 1.0, 3.0, 1, NULL, 'slope_design', 'safety_factor',           'F ≥ 1.30 安全', 2);
+    (5002, 501, 'safety_factor_F',       '安全系数 F',   '',       'numeric',  1.30, 2.0, 1.35, 1.0, 3.0, 1, NULL, 'slope_design', 'safety_factor',           'F ≥ 1.30 安全', 2) ON CONFLICT (param_id) DO UPDATE SET phase_id = EXCLUDED.phase_id, code = EXCLUDED.code, name = EXCLUDED.name, unit = EXCLUDED.unit, value_type = EXCLUDED.value_type, standard_min = EXCLUDED.standard_min, standard_max = EXCLUDED.standard_max, standard_default = EXCLUDED.standard_default, alarm_low = EXCLUDED.alarm_low, alarm_high = EXCLUDED.alarm_high, is_required = EXCLUDED.is_required, calc_formula = EXCLUDED.calc_formula, source_table = EXCLUDED.source_table, source_column = EXCLUDED.source_column, description = EXCLUDED.description, display_order = EXCLUDED.display_order;
 
 -- 边坡 / 最终帮设计
-INSERT INTO parameter_definition
-    (param_id, phase_id, code, name, unit, value_type,
+INSERT INTO parameter_definition (param_id, phase_id, code, name, unit, value_type,
      standard_min, standard_max, standard_default, alarm_low, alarm_high, is_required,
      calc_formula, source_table, source_column, description, display_order) VALUES
     (5101, 502, 'final_slope_angle',     '最终帮坡角',   '°',      'numeric',  35,  45,   42,  30,   50, 1, NULL, 'slope_design', 'final_slope_angle_deg', '最终帮整体坡角', 1),
-    (5102, 502, 'max_depth',             '最大开采深度', 'm',      'numeric', 200, 400,  300, 100,  500, 0, NULL, 'slope_design', 'max_depth_m',           '矿坑最大深度',   2);
+    (5102, 502, 'max_depth',             '最大开采深度', 'm',      'numeric', 200, 400,  300, 100,  500, 0, NULL, 'slope_design', 'max_depth_m',           '矿坑最大深度',   2) ON CONFLICT (param_id) DO UPDATE SET phase_id = EXCLUDED.phase_id, code = EXCLUDED.code, name = EXCLUDED.name, unit = EXCLUDED.unit, value_type = EXCLUDED.value_type, standard_min = EXCLUDED.standard_min, standard_max = EXCLUDED.standard_max, standard_default = EXCLUDED.standard_default, alarm_low = EXCLUDED.alarm_low, alarm_high = EXCLUDED.alarm_high, is_required = EXCLUDED.is_required, calc_formula = EXCLUDED.calc_formula, source_table = EXCLUDED.source_table, source_column = EXCLUDED.source_column, description = EXCLUDED.description, display_order = EXCLUDED.display_order;
 
 -- 经济 / 单价管理
-INSERT INTO parameter_definition
-    (param_id, phase_id, code, name, unit, value_type,
+INSERT INTO parameter_definition (param_id, phase_id, code, name, unit, value_type,
      standard_min, standard_max, standard_default, alarm_low, alarm_high, is_required,
      calc_formula, source_table, source_column, description, display_order) VALUES
     (7001, 702, 'diesel_unit_price',     '柴油单价',     '元/L',   'numeric',   5,   9,    7,   3,   12, 0, NULL, NULL, NULL, '柴油采购单价',     1),
     (7002, 702, 'electric_unit_price',   '电单价',       '元/kWh', 'numeric', 0.4, 0.8, 0.55, 0.2,   1, 0, NULL, NULL, NULL, '工业电价',         2),
     (7003, 702, 'explosive_unit_price',  '炸药单价',     '元/kg',  'numeric',   5,  12,    8,   3,   15, 0, NULL, NULL, NULL, '炸药采购单价',     3),
-    (7004, 702, 'outsource_unit_price',  '外委单价',     '元/m³',  'numeric',   8,  18,   12,   5,   25, 0, NULL, NULL, NULL, '外委剥离单价',     4);
+    (7004, 702, 'outsource_unit_price',  '外委单价',     '元/m³',  'numeric',   8,  18,   12,   5,   25, 0, NULL, NULL, NULL, '外委剥离单价',     4) ON CONFLICT (param_id) DO UPDATE SET phase_id = EXCLUDED.phase_id, code = EXCLUDED.code, name = EXCLUDED.name, unit = EXCLUDED.unit, value_type = EXCLUDED.value_type, standard_min = EXCLUDED.standard_min, standard_max = EXCLUDED.standard_max, standard_default = EXCLUDED.standard_default, alarm_low = EXCLUDED.alarm_low, alarm_high = EXCLUDED.alarm_high, is_required = EXCLUDED.is_required, calc_formula = EXCLUDED.calc_formula, source_table = EXCLUDED.source_table, source_column = EXCLUDED.source_column, description = EXCLUDED.description, display_order = EXCLUDED.display_order;
 
 -- 安全 / 振动监测
-INSERT INTO parameter_definition
-    (param_id, phase_id, code, name, unit, value_type,
+INSERT INTO parameter_definition (param_id, phase_id, code, name, unit, value_type,
      standard_min, standard_max, standard_default, alarm_low, alarm_high, is_required,
      calc_formula, source_table, source_column, description, display_order) VALUES
     (8001, 801, 'vibration_velocity',    '振动速度',     'cm/s',   'numeric',   0,   3,    1,   0,    5, 1, NULL, NULL, NULL, '地震波速,< 3 安全', 1),
-    (8002, 801, 'flying_rock_distance',  '飞石距离',     'm',      'numeric',   0, 200,  100,   0,  500, 0, NULL, NULL, NULL, '爆破飞石最远距',    2);
+    (8002, 801, 'flying_rock_distance',  '飞石距离',     'm',      'numeric',   0, 200,  100,   0,  500, 0, NULL, NULL, NULL, '爆破飞石最远距',    2) ON CONFLICT (param_id) DO UPDATE SET phase_id = EXCLUDED.phase_id, code = EXCLUDED.code, name = EXCLUDED.name, unit = EXCLUDED.unit, value_type = EXCLUDED.value_type, standard_min = EXCLUDED.standard_min, standard_max = EXCLUDED.standard_max, standard_default = EXCLUDED.standard_default, alarm_low = EXCLUDED.alarm_low, alarm_high = EXCLUDED.alarm_high, is_required = EXCLUDED.is_required, calc_formula = EXCLUDED.calc_formula, source_table = EXCLUDED.source_table, source_column = EXCLUDED.source_column, description = EXCLUDED.description, display_order = EXCLUDED.display_order;
 
 -- 安全 / 粉尘监测
-INSERT INTO parameter_definition
-    (param_id, phase_id, code, name, unit, value_type,
+INSERT INTO parameter_definition (param_id, phase_id, code, name, unit, value_type,
      standard_min, standard_max, standard_default, alarm_low, alarm_high, is_required,
      calc_formula, source_table, source_column, description, display_order) VALUES
-    (8101, 802, 'dust_concentration',    '粉尘浓度',     'mg/m³',  'numeric',   0,  10,    4,   0,   20, 1, NULL, NULL, NULL, '工作区呼吸粉尘',   1);
+    (8101, 802, 'dust_concentration',    '粉尘浓度',     'mg/m³',  'numeric',   0,  10,    4,   0,   20, 1, NULL, NULL, NULL, '工作区呼吸粉尘',   1) ON CONFLICT (param_id) DO UPDATE SET phase_id = EXCLUDED.phase_id, code = EXCLUDED.code, name = EXCLUDED.name, unit = EXCLUDED.unit, value_type = EXCLUDED.value_type, standard_min = EXCLUDED.standard_min, standard_max = EXCLUDED.standard_max, standard_default = EXCLUDED.standard_default, alarm_low = EXCLUDED.alarm_low, alarm_high = EXCLUDED.alarm_high, is_required = EXCLUDED.is_required, calc_formula = EXCLUDED.calc_formula, source_table = EXCLUDED.source_table, source_column = EXCLUDED.source_column, description = EXCLUDED.description, display_order = EXCLUDED.display_order;

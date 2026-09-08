@@ -13,7 +13,7 @@ INSERT INTO equipment (equipment_id, category, model, manufacturer, status, oper
   ('XE4000-安家R2', 'Shovel', 'XE4000', NULL, '租赁', '安家岭矿', '租赁/试用设备(据设备能力分析补充)'),
   ('XE4000-安家R3', 'Shovel', 'XE4000', NULL, '租赁', '安家岭矿', '租赁/试用设备(据设备能力分析补充)'),
   ('XE4000-东露R1', 'Shovel', 'XE4000', NULL, '租赁', '东露天矿', '租赁/试用设备(据设备能力分析补充)'),
-  ('XE4000-东露R2', 'Shovel', 'XE4000', NULL, '租赁', '东露天矿', '租赁/试用设备(据设备能力分析补充)');
+  ('XE4000-东露R2', 'Shovel', 'XE4000', NULL, '租赁', '东露天矿', '租赁/试用设备(据设备能力分析补充)') ON CONFLICT DO NOTHING;
 
 DELETE FROM capacity_monthly;
 INSERT INTO capacity_monthly (equipment_id, year, month, output_m3) VALUES

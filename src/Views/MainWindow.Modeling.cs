@@ -228,7 +228,22 @@ public partial class MainWindow
     };
 
     // ═══════════════════ 命令派发（Ribbon Tag / 中文别名 → 场景版处理器）═══════════════════
+    /// <summary>
+    /// 三维地质建模命令派发。整体兜底：这里被 async void 的 OnRibbonCommand 调用，
+    /// 抛异常会被静默吞掉，用户看到的就是"点了没反应"——改为把原因写到状态栏与日志。
+    /// </summary>
     private async Task<bool> TryModelingCommandAsync(string cmd)
+    {
+        try { return await TryModelingCommandCoreAsync(cmd); }
+        catch (System.Exception ex)
+        {
+            StatusMsg.Text = $"「{cmd}」执行出错：{ex.Message}";
+            PitMine3D.Kylin.CrashLog.Write("建模", $"{cmd} 失败: {ex}");
+            return true;   // 已处理(报了错), 不再往下当未知命令回显
+        }
+    }
+
+    private async Task<bool> TryModelingCommandCoreAsync(string cmd)
     {
         if (ModelingWindowFactory.TryOpen(this, MdlCtx(), cmd)) return true;   // 已登记独立窗口的功能项优先走窗口
         switch (cmd)
@@ -301,6 +316,19 @@ public partial class MainWindow
         var selSegs = _selected.OfType<LineEntity>()
             .Where(l => System.Math.Abs(l.X1 - l.X0) > 1e-9 || System.Math.Abs(l.Y1 - l.Y0) > 1e-9).ToList();
 
+        // 什么都没选 → 用场景里**全部可见的线**。等值线图动辄上千条, 逐条框选不现实;
+        // 此前没选就直接去弹选点 CSV 的文件框, 用户把框一关, 看起来就是"点了没反应"。
+        bool usingAll = false;
+        if (selPts.Count == 0 && selLines.Count == 0 && selSegs.Count == 0)
+        {
+            selLines = _scene.Entities.OfType<PolylineEntity>()
+                .Where(l => l.Visible && l.Points.Count >= 2 && _layers.IsShown(l.LayerName)).ToList();
+            selSegs = _scene.Entities.OfType<LineEntity>()
+                .Where(l => l.Visible && _layers.IsShown(l.LayerName)
+                            && (System.Math.Abs(l.X1 - l.X0) > 1e-9 || System.Math.Abs(l.Y1 - l.Y0) > 1e-9)).ToList();
+            usingAll = selLines.Count > 0 || selSegs.Count > 0;
+        }
+
         // ① 选了多段线(等值线建面)：线的顶点当输入点、线段当**约束边**。
         //    此前这条路走不通 —— 只收点实体, 多段线仅被当作裁剪边界, 于是最常见的
         //    "选一堆等值线建面"只会提示"需 ≥3 个点"。
@@ -339,7 +367,7 @@ public partial class MainWindow
             var lineMesh = AddMesh(new MeshEntity(NewMeshName("三角网"), col.Verts, lineTris), true);
             SelectEntities(new SceneEntity[] { lineMesh });
             var lst = TinSurface.Describe(col.Verts, lineTris);
-            StatusMsg.Text = $"创建三角网「{lineMesh.Name}」：{selLines.Count + selSegs.Count} 条线 {col.Verts.Count} 顶点"
+            StatusMsg.Text = $"创建三角网「{lineMesh.Name}」：{(usingAll ? "未选中对象, 取场景全部可见线 " : "")}{selLines.Count + selSegs.Count} 条线 {col.Verts.Count} 顶点"
                            + (dropped ? $"(顶点超 {TinConstraintVertexLimit:N0}，已退为无约束剖分，线形约束未保留；可先用「抽稀等值线」减点)"
                                       : $"({col.Constraints.Count} 段约束{(selPts.Count > 0 ? $" + {selPts.Count} 散点" : "")})")
                            + $" → {lineTris.Count} 三角 · 投影面积 {lst.ProjectedAreaXY:0.#} · 高程 {lst.ZMin:0.#}~{lst.ZMax:0.#}";
@@ -369,8 +397,14 @@ public partial class MainWindow
         }
 
         // ③ 只有点：散点 Delaunay
+        if (selPts.Count == 0)
+        {
+            // 场景里既没有线也没有导入线框, 才谈得上"要点" —— 明说找不到什么, 别默默弹文件框
+            StatusMsg.Text = "创建三角网：场景里没有可用的线或点。请先导入/绘制等值线(或高程点)，"
+                           + "或选中若干点后再执行；也可从 CSV 导入点。";
+        }
         var pts = await PickPointsAsync("创建三角网", 3);
-        if (pts.Count < 3) { StatusMsg.Text = "创建三角网：需 ≥3 个点或 ≥1 条多段线(先在场景中选中, 或从 CSV 导入点)"; return; }
+        if (pts.Count < 3) { StatusMsg.Text = "创建三角网：需 ≥3 个点或 ≥1 条线(先在场景中选中, 或从 CSV 导入点)"; return; }
         var p3 = Pts3(pts);
         var p2 = p3.Select(p => (p.x, p.y)).ToList();
         List<(int a, int b, int c)> tris = Delaunay.Triangulate(p2);

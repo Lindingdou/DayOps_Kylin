@@ -69,7 +69,6 @@ EXECUTE PROCEDURE fn_touch_updated_at();
 -- 为已在册的煤层各建一行空覆盖(全部 NULL = 全走全矿默认),
 -- 这样参数分组窗口一打开就能按煤层列全,用户只改要偏离的那几项。
 -- strip_width / min_mineable_thick 在 parameter_definition 里没有对口项,给出初值。
-INSERT INTO seam_bench_param
-    (seam_code, strip_width_m, layering_mode, min_mineable_thick_m, datum, notes)
+INSERT INTO seam_bench_param (seam_code, strip_width_m, layering_mode, min_mineable_thick_m, datum, notes)
 SELECT code, 20.0, 'inclined', 0.8, 'floor', '自动建行:参数全部回落全矿默认,按需逐项覆盖'
-FROM coal_seam_def;
+FROM coal_seam_def ON CONFLICT DO NOTHING;

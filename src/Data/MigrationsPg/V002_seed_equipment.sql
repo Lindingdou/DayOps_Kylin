@@ -16,8 +16,7 @@
 -- =============================================================================
 
 -- ─── ① 设备型号字典 ─────────────────────────────────────────────────────────
-INSERT INTO equipment_model
-    (model, category, working_weight_t, power_kw, bucket_m3, load_t, dimensions_lwh, drill_diameter_mm, tire_spec, std_daily_cap_wan_m3)
+INSERT INTO equipment_model (model, category, working_weight_t, power_kw, bucket_m3, load_t, dimensions_lwh, drill_diameter_mm, tire_spec, std_daily_cap_wan_m3)
 VALUES
     ('4100XPC',  'Shovel', 1440, 4480,  57,  113, '13.5 × 9.6 × 14.2', NULL, NULL, NULL),
     ('PH2800',   'Shovel',  630, 1490,  30,   56, '10.2 × 7.6 × 11.8', NULL, NULL, NULL),
@@ -28,7 +27,7 @@ VALUES
     ('DMH90',    'Drill',    92,  559, NULL, NULL, '12.8 × 6.5 × 13.6', 200, NULL, NULL),
     ('D10N',     'Dozer',    66,  354, NULL, NULL, '8.7 × 4.7 × 4.2',  NULL, NULL, NULL),
     ('GD825A-2', 'Grader',   26,  209, NULL, NULL, '10.0 × 3.4 × 3.6', NULL, '23.5R25', NULL),
-    ('水鹤',     'WaterTruck', NULL, NULL, NULL, NULL, '4.5 × 1.2 × 6.8', NULL, NULL, NULL);
+    ('水鹤',     'WaterTruck', NULL, NULL, NULL, NULL, '4.5 × 1.2 × 6.8', NULL, NULL, NULL) ON CONFLICT (model) DO UPDATE SET category = EXCLUDED.category, working_weight_t = EXCLUDED.working_weight_t, power_kw = EXCLUDED.power_kw, bucket_m3 = EXCLUDED.bucket_m3, load_t = EXCLUDED.load_t, dimensions_lwh = EXCLUDED.dimensions_lwh, drill_diameter_mm = EXCLUDED.drill_diameter_mm, tire_spec = EXCLUDED.tire_spec, std_daily_cap_wan_m3 = EXCLUDED.std_daily_cap_wan_m3;
 
 -- ─── ② 智能修补现有 equipment 表的 model/category ────────────────────────────
 -- capacity_history.csv 的 model 列是 "Shovel"/"Truck" 占位,
