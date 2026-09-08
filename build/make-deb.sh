@@ -289,6 +289,16 @@ if [ -d /opt/pitmine3d/runtime-libs ]; then
 fi
 command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q /usr/share/applications || true
 command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -q -f /usr/share/icons/hicolor || true
+# 清掉旧版留下的图形降档状态：0.1.9 曾把 Glenfly 误判为坏驱动直接降级，
+# 而真正的崩因是 fcitx 输入法那条 DBus 通路(本版已关)。升级后让硬件渲染重新参与。
+for f in "$HOME"/.local/share/PitMine3D.Kylin/.gl-level "$HOME"/.local/share/PitMine3D.Kylin/.gl-crashed; do
+    [ -e "$f" ] && rm -f "$f" && echo "已清除旧的图形降档状态: $f"
+done
+for d in /home/*/.local/share/PitMine3D.Kylin /root/.local/share/PitMine3D.Kylin; do
+    [ -d "$d" ] || continue
+    rm -f "$d/.gl-level" "$d/.gl-crashed" 2>/dev/null || true
+done
+
 if command -v pitmine3d >/dev/null 2>&1; then
     echo "已安装。启动: pitmine3d"
 else

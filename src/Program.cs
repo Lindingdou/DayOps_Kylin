@@ -47,6 +47,10 @@ internal static class Program
                 // 导出应用菜单并抛 ServiceUnknown, 由终结器线程重抛(crash.log 里的 [TASK] 那条)。
                 // 我们的菜单本来就画在窗口内, 不需要全局菜单 —— 直接关掉这条 DBus 通路。
                 UseDBusMenu = false,
+                // 麒麟上的 fcitx 与 Avalonia 期望的 DBus 接口对不上(SetCapacity/DestroyIC 方法不存在),
+                // 出错后销毁输入上下文时进程直接段错误 —— 实测崩溃紧跟在这串 [IME] Error 之后。
+                // 视口/命令行都不需要中文输入法候选框, 关掉这条通路。要打开: PITMINE_IME=1
+                EnableIme = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PITMINE_IME")),
                 GlProfiles = BuildGlProfiles(),
             })
             .WithInterFont()

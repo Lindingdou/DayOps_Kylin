@@ -119,9 +119,6 @@ public partial class CadGlViewport : OpenGlControlBase
     public bool GlFailed { get; private set; }
     public string GlFailReason { get; private set; } = "";
 
-    /// <summary>已知会原生崩溃的 GPU/驱动关键字(匹配 GL_RENDERER 或 GL_VENDOR)。</summary>
-    private static readonly string[] KnownBadGl = { "Glenfly", "Arise" };
-
     private bool _firstFrameLogged;
 
     /// <summary>已请求但尚未绘出的帧(重绘去重, 见 SetCursorScreen)。</summary>
@@ -161,11 +158,9 @@ public partial class CadGlViewport : OpenGlControlBase
             string renderer = gl.GetString(0x1F01) ?? "", vendor = gl.GetString(0x1F00) ?? "";
             PitMine3D.Kylin.CrashLog.Write("GL", $"GL_VERSION={gl.GetString(0x1F02)} · GL_RENDERER={renderer} · GL_VENDOR={vendor}");
             PitMine3D.Kylin.CrashLog.Write("GL", $"GLSL={gl.GetString(0x8B8C)}");
-            // 已知会段错误的驱动: 直接标记, 下次启动就走软件渲染, 不必先崩一次。
-            // 格兰菲 Arise1020 + Mesa 25.0 实测: 有时首帧前崩, 有时画出几帧后崩。
-            foreach (var bad in KnownBadGl)
-                if (renderer.Contains(bad, StringComparison.OrdinalIgnoreCase) || vendor.Contains(bad, StringComparison.OrdinalIgnoreCase))
-                { PitMine3D.Kylin.CrashLog.MarkGlUnsafe($"GL_RENDERER={renderer}"); break; }
+            // 注: 曾把 Glenfly/Arise 列为"已知坏驱动"直接标记降级, 后经日志证实首帧能正常画出
+            // (2005x955), 崩溃其实来自 fcitx 输入法那条 DBus 通路 —— 故撤掉黑名单, 不再误伤硬件渲染。
+            // 真崩了仍有启动器的退出码阶梯兜底(崩一次降一档)。
         }
         catch (Exception ex) { PitMine3D.Kylin.CrashLog.Write("GL", "取驱动字符串失败: " + ex.Message); }
         _hasGrid = false; _hasGridPlan = false;   // 上下文重建 → 格网下一帧按当前视图重建

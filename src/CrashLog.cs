@@ -49,22 +49,6 @@ public static class CrashLog
         catch { }
     }
 
-    /// <summary>
-    /// 标记"硬件 OpenGL 不可靠"，启动器下次启动即自动改用软件渲染。
-    /// 用于已知会崩的驱动：与启动器 .gl-crashed 同一个文件，两条路径(崩溃退出码 / 驱动黑名单)共用。
-    /// </summary>
-    public static void MarkGlUnsafe(string reason)
-    {
-        try
-        {
-            string dir = System.IO.Path.GetDirectoryName(Path) ?? "";
-            if (dir.Length == 0) return;
-            File.WriteAllText(System.IO.Path.Combine(dir, ".gl-crashed"), reason + Environment.NewLine, Encoding.UTF8);
-            Write("GL", $"已标记硬件 OpenGL 不可靠({reason}); 下次启动自动改用软件渲染");
-        }
-        catch { }
-    }
-
     public static void Write(string tag, string text)
     {
         string line = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [{tag}] {text}";
