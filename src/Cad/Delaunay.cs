@@ -10,13 +10,26 @@ namespace PitMine3D.Kylin.Cad;
 /// </summary>
 public static class Delaunay
 {
+    /// <summary>
+    /// 散点 Delaunay（Bowyer-Watson）。
+    ///
+    /// 三处性能要点（等值线建面动辄几万顶点，原实现在这个量级要几十秒）：
+    ///   ① 外接圆**建三角形时算一次**存起来，不再每次判定都重算 —— 原来是
+    ///      「每个点 × 每个三角形」都调一次 Circumcircle，这是最大的开销；
+    ///   ② 删除坏三角形改用存活标记 + 尾部压缩，不再 List.Remove（每次 O(n) 线性查找 + 搬移）；
+    ///   ③ 插入顺序按网格蛇形排过 —— 相邻点落在相邻位置，坏三角形集中，命中更快；
+    ///   ④ 三角形按**外接圆包围盒**登记进均匀网格：新点只需检查自己所在格子里的三角形，
+    ///      不再逐个扫全表。点若落在某三角形的外接圆内，必然落在其包围盒内，因而必在
+    ///      登记过的格子里 —— 不会漏。外接圆特别大的（超级三角形、凸包附近那些）
+    ///      跨格太多，单独放 oversized 表每次都查，数量很少。
+    /// 算法与结果口径不变，仍是同一套 Bowyer-Watson。
+    /// </summary>
     public static List<(int a, int b, int c)> Triangulate(IReadOnlyList<(double x, double y)> input)
     {
         var result = new List<(int, int, int)>();
         int n = input.Count;
         if (n < 3) return result;
 
-        // 点表 + 超级三角形三个远点(索引 n,n+1,n+2)
         var pts = new List<(double x, double y)>(input);
         double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
         foreach (var p in input) { if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y; if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y; }
@@ -27,30 +40,140 @@ public static class Delaunay
         pts.Add((midX, midY + 20 * dmax));
         int s0 = n, s1 = n + 1, s2 = n + 2;
 
-        var tris = new List<(int a, int b, int c)> { (s0, s1, s2) };
+        // 三角形表：顶点索引 + 外接圆(圆心/半径²) + 存活标记
+        int cap = System.Math.Max(64, n * 4);
+        var ta = new int[cap]; var tb = new int[cap]; var tc = new int[cap];
+        var ccx = new double[cap]; var ccy = new double[cap]; var ccr = new double[cap];
+        var alive = new bool[cap];
+        int count = 0, deadCount = 0;
 
-        for (int ip = 0; ip < n; ip++)
+        void Grow()
         {
-            var (px, py) = pts[ip];
-            var bad = new List<(int a, int b, int c)>();
-            foreach (var t in tris)
-                if (InCircumcircle(pts, t, px, py)) bad.Add(t);
-
-            // 空腔边界 = 只属于一个坏三角形的边
-            var edgeCount = new Dictionary<(int, int), int>();
-            foreach (var t in bad)
-            {
-                Bump(edgeCount, t.a, t.b); Bump(edgeCount, t.b, t.c); Bump(edgeCount, t.c, t.a);
-            }
-            foreach (var t in bad) tris.Remove(t);
-            foreach (var kv in edgeCount)
-                if (kv.Value == 1) tris.Add((kv.Key.Item1, kv.Key.Item2, ip));
+            if (count < ta.Length) return;
+            int m = ta.Length * 2;
+            System.Array.Resize(ref ta, m); System.Array.Resize(ref tb, m); System.Array.Resize(ref tc, m);
+            System.Array.Resize(ref ccx, m); System.Array.Resize(ref ccy, m); System.Array.Resize(ref ccr, m);
+            System.Array.Resize(ref alive, m);
         }
 
-        // 去掉含超级三角形顶点的三角形
-        foreach (var t in tris)
-            if (t.a < n && t.b < n && t.c < n) result.Add(t);
+        // 均匀网格：三角形按外接圆包围盒登记，新点只查自己所在格子
+        int gN = System.Math.Clamp((int)System.Math.Sqrt(n / 2.0), 1, 512);
+        double gw = (maxX - minX) > 1e-12 ? (maxX - minX) / gN : 1;
+        double gh = (maxY - minY) > 1e-12 ? (maxY - minY) / gN : 1;
+        const int MaxCellsPerTri = 16;              // 跨格超过这个数就算"过大", 进 oversized
+        var cells = new List<int>[gN * gN];
+        var oversized = new List<int>();
+
+        int Gx(double x) => System.Math.Clamp((int)((x - minX) / gw), 0, gN - 1);
+        int Gy(double y) => System.Math.Clamp((int)((y - minY) / gh), 0, gN - 1);
+
+        void Register(int t)
+        {
+            double r = System.Math.Sqrt(ccr[t]);
+            int x0 = Gx(ccx[t] - r), x1 = Gx(ccx[t] + r), y0 = Gy(ccy[t] - r), y1 = Gy(ccy[t] + r);
+            long span = (long)(x1 - x0 + 1) * (y1 - y0 + 1);
+            if (span > MaxCellsPerTri) { oversized.Add(t); return; }
+            for (int gy = y0; gy <= y1; gy++)
+                for (int gx = x0; gx <= x1; gx++)
+                {
+                    int ci = gy * gN + gx;
+                    (cells[ci] ??= new List<int>()).Add(t);
+                }
+        }
+
+        void AddTri(int a, int b, int c)
+        {
+            var A = pts[a]; var B = pts[b]; var C = pts[c];
+            var cc = ArcMath.Circumcircle(A.x, A.y, B.x, B.y, C.x, C.y);
+            if (cc == null) return;   // 退化(共线)三角形不入表
+            Grow();
+            ta[count] = a; tb[count] = b; tc[count] = c;
+            ccx[count] = cc.Value.cx; ccy[count] = cc.Value.cy; ccr[count] = cc.Value.r * cc.Value.r;
+            alive[count] = true;
+            Register(count);
+            count++;
+        }
+
+        // 压缩：挤掉死三角形并按新下标重建网格(下标变了, 格子里的旧索引全部失效)
+        void Compact()
+        {
+            int w = 0;
+            for (int r = 0; r < count; r++)
+            {
+                if (!alive[r]) continue;
+                if (w != r)
+                {
+                    ta[w] = ta[r]; tb[w] = tb[r]; tc[w] = tc[r];
+                    ccx[w] = ccx[r]; ccy[w] = ccy[r]; ccr[w] = ccr[r]; alive[w] = true;
+                }
+                w++;
+            }
+            count = w; deadCount = 0;
+            System.Array.Clear(cells, 0, cells.Length);
+            oversized.Clear();
+            for (int t = 0; t < count; t++) Register(t);
+        }
+
+        AddTri(s0, s1, s2);
+
+        var edgeCount = new Dictionary<(int, int), int>();
+        var badEdges = new List<(int u, int v)>();
+        foreach (int ip in SpatialOrder(input, minX, minY, maxX, maxY))
+        {
+            var (px, py) = pts[ip];
+            edgeCount.Clear();
+
+            void Kill(List<int>? bucket)
+            {
+                if (bucket == null) return;
+                for (int i = 0; i < bucket.Count; i++)
+                {
+                    int t = bucket[i];
+                    if (!alive[t]) continue;
+                    double dx = px - ccx[t], dy = py - ccy[t];
+                    if (dx * dx + dy * dy > ccr[t]) continue;   // 圆外
+                    alive[t] = false; deadCount++;
+                    Bump(edgeCount, ta[t], tb[t]); Bump(edgeCount, tb[t], tc[t]); Bump(edgeCount, tc[t], ta[t]);
+                }
+            }
+            Kill(cells[Gy(py) * gN + Gx(px)]);
+            Kill(oversized);
+
+            badEdges.Clear();
+            foreach (var kv in edgeCount) if (kv.Value == 1) badEdges.Add(kv.Key);
+            foreach (var (u, v) in badEdges) AddTri(u, v, ip);
+            if (deadCount > 4096 && deadCount * 2 > count) Compact();
+        }
+
+        for (int t = 0; t < count; t++)
+            if (alive[t] && ta[t] < n && tb[t] < n && tc[t] < n) result.Add((ta[t], tb[t], tc[t]));
         return result;
+    }
+
+    /// <summary>
+    /// 插入顺序：按网格蛇形走（行内左右交替），让相邻插入的点在平面上也相邻。
+    /// 坏三角形因此集中在上一次的邻域，判定命中更快、空腔更小。
+    /// </summary>
+    private static int[] SpatialOrder(IReadOnlyList<(double x, double y)> pts, double minX, double minY, double maxX, double maxY)
+    {
+        int n = pts.Count;
+        var order = new int[n];
+        for (int i = 0; i < n; i++) order[i] = i;
+        double w = maxX - minX, h = maxY - minY;
+        if (n < 64 || (w < 1e-12 && h < 1e-12)) return order;
+
+        int cells = System.Math.Max(1, (int)System.Math.Sqrt(n / 2.0));
+        double cw = w > 1e-12 ? w / cells : 1, ch = h > 1e-12 ? h / cells : 1;
+        var key = new long[n];
+        for (int i = 0; i < n; i++)
+        {
+            int gx = System.Math.Clamp((int)((pts[i].x - minX) / cw), 0, cells - 1);
+            int gy = System.Math.Clamp((int)((pts[i].y - minY) / ch), 0, cells - 1);
+            if ((gy & 1) == 1) gx = cells - 1 - gx;      // 蛇形：奇数行反向
+            key[i] = (long)gy * cells + gx;
+        }
+        System.Array.Sort(key, order);
+        return order;
     }
 
     /// <summary>
@@ -64,28 +187,42 @@ public static class Delaunay
     {
         var tris = Triangulate(input);
         if (constraints == null) return tris;
+
+        // 边计数表(边 → 有几个三角形用到它)。等值线的相邻顶点绝大多数**本来就已经是三角边**,
+        // 有了它这一步是 O(1) 直接跳过; 原来每条约束都要扫一遍整张网(m×t 次比较), 三万顶点就要一秒多。
+        var edges = new Dictionary<(int, int), int>(tris.Count * 2);
+        foreach (var t in tris) AddTriEdges(edges, t, +1);
+
         foreach (var (u, v) in constraints)
         {
             if (u < 0 || v < 0 || u == v || u >= input.Count || v >= input.Count) continue;
-            InsertConstraint(input, tris, u, v);
+            InsertConstraint(input, tris, edges, u, v);
         }
         return tris;
     }
 
-    private static bool HasEdge(List<(int a, int b, int c)> tris, int u, int v)
+    /// <summary>三角形三条边的计数 ±1（delta=+1 加入 / -1 移除）；计数归零即从表中删掉。</summary>
+    private static void AddTriEdges(Dictionary<(int, int), int> edges, (int a, int b, int c) t, int delta)
     {
-        foreach (var t in tris)
-            if ((t.a == u && t.b == v) || (t.b == u && t.c == v) || (t.c == u && t.a == v) ||
-                (t.a == v && t.b == u) || (t.b == v && t.c == u) || (t.c == v && t.a == u)) return true;
-        return false;
+        Edge(t.a, t.b); Edge(t.b, t.c); Edge(t.c, t.a);
+        void Edge(int u, int v)
+        {
+            var k = u < v ? (u, v) : (v, u);
+            int c = edges.TryGetValue(k, out int cur) ? cur + delta : delta;
+            if (c <= 0) edges.Remove(k); else edges[k] = c;
+        }
     }
 
-    private static void InsertConstraint(IReadOnlyList<(double x, double y)> pts, List<(int a, int b, int c)> tris, int u, int v)
+    private static bool HasEdge(Dictionary<(int, int), int> edges, int u, int v)
+        => edges.ContainsKey(u < v ? (u, v) : (v, u));
+
+    private static void InsertConstraint(IReadOnlyList<(double x, double y)> pts, List<(int a, int b, int c)> tris,
+                                         Dictionary<(int, int), int> edges, int u, int v)
     {
-        if (HasEdge(tris, u, v)) return;
+        if (HasEdge(edges, u, v)) return;
         // 若有顶点落在约束边上(共线且严格居中)→ 在该点分段递归(breakline 穿过网点很常见)
         int mid = VertexOnSegment(pts, u, v);
-        if (mid >= 0) { InsertConstraint(pts, tris, u, mid); InsertConstraint(pts, tris, mid, v); return; }
+        if (mid >= 0) { InsertConstraint(pts, tris, edges, u, mid); InsertConstraint(pts, tris, edges, mid, v); return; }
         // 找被约束边穿过内部的三角形
         var crossed = new List<int>();
         for (int i = 0; i < tris.Count; i++)
@@ -97,16 +234,18 @@ public static class Delaunay
         foreach (int ci in crossed) { var t = tris[ci]; Bump2(t.a, t.b); Bump2(t.b, t.c); Bump2(t.c, t.a); }
         var boundary = new List<(int, int)>();
         foreach (var kv in edgeCnt) if (kv.Value == 1) boundary.Add(kv.Key);
-        // 删被穿三角(降序删)
+        // 删被穿三角(降序删), 同步扣减边计数
         crossed.Sort((a, b) => b.CompareTo(a));
-        foreach (int ci in crossed) tris.RemoveAt(ci);
+        foreach (int ci in crossed) { AddTriEdges(edges, tris[ci], -1); tris.RemoveAt(ci); }
         // 边界排成环
         var loop = OrderLoop(boundary);
         if (loop == null || loop.Count < 3) return;
         int iu = loop.IndexOf(u), iv = loop.IndexOf(v);
         if (iu < 0 || iv < 0) return;
+        int before = tris.Count;
         EarClip(pts, tris, SubLoop(loop, iu, iv));   // u..v 侧
         EarClip(pts, tris, SubLoop(loop, iv, iu));   // v..u 侧
+        for (int i = before; i < tris.Count; i++) AddTriEdges(edges, tris[i], +1);
     }
 
     private static double Orient((double x, double y) a, (double x, double y) b, (double x, double y) c)

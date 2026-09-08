@@ -1282,6 +1282,60 @@ public static class GeoDataQueries
         _ => null,
     };
 
+    // ── CSV 导入的批量预取工具 ────────────────────────────────────────────────
+    //
+    // 导入原本是逐行查库: 查外键、查码表、查是否已存在, 每行 2~4 次往返。
+    // 库在进程内(SQLite)时这是函数调用, 微秒级, 无所谓; 一旦数据库挪到远程,
+    // 每次往返就是毫秒级网络开销 —— 12628 行的月度 KPI 要发 25000 多次往返,
+    // 局域网十几秒, 跨网十几分钟。
+    //
+    // 这几个工具把"逐行查"换成"进循环前一次性拉进内存, 循环里查字典"。
+    // 查找表都很小(最大的 equipment 527 行), 内存代价可忽略。
+    // 对本地 SQLite 同样是净收益, 不是为远程专付的成本。
+
+    /// <summary>
+    /// 拉一张 键→ID 映射(SELECT 出两列: 键, ID)。
+    /// 用 Ordinal 而非 OrdinalIgnoreCase: SQLite 的 `key=@v` 默认是二进制(区分大小写)比较,
+    /// 换成忽略大小写会比原来更宽松, 属于行为改变 —— 这里只做提速, 不改语义。
+    /// </summary>
+    private static Dictionary<string, long> LoadIdMap(DbConnection conn, string sql)
+    {
+        var map = new Dictionary<string, long>(System.StringComparer.Ordinal);
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql;
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+            if (!rd.IsDBNull(0)) map[rd.GetString(0)] = System.Convert.ToInt64(rd.GetValue(1));
+        return map;
+    }
+
+    /// <summary>拉一列(或多列拼成复合键)做存在性判断(码表、已有主键等)。比较语义同 <see cref="LoadIdMap"/>。</summary>
+    private static HashSet<string> LoadKeySet(DbConnection conn, string sql)
+    {
+        var set = new HashSet<string>(System.StringComparer.Ordinal);
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql;
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+        {
+            if (rd.IsDBNull(0)) continue;
+            // 复合键: 把各列用  拼起来(该字符不会出现在业务数据里)
+            if (rd.FieldCount == 1) { set.Add(rd.GetValue(0)?.ToString() ?? ""); continue; }
+            var parts = new string[rd.FieldCount];
+            for (int i = 0; i < rd.FieldCount; i++) parts[i] = rd.IsDBNull(i) ? "" : rd.GetValue(i)?.ToString() ?? "";
+            set.Add(string.Join("", parts));
+        }
+        return set;
+    }
+
+    /// <summary>复合键拼接。与 <see cref="LoadKeySet"/> 的拼法必须一致。</summary>
+    private static string Key(params object[] parts)
+    {
+        var s = new string[parts.Length];
+        for (int i = 0; i < parts.Length; i++) s[i] = parts[i]?.ToString() ?? "";
+        return string.Join("", s);
+    }
+
     /// <summary>生产班次记录 CSV 入库（忠实 DataImportCenter.ProductionRecordSpec）：按 设备+日期+班次 键 upsert。
     /// rows=逐行列名→值(表头大小写不敏感)。overwrite=true 覆盖既有, false 跳过。列: equipment_id,date,shift,output_m3,work_hours,fault_hours[,fault_reason]。</summary>
     public static ImportOutcome ImportProductionRecords(DbConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
@@ -1464,6 +1518,12 @@ public static class GeoDataQueries
     public static ImportOutcome ImportEquipmentLedger(DbConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
     {
         int ins = 0, upd = 0, skip = 0, err = 0;
+
+        // 父表与既有主键一次性预取, 每行 3 次往返压成 1 次。
+        var models = LoadKeySet(conn, "SELECT model FROM equipment_model");
+        var locations = LoadKeySet(conn, "SELECT location_code FROM mine_location");
+        var existing = LoadKeySet(conn, "SELECT equipment_id FROM equipment");
+
         foreach (var row in rows)
         {
             string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
@@ -1471,14 +1531,12 @@ public static class GeoDataQueries
             if (eq.Length == 0 || cat.Length == 0) { err++; continue; }
             object Opt(string k) => Get(k) is { Length: > 0 } v ? v : (object)System.DBNull.Value;
             // FK 列(model→equipment_model, operating_area→mine_location): 父表无该值则置 NULL, 免整行 FK 失败(无损降级, 保引用完整)
-            object FkOpt(string k, string tbl, string pcol)
+            object FkOpt(string k, HashSet<string> parent)
             {
-                string v = Get(k); if (v.Length == 0) return System.DBNull.Value;
-                using var q = conn.CreateCommand(); q.CommandText = $"SELECT 1 FROM {tbl} WHERE {pcol}=@v LIMIT 1"; q.AddWithValue("@v", v);
-                return q.ExecuteScalar() != null ? (object)v : System.DBNull.Value;
+                string v = Get(k);
+                return v.Length > 0 && parent.Contains(v) ? (object)v : System.DBNull.Value;
             }
-            bool exists;
-            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM equipment WHERE equipment_id=@equipment_id"; q.AddWithValue("@equipment_id", eq); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
+            bool exists = existing.Contains(eq);
             // 台账全列(忠实原 EquipmentLedgerSpec/DataImportCenter): 型号/厂商/产权/状态 + 出厂编号/资产编码/购置·投产/累计台时/大修/所属矿/备注
             var cols = new[] { "model", "manufacturer", "origin", "status", "serial_number", "asset_code",
                 "acquisition_date", "commission_year", "cumulative_hours", "last_overhaul_date", "operating_area", "notes" };
@@ -1500,12 +1558,17 @@ public static class GeoDataQueries
             cmd.AddWithValue("@equipment_id", eq); cmd.AddWithValue("@category", cat);
             foreach (var col in cols)
             {
-                object val = col == "model" ? FkOpt("model", "equipment_model", "model")
-                           : col == "operating_area" ? FkOpt("operating_area", "mine_location", "location_code")
+                object val = col == "model" ? FkOpt("model", models)
+                           : col == "operating_area" ? FkOpt("operating_area", locations)
                            : Opt(col);
                 cmd.AddWithValue("@" + col, val);
             }
-            try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
+            try
+            {
+                cmd.ExecuteNonQuery();
+                if (!exists) existing.Add(eq);   // 同份 CSV 内重复键要能看到前一行已写入
+            }
+            catch { err++; if (exists) upd--; else ins--; }
         }
         return new ImportOutcome(ins, upd, skip, err);
     }
@@ -1517,24 +1580,37 @@ public static class GeoDataQueries
     public static ImportOutcome ImportCoalSamples(DbConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
     {
         int ins = 0, upd = 0, skip = 0, err = 0;
+
+        // 三张查找表一次性预取, 把每行 4 次往返压成 1 次(只剩写入那次)。
+        var holeIds = LoadIdMap(conn, "SELECT hole_id, id FROM borehole");
+        var coalCodes = LoadKeySet(conn, "SELECT code FROM coal_classification");
+        // 已存在的 (孔,煤层,起深) 主键。用强类型元组而不是拼字符串:
+        // depth_from 是浮点, 转字符串会受区域设置和格式化影响, 直接比 double 才和原来的 `depth_from=@d` 等价。
+        var existing = new HashSet<(long, string, double)>();
+        using (var q = conn.CreateCommand())
+        {
+            q.CommandText = "SELECT borehole_id, seam_code, depth_from FROM coal_sample";
+            using var rd = q.ExecuteReader();
+            while (rd.Read())
+                if (!rd.IsDBNull(0) && !rd.IsDBNull(1) && !rd.IsDBNull(2))
+                    existing.Add((rd.GetInt64(0), rd.GetString(1), rd.GetDouble(2)));
+        }
+
         foreach (var row in rows)
         {
             string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
             string hole = Get("hole_id"), seam = Get("seam_code");
             if (hole.Length == 0 || seam.Length == 0 || !ParseD(Get("depth_from"), out double df)) { err++; continue; }
-            long bhId;
-            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT id FROM borehole WHERE hole_id=@h"; q.AddWithValue("@h", hole); var o = q.ExecuteScalar(); if (o == null || o is System.DBNull) { err++; continue; } bhId = System.Convert.ToInt64(o); }
+            if (!holeIds.TryGetValue(hole, out long bhId)) { err++; continue; }
             object Num(string k) => ParseD(Get(k), out double v) ? v : (object)System.DBNull.Value;
             object Txt(string k) => Get(k) is { Length: > 0 } s ? s : (object)System.DBNull.Value;
             // coal_type→coal_classification(code) 有外键: 非有效码则置 NULL(无损降级, 免整行 FK 失败——用户填煤种中文名/未知码不丢整条化验)
-            object FkTxt(string k, string tbl, string pcol)
+            object FkTxt(string k)
             {
-                string v = Get(k); if (v.Length == 0) return System.DBNull.Value;
-                using var q = conn.CreateCommand(); q.CommandText = $"SELECT 1 FROM {tbl} WHERE {pcol}=@v LIMIT 1"; q.AddWithValue("@v", v);
-                return q.ExecuteScalar() != null ? (object)v : System.DBNull.Value;
+                string v = Get(k);
+                return v.Length > 0 && coalCodes.Contains(v) ? (object)v : System.DBNull.Value;
             }
-            bool exists;
-            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM coal_sample WHERE borehole_id=@b AND seam_code=@s AND depth_from=@d"; q.AddWithValue("@b", bhId); q.AddWithValue("@s", seam); q.AddWithValue("@d", df); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
+            bool exists = existing.Contains((bhId, seam, df));
             // 数值列: 工业分析 M/A/V/FC(原煤 raw + 浮煤 clean 全齐) + 密度(视/真) + 全硫 + 发热量 + 胶质层 X/Y + 粘结 G + 焦渣 + 浮煤回收率
             var cols = new[] { "depth_to", "sample_thickness", "z_sample", "apparent_density", "true_density",
                 "mad_raw", "ad_raw", "vdaf_raw", "fcd_raw", "mad_clean", "ad_clean", "vdaf_clean", "fcd_clean",
@@ -1561,8 +1637,15 @@ public static class GeoDataQueries
             }
             cmd.AddWithValue("@b", bhId); cmd.AddWithValue("@s", seam); cmd.AddWithValue("@d", df);
             foreach (var col in cols) cmd.AddWithValue("@" + col, Num(col));
-            foreach (var col in txtCols) cmd.AddWithValue("@" + col, col == "coal_type" ? FkTxt("coal_type", "coal_classification", "code") : Txt(col));
-            try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
+            foreach (var col in txtCols) cmd.AddWithValue("@" + col, col == "coal_type" ? FkTxt("coal_type") : Txt(col));
+            try
+            {
+                cmd.ExecuteNonQuery();
+                // 记进预取集合: 同一份 CSV 里若出现重复键, 后一行要能看到前一行已写入,
+                // 才和原来"每行现查数据库"的行为一致。
+                if (!exists) existing.Add((bhId, seam, df));
+            }
+            catch { err++; if (exists) upd--; else ins--; }
         }
         return new ImportOutcome(ins, upd, skip, err);
     }
@@ -1629,23 +1712,32 @@ public static class GeoDataQueries
     public static ImportOutcome ImportSeamResults(DbConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
     {
         int ins = 0, upd = 0, skip = 0, err = 0;
+
+        // 孔号映射与既有 (孔,煤层) 主键一次性预取, 每行 3 次往返压成 1 次。
+        var holeIds = LoadIdMap(conn, "SELECT hole_id, id FROM borehole");
+        var existing = LoadKeySet(conn, "SELECT borehole_id, seam_code FROM borehole_seam_result");
+
         foreach (var row in rows)
         {
             string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
             string hole = Get("hole_id"), seam = Get("seam_code");
             if (hole.Length == 0 || seam.Length == 0) { err++; continue; }
-            long bhId;
-            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT id FROM borehole WHERE hole_id=@h"; q.AddWithValue("@h", hole); var o = q.ExecuteScalar(); if (o == null || o is System.DBNull) { err++; continue; } bhId = System.Convert.ToInt64(o); }
+            if (!holeIds.TryGetValue(hole, out long bhId)) { err++; continue; }
             object Num(string k) => ParseD(Get(k), out double v) ? v : (object)System.DBNull.Value;
             string status = Get("status") is { Length: > 0 } st ? st : "正常";
-            bool exists;
-            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM borehole_seam_result WHERE borehole_id=@b AND seam_code=@s"; q.AddWithValue("@b", bhId); q.AddWithValue("@s", seam); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
+            string key = Key(bhId, seam);
+            bool exists = existing.Contains(key);
             using var cmd = conn.CreateCommand();
             if (exists) { if (!overwrite) { skip++; continue; } cmd.CommandText = "UPDATE borehole_seam_result SET floor_elevation=@f, adopted_thickness=@a, drill_seam_thickness=@d, status=@st WHERE borehole_id=@b AND seam_code=@s"; upd++; }
             else { cmd.CommandText = "INSERT INTO borehole_seam_result (borehole_id, seam_code, floor_elevation, adopted_thickness, drill_seam_thickness, status) VALUES (@b,@s,@f,@a,@d,@st)"; ins++; }
             cmd.AddWithValue("@b", bhId); cmd.AddWithValue("@s", seam);
             cmd.AddWithValue("@f", Num("floor_elevation")); cmd.AddWithValue("@a", Num("adopted_thickness")); cmd.AddWithValue("@d", Num("drill_seam_thickness")); cmd.AddWithValue("@st", status);
-            try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
+            try
+            {
+                cmd.ExecuteNonQuery();
+                if (!exists) existing.Add(key);   // 同份 CSV 内重复键要能看到前一行已写入
+            }
+            catch { err++; if (exists) upd--; else ins--; }
         }
         return new ImportOutcome(ins, upd, skip, err);
     }
@@ -1654,6 +1746,11 @@ public static class GeoDataQueries
     public static ImportOutcome ImportHaulRoads(DbConnection conn, IReadOnlyList<IReadOnlyDictionary<string, string>> rows, bool overwrite)
     {
         int ins = 0, upd = 0, skip = 0, err = 0;
+
+        // 既有路号与车型父表一次性预取, 每行 3 次往返压成 1 次。
+        var existing = LoadKeySet(conn, "SELECT road_id FROM haul_road");
+        var truckModels = LoadKeySet(conn, "SELECT model FROM equipment_model");
+
         foreach (var row in rows)
         {
             string Get(string k) { foreach (var kv in row) if (string.Equals(kv.Key, k, System.StringComparison.OrdinalIgnoreCase)) return kv.Value?.Trim() ?? ""; return ""; }
@@ -1661,8 +1758,7 @@ public static class GeoDataQueries
             if (id.Length == 0 || name.Length == 0 || type.Length == 0 || !ParseD(Get("length_m"), out double len)) { err++; continue; }
             object Num(string k) => ParseD(Get(k), out double v) ? v : (object)System.DBNull.Value;
             object Txt(string k) => Get(k) is { Length: > 0 } s ? s : (object)System.DBNull.Value;
-            bool exists;
-            using (var q = conn.CreateCommand()) { q.CommandText = "SELECT COUNT(*) FROM haul_road WHERE road_id=@i"; q.AddWithValue("@i", id); exists = System.Convert.ToInt64(q.ExecuteScalar()) > 0; }
+            bool exists = existing.Contains(id);
             // 无损全列: 补此前漏的 turning_radius/max_load/pavement/maintenance/notes + 路况 condition + 主力车型
             var extras = new System.Collections.Generic.List<(string col, object val)>
             {
@@ -1675,7 +1771,7 @@ public static class GeoDataQueries
             string cond = Get("condition").ToLowerInvariant();   // CHECK: good/fair/poor/closed; 无效留 DEFAULT 'good'(此前恒默认→路况列表全空, 现载真值)
             if (cond is "good" or "fair" or "poor" or "closed") extras.Add(("condition", cond));
             string tm = Get("primary_truck_model");              // FK→equipment_model: 父表有该型号才写(免整行 FK 失败, 无损降级)
-            if (tm.Length > 0) { using var qm = conn.CreateCommand(); qm.CommandText = "SELECT 1 FROM equipment_model WHERE model=@m LIMIT 1"; qm.AddWithValue("@m", tm); if (qm.ExecuteScalar() != null) extras.Add(("primary_truck_model", (object)tm)); }
+            if (tm.Length > 0 && truckModels.Contains(tm)) extras.Add(("primary_truck_model", (object)tm));
 
             using var cmd = conn.CreateCommand();
             if (exists)
@@ -1694,7 +1790,12 @@ public static class GeoDataQueries
             }
             cmd.AddWithValue("@road_id", id); cmd.AddWithValue("@name", name); cmd.AddWithValue("@road_type", type); cmd.AddWithValue("@length_m", len);
             foreach (var e in extras) cmd.AddWithValue("@" + e.col, e.val);
-            try { cmd.ExecuteNonQuery(); } catch { err++; if (exists) upd--; else ins--; }
+            try
+            {
+                cmd.ExecuteNonQuery();
+                if (!exists) existing.Add(id);   // 同份 CSV 内重复键要能看到前一行已写入
+            }
+            catch { err++; if (exists) upd--; else ins--; }
         }
         return new ImportOutcome(ins, upd, skip, err);
     }
