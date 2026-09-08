@@ -24,158 +24,27 @@ public static class Delaunay
     ///      跨格太多，单独放 oversized 表每次都查，数量很少。
     /// 算法与结果口径不变，仍是同一套 Bowyer-Watson。
     /// </summary>
+    /// <summary>
+    /// 无约束 Delaunay。实现改用 <see cref="DelaunatorCore"/>（O(n log n)），
+    /// 与原版内核 LasLib 里内置的 delaunator 同一算法 —— 旧的 Bowyer-Watson 是 O(n²)，
+    /// 等值线几万顶点就把界面卡死。
+    /// </summary>
     public static List<(int a, int b, int c)> Triangulate(IReadOnlyList<(double x, double y)> input)
     {
         var result = new List<(int, int, int)>();
-        int n = input.Count;
-        if (n < 3) return result;
-
-        var pts = new List<(double x, double y)>(input);
-        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
-        foreach (var p in input) { if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y; if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y; }
-        double dmax = System.Math.Max(maxX - minX, maxY - minY); if (dmax < 1e-9) dmax = 1;
-        double midX = (minX + maxX) / 2, midY = (minY + maxY) / 2;
-        pts.Add((midX - 20 * dmax, midY - dmax));
-        pts.Add((midX + 20 * dmax, midY - dmax));
-        pts.Add((midX, midY + 20 * dmax));
-        int s0 = n, s1 = n + 1, s2 = n + 2;
-
-        // 三角形表：顶点索引 + 外接圆(圆心/半径²) + 存活标记
-        int cap = System.Math.Max(64, n * 4);
-        var ta = new int[cap]; var tb = new int[cap]; var tc = new int[cap];
-        var ccx = new double[cap]; var ccy = new double[cap]; var ccr = new double[cap];
-        var alive = new bool[cap];
-        int count = 0, deadCount = 0;
-
-        void Grow()
-        {
-            if (count < ta.Length) return;
-            int m = ta.Length * 2;
-            System.Array.Resize(ref ta, m); System.Array.Resize(ref tb, m); System.Array.Resize(ref tc, m);
-            System.Array.Resize(ref ccx, m); System.Array.Resize(ref ccy, m); System.Array.Resize(ref ccr, m);
-            System.Array.Resize(ref alive, m);
-        }
-
-        // 均匀网格：三角形按外接圆包围盒登记，新点只查自己所在格子
-        int gN = System.Math.Clamp((int)System.Math.Sqrt(n / 2.0), 1, 512);
-        double gw = (maxX - minX) > 1e-12 ? (maxX - minX) / gN : 1;
-        double gh = (maxY - minY) > 1e-12 ? (maxY - minY) / gN : 1;
-        const int MaxCellsPerTri = 16;              // 跨格超过这个数就算"过大", 进 oversized
-        var cells = new List<int>[gN * gN];
-        var oversized = new List<int>();
-
-        int Gx(double x) => System.Math.Clamp((int)((x - minX) / gw), 0, gN - 1);
-        int Gy(double y) => System.Math.Clamp((int)((y - minY) / gh), 0, gN - 1);
-
-        void Register(int t)
-        {
-            double r = System.Math.Sqrt(ccr[t]);
-            int x0 = Gx(ccx[t] - r), x1 = Gx(ccx[t] + r), y0 = Gy(ccy[t] - r), y1 = Gy(ccy[t] + r);
-            long span = (long)(x1 - x0 + 1) * (y1 - y0 + 1);
-            if (span > MaxCellsPerTri) { oversized.Add(t); return; }
-            for (int gy = y0; gy <= y1; gy++)
-                for (int gx = x0; gx <= x1; gx++)
-                {
-                    int ci = gy * gN + gx;
-                    (cells[ci] ??= new List<int>()).Add(t);
-                }
-        }
-
-        void AddTri(int a, int b, int c)
-        {
-            var A = pts[a]; var B = pts[b]; var C = pts[c];
-            var cc = ArcMath.Circumcircle(A.x, A.y, B.x, B.y, C.x, C.y);
-            if (cc == null) return;   // 退化(共线)三角形不入表
-            Grow();
-            ta[count] = a; tb[count] = b; tc[count] = c;
-            ccx[count] = cc.Value.cx; ccy[count] = cc.Value.cy; ccr[count] = cc.Value.r * cc.Value.r;
-            alive[count] = true;
-            Register(count);
-            count++;
-        }
-
-        // 压缩：挤掉死三角形并按新下标重建网格(下标变了, 格子里的旧索引全部失效)
-        void Compact()
-        {
-            int w = 0;
-            for (int r = 0; r < count; r++)
-            {
-                if (!alive[r]) continue;
-                if (w != r)
-                {
-                    ta[w] = ta[r]; tb[w] = tb[r]; tc[w] = tc[r];
-                    ccx[w] = ccx[r]; ccy[w] = ccy[r]; ccr[w] = ccr[r]; alive[w] = true;
-                }
-                w++;
-            }
-            count = w; deadCount = 0;
-            System.Array.Clear(cells, 0, cells.Length);
-            oversized.Clear();
-            for (int t = 0; t < count; t++) Register(t);
-        }
-
-        AddTri(s0, s1, s2);
-
-        var edgeCount = new Dictionary<(int, int), int>();
-        var badEdges = new List<(int u, int v)>();
-        foreach (int ip in SpatialOrder(input, minX, minY, maxX, maxY))
-        {
-            var (px, py) = pts[ip];
-            edgeCount.Clear();
-
-            void Kill(List<int>? bucket)
-            {
-                if (bucket == null) return;
-                for (int i = 0; i < bucket.Count; i++)
-                {
-                    int t = bucket[i];
-                    if (!alive[t]) continue;
-                    double dx = px - ccx[t], dy = py - ccy[t];
-                    if (dx * dx + dy * dy > ccr[t]) continue;   // 圆外
-                    alive[t] = false; deadCount++;
-                    Bump(edgeCount, ta[t], tb[t]); Bump(edgeCount, tb[t], tc[t]); Bump(edgeCount, tc[t], ta[t]);
-                }
-            }
-            Kill(cells[Gy(py) * gN + Gx(px)]);
-            Kill(oversized);
-
-            badEdges.Clear();
-            foreach (var kv in edgeCount) if (kv.Value == 1) badEdges.Add(kv.Key);
-            foreach (var (u, v) in badEdges) AddTri(u, v, ip);
-            if (deadCount > 4096 && deadCount * 2 > count) Compact();
-        }
-
-        for (int t = 0; t < count; t++)
-            if (alive[t] && ta[t] < n && tb[t] < n && tc[t] < n) result.Add((ta[t], tb[t], tc[t]));
+        if (input == null || input.Count < 3) return result;
+        var d = DelaunatorCore.Build(input);
+        for (int t = 0; t < d.Triangles.Length; t += 3)
+            result.Add((d.Triangles[t], d.Triangles[t + 1], d.Triangles[t + 2]));
         return result;
     }
 
     /// <summary>
-    /// 插入顺序：按网格蛇形走（行内左右交替），让相邻插入的点在平面上也相邻。
-    /// 坏三角形因此集中在上一次的邻域，判定命中更快、空腔更小。
+    /// 约束 Delaunay：在无约束三角网基础上，把每条约束边(constraints，索引对)嵌入三角网
+    /// (忠实原「多段线作约束嵌入三角网」——断层/山脊等 breakline 必须是三角边)。
+    /// 算法：对每条不在网中的约束边，删除被其穿过的三角形→形成孔洞，以约束边把孔洞分成两侧
+    /// 伪多边形，各自耳切重剖(约束边即成两侧共享边)。结果仍覆盖凸包(总面积不变)。纯逻辑、可单测。
     /// </summary>
-    private static int[] SpatialOrder(IReadOnlyList<(double x, double y)> pts, double minX, double minY, double maxX, double maxY)
-    {
-        int n = pts.Count;
-        var order = new int[n];
-        for (int i = 0; i < n; i++) order[i] = i;
-        double w = maxX - minX, h = maxY - minY;
-        if (n < 64 || (w < 1e-12 && h < 1e-12)) return order;
-
-        int cells = System.Math.Max(1, (int)System.Math.Sqrt(n / 2.0));
-        double cw = w > 1e-12 ? w / cells : 1, ch = h > 1e-12 ? h / cells : 1;
-        var key = new long[n];
-        for (int i = 0; i < n; i++)
-        {
-            int gx = System.Math.Clamp((int)((pts[i].x - minX) / cw), 0, cells - 1);
-            int gy = System.Math.Clamp((int)((pts[i].y - minY) / ch), 0, cells - 1);
-            if ((gy & 1) == 1) gx = cells - 1 - gx;      // 蛇形：奇数行反向
-            key[i] = (long)gy * cells + gx;
-        }
-        System.Array.Sort(key, order);
-        return order;
-    }
-
     /// <summary>
     /// 约束 Delaunay：在无约束三角网基础上，把每条约束边(constraints，索引对)嵌入三角网
     /// (忠实原「多段线作约束嵌入三角网」——断层/山脊等 breakline 必须是三角边)。
