@@ -8281,8 +8281,16 @@ public partial class MainWindow : Window
     }
 
     // 从场景实体抽取捕捉原语(线段/圆/圆弧/点)——供 ObjectSnap 补算交点/最近/垂足(端点/中点/圆心已由 SnapCandidates 覆盖)。
+    // 捕捉几何缓存：BuildSnapGeom 要遍历整个场景建 段/圆/弧/点 四张表，
+    // 而它被鼠标移动事件逐个调用(开了交点/最近/垂足捕捉时) —— 场景一大, 光移鼠标就卡。
+    // 场景没变就直接复用, 由 RefreshScene / 图层显隐 置空。
+    private (List<ObjectSnap.Seg>, List<ObjectSnap.Circ>, List<ObjectSnap.ArcP>, List<(double x, double y)>)? _snapGeomCache;
+
+    private void InvalidateSnapGeom() => _snapGeomCache = null;
+
     private (List<ObjectSnap.Seg> segs, List<ObjectSnap.Circ> circles, List<ObjectSnap.ArcP> arcs, List<(double x, double y)> pts) BuildSnapGeom()
     {
+        if (_snapGeomCache is { } hit) return hit;
         var segs = new List<ObjectSnap.Seg>();
         var circles = new List<ObjectSnap.Circ>();
         var arcs = new List<ObjectSnap.ArcP>();
@@ -8322,6 +8330,7 @@ public partial class MainWindow : Window
                     break;
             }
         }
+        _snapGeomCache = (segs, circles, arcs, pts);
         return (segs, circles, arcs, pts);
     }
 
@@ -8395,6 +8404,7 @@ public partial class MainWindow : Window
     // 重绘场景（含当前工具进行中的预览：已点的段 + 到光标的橡皮筋）
     private void RefreshScene()
     {
+        InvalidateSnapGeom();   // 场景/图层变了 → 捕捉几何缓存作废
         var baseGeom = _scene.BuildGeometry(_layers.IsShown);
         _snapVerts = _scene.SnapCandidates(_layers.IsShown);   // 语义 osnap 点(端点/中点/圆心/象限)
         var list = new List<float>(baseGeom);

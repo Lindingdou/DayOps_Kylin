@@ -102,6 +102,41 @@ mkdir -p "$LOGDIR" 2>/dev/null || LOGDIR=/tmp
 LOG="$LOGDIR/last-run.log"
 echo "=== $(date "+%Y-%m-%d %H:%M:%S") 启动 ===" >> "$LOG"
 
+# ── 一键诊断模式: PITMINE_DIAG=1 pitmine3d ────────────────────────────────
+# 原生崩溃(段错误)不走托管异常钩子, crash.log 里什么都不会有。这里把所有能逼出线索的开关
+# 一次性打开: Mesa/GLX verbose、core dump、.NET 崩溃转储；有 gdb 就直接在 gdb 里跑, 崩了
+# 自动打印本地/全部线程回溯 —— 那份回溯会明确指出崩在哪个 .so 的哪个函数。
+if [ -n "${PITMINE_DIAG:-}" ]; then
+    PITMINE_TRACE=1; export PITMINE_TRACE
+    LIBGL_DEBUG=verbose; export LIBGL_DEBUG
+    MESA_DEBUG=1; export MESA_DEBUG
+    EGL_LOG_LEVEL=debug; export EGL_LOG_LEVEL
+    # .NET 自带崩溃转储(原生栈也在里面)
+    DOTNET_DbgEnableMiniDump=1; export DOTNET_DbgEnableMiniDump
+    DOTNET_DbgMiniDumpType=2; export DOTNET_DbgMiniDumpType
+    DOTNET_DbgMiniDumpName="$LOGDIR/coredump.%p"; export DOTNET_DbgMiniDumpName
+    ulimit -c unlimited 2>/dev/null || true
+    echo "=== 诊断模式: TRACE/Mesa 详细日志/崩溃转储 已开启 ===" | tee -a "$LOG"
+
+    if command -v gdb >/dev/null 2>&1; then
+        echo "=== 检测到 gdb, 在 gdb 中运行(崩溃时自动打印回溯) ===" | tee -a "$LOG"
+        gdb -q -batch \
+            -ex "set pagination off" \
+            -ex "handle SIGSEGV stop nopass" \
+            -ex "run" \
+            -ex "echo \n===== 崩溃点回溯 =====\n" \
+            -ex "bt full" \
+            -ex "echo \n===== 所有线程回溯 =====\n" \
+            -ex "thread apply all bt" \
+            --args "$APP_DIR/PitMine3D.Kylin" "$@" >> "$LOG" 2>&1
+        RC=$?
+        echo "gdb 结束(码 $RC)。回溯见: $LOG" >&2
+        tail -n 60 "$LOG" >&2 2>/dev/null || true
+        exit "$RC"
+    fi
+    echo "!! 没装 gdb, 拿不到原生回溯。装上再跑一次最有效: sudo apt install gdb" | tee -a "$LOG"
+fi
+
 # 不要用 "app | tee" 拿退出码: PIPESTATUS 是 bash 专有的, 麒麟的 /bin/sh 是 dash,
 # ${PIPESTATUS:-0} 在 dash 里恒为 0 —— 段错误也被记成"正常退出", 下面的异常提示永远不打印(踩过)。
 # 改为直接重定向取 $?, 失败时再把日志尾巴回显到终端。

@@ -119,6 +119,11 @@ public partial class CadGlViewport : OpenGlControlBase
     public bool GlFailed { get; private set; }
     public string GlFailReason { get; private set; } = "";
 
+    private bool _firstFrameLogged;
+
+    /// <summary>已请求但尚未绘出的帧(重绘去重, 见 SetCursorScreen)。</summary>
+    private bool _renderQueued;
+
     /// <summary>PITMINE_NO_CURSOR=1: 不画十字光标(应急开关, 见 EnsureCursor 处说明)。</summary>
     private static readonly bool NoCursor =
         !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PITMINE_NO_CURSOR"));
@@ -197,6 +202,7 @@ public partial class CadGlViewport : OpenGlControlBase
 
     protected override void OnOpenGlRender(GlInterface gl, int fb)
     {
+        _renderQueued = false;   // 本帧开画, 允许下一次移动再排一帧
         if (GlFailed) return;   // GL 不可用: 空转(窗口/面板/命令行仍可用)
 
         double scale = VisualRoot?.RenderScaling ?? 1.0;
@@ -307,6 +313,14 @@ public partial class CadGlViewport : OpenGlControlBase
         CursorPass();
         _renderer.EndFrame();
         if (T) PitMine3D.Kylin.CrashLog.Trace("帧 结束");
+
+        // 首帧无条件记一条(不需要 PITMINE_TRACE): 日志停在 GL 初始化之后、这条之前,
+        // 就说明连一帧都没画完就死了; 有这条则崩在后续交互。判断范围一下子缩一半。
+        if (!_firstFrameLogged)
+        {
+            _firstFrameLogged = true;
+            PitMine3D.Kylin.CrashLog.Write("GL", $"首帧完成 {w}x{h}");
+        }
 
         // 帧时间采样：每秒汇总一次 FPS / 平均帧时(ms) → 状态栏 Performance 项(同原版 FrameProfiler)
         _frameCount++;
@@ -421,7 +435,13 @@ public partial class CadGlViewport : OpenGlControlBase
         bool wasHidden = !_showCursor;
         _showCursor = true;
         if (NoCursor) return;                       // 关了十字光标就没有重绘理由
-        if (moved || wasHidden) RequestNextFrameRendering();
+        if (!moved && !wasHidden) return;
+        // 已经有一帧在排队就别再排：软件渲染下一帧要几十毫秒, 而 X11 一秒派上百个移动事件,
+        // 逐个排队会让输入越积越多 —— 表现就是"鼠标拖泥带水"。丢掉多余请求即可, 光标
+        // 本来就只需跟上实际帧率。
+        if (_renderQueued) return;
+        _renderQueued = true;
+        RequestNextFrameRendering();
     }
 
     /// <summary>隐藏十字光标（光标离开视口）。</summary>
