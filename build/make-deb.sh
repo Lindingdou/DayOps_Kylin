@@ -211,6 +211,35 @@ if [ "$RC" != "0" ]; then
             *)  WHY=" —— 收到信号 $SIG" ;;
         esac
     fi
+    # 段错误会留下 core dump —— 直接从里面把原生回溯挖出来, 不必让用户再跑一次 gdb。
+    # 这是唯一能指名"崩在哪个 .so 的哪个函数"的东西。
+    if [ "$RC" -gt 128 ] 2>/dev/null; then
+        CORE="$LOGDIR/last-core"
+        rm -f "$CORE" 2>/dev/null || true
+        if command -v coredumpctl >/dev/null 2>&1; then
+            coredumpctl dump -1 -o "$CORE" >/dev/null 2>&1 || true
+        fi
+        # 没有 coredumpctl 就按 core_pattern 找当前目录/常见位置的 core 文件
+        if [ ! -s "$CORE" ]; then
+            for c in ./core ./core.* /var/lib/systemd/coredump/core.PitMine3D* "$LOGDIR"/core*; do
+                [ -s "$c" ] && { CORE="$c"; break; }
+            done
+        fi
+        if [ -s "$CORE" ] && command -v gdb >/dev/null 2>&1; then
+            {
+                echo ""
+                echo "===== 原生回溯(取自 core dump: $CORE) ====="
+                gdb -q -batch -ex "bt full" -ex "echo 
+--- 所有线程 ---
+" -ex "thread apply all bt"                     "$APP_DIR/PitMine3D.Kylin" "$CORE" 2>&1
+            } >> "$LOG"
+            echo "已从 core dump 提取原生回溯, 见日志末尾: $LOG" >&2
+        elif [ -s "$CORE" ]; then
+            echo "找到 core dump($CORE) 但没装 gdb。装上再崩一次即可自动出回溯: sudo apt install gdb" >&2
+        else
+            echo "没找到 core dump。开启方法: ulimit -c unlimited, 或装 systemd-coredump" >&2
+        fi
+    fi
     echo "PitMine3D 异常退出(码 $RC)$WHY" >&2
     echo "运行日志: $LOG" >&2
     echo "崩溃日志: $LOGDIR/crash.log" >&2

@@ -116,7 +116,7 @@ public partial class CadGlViewport : OpenGlControlBase
     private long _statT0;
 
     /// <summary>GL 初始化失败(老驱动/无 GLX/无 GPU)：不再抛出把程序带崩, 记原因并停掉本视口的绘制。</summary>
-    public bool GlFailed { get; private set; }
+    public bool GlFailed { get; private set; }   // 置位后本视口停绘, 程序继续
     public string GlFailReason { get; private set; } = "";
 
     private bool _firstFrameLogged;
@@ -205,6 +205,19 @@ public partial class CadGlViewport : OpenGlControlBase
     }
 
     protected override void OnOpenGlRender(GlInterface gl, int fb)
+    {
+        // 渲染回调里的托管异常此前会直接把进程带走。改为记下原因、停掉本视口绘制,
+        // 窗口/面板/命令行都还在 —— 报错而不是崩溃。(原生段错误仍拦不住, 那是信号不是异常。)
+        try { RenderCore(gl, fb); }
+        catch (Exception ex)
+        {
+            GlFailed = true;
+            GlFailReason = ex.Message;
+            PitMine3D.Kylin.CrashLog.Write("GL", "渲染失败, 已停止本视口绘制(程序继续): " + ex);
+        }
+    }
+
+    private void RenderCore(GlInterface gl, int fb)
     {
         _renderQueued = false;   // 本帧开画, 允许下一次移动再排一帧
         if (GlFailed) return;   // GL 不可用: 空转(窗口/面板/命令行仍可用)

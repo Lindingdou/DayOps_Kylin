@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Media;
 using PitMine3D.Kylin.Cad.Draw;
@@ -13,6 +14,9 @@ public static class GlyphFontHost
 {
     /// <summary>已启用的字体名(诊断/状态栏用)；未启用为 null。</summary>
     public static string? ActiveFamily { get; private set; }
+
+    /// <summary>挡住 GC 的字体引用(表已复制成托管数组, 这里只是再保一道)。</summary>
+    private static IGlyphTypeface? _pinned;
 
     // 候选字体：忠实原版 StrokeFontRegistry —— 默认中文字体绑 **宋体(SimSun)**,
     // 麒麟上没有宋体, 故把麒麟常见中文字体排在前面, 再退 Windows 的宋体/黑体/雅黑。
@@ -58,7 +62,18 @@ public static class GlyphFontHost
             foreach (var tag in new[] { "glyf", "loca", "cmap" })
                 if (!gt.TryGetTable(TagOf(tag), out var t) || t == null || t.Length == 0) return false;
 
-            GlyphFont.Provider = tag => gt.TryGetTable(tag, out var bytes) ? bytes : null;
+            // 一次性把要用的表**复制成托管字节数组**, 之后再不碰原生字体对象。
+            // 此前是把 gt 捕获进静态委托、渲染时才回调 —— 原生字体一旦被释放, 再调用就是
+            // 访问已释放内存, 进程直接段错误, 且时机不定(偶发闪退的由来)。
+            var tables = new Dictionary<uint, byte[]>();
+            foreach (var tag in new[] { "glyf", "loca", "cmap", "head", "maxp", "hhea", "hmtx" })
+            {
+                uint t = TagOf(tag);
+                if (gt.TryGetTable(t, out var bytes) && bytes is { Length: > 0 })
+                    tables[t] = bytes;   // TryGetTable 已返回托管副本, 不持有原生指针
+            }
+            _pinned = gt;   // 再保一道: 静态引用挡住 GC, 避免任何残留的原生访问踩空
+            GlyphFont.Provider = tag => tables.TryGetValue(tag, out var b) ? b : null;
             GlyphFont.Reset();
             // Avalonia 找不到请求的字体会静默换成默认字体(Windows 上是 Segoe UI, 没有中文)——
             // 故必须用探针字复核, 否则会误判"已装上中文字体"。
