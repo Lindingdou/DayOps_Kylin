@@ -22,7 +22,24 @@ case "$RID" in
     *) echo "未知 RID: $RID"; exit 1 ;;
 esac
 
-[ -d "$DIST" ] || { echo "缺 $DIST，先跑: ./publish-linux.sh $RID"; exit 1; }
+# 先重新发布, 再打包。**不要**依赖 dist/ 里已有的产物 ——
+# 之前这里只检查目录存在就直接拷, 结果连出 4 个版本号不同、内容却是同一份旧二进制的包,
+# 改的东西一次都没进包, 白白排查了几轮。除非显式 --no-publish, 否则一律重发布。
+if [ "${3:-}" = "--no-publish" ]; then
+    [ -d "$DIST" ] || { echo "缺 $DIST，去掉 --no-publish 或先跑: ./publish-linux.sh $RID"; exit 1; }
+    echo "!! --no-publish: 直接用已有产物 $DIST ($(date -r "$DIST" "+%Y-%m-%d %H:%M" 2>/dev/null || echo "?"))"
+else
+    echo ">> 重新发布(保证包里是当前源码)"
+    rm -rf "$DIST"
+    bash "$HERE/publish-linux.sh" "$RID" Release
+fi
+[ -d "$DIST" ] || { echo "发布失败: 没有 $DIST"; exit 1; }
+
+# 产物必须比源码新, 否则就是拿了旧东西打包
+NEWEST_SRC=$(find "$ROOT/src" -name '*.cs' -newer "$DIST/PitMine3D.Kylin.dll" -print -quit 2>/dev/null || true)
+if [ -n "$NEWEST_SRC" ]; then
+    echo "!! 警告: 源码比发布产物新($NEWEST_SRC), 包里可能不是最新代码"; exit 1
+fi
 
 STAGE="$(mktemp -d)"
 APPDIR="$STAGE/opt/pitmine3d"
