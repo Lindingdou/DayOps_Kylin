@@ -102,19 +102,41 @@ mkdir -p "$LOGDIR" 2>/dev/null || LOGDIR=/tmp
 LOG="$LOGDIR/last-run.log"
 echo "=== $(date "+%Y-%m-%d %H:%M:%S") 启动 ===" >> "$LOG"
 
-# ── 安全模式: 上次被信号打死(段错误)就自动改软件渲染 ────────────────────────
-# 实测格兰菲 Arise1020 + Mesa 25.0: 有时连首帧都画不出, 有时画出首帧后第 N 帧才崩 ——
-# 所以判据**不能**是"有没有画出首帧"(崩在后面就永远不触发, 变成死循环崩), 只能由启动器
-# 直接看上次的退出状态: 被信号打死(码 >128) 即认定硬件 GL 不可靠。
+# ── 图形档位自动降级阶梯 ────────────────────────────────────────────────
+# 目标是**尽量留在硬件渲染**: 国产 GPU 驱动往往只有低版本路径被充分打磨, 直接投降到
+# 软件渲染在 4019x2317 这种分辨率上会很慢。所以按阶梯逐级降低对驱动的要求, 崩一次降一档:
+#
+#     auto(GL 4.0 优先) → 3.0 → 2.1(兼容配置, 连 VAO 都不用) → soft(软件渲染)
+#
+# 判据只能看上次的退出状态: 被信号打死(码 >128)即本档不可靠。**不能**按"有没有画出首帧"判 ——
+# 实测该驱动有时画出首帧后第 N 帧才崩, 那样永远不降档, 变成反复闪退。
+# 某一档能正常退出就停在那一档, 不再降。用户手动指定则完全听用户的, 不动阶梯。
+LEVELFILE="$LOGDIR/.gl-level"
 CRASHFLAG="$LOGDIR/.gl-crashed"
 USING_SOFTWARE=""
+LADDER_ON=""
+
 if [ -n "${LIBGL_ALWAYS_SOFTWARE:-}" ]; then
-    USING_SOFTWARE=1
-elif [ -f "$CRASHFLAG" ]; then
-    LIBGL_ALWAYS_SOFTWARE=1; export LIBGL_ALWAYS_SOFTWARE
-    USING_SOFTWARE=1
-    echo "上次运行被信号打死(硬件 OpenGL 驱动崩溃), 本次自动改用软件渲染。" | tee -a "$LOG" >&2
-    echo "如需再试硬件渲染: rm $CRASHFLAG" >&2
+    USING_SOFTWARE=1                      # 用户显式要软件渲染
+elif [ -n "${PITMINE_GL_PROFILE:-}" ]; then
+    :                                     # 用户显式指定档位, 阶梯让路
+else
+    LADDER_ON=1
+    # 主程序若认出已知问题驱动会写 .gl-crashed；把它并入阶梯(等价于"本档崩过一次")
+    LEVEL=$(cat "$LEVELFILE" 2>/dev/null || echo auto)
+    if [ -f "$CRASHFLAG" ] && [ "$LEVEL" = "auto" ]; then
+        LEVEL=3.0
+        echo "$LEVEL" > "$LEVELFILE" 2>/dev/null || true
+        rm -f "$CRASHFLAG" 2>/dev/null || true
+    fi
+    case "$LEVEL" in
+        auto) ;;                                                        # 默认协商表(GL 4.0 优先)
+        soft) LIBGL_ALWAYS_SOFTWARE=1; export LIBGL_ALWAYS_SOFTWARE; USING_SOFTWARE=1 ;;
+        *)    PITMINE_GL_PROFILE="$LEVEL"; export PITMINE_GL_PROFILE ;;
+    esac
+    if [ "$LEVEL" != "auto" ]; then
+        echo "图形档位: $LEVEL (此前更高档位崩过; 想从头再试: rm $LEVELFILE)" | tee -a "$LOG" >&2
+    fi
 fi
 
 # ── 一键诊断模式: PITMINE_DIAG=1 pitmine3d ────────────────────────────────
@@ -158,13 +180,20 @@ fi
 "$APP_DIR/PitMine3D.Kylin" "$@" >> "$LOG" 2>&1
 RC=$?
 
-# 维护安全模式标记：硬件 GL 下被信号打死就记上, 正常退出就清掉
-if [ -z "$USING_SOFTWARE" ]; then
-    if [ "$RC" -gt 128 ] 2>/dev/null; then
-        : > "$CRASHFLAG" 2>/dev/null || true
-        echo "已记下本次硬件 OpenGL 崩溃, 下次启动将自动改用软件渲染。" >&2
-    elif [ "$RC" = "0" ]; then
-        rm -f "$CRASHFLAG" 2>/dev/null || true
+# 阶梯推进: 本档被信号打死就降一档; 正常退出说明本档可用, 保持不动。
+if [ -n "$LADDER_ON" ] && [ "$RC" -gt 128 ] 2>/dev/null; then
+    CUR=$(cat "$LEVELFILE" 2>/dev/null || echo auto)
+    case "$CUR" in
+        auto) NEXT=3.0 ;;
+        3.0)  NEXT=2.1 ;;
+        2.1)  NEXT=soft ;;
+        *)    NEXT=soft ;;
+    esac
+    echo "$NEXT" > "$LEVELFILE" 2>/dev/null || true
+    if [ "$NEXT" = "soft" ]; then
+        echo "硬件 OpenGL 各档位都崩, 下次启动改用软件渲染(慢但稳)。" >&2
+    else
+        echo "本档图形驱动崩溃, 下次启动降到 OpenGL $NEXT 再试(仍是硬件渲染)。" >&2
     fi
 fi
 
