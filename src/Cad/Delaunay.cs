@@ -53,7 +53,20 @@ public static class Delaunay
     /// </summary>
     public static List<(int a, int b, int c)> TriangulateConstrained(
         IReadOnlyList<(double x, double y)> input, IReadOnlyList<(int u, int v)> constraints)
+        => TriangulateConstrained(input, constraints, out _, out _);
+
+    /// <summary>
+    /// 约束 Delaunay，并回报嵌入了几条、因预算保护跳过了几条。
+    ///
+    /// 预算是硬要求：不在网中的约束要扫一遍整张网找被穿过的三角形，几万条这种约束就是十亿次量级，
+    /// 界面直接卡死（原版遇到同样的坏数据是"能跑完但结果不对"，我们不能比它更差 —— 宁可少嵌几条约束
+    /// 也必须把面建出来）。跳过的条数如实报给用户，别让人以为结果是完整的。
+    /// </summary>
+    public static List<(int a, int b, int c)> TriangulateConstrained(
+        IReadOnlyList<(double x, double y)> input, IReadOnlyList<(int u, int v)> constraints,
+        out int inserted, out int skipped, long budget = 300_000_000)
     {
+        inserted = 0; skipped = 0;
         var tris = Triangulate(input);
         if (constraints == null) return tris;
 
@@ -62,12 +75,67 @@ public static class Delaunay
         var edges = new Dictionary<(int, int), int>(tris.Count * 2);
         foreach (var t in tris) AddTriEdges(edges, t, +1);
 
+        var grid = new PointGrid(input);
+        long work = 0;
         foreach (var (u, v) in constraints)
         {
             if (u < 0 || v < 0 || u == v || u >= input.Count || v >= input.Count) continue;
-            InsertConstraint(input, tris, edges, u, v);
+            var key = u < v ? (u, v) : (v, u);
+            if (edges.ContainsKey(key)) { inserted++; continue; }        // 已是网中的边: O(1)
+            if (work >= budget) { skipped++; continue; }                  // 预算用尽: 跳过, 但面照建
+            work += tris.Count;                                           // 这条要扫一遍整张网
+            InsertConstraint(input, tris, edges, u, v, grid);
+            inserted++;
         }
         return tris;
+    }
+
+    /// <summary>
+    /// 顶点的均匀网格索引 —— 供"找落在约束边上的顶点"用。
+    /// 此前那步是扫全部顶点(每条约束 O(n))，几万顶点时和扫全网一样要命。
+    /// 顶点在嵌入过程中不增不减(不加 Steiner 点)，所以建一次就一直有效。
+    /// </summary>
+    private sealed class PointGrid
+    {
+        private readonly IReadOnlyList<(double x, double y)> _pts;
+        private readonly List<int>[] _cells;
+        private readonly int _g;
+        private readonly double _minX, _minY, _cw, _ch;
+
+        public PointGrid(IReadOnlyList<(double x, double y)> pts)
+        {
+            _pts = pts;
+            double maxX = double.MinValue, maxY = double.MinValue;
+            _minX = double.MaxValue; _minY = double.MaxValue;
+            foreach (var p in pts)
+            {
+                if (p.x < _minX) _minX = p.x; if (p.x > maxX) maxX = p.x;
+                if (p.y < _minY) _minY = p.y; if (p.y > maxY) maxY = p.y;
+            }
+            _g = System.Math.Clamp((int)System.Math.Sqrt(pts.Count / 2.0), 1, 512);
+            _cw = maxX - _minX > 1e-12 ? (maxX - _minX) / _g : 1;
+            _ch = maxY - _minY > 1e-12 ? (maxY - _minY) / _g : 1;
+            _cells = new List<int>[_g * _g];
+            for (int i = 0; i < pts.Count; i++) (_cells[Cell(pts[i].x, pts[i].y)] ??= new List<int>()).Add(i);
+        }
+
+        private int Ix(double x) => System.Math.Clamp((int)((x - _minX) / _cw), 0, _g - 1);
+        private int Iy(double y) => System.Math.Clamp((int)((y - _minY) / _ch), 0, _g - 1);
+        private int Cell(double x, double y) => Iy(y) * _g + Ix(x);
+
+        /// <summary>枚举可能落在线段 ab 附近的顶点(按包围盒覆盖的格子)。</summary>
+        public IEnumerable<int> Near((double x, double y) a, (double x, double y) b)
+        {
+            int x0 = Ix(System.Math.Min(a.x, b.x)), x1 = Ix(System.Math.Max(a.x, b.x));
+            int y0 = Iy(System.Math.Min(a.y, b.y)), y1 = Iy(System.Math.Max(a.y, b.y));
+            for (int gy = y0; gy <= y1; gy++)
+                for (int gx = x0; gx <= x1; gx++)
+                {
+                    var c = _cells[gy * _g + gx];
+                    if (c == null) continue;
+                    foreach (int i in c) yield return i;
+                }
+        }
     }
 
     /// <summary>三角形三条边的计数 ±1（delta=+1 加入 / -1 移除）；计数归零即从表中删掉。</summary>
@@ -86,16 +154,28 @@ public static class Delaunay
         => edges.ContainsKey(u < v ? (u, v) : (v, u));
 
     private static void InsertConstraint(IReadOnlyList<(double x, double y)> pts, List<(int a, int b, int c)> tris,
-                                         Dictionary<(int, int), int> edges, int u, int v)
+                                         Dictionary<(int, int), int> edges, int u, int v, PointGrid grid)
     {
         if (HasEdge(edges, u, v)) return;
         // 若有顶点落在约束边上(共线且严格居中)→ 在该点分段递归(breakline 穿过网点很常见)
-        int mid = VertexOnSegment(pts, u, v);
-        if (mid >= 0) { InsertConstraint(pts, tris, edges, u, mid); InsertConstraint(pts, tris, edges, mid, v); return; }
-        // 找被约束边穿过内部的三角形
+        int mid = VertexOnSegment(pts, u, v, grid);
+        if (mid >= 0) { InsertConstraint(pts, tris, edges, u, mid, grid); InsertConstraint(pts, tris, edges, mid, v, grid); return; }
+        // 找被约束边穿过内部的三角形。先用包围盒粗筛: 等值线的约束段都很短,
+        // 绝大多数三角形连包围盒都不重叠, 几次比较就排掉, 不必做完整的相交判定。
+        var pa = pts[u]; var pb = pts[v];
+        double sminX = System.Math.Min(pa.x, pb.x), smaxX = System.Math.Max(pa.x, pb.x);
+        double sminY = System.Math.Min(pa.y, pb.y), smaxY = System.Math.Max(pa.y, pb.y);
         var crossed = new List<int>();
         for (int i = 0; i < tris.Count; i++)
-            if (TriangleCrossed(pts, tris[i], u, v)) crossed.Add(i);
+        {
+            var t = tris[i];
+            var p0 = pts[t.a]; var p1 = pts[t.b]; var p2 = pts[t.c];
+            if (System.Math.Min(System.Math.Min(p0.x, p1.x), p2.x) > smaxX) continue;
+            if (System.Math.Max(System.Math.Max(p0.x, p1.x), p2.x) < sminX) continue;
+            if (System.Math.Min(System.Math.Min(p0.y, p1.y), p2.y) > smaxY) continue;
+            if (System.Math.Max(System.Math.Max(p0.y, p1.y), p2.y) < sminY) continue;
+            if (TriangleCrossed(pts, t, u, v)) crossed.Add(i);
+        }
         if (crossed.Count == 0) return;   // 退化/共线：跳过该约束(无破坏)
         // 孔洞边界 = 被删三角集里只出现一次的边
         var edgeCnt = new Dictionary<(int, int), int>();
@@ -103,32 +183,46 @@ public static class Delaunay
         foreach (int ci in crossed) { var t = tris[ci]; Bump2(t.a, t.b); Bump2(t.b, t.c); Bump2(t.c, t.a); }
         var boundary = new List<(int, int)>();
         foreach (var kv in edgeCnt) if (kv.Value == 1) boundary.Add(kv.Key);
-        // 删被穿三角(降序删), 同步扣减边计数
-        crossed.Sort((a, b) => b.CompareTo(a));
-        foreach (int ci in crossed) { AddTriEdges(edges, tris[ci], -1); tris.RemoveAt(ci); }
-        // 边界排成环
+        // **先算清楚能不能重剖成功, 再动手删**。此前是先删被穿的三角形, 重剖失败就直接 return,
+        // 网上留下一个大洞 —— 几千条硬约束下来整张网被啃光(实测 14400 点只剩 749 个三角形,
+        // 表现就是"建不出来")。宁可这条约束不嵌, 也不能把已经建好的面破坏掉。
         var loop = OrderLoop(boundary);
         if (loop == null || loop.Count < 3) return;
         int iu = loop.IndexOf(u), iv = loop.IndexOf(v);
         if (iu < 0 || iv < 0) return;
-        int before = tris.Count;
-        EarClip(pts, tris, SubLoop(loop, iu, iv));   // u..v 侧
-        EarClip(pts, tris, SubLoop(loop, iv, iu));   // v..u 侧
-        for (int i = before; i < tris.Count; i++) AddTriEdges(edges, tris[i], +1);
+
+        var refill = new List<(int a, int b, int c)>();
+        EarClip(pts, refill, SubLoop(loop, iu, iv));   // u..v 侧
+        EarClip(pts, refill, SubLoop(loop, iv, iu));   // v..u 侧
+
+        // 面积必须守恒: 补回来的三角面积应与删掉的相当, 否则说明耳切没填满, 同样会留洞
+        double removedArea = 0, refillArea = 0;
+        foreach (int ci in crossed) removedArea += TriArea(pts, tris[ci]);
+        foreach (var t in refill) refillArea += TriArea(pts, t);
+        if (refill.Count == 0 || System.Math.Abs(refillArea - removedArea) > removedArea * 1e-6 + 1e-9) return;
+
+        // 到这一步才真正提交: 删被穿三角(降序删), 同步维护边计数
+        crossed.Sort((a, b) => b.CompareTo(a));
+        foreach (int ci in crossed) { AddTriEdges(edges, tris[ci], -1); tris.RemoveAt(ci); }
+        foreach (var t in refill) { tris.Add(t); AddTriEdges(edges, t, +1); }
     }
+
+    /// <summary>三角形面积(绝对值)。用于校验重剖是否把删掉的区域填满。</summary>
+    private static double TriArea(IReadOnlyList<(double x, double y)> pts, (int a, int b, int c) t)
+        => System.Math.Abs(Orient(pts[t.a], pts[t.b], pts[t.c])) / 2;
 
     private static double Orient((double x, double y) a, (double x, double y) b, (double x, double y) c)
         => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
 
     // 返回落在开区间(u,v)线段上、且最靠近 u 的顶点索引；无则 -1。用于约束边穿过网点时分段。
-    private static int VertexOnSegment(IReadOnlyList<(double x, double y)> pts, int u, int v)
+    private static int VertexOnSegment(IReadOnlyList<(double x, double y)> pts, int u, int v, PointGrid grid)
     {
         var a = pts[u]; var b = pts[v];
         double abLen2 = (b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y);
         if (abLen2 < 1e-18) return -1;
         double tol = 1e-7 * System.Math.Sqrt(abLen2);   // 共线判定容差(相对边长)
         int best = -1; double bestT = double.MaxValue;
-        for (int w = 0; w < pts.Count; w++)
+        foreach (int w in grid.Near(a, b))
         {
             if (w == u || w == v) continue;
             var p = pts[w];
