@@ -60,29 +60,48 @@ public partial class MainWindow
     ///   · 结果落图层「格网」、用原版那支橙(ACI 30)；
     ///   · 不按闭合线裁边界(原版 close_convex_hull=true, 结果填满凸包; 裁剪另用「闭合线裁剪面」)。
     /// </summary>
-    private bool BuildTinFromConstraints(PolylineTin.Result col, string source)
+    private bool BuildTinFromConstraints(PolylineTin.Result col, string source, Action<string>? log = null)
     {
-        if (col.Verts.Count < 3) { StatusMsg.Text = $"创建三角网：{source}的顶点不足 3 个"; return false; }
+        log ??= _ => { };
+        if (col.Verts.Count < 3) { StatusMsg.Text = $"创建三角网：{source}的顶点不足 3 个"; log("止步: 顶点不足 3 个"); return false; }
 
         var cons = PolylineTin.Clean(col.Verts, col.Constraints, out var clean);
-        var xy = col.Verts.Select(v => (v.x, v.y)).ToList();
-        bool dropped = col.Verts.Count > TinConstraintVertexLimit;
-        var tris = dropped ? Delaunay.Triangulate(xy) : Delaunay.TriangulateConstrained(xy, cons);
-        if (tris.Count == 0) { StatusMsg.Text = $"创建三角网：{source}的顶点共线，无法剖分"; return false; }
+        log($"预清洗: 约束 {col.Constraints.Count} → {cons.Count} (重复{clean.Duplicate}/交叉{clean.Crossing}/退化{clean.Degenerate})");
 
-        tris = OrientUp(col.Verts, tris);   // 统一绕向(法线朝上), 边界环/成体/内外判定都依赖一致绕向
-        var me = new MeshEntity(NewMeshName("三角网"), col.Verts, tris)
+        // 顶点超上限: 照原版先做体素抽稀再无约束剖分。不抽稀的话地形图 50 万顶点会剖出近百万三角形,
+        // 剖分本身很快, 但接下来镶嵌/算边线/传 GL 缓冲就把界面卡死了。
+        var verts = col.Verts;
+        bool dropped = verts.Count > TinConstraintVertexLimit;
+        double voxel = 0;
+        if (dropped)
+        {
+            int before = verts.Count;
+            verts = PolylineTin.Downsample(verts, TinConstraintVertexLimit, out voxel);
+            log($"体素抽稀: 顶点 {before} → {verts.Count} (格边长 {voxel:0.##})");
+        }
+        var xy = verts.Select(v => (v.x, v.y)).ToList();
+        log($"开始剖分: 顶点={xy.Count} 约束={(dropped ? 0 : cons.Count)}{(dropped ? " (已抽稀, 退无约束)" : "")}");
+
+        int insCnt = 0, skipCnt = 0;
+        var tris = dropped ? Delaunay.Triangulate(xy)
+                           : Delaunay.TriangulateConstrained(xy, cons, out insCnt, out skipCnt);
+        log($"剖分完成: 三角={tris.Count} 约束嵌入={insCnt} 跳过={skipCnt}");
+        if (tris.Count == 0) { StatusMsg.Text = $"创建三角网：{source}的顶点共线，无法剖分"; log("止步: 剖分结果为空(共线?)"); return false; }
+
+        tris = OrientUp(verts, tris);   // 统一绕向(法线朝上), 边界环/成体/内外判定都依赖一致绕向
+        var me = new MeshEntity(NewMeshName("三角网"), verts, tris)
         {
             LayerName = TinLayerName,
             Cr = 0xFF / 255f, Cg = 0x7F / 255f, Cb = 0x00,   // 原版结果色: ACI 30 橙
         };
+        log($"入场景: 图层={TinLayerName} 顶点={verts.Count} 三角={tris.Count}");
         _layers.EnsureImported(TinLayerName, 1f, 0x7F / 255f, 0f);   // 结果落「格网」层(同原版), 用同一支橙
         AddMesh(me, true);
         SelectEntities(new SceneEntity[] { me });
 
-        var st = TinSurface.Describe(col.Verts, tris);
-        StatusMsg.Text = $"创建三角网「{me.Name}」：{source} {col.Verts.Count} 顶点"
-                       + (dropped ? $"(超 {TinConstraintVertexLimit:N0}，已退为无约束剖分，线形约束未保留；可先用「抽稀等值线」减点)"
+        var st = TinSurface.Describe(verts, tris);
+        StatusMsg.Text = $"创建三角网「{me.Name}」：{source} {verts.Count} 顶点"
+                       + (dropped ? $"(超 {TinConstraintVertexLimit:N0}，已按 {voxel:0.##} m 体素抽稀至 {verts.Count:N0} 点并退为无约束剖分)"
                                   : $"，{cons.Count} 段约束")
                        + (clean.Total > 0 ? $"，已清洗剔除 {clean.Total} 处问题约束(重复 {clean.Duplicate}/交叉 {clean.Crossing}/退化 {clean.Degenerate})" : "")
                        + $" → {tris.Count} 三角 · 投影面积 {st.ProjectedAreaXY:0.#} · 高程 {st.ZMin:0.#}~{st.ZMax:0.#}";
@@ -351,6 +370,10 @@ public partial class MainWindow
     // ═══════════════════ 建模 ═══════════════════
     private async Task MdlCreateTinAsync(string cmd)
     {
+        var tinSw = System.Diagnostics.Stopwatch.StartNew();
+        void TinLog(string m) => PitMine3D.Kylin.CrashLog.Write("三角网", $"[{tinSw.ElapsedMilliseconds}ms] {m}");
+        TinLog("开始");
+
         var selPts = SelectedPoints();
         var selLines = SelectedPolylines().Where(l => l.Points.Count >= 2).ToList();
         // 直线实体同样作约束（原版按 AcDbLine 收成 2 点开链约束），零长退化线剔除
@@ -369,6 +392,9 @@ public partial class MainWindow
                             && (System.Math.Abs(l.X1 - l.X0) > 1e-9 || System.Math.Abs(l.Y1 - l.Y0) > 1e-9)).ToList();
             usingAll = selLines.Count > 0 || selSegs.Count > 0;
         }
+        TinLog($"输入清点: 选中点={selPts.Count} 多段线={selLines.Count} 直线={selSegs.Count} " +
+               $"取全部可见线={usingAll} 场景实体={_scene.Entities.Count} " +
+               $"导入线框段数={(_lastImport?.LineVertices.Length ?? 0) / 12}");
 
         // ① 选了多段线(等值线建面)：线的顶点当输入点、线段当**约束边**。
         //    此前这条路走不通 —— 只收点实体, 多段线仅被当作裁剪边界, 于是最常见的
@@ -391,12 +417,13 @@ public partial class MainWindow
                 Closed = false,
             }));
             var col = PolylineTin.Collect(input);
+            TinLog($"通路①线建面: 收集顶点={col.Verts.Count} 约束={col.Constraints.Count} 合并重合点={col.MergedVertices}");
 
             // 同时选中的散点一并作为输入(点线混选; 原版 AcDbPoint 走 StandalonePoint)
             foreach (var pe in selPts) col.Verts.Add((pe.X, pe.Y, pe.Elevation));
 
             string src = (usingAll ? "未选中对象, 取场景全部可见线 " : "") + $"{selLines.Count + selSegs.Count} 条线";
-            if (!BuildTinFromConstraints(col, src)) return;
+            if (!BuildTinFromConstraints(col, src, TinLog)) return;
             return;
         }
 
@@ -405,12 +432,14 @@ public partial class MainWindow
         if (selPts.Count == 0 && _lastImport is { LineVertices.Length: >= 12 })
         {
             var col = PolylineTin.CollectSegments(_lastImport.LineVertices);
-            if (col.Verts.Count >= 3) { BuildTinFromConstraints(col, "取自导入图形"); return; }
+            TinLog($"通路②导入线框: 收集顶点={col.Verts.Count} 约束={col.Constraints.Count} 合并重合点={col.MergedVertices}");
+            if (col.Verts.Count >= 3) { BuildTinFromConstraints(col, "取自导入图形", TinLog); return; }
         }
 
         // ③ 只有点：散点 Delaunay
         if (selPts.Count == 0)
         {
+            TinLog("通路③: 场景里既没有可用的线, 也没有导入线框 —— 无输入");
             // 场景里既没有线也没有导入线框, 才谈得上"要点" —— 明说找不到什么, 别默默弹文件框
             StatusMsg.Text = "创建三角网：场景里没有可用的线或点。请先导入/绘制等值线(或高程点)，"
                            + "或选中若干点后再执行；也可从 CSV 导入点。";

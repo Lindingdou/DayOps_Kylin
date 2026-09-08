@@ -193,4 +193,44 @@ public class PolylineTinTests
         Assert.Equal(2, kept.Count);
         Assert.Equal(0, st.Total);
     }
+
+    // ── 体素抽稀(顶点超上限时照原版先抽稀再剖分) ──
+
+    [Fact]
+    public void Downsample_leavesSmallInputUntouched()
+    {
+        var v = new List<(double x, double y, double z)> { (0, 0, 1), (10, 0, 2), (0, 10, 3) };
+        var outp = PolylineTin.Downsample(v, 100, out double vox);
+        Assert.Equal(3, outp.Count);
+        Assert.Equal(0, vox);   // 没抽稀
+    }
+
+    [Fact]
+    public void Downsample_bringsCountUnderTarget_andKeepsExtent()
+    {
+        var v = new List<(double x, double y, double z)>();
+        for (int i = 0; i < 200; i++)
+            for (int j = 0; j < 200; j++) v.Add((i, j, i + j));   // 4 万点
+        var outp = PolylineTin.Downsample(v, 5000, out double vox);
+        Assert.InRange(outp.Count, 1, 5000);
+        Assert.True(vox > 0);
+        // 抽稀后仍应铺满原范围(不能只剩一角)
+        Assert.InRange(outp.Min(p => p.x), 0, 20);
+        Assert.InRange(outp.Max(p => p.x), 180, 199);
+        Assert.InRange(outp.Min(p => p.y), 0, 20);
+        Assert.InRange(outp.Max(p => p.y), 180, 199);
+        // 高程要跟着点一起留下(不是重新编的)
+        Assert.All(outp, p => Assert.Equal(p.x + p.y, p.z, 9));
+    }
+
+    [Fact]
+    public void Downsample_keepsOnePerCell_soPointsStaySpread()
+    {
+        // 一个格子里挤 100 个点, 只应留一个代表
+        var v = new List<(double x, double y, double z)>();
+        for (int i = 0; i < 100; i++) v.Add((0.001 * i, 0.001 * i, 0));
+        v.Add((1000, 1000, 5));
+        var outp = PolylineTin.Downsample(v, 2, out _);
+        Assert.InRange(outp.Count, 2, 2);
+    }
 }

@@ -66,6 +66,61 @@ public static class PolylineTin
         return res;
     }
 
+    /// <summary>
+    /// 体素抽稀 —— 忠实原版：顶点超上限时先按体素格抽稀再剖分，而不是把几十万点全剖出来。
+    ///
+    /// 为什么必须做：地形图一张就有 50 万顶点，全剖出来是 98 万个三角形。剖分本身只要 0.2 秒，
+    /// 但接下来要给这近百万三角形做镶嵌、算唯一边线、传 GL 缓冲，界面就在这一步卡死
+    /// （用户实测"原版能建出来、Kylin 卡死"，差的就是这一步）。
+    ///
+    /// 做法：按格子取一个代表点（离格心最近的那个，比取第一个更贴合地形），
+    /// 格子边长自适应——从数据范围估起，逐步放大直到点数落到 target 以内。
+    /// </summary>
+    public static List<(double x, double y, double z)> Downsample(
+        IReadOnlyList<(double x, double y, double z)> verts, int target, out double voxelUsed)
+    {
+        voxelUsed = 0;
+        if (verts == null || verts.Count <= target) return verts == null ? new() : new(verts);
+
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        foreach (var v in verts)
+        {
+            if (v.x < minX) minX = v.x; if (v.x > maxX) maxX = v.x;
+            if (v.y < minY) minY = v.y; if (v.y > maxY) maxY = v.y;
+        }
+        double w = Math.Max(maxX - minX, 1e-9), h = Math.Max(maxY - minY, 1e-9);
+
+        // 起点：让格子数约等于目标点数（面积 / 目标数 开方）
+        double cell = Math.Max(Math.Sqrt(w * h / Math.Max(target, 1)), 1e-6);
+        for (int attempt = 0; attempt < 24; attempt++)
+        {
+            var keep = new Dictionary<(long, long), int>(target * 2);
+            for (int i = 0; i < verts.Count; i++)
+            {
+                var v = verts[i];
+                long gx = (long)Math.Floor((v.x - minX) / cell), gy = (long)Math.Floor((v.y - minY) / cell);
+                var k = (gx, gy);
+                if (!keep.TryGetValue(k, out int cur)) { keep[k] = i; continue; }
+                // 取离格心更近的那个：等值线在格内往往连成一串，取格心代表更贴合地形
+                double ccx = minX + (gx + 0.5) * cell, ccy = minY + (gy + 0.5) * cell;
+                var o = verts[cur];
+                if (Sq(v.x - ccx) + Sq(v.y - ccy) < Sq(o.x - ccx) + Sq(o.y - ccy)) keep[k] = i;
+            }
+            if (keep.Count <= target || attempt == 23)
+            {
+                voxelUsed = cell;
+                var outp = new List<(double x, double y, double z)>(keep.Count);
+                foreach (var i in keep.Values) outp.Add(verts[i]);
+                return outp;
+            }
+            cell *= 1.35;   // 还是太多, 放大格子再来
+        }
+        voxelUsed = cell;
+        return new(verts);
+
+        static double Sq(double t) => t * t;
+    }
+
     /// <summary>清洗统计（对应原版 preclean_* 计数，用于回报"剔除了多少处问题约束"）。</summary>
     public sealed class CleanStat
     {
