@@ -1,4 +1,4 @@
-using Avalonia.Controls;
+﻿using Avalonia.Controls;
 
 namespace PitMine3D.Kylin.Views.Modeling;
 
@@ -24,6 +24,25 @@ public static class BlockModelWindows
         o["实体转块体"] = (owner, ctx) => ModelingWindows.Show(ctx, () => new EntityToBlocksWindow(ctx));
         o["体素格网体积"] = (owner, ctx) => ModelingWindows.Show(ctx, () => new VoxelVolumeWindow(ctx));
         o["块体模型浏览器"] = (owner, ctx) => ModelingWindows.Show(ctx, () => new BlockModelBrowserWindow(ctx));
+        o["体积算量"] = (owner, ctx) => SumSelectedMeshVolume(ctx);
+    }
+
+    /// <summary>
+    /// 「采矿模型」组 · 体积算量（忠实原 BlockModelLibPlugin.CreateVolumeCommand → IPitDesignCapability.SumSelectedMeshVolume）：
+    /// 拿视口当前选中的采矿模型体，逐个算体积、只累计算得出（&gt;0，即封闭体）的那些，汇总方量回显。
+    /// 与「三角网体积」不同：那个是逐网的顶点/三角/面积/Z 明细，这个只报个数与合计方量。
+    /// </summary>
+    private static void SumSelectedMeshVolume(ModelingContext ctx)
+    {
+        double sum = 0; int n = 0;
+        foreach (var me in ctx.SelectedMeshes())
+        {
+            double v = 0;
+            try { if (Cad.MeshDiagnose.Analyze(me.Verts, me.Tris).IsClosed) v = Cad.MeshMetrics.RobustVolume(me.Verts, me.Tris); }
+            catch { v = 0; }
+            if (v > 0) { sum += v; n++; }
+        }
+        ctx.Status(n == 0 ? "体积算量:请先选中采矿模型体(封闭三角网)" : $"✓ 体积算量:{n} 个体,合计 {sum:N0} m³");
     }
 
     private static void Modal(Window dlg, Window owner) => _ = dlg.ShowDialog<bool>(owner);
