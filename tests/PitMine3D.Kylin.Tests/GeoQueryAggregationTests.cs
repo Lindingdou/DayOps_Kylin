@@ -1,5 +1,6 @@
-using System.Collections.Generic;
 using Microsoft.Data.Sqlite;
+using System.Collections.Generic;
+using System.Data.Common;
 using PitMine3D.Kylin.Data;
 using Xunit;
 
@@ -9,13 +10,13 @@ using Xunit;
 /// </summary>
 public class GeoQueryAggregationTests
 {
-    private static SqliteConnection Db(string ddl)
+    private static DbConnection Db(string ddl)
     {
         var c = new SqliteConnection("Data Source=:memory:"); c.Open();
         using var cmd = c.CreateCommand(); cmd.CommandText = ddl; cmd.ExecuteNonQuery();
         return c;
     }
-    private static void Exec(SqliteConnection c, string sql)
+    private static void Exec(DbConnection c, string sql)
     { using var cmd = c.CreateCommand(); cmd.CommandText = sql; cmd.ExecuteNonQuery(); }
 
     [Fact]

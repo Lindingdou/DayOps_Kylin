@@ -292,18 +292,53 @@ public partial class MainWindow
     // ═══════════════════ 建模 ═══════════════════
     private async Task MdlCreateTinAsync(string cmd)
     {
+        var selPts = SelectedPoints();
+        var selLines = SelectedPolylines().Where(l => l.Points.Count >= 2).ToList();
+
+        // ① 选了多段线(等值线建面)：线的顶点当输入点、线段当**约束边**。
+        //    此前这条路走不通 —— 只收点实体, 多段线仅被当作裁剪边界, 于是最常见的
+        //    "选一堆等值线建面"只会提示"需 ≥3 个点"。
+        //    约束边不能省: 等值线是地形结构线, 只当散点做无约束 Delaunay 会连出
+        //    跨山脊/沟谷的三角形, 面就糊了。
+        if (selLines.Count > 0)
+        {
+            var input = selLines.Select(l => new PolylineTin.Line
+            {
+                Points = l.Points,
+                Z = l.Has3D ? Enumerable.Range(0, l.Points.Count).Select(l.ZAt).ToList() : null,
+                FlatZ = l.Elevation,
+                Closed = l.Closed,
+            }).ToList();
+            var col = PolylineTin.Collect(input);
+
+            // 同时选中的散点一并作为输入(点线混选)
+            foreach (var pe in selPts) col.Verts.Add((pe.X, pe.Y, pe.Elevation));
+
+            if (col.Verts.Count < 3) { StatusMsg.Text = "创建三角网：多段线顶点不足 3 个"; return; }
+            var lineTris = Delaunay.TriangulateConstrained(col.Verts.Select(v => (v.x, v.y)).ToList(), col.Constraints);
+            if (lineTris.Count == 0) { StatusMsg.Text = "创建三角网：顶点共线或约束自交，无法剖分"; return; }
+            lineTris = OrientUp(col.Verts, lineTris);
+            var lineMesh = AddMesh(new MeshEntity(NewMeshName("三角网"), col.Verts, lineTris), true);
+            SelectEntities(new SceneEntity[] { lineMesh });
+            var lst = TinSurface.Describe(col.Verts, lineTris);
+            StatusMsg.Text = $"创建三角网「{lineMesh.Name}」：{selLines.Count} 条线 {col.Verts.Count} 顶点"
+                           + $"({col.Constraints.Count} 段约束{(selPts.Count > 0 ? $" + {selPts.Count} 散点" : "")})"
+                           + $" → {lineTris.Count} 三角 · 投影面积 {lst.ProjectedAreaXY:0.#} · 高程 {lst.ZMin:0.#}~{lst.ZMax:0.#}";
+            return;
+        }
+
+        // ② 只有点：散点 Delaunay(向后兼容; 选中闭合线时按其裁边, 见上一分支已接管)
         var pts = await PickPointsAsync("创建三角网", 3);
-        if (pts.Count < 3) { StatusMsg.Text = "创建三角网：需 ≥3 个点(先选中场景中的点, 或从 CSV 导入)"; return; }
+        if (pts.Count < 3) { StatusMsg.Text = "创建三角网：需 ≥3 个点或 ≥1 条多段线(先在场景中选中, 或从 CSV 导入点)"; return; }
         var p3 = Pts3(pts);
         var p2 = p3.Select(p => (p.x, p.y)).ToList();
-        var loops = SelectedPolylines().Where(l => l.Closed && l.Points.Count >= 3).ToList();
-        List<(int a, int b, int c)> tris = loops.Count > 0 ? Delaunay.TriangulateClipped(p2, loops[0].Points) : Delaunay.Triangulate(p2);
+        List<(int a, int b, int c)> tris = Delaunay.Triangulate(p2);
         if (tris.Count == 0) { StatusMsg.Text = "创建三角网：点太少或共线，无法剖分"; return; }
         tris = OrientUp(p3, tris);   // 统一绕向(法线朝上), 边界环/成体/内外判定都依赖一致绕向
         var me = AddMesh(new MeshEntity(NewMeshName("三角网"), p3, tris), true);
         SelectEntities(new SceneEntity[] { me });
         var st = TinSurface.Describe(p3, tris);
-        StatusMsg.Text = $"创建三角网「{me.Name}」：{p3.Count} 点 → {tris.Count} 三角{(loops.Count > 0 ? "(按闭合线裁边)" : "")} · 投影面积 {st.ProjectedAreaXY:0.#} · 高程 {st.ZMin:0.#}~{st.ZMax:0.#}";
+        StatusMsg.Text = $"创建三角网「{me.Name}」：{p3.Count} 点 → {tris.Count} 三角 · 投影面积 {st.ProjectedAreaXY:0.#} · 高程 {st.ZMin:0.#}~{st.ZMax:0.#}";
     }
 
     private async Task MdlEmbedPolylineAsync()

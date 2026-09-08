@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Collections.Generic;
 using PitMine3D.Kylin.Data;
 using Xunit;
@@ -65,7 +66,7 @@ public class CompatibleModelsTests
         Assert.True(bHi.Count > 0 || bLo.Count > 0);          // 极端值至少一端禁掉某机型(证约束生效)
     }
 
-    private static long ScalarLong(Microsoft.Data.Sqlite.SqliteConnection c, string sql)
+    private static long ScalarLong(DbConnection c, string sql)
     {
         using var cmd = c.CreateCommand(); cmd.CommandText = sql;
         return System.Convert.ToInt64(cmd.ExecuteScalar());

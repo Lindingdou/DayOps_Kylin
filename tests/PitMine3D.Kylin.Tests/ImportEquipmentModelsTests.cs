@@ -1,5 +1,6 @@
-using System.Collections.Generic;
 using Microsoft.Data.Sqlite;
+using System.Collections.Generic;
+using System.Data.Common;
 using PitMine3D.Kylin.Data;
 using Xunit;
 
@@ -8,7 +9,7 @@ namespace PitMine3D.Kylin.Tests;
 /// <summary>设备型号 CSV 入库（按 model 主键 upsert）回归。</summary>
 public class ImportEquipmentModelsTests
 {
-    private static SqliteConnection MemDb()
+    private static DbConnection MemDb()
     {
         var conn = new SqliteConnection("Data Source=:memory:"); conn.Open();
         using var c = conn.CreateCommand();

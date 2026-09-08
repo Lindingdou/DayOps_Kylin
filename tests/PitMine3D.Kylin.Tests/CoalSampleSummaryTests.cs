@@ -1,11 +1,12 @@
 using Microsoft.Data.Sqlite;
+using System.Data.Common;
 using PitMine3D.Kylin.Data;
 using Xunit;
 
 /// <summary>钻孔煤质汇总(GeoDataQueries.GetCoalSampleSummaries)——读衍生表 coal_sample_summary(每孔每层化验平均, 忠实原 CoalQualityService.AllSummary)。</summary>
 public class CoalSampleSummaryTests
 {
-    private static SqliteConnection Db()
+    private static DbConnection Db()
     {
         var c = new SqliteConnection("Data Source=:memory:"); c.Open();
         using var cmd = c.CreateCommand();

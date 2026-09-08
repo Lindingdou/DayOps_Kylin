@@ -1,5 +1,6 @@
-using System.Collections.Generic;
 using Microsoft.Data.Sqlite;
+using System.Collections.Generic;
+using System.Data.Common;
 using PitMine3D.Kylin.Data;
 using Xunit;
 
@@ -8,7 +9,7 @@ namespace PitMine3D.Kylin.Tests;
 /// <summary>爆破事件 CSV 入库（导入→GetBlastStats 往返 + 缺单耗自算）回归。</summary>
 public class ImportBlastEventsTests
 {
-    private static SqliteConnection MemDb()
+    private static DbConnection MemDb()
     {
         var conn = new SqliteConnection("Data Source=:memory:"); conn.Open();
         using var c = conn.CreateCommand();

@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Collections.Generic;
 using System.Linq;
 using PitMine3D.Kylin.Data;
@@ -376,7 +377,7 @@ public class GeoDataQueriesTests
             Assert.True(o.Inserted == 1, $"de-DE locale 导入 ins={o.Inserted} err={o.Errors}");
             using var q2 = db.Connection.CreateCommand();
             q2.CommandText = "SELECT work_hours, availability FROM equipment_kpi_monthly WHERE equipment_id=@e AND year=2098 AND month=6";
-            q2.Parameters.AddWithValue("@e", eq);
+            q2.AddWithValue("@e", eq);
             using var rd = q2.ExecuteReader();
             Assert.True(rd.Read());
             Assert.Equal(600.5, rd.GetDouble(0), 6);   // "600.5" 逗号 locale 下仍 =600.5(非 6005 或失败)
@@ -575,7 +576,7 @@ public class GeoDataQueriesTests
         }, true);
         Assert.True(io.Inserted + io.Updated >= 1, $"煤样导入 ins={io.Inserted} upd={io.Updated} err={io.Errors}");
         double? mad;
-        using (var c = db.Connection.CreateCommand()) { c.CommandText = "SELECT mad_raw FROM coal_sample WHERE seam_code=@s AND depth_from=888"; c.Parameters.AddWithValue("@s", seam); var o = c.ExecuteScalar(); mad = o == null || o is System.DBNull ? (double?)null : System.Convert.ToDouble(o); }
+        using (var c = db.Connection.CreateCommand()) { c.CommandText = "SELECT mad_raw FROM coal_sample WHERE seam_code=@s AND depth_from=888"; c.AddWithValue("@s", seam); var o = c.ExecuteScalar(); mad = o == null || o is System.DBNull ? (double?)null : System.Convert.ToDouble(o); }
         Assert.True(mad.HasValue, $"mad_raw 应入库 (实际 {(mad?.ToString() ?? "NULL")})");
         var h = GeoDataQueries.GetCoalDataHealth(db.Connection);
         Assert.True(h.TotalSamples > 0);
@@ -880,7 +881,7 @@ public class GeoDataQueriesTests
         using (var q = db.Connection.CreateCommand())
         {
             q.CommandText = "SELECT mad_raw, fcd_raw, true_density FROM coal_sample WHERE seam_code=@s AND depth_from=999";
-            q.Parameters.AddWithValue("@s", seam);
+            q.AddWithValue("@s", seam);
             using var rd = q.ExecuteReader();
             Assert.True(rd.Read());
             Assert.Equal(8, rd.GetDouble(0), 6);
@@ -974,7 +975,7 @@ public class GeoDataQueriesTests
         using (var q2 = db.Connection.CreateCommand())
         {
             q2.CommandText = "SELECT idle_hours, delay_hours, internal_fault_rate_pct, external_fault_rate_pct FROM equipment_kpi_monthly WHERE equipment_id=@e AND year=2099 AND month=7";
-            q2.Parameters.AddWithValue("@e", eq);
+            q2.AddWithValue("@e", eq);
             using var rd = q2.ExecuteReader();
             Assert.True(rd.Read());
             Assert.Equal(60, rd.GetDouble(0), 6);    // idle_hours(修前丢)

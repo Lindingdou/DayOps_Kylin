@@ -1,11 +1,12 @@
 using Microsoft.Data.Sqlite;
+using System.Data.Common;
 using PitMine3D.Kylin.Data;
 using Xunit;
 
 /// <summary>排土场台账(GeoDataQueries.GetDumpSites)已知值回归 —— 充填率=已填÷设计×100(忠实原 DumpSite.FillRate)。</summary>
 public class DumpSiteLedgerTests
 {
-    private static SqliteConnection Db()
+    private static DbConnection Db()
     {
         var c = new SqliteConnection("Data Source=:memory:"); c.Open();
         using var cmd = c.CreateCommand();

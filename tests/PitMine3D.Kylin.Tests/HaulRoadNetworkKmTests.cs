@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+using System.Data.Common;
 using PitMine3D.Kylin.Data;
 using Xunit;
 
