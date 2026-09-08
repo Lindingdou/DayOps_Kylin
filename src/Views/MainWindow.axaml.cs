@@ -24,7 +24,16 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        WindowState = WindowState.Maximized;   // 原版默认 1920x1080 铺满屏幕；XAML 里设 WindowState 在部分平台不生效, 改代码设
+        // 原版默认 1920x1080 铺满屏幕；XAML 里设 WindowState 在部分平台不生效, 改代码设。
+        // PITMINE_WINDOW=1920x1080 可锁定窗口尺寸(不最大化)：信创整机常是高分屏, 按 1080p 布局核对/交付时用。
+        var wantSize = ParseWindowSize(System.Environment.GetEnvironmentVariable("PITMINE_WINDOW"));
+        if (wantSize is { } ws)
+        {
+            WindowState = WindowState.Normal;
+            Width = ws.w; Height = ws.h;
+            WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        }
+        else WindowState = WindowState.Maximized;
         _active = NewDocState();   // 首个文档(场景/图层), 供 _scene/_layers 与停靠布局
         _docs.Add(_active);
         BuildDock();               // 代码建 MVVM 停靠布局 + 内容模板(返回暂存面板控件)
@@ -33,6 +42,7 @@ public partial class MainWindow : Window
         RenderAssistant(_assistant.Current());   // 智能助手：启动显示欢迎 + 主菜单
         GlyphFontHost.Install();   // 视口文字用系统真字形(含中文), 取不到则退回笔画字体
         Opened += (_, _) => ReportGraphicsDowngrade();   // 图形被自动降级时在信息栏说明
+        Opened += (_, _) => InstallRibbonAutoFit();      // 功能区按窗口宽度自适应缩放(1080p 上一屏放得下)
         InitPropertyRibbon();      // Ribbon「特性」组 颜色/线宽/线型 三栏(填下拉 + 复位显示)
         Modeling.MeshEditWindows.Register(); Modeling.EstimationWindows.Register(); Modeling.ModelUpdateWindows.Register(); Modeling.BlockModelWindows.Register();   // 三维地质建模独立窗口登记(功能项名 → 窗口)
 
@@ -7786,14 +7796,35 @@ public partial class MainWindow : Window
         var tol = new TextBox { Text = _snapTolPx.ToString("0"), Width = 80 };
         var tolRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { tolLabel, tol } };
 
+        // 界面缩放：功能区内容 1:1 约需 2600px，1080p 及以下放不下，故可按屏幕选挡位（默认自动）
+        var scaleLabel = new TextBlock { Text = "功能区缩放（屏幕适配）", VerticalAlignment = VerticalAlignment.Center };
+        var scaleBox = new ComboBox { Width = 210, ItemsSource = RibbonScalePresets.Select(x => x.label).ToList() };
+        int curIdx = 0;
+        for (int i = 0; i < RibbonScalePresets.Length; i++)
+            if (System.Math.Abs(RibbonScalePresets[i].targetWidth - _ribbonScaleSetting) < 1e-6) { curIdx = i; break; }
+        scaleBox.SelectedIndex = curIdx;
+        scaleBox.SelectionChanged += (_, _) =>   // 选中即预览, 不必先点确定
+        {
+            int i = System.Math.Max(0, scaleBox.SelectedIndex);
+            _ribbonScaleSetting = RibbonScalePresets[i].targetWidth;
+            FitRibbons();
+        };
+        var scaleRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { scaleLabel, scaleBox } };
+        var scaleHint = new TextBlock
+        {
+            Text = "功能区按 1:1 需要约 2300px 宽，1080p 及以下放不下。选「自动」按当前窗口宽度缩放，"
+                 + "保证一屏显示完整；选固定分辨率则按该宽度缩放，适合投屏或多屏切换。选中即可预览。",
+            FontSize = 11, Foreground = Brush.Parse("#666"), TextWrapping = TextWrapping.Wrap, MaxWidth = 380,
+        };
+
         var ok = new Button { Content = "确定", MinWidth = 72 };
         var cancel = new Button { Content = "取消", MinWidth = 72 };
         var btnRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right, Children = { ok, cancel } };
 
-        var panel = new StackPanel { Margin = new Thickness(16), Spacing = 12, Children = { grid, snap, tolRow, btnRow } };
+        var panel = new StackPanel { Margin = new Thickness(16), Spacing = 12, Children = { grid, snap, tolRow, scaleRow, scaleHint, btnRow } };
         var win = new Window
         {
-            Title = "选项", Width = 320, Height = 220,
+            Title = "选项", Width = 430, Height = 300,
             WindowStartupLocation = WindowStartupLocation.CenterOwner, CanResize = false,
             Content = panel
         };
@@ -7803,7 +7834,12 @@ public partial class MainWindow : Window
             SetGrid(grid.IsChecked == true);
             SnapToggle.IsChecked = snap.IsChecked == true;
             if (double.TryParse(tol.Text, out double t) && t >= 2 && t <= 60) _snapTolPx = t;
-            StatusMsg.Text = $"选项已应用（网格 {(_gridOn ? "开" : "关")} · 捕捉 {(SnapToggle.IsChecked == true ? "开" : "关")} · 容差 {_snapTolPx:0}px）";
+            int si = System.Math.Max(0, scaleBox.SelectedIndex);
+            _ribbonScaleSetting = RibbonScalePresets[si].targetWidth;
+            SaveRibbonScaleSetting();
+            FitRibbons();
+            StatusMsg.Text = $"选项已应用（网格 {(_gridOn ? "开" : "关")} · 捕捉 {(SnapToggle.IsChecked == true ? "开" : "关")} · 容差 {_snapTolPx:0}px"
+                           + $" · 功能区按 {(_ribbonScaleSetting > 0 ? _ribbonScaleSetting.ToString("0") + "px 宽" : "窗口宽度")}适配）";
             win.Close();
         };
         win.Show(this);
@@ -11705,6 +11741,103 @@ public partial class MainWindow : Window
         LogCommand(msg);
         StatusMsg.Text = msg;
         PitMine3D.Kylin.CrashLog.Write("GL", msg);
+    }
+
+
+    // ── 功能区自适应宽度（1080p / 2K / 4K 适配）──────────────────────────
+    // 功能区 1:1 约需 2300px 宽，1080p 及以下放不下，超出的组只能横向滚动才看得到，
+    // 用户看到的就是"显示不完整"。这里给整个功能区套一层缩放：窄屏缩到一屏放得下，宽屏保持 1:1。
+    //
+    // 关键是包在 TabControl **外面**而不是逐页包：
+    //   · 逐页包 → 每页要等切过去才应用缩放，首次切页肉眼可见抖动；
+    //   · 逐页包 → 各页按自己的宽度算，最宽的"开始"缩到 84%、窄页保持 100%，跨页图标忽大忽小。
+    // 包在外面则任何页一出现就已经是最终尺寸，且天然全页一致。
+    private const double RibbonMinScale = 0.55;   // 再小就看不清了, 剩下的交给横向滚动
+
+    /// <summary>缩放挡位：0=自动(跟随窗口宽度)，其余为目标屏幕宽度(像素)。默认 1080p。</summary>
+    private double _ribbonScaleSetting = 1920;
+
+    /// <summary>历史最大所需宽度：页是点开才创建的，切走后测得的宽度会变小，
+    /// 若跟着变就会来回缩放抖动。故只增不减。</summary>
+    private double _ribbonNeedMax;
+    private double _lastRibbonScale = 1;
+
+    private static string RibbonScaleFile =>
+        System.IO.Path.Combine(System.IO.Path.GetDirectoryName(PitMine3D.Kylin.CrashLog.Path) ?? ".", "ribbon-scale.txt");
+
+    private void LoadRibbonScaleSetting()
+    {
+        try
+        {
+            if (File.Exists(RibbonScaleFile) &&
+                double.TryParse(File.ReadAllText(RibbonScaleFile).Trim(), out double v) && v >= 0 && v <= 8000)
+                _ribbonScaleSetting = v;
+        }
+        catch { }
+    }
+
+    private void SaveRibbonScaleSetting()
+    {
+        try { File.WriteAllText(RibbonScaleFile, _ribbonScaleSetting.ToString("0.###")); } catch { }
+    }
+
+    /// <summary>
+    /// 屏幕挡位 → 目标宽度(像素)。缩放不写死百分比，而是按「目标宽度 ÷ 功能区实际需要的宽度」算，
+    /// 以后功能区增删按钮也不用改这张表。0 = 自动，跟随当前窗口宽度。
+    /// </summary>
+    private static readonly (string label, double targetWidth)[] RibbonScalePresets =
+    {
+        ("1080p  1920×1080（默认）", 1920),
+        ("2K  2560×1440", 2560),
+        ("4K  3840×2160", 3840),
+        ("1K  1366×768", 1366),
+        ("自动（跟随窗口宽度）", 0),
+    };
+
+    /// <summary>装好缩放：读取挡位并随窗口尺寸重算。</summary>
+    private void InstallRibbonAutoFit()
+    {
+        LoadRibbonScaleSetting();
+        SizeChanged += (_, _) => FitRibbons();
+        // 等一次布局跑完再量宽度(刚建好时 DesiredSize 可能还是 0)
+        Avalonia.Threading.Dispatcher.UIThread.Post(FitRibbons, Avalonia.Threading.DispatcherPriority.Background);
+    }
+
+    /// <summary>按挡位/窗口宽度重算功能区缩放。</summary>
+    private void FitRibbons()
+    {
+        if (RibbonScaler?.Child is not Control content)
+        {
+            PitMine3D.Kylin.CrashLog.Write("UI", $"功能区缩放: 取不到容器(RibbonScaler={(RibbonScaler == null ? "null" : "有")})");
+            return;
+        }
+        content.Measure(Size.Infinity);
+        _ribbonNeedMax = System.Math.Max(_ribbonNeedMax, content.DesiredSize.Width);
+        double need = _ribbonNeedMax;
+        double have = Bounds.Width;
+        if (need <= 1 || have <= 1) return;
+
+        // 手动挡位按所选分辨率宽度算；自动按当前窗口宽度。都不放大，只在放不下时缩。
+        double target = _ribbonScaleSetting > 0 ? _ribbonScaleSetting : have;
+        double scale = target >= need ? 1.0 : System.Math.Max(RibbonMinScale, target / need);
+
+        // 必须整体换一个 Transform 对象：只改已有 ScaleTransform 的 ScaleX/ScaleY
+        // 不会让 LayoutTransformControl 重新布局，表现就是"算出来了却没缩"(实测踩到)。
+        double cur = RibbonScaler.LayoutTransform is ScaleTransform st ? st.ScaleX : 1.0;
+        if (System.Math.Abs(cur - scale) <= 0.005) return;
+        RibbonScaler.LayoutTransform = new ScaleTransform(scale, scale);
+        _lastRibbonScale = scale;
+        PitMine3D.Kylin.CrashLog.Write("UI", $"功能区缩放 {scale:0.00}（需 {need:0}px，目标 {target:0}px）");
+    }
+
+    /// <summary>解析 PITMINE_WINDOW（形如 1920x1080）；不合法返回 null。</summary>
+    private static (double w, double h)? ParseWindowSize(string? spec)
+    {
+        if (string.IsNullOrWhiteSpace(spec)) return null;
+        var parts = spec.Trim().ToLowerInvariant().Split('x');
+        if (parts.Length == 2 && double.TryParse(parts[0], out double w) && double.TryParse(parts[1], out double h)
+            && w >= 800 && h >= 600) return (w, h);
+        return null;
     }
 
     // 命令历史/输出面板：回显执行的命令（▸ cmd），滚动到底，上限 100 行

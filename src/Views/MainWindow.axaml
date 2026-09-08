@@ -11,7 +11,11 @@
     <Grid RowDefinitions="Auto,*,Auto">   <!-- Ribbon / DockingManager(含信息栏 Tab) / StatusBar —— 同原版 mainGrid -->
 
         <!-- ============================ 顶部 Ribbon ============================ -->
-        <TabControl Grid.Row="0" Classes="ribbon">
+        <!-- 功能区整体包一层可缩放容器：按屏幕宽度统一缩放(1080p 上一屏放得下)。
+             包在 TabControl **外面**而不是逐页包 —— 逐页包的话每页要等切过去才应用缩放,
+             首次切页会看到明显抖动, 且各页缩放不一致导致图标忽大忽小(实测反馈)。 -->
+        <LayoutTransformControl Grid.Row="0" x:Name="RibbonScaler" HorizontalAlignment="Left" VerticalAlignment="Top">
+        <TabControl Classes="ribbon">
 
             <!-- ===== 开始 ===== -->
             <TabItem Header="开始">
@@ -1334,6 +1338,7 @@
                 </Border>
             </TabItem>
         </TabControl>
+        </LayoutTransformControl>
 
         <!-- ============================ 3D 视口 ============================ -->
         <!-- 隐藏暂存：面板内容在 Window namescope 构建(x:Name/事件正常回填)，加载后移入 Dock 工具 -->
