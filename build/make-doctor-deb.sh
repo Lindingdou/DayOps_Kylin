@@ -65,10 +65,27 @@ CTRL
 cat > "$STAGE/DEBIAN/postinst" <<'POST'
 #!/bin/sh
 set -e
+# 修复 0.1.0/0.1.2 那两版打包留下的损伤：当时把 ./usr ./usr/share 等目录打成了 drw-r--r--,
+# dpkg 会把目标机对应目录一并改成无执行位, 非 root 从此进不去 /usr, /usr/bin 里的命令全"找不到"。
+for d in /usr /usr/share /usr/share/doc /usr/share/applications /usr/share/icons /usr/share/icons/hicolor /usr/bin; do
+    [ -d "$d" ] || continue
+    case "$(ls -ld "$d" | cut -c1-10)" in
+        d?????????) [ -x "$d" ] || { chmod 755 "$d"; echo "已修复目录权限: $d (此前无执行位)"; } ;;
+    esac
+done
 ln -sf /opt/pitmine3d-doctor/pitmine3d-doctor /usr/bin/pitmine3d-doctor
 ln -sf /opt/pitmine3d-doctor/pitmine3d-doctor.sh /usr/bin/pitmine3d-doctor.sh
 chmod +x /opt/pitmine3d-doctor/pitmine3d-doctor /opt/pitmine3d-doctor/pitmine3d-doctor.sh 2>/dev/null || true
-echo "已安装环境体检器。运行: pitmine3d-doctor   (报告: ~/pitmine3d-doctor.log)"
+# 自证：装完就说清楚命令在哪、能不能直接敲，免得"装上了却看不到任何输出"
+if command -v pitmine3d-doctor >/dev/null 2>&1; then
+    echo "已安装环境体检器。运行: pitmine3d-doctor        (报告: ~/pitmine3d-doctor.log)"
+    echo "                纯脚本版: pitmine3d-doctor.sh"
+else
+    echo "已安装环境体检器, 但 /usr/bin 软链不可用。请直接运行:"
+    echo "    /opt/pitmine3d-doctor/pitmine3d-doctor"
+    echo "    /opt/pitmine3d-doctor/pitmine3d-doctor.sh"
+fi
+echo "若体检器本身跑不起来(无输出), 改用纯脚本版, 或加 --no-gl 跳过 OpenGL 探测。"
 exit 0
 POST
 

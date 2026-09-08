@@ -140,6 +140,14 @@ CTRL
 cat > "$STAGE/DEBIAN/postinst" <<'POST'
 #!/bin/sh
 set -e
+# 修复 0.1.0/0.1.2 那两版打包留下的损伤：当时把 ./usr ./usr/share 等目录打成了 drw-r--r--,
+# dpkg 会把目标机对应目录一并改成无执行位, 非 root 从此进不去 /usr, /usr/bin 里的命令全"找不到"。
+for d in /usr /usr/share /usr/share/doc /usr/share/applications /usr/share/icons /usr/share/icons/hicolor /usr/bin; do
+    [ -d "$d" ] || continue
+    case "$(ls -ld "$d" | cut -c1-10)" in
+        d?????????) [ -x "$d" ] || { chmod 755 "$d"; echo "已修复目录权限: $d (此前无执行位)"; } ;;
+    esac
+done
 ln -sf /opt/pitmine3d/pitmine3d.sh /usr/bin/pitmine3d
 chmod +x /opt/pitmine3d/PitMine3D.Kylin /opt/pitmine3d/pitmine3d.sh 2>/dev/null || true
 # ICU soname 软链(.NET 按 libicuuc.so.<主版本> 查找)
@@ -153,6 +161,12 @@ if [ -d /opt/pitmine3d/runtime-libs ]; then
 fi
 command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q /usr/share/applications || true
 command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -q -f /usr/share/icons/hicolor || true
+if command -v pitmine3d >/dev/null 2>&1; then
+    echo "已安装。启动: pitmine3d"
+else
+    echo "已安装, 但 /usr/bin 软链不可用。请直接运行: /opt/pitmine3d/pitmine3d.sh"
+fi
+echo "启动异常时先跑体检器: pitmine3d-doctor  (报告 ~/pitmine3d-doctor.log)"
 exit 0
 POST
 

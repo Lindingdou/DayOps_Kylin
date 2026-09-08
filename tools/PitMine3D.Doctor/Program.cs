@@ -23,28 +23,68 @@ internal static class Program
     private static void Warn(string item, string detail) { _warn++; W($"  [ 注意 ] {item} — {detail}"); }
     private static void Bad(string item, string detail) { _fail++; W($"  [ 缺失 ] {item} — {detail}"); }
 
+    private static string _logPath = "";
+    private static bool _logWarned;
+
     public static int Main(string[] args)
     {
         try { Console.OutputEncoding = new UTF8Encoding(false); } catch { }   // 终端非 UTF-8 时不致中断
+        _logPath = Path.Combine(Environment.GetEnvironmentVariable("HOME") ?? Path.GetTempPath(), "pitmine3d-doctor.log");
+
+        foreach (var a in args)
+            if (a is "-h" or "--help")
+            {
+                Console.WriteLine("用法: pitmine3d-doctor [--dir=<主程序安装目录, 默认 /opt/pitmine3d>] [--no-gl]");
+                Console.WriteLine("      --no-gl  跳过 OpenGL 探测(驱动有问题时, 建上下文可能让进程直接崩掉)");
+                Console.WriteLine("报告: ~/pitmine3d-doctor.log");
+                return 0;
+            }
+
         W("PitMine3D 麒麟环境体检器  " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
         W("(独立程序, 不改动也不需要主程序; 把本报告回传即可定位闪退原因)");
+        W("报告写往: " + _logPath);
+        // 先落一次盘: 后面哪一节把进程搞崩了(图形那节会真建 GL 上下文, 坏驱动可能直接 SIGSEGV),
+        // 从报告断在哪一节也能看出问题出在哪 —— 此前只在最后写一次, 中途崩掉就什么都没有。
+        Flush();
 
         string scanDir = "/opt/pitmine3d";
         foreach (var a in args) if (a.StartsWith("--dir=")) scanDir = a.Substring(6);
+        bool noGl = Array.IndexOf(args, "--no-gl") >= 0;
 
-        System();
-        Libraries();
-        ScanElfDeps(scanDir);
-        Icu();
-        Session();
-        Graphics();
-        Fonts();
-        Verdict();
+        // 逐节容错: 一节抛异常不连累后面(此前 Main 无兜底, 任一节抛异常整个程序就静默退出了)
+        Section("系统", System);
+        Section("必需动态库", Libraries);
+        Section("依赖全量扫描", () => ScanElfDeps(scanDir));
+        Section("ICU", Icu);
+        Section("显示会话", Session);
+        if (noGl) { Head("图形"); Warn("OpenGL 探测", "已按 --no-gl 跳过"); Flush(); }
+        else Section("图形", Graphics);
+        Section("字体", Fonts);
+        Section("结论", Verdict);
 
-        string log = Path.Combine(Environment.GetEnvironmentVariable("HOME") ?? Path.GetTempPath(), "pitmine3d-doctor.log");
-        try { File.WriteAllText(log, string.Join(Environment.NewLine, Lines), new UTF8Encoding(false)); Console.WriteLine($"\n报告已保存: {log}"); }
-        catch (Exception ex) { Console.WriteLine($"\n(报告保存失败: {ex.Message})"); }
+        Flush();
+        Console.WriteLine($"\n报告已保存: {_logPath}");
+        try { Console.Out.Flush(); } catch { }
         return _fail > 0 ? 1 : 0;
+    }
+
+    /// <summary>跑一节：异常不外泄(记成[注意]继续往下)，跑完即时把报告写盘。</summary>
+    private static void Section(string name, Action body)
+    {
+        try { body(); }
+        catch (Exception ex) { Warn(name, "这一节检查失败: " + ex.GetType().Name + " " + ex.Message); }
+        Flush();
+    }
+
+    /// <summary>把已有内容写盘(每节一次)。写不了就说一声，不中断体检。</summary>
+    private static void Flush()
+    {
+        try { Console.Out.Flush(); } catch { }
+        try { File.WriteAllText(_logPath, string.Join(Environment.NewLine, Lines), new UTF8Encoding(false)); }
+        catch (Exception ex)
+        {
+            if (!_logWarned) { _logWarned = true; Console.WriteLine($"(报告写不了 {_logPath}: {ex.Message})"); }
+        }
     }
 
     // ─────────────────────────── 系统 ───────────────────────────
