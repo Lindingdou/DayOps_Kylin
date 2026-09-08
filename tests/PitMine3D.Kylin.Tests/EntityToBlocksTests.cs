@@ -44,8 +44,9 @@ public class EntityToBlocksTests
         var wn = new WindingNumberTester(v, t);
         var blocks = Voxelize(wn, 5.0);   // 2³ = 8
         var cells = BlockModel.BuildCells(blocks, 0, 0);
-        Assert.Equal(blocks.Count, cells.Count);
-        Assert.All(cells, c => Assert.IsType<RectEntity>(c));
+        // 2×2×2 体素全是壳层块(没有块被六面包围) → 8 块都画, 每块 6 面 × 4 顶点
+        var mesh = Assert.IsType<MeshEntity>(Assert.Single(cells));
+        Assert.Equal(blocks.Count * 24, mesh.Verts.Count);
     }
 
     [Fact]

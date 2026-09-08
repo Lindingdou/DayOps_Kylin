@@ -14,7 +14,22 @@ public sealed class MeshEntity : SceneEntity
     public List<(double x, double y, double z)> Verts = new();
     public List<(int a, int b, int c)> Tris = new();
 
+    /// <summary>
+    /// 逐顶点颜色（可空；非空且个数与 Verts 一致时，着色面按顶点色而非实体基色 Cr/Cg/Cb）。
+    /// 块体模型这类「一张网格里每块颜色不同」的情形需要它 —— 否则只能按颜色拆成成百上千个实体。
+    /// </summary>
+    public List<(float r, float g, float b)>? VertColors;
+
+    private bool HasVertColors => VertColors != null && VertColors.Count == Verts.Count;
+
     private List<(int i, int j)>? _edges;
+
+    /// <summary>
+    /// 显式边线集合（null = 由三角边推导）。
+    /// 块体这种「四边形面被切成两个三角」的网格必须给它：按三角边画会把每个面的**对角线**也画出来，
+    /// 看着像斜线交叉网，而不是一格一格的立方体棱。
+    /// </summary>
+    public List<(int i, int j)>? EdgeOverride;
     private double _minX, _minY, _maxX, _maxY, _minZ, _maxZ;
     private bool _boundsOk;
 
@@ -35,6 +50,7 @@ public sealed class MeshEntity : SceneEntity
     {
         get
         {
+            if (EdgeOverride != null) return EdgeOverride;
             if (_edges != null) return _edges;
             var set = new HashSet<long>();
             var list = new List<(int, int)>(Tris.Count * 2);
@@ -88,6 +104,21 @@ public sealed class MeshEntity : SceneEntity
     // ── 显示模式(全局, 原「渲染配置」实体/线框着色管线)：线框 / 着色面 / 着色面+线框 ──
     public enum DisplayMode { Wireframe, Shaded, ShadedWireframe }
     public static DisplayMode RenderMode = DisplayMode.Shaded;   // 默认直接显示面(用户 2026-09-07: 默认不显示网格线)
+
+    /// <summary>
+    /// 逐实体显示模式覆盖（null = 跟随全局 <see cref="RenderMode"/>）。
+    /// 块体模型需要它：一堆同色立方体只画面就糊成一整块，看不出块界，原版是恒给每块描边的。
+    /// </summary>
+    public DisplayMode? RenderModeOverride;
+
+    /// <summary>本实体的显示模式（覆盖优先）。</summary>
+    public DisplayMode EffectiveMode => RenderModeOverride ?? RenderMode;
+
+    /// <summary>
+    /// 固定边色（null = 由填充色推导）。对应原版 BlockEdgeMode：
+    /// AutoFromFill 由填充色压暗得到，Fixed 用这里给的色。
+    /// </summary>
+    public (float r, float g, float b)? EdgeColorFixed;
     /// <summary>面按高程着色(地形色带), 否则按实体颜色。</summary>
     public static bool ColorByElevation;
     /// <summary>平行光方向(世界系, 单位化)；两面受光。</summary>
@@ -105,25 +136,41 @@ public sealed class MeshEntity : SceneEntity
         }
     }
 
+    /// <summary>
+    /// 边线，逐边取色：固定边色 &gt; 逐顶点色压暗 &gt; 实体基色压暗。
+    /// 忠实原版 Voxel.hlsl 的 AutoFromFill（edgeColor = litColor·0.55）与 Fixed 两种边色口径 ——
+    /// 块体一张网里每块颜色不同，边线不能统一用实体基色，否则块界仍看不清。
+    /// </summary>
+    private void TessellateEdgesColored(List<float> o, float dim)
+    {
+        bool perVert = HasVertColors;
+        var fix = EdgeColorFixed;
+        foreach (var (i, j) in Edges)
+        {
+            var p = Verts[i]; var q = Verts[j];
+            float r, g, b;
+            if (fix is { } f) { r = f.r; g = f.g; b = f.b; }
+            else if (perVert) { var c = VertColors![i]; r = c.r * dim; g = c.g * dim; b = c.b * dim; }
+            else { r = Cr * dim; g = Cg * dim; b = Cb * dim; }
+            o.Add((float)p.x); o.Add((float)p.y); o.Add((float)(p.z + Elevation)); o.Add(r); o.Add(g); o.Add(b);
+            o.Add((float)q.x); o.Add((float)q.y); o.Add((float)(q.z + Elevation)); o.Add(r); o.Add(g); o.Add(b);
+        }
+    }
+
     // 镶嵌缓存：大网(数万三角)每次 RefreshScene 都重算边线/着色面太慢；按 (模式, 高程着色, 颜色, 标高) 键缓存, 几何改动 Invalidate() 清。
     private float[]? _edgeCache, _faceCache;
     private (DisplayMode mode, bool byElev, float r, float g, float b, double elev) _edgeKey, _faceKey;
 
     public override void Tessellate(List<float> o)
     {
-        if (RenderMode == DisplayMode.Shaded) return;   // 纯着色面模式不画边线
-        var key = (RenderMode, ColorByElevation, Cr, Cg, Cb, Elevation);
+        var mode = EffectiveMode;
+        if (mode == DisplayMode.Shaded) return;   // 纯着色面模式不画边线
+        var key = (mode, ColorByElevation, Cr, Cg, Cb, Elevation);
         if (_edgeCache == null || _edgeKey != key)
         {
             var tmp = new List<float>(Edges.Count * 12);
-            if (RenderMode == DisplayMode.ShadedWireframe)
-            {
-                // 面+线框：边线压暗, 与着色面区分
-                float cr = Cr, cg = Cg, cb = Cb;
-                Cr *= 0.45f; Cg *= 0.45f; Cb *= 0.45f;
-                try { TessellateEdges(tmp); } finally { Cr = cr; Cg = cg; Cb = cb; }
-            }
-            else TessellateEdges(tmp);
+            // 面+线框：边线压暗, 与着色面区分（逐顶点色的网格逐边取自己的色）
+            TessellateEdgesColored(tmp, mode == DisplayMode.ShadedWireframe ? 0.45f : 1f);
             _edgeCache = tmp.ToArray(); _edgeKey = key;
         }
         o.AddRange(_edgeCache);
@@ -132,9 +179,10 @@ public sealed class MeshEntity : SceneEntity
     /// <summary>着色三角面：逐三角平面法线 × 平行光(两面受光) 调制基色(或高程色带)。</summary>
     public override void TessellateFaces(List<float> o)
     {
-        if (RenderMode == DisplayMode.Wireframe) return;
-        var key = (RenderMode, ColorByElevation, Cr, Cg, Cb, Elevation);
+        if (EffectiveMode == DisplayMode.Wireframe) return;
+        var key = (EffectiveMode, ColorByElevation, Cr, Cg, Cb, Elevation);
         if (_faceCache != null && _faceKey == key) { o.AddRange(_faceCache); return; }
+        // 逐顶点色不进 key（改色一律走 Invalidate 重建），只在这里选取色源
         var tmp = new List<float>(Tris.Count * 18);
         BuildFaces(tmp);
         _faceCache = tmp.ToArray(); _faceKey = key;
@@ -144,6 +192,7 @@ public sealed class MeshEntity : SceneEntity
     private void BuildFaces(List<float> o)
     {
         var b = Bounds; double zr = b.maxZ - b.minZ;
+        bool perVert = HasVertColors;
         foreach (var (a, bb, c) in Tris)
         {
             if (a >= Verts.Count || bb >= Verts.Count || c >= Verts.Count) continue;
@@ -152,14 +201,15 @@ public sealed class MeshEntity : SceneEntity
             var n = Normalize((uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx));
             double lambert = Math.Abs(n.x * Light.x + n.y * Light.y + n.z * Light.z);
             float k = (float)(0.42 + 0.58 * lambert);
-            void V((double x, double y, double z) w)
+            void V((double x, double y, double z) w, int vi)
             {
                 float cr = Cr, cg = Cg, cb = Cb;
+                if (perVert) (cr, cg, cb) = VertColors![vi];
                 if (ColorByElevation) { var t = zr > 1e-9 ? (w.z - b.minZ) / zr : 0.5; (cr, cg, cb) = TerrainRamp(t); }
                 o.Add((float)w.x); o.Add((float)w.y); o.Add((float)(w.z + Elevation));
                 o.Add(Math.Min(1f, cr * k)); o.Add(Math.Min(1f, cg * k)); o.Add(Math.Min(1f, cb * k));
             }
-            V(p); V(q); V(r);
+            V(p, a); V(q, bb); V(r, c);
         }
     }
 

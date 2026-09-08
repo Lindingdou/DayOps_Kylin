@@ -34,6 +34,11 @@ internal sealed class GlExtras
         _polygonOffset = Load<GlPolygonOffset>(gl, "glPolygonOffset");
     }
 
+    /// <summary>各扩展入口点是否解析到(原生崩溃排查用: 空指针被调用就是段错误)。</summary>
+    public string Resolved =>
+        $"VAO={( _gen != null && _bind != null && _del != null ? "有" : "无")}" +
+        $" glPolygonOffset={(_polygonOffset != null ? "有" : "无")}";
+
     /// <summary>多边形深度偏移(着色面后退, 让边线/高亮浮在面上)；GL/GLES 均有。</summary>
     public void PolygonOffset(float factor, float units) => _polygonOffset?.Invoke(factor, units);
 

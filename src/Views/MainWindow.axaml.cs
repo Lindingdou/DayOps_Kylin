@@ -10076,6 +10076,15 @@ public partial class MainWindow : Window
             string cmd = raw.Trim();
             if (cmd.Length == 0) continue;
             if (cmd == "@Ribbon末端") { ScrollRibbonToEnd(); continue; }
+            if (cmd.StartsWith("@块体示例"))   // @块体示例 [nx ny nz]: 建一个规则块体模型并入场景(截图核对体素显示用)
+            {
+                var a = cmd.Length > 5 ? cmd.Substring(5).Split(' ', System.StringSplitOptions.RemoveEmptyEntries) : System.Array.Empty<string>();
+                int nx = a.Length > 0 && int.TryParse(a[0], out int v0) ? v0 : 12;
+                int ny = a.Length > 1 && int.TryParse(a[1], out int v1) ? v1 : 10;
+                int nz = a.Length > 2 && int.TryParse(a[2], out int v2) ? v2 : 5;
+                SelftestSampleBlockModel(nx, ny, nz);
+                continue;
+            }
             if (cmd.StartsWith("@窗口 "))   // @窗口 <宽> <高>: 退出最大化并定尺寸(截图核对用)
             {
                 var a = cmd.Substring(3).Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
@@ -10085,6 +10094,19 @@ public partial class MainWindow : Window
             }
             DispatchRibbon(cmd);
         }
+    }
+
+    /// <summary>自检：建一个规则块体模型入场景并切三维（核对块体是否为体素）。</summary>
+    private void SelftestSampleBlockModel(int nx, int ny, int nz)
+    {
+        var m = Cad.BlockModelMeta.CreateRegular("自检块体", 0, 0, 0, 20, 20, 10, nx, ny, nz);
+        m.ActiveColormapAttribute = Cad.BlockModelMeta.ZElevationSentinel;   // 按高程配色, 核对「显示颜色是否起作用」
+        var err = Modeling.BlockModelStore.Create(MdlCtx(), m);
+        if (err != null) { StatusMsg.Text = "自检块体：" + err; return; }
+        Modeling.BlockModelStore.RefreshDisplay(MdlCtx(), m, fit: true);
+        DispatchRibbon("3D");
+        var mesh = m.BuildCellMesh(null, out var stat);
+        Title += $" [自检 块体 {nx}x{ny}x{nz} 画{stat.DrawnCells}块/剔{stat.CulledCells}块 顶点{mesh?.Verts.Count ?? 0}]";
     }
 
     private void ScrollRibbonToEnd()

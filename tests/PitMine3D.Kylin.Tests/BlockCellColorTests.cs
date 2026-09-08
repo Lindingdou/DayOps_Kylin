@@ -6,7 +6,10 @@ using B = PitMine3D.Kylin.Cad.BlockModel.Block;
 
 namespace PitMine3D.Kylin.Tests;
 
-/// <summary>块体分类离散着色(BuildCellsColored)回归 —— 按属性值分类, 同值同色/异值异色。</summary>
+/// <summary>
+/// 块体分类离散着色(BuildCellsColored)回归 —— 按属性值分类, 同值同色/异值异色。
+/// 块体现在出的是六面体网格(一张三角网, 逐顶点色), 不再是每块一张平面 RectEntity。
+/// </summary>
 public class BlockCellColorTests
 {
     [Fact]
@@ -24,13 +27,16 @@ public class BlockCellColorTests
         Assert.Equal(2, catId.Count);   // 2 类别(5, 10)
 
         var cells = BlockModel.BuildCellsColored(blocks, b => (catId[b.Grade] * 0.1f, 0.5f, 0.2f));
-        Assert.Equal(3, cells.Count);
-        var r0 = (RectEntity)cells[0]; var r1 = (RectEntity)cells[1]; var r2 = (RectEntity)cells[2];
+        var mesh = Assert.IsType<MeshEntity>(Assert.Single(cells));
+        Assert.Equal(3 * VertsPerCell, mesh.Verts.Count);          // 3 块各一个立方体(彼此不相邻, 无剔除)
         // 块0,块2 同品位(5) → 同色; 块1(10) 异色
-        Assert.Equal(r0.Cr, r2.Cr, 6);
-        Assert.NotEqual(r0.Cr, r1.Cr);
-        // 方块几何 = 中心 ± size/2
-        Assert.Equal(-1, r0.X0, 6); Assert.Equal(1, r0.X1, 6);
+        Assert.Equal(CellColor(mesh, 0).r, CellColor(mesh, 2).r, 6);
+        Assert.NotEqual(CellColor(mesh, 0).r, CellColor(mesh, 1).r);
+        // 立方体几何 = 中心 ± size/2，**三个轴都有**(此前只有 XY 足印, Z 被丢掉)
+        var b0 = mesh.Bounds;
+        Assert.Equal(-1, b0.minX, 6);
+        Assert.Equal(-1, b0.minY, 6); Assert.Equal(1, b0.maxY, 6);
+        Assert.Equal(-1, b0.minZ, 6); Assert.Equal(1, b0.maxZ, 6);
     }
 
     [Fact]
@@ -38,8 +44,9 @@ public class BlockCellColorTests
     {
         var blocks = new List<B> { new() { X = 0, Y = 0, Z = 0, Size = 2, Grade = 5 } };
         var cells = BlockModel.BuildCells(blocks, 0, 10);   // 连续品位色(蓝→红)
-        Assert.Single(cells);
-        Assert.IsType<RectEntity>(cells[0]);
+        var mesh = Assert.IsType<MeshEntity>(Assert.Single(cells));
+        Assert.Equal(VertsPerCell, mesh.Verts.Count);
+        Assert.Equal(12, mesh.Tris.Count);                  // 六面体 = 6 面 × 2 三角
     }
 
     // ── 分级区间(graduated)配色: 上界升序, [b_{i-1},b_i) → 类 i ──
@@ -67,9 +74,15 @@ public class BlockCellColorTests
         var breaks = new List<double> { 1, 3, 5 };
         var colors = new List<(float, float, float)> { (0, 0, 0), (0.3f, 0, 0), (0.6f, 0, 0), (0.9f, 0, 0) };
         var cells = BlockModel.BuildCellsClassed(blocks, breaks, colors);
-        Assert.Equal(3, cells.Count);
-        Assert.Equal(0.0f, ((RectEntity)cells[0]).Cr, 6);   // 类0
-        Assert.Equal(0.3f, ((RectEntity)cells[1]).Cr, 6);   // 类1
-        Assert.Equal(0.9f, ((RectEntity)cells[2]).Cr, 6);   // 类3(跳过类2, 因值6≥5)
+        var mesh = Assert.IsType<MeshEntity>(Assert.Single(cells));
+        Assert.Equal(0.0f, CellColor(mesh, 0).r, 6);   // 类0
+        Assert.Equal(0.3f, CellColor(mesh, 1).r, 6);   // 类1
+        Assert.Equal(0.9f, CellColor(mesh, 2).r, 6);   // 类3(跳过类2, 因值6≥5)
     }
+
+    /// <summary>一个未被剔除的块 = 6 面 × 4 顶点。</summary>
+    private const int VertsPerCell = 24;
+
+    /// <summary>第 i 个画出来的块的颜色(逐顶点色, 每块 24 个顶点同色)。</summary>
+    private static (float r, float g, float b) CellColor(MeshEntity m, int i) => m.VertColors![i * VertsPerCell];
 }

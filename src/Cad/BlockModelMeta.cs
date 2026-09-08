@@ -736,27 +736,58 @@ public sealed class BlockModelMeta
         return BlockColormap.Sample(ds.DefaultColormap, tt);
     }
 
-    /// <summary>可见块 → 配色方块（RectEntity，按 Sx/Sy 足印，子块按其 Size）。clip 非空时再按剖切谓词过滤。低 Z 先画。</summary>
+    /// <summary>
+    /// 可见块 → **六面体网格**（一个模型一张三角网，逐顶点色）。clip 非空时再按剖切谓词过滤。
+    ///
+    /// 此前每块出一张平面 RectEntity（只有 Sx/Sy 足印、放在 Z 上），三维里看到的是一摞平板而不是体素；
+    /// 现按 Sx/Sy/Sz 出真立方体，并照原版 SurfaceInstanceBuilder 的口径**整块剔除**内部块。
+    /// 面色取每块自己的配色（逐顶点色），实体基色取样式的填充色；块界靠逐块描边（见下方 EdgeMode 处理）。
+    /// </summary>
     public List<SceneEntity> BuildCells(Func<BlockModel.Block, bool>? clip = null)
     {
-        var idxs = new List<int>(Blocks.Count);
+        var r = BuildCellMesh(clip, out _);
+        return r == null ? new List<SceneEntity>() : new List<SceneEntity> { r };
+    }
+
+    /// <summary>块数超过这个数就不再描边（边线数 = 12·块数，太多会盖死面并拖慢视口）。</summary>
+    public const int WireframeCellLimit = 60_000;
+
+    /// <summary>可见块 → 一张六面体三角网；stat 给出画了几块/剔了几块/截断几块。无可见块返回 null。</summary>
+    public MeshEntity? BuildCellMesh(Func<BlockModel.Block, bool>? clip, out BlockMeshBuilder.Result stat)
+    {
+        var cells = new List<BlockMeshBuilder.Cell>(Blocks.Count);
+        double hz = Sz * 0.5;
         for (int i = 0; i < Blocks.Count; i++)
         {
             if (!IsCellVisible(i)) continue;
-            if (clip != null && !clip(Blocks[i])) continue;
-            idxs.Add(i);
-        }
-        if (!IsRegular) idxs.Sort((a, b) => Blocks[a].Z.CompareTo(Blocks[b].Z));
-        var list = new List<SceneEntity>(idxs.Count);
-        foreach (var i in idxs)
-        {
             var b = Blocks[i];
-            double hx, hy;
-            if (IsSubCell(b)) { hx = hy = b.Size * 0.5; } else { hx = Sx * 0.5; hy = Sy * 0.5; }
-            var (r, g, bl) = ColorOf(i);
-            list.Add(new RectEntity { X0 = b.X - hx, Y0 = b.Y - hy, X1 = b.X + hx, Y1 = b.Y + hy, Cr = r / 255f, Cg = g / 255f, Cb = bl / 255f, Elevation = b.Z });
+            if (clip != null && !clip(b)) continue;
+            double hx, hy, h = hz;
+            if (IsSubCell(b)) { hx = hy = h = b.Size * 0.5; } else { hx = Sx * 0.5; hy = Sy * 0.5; }
+            var (cr, cg, cb) = ColorOf(i);
+            cells.Add(new BlockMeshBuilder.Cell(b.X, b.Y, b.Z, hx, hy, h, cr / 255f, cg / 255f, cb / 255f));
         }
-        return list;
+        stat = BlockMeshBuilder.Build(cells);
+        var ds = DisplayStyle;
+        var mesh = BlockMeshBuilder.ToMesh(stat, $"块体-{Name}", (ds.FillColor.r / 255f, ds.FillColor.g / 255f, ds.FillColor.b / 255f));
+        if (mesh == null) return null;   // 无可见块(全删/全被筛掉/全被剖切)
+
+        // 边线：块体恒描边（同原版 —— 一堆同色立方体只画面会糊成一整块，看不出块界），
+        // 故用逐实体覆盖而不跟随全局显示模式；边色按样式的 EdgeMode：
+        //   AutoFromFill → 由每块自己的填充色压暗（原版 litColor·0.55）
+        //   Fixed        → 用样式里的固定边色
+        //   HiddenUnlessSelected → 不描边（原版此模式亦只是隐藏）
+        // 块太多时不描边：边线数 = 12·块数，几十万条会盖死面且拖慢视口（原版靠按屏幕尺寸淡出边线，此处按块数设阈）。
+        bool tooMany = stat.DrawnCells > WireframeCellLimit;
+        if (ds.EdgeMode == BlockEdgeMode.HiddenUnlessSelected || tooMany)
+            mesh.RenderModeOverride = MeshEntity.DisplayMode.Shaded;
+        else
+        {
+            mesh.RenderModeOverride = MeshEntity.DisplayMode.ShadedWireframe;
+            if (ds.EdgeMode == BlockEdgeMode.Fixed)
+                mesh.EdgeColorFixed = (ds.EdgeColor.r / 255f, ds.EdgeColor.g / 255f, ds.EdgeColor.b / 255f);
+        }
+        return mesh;
     }
 
     /// <summary>未删块 + 其属性子表（供推给主窗口 ctx.SetBlocks / 导出）。Grade 同步为着色属性值（无则 grade 列）。</summary>

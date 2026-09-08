@@ -32,12 +32,16 @@ public class BlockModelTests
     }
 
     [Fact]
-    public void BuildCells_one_rect_per_block()
+    public void BuildCells_one_cube_per_block()
     {
         var r = BlockModel.Parse("0,0,0,2,1\n5,5,0,2,2\n");
         var cells = BlockModel.BuildCells(r.Blocks, r.GradeMin, r.GradeMax);
-        Assert.Equal(2, cells.Count);
-        Assert.All(cells, c => Assert.IsType<PitMine3D.Kylin.Cad.Draw.RectEntity>(c));
+        // 一张六面体网格(不再是每块一张平面矩形): 2 块 × 6 面 × 4 顶点 / 12 三角
+        var mesh = Assert.IsType<PitMine3D.Kylin.Cad.Draw.MeshEntity>(Assert.Single(cells));
+        Assert.Equal(2 * 24, mesh.Verts.Count);
+        Assert.Equal(2 * 12, mesh.Tris.Count);
+        Assert.Equal(-1, mesh.Bounds.minZ, 9);   // 有真实高度, 不再是 Z=0 的平板
+        Assert.Equal(1, mesh.Bounds.maxZ, 9);
     }
 
     [Fact]

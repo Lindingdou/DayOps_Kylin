@@ -125,6 +125,20 @@ internal sealed class GlRenderer
         if (m.Vbo != 0) _gl.DeleteBuffer(m.Vbo);
     }
 
+    /// <summary>
+    /// 就地更新已上传的网格：复用同一个 VBO 重灌数据，不再「删一个再建一个」。
+    /// 十字光标每次鼠标移动都要更新，按原来的删+建等于每动一下就申请/释放一次 GL 缓冲 ——
+    /// 既浪费，某些国产 GPU 驱动上还会在缓冲频繁增删时原生崩溃(段错误, 托管侧抓不到)。
+    /// </summary>
+    public unsafe void UpdateMesh(ref Mesh m, float[] p3c3)
+    {
+        if (m.Vbo == 0) { m = Upload(p3c3); return; }
+        _gl.BindBuffer(GL_ARRAY_BUFFER, m.Vbo);
+        fixed (float* p = p3c3)
+            _gl.BufferData(GL_ARRAY_BUFFER, new IntPtr(p3c3.Length * sizeof(float)), new IntPtr(p), GL_STATIC_DRAW);
+        m = new Mesh(m.Vbo, p3c3.Length / 6);
+    }
+
     // ---- 帧 / 趟（对应 Renderer::BeginFrame/EndFrame/BeginPass/EndPass）----
 
     public void BeginFrame(int w, int h, float r, float g, float b)

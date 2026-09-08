@@ -131,7 +131,7 @@ public static class BlockModel
         return ((float)t, 0.30f, (float)(1 - t));
     }
 
-    /// <summary>块体 → 品位配色方块(RectEntity, 平面投影)。</summary>
+    /// <summary>块体 → 品位配色**六面体**网格。</summary>
     public static List<SceneEntity> BuildCells(IReadOnlyList<Block> blocks, double gmin, double gmax)
         => BuildCellsColored(blocks, b => GradeColor(b.Grade, gmin, gmax));
 
@@ -153,16 +153,28 @@ public static class BlockModel
         IReadOnlyList<Block> blocks, IReadOnlyList<double> ascBreaks, IReadOnlyList<(float r, float g, float b)> colors)
         => BuildCellsColored(blocks, b => colors[Math.Min(ClassOf(b.Grade, ascBreaks), colors.Count - 1)]);
 
-    /// <summary>块体 → 方块, 逐块取色函数(供连续/分类离散配色)。</summary>
+    /// <summary>
+    /// 块体 → **六面体**网格（一张三角网，逐顶点色），逐块取色函数供连续/分类离散配色。
+    /// 此前每块出一张平面 RectEntity（还丢了 Z），三维里是一摞平板而非体素；现按块的 Size 出真立方体，
+    /// 并整块剔除埋在内部的块（口径见 <see cref="BlockMeshBuilder"/>）。
+    /// </summary>
     public static List<SceneEntity> BuildCellsColored(IReadOnlyList<Block> blocks, Func<Block, (float r, float g, float b)> color)
     {
-        var list = new List<SceneEntity>();
+        var mesh = BuildCellMesh(blocks, color, out _);
+        return mesh == null ? new List<SceneEntity>() : new List<SceneEntity> { mesh };
+    }
+
+    /// <summary>块体 → 一张六面体三角网；stat 给出画了几块/剔了几块。无块返回 null。</summary>
+    public static MeshEntity? BuildCellMesh(IReadOnlyList<Block> blocks, Func<Block, (float r, float g, float b)> color, out BlockMeshBuilder.Result stat)
+    {
+        var cells = new List<BlockMeshBuilder.Cell>(blocks.Count);
         foreach (var b in blocks)
         {
             double h = b.Size / 2;
             var (cr, cg, cb) = color(b);
-            list.Add(new RectEntity { X0 = b.X - h, Y0 = b.Y - h, X1 = b.X + h, Y1 = b.Y + h, Cr = cr, Cg = cg, Cb = cb });
+            cells.Add(new BlockMeshBuilder.Cell(b.X, b.Y, b.Z, h, h, h, cr, cg, cb));
         }
-        return list;
+        stat = BlockMeshBuilder.Build(cells);
+        return BlockMeshBuilder.ToMesh(stat, "块体", (0.56f, 0.65f, 0.76f));
     }
 }

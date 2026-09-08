@@ -74,21 +74,43 @@ fi
 # 麒麟自带 Mesa 时软件渲染更稳；有独显/驱动就走硬件(不强制)
 [ -n "${PITMINE_SOFTWARE_GL:-}" ] && { LIBGL_ALWAYS_SOFTWARE=1; export LIBGL_ALWAYS_SOFTWARE; }
 
+# 应急/诊断开关(都由主程序读取, 这里只是留个说明并确保传下去):
+#   PITMINE_TRACE=1      每步往 crash.log 落一条 TRACE 并立即刷盘 —— 原生崩溃时看最后一条就知道崩在哪
+#   PITMINE_NO_CURSOR=1  不画十字光标(光标每次移动都要重传一次 GL 缓冲, 驱动有问题时最先崩在这)
+#   PITMINE_SOFTWARE_GL=1 强制软件渲染
+
 # 运行日志: 始终留一份到用户目录, 闪退时直接回传这个文件
 LOGDIR="${XDG_DATA_HOME:-$HOME/.local/share}/PitMine3D.Kylin"
 mkdir -p "$LOGDIR" 2>/dev/null || LOGDIR=/tmp
 LOG="$LOGDIR/last-run.log"
 echo "=== $(date "+%Y-%m-%d %H:%M:%S") 启动 ===" >> "$LOG"
 
-if command -v tee >/dev/null 2>&1; then
-    "$APP_DIR/PitMine3D.Kylin" "$@" 2>&1 | tee -a "$LOG"
-    RC=${PIPESTATUS:-0}
-else
-    "$APP_DIR/PitMine3D.Kylin" "$@" >> "$LOG" 2>&1
-    RC=$?
-fi
+# 不要用 "app | tee" 拿退出码: PIPESTATUS 是 bash 专有的, 麒麟的 /bin/sh 是 dash,
+# ${PIPESTATUS:-0} 在 dash 里恒为 0 —— 段错误也被记成"正常退出", 下面的异常提示永远不打印(踩过)。
+# 改为直接重定向取 $?, 失败时再把日志尾巴回显到终端。
+"$APP_DIR/PitMine3D.Kylin" "$@" >> "$LOG" 2>&1
+RC=$?
+
 if [ "$RC" != "0" ]; then
-    echo "PitMine3D 异常退出(码 $RC)。日志: $LOG 与 $LOGDIR/crash.log" >&2
+    # 被信号打死时 shell 返回 128+信号号: 139=SIGSEGV(段错误), 134=SIGABRT, 132=SIGILL, 136=SIGFPE
+    WHY=""
+    if [ "$RC" -gt 128 ] 2>/dev/null; then
+        SIG=$((RC - 128))
+        case "$SIG" in
+            11) WHY=" —— SIGSEGV 段错误(原生崩溃, 多半出在图形驱动/GL 调用; 托管异常处理器抓不到, 所以 crash.log 里不会有堆栈)" ;;
+            6)  WHY=" —— SIGABRT 运行时中止" ;;
+            4)  WHY=" —— SIGILL 非法指令(CPU 指令集不匹配)" ;;
+            8)  WHY=" —— SIGFPE 算术异常" ;;
+            9)  WHY=" —— SIGKILL 被强杀(内存不足?)" ;;
+            *)  WHY=" —— 收到信号 $SIG" ;;
+        esac
+    fi
+    echo "PitMine3D 异常退出(码 $RC)$WHY" >&2
+    echo "运行日志: $LOG" >&2
+    echo "崩溃日志: $LOGDIR/crash.log" >&2
+    echo "--- 运行日志末尾 40 行 ---" >&2
+    tail -n 40 "$LOG" >&2 2>/dev/null || true
+    echo "--- 如需逐步定位原生崩溃, 用 PITMINE_TRACE=1 pitmine3d 再跑一次, 看 crash.log 最后一条 TRACE ---" >&2
 fi
 exit "$RC"
 LAUNCH

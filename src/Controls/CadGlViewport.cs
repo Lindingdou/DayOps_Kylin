@@ -119,6 +119,10 @@ public partial class CadGlViewport : OpenGlControlBase
     public bool GlFailed { get; private set; }
     public string GlFailReason { get; private set; } = "";
 
+    /// <summary>PITMINE_NO_CURSOR=1: 不画十字光标(应急开关, 见 EnsureCursor 处说明)。</summary>
+    private static readonly bool NoCursor =
+        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PITMINE_NO_CURSOR"));
+
     protected override void OnOpenGlInit(GlInterface gl)
     {
         try { OnOpenGlInitCore(gl); }
@@ -142,7 +146,14 @@ public partial class CadGlViewport : OpenGlControlBase
         Dispatcher.UIThread.Post(() => GlReady?.Invoke(backend));
 
         _renderer.Init(gl, _ext, _isGles, GlVersion.Major, GlVersion.Minor);
-        PitMine3D.Kylin.CrashLog.Write("GL", $"渲染器就绪, 着色器方言={_renderer.ShaderProfile}");
+        // 驱动实况落盘: 原生崩溃(SIGSEGV)抓不到堆栈, 这几行是判断"崩在哪类驱动"的第一手材料
+        PitMine3D.Kylin.CrashLog.Write("GL", $"渲染器就绪, 着色器方言={_renderer.ShaderProfile}, 扩展 {_ext!.Resolved}");
+        try
+        {
+            PitMine3D.Kylin.CrashLog.Write("GL", $"GL_VERSION={gl.GetString(0x1F02)} · GL_RENDERER={gl.GetString(0x1F01)} · GL_VENDOR={gl.GetString(0x1F00)}");
+            PitMine3D.Kylin.CrashLog.Write("GL", $"GLSL={gl.GetString(0x8B8C)}");
+        }
+        catch (Exception ex) { PitMine3D.Kylin.CrashLog.Write("GL", "取驱动字符串失败: " + ex.Message); }
         _hasGrid = false; _hasGridPlan = false;   // 上下文重建 → 格网下一帧按当前视图重建
         _cube = _renderer.Upload(BuildCube());
         _gizmo = _renderer.Upload(BuildGizmo());
@@ -247,7 +258,9 @@ public partial class CadGlViewport : OpenGlControlBase
         }
 
         // CAD 十字光标：光标位/视口尺寸变了才重建满屏横竖两线(NDC, 屏幕对齐, 与几何无关不受相机影响)。
-        if (_showCursor && Bounds.Width > 0 && Bounds.Height > 0 &&
+        // 它是「鼠标每动一次就删一个 GL 缓冲再传一个」的唯一路径 —— 驱动有问题时最先崩在这，
+        // 故留 PITMINE_NO_CURSOR=1 应急开关: 关掉光标即可判断闪退是不是这条路引起的。
+        if (!NoCursor && _showCursor && Bounds.Width > 0 && Bounds.Height > 0 &&
             (_cursorSx != _curBuiltSx || _cursorSy != _curBuiltSy || Bounds.Width != _curBuiltW || Bounds.Height != _curBuiltH))
         {
             _curBuiltSx = _cursorSx; _curBuiltSy = _cursorSy; _curBuiltW = Bounds.Width; _curBuiltH = Bounds.Height;
@@ -264,9 +277,11 @@ public partial class CadGlViewport : OpenGlControlBase
                 nx + hx, ny + hy, 0f, r,g,b,   nx - hx, ny + hy, 0f, r,g,b,   // 上
                 nx - hx, ny + hy, 0f, r,g,b,   nx - hx, ny - hy, 0f, r,g,b,   // 左
             };
-            if (_hasCursor) _renderer.DeleteMesh(_cursor);
-            _cursor = _renderer.Upload(verts);
+            // 复用同一个 VBO 重灌(顶点数恒定 12)，不再每次移动都删一个缓冲再建一个
+            PitMine3D.Kylin.CrashLog.Trace("光标更新 前");
+            _renderer.UpdateMesh(ref _cursor, verts);
             _hasCursor = !_cursor.IsEmpty;
+            PitMine3D.Kylin.CrashLog.Trace("光标更新 后");
         }
 
         float[] vp = _camera.ViewProj(aspect);

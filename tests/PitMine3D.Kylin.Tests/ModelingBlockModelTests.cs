@@ -153,15 +153,22 @@ public class ModelingBlockModelTests
     {
         var m = Small();
         m.DeletedIds.Add(0);
-        var cells = m.BuildCells();
-        Assert.Equal(11, cells.Count);
-        Assert.All(cells, c => Assert.IsType<RectEntity>(c));
-        var rc = (RectEntity)cells[0];
-        Assert.Equal(10, rc.X1 - rc.X0, 9);
-        Assert.Equal(5, m.BuildCells(b => b.Z < 305).Count);   // 剖切：上层 6 块被切，下层 0 号已删 → 5
+        // 出的是一张六面体网格；块数看 stat.DrawnCells(此前是「实体个数=块数」)
+        var mesh = m.BuildCellMesh(null, out var stat);
+        Assert.NotNull(mesh);
+        Assert.Equal(11, stat.DrawnCells);
+        Assert.Equal(11 * 24, mesh!.Verts.Count);
+        // 头一个立方体自身的 X 尺寸 = Sx = 10（前 24 个顶点属于第一块）
+        double x0 = double.MaxValue, x1 = double.MinValue, z0 = double.MaxValue, z1 = double.MinValue;
+        for (int i = 0; i < 24; i++) { var v = mesh.Verts[i]; x0 = Math.Min(x0, v.x); x1 = Math.Max(x1, v.x); z0 = Math.Min(z0, v.z); z1 = Math.Max(z1, v.z); }
+        Assert.Equal(10, x1 - x0, 9);
+        Assert.Equal(m.Sz, z1 - z0, 9);   // 有真实厚度, 不再是平板
+        m.BuildCellMesh(b => b.Z < 305, out var clipped);
+        Assert.Equal(5, clipped.DrawnCells);   // 剖切：上层 6 块被切，下层 0 号已删 → 5
         m.Filter = new BlockFilterSet();
         m.Filter.Conditions.Add(new BlockFilterCondition { AttributeName = "grade", Op = BlockFilterOperator.GreaterThan, Value = 0 });
-        Assert.Equal(11, m.BuildCells().Count);   // 无属性数据 → 不收窄
+        m.BuildCellMesh(null, out var unfiltered);
+        Assert.Equal(11, unfiltered.DrawnCells);   // 无属性数据 → 不收窄
         m.SetConstant("grade", 0);
         Assert.Empty(m.BuildCells());
     }

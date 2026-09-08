@@ -34,6 +34,21 @@ public static class CrashLog
         }
     }
 
+    /// <summary>
+    /// 断点追踪：PITMINE_TRACE=1 时每步落一条并立即刷盘。
+    /// 原生崩溃(SIGSEGV)不会走托管异常钩子，crash.log 里不会有堆栈；
+    /// 靠「最后一条 TRACE 停在哪」来定位崩在哪一步。默认关闭，不影响正常运行。
+    /// </summary>
+    public static readonly bool TraceOn =
+        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PITMINE_TRACE"));
+
+    public static void Trace(string step)
+    {
+        if (!TraceOn) return;
+        try { File.AppendAllText(Path, $"[{DateTime.Now:HH:mm:ss.fff}] [TRACE] {step}{Environment.NewLine}", Encoding.UTF8); }
+        catch { }
+    }
+
     public static void Write(string tag, string text)
     {
         string line = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [{tag}] {text}";
