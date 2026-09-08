@@ -110,7 +110,7 @@ public static class PmbExportService
         // Section data
         foreach (var seg in segs) bw.Write(seg.data);
         // Footer: activeBlockCount(8) + crc32(4) + magicEnd(4); crc 覆盖 [0, fileSize-16)
-        bw.Write(blockCount - meta.DeletedCells.Count);
+        bw.Write((long)0);   // activeBlockCount：原版 v1 恒写 0（reader 亦不校验此字段）
         bw.Flush();
         var fileBytes = ms.ToArray();
         uint crc = Crc32(fileBytes, (int)(fileSize - FooterSize));
