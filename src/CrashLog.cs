@@ -50,16 +50,17 @@ public static class CrashLog
     }
 
     /// <summary>
-    /// 启动器在启动前放的「本次尝试硬件 GL」标记；首帧画出来就撤掉它。
-    /// 启动时若发现标记还在，说明上次连一帧都没画出来(硬件驱动里崩了)，
-    /// 启动器就自动改用软件渲染 —— 崩一次之后至少还能用。
+    /// 标记"硬件 OpenGL 不可靠"，启动器下次启动即自动改用软件渲染。
+    /// 用于已知会崩的驱动：与启动器 .gl-crashed 同一个文件，两条路径(崩溃退出码 / 驱动黑名单)共用。
     /// </summary>
-    public static void ClearHardwareGlAttempt()
+    public static void MarkGlUnsafe(string reason)
     {
         try
         {
             string dir = System.IO.Path.GetDirectoryName(Path) ?? "";
-            if (dir.Length > 0) File.Delete(System.IO.Path.Combine(dir, ".hw-gl-attempt"));
+            if (dir.Length == 0) return;
+            File.WriteAllText(System.IO.Path.Combine(dir, ".gl-crashed"), reason + Environment.NewLine, Encoding.UTF8);
+            Write("GL", $"已标记硬件 OpenGL 不可靠({reason}); 下次启动自动改用软件渲染");
         }
         catch { }
     }

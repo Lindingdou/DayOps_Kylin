@@ -102,19 +102,19 @@ mkdir -p "$LOGDIR" 2>/dev/null || LOGDIR=/tmp
 LOG="$LOGDIR/last-run.log"
 echo "=== $(date "+%Y-%m-%d %H:%M:%S") 启动 ===" >> "$LOG"
 
-# ── 安全模式: 硬件 GL 上次崩在首帧之前, 这次自动改软件渲染 ──────────────────
-# 实测格兰菲 Arise1020 + Mesa 25.0 上, GL 初始化成功、第一帧却直接段错误。
-# 启动前放一个"正在尝试硬件 GL"标记, 主程序画出首帧就把它删掉；
-# 下次启动若发现标记还在, 说明上次连一帧都没画出来 —— 直接退到软件渲染, 保证程序能用。
-HWFLAG="$LOGDIR/.hw-gl-attempt"
-if [ -z "${LIBGL_ALWAYS_SOFTWARE:-}" ]; then
-    if [ -f "$HWFLAG" ]; then
-        LIBGL_ALWAYS_SOFTWARE=1; export LIBGL_ALWAYS_SOFTWARE
-        echo "上次启动未能画出首帧(硬件 OpenGL 驱动崩溃), 本次自动改用软件渲染。" | tee -a "$LOG" >&2
-        echo "如需再试硬件渲染: rm $HWFLAG" >&2
-    else
-        : > "$HWFLAG" 2>/dev/null || true
-    fi
+# ── 安全模式: 上次被信号打死(段错误)就自动改软件渲染 ────────────────────────
+# 实测格兰菲 Arise1020 + Mesa 25.0: 有时连首帧都画不出, 有时画出首帧后第 N 帧才崩 ——
+# 所以判据**不能**是"有没有画出首帧"(崩在后面就永远不触发, 变成死循环崩), 只能由启动器
+# 直接看上次的退出状态: 被信号打死(码 >128) 即认定硬件 GL 不可靠。
+CRASHFLAG="$LOGDIR/.gl-crashed"
+USING_SOFTWARE=""
+if [ -n "${LIBGL_ALWAYS_SOFTWARE:-}" ]; then
+    USING_SOFTWARE=1
+elif [ -f "$CRASHFLAG" ]; then
+    LIBGL_ALWAYS_SOFTWARE=1; export LIBGL_ALWAYS_SOFTWARE
+    USING_SOFTWARE=1
+    echo "上次运行被信号打死(硬件 OpenGL 驱动崩溃), 本次自动改用软件渲染。" | tee -a "$LOG" >&2
+    echo "如需再试硬件渲染: rm $CRASHFLAG" >&2
 fi
 
 # ── 一键诊断模式: PITMINE_DIAG=1 pitmine3d ────────────────────────────────
@@ -157,6 +157,16 @@ fi
 # 改为直接重定向取 $?, 失败时再把日志尾巴回显到终端。
 "$APP_DIR/PitMine3D.Kylin" "$@" >> "$LOG" 2>&1
 RC=$?
+
+# 维护安全模式标记：硬件 GL 下被信号打死就记上, 正常退出就清掉
+if [ -z "$USING_SOFTWARE" ]; then
+    if [ "$RC" -gt 128 ] 2>/dev/null; then
+        : > "$CRASHFLAG" 2>/dev/null || true
+        echo "已记下本次硬件 OpenGL 崩溃, 下次启动将自动改用软件渲染。" >&2
+    elif [ "$RC" = "0" ]; then
+        rm -f "$CRASHFLAG" 2>/dev/null || true
+    fi
+fi
 
 if [ "$RC" != "0" ]; then
     # 被信号打死时 shell 返回 128+信号号: 139=SIGSEGV(段错误), 134=SIGABRT, 132=SIGILL, 136=SIGFPE

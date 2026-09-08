@@ -119,6 +119,9 @@ public partial class CadGlViewport : OpenGlControlBase
     public bool GlFailed { get; private set; }
     public string GlFailReason { get; private set; } = "";
 
+    /// <summary>已知会原生崩溃的 GPU/驱动关键字(匹配 GL_RENDERER 或 GL_VENDOR)。</summary>
+    private static readonly string[] KnownBadGl = { "Glenfly", "Arise" };
+
     private bool _firstFrameLogged;
 
     /// <summary>已请求但尚未绘出的帧(重绘去重, 见 SetCursorScreen)。</summary>
@@ -155,8 +158,14 @@ public partial class CadGlViewport : OpenGlControlBase
         PitMine3D.Kylin.CrashLog.Write("GL", $"渲染器就绪, 着色器方言={_renderer.ShaderProfile}, 扩展 {_ext!.Resolved}");
         try
         {
-            PitMine3D.Kylin.CrashLog.Write("GL", $"GL_VERSION={gl.GetString(0x1F02)} · GL_RENDERER={gl.GetString(0x1F01)} · GL_VENDOR={gl.GetString(0x1F00)}");
+            string renderer = gl.GetString(0x1F01) ?? "", vendor = gl.GetString(0x1F00) ?? "";
+            PitMine3D.Kylin.CrashLog.Write("GL", $"GL_VERSION={gl.GetString(0x1F02)} · GL_RENDERER={renderer} · GL_VENDOR={vendor}");
             PitMine3D.Kylin.CrashLog.Write("GL", $"GLSL={gl.GetString(0x8B8C)}");
+            // 已知会段错误的驱动: 直接标记, 下次启动就走软件渲染, 不必先崩一次。
+            // 格兰菲 Arise1020 + Mesa 25.0 实测: 有时首帧前崩, 有时画出几帧后崩。
+            foreach (var bad in KnownBadGl)
+                if (renderer.Contains(bad, StringComparison.OrdinalIgnoreCase) || vendor.Contains(bad, StringComparison.OrdinalIgnoreCase))
+                { PitMine3D.Kylin.CrashLog.MarkGlUnsafe($"GL_RENDERER={renderer}"); break; }
         }
         catch (Exception ex) { PitMine3D.Kylin.CrashLog.Write("GL", "取驱动字符串失败: " + ex.Message); }
         _hasGrid = false; _hasGridPlan = false;   // 上下文重建 → 格网下一帧按当前视图重建
@@ -320,7 +329,6 @@ public partial class CadGlViewport : OpenGlControlBase
         {
             _firstFrameLogged = true;
             PitMine3D.Kylin.CrashLog.Write("GL", $"首帧完成 {w}x{h}");
-            PitMine3D.Kylin.CrashLog.ClearHardwareGlAttempt();   // 硬件 GL 走通了, 撤掉启动器的"尝试中"标记
         }
 
         // 帧时间采样：每秒汇总一次 FPS / 平均帧时(ms) → 状态栏 Performance 项(同原版 FrameProfiler)
