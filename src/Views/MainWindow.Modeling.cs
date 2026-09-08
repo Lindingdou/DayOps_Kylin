@@ -27,6 +27,9 @@ public partial class MainWindow
     private List<MeshEntity> SelectedMeshes() => _selected.OfType<MeshEntity>().ToList();
     private List<PointEntity> SelectedPoints() => _selected.OfType<PointEntity>().ToList();
     private List<PolylineEntity> SelectedPolylines() => _selected.OfType<PolylineEntity>().ToList();
+
+    /// <summary>约束剖分的顶点上限；超过即退为无约束(同原版 kCdt2D5Threshold)。</summary>
+    private const int TinConstraintVertexLimit = 100_000;
     private static List<(double x, double y, double z)> Pts3(IEnumerable<PointEntity> pts) => pts.Select(p => (p.X, p.Y, p.Elevation)).ToList();
     private static List<(double x, double y, double z)> Line3(PolylineEntity pl)
     {
@@ -294,13 +297,16 @@ public partial class MainWindow
     {
         var selPts = SelectedPoints();
         var selLines = SelectedPolylines().Where(l => l.Points.Count >= 2).ToList();
+        // 直线实体同样作约束（原版按 AcDbLine 收成 2 点开链约束），零长退化线剔除
+        var selSegs = _selected.OfType<LineEntity>()
+            .Where(l => System.Math.Abs(l.X1 - l.X0) > 1e-9 || System.Math.Abs(l.Y1 - l.Y0) > 1e-9).ToList();
 
         // ① 选了多段线(等值线建面)：线的顶点当输入点、线段当**约束边**。
         //    此前这条路走不通 —— 只收点实体, 多段线仅被当作裁剪边界, 于是最常见的
         //    "选一堆等值线建面"只会提示"需 ≥3 个点"。
         //    约束边不能省: 等值线是地形结构线, 只当散点做无约束 Delaunay 会连出
         //    跨山脊/沟谷的三角形, 面就糊了。
-        if (selLines.Count > 0)
+        if (selLines.Count > 0 || selSegs.Count > 0)
         {
             var input = selLines.Select(l => new PolylineTin.Line
             {
@@ -309,20 +315,33 @@ public partial class MainWindow
                 FlatZ = l.Elevation,
                 Closed = l.Closed,
             }).ToList();
+            input.AddRange(selSegs.Select(l => new PolylineTin.Line
+            {
+                Points = new[] { (l.X0, l.Y0), (l.X1, l.Y1) },
+                FlatZ = l.Elevation,
+                Closed = false,
+            }));
             var col = PolylineTin.Collect(input);
 
             // 同时选中的散点一并作为输入(点线混选)
             foreach (var pe in selPts) col.Verts.Add((pe.X, pe.Y, pe.Elevation));
 
-            if (col.Verts.Count < 3) { StatusMsg.Text = "创建三角网：多段线顶点不足 3 个"; return; }
-            var lineTris = Delaunay.TriangulateConstrained(col.Verts.Select(v => (v.x, v.y)).ToList(), col.Constraints);
+            if (col.Verts.Count < 3) { StatusMsg.Text = "创建三角网：线的顶点不足 3 个"; return; }
+
+            // 顶点太多时退约束(同原版 10 万点阈值): 约束剖分在这个量级上不可行, 会把界面卡死。
+            // 等值线足够密时无约束结果与约束结果几乎一致 —— 但形状约束确实丢了, 故明确回报。
+            var xy = col.Verts.Select(v => (v.x, v.y)).ToList();
+            bool dropped = col.Verts.Count > TinConstraintVertexLimit;
+            var lineTris = dropped ? Delaunay.Triangulate(xy)
+                                   : Delaunay.TriangulateConstrained(xy, col.Constraints);
             if (lineTris.Count == 0) { StatusMsg.Text = "创建三角网：顶点共线或约束自交，无法剖分"; return; }
             lineTris = OrientUp(col.Verts, lineTris);
             var lineMesh = AddMesh(new MeshEntity(NewMeshName("三角网"), col.Verts, lineTris), true);
             SelectEntities(new SceneEntity[] { lineMesh });
             var lst = TinSurface.Describe(col.Verts, lineTris);
-            StatusMsg.Text = $"创建三角网「{lineMesh.Name}」：{selLines.Count} 条线 {col.Verts.Count} 顶点"
-                           + $"({col.Constraints.Count} 段约束{(selPts.Count > 0 ? $" + {selPts.Count} 散点" : "")})"
+            StatusMsg.Text = $"创建三角网「{lineMesh.Name}」：{selLines.Count + selSegs.Count} 条线 {col.Verts.Count} 顶点"
+                           + (dropped ? $"(顶点超 {TinConstraintVertexLimit:N0}，已退为无约束剖分，线形约束未保留；可先用「抽稀等值线」减点)"
+                                      : $"({col.Constraints.Count} 段约束{(selPts.Count > 0 ? $" + {selPts.Count} 散点" : "")})")
                            + $" → {lineTris.Count} 三角 · 投影面积 {lst.ProjectedAreaXY:0.#} · 高程 {lst.ZMin:0.#}~{lst.ZMax:0.#}";
             return;
         }

@@ -43,6 +43,8 @@
   <!-- §四/§八 数据库迁移(建表 + 真实种子数据)作嵌入资源, 运行时建库自足, 无需外部 DB -->
   <ItemGroup>
     <EmbeddedResource Include="Data\Migrations\*.sql" />
+    <!-- 达梦版迁移: 由 build/sqlite2dm.py 从上面那套生成, 勿手改。方言选择见 GeoDbDialect。 -->
+    <EmbeddedResource Include="Data\MigrationsDm\*.sql" />
   </ItemGroup>
 
   <!-- 设备信息管理「三维展示」: 原 GeoDataBase/Models3D 的 PNG 转台序列帧(12 类 × 60 帧), 随程序输出 -->
