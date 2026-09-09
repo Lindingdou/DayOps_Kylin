@@ -100,7 +100,7 @@ public partial class MainWindow
         cur = PcCurrentCloud!;
         if (cur != null) return true;
         cur = null!;
-        StatusMsg.Text = $"{what}：场景中没有已加载的点云，请先「加载点云」。";
+        EditEcho($"{what}：场景中没有已加载的点云，请先「加载点云」。", EchoLevel.Error);
         return false;
     }
 
@@ -189,7 +189,7 @@ public partial class MainWindow
         try { return await PointCloudCommandCoreAsync(cmd); }
         catch (Exception ex)
         {
-            StatusMsg.Text = $"「{cmd}」执行出错：{ex.Message}";
+            EditEcho($"「{cmd}」执行出错：{ex.Message}", EchoLevel.Success);
             PitMine3D.Kylin.CrashLog.Write("点云", $"{cmd} 失败: {ex}");
             return true;
         }
@@ -263,7 +263,7 @@ public partial class MainWindow
         if (files.Count == 0) return;
         string path = files[0].Path.LocalPath;
         string name = System.IO.Path.GetFileNameWithoutExtension(path);
-        StatusMsg.Text = $"加载点云：正在读取 {name} …";
+        EditEcho($"加载点云：正在读取 {name} …", EchoLevel.Success);
 
         List<(double x, double y, double z)> pts;
         List<(float r, float g, float b)>? rgb = null;
@@ -272,8 +272,8 @@ public partial class MainWindow
         {
             // 大文件读盘 + 解码放后台，UI 不假死（原版把 LAS→缓存构建挪到后台也是这个理由）
             var r = await Task.Run(() => LasImportService.Load(path, 2_000_000));
-            if (!r.Success) { StatusMsg.Text = $"加载点云：LAS 读取失败 {r.Error}"; return; }
-            if (r.Points.Count == 0) { StatusMsg.Text = "加载点云：LAS 头有效但无点"; return; }
+            if (!r.Success) { EditEcho($"加载点云：LAS 读取失败 {r.Error}", EchoLevel.Error); return; }
+            if (r.Points.Count == 0) { EditEcho("加载点云：LAS 头有效但无点", EchoLevel.Success); return; }
             pts = r.Points;
             if (r.Colors != null && r.Colors.Count == pts.Count) rgb = r.Colors;
             extra = $" · LAS {r.VersionMajor}.{r.VersionMinor} 格式{r.PointFormat}"
@@ -283,8 +283,8 @@ public partial class MainWindow
         else
         {
             var r = await Task.Run(() => PointDataImportService.Load(path));
-            if (!r.Success) { StatusMsg.Text = $"加载点云：导入失败 {r.Error}"; return; }
-            if (r.Points.Count == 0) { StatusMsg.Text = "加载点云：无点"; return; }
+            if (!r.Success) { EditEcho($"加载点云：导入失败 {r.Error}", EchoLevel.Error); return; }
+            if (r.Points.Count == 0) { EditEcho("加载点云：无点", EchoLevel.Success); return; }
             pts = r.Points;
         }
 
@@ -294,7 +294,7 @@ public partial class MainWindow
         pc.Source = path;
         RefreshScene();
         PcZoomTo(pc);
-        StatusMsg.Text = $"加载点云「{pc.Name}」：{pc.PointCount:N0} 点已入场景{extra} · 已设为当前点云";
+        EditEcho($"加载点云「{pc.Name}」：{pc.PointCount:N0} 点已入场景{extra} · 已设为当前点云", EchoLevel.Success);
     }
 
     /// <summary>点云管理面板（非模态；已开着就前置刷新，不叠第二个窗口）。</summary>
@@ -307,23 +307,23 @@ public partial class MainWindow
         }
         _pcManager = new PointCloudManagerWindow(
             PcClouds, () => PcCurrentCloud, PcSetCurrent,
-            pc => { BeginChange(); _scene.Remove(pc); if (ReferenceEquals(pc, _pcCurrent)) _pcCurrent = null; _selected.Remove(pc); RefreshScene(); StatusMsg.Text = $"点云管理：已移除「{pc.Name}」"; },
+            pc => { BeginChange(); _scene.Remove(pc); if (ReferenceEquals(pc, _pcCurrent)) _pcCurrent = null; _selected.Remove(pc); RefreshScene(); EditEcho($"点云管理：已移除「{pc.Name}」", EchoLevel.Success); },
             PcZoomTo, RefreshScene);
         _pcManager.Closed += (_, _) => _pcManager = null;
         _pcManager.Show(this);   // 非模态: 自检脚本也照开(不阻塞), 截图才核对得到面板本身
-        StatusMsg.Text = $"点云管理：{PcClouds().Count} 份点云（设为当前 / 重命名 / 显隐 / 移除）";
+        EditEcho($"点云管理：{PcClouds().Count} 份点云（设为当前 / 重命名 / 显隐 / 移除）", EchoLevel.Success);
     }
 
     /// <summary>显示/隐藏：全局切换所有点云的显示（不卸载数据；单独显隐走「点云管理」）。</summary>
     private void PcToggleVisible()
     {
         var all = PcClouds();
-        if (all.Count == 0) { StatusMsg.Text = "显示/隐藏：场景中没有点云"; return; }
+        if (all.Count == 0) { EditEcho("显示/隐藏：场景中没有点云", EchoLevel.Error); return; }
         bool anyVisible = all.Any(c => c.Visible);
         foreach (var c in all) c.Visible = !anyVisible;
         RefreshScene();
         _pcManager?.RefreshFromOutside();
-        StatusMsg.Text = $"点云已{(anyVisible ? "隐藏" : "显示")}（{all.Count} 份 · 数据未卸载，可再点恢复）";
+        EditEcho($"点云已{(anyVisible ? "隐藏" : "显示")}（{all.Count} 份 · 数据未卸载，可再点恢复）", EchoLevel.Success);
     }
 
     /// <summary>点云着色：真实色 (RGB) / 任意单色 / 高程色带。忠实原 ColorModeDialog 的十个预设色。</summary>
@@ -343,17 +343,17 @@ public partial class MainWindow
             .Rows(PcRow.Radios("mode", "着色方式", modes, modes[1]))
             .Rows(PcRow.Combo("color", "单色", presets, "灰", "（「单色」档用；同原版十个预设色）", null, 70, 120));
         var v = await form.AskAsync(this);
-        if (v == null) { StatusMsg.Text = "点云着色：已取消"; return true; }
+        if (v == null) { EditEcho("点云着色：已取消", EchoLevel.Info); return true; }
         var pc = PcResolve(all, v.S("src")) ?? cur;
         string mode = v.S("mode");
 
         BeginChange();
         if (mode == modes[0])
         {
-            if (!pc.HasRgb) { StatusMsg.Text = $"点云着色：「{pc.Name}」没有真实色（源文件不含 RGB），可改用单色或高程色带"; return true; }
+            if (!pc.HasRgb) { EditEcho($"点云着色：「{pc.Name}」没有真实色（源文件不含 RGB），可改用单色或高程色带", EchoLevel.Error); return true; }
             pc.Colors = new List<(float, float, float)>(pc.RgbColors!);
             pc.Invalidate(); RefreshScene();
-            StatusMsg.Text = $"点云着色：「{pc.Name}」已恢复真实颜色 (RGB)";
+            EditEcho($"点云着色：「{pc.Name}」已恢复真实颜色 (RGB)", EchoLevel.Success);
         }
         else if (mode == modes[2])
         {
@@ -361,13 +361,13 @@ public partial class MainWindow
             var cols = new List<(float, float, float)>(pc.PointCount);
             foreach (var p in pc.Pts) cols.Add(MeshEntity.TerrainRamp(zr > 1e-9 ? (p.z - b.minZ) / zr : 0.5));
             pc.Colors = cols; pc.Invalidate(); RefreshScene();
-            StatusMsg.Text = $"点云着色：「{pc.Name}」按高程分带（{b.minZ:0.#}~{b.maxZ:0.#} m）";
+            EditEcho($"点云着色：「{pc.Name}」按高程分带（{b.minZ:0.#}~{b.maxZ:0.#} m）", EchoLevel.Success);
         }
         else
         {
             var (r, g, bl) = PcPresetColor(v.S("color"));
             pc.SetSolidColor(r, g, bl); RefreshScene();
-            StatusMsg.Text = $"点云着色：「{pc.Name}」已设为单色 {v.S("color")}";
+            EditEcho($"点云着色：「{pc.Name}」已设为单色 {v.S("color")}", EchoLevel.Success);
         }
         return true;
     }
@@ -391,7 +391,7 @@ public partial class MainWindow
     private void PcClearAll()
     {
         var all = PcClouds();
-        if (all.Count == 0) { StatusMsg.Text = "清除全部：场景中没有点云"; return; }
+        if (all.Count == 0) { EditEcho("清除全部：场景中没有点云", EchoLevel.Error); return; }
         BeginChange();
         long n = 0;
         foreach (var pc in all) { n += pc.PointCount; _scene.Remove(pc); _selected.Remove(pc); }
@@ -399,7 +399,7 @@ public partial class MainWindow
         Viewport.SetHighlight(null);
         RefreshScene();
         _pcManager?.RefreshFromOutside();
-        StatusMsg.Text = $"清除全部：已移除 {all.Count} 份点云 · {n:N0} 点（可 Ctrl+Z 撤销；其它实体不受影响）";
+        EditEcho($"清除全部：已移除 {all.Count} 份点云 · {n:N0} 点（可 Ctrl+Z 撤销；其它实体不受影响）", EchoLevel.Success);
     }
 
     // ═══════════════════ 2. 点云修复 ═══════════════════
@@ -435,7 +435,7 @@ public partial class MainWindow
                 PcRow.Check("keep", "同时输出「非地面点/障碍物」图层（建议勾选，用于核对是否误剔）", true));
 
         var v = await form.AskAsync(this);
-        if (v == null) { StatusMsg.Text = "地面点滤波：已取消"; return true; }
+        if (v == null) { EditEcho("地面点滤波：已取消", EchoLevel.Info); return true; }
         var pc = PcResolve(all, v.S("src")) ?? cur;
 
         // 坡度允许给得过小是这个算法最常见、也最难自查的误用：整片台阶坡面会被判成障碍物剔掉。
@@ -444,7 +444,7 @@ public partial class MainWindow
             bool go = await BlockMsgBox.ConfirmAsync(this, "坡度允许过小",
                 $"「地形坡度允许」只设了 {v.D("slope", 45).ToString("0.#", Inv)}°。\n\n" +
                 "露天矿台阶坡面角常在 45–70°，低于真实坡面角会把整片陡壁当成障碍物剔掉。\n\n仍要按此参数计算吗？");
-            if (!go) { StatusMsg.Text = "地面点滤波：已取消"; return true; }
+            if (!go) { EditEcho("地面点滤波：已取消", EchoLevel.Info); return true; }
         }
         var pts = PcPts(pc);
         double cell = v.D("cell", 1);
@@ -457,9 +457,9 @@ public partial class MainWindow
         bool keepNon = v.B("keep", true);
         double slopeTan = Math.Tan(Math.Clamp(slopeDeg, 1, 89) * Math.PI / 180.0);
 
-        StatusMsg.Text = "地面点滤波：栅格化 + 多轮形态学开运算…";
+        EditEcho("地面点滤波：栅格化 + 多轮形态学开运算…", EchoLevel.Success);
         var res = await Task.Run(() => ProgressiveMorphFilter.Filter(pts, cell, slopeTan, dh0, dhMax, win));
-        if (res.GroundCount == 0) { StatusMsg.Text = "地面点滤波：没有点被判为地面（参数过严，请调大「地形坡度允许」或「离地高阈值」）"; return true; }
+        if (res.GroundCount == 0) { EditEcho("地面点滤波：没有点被判为地面（参数过严，请调大「地形坡度允许」或「离地高阈值」）", EchoLevel.Error); return true; }
 
         BeginChange();
         var ground = PcCommit(pc, pc.Name + "·地面点", res.Ground);
@@ -474,8 +474,8 @@ public partial class MainWindow
         string warn = (double)res.GroundCount / Math.Max(pts.Count, 1) < 0.5
             ? " · 提示：地面点不足输入一半，通常是「地形坡度允许」低于真实台阶坡面角、把陡壁当障碍剔掉了，请对照「非地面点」核对"
             : "";
-        StatusMsg.Text = $"地面点滤波：{pts.Count:N0} → 地面 {res.GroundCount:N0}(棕) / 非地面 {res.NonGroundCount:N0}(红)"
-                       + $" · 格网 {cell.ToString("0.##", Inv)}m · 坡度允许 {slopeDeg.ToString("0.#", Inv)}°{warn}";
+        EditEcho($"地面点滤波：{pts.Count:N0} → 地面 {res.GroundCount:N0}(棕) / 非地面 {res.NonGroundCount:N0}(红)"
+                       + $" · 格网 {cell.ToString("0.##", Inv)}m · 坡度允许 {slopeDeg.ToString("0.#", Inv)}°{warn}", EchoLevel.Success);
         return true;
     }
 
@@ -486,7 +486,7 @@ public partial class MainWindow
     private async Task<bool> PcFillHoleAsync()
     {
         var meshes = await PcSelectAsync<MeshEntity>("补洞(三角网)", "三角网");
-        if (meshes.Count == 0) { StatusMsg.Text = "补洞(三角网)：场景里没有三角网，请先用「2.5D TIN」把点云建成面。"; return true; }
+        if (meshes.Count == 0) { EditEcho("补洞(三角网)：场景里没有三角网，请先用「2.5D TIN」把点云建成面。", EchoLevel.Error); return true; }
         var m = meshes[0];
         var form = new PcForm
         {
@@ -497,12 +497,12 @@ public partial class MainWindow
                 + "避免把矿坑大空洞/坑底也填上；带 Undo。")
             .Rows(PcRow.Num("area", "最大补洞面积", "100", "m²", "（越大填得越多）", null, 100, 80));
         var v = await form.AskAsync(this);
-        if (v == null) { StatusMsg.Text = "补洞(三角网)：已取消"; return true; }
+        if (v == null) { EditEcho("补洞(三角网)：已取消", EchoLevel.Info); return true; }
         double maxArea = Math.Max(v.D("area", 100), 0);
 
         var (verts, tris, holes) = MeshHoleFill.Fill(m.Verts, m.Tris, maxArea <= 0 ? double.MaxValue : maxArea);
         if (holes == 0)
-        { StatusMsg.Text = $"补洞(三角网)「{m.Name}」：没有面积 ≤ {maxArea.ToString("0.#", Inv)} m² 的内部空洞（阈值调大可多填）"; return true; }
+        { EditEcho($"补洞(三角网)「{m.Name}」：没有面积 ≤ {maxArea.ToString("0.#", Inv)} m² 的内部空洞（阈值调大可多填）", EchoLevel.Error); return true; }
 
         BeginChange();
         int tri0 = m.Tris.Count;
@@ -511,8 +511,8 @@ public partial class MainWindow
         m.VertColors = null; m.RgbColors = null;   // 顶点数变了, 旧的逐顶点色对不上, 清掉(可重新着色)
         m.Invalidate();
         RefreshScene(); HighlightSelection();
-        StatusMsg.Text = $"补洞(三角网)「{m.Name}」：补了 {holes} 个洞（面积 ≤ {maxArea.ToString("0.#", Inv)} m²）· "
-                       + $"三角 {tri0:N0} → {m.Tris.Count:N0} · 可 Ctrl+Z 撤销";
+        EditEcho($"补洞(三角网)「{m.Name}」：补了 {holes} 个洞（面积 ≤ {maxArea.ToString("0.#", Inv)} m²）· "
+                       + $"三角 {tri0:N0} → {m.Tris.Count:N0} · 可 Ctrl+Z 撤销", EchoLevel.Success);
         return true;
     }
 
@@ -523,7 +523,7 @@ public partial class MainWindow
     private async Task<bool> PcRemoveObstaclesAsync()
     {
         var meshes = await PcSelectAsync<MeshEntity>("剔面(三角网)", "三角网");
-        if (meshes.Count == 0) { StatusMsg.Text = "剔面(三角网)：场景里没有三角网，请先用「2.5D TIN」把点云建成面。"; return true; }
+        if (meshes.Count == 0) { EditEcho("剔面(三角网)：场景里没有三角网，请先用「2.5D TIN」把点云建成面。", EchoLevel.Error); return true; }
         var m = meshes[0];
         var form = new PcForm
         {
@@ -536,7 +536,7 @@ public partial class MainWindow
                 PcRow.Num("slope", "坡面角上限", "60", "°", "（法向角超此值视为障碍）", null, 96, 70))
             .Small("提示：只删面不删点 —— 重建 TIN 后障碍物会回来。要真正去掉请用「地面点滤波」。");
         var v = await form.AskAsync(this);
-        if (v == null) { StatusMsg.Text = "剔面(三角网)：已取消"; return true; }
+        if (v == null) { EditEcho("剔面(三角网)：已取消", EchoLevel.Info); return true; }
         double maxH = Math.Max(v.D("height", 1.5), 0), maxSlope = Math.Clamp(v.D("slope", 60), 1, 89);
 
         // 两条判据都过才留：坡面角超限(陡刺) 或 局部高出周围(设备/车辆/植被顶) 任一命中即剔。
@@ -547,17 +547,17 @@ public partial class MainWindow
         var kept = m.Tris.Where(t => bySlope.Contains(t) && bySpike.Contains(t)).ToList();
         int removed = m.Tris.Count - kept.Count;
         if (removed == 0)
-        { StatusMsg.Text = $"剔面(三角网)「{m.Name}」：没有三角超出阈值（局部高出 {maxH.ToString("0.##", Inv)}m / 坡面角 {maxSlope.ToString("0.#", Inv)}°）"; return true; }
+        { EditEcho($"剔面(三角网)「{m.Name}」：没有三角超出阈值（局部高出 {maxH.ToString("0.##", Inv)}m / 坡面角 {maxSlope.ToString("0.#", Inv)}°）", EchoLevel.Error); return true; }
         if (kept.Count == 0)
-        { StatusMsg.Text = $"剔面(三角网)「{m.Name}」：按此阈值会把整张网剔光，已放弃（请调大阈值）"; return true; }
+        { EditEcho($"剔面(三角网)「{m.Name}」：按此阈值会把整张网剔光，已放弃（请调大阈值）", EchoLevel.Error); return true; }
 
         BeginChange();
         int tri0 = m.Tris.Count;
         m.Tris.Clear(); m.Tris.AddRange(kept);
         m.Invalidate();
         RefreshScene(); HighlightSelection();
-        StatusMsg.Text = $"剔面(三角网)「{m.Name}」：剔除 {removed:N0} 个三角（局部高出周围 >{maxH.ToString("0.##", Inv)}m 或 坡面角 >{maxSlope.ToString("0.#", Inv)}°）· "
-                       + $"三角 {tri0:N0} → {kept.Count:N0} · 只删面不删点，可 Ctrl+Z 撤销";
+        EditEcho($"剔面(三角网)「{m.Name}」：剔除 {removed:N0} 个三角（局部高出周围 >{maxH.ToString("0.##", Inv)}m 或 坡面角 >{maxSlope.ToString("0.#", Inv)}°）· "
+                       + $"三角 {tri0:N0} → {kept.Count:N0} · 只删面不删点，可 Ctrl+Z 撤销", EchoLevel.Success);
         return true;
     }
 
@@ -598,7 +598,7 @@ public partial class MainWindow
         }
 
         var v = await form.AskAsync(this);
-        if (v == null) { StatusMsg.Text = $"{what}：已取消"; return true; }
+        if (v == null) { EditEcho($"{what}：已取消", EchoLevel.Info); return true; }
         var pc = ror ? (PcResolve(all, v.S("src")) ?? cur) : cur;
         var pts = PcPts(pc);
 
@@ -612,14 +612,14 @@ public partial class MainWindow
 
         StatusMsg.Text = $"{what}：计算中…";
         var kept = await Task.Run(() => ror ? PointDenoise.Ror(pts, rad, minPts) : PointDenoise.Sor(pts, k, sigma));
-        if (kept.Count == 0) { StatusMsg.Text = $"{what}：全部被剔除（参数过严）"; return true; }
+        if (kept.Count == 0) { EditEcho($"{what}：全部被剔除（参数过严）", EchoLevel.Success); return true; }
 
         BeginChange();
         var np = PcCommit(pc, pc.Name + (ror ? "·ROR" : "·SOR"), kept);
         RefreshScene();
         string how = ror ? $"半径 {rad.ToString("0.###", Inv)}m{(v.D("radius", 0) <= 0 ? "(自动=3×平均间距)" : "")} · 最少邻点 {minPts}"
                          : $"k={k} · σ={sigma.ToString("0.##", Inv)}";
-        StatusMsg.Text = $"{what}「{np.Name}」：{pts.Count:N0} → 保留 {kept.Count:N0}（剔除 {pts.Count - kept.Count:N0} · {how}）· 已设为当前点云";
+        EditEcho($"{what}「{np.Name}」：{pts.Count:N0} → 保留 {kept.Count:N0}（剔除 {pts.Count - kept.Count:N0} · {how}）· 已设为当前点云", EchoLevel.Success);
         return true;
     }
 
@@ -647,7 +647,7 @@ public partial class MainWindow
                 PcRow.Num("size", "体素尺寸 / 最小间距", "2", "m", "（体素/距离/自适应用）", null, 130, 70),
                 PcRow.Num("ratio", "随机保留比例", "0.2", null, "0–1（随机用）", null, 130, 70));
         var v = await form.AskAsync(this);
-        if (v == null) { StatusMsg.Text = "点云抽稀：已取消"; return true; }
+        if (v == null) { EditEcho("点云抽稀：已取消", EchoLevel.Info); return true; }
         var pc = PcResolve(all, v.S("src")) ?? cur;
         var pts = PcPts(pc);
         double size = v.D("size", 2); if (size <= 0) size = 2;
@@ -659,14 +659,14 @@ public partial class MainWindow
                                       : mode == modes[1] ? PointThin.ThinRandom(pts, ratio, new Random(12345))
                                       : mode == modes[2] ? PointThin.ThinUniform(pts, size)
                                       : PointThin.ThinAdaptive(pts, size));
-        if (thin.Count == 0) { StatusMsg.Text = "点云抽稀：结果为空（参数过大）"; return true; }
+        if (thin.Count == 0) { EditEcho("点云抽稀：结果为空（参数过大）", EchoLevel.Error); return true; }
 
         BeginChange();
         var np = PcCommit(pc, pc.Name + "·抽稀", thin);
         RefreshScene();
         string how = mode == modes[1] ? $"比例 {ratio.ToString("0.###", Inv)}" : $"{size.ToString("0.##", Inv)}m";
-        StatusMsg.Text = $"点云抽稀「{np.Name}」（{mode}，{how}）：{pts.Count:N0} → {thin.Count:N0}"
-                       + $"（压缩 {100.0 * (1 - (double)thin.Count / Math.Max(pts.Count, 1)):0.#}%）· 已设为当前点云";
+        EditEcho($"点云抽稀「{np.Name}」（{mode}，{how}）：{pts.Count:N0} → {thin.Count:N0}"
+                       + $"（压缩 {100.0 * (1 - (double)thin.Count / Math.Max(pts.Count, 1)):0.#}%）· 已设为当前点云", EchoLevel.Success);
         return true;
     }
 
@@ -675,7 +675,7 @@ public partial class MainWindow
     {
         if (!PcNeedCloud("分割点云", out var cur, out var all)) return true;   // 无点云 → 报"请先加载点云"(同原版)，不落到选 CSV
         var bnds = await PcSelectAsync<PolylineEntity>("分割点云", "闭合多段线（裁剪边界）", p => p.Closed && p.Points.Count >= 3);
-        if (bnds.Count == 0) { StatusMsg.Text = "分割点云：场景里没有闭合多段线可作裁剪边界（先画一条，或用「高程截断」按高程裁）"; return true; }
+        if (bnds.Count == 0) { EditEcho("分割点云：场景里没有闭合多段线可作裁剪边界（先画一条，或用「高程截断」按高程裁）", EchoLevel.Error); return true; }
         var bnd = bnds[0];
         string[] sides = { "保留圈内（多边形内部）", "保留圈外（多边形外部）" };
         var form = new PcForm
@@ -688,19 +688,19 @@ public partial class MainWindow
             .Rows(PcRow.Radios("side", "保留侧", sides, sides[0]))
             .Small($"裁剪边界：已选中的闭合多段线（{bnd.Points.Count} 个顶点）。");
         var v = await form.AskAsync(this);
-        if (v == null) { StatusMsg.Text = "分割点云：已取消"; return true; }
+        if (v == null) { EditEcho("分割点云：已取消", EchoLevel.Info); return true; }
         bool inside = v.S("side") == sides[0];
         var pc = PcResolve(all, v.S("src")) ?? cur;
         var pts = PcPts(pc);
         var poly = new List<(double x, double y)>(bnd.Points);
 
         var kept = await Task.Run(() => PointCloudCrop.ByPolygon(pts, poly, inside));
-        if (kept.Count == 0) { StatusMsg.Text = $"分割点云：{(inside ? "圈内" : "圈外")}无点（共 {pts.Count:N0} 点）"; return true; }
+        if (kept.Count == 0) { EditEcho($"分割点云：{(inside ? "圈内" : "圈外")}无点（共 {pts.Count:N0} 点）", EchoLevel.Success); return true; }
 
         BeginChange();
         var np = PcCommit(pc, $"{pc.Name}·{(inside ? "圈内" : "圈外")}", kept);
         RefreshScene();
-        StatusMsg.Text = $"分割点云「{np.Name}」：保留{(inside ? "圈内" : "圈外")} {kept.Count:N0}/{pts.Count:N0} 点 · 已设为当前点云";
+        EditEcho($"分割点云「{np.Name}」：保留{(inside ? "圈内" : "圈外")} {kept.Count:N0}/{pts.Count:N0} 点 · 已设为当前点云", EchoLevel.Success);
         return true;
     }
 
@@ -721,18 +721,18 @@ public partial class MainWindow
                 PcRow.Num("zmin", "最低高程", b.minZ.ToString("F2", Inv), "m", null, null, 70, 90),
                 PcRow.Num("zmax", "最高高程", b.maxZ.ToString("F2", Inv), "m", null, null, 70, 90));
         var v = await form.AskAsync(this);
-        if (v == null) { StatusMsg.Text = "高程截断：已取消"; return true; }
+        if (v == null) { EditEcho("高程截断：已取消", EchoLevel.Info); return true; }
         var pc = PcResolve(all, v.S("src")) ?? cur;
         double lo = v.D("zmin", b.minZ), hi = v.D("zmax", b.maxZ);
         if (hi < lo) (lo, hi) = (hi, lo);
         var kept = pc.Pts.Where(p => p.z >= lo && p.z <= hi).ToList();
-        if (kept.Count == 0) { StatusMsg.Text = $"高程截断：区间 [{lo.ToString("0.##", Inv)}, {hi.ToString("0.##", Inv)}] 内无点"; return true; }
+        if (kept.Count == 0) { EditEcho($"高程截断：区间 [{lo.ToString("0.##", Inv)}, {hi.ToString("0.##", Inv)}] 内无点", EchoLevel.Success); return true; }
 
         BeginChange();
         var np = PcCommit(pc, pc.Name + "·Z截断", kept);
         RefreshScene();
-        StatusMsg.Text = $"高程截断「{np.Name}」：保留 {kept.Count:N0}/{pc.PointCount:N0} 点"
-                       + $"（Z {lo.ToString("0.##", Inv)} ~ {hi.ToString("0.##", Inv)} m）· 已设为当前点云";
+        EditEcho($"高程截断「{np.Name}」：保留 {kept.Count:N0}/{pc.PointCount:N0} 点"
+                       + $"（Z {lo.ToString("0.##", Inv)} ~ {hi.ToString("0.##", Inv)} m）· 已设为当前点云", EchoLevel.Success);
         return true;
     }
 
@@ -758,7 +758,7 @@ public partial class MainWindow
                 PcRow.Num("dy", "平移 ΔY", "0", "m", null, null, 70, 90),
                 PcRow.Num("dz", "平移 ΔZ", "0", "m", null, null, 70, 90));
         var v = await form.AskAsync(this);
-        if (v == null) { StatusMsg.Text = "坐标转换：已取消"; return true; }
+        if (v == null) { EditEcho("坐标转换：已取消", EchoLevel.Info); return true; }
         var pc = PcResolve(all, v.S("src")) ?? cur;
         double dx = v.D("dx"), dy = v.D("dy"), dz = v.D("dz"), rot = v.D("rot");
         double rx = v.D("cx", cx), ry = v.D("cy", cy);
@@ -775,8 +775,8 @@ public partial class MainWindow
         var np = PcCommit(pc, pc.Name + "·转换", outPts, pc.HasColors ? new List<(float, float, float)>(pc.Colors!) : null);
         RefreshScene();
         PcZoomTo(np);
-        StatusMsg.Text = $"坐标转换「{np.Name}」：平移 ({dx.ToString("0.###", Inv)}, {dy.ToString("0.###", Inv)}, {dz.ToString("0.###", Inv)})"
-                       + $" · 绕 Z {rot.ToString("0.##", Inv)}° · {np.PointCount:N0} 点 · 已设为当前点云";
+        EditEcho($"坐标转换「{np.Name}」：平移 ({dx.ToString("0.###", Inv)}, {dy.ToString("0.###", Inv)}, {dz.ToString("0.###", Inv)})"
+                       + $" · 绕 Z {rot.ToString("0.##", Inv)}° · {np.PointCount:N0} 点 · 已设为当前点云", EchoLevel.Success);
         return true;
     }
 
@@ -827,7 +827,7 @@ public partial class MainWindow
             .Small("上限 ≤ 下限时按分析项取默认区间（坡度 0–90 / 坡向 0–360 / 曲率按 P99 截断）")
             .Hint("normal", "");
         var v = await form.AskAsync(this);
-        if (v == null) { StatusMsg.Text = "逐点属性分析：已取消"; return true; }
+        if (v == null) { EditEcho("逐点属性分析：已取消", EchoLevel.Info); return true; }
         var pc = PcResolve(all, v.S("src")) ?? cur;
         int attr = Array.IndexOf(attrs, v.S("attr")); if (attr < 0) attr = 0;
         int map = Array.IndexOf(maps, v.S("map")); if (map < 0) map = 0;
@@ -837,7 +837,7 @@ public partial class MainWindow
 
         StatusMsg.Text = $"逐点{PointCloudOps.AttrName(attr)}分析中（kNN PCA）…";
         var attribs = await PcAttribsAsync(pc, k);
-        if (attribs.Count != pts.Count) { StatusMsg.Text = "逐点属性分析：点太少（需 ≥3 点）"; return true; }
+        if (attribs.Count != pts.Count) { EditEcho("逐点属性分析：点太少（需 ≥3 点）", EchoLevel.Success); return true; }
         var values = PointCloudOps.AttributeValues(attribs, attr);
         if (hi <= lo) (lo, hi) = PointCloudOps.DefaultRange(attr, values);
         var cols = PointCloudOps.Colorize(values, map, lo, hi);
@@ -849,8 +849,8 @@ public partial class MainWindow
         var np = PcCommit(pc, $"{pc.Name}·{PointCloudOps.AttrName(attr)}", pts, cols);
         RefreshScene();
         string u = PointCloudOps.AttrUnit(attr);
-        StatusMsg.Text = $"逐点{PointCloudOps.AttrName(attr)}分析「{np.Name}」：{pts.Count:N0} 点 · 实测 {vmin.ToString("0.##", Inv)}~{vmax.ToString("0.##", Inv)}{u}"
-                       + $"（均 {(sum / Math.Max(values.Length, 1)).ToString("0.##", Inv)}{u}）· 色带区间 [{lo.ToString("0.##", Inv)}, {hi.ToString("0.##", Inv)}]{u}";
+        EditEcho($"逐点{PointCloudOps.AttrName(attr)}分析「{np.Name}」：{pts.Count:N0} 点 · 实测 {vmin.ToString("0.##", Inv)}~{vmax.ToString("0.##", Inv)}{u}"
+                       + $"（均 {(sum / Math.Max(values.Length, 1)).ToString("0.##", Inv)}{u}）· 色带区间 [{lo.ToString("0.##", Inv)}, {hi.ToString("0.##", Inv)}]{u}", EchoLevel.Success);
         return true;
     }
 
@@ -879,14 +879,14 @@ public partial class MainWindow
         {
             bool go = await BlockMsgBox.ConfirmAsync(this, "已有法向缓存",
                 $"点云「{pc.Name}」已缓存过法向，重算会覆盖旧结果。\n\n继续吗？");
-            if (!go) { StatusMsg.Text = "法向估计：已取消"; return true; }
+            if (!go) { EditEcho("法向估计：已取消", EchoLevel.Info); return true; }
         }
         StatusMsg.Text = "法向估计：逐点 kNN PCA 计算中…";
         var attribs = await PcAttribsAsync(pc, kNormals);
-        if (attribs.Count != pc.PointCount) { StatusMsg.Text = "法向估计：点太少（需 ≥3 点）"; return true; }
+        if (attribs.Count != pc.PointCount) { EditEcho("法向估计：点太少（需 ≥3 点）", EchoLevel.Success); return true; }
         double sum = 0; foreach (var a in attribs) sum += a.SlopeDeg;
-        StatusMsg.Text = $"法向估计「{pc.Name}」：{attribs.Count:N0} 个法向已缓存（平均坡度 {(sum / attribs.Count).ToString("0.#", Inv)}°）"
-                       + " · 坡度/坡向/曲率分析可直接复用";
+        EditEcho($"法向估计「{pc.Name}」：{attribs.Count:N0} 个法向已缓存（平均坡度 {(sum / attribs.Count).ToString("0.#", Inv)}°）"
+                       + " · 坡度/坡向/曲率分析可直接复用", EchoLevel.Success);
         return true;
     }
 
@@ -898,7 +898,7 @@ public partial class MainWindow
     {
         if (!PcNeedCloud("点云剖面", out var cur, out var all)) return true;   // 无点云 → 报"请先加载点云"(同原版)，不落到选 CSV
         var line = await PcSelectLineAsync("点云剖面");
-        if (line == null) { StatusMsg.Text = "点云剖面：场景里没有可作剖面线的线（先画一条穿过点云的线）"; return true; }
+        if (line == null) { EditEcho("点云剖面：场景里没有可作剖面线的线（先画一条穿过点云的线）", EchoLevel.Error); return true; }
         string[] aggs = { "最低点（地面）", "均值", "最高点（顶面）" };
         // 窗体组织忠实原 Profile/CloudProfileDialog：说明 → 源点云 → 缓冲半宽 / 站点间距 / 取值方式
         var form = new PcForm
@@ -914,7 +914,7 @@ public partial class MainWindow
                 PcRow.Num("step", "站点间距", "1.0", "m", "沿线采样密度", null, 110, 70),
                 PcRow.Combo("agg", "取值方式", aggs, aggs[0], "带植被/设备时取最低点更接近地面", null, 110, 160));
         var v = await form.AskAsync(this);
-        if (v == null) { StatusMsg.Text = "点云剖面：已取消"; return true; }
+        if (v == null) { EditEcho("点云剖面：已取消", EchoLevel.Info); return true; }
         var pc = PcResolve(all, v.S("src")) ?? cur;
         double half = Math.Max(v.D("half", 2), 1e-3), step = Math.Max(v.D("step", 1), 1e-3);
         int agg = Math.Max(0, Array.IndexOf(aggs, v.S("agg")));
@@ -923,7 +923,7 @@ public partial class MainWindow
         StatusMsg.Text = "点云剖面：缓冲带取点中…";
         var prof = await Task.Run(() => PointCloudOps.CloudProfile(pts, line, half, step, agg));
         var good = prof.Where(s => s.Count > 0).ToList();
-        if (good.Count < 2) { StatusMsg.Text = "点云剖面：缓冲带内点太少（把半宽调大试试）"; return true; }
+        if (good.Count < 2) { EditEcho("点云剖面：缓冲带内点太少（把半宽调大试试）", EchoLevel.Success); return true; }
 
         double zmin = good.Min(s => s.Z), zmax = good.Max(s => s.Z), len = prof[^1].Dist;
         PcDrawProfile(line, good.Select(s => (s.Dist, s.Z)).ToList(), zmin, zmax, len, "点云剖面", 0.35f, 0.85f, 0.95f);
@@ -932,9 +932,9 @@ public partial class MainWindow
         PcProfileChartWindow.Popup(this, $"剖面图 · {pc.Name}",
             $"点云「{pc.Name}」缓冲半宽 {half.ToString("0.##", Inv)} m · 站点间距 {step.ToString("0.##", Inv)} m · 取值 {v.S("agg")}",
             prof.Select(x => new PcProfileChartWindow.Station(x.Dist, x.Count > 0 ? x.Z : double.NaN)).ToList());
-        StatusMsg.Text = $"点云剖面「{pc.Name}」：{good.Count} 站有效"
+        EditEcho($"点云剖面「{pc.Name}」：{good.Count} 站有效"
                        + (gap > 0 ? $"（{gap} 站无点，按缺口留白不插值）" : "")
-                       + $" · 里程 {len.ToString("0.#", Inv)}m · 高程 {zmin.ToString("0.##", Inv)}~{zmax.ToString("0.##", Inv)}m";
+                       + $" · 里程 {len.ToString("0.#", Inv)}m · 高程 {zmin.ToString("0.##", Inv)}~{zmax.ToString("0.##", Inv)}m", EchoLevel.Success);
         return true;
     }
 
@@ -970,7 +970,7 @@ public partial class MainWindow
     private async Task<bool> PcC2cAsync()
     {
         if (!PcNeedCloud("位移监测 C2C", out var cur, out var all)) return true;   // 无点云 → 报"请先加载点云"(同原版)，不落到选 CSV
-        if (all.Count < 2) { StatusMsg.Text = "位移监测 C2C：需要两期点云，请先把两期都加载进场景"; return true; }
+        if (all.Count < 2) { EditEcho("位移监测 C2C：需要两期点云，请先把两期都加载进场景", EchoLevel.Error); return true; }
         string[] maps = { "地形色（蓝→红）", "灰阶", "分歧色（蓝-白-红）" };
         var choices = PcChoices(all);
         // 窗体组织忠实原 Monitor/C2cDialog：两期下拉 → 说明 → 最大匹配距离 → 色带 → 按高差定正负
@@ -988,10 +988,10 @@ public partial class MainWindow
                 PcRow.Combo("map", "色带", maps, maps[2], "有正负时用分歧色，零位移居中显白", null, 110, 180),
                 PcRow.Check("signed", "按高差定正负（隆起为正 / 沉降为负）；取消则只报绝对位移量", true));
         var v = await form.AskAsync(this);
-        if (v == null) { StatusMsg.Text = "位移监测 C2C：已取消"; return true; }
+        if (v == null) { EditEcho("位移监测 C2C：已取消", EchoLevel.Info); return true; }
         var ca = PcResolve(all, v.S("a"))!;
         var cb = PcResolve(all, v.S("b"))!;
-        if (ReferenceEquals(ca, cb)) { StatusMsg.Text = "位移监测 C2C：两期不能是同一份点云"; return true; }
+        if (ReferenceEquals(ca, cb)) { EditEcho("位移监测 C2C：两期不能是同一份点云", EchoLevel.Success); return true; }
         double maxDist = Math.Max(0, v.D("max", 0));
         bool signed = v.B("signed", true);
         int map = Math.Max(0, Array.IndexOf(maps, v.S("map")));
@@ -999,7 +999,7 @@ public partial class MainWindow
         StatusMsg.Text = "位移监测 C2C：两期逐点最近邻计算中…";
         var ptsA = PcPts(ca); var ptsB = PcPts(cb);
         var res = await Task.Run(() => PointCloudOps.CloudToCloud(ptsA, ptsB, maxDist, signed));
-        if (res.Matched == 0) { StatusMsg.Text = $"位移监测 C2C：没有点匹配上（最大匹配距离 {maxDist.ToString("0.##", Inv)}m 过小？）"; return true; }
+        if (res.Matched == 0) { EditEcho($"位移监测 C2C：没有点匹配上（最大匹配距离 {maxDist.ToString("0.##", Inv)}m 过小？）", EchoLevel.Error); return true; }
 
         // 着色：未匹配点画成中性灰，不参与色带（否则色带会被"假位移"拉满）
         double lo = signed ? -Math.Max(Math.Abs(res.Min), Math.Abs(res.Max)) : res.Min;
@@ -1029,8 +1029,8 @@ public partial class MainWindow
         };
         PcResultWindow.Popup(this, "位移监测 C2C · 统计", rows, res.Histogram, res.HistLo, res.HistHi,
                              "位移分布直方图（20 桶）", "着色点云已入场景；未匹配点显中性灰，不参与色带。");
-        StatusMsg.Text = $"位移监测 C2C「{np.Name}」：匹配 {res.Matched:N0}/{ptsB.Count:N0} · 均值 {res.Mean.ToString("0.###", Inv)}m"
-                       + $" · |位移|P95 {res.AbsP95.ToString("0.###", Inv)}m · 标准差 {res.Std.ToString("0.###", Inv)}m";
+        EditEcho($"位移监测 C2C「{np.Name}」：匹配 {res.Matched:N0}/{ptsB.Count:N0} · 均值 {res.Mean.ToString("0.###", Inv)}m"
+                       + $" · |位移|P95 {res.AbsP95.ToString("0.###", Inv)}m · 标准差 {res.Std.ToString("0.###", Inv)}m", EchoLevel.Success);
         return true;
     }
 
@@ -1061,8 +1061,8 @@ public partial class MainWindow
         var h = new double[hist.Length];
         for (int i = 0; i < hist.Length; i++) h[i] = hist[i];
         PcResultWindow.Popup(this, $"点云质量统计 · {pc.Name}", rows, h, zlo, zhi, "高程分布直方图（20 桶）");
-        StatusMsg.Text = $"质量统计「{pc.Name}」：{s.Count:N0} 点 · 密度 {s.DensityXY.ToString("0.###", Inv)} 点/m²"
-                       + $" · 平均间距 {spacing.ToString("0.###", Inv)}m · Z {s.MinZ.ToString("0.##", Inv)}~{s.MaxZ.ToString("0.##", Inv)}m";
+        EditEcho($"质量统计「{pc.Name}」：{s.Count:N0} 点 · 密度 {s.DensityXY.ToString("0.###", Inv)} 点/m²"
+                       + $" · 平均间距 {spacing.ToString("0.###", Inv)}m · Z {s.MinZ.ToString("0.##", Inv)}~{s.MaxZ.ToString("0.##", Inv)}m", EchoLevel.Success);
         return true;
     }
 
@@ -1088,11 +1088,11 @@ public partial class MainWindow
                 PcRow.Num("slope", "陡坡阈值", "24", "°", "（≥此值判为坡面，用于坡底）", null, 120, 70),
                 PcRow.Num("minlen", "最短线长", "60", "m", "（主要过滤短孤线）", null, 120, 70));
         var v = await form.AskAsync(this);
-        if (v == null) { StatusMsg.Text = "坡顶底线提取：已取消"; return true; }
+        if (v == null) { EditEcho("坡顶底线提取：已取消", EchoLevel.Info); return true; }
         var pc = PcResolve(all, v.S("src")) ?? cur;
         double cell = Math.Max(v.D("cell", 1), 1e-3), thr = v.D("slope", 24), minLen = Math.Max(v.D("minlen", 60), 0);
 
-        StatusMsg.Text = "坡顶底线提取：栅格化 DEM + 断棱线检测…";
+        EditEcho("坡顶底线提取：栅格化 DEM + 断棱线检测…", EchoLevel.Success);
         var pts = PcPts(pc);
         var (crest, toe, gridPts) = await Task.Run(() =>
         {
@@ -1104,16 +1104,16 @@ public partial class MainWindow
             var (c, t) = CrestToe.Extract(gp, tris, thr);
             return (c, t, gp);
         });
-        if (gridPts.Count < 3) { StatusMsg.Text = "坡顶底线提取：栅格点太少（把 DEM 格网调小）"; return true; }
-        if (crest.Count == 0 && toe.Count == 0) { StatusMsg.Text = $"坡顶底线提取：未检出断棱线（陡坡阈值 {thr.ToString("0.#", Inv)}° 可能偏大）"; return true; }
+        if (gridPts.Count < 3) { EditEcho("坡顶底线提取：栅格点太少（把 DEM 格网调小）", EchoLevel.Success); return true; }
+        if (crest.Count == 0 && toe.Count == 0) { EditEcho($"坡顶底线提取：未检出断棱线（陡坡阈值 {thr.ToString("0.#", Inv)}° 可能偏大）", EchoLevel.Success); return true; }
 
         BeginChange();
         int nc = PcAddEdgeLines(crest, minLen, "点云_坡顶线", 0.95f, 0.55f, 0.2f);
         int nt = PcAddEdgeLines(toe, minLen, "点云_坡底线", 0.2f, 0.7f, 0.9f);
         RefreshScene();
-        StatusMsg.Text = $"坡顶底线提取「{pc.Name}」：坡顶线 {nc} 条(橙) / 坡底线 {nt} 条(青)"
+        EditEcho($"坡顶底线提取「{pc.Name}」：坡顶线 {nc} 条(橙) / 坡底线 {nt} 条(青)"
                        + $" · DEM 网格 {cell.ToString("0.##", Inv)}m · 陡坡阈值 {thr.ToString("0.#", Inv)}°"
-                       + $" · 最短线长 {minLen.ToString("0.#", Inv)}m";
+                       + $" · 最短线长 {minLen.ToString("0.#", Inv)}m", EchoLevel.Success);
         return true;
     }
 
@@ -1148,7 +1148,7 @@ public partial class MainWindow
         {
             bool hasMdlInput = _selected.OfType<PointEntity>().Any() || _selected.OfType<PolylineEntity>().Any() || _selected.OfType<LineEntity>().Any();
             if (hasMdlInput) return false;
-            StatusMsg.Text = "2.5D TIN：场景中没有已加载的点云，请先「加载点云」。";
+            EditEcho("2.5D TIN：场景中没有已加载的点云，请先「加载点云」。", EchoLevel.Error);
             return true;
         }
         if (!PcNeedCloud("2.5D TIN", out var cur, out var all)) return true;
@@ -1186,7 +1186,7 @@ public partial class MainWindow
                           "一般无需设置，采样精度已经在控制点数"));
 
         var v = await form.AskAsync(this);
-        if (v == null) { StatusMsg.Text = "2.5D TIN：已取消"; return true; }
+        if (v == null) { EditEcho("2.5D TIN：已取消", EchoLevel.Info); return true; }
         var pc = PcResolve(all, v.S("src")) ?? cur;
         double voxel = Math.Max(v.D("voxel", 3), 0), gap = Math.Max(v.D("gap", 0), 0);
         long maxPts = (long)Math.Max(v.D("maxpts", 0), 0);
@@ -1221,7 +1221,7 @@ public partial class MainWindow
             }
             return (input, t);
         });
-        if (tris.Count == 0) { StatusMsg.Text = "2.5D TIN：剖分为空（点太少/共线，或空洞桥接上限过小）"; return true; }
+        if (tris.Count == 0) { EditEcho("2.5D TIN：剖分为空（点太少/共线，或空洞桥接上限过小）", EchoLevel.Error); return true; }
 
         BeginChange();
         var mesh = new MeshEntity(pc.Name + "·TIN", verts, tris);
@@ -1239,10 +1239,10 @@ public partial class MainWindow
         _scene.Add(mesh);
         _selected.Clear(); _selected.Add(mesh); HighlightSelection();
         RefreshScene();
-        StatusMsg.Text = $"2.5D TIN「{mesh.Name}」：{verts.Count:N0} 顶点 / {tris.Count:N0} 三角"
+        EditEcho($"2.5D TIN「{mesh.Name}」：{verts.Count:N0} 顶点 / {tris.Count:N0} 三角"
                        + (voxel > 0 ? $"（采样精度 {voxel.ToString("0.##", Inv)}m{(adaptive ? "·保坡面细节" : "")}，源 {src.Count:N0} 点）" : $"（全密度 {src.Count:N0} 点）")
                        + (gap > 0 ? $" · 空洞桥接 {gap.ToString("0.##", Inv)}m" : " · 凸包全填充")
-                       + (maxPts > 0 ? $" · 限输入 {maxPts:N0} 点" : "") + " · 已选中";
+                       + (maxPts > 0 ? $" · 限输入 {maxPts:N0} 点" : "") + " · 已选中", EchoLevel.Success);
         return true;
     }
 
@@ -1250,7 +1250,7 @@ public partial class MainWindow
     private async Task<bool> PcTwoEpochVolumeAsync()
     {
         if (!PcNeedCloud("两期点云算量", out var cur, out var all)) return true;   // 无点云 → 报"请先加载点云"(同原版)，不落到选 CSV
-        if (all.Count < 2) { StatusMsg.Text = "两期点云算量：需要两期点云，请先把两期都加载进场景"; return true; }
+        if (all.Count < 2) { EditEcho("两期点云算量：需要两期点云，请先把两期都加载进场景", EchoLevel.Error); return true; }
         var choices = PcChoices(all);
         var ca0 = all[0];
         var cb0 = all[Math.Min(1, all.Count - 1)];
@@ -1282,10 +1282,10 @@ public partial class MainWindow
             .Small("直接栅格（不建 TIN）：只统计两期都有数据的格，大无数据区不虚构地形。"
                  + "挖方 = 第二期低于第一期（红），填方 = 第二期高于第一期（蓝），各连通块生成独立水密封闭体入场景。");
         var v = await form.AskAsync(this);
-        if (v == null) { StatusMsg.Text = "两期点云算量：已取消"; return true; }
+        if (v == null) { EditEcho("两期点云算量：已取消", EchoLevel.Info); return true; }
         var ca = PcResolve(all, v.S("a"))!;
         var cb = PcResolve(all, v.S("b"))!;
-        if (ReferenceEquals(ca, cb)) { StatusMsg.Text = "两期点云算量：两期不能是同一份点云"; return true; }
+        if (ReferenceEquals(ca, cb)) { EditEcho("两期点云算量：两期不能是同一份点云", EchoLevel.Success); return true; }
 
         bool viaTin = v.S("method") == methods[1];
         double cell = Math.Max(v.D("cell", 2), 1e-3);
@@ -1303,13 +1303,13 @@ public partial class MainWindow
         if (clip)
         {
             var rings = await PcSelectAsync<PolylineEntity>("两期点云算量", "闭合多段线（计算范围）", p => p.Closed && p.Points.Count >= 3);
-            if (rings.Count == 0) { StatusMsg.Text = "两期点云算量：场景里没有闭合多段线可作计算范围，请改用「整体」或先画一条"; return true; }
+            if (rings.Count == 0) { EditEcho("两期点云算量：场景里没有闭合多段线可作计算范围，请改用「整体」或先画一条", EchoLevel.Error); return true; }
             var poly = new List<(double x, double y)>(rings[0].Points);
             ptsA = PointCloudCrop.ByPolygon(ptsA, poly, true);
             ptsB = PointCloudCrop.ByPolygon(ptsB, poly, true);
             scopeText = $"仅选定区域内（{rings[0].Points.Count} 点闭合线）";
             if (ptsA.Count == 0 || ptsB.Count == 0)
-            { StatusMsg.Text = "两期点云算量：所选区域内某一期没有点（区域与点云坐标是否一致？）"; return true; }
+            { EditEcho("两期点云算量：所选区域内某一期没有点（区域与点云坐标是否一致？）", EchoLevel.Error); return true; }
         }
 
         StatusMsg.Text = $"两期点云算量（{(viaTin ? "常规 TIN" : "直接栅格")}）：后台计算中…";
@@ -1326,7 +1326,7 @@ public partial class MainWindow
             return (res: r, holesA: fa, holesB: fb, err: r.Error);
         });
         if (job.res == null || !string.IsNullOrEmpty(job.err))
-        { StatusMsg.Text = $"两期点云算量：{(string.IsNullOrEmpty(job.err) ? "计算失败" : job.err)}"; return true; }
+        { EditEcho($"两期点云算量：{(string.IsNullOrEmpty(job.err) ? "计算失败" : job.err)}", EchoLevel.Error); return true; }
         var res = job.res;
 
         // ③ 最小图斑面积：小块整块丢弃，扣掉的量单独回报 —— 绝不让"体积少了"这件事无声发生（同原版口径过滤）
@@ -1400,10 +1400,10 @@ public partial class MainWindow
         PcResultWindow.Popup(this, "两期点云算量 · 结果", rows, null, 0, 0, null,
                              "挖方（红）= 第二期低于第一期；填方（蓝）= 第二期高于第一期。各连通块已生成独立水密封闭体入场景。");
 
-        StatusMsg.Text = $"两期点云算量（{ca.Name} → {cb.Name}，{(viaTin ? "常规TIN" : "直接栅格")}，体积格网 {raw.CellSize.ToString("0.##", Inv)}m）："
+        EditEcho($"两期点云算量（{ca.Name} → {cb.Name}，{(viaTin ? "常规TIN" : "直接栅格")}，体积格网 {raw.CellSize.ToString("0.##", Inv)}m）："
                        + $"挖方 {cutM3.ToString("N1", Inv)} m³ · 填方 {fillM3.ToString("N1", Inv)} m³ · 净 {(fillM3 - cutM3).ToString("N1", Inv)} m³"
                        + $" · {made.Count} 个封闭体入场景（填 {nFill} 蓝 / 挖 {nCut} 红，图层「填方」/「挖方」）"
-                       + (dropN > 0 ? $" · 碎斑丢弃 {dropN} 块" : "");
+                       + (dropN > 0 ? $" · 碎斑丢弃 {dropN} 块" : ""), EchoLevel.Success);
         return true;
     }
 
@@ -1439,7 +1439,7 @@ public partial class MainWindow
     {
         if (!PcNeedCloud("圈范围算量", out var cur, out var all)) return true;   // 无点云 → 报"请先加载点云"(同原版)，不落到选 CSV
         var bnds = await PcSelectAsync<PolylineEntity>("圈范围算量", "闭合多段线（范围边界）", p => p.Closed && p.Points.Count >= 3);
-        if (bnds.Count == 0) { StatusMsg.Text = "圈范围算量：场景里没有闭合多段线可作范围边界（先画一条圈定范围）"; return true; }
+        if (bnds.Count == 0) { EditEcho("圈范围算量：场景里没有闭合多段线可作范围边界（先画一条圈定范围）", EchoLevel.Error); return true; }
         var bnd = bnds[0];
         // 窗体组织忠实原 Volume/RangeVolumeDialog：说明 → 向下深度 H → 格网尺寸 → 取高程方式 → 结论说明
         string[] aggs = { "最高点（顶面，默认）", "均值" };
@@ -1457,15 +1457,15 @@ public partial class MainWindow
                 PcRow.Combo("agg", "点云→格网取高程方式", aggs, aggs[0], null, null, 150, 170))
             .Small("说明：只统计圈内落到点的格（cell² 计面积），大无数据区不虚构地形；结果只读回显，不改点云、不入图。");
         var v = await form.AskAsync(this);
-        if (v == null) { StatusMsg.Text = "圈范围算量：已取消"; return true; }
+        if (v == null) { EditEcho("圈范围算量：已取消", EchoLevel.Info); return true; }
         var pc = PcResolve(all, v.S("src")) ?? cur;
         int topAgg = v.S("agg") == aggs[1] ? 1 : 2;
         double h = v.D("h", 10), cell = Math.Max(v.D("cell", 2), 1e-3);
-        if (h <= 0) { StatusMsg.Text = "圈范围算量：向下深度 H 必须 > 0"; return true; }
+        if (h <= 0) { EditEcho("圈范围算量：向下深度 H 必须 > 0", EchoLevel.Success); return true; }
 
         var poly = new List<(double x, double y)>(bnd.Points);
         var pts = PcPts(pc);
-        StatusMsg.Text = "圈范围算量：圈内取点 + 栅格化…";
+        EditEcho("圈范围算量：圈内取点 + 栅格化…", EchoLevel.Success);
         var r = await Task.Run(() =>
         {
             var inside = PointCloudCrop.ByPolygon(pts, poly, true);
@@ -1484,13 +1484,13 @@ public partial class MainWindow
             }
             return (vol: vol, cells: cells, area: cells * a, top: top, baseZ: bz, n: inside.Count);
         });
-        if (r.n == 0) { StatusMsg.Text = "圈范围算量：圈内没有点"; return true; }
+        if (r.n == 0) { EditEcho("圈范围算量：圈内没有点", EchoLevel.Error); return true; }
 
         double polyArea = TerrainAnalysis.PolygonAreaXY(poly);
-        StatusMsg.Text = $"圈范围算量「{pc.Name}」：方量 {r.vol.ToString("N0", Inv)} m³"
+        EditEcho($"圈范围算量「{pc.Name}」：方量 {r.vol.ToString("N0", Inv)} m³"
                        + $"（顶面最高 {r.top.ToString("0.##", Inv)}m → 底面 {r.baseZ.ToString("0.##", Inv)}m，深度 {h.ToString("0.##", Inv)}m）"
                        + $" · 高于底面的格 {r.cells:N0}（{r.area.ToString("N0", Inv)} m²，圈面积 {polyArea.ToString("N0", Inv)} m²）· 圈内 {r.n:N0} 点"
-                       + $" · 格网 {cell.ToString("0.##", Inv)}m";
+                       + $" · 格网 {cell.ToString("0.##", Inv)}m", EchoLevel.Success);
         return true;
     }
 
@@ -1498,7 +1498,7 @@ public partial class MainWindow
     private async Task<bool> PcTinShadingAsync()
     {
         var meshes = await PcSelectAsync<MeshEntity>("三角网着色", "三角网");
-        if (meshes.Count == 0) { StatusMsg.Text = "三角网着色：场景里没有三角网（先用「2.5D TIN」把点云建成面）"; return true; }
+        if (meshes.Count == 0) { EditEcho("三角网着色：场景里没有三角网（先用「2.5D TIN」把点云建成面）", EchoLevel.Error); return true; }
         // 窗体组织忠实原 Shading/TinShadingDialog：说明 → 模式单选(素色/真实色/高程/坡度/坡向/等高线/清除)
         // → 色带 → 等高线间距。正射影像贴图那一档需要纹理管线，本版渲染器无纹理，故不摆这个选项。
         string[] modes =
@@ -1524,7 +1524,7 @@ public partial class MainWindow
                 PcRow.Combo("map", "色带", maps, maps[0], "（高程 / 坡度 / 坡向 / 等高线 分级用）", null, 96, 220),
                 PcRow.Num("spacing", "等高线间距", "5", "m", "（「等高线」档用）", null, 96, 72));
         var v = await form.AskAsync(this);
-        if (v == null) { StatusMsg.Text = "三角网着色：已取消"; return true; }
+        if (v == null) { EditEcho("三角网着色：已取消", EchoLevel.Info); return true; }
         int mode = Math.Max(0, Array.IndexOf(modes, v.S("mode")));
         int map = Math.Max(0, Array.IndexOf(maps, v.S("map")));
         double spacing = Math.Max(v.D("spacing", 5), 1e-6);
@@ -1574,14 +1574,14 @@ public partial class MainWindow
             m.Invalidate();
         }
         RefreshScene();
-        StatusMsg.Text = mode is 0 or 7
+        EditEcho(mode is 0 or 7
             ? $"三角网着色：已清除 {meshes.Count} 张三角网的独立着色（回到素色）"
             : mode == 1
                 ? $"三角网着色：{meshes.Count} 张三角网按「平面（单色·显示三角面）」显示（逐实体面+线框）"
             : mode == 2
                 ? $"三角网着色：{meshes.Count} 张三角网按顶点真实色显示"
                   + (noRgb > 0 ? $"（其中 {noRgb} 张没有真实色 —— 要有真实色，得先用带 RGB 的点云建 2.5D TIN）" : "")
-                : $"三角网着色：{meshes.Count} 张三角网按「{modes[mode]}」着色（{v.S("map")}）";
+                : $"三角网着色：{meshes.Count} 张三角网按「{modes[mode]}」着色（{v.S("map")}）", EchoLevel.Success);
         return true;
     }
 
@@ -1620,7 +1620,7 @@ public partial class MainWindow
     private async Task<bool> PcContourAsync()
     {
         var meshes = await PcSelectAsync<MeshEntity>("等高线生产", "三角网");
-        if (meshes.Count == 0) { StatusMsg.Text = "等高线生产：场景里没有三角网，请先用「2.5D TIN」把点云建成面。"; return true; }
+        if (meshes.Count == 0) { EditEcho("等高线生产：场景里没有三角网，请先用「2.5D TIN」把点云建成面。", EchoLevel.Error); return true; }
         var m = meshes[0];
         // 窗体组织忠实原 Contour/ContourDialog：一句说明 + 等高距一行（采样格距是本实现的必要项，收进「高级」）
         var b = m.Bounds;
@@ -1635,7 +1635,7 @@ public partial class MainWindow
                 PcRow.Num("cell", "采样格距", (Math.Max(b.maxX - b.minX, b.maxY - b.minY) / 200).ToString("0.###", Inv), "m",
                           "栅格采样步长：越小越贴合、越慢", null, 80, 80));
         var v = await form.AskAsync(this);
-        if (v == null) { StatusMsg.Text = "等高线生产：已取消"; return true; }
+        if (v == null) { EditEcho("等高线生产：已取消", EchoLevel.Info); return true; }
         await MdlContourCoreAsync(m, "等高线生产", Math.Max(v.D("dz", 5), 1e-6), Math.Max(v.D("cell", 1), 1e-6));
         return true;
     }
@@ -1644,18 +1644,18 @@ public partial class MainWindow
     private async Task<bool> PcMeshProfileAsync()
     {
         var meshes = await PcSelectAsync<MeshEntity>("剖面分析", "三角网");
-        if (meshes.Count == 0) { StatusMsg.Text = "剖面分析：场景里没有三角网，请先用「2.5D TIN」把点云建成面。"; return true; }
+        if (meshes.Count == 0) { EditEcho("剖面分析：场景里没有三角网，请先用「2.5D TIN」把点云建成面。", EchoLevel.Error); return true; }
         var line = await PcSelectLineAsync("剖面分析");
-        if (line == null) { StatusMsg.Text = "剖面分析：场景里没有可作剖面线的线，请先画一条穿过三角网的线。"; return true; }
+        if (line == null) { EditEcho("剖面分析：场景里没有可作剖面线的线，请先画一条穿过三角网的线。", EchoLevel.Error); return true; }
         var prof = PcSampleMeshProfile(meshes[0], line);
-        if (prof.Count < 2) { StatusMsg.Text = "剖面分析：剖面线与三角网无交（线是否在网格范围内？）"; return true; }
+        if (prof.Count < 2) { EditEcho("剖面分析：剖面线与三角网无交（线是否在网格范围内？）", EchoLevel.Success); return true; }
         double zmin = prof.Min(p => p.z), zmax = prof.Max(p => p.z), len = prof[^1].dist;
         PcDrawProfile(line, prof, zmin, zmax, len, "剖面分析", 0.30f, 0.90f, 0.50f);
         PcProfileChartWindow.Popup(this, $"剖面图 · {meshes[0].Name}",
             $"沿选中剖面线在三角网「{meshes[0].Name}」上采样 {prof.Count} 点",
             prof.Select(x => new PcProfileChartWindow.Station(x.dist, x.z)).ToList());
-        StatusMsg.Text = $"剖面分析「{meshes[0].Name}」：{prof.Count} 个采样点 · 里程 {len.ToString("0.#", Inv)}m"
-                       + $" · 高程 {zmin.ToString("0.##", Inv)}~{zmax.ToString("0.##", Inv)}m";
+        EditEcho($"剖面分析「{meshes[0].Name}」：{prof.Count} 个采样点 · 里程 {len.ToString("0.#", Inv)}m"
+                       + $" · 高程 {zmin.ToString("0.##", Inv)}~{zmax.ToString("0.##", Inv)}m", EchoLevel.Success);
         return true;
     }
 
@@ -1678,18 +1678,18 @@ public partial class MainWindow
     private async Task<bool> PcProcessParamAsync()
     {
         var meshes = await PcSelectAsync<MeshEntity>("工艺参数分析", "三角网");
-        if (meshes.Count == 0) { StatusMsg.Text = "工艺参数分析：场景里没有三角网，请先用「2.5D TIN」把点云建成面。"; return true; }
+        if (meshes.Count == 0) { EditEcho("工艺参数分析：场景里没有三角网，请先用「2.5D TIN」把点云建成面。", EchoLevel.Error); return true; }
         var line = await PcSelectLineAsync("工艺参数分析");
-        if (line == null) { StatusMsg.Text = "工艺参数分析：场景里没有可作剖面线的线，请先画一条穿过三角网的线。"; return true; }
+        if (line == null) { EditEcho("工艺参数分析：场景里没有可作剖面线的线，请先画一条穿过三角网的线。", EchoLevel.Error); return true; }
         var v = await PromptDialog.AskAsync(this, "工艺参数分析", new[]
         {
             new PromptDialog.Field("flat", "平盘判定坡度", "15", "°", "缓于此坡度的段判为平盘，陡于此判为坡面"),
         }, $"沿选中剖面线在三角网「{meshes[0].Name}」上取剖面，提取台阶高 / 坡面角 / 平盘宽 / 整体帮坡角。");
-        if (v == null) { StatusMsg.Text = "工艺参数分析：已取消"; return true; }
+        if (v == null) { EditEcho("工艺参数分析：已取消", EchoLevel.Info); return true; }
         var prof = PcSampleMeshProfile(meshes[0], line);
-        if (prof.Count < 2) { StatusMsg.Text = "工艺参数分析：剖面线与三角网无交"; return true; }
+        if (prof.Count < 2) { EditEcho("工艺参数分析：剖面线与三角网无交", EchoLevel.Success); return true; }
         var res = BenchAnalyzer.Analyze(prof.Select(p => p.dist).ToList(), prof.Select(p => p.z).ToList(), v.D("flat", 15));
-        if (res.Rows.Count == 0) { StatusMsg.Text = "工艺参数分析：剖面上未识别出台阶结构"; return true; }
+        if (res.Rows.Count == 0) { EditEcho("工艺参数分析：剖面上未识别出台阶结构", EchoLevel.Success); return true; }
 
         var rows = new List<(string, string)>
         {
@@ -1704,8 +1704,8 @@ public partial class MainWindow
                 : $"平盘宽 {r.Width.ToString("0.##", Inv)} m · 标高 {r.TopZ.ToString("0.##", Inv)} m"));
         if (res.Rows.Count > 24) rows.Add(("…", $"另有 {res.Rows.Count - 24} 段未列出"));
         PcResultWindow.Popup(this, "工艺参数分析", rows, null, 0, 0, null, "沿剖面按坡度分平盘/坡面段（行程编码合并连续同类）。");
-        StatusMsg.Text = $"工艺参数分析「{meshes[0].Name}」：{res.FaceCount} 个坡面 / {res.BermCount} 个平盘"
-                       + $" · 整体帮坡角 {res.OverallSlopeDeg.ToString("0.##", Inv)}° · 总高差 {res.TotalHeight.ToString("0.##", Inv)}m";
+        EditEcho($"工艺参数分析「{meshes[0].Name}」：{res.FaceCount} 个坡面 / {res.BermCount} 个平盘"
+                       + $" · 整体帮坡角 {res.OverallSlopeDeg.ToString("0.##", Inv)}° · 总高差 {res.TotalHeight.ToString("0.##", Inv)}m", EchoLevel.Success);
         return true;
     }
 
@@ -1717,9 +1717,9 @@ public partial class MainWindow
         foreach (var m in AllMeshes()) m.Invalidate();    // 面缓存按着色模式建的, 换模式要重建
         RefreshScene();
         int n = AllMeshes().Count;
-        StatusMsg.Text = off
+        EditEcho(off
             ? $"{label}着色：已关闭，回到实体色（{n} 张三角网）"
-            : $"{label}着色：视口全局按{label}着色（GPU 实时，只改显示、不出数值，对场景内 {n} 张三角网生效）";
+            : $"{label}着色：视口全局按{label}着色（GPU 实时，只改显示、不出数值，对场景内 {n} 张三角网生效）", EchoLevel.Success);
     }
 
     /// <summary>粗糙度 / 曲率：选中三角网 → 逐顶点算 → 着色（原版这两项都要求先选中三角网）。</summary>
@@ -1727,7 +1727,7 @@ public partial class MainWindow
     {
         string what = curvature ? "曲率" : "粗糙度";
         var meshes = await PcSelectAsync<MeshEntity>(what + "分析", "三角网");
-        if (meshes.Count == 0) { StatusMsg.Text = $"{what}分析：场景里没有三角网，请先用「2.5D TIN」把点云建成面。"; return true; }
+        if (meshes.Count == 0) { EditEcho($"{what}分析：场景里没有三角网，请先用「2.5D TIN」把点云建成面。", EchoLevel.Error); return true; }
         // 原版这两项无参数框：选中三角网后直接算并着色（曲率有正负用分歧色，粗糙度用地形色）
         int map = curvature ? 2 : 0;
 
@@ -1753,8 +1753,8 @@ public partial class MainWindow
             total += vals.Length;
         }
         RefreshScene();
-        StatusMsg.Text = $"{what}分析：{meshes.Count} 张三角网 · {total:N0} 个顶点已按{what}着色"
-                       + (curvature ? "（分歧色：蓝=凹 / 白=平 / 红=凸）" : "（局部高程起伏 RMS，越红越粗糙）");
+        EditEcho($"{what}分析：{meshes.Count} 张三角网 · {total:N0} 个顶点已按{what}着色"
+                       + (curvature ? "（分歧色：蓝=凹 / 白=平 / 红=凸）" : "（局部高程起伏 RMS，越红越粗糙）"), EchoLevel.Success);
         return true;
     }
 
@@ -1789,7 +1789,7 @@ public partial class MainWindow
         RefreshScene();
         PcZoomTo(pc);
         Title += $" [自检 点云 {pc.PointCount} 点]";
-        StatusMsg.Text = $"自检点云「{pc.Name}」：{pc.PointCount:N0} 点（4 级台阶 + 噪声 + 矿卡）已入场景并设为当前点云";
+        EditEcho($"自检点云「{pc.Name}」：{pc.PointCount:N0} 点（4 级台阶 + 噪声 + 矿卡）已入场景并设为当前点云", EchoLevel.Success);
     }
 
     /// <summary>
@@ -1806,7 +1806,7 @@ public partial class MainWindow
         _scene.Add(pl);
         _selected.Add(pl);   // 追加不清空: 剖面分析/工艺参数分析要求「三角网 + 剖面线」同时选中
         RefreshScene(); HighlightSelection();
-        StatusMsg.Text = $"自检{(closed ? "闭合边界" : "剖面线")}：{pl.Points.Count} 点已入场景并选中（当前共选 {_selected.Count} 个）";
+        EditEcho($"自检{(closed ? "闭合边界" : "剖面线")}：{pl.Points.Count} 点已入场景并选中（当前共选 {_selected.Count} 个）", EchoLevel.Success);
     }
 
     /// <summary>逐顶点 粗糙度(一环高差 RMS) 或 曲率(高度 Laplacian)。</summary>

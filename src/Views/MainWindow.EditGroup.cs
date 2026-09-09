@@ -875,6 +875,12 @@ public partial class MainWindow
     /// </summary>
     private async Task EdMeshSplitAlongAsync()
     {
+        // 场景里压根没有可选的线/网时先说清楚 —— 否则进了"点选切线"模式却什么都点不中,
+        // 用起来就是"点了没反应"(点云选项卡的其余命令都在入口处报缺什么, 这条也照做)。
+        bool anyLine = _scene.Entities.OfType<PolylineEntity>().Any(e => e.Visible && e.Points.Count >= 2 && _layers.IsSelectable(e.LayerName));
+        bool anyMesh = _scene.Entities.OfType<MeshEntity>().Any(e => e.Visible && _layers.IsSelectable(e.LayerName));
+        if (!anyMesh) { EditEcho("分割三角网：场景里没有三角网，请先用「2.5D TIN」把点云建成面。", EchoLevel.Error); return; }
+        if (!anyLine) { EditEcho("分割三角网：场景里没有可作切线的多段线，请先画一条穿过三角网的线。", EchoLevel.Error); return; }
         EditEcho("> SPLITALONG (沿线分割三角网)：请按提示 ① 选切线（多段线） ② 选三角网…");
         var line = await PickEntityInViewportAsync<PolylineEntity>(
             "① 点选切线（多段线 / 直线段）…（Esc 取消）", p => p.Points.Count >= 2,
