@@ -63,7 +63,10 @@ public partial class CadGlViewport : OpenGlControlBase
     private bool _hasFaces;
     private float[]? _pendingFaces;
     private bool _facesDirty;
-    private double _sceneZc;          // 场景几何高程中心(供 ZE/FitBounds 把注视点放到模型高度)
+    private double _sceneZc;          // 线几何高程中心(供 ZE/FitBounds 把注视点放到模型高度)
+    private double[]? _facesBounds;   // 着色面 XY 包围盒(着色面模式下三角网不进线通道, ZE 得单独并进来)
+    private double _facesZc;          // 着色面高程中心
+    private double _cloudZc;          // 点云高程中心
 
     // 点云(GL_POINTS): 一份场景可有多份点云, 合成一条通道整体上传
     private GlRenderer.Mesh _cloud;
@@ -608,12 +611,25 @@ public partial class CadGlViewport : OpenGlControlBase
     }
 
     /// <summary>范围缩放到最近导入几何（ZE / ZOOMEXTENTS）。</summary>
+    /// <summary>
+    /// 取景用的高程中心：线几何 → 着色面 → 点云，取第一个有内容的。
+    /// 矿区模型都在 z≈+1200，注视点取错就等于"什么都看不见"，而三条通道任一为空都很常见
+    /// （着色面模式没有边线；点云隐藏后没有点；纯点云场景没有线）。
+    /// </summary>
+    private double FramingZc()
+    {
+        if (_pendingScene is { Length: > 0 }) return _sceneZc;
+        if (_pendingFaces is { Length: > 0 }) return _facesZc;
+        if (_pendingCloud is { Length: > 0 }) return _cloudZc;
+        return _sceneZc;
+    }
+
     public void ZoomExtents()
     {
         // 框住 导入几何 ∪ 手绘场景几何；无任何几何才不动。(LocalizeBounds 按当前原点态一致换算)
-        var b = UnionBounds(UnionBounds(_lastBounds, _sceneBounds), _cloudBounds);
+        var b = UnionBounds(UnionBounds(UnionBounds(_lastBounds, _sceneBounds), _facesBounds), _cloudBounds);
         if (b == null) return;
-        var lb = LocalizeBounds(b)!; _camera.FitBounds(lb[0], lb[1], lb[2], lb[3], _sceneZc);
+        var lb = LocalizeBounds(b)!; _camera.FitBounds(lb[0], lb[1], lb[2], lb[3], FramingZc());
         RequestNextFrameRendering();
     }
 
@@ -623,7 +639,7 @@ public partial class CadGlViewport : OpenGlControlBase
         if (bounds == null || bounds.Length < 4) return;
         _lastBounds = bounds;
         EnsureOrigin(bounds);
-        var lb2 = LocalizeBounds(bounds)!; _camera.FitBounds(lb2[0], lb2[1], lb2[2], lb2[3], _sceneZc);
+        var lb2 = LocalizeBounds(bounds)!; _camera.FitBounds(lb2[0], lb2[1], lb2[2], lb2[3], FramingZc());
         RequestNextFrameRendering();
     }
 
@@ -982,6 +998,8 @@ public partial class CadGlViewport
     public void SetSceneFaces(float[] tris)
     {
         _pendingFaces = tris ?? Array.Empty<float>();
+        _facesBounds = ComputeXYBounds(_pendingFaces);
+        _facesZc = ComputeZCenter(_pendingFaces);
         _facesDirty = true;
         RequestNextFrameRendering();
     }
@@ -995,9 +1013,7 @@ public partial class CadGlViewport
     {
         _pendingCloud = verts ?? Array.Empty<float>();
         _cloudBounds = ComputeXYBounds(_pendingCloud);
-        // 场景里只有点云时, 注视点高程得取点云的 —— 否则相机盯着 z=0, 而矿区点云在 +1200m,
-        // 三维视图下"加载完什么都看不见"。有其它几何时以它们为准(RefreshScene 先设线段几何再设点云)。
-        if (_pendingScene == null || _pendingScene.Length == 0) _sceneZc = ComputeZCenter(_pendingCloud);
+        _cloudZc = ComputeZCenter(_pendingCloud);
         _cloudPx = pointPixels > 0 ? pointPixels : 2f;
         _cloudDirty = true;
         RequestNextFrameRendering();
@@ -1020,6 +1036,6 @@ public partial class CadGlViewport
     {
         var s = _camera.Snapshot();
         string B(double[]? b) => b == null ? "null" : $"[{b[0]:0.#},{b[1]:0.#},{b[2]:0.#},{b[3]:0.#}]";
-        return $"yaw={s.Yaw:0.##} pitch={s.Pitch:0.##} dist={s.Dist:0.#} target=({s.Tx:0.#},{s.Ty:0.#},{s.Tz:0.#}) 2D={s.Is2D} origin=({_ox:0.#},{_oy:0.#},{_originSet}) scene={B(_sceneBounds)} last={B(_lastBounds)} zc={_sceneZc:0.#} bounds={Bounds.Width:0}x{Bounds.Height:0}";
+        return $"yaw={s.Yaw:0.##} pitch={s.Pitch:0.##} dist={s.Dist:0.#} target=({s.Tx:0.#},{s.Ty:0.#},{s.Tz:0.#}) 2D={s.Is2D} origin=({_ox:0.#},{_oy:0.#},{_originSet}) scene={B(_sceneBounds)} faces={B(_facesBounds)} cloud={B(_cloudBounds)} last={B(_lastBounds)} zc={FramingZc():0.#} bounds={Bounds.Width:0}x{Bounds.Height:0}";
     }
 }

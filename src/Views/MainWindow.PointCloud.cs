@@ -1360,8 +1360,21 @@ public partial class MainWindow
             _scene.Add(me); made.Add(me);
             if (b.IsFill) nFill++; else nCut++;
         }
+        // 不自动选中生成的封闭体：选中会盖上高亮青色，挖红/填蓝就看不出来了 —— 原版生成完即以本色示人。
+        if (made.Count > 0) { _selected.Clear(); HighlightSelection(); }
         RefreshScene();
-        if (made.Count > 0) { _selected.Clear(); _selected.AddRange(made); HighlightSelection(); }
+        if (made.Count > 0)   // 取景到新生成的挖填体(点云常被隐藏/远在别处, 不框住等于看不见)
+        {
+            double bx0 = double.MaxValue, by0 = double.MaxValue, bx1 = double.MinValue, by1 = double.MinValue;
+            foreach (var e in made)
+            {
+                if (e is not MeshEntity mm) continue;
+                var mb = mm.Bounds;
+                bx0 = Math.Min(bx0, mb.minX); by0 = Math.Min(by0, mb.minY);
+                bx1 = Math.Max(bx1, mb.maxX); by1 = Math.Max(by1, mb.maxY);
+            }
+            if (bx1 > bx0 && by1 > by0) Viewport.FitBounds(new[] { bx0, by0, bx1, by1 });
+        }
 
         // ⑤ 结果窗：总量 + 口径过滤扣除 + 逐块明细（同原版 VolumeResultWindow 的角色）
         var raw = res.Raw;
@@ -1389,7 +1402,7 @@ public partial class MainWindow
 
         StatusMsg.Text = $"两期点云算量（{ca.Name} → {cb.Name}，{(viaTin ? "常规TIN" : "直接栅格")}，体积格网 {raw.CellSize.ToString("0.##", Inv)}m）："
                        + $"挖方 {cutM3.ToString("N1", Inv)} m³ · 填方 {fillM3.ToString("N1", Inv)} m³ · 净 {(fillM3 - cutM3).ToString("N1", Inv)} m³"
-                       + $" · {made.Count} 个封闭体入场景（填 {nFill} 蓝 / 挖 {nCut} 红）"
+                       + $" · {made.Count} 个封闭体入场景（填 {nFill} 蓝 / 挖 {nCut} 红，图层「填方」/「挖方」）"
                        + (dropN > 0 ? $" · 碎斑丢弃 {dropN} 块" : "");
         return true;
     }

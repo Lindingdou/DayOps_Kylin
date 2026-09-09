@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using PitMine3D.Kylin.Cad.Draw;
@@ -41,6 +41,27 @@ public class MeshFacesAndPanTests
             MeshEntity.RenderMode = MeshEntity.DisplayMode.Wireframe;
             o.Clear(); m.TessellateFaces(o); Assert.Empty(o);
             e.Clear(); m.Tessellate(e); Assert.Equal(5 * 12, e.Count);
+        }
+        finally { (MeshEntity.RenderMode, MeshEntity.ColorByElevation) = saved; }
+    }
+
+    /// <summary>
+    /// 着色面模式下三角网**不进线通道** —— 取景(ZE/FitBounds)若只看线通道就会框空：
+    /// 两期算量刚生成的挖填封闭体、隐藏点云后的场景都只有面，实体在 z≈1200 而相机盯着 z=0，
+    /// 看着就是"没生成"。CadGlViewport 因此必须把面通道的包围盒/高程中心并进取景。
+    /// </summary>
+    [Fact]
+    public void Shaded_mesh_leaves_line_channel_empty_so_framing_needs_faces()
+    {
+        var saved = (MeshEntity.RenderMode, MeshEntity.ColorByElevation);
+        try
+        {
+            MeshEntity.RenderMode = MeshEntity.DisplayMode.Shaded;
+            var scene = new Scene();
+            scene.Add(Quad());
+            Assert.Empty(scene.BuildGeometry());        // 线通道: 空 → 老的取景包围盒为 null
+            Assert.NotEmpty(scene.BuildFaces());        // 面通道: 有内容 → 取景必须从这里取
+            Assert.Empty(scene.BuildCloudPoints());     // 没有点云时点通道也空
         }
         finally { (MeshEntity.RenderMode, MeshEntity.ColorByElevation) = saved; }
     }
