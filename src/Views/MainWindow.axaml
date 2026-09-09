@@ -6,7 +6,7 @@
         Width="1280" Height="800"
         MinWidth="900" MinHeight="600"
         Background="#F3F4F6"
-        Title="DayOps">
+        Title="中煤平朔露天煤矿生产计划决策支撑系统 · DayOps">
 
     <Grid RowDefinitions="Auto,*,Auto">   <!-- Ribbon / DockingManager(含信息栏 Tab) / StatusBar —— 同原版 mainGrid -->
 

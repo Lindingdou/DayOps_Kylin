@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=DayOps
-Name[zh_CN]=DayOps · 露天矿三维平台
+Name[zh_CN]=DayOps
 Comment=露天煤矿二三维一体化平台 · 麒麟版 (Avalonia + OpenGL)
 Exec=/opt/pitmine3d/PitMine3D.Kylin
 Icon=pitmine3d

@@ -1836,7 +1836,7 @@ public partial class MainWindow : Window
     private void SetDocPath(string? path)
     {
         _currentPath = path;
-        Title = "DayOps — " + (path == null ? "未命名" : Path.GetFileName(path));   // 软件名 + 当前文档名
+        Title = "中煤平朔露天煤矿生产计划决策支撑系统 · DayOps — " + (path == null ? "未命名" : Path.GetFileName(path));   // 原版系统名 + 当前文档名(桌面/软件名另用 DayOps)
     }
 
     private async Task SaveSceneAsync()
