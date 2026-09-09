@@ -79,7 +79,7 @@ public class FleetOptimizerTests
     [Fact]
     public void Fleet_dispatch_rules_from_seed()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var rules = GeoDataQueries.GetFleetDispatchRules(db.Connection);
         Assert.NotEmpty(rules);
         Assert.Contains(rules, r => r.TruckPayloadT > 0 && r.CycleTimeMin > 0);   // join 到载重

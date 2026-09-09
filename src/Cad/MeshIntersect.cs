@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace PitMine3D.Kylin.Cad;
@@ -41,6 +41,16 @@ public static class MeshIntersect
         return (Math.Min(A.x, Math.Min(B.x, C.x)), Math.Min(A.y, Math.Min(B.y, C.y)), Math.Min(A.z, Math.Min(B.z, C.z)),
                 Math.Max(A.x, Math.Max(B.x, C.x)), Math.Max(A.y, Math.Max(B.y, C.y)), Math.Max(A.z, Math.Max(B.z, C.z)));
     }
+
+    /// <summary>
+    /// 两三角的交段（无交/共面/退化 → false）。布尔运算 / 刀切实体需要**逐三角**拿到交段
+    /// 作为约束边重剖分，故把内部的 TriTri 开放出来。
+    /// </summary>
+    public static bool TriTriSegment(
+        (double x, double y, double z) a0, (double x, double y, double z) a1, (double x, double y, double z) a2,
+        (double x, double y, double z) b0, (double x, double y, double z) b1, (double x, double y, double z) b2,
+        out Seg seg)
+        => TriTri(a0, a1, a2, b0, b1, b2, out seg);
 
     /// <summary>两三角是否横切相交(有实交段)。供网格自交诊断复用; 共面/仅触边不算。</summary>
     public static bool TrianglesIntersect(

@@ -20,6 +20,38 @@ public abstract class DrawTool
     /// <summary>结束多点绘制，返回实体（不足则 null）。</summary>
     public virtual SceneEntity? Finish() => null;
 
+    // ── 命令行选项关键字（AutoCAD 的 “指定下一点或 [闭合(C)/放弃(U)]”）─────────────
+    /// <summary>一个选项：命令行键入的字母、中文名。</summary>
+    public readonly record struct Option(string Key, string Name);
+
+    /// <summary>执行一个选项后的结果。</summary>
+    /// <param name="Handled">该关键字是否被本工具认领（false = 不是选项，按坐标/命令处理）。</param>
+    /// <param name="Entity">选项产出的实体（如“闭合”出一条闭合多段线）。</param>
+    /// <param name="EndsCommand">该选项是否结束本次绘制。</param>
+    /// <param name="SwitchTo">改用另一个绘制命令（如 圆 的 3P/2P/T），由外层重新激活。</param>
+    /// <param name="Message">状态栏回显。</param>
+    public readonly record struct OptionResult(
+        bool Handled, SceneEntity? Entity = null, bool EndsCommand = false, string? SwitchTo = null, string? Message = null);
+
+    /// <summary>当前可用的选项（随已点点数变化，如“闭合”要够 2 点才出现）。空 = 无选项。</summary>
+    public virtual IReadOnlyList<Option> Options => System.Array.Empty<Option>();
+
+    /// <summary>执行选项；不认识的关键字返回 Handled=false。</summary>
+    public virtual OptionResult Invoke(string key) => new(false);
+
+    /// <summary>提示里的选项串：<c>[闭合(C)/放弃(U)]</c>；无选项返回空串。</summary>
+    public string OptionHint()
+    {
+        var ops = Options;
+        if (ops.Count == 0) return "";
+        var parts = new string[ops.Count];
+        for (int i = 0; i < ops.Count; i++) parts[i] = $"{ops[i].Name}({ops[i].Key})";
+        return "或 [" + string.Join("/", parts) + "]";      // 接在“指定下一点”后面, 同 AutoCAD 的中文提示行
+    }
+
+    /// <summary>关键字匹配：不分大小写的全词命中（AutoCAD 的选项字母）。</summary>
+    protected bool IsKey(string typed, string key) => string.Equals(typed?.Trim(), key, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>追加进行中的预览（橡皮筋）：已点的点 + 当前光标。cursor 为 null 时只画已确定部分。</summary>
     public virtual void AppendPreview(List<float> o, (double x, double y)? cursor) { }
 
@@ -69,13 +101,27 @@ public sealed class LineTool : DrawTool
 public sealed class CircleTool : DrawTool
 {
     private (double x, double y)? _c;
-    public override string Prompt => _c == null ? "圆：指定圆心" : "圆：指定半径";
+    public override string Prompt => _c == null ? $"圆：指定圆心{OptionHint()}" : "圆：指定半径";
     public override SceneEntity? AddPoint(double x, double y)
     {
         if (_c == null) { _c = (x, y); return null; }
         var c = _c.Value; _c = null;
         double r = Math.Sqrt((x - c.x) * (x - c.x) + (y - c.y) * (y - c.y));
         return new CircleEntity { Cx = c.x, Cy = c.y, Radius = r };
+    }
+
+    // 同 AutoCAD CIRCLE 的 [三点(3P)/两点(2P)/相切、相切、半径(T)]：本系统各是一条独立命令, 选项即切过去。
+    // 只在还没定圆心时给 —— 定了圆心再切等于丢掉已点的点。
+    public override IReadOnlyList<Option> Options => _c != null ? System.Array.Empty<Option>()
+        : new[] { new Option("3P", "三点"), new Option("2P", "两点"), new Option("T", "相切、相切、半径") };
+
+    public override OptionResult Invoke(string key)
+    {
+        if (_c != null) return new(false);   // 圆心已定：不再认这几个字, 免得把已点的点悄悄丢了
+        if (IsKey(key, "3P")) return new(true, SwitchTo: "CIRCLE3P");
+        if (IsKey(key, "2P")) return new(true, SwitchTo: "CIRCLE2P");
+        if (IsKey(key, "T") || IsKey(key, "TTR")) return new(true, SwitchTo: "TTR");
+        return new(false);
     }
     public override void AppendPreview(List<float> o, (double x, double y)? cursor)
     {
@@ -254,7 +300,9 @@ public sealed class PolylineTool : DrawTool
 {
     private readonly List<(double x, double y)> _pts = new();
     public override bool IsMultiPoint => true;
-    public override string Prompt => _pts.Count == 0 ? "多段线：指定起点" : $"多段线：下一点（双击结束，已 {_pts.Count} 点）";
+    public override string Prompt => _pts.Count == 0
+        ? "多段线：指定起点"
+        : $"多段线：指定下一点{OptionHint()}（已 {_pts.Count} 点，回车/双击结束）";
     public override SceneEntity? AddPoint(double x, double y) { _pts.Add((x, y)); return null; }
     public override SceneEntity? Finish()
     {
@@ -262,6 +310,29 @@ public sealed class PolylineTool : DrawTool
         var e = new PolylineEntity { Points = new List<(double, double)>(_pts) };
         _pts.Clear();
         return e;
+    }
+
+    // 选项同 AutoCAD PLINE：闭合(C) 要够 2 点才给（1 点闭合无意义）；放弃(U) 有点就能撤。
+    public override IReadOnlyList<Option> Options => _pts.Count >= 2
+        ? new[] { new Option("C", "闭合"), new Option("U", "放弃") }
+        : _pts.Count == 1 ? new[] { new Option("U", "放弃") } : System.Array.Empty<Option>();
+
+    public override OptionResult Invoke(string key)
+    {
+        if (IsKey(key, "C") || IsKey(key, "闭合"))
+        {
+            if (_pts.Count < 3) return new(true, Message: "多段线：至少 3 点才能闭合");
+            var e = new PolylineEntity { Points = new List<(double, double)>(_pts), Closed = true };
+            int n = _pts.Count; _pts.Clear();
+            return new(true, e, EndsCommand: true, Message: $"多段线已闭合（{n} 点）");
+        }
+        if (IsKey(key, "U") || IsKey(key, "放弃"))
+        {
+            if (_pts.Count == 0) return new(true, Message: "多段线：没有可放弃的点");
+            _pts.RemoveAt(_pts.Count - 1);
+            return new(true, Message: _pts.Count == 0 ? "多段线：已退回到起点之前" : $"多段线：已放弃上一点（剩 {_pts.Count} 点）");
+        }
+        return new(false);
     }
     public override void AppendPreview(List<float> o, (double x, double y)? cursor)
     {

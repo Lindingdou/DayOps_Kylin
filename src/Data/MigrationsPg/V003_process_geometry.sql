@@ -11,7 +11,7 @@
 
 -- ─── ① working_face(工作面 / 台阶几何)─────────────────────────────────────
 CREATE TABLE IF NOT EXISTS working_face (
-    id                           SERIAL PRIMARY KEY,
+    id                           BIGSERIAL PRIMARY KEY,
     face_code                    TEXT NOT NULL UNIQUE,           -- 工作面编号 WF-1195-A
     location_code                TEXT,                            -- 平盘编码 FK→mine_location
     equipment_id                 TEXT,                            -- 主电铲编号 FK→equipment
@@ -81,7 +81,7 @@ EXECUTE PROCEDURE fn_touch_updated_at();
 
 -- ─── ③ slope_design(边坡设计)──────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS slope_design (
-    id                           SERIAL PRIMARY KEY,
+    id                           BIGSERIAL PRIMARY KEY,
     side_name                    TEXT NOT NULL,                   -- 帮别 东帮/西帮/南帮/北帮 / 工作帮
     side_type                    TEXT NOT NULL CHECK (side_type IN ('working','final','transition')),
     working_slope_angle_deg      DOUBLE PRECISION,                            -- 工作帮坡角(°,20-35)

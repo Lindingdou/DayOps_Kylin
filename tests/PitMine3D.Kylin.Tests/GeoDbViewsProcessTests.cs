@@ -1,3 +1,4 @@
+using PitMine3D.Kylin.Tests;
 using System;
 using System.Linq;
 using PitMine3D.Kylin.Data;
@@ -15,7 +16,7 @@ public class GeoDbViewsProcessTests
     [Fact]
     public void Systems_seeded_eight_ordered_by_display_order()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var systems = ProcessSystems(db.Connection, activeOnly: false);
         Assert.Equal(8, systems.Count);
         Assert.Equal("blasting", systems[0].Code);
@@ -27,7 +28,7 @@ public class GeoDbViewsProcessTests
     [Fact]
     public void Phases_by_system_ordered_by_sequence()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var phases = ProcessPhasesBySystem(db.Connection, 1);
         Assert.Equal(4, phases.Count);
         Assert.Equal("drilling", phases[0].Code);
@@ -45,7 +46,7 @@ public class GeoDbViewsProcessTests
     [Fact]
     public void Params_by_phase_seeded_with_norms()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var ps = ProcessParamsByPhase(db.Connection, 101);
         Assert.True(ps.Count >= 3);
         Assert.Equal(ps.Count, ProcessParamCountByPhase(db.Connection, 101));
@@ -75,7 +76,7 @@ public class GeoDbViewsProcessTests
     [Fact]
     public void System_phase_param_crud_roundtrip_and_cascade()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var c = db.Connection;
         long sysId = ProcessInsertSystem(c, "test_sys", "测试系统");
         Assert.True(sysId > 8);
@@ -104,7 +105,7 @@ public class GeoDbViewsProcessTests
     [Fact]
     public void Constraints_by_param_bench_height_has_hard_shovel_limits()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var cs = ProcessConstraintsByParam(db.Connection, 2001);   // 台阶高度 → 电铲最大挖掘高度(V012)
         Assert.Equal(4, cs.Count);
         Assert.All(cs, x => { Assert.Equal("max", x.ConstraintType); Assert.Equal("hard", x.Consequence); Assert.True(x.IsActive); });
@@ -117,7 +118,7 @@ public class GeoDbViewsProcessTests
     [Fact]
     public void Templates_seeded_and_archive_hides_from_active()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var c = db.Connection;
         var all = ProcTemplates(c, activeOnly: false);
         Assert.True(all.Count >= 3);
@@ -135,7 +136,7 @@ public class GeoDbViewsProcessTests
     [Fact]
     public void Template_values_seeded_and_upsert_updates_in_place()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var c = db.Connection;
         var vals = ProcValuesByTemplate(c, 1);
         Assert.True(vals.Count >= 10);
@@ -158,7 +159,7 @@ public class GeoDbViewsProcessTests
     [Fact]
     public void Template_insert_clone_delete()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var c = db.Connection;
         var src = ProcGetTemplate(c, 1)!;
         var clone = new ProcTemplate
@@ -213,7 +214,7 @@ public class GeoDbViewsProcessTests
     [Fact]
     public void Template_usage_lists_bound_locations()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var usage = ProcTemplateUsage(db.Connection, 1);
         Assert.True(usage.Count > 0);
         Assert.Contains(usage, u => u.LocationCode == "1195" && u.PhaseName == "钻孔");
@@ -225,7 +226,7 @@ public class GeoDbViewsProcessTests
     [Fact]
     public void Locations_active_ordered_by_elevation()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var locs = ProcLocations(db.Connection, activeOnly: true);
         Assert.Contains(locs, l => l.LocationCode == "1195");
         var withElev = locs.Where(l => l.ElevationM.HasValue).Select(l => l.ElevationM!.Value).ToList();
@@ -239,7 +240,7 @@ public class GeoDbViewsProcessTests
     [Fact]
     public void Bindings_seeded_for_1195_and_rebind_switches_template()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var c = db.Connection;
         var bindings = ProcActiveBindingsByLocation(c, "1195");
         Assert.True(bindings.Count >= 4);
@@ -275,7 +276,7 @@ public class GeoDbViewsProcessTests
     [Fact]
     public void Acceptance_seeded_1195_drilling_sorted_desc_and_latest()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var c = db.Connection;
         var hist = ProcAcceptanceByLocationPhase(c, "1195", 101);
         Assert.True(hist.Count >= 10);
@@ -294,7 +295,7 @@ public class GeoDbViewsProcessTests
     [Fact]
     public void Recent_by_status_window_filters()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var fails = ProcRecentAcceptanceByStatus(db.Connection, "fail", 36500);
         var warns = ProcRecentAcceptanceByStatus(db.Connection, "warning", 36500);
         Assert.True(fails.Count > 0);
@@ -350,7 +351,7 @@ public class GeoDbViewsProcessTests
     [Fact]
     public void LoadAcceptanceRows_prefills_existing_and_template_name()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var (rows, tplName) = ProcLoadAcceptanceRows(db.Connection, "1195", 101, new DateTime(2026, 5, 20));
         Assert.Equal("硬岩区标准 v1.0", tplName);
         Assert.Equal(ProcessParamCountByPhase(db.Connection, 101), rows.Count);
@@ -370,7 +371,7 @@ public class GeoDbViewsProcessTests
     [Fact]
     public void SubmitAcceptance_inserts_then_updates()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var c = db.Connection;
         var date = new DateTime(2030, 1, 1);
         var (rows, _) = ProcLoadAcceptanceRows(c, "1195", 101, date);
@@ -413,7 +414,7 @@ public class GeoDbViewsProcessTests
     [Fact]
     public void ParamCompareRows_join_template_and_latest_measurement()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var rows = ProcParamCompareRows(db.Connection, "1195", 101, 1);
         Assert.Equal(ProcessParamCountByPhase(db.Connection, 101), rows.Count);
         var hd = rows.First(r => r.ParamName == "孔径");
@@ -433,7 +434,7 @@ public class GeoDbViewsProcessTests
     [Fact]
     public void CompatibleEquipment_filters_by_typical_category_and_hard_constraints()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         // 钻孔(101, 典型 Drill) + 硬岩模板 孔径 250 ≤ DMH90 max 251 → 适用; 仅 Drill 类机型
         var drill = ProcCompatibleEquipment(db.Connection, 101, 1);
         Assert.True(drill.Count >= 1);
@@ -471,7 +472,7 @@ public class GeoDbViewsProcessTests
     [Fact]
     public void Plan_checks_read_slope_and_fleet()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var f = ProcMinSlopeSafetyFactor(db.Connection);
         Assert.NotNull(f);
         Assert.InRange(f!.Value, 0.8, 3.0);

@@ -9,10 +9,10 @@
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS parameter_acceptance (
-    id                  SERIAL PRIMARY KEY,
-    param_id            INTEGER NOT NULL,
+    id                  BIGSERIAL PRIMARY KEY,
+    param_id            BIGINT NOT NULL,
     location_code       TEXT NOT NULL,
-    phase_id            INTEGER NOT NULL,
+    phase_id            BIGINT NOT NULL,
     measure_date        TEXT NOT NULL,
     measured_value      DOUBLE PRECISION,                          -- 数值型实测
     measured_text       TEXT,                          -- 文本/枚举型实测

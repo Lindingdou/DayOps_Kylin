@@ -12,7 +12,7 @@
 
 -- ─── 主表: current_state_batch (现状写实批次) ─────────────────────────────
 CREATE TABLE IF NOT EXISTS current_state_batch (
-    id          SERIAL PRIMARY KEY,
+    id          BIGSERIAL PRIMARY KEY,
     label       TEXT    NOT NULL UNIQUE,       -- 系统唯一时间标签 CSR-yyyyMMdd-HHmmss[-nn]
     name        TEXT    NOT NULL DEFAULT '',   -- 友好名(可改)
     source      TEXT,                          -- 手工录入 / Excel导入
@@ -38,8 +38,8 @@ EXECUTE PROCEDURE fn_touch_updated_at();
 
 -- ─── 主表: current_state_point (现状高程点) ───────────────────────────────
 CREATE TABLE IF NOT EXISTS current_state_point (
-    id          SERIAL PRIMARY KEY,
-    batch_id    INTEGER NOT NULL,
+    id          BIGSERIAL PRIMARY KEY,
+    batch_id    BIGINT NOT NULL,
     x           DOUBLE PRECISION    NOT NULL,              -- 经距 (m, 与工程同坐标系)
     y           DOUBLE PRECISION    NOT NULL,              -- 纬距 (m)
     z           DOUBLE PRECISION    NOT NULL,              -- 现状高程 (m, 黄海)

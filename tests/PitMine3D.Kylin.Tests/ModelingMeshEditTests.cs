@@ -415,7 +415,7 @@ public class ModelingMeshEditTests
     [Fact]
     public void Section_boreholes_from_seeded_db_project_within_band()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var all = GeoDbViews.SectionBoreholesInBounds(db.Connection, -1e9, 1e9, -1e9, 1e9);
         Assert.True(all.Count > 100);
         var h = all.First(r => r.HoleId == "355");

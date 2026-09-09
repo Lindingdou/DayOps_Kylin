@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace PitMine3D.Kylin.Cad;
@@ -109,6 +109,9 @@ public static class Contour
         for (int iy = 0; iy + 1 < ny; iy++)
         {
             double a = grid[ix, iy], b = grid[ix + 1, iy], c = grid[ix + 1, iy + 1], d = grid[ix, iy + 1];
+            // 无数据格(NaN/±∞: 采样落在网格外或空洞里)整格跳过 —— 不跳的话 NaN 会被当成"低于等值",
+            // 插值出 NaN 坐标的等值线段, 那条线既画不出来, 还会让整篇工程存不了档(JSON 写不了 NaN)。
+            if (!IsFinite(a) || !IsFinite(b) || !IsFinite(c) || !IsFinite(d)) continue;
             int code = (a > level ? 1 : 0) | (b > level ? 2 : 0) | (c > level ? 4 : 0) | (d > level ? 8 : 0);
             var edges = Table[code];
             for (int k = 0; k + 1 < edges.Length; k += 2)
@@ -133,6 +136,8 @@ public static class Contour
             default: t = Frac(d, a, L); return (x0 + ix * dx, y0 + (iy + 1 - t) * dy);         // 左 d→a
         }
     }
+
+    private static bool IsFinite(double v) => !double.IsNaN(v) && !double.IsInfinity(v);
 
     private static double Frac(double v0, double v1, double L)
     {

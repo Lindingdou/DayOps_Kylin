@@ -33,4 +33,4 @@
 -- =============================================================================
 
 -- ── 本期是否纳入作业范围(1=选定,进推演/进路网裁剪;0=不参与,但仍在台账里) ───────────
-ALTER TABLE mineable_region ADD COLUMN active INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE mineable_region ADD COLUMN active BIGINT NOT NULL DEFAULT 1;

@@ -14,14 +14,14 @@
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS virtual_drill_surface (
-    id             SERIAL PRIMARY KEY,
+    id             BIGSERIAL PRIMARY KEY,
     role           TEXT    NOT NULL DEFAULT 'roof',      -- 'surface' | 'roof' | 'floor'
     seam_name      TEXT    NOT NULL DEFAULT '',          -- 地表为空;顶/底板为煤层编号(如 4 / 7-1 / 9 / 11)
-    seam_order     INTEGER NOT NULL DEFAULT 0,           -- 地质排序(自上而下递增,0 在最上)
+    seam_order     BIGINT NOT NULL DEFAULT 0,           -- 地质排序(自上而下递增,0 在最上)
     color_hex      TEXT    NOT NULL DEFAULT '#3C3C3C',   -- 层位显示色(可配置;#RRGGBB)
     source_layer   TEXT    NOT NULL DEFAULT '',          -- 来源:原场景三角网图层名(溯源)
-    vertex_count   INTEGER NOT NULL DEFAULT 0,
-    triangle_count INTEGER NOT NULL DEFAULT 0,
+    vertex_count   BIGINT NOT NULL DEFAULT 0,
+    triangle_count BIGINT NOT NULL DEFAULT 0,
     min_x DOUBLE PRECISION NOT NULL DEFAULT 0,
     min_y DOUBLE PRECISION NOT NULL DEFAULT 0,
     min_z DOUBLE PRECISION NOT NULL DEFAULT 0,

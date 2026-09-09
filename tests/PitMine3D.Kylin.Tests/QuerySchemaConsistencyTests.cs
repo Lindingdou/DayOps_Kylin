@@ -13,7 +13,7 @@ public class QuerySchemaConsistencyTests
     [Fact]
     public void All_conn_only_queries_run_against_real_migrated_schema()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var c = db.Connection;
         Assert.Null(Record.Exception(() => GeoDataQueries.GetAcceptanceByPhase(c)));
         Assert.Null(Record.Exception(() => GeoDataQueries.GetAcceptanceStats(c)));

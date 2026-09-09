@@ -1638,4 +1638,21 @@
         </DrawingImage.Drawing>
     </DrawingImage>
 
+    <!-- 数据库连接：服务器圆柱 + 指向客户端的连接线（局域网共享库） -->
+    <DrawingImage x:Key="db_connect">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <!-- 圆柱主体 -->
+                <GeometryDrawing Brush="#3B82F6" Geometry="M6,7 L6,20 A9,3.4 0 0 0 24,20 L24,7 Z" />
+                <!-- 顶盖（浅色椭圆，区分出立体感） -->
+                <GeometryDrawing Brush="#93C5FD" Geometry="M15,3.6 A9,3.4 0 0 0 15,10.4 A9,3.4 0 0 0 15,3.6 Z" />
+                <!-- 分层线 -->
+                <GeometryDrawing Brush="#1D4ED8" Geometry="M6,12.5 A9,3.4 0 0 0 24,12.5 A9,3.4 0 0 1 6,12.5 Z" />
+                <!-- 连接线 + 客户端端点 -->
+                <GeometryDrawing Brush="#0F766E" Geometry="M24,15 L29,15 L29,25 L24.6,25 L24.6,23.6 L27.6,23.6 L27.6,16.4 L24,16.4 Z" />
+                <GeometryDrawing Brush="#0F766E" Geometry="M20,22.4 A2.6,2.6 0 1 0 20,27.6 A2.6,2.6 0 1 0 20,22.4 Z" />
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
 </ResourceDictionary>

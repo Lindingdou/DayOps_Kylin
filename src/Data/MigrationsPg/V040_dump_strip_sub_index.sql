@@ -12,8 +12,8 @@
 -- 容不下同一带的多个子格 —— 不补这一列的话，一带切成 5 个位置，落库只进得去 1 个，
 -- 剩下 4 个连同它们的库容一起消失，而清单和图上都还在。
 
-ALTER TABLE dump_strip ADD COLUMN sub_index INTEGER NOT NULL DEFAULT 0;   -- 带内子号(1 起;0 = 该带没切)
-ALTER TABLE dump_strip ADD COLUMN sub_count INTEGER NOT NULL DEFAULT 1;   -- 本带共切成几个位置
+ALTER TABLE dump_strip ADD COLUMN sub_index BIGINT NOT NULL DEFAULT 0;   -- 带内子号(1 起;0 = 该带没切)
+ALTER TABLE dump_strip ADD COLUMN sub_count BIGINT NOT NULL DEFAULT 1;   -- 本带共切成几个位置
 
 DROP INDEX IF EXISTS idx_dump_strip_key;
 

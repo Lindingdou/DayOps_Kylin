@@ -12,15 +12,20 @@ namespace PitMine3D.Kylin.Data;
 /// 原 PitMine3D 走 SqlLib(**SQLite**) + GeoDataBase 迁移(建表 + 真实种子数据)。
 /// 此忠实移植其数据基座: 内嵌 50 个迁移 SQL(与原逐字一致) → 运行时建库自足, 跨平台、可单测。
 ///
-/// 具体用哪种库已抽到 <see cref="GeoDbDialect"/>: 默认 SQLite(嵌入式, 本机全可跑, 无需外部服务),
-/// 设 PITMINE_DB=opengauss 则连 openGauss。本类只负责"按版本号顺序把迁移喂进去"这件与库无关的事。
+/// 具体用哪种库已抽到 <see cref="GeoDbDialect"/>。
+/// 产品里只有 openGauss(SQLite 已降级为测试专用)。本类只负责"按版本号顺序把迁移喂进去"这件与库无关的事。
 /// </summary>
 public sealed class GeoDatabase : IDisposable
 {
     private readonly DbConnection _conn;
+    private readonly GeoDbDialect _dialect;
     public DbConnection Connection => _conn;
 
-    private GeoDatabase(DbConnection conn) => _conn = conn;
+    private GeoDatabase(DbConnection conn, GeoDbDialect dialect)
+    {
+        _conn = conn;
+        _dialect = dialect;
+    }
 
     /// <summary>
     /// 默认库文件路径：用户数据目录 (Linux: ~/.local/share/PitMine3D.Kylin/geo.db, Windows: %LocalAppData%\PitMine3D.Kylin\geo.db)。
@@ -51,16 +56,24 @@ public sealed class GeoDatabase : IDisposable
     /// 否则十几台机器早上同时开机会同时建表灌种子, 首次部署就打架。
     /// </summary>
     public static GeoDatabase OpenSeeded(string? path = null)
+        => OpenWith(GeoDbDialect.Current, path);
+
+    /// <summary>
+    /// 显式指定方言打开。给测试用: 不必去改 <see cref="GeoDbDialect.Current"/> 这个进程级
+    /// 懒缓存静态, 就能针对另一种库跑 —— 本仓库有过共享可变 static 引发并行测试偶发失败的
+    /// 前科, 不再往里加。生产代码走 <see cref="OpenSeeded"/> 即可。
+    /// </summary>
+    public static GeoDatabase OpenWith(GeoDbDialect dialect, string? path = null)
     {
-        var conn = GeoDbDialect.Current.CreateConnection(path);
+        var conn = dialect.CreateConnection(path);
         conn.Open();
 
-        if (GeoDbDialect.Current.MigrateOnOpen || IsMigrateRequested())
-            ApplyMigrations(conn);
+        if (dialect.MigrateOnOpen || IsMigrateRequested())
+            ApplyMigrations(conn, dialect);
         else
-            VerifySchemaUpToDate(conn);
+            VerifySchemaUpToDate(conn, dialect);
 
-        return new GeoDatabase(conn);
+        return new GeoDatabase(conn, dialect);
     }
 
     /// <summary>部署方显式要求执行迁移(PITMINE_DB_MIGRATE=1)。</summary>
@@ -74,9 +87,8 @@ public sealed class GeoDatabase : IDisposable
     /// 共享库上客户端启动时的校验: 库里登记的迁移版本必须覆盖本程序内嵌的全部版本。
     /// 缺哪个就报哪个 —— 与其让程序带着不匹配的 schema 半死不活地跑, 不如当场说清楚。
     /// </summary>
-    private static void VerifySchemaUpToDate(DbConnection conn)
+    private static void VerifySchemaUpToDate(DbConnection conn, GeoDbDialect d)
     {
-        var d = GeoDbDialect.Current;
         var embedded = EmbeddedMigrations(d).Select(t => t.ver).ToList();
 
         var applied = new HashSet<string>(StringComparer.Ordinal);
@@ -107,7 +119,7 @@ public sealed class GeoDatabase : IDisposable
     public int AppliedMigrationCount()
     {
         using var cmd = _conn.CreateCommand();
-        cmd.CommandText = $"SELECT COUNT(*) FROM {GeoDbDialect.Current.SchemaMigrationTable}";
+        cmd.CommandText = $"SELECT COUNT(*) FROM {_dialect.SchemaMigrationTable}";
         return Convert.ToInt32(cmd.ExecuteScalar());
     }
 
@@ -120,10 +132,8 @@ public sealed class GeoDatabase : IDisposable
         return v == null || v is DBNull ? 0 : Convert.ToInt64(v);
     }
 
-    private static void ApplyMigrations(DbConnection conn)
+    private static void ApplyMigrations(DbConnection conn, GeoDbDialect d)
     {
-        var d = GeoDbDialect.Current;
-
         d.BeforeMigrations(conn);                 // SQLite: 迁移期临时关外键(种子跨表插入顺序会临时违约)
         d.EnsureSchemaMigrationTable(conn);
 
@@ -135,13 +145,12 @@ public sealed class GeoDatabase : IDisposable
             while (rd.Read()) applied.Add(rd.GetString(0));
         }
 
-        var asm = typeof(GeoDatabase).Assembly;
         var migrations = EmbeddedMigrations(d);
 
         foreach (var (res, ver) in migrations)
         {
             if (applied.Contains(ver)) continue;
-            string sql = ReadResource(asm, res);
+            string sql = ReadResource(d.MigrationAssembly, res);
             using var tx = conn.BeginTransaction();
             try
             {
@@ -185,7 +194,7 @@ public sealed class GeoDatabase : IDisposable
     /// </summary>
     private static List<(string res, string ver)> EmbeddedMigrations(GeoDbDialect d)
     {
-        var asm = typeof(GeoDatabase).Assembly;
+        var asm = d.MigrationAssembly;
         // 资源名形如 PitMine3D.Kylin.Data.Migrations.V001_initial.sql(openGauss 版在 .MigrationsPg.)
         var list = asm.GetManifestResourceNames()
             .Where(n => n.Contains(d.MigrationMarker) && n.EndsWith(".sql", StringComparison.OrdinalIgnoreCase))

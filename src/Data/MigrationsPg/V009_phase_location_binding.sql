@@ -9,13 +9,13 @@
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS phase_location_binding (
-    id                  SERIAL PRIMARY KEY,
-    phase_id            INTEGER NOT NULL,
+    id                  BIGSERIAL PRIMARY KEY,
+    phase_id            BIGINT NOT NULL,
     location_code       TEXT NOT NULL,
-    bound_template_id   INTEGER,                      -- 本平盘该环节套用的模板(NULL=用参数默认值)
+    bound_template_id   BIGINT,                      -- 本平盘该环节套用的模板(NULL=用参数默认值)
     started_at          TEXT NOT NULL DEFAULT (CURRENT_DATE),
     ended_at            TEXT,                         -- NULL = 现行
-    is_active           INTEGER NOT NULL DEFAULT 1,
+    is_active           BIGINT NOT NULL DEFAULT 1,
     notes               TEXT,
     created_at          TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at          TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -41,4 +41,4 @@
 -- =============================================================================
 
 -- ── 该排土场对应的作业区域(mineable_region.id);NULL = 还没挂上 ─────────────────
-ALTER TABLE dump_site ADD COLUMN region_id INTEGER;
+ALTER TABLE dump_site ADD COLUMN region_id BIGINT;

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using PitMine3D.Kylin.Cad;
@@ -100,6 +101,9 @@ public partial class ImportBlockModelWindow : Window
             if (string.IsNullOrWhiteSpace(path)) { await BlockMsgBox.WarnAsync(this, "导入块体", "请先选择要导入的文件。"); return; }
             if (!File.Exists(path)) { await BlockMsgBox.WarnAsync(this, "导入块体", $"文件不存在：\n{path}"); return; }
             string fmt = Format(path);
+            // 读文件与建元数据都放后台线程：八十多 MB 的块体文件占着 UI 线程, 窗口就会挂"(未响应)"
+            importBtn.IsEnabled = false;
+            statusLabel.Text = "ⓘ 正在读取…界面可继续操作";
             List<BlockModel.Block> blocks; Dictionary<string, double[]>? attrs = null; string note;
             string baseName = Path.GetFileNameWithoutExtension(path);
             PmbImportService.Result? pmb = null;
@@ -107,7 +111,7 @@ public partial class ImportBlockModelWindow : Window
             {
                 case "pmb":
                 {
-                    var r = PmbImportService.Load(path);
+                    var r = await Task.Run(() => PmbImportService.Load(path));   // 后台读, 同 blk
                     if (!r.Success) { await BlockMsgBox.WarnAsync(this, "块体文件无效", r.Error); return; }
                     pmb = r;
                     blocks = r.Blocks; attrs = r.AllAttrs.Count > 0 ? r.AllAttrs : null;
@@ -119,7 +123,7 @@ public partial class ImportBlockModelWindow : Window
                 }
                 case "blk":
                 {
-                    var r = BlkImportService.Load(path);
+                    var r = await Task.Run(() => BlkImportService.Load(path));   // 后台读: 八十多 MB 的块体文件别占着 UI 线程
                     if (!r.Success) { await BlockMsgBox.WarnAsync(this, "块体文件无效", r.Error); return; }
                     blocks = r.Blocks; attrs = r.AllAttrs.Count > 0 ? r.AllAttrs : null;
                     note = $"\n八叉树原生 {r.BlockCount:N0} 个子块（变尺寸），含 {r.AttrNames.Count} 个属性列。";
@@ -127,7 +131,8 @@ public partial class ImportBlockModelWindow : Window
                 }
                 case "csv":
                 {
-                    var text = File.ReadAllText(path, CsvEncoding());
+                    var enc = CsvEncoding();
+                    var text = await Task.Run(() => File.ReadAllText(path, enc));
                     var r = BlockModel.Parse(text);
                     if (!r.Success) { await BlockMsgBox.WarnAsync(this, "块体文件无效", r.Error ?? "解析失败"); return; }
                     blocks = r.Blocks;
@@ -144,7 +149,9 @@ public partial class ImportBlockModelWindow : Window
                 bool go = await BlockMsgBox.ConfirmAsync(this, "块数较多", $"文件含 {blocks.Count:N0} 块，超过视口逐块渲染建议上限 {BlockVoxelBuilder.MaxRenderBlocks:N0}，导入后视口可能卡顿。\n仍要导入？");
                 if (!go) return;
             }
-            var meta = BlockModelMeta.FromBlocks(BlockModelStore.UniqueName(baseName), blocks, attrs);
+            string uniq = BlockModelStore.UniqueName(baseName);
+            var capturedBlocks = blocks; var capturedAttrs = attrs;
+            var meta = await Task.Run(() => BlockModelMeta.FromBlocks(uniq, capturedBlocks, capturedAttrs));
             meta.DisplayStyle.FillColor = BlockDefaultPalette.Next(BlockModelStore.Models.Count);
             if (meta.PropertySchema.Count > 0) { meta.ActiveColormapAttribute = meta.PropertySchema[0].Name; meta.ColormapRange = null; }
             if (pmb != null) ApplyPmbMetadata(meta, pmb);
@@ -155,6 +162,7 @@ public partial class ImportBlockModelWindow : Window
             Close(true);
         }
         catch (Exception ex) { await BlockMsgBox.WarnAsync(this, "导入块体", ex.Message); }
+        finally { importBtn.IsEnabled = true; UpdatePreview(); }   // 任何一条 return 都要把按钮放回去
     }
 
     /// <summary>

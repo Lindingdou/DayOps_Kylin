@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using PitMine3D.Kylin.Data;
 using Xunit;
@@ -23,14 +24,19 @@ public class PgMigrationTests
     private const string SqliteMarker = ".Data.Migrations.";
     private const string PgMarker     = ".Data.MigrationsPg.";
 
+    // SQLite 版迁移嵌在**测试**程序集(产品已不含 SQLite), openGauss 版在主程序集。
+    private static Assembly AsmFor(string marker) =>
+        marker == SqliteMarker ? typeof(PgMigrationTests).Assembly : typeof(GeoDatabase).Assembly;
+
     private static IEnumerable<string> Resources(string marker) =>
-        typeof(GeoDatabase).Assembly.GetManifestResourceNames()
+        AsmFor(marker).GetManifestResourceNames()
             .Where(n => n.Contains(marker) && n.EndsWith(".sql", StringComparison.OrdinalIgnoreCase))
             .OrderBy(n => n, StringComparer.Ordinal);
 
     private static string Read(string res)
     {
-        using var s = typeof(GeoDatabase).Assembly.GetManifestResourceStream(res)!;
+        using var s = (res.Contains(SqliteMarker) ? typeof(PgMigrationTests).Assembly
+                                                  : typeof(GeoDatabase).Assembly).GetManifestResourceStream(res)!;
         using var r = new StreamReader(s);
         return r.ReadToEnd();
     }
@@ -126,10 +132,12 @@ public class PgMigrationTests
 
         int setvals = Regex.Matches(last, @"setval\s*\(\s*pg_get_serial_sequence", RegexOptions.IgnoreCase).Count;
 
+        // 用的是 BIGSERIAL 不是 SERIAL: SQLite 的 INTEGER 本来就是 64 位, 数据层 record 都声明 long,
+        // 映射成 32 位的 SERIAL/INTEGER 会让 Dapper 物化失败(实测被 CoalSeamDefs 等 4 个方法抓到)。
         int serials = Resources(PgMarker)
-            .Sum(r => Regex.Matches(Strip(Read(r)), @"\bSERIAL\b", RegexOptions.IgnoreCase).Count);
+            .Sum(r => Regex.Matches(Strip(Read(r)), @"\b(?:BIG)?SERIAL\b", RegexOptions.IgnoreCase).Count);
 
-        Assert.True(serials > 0, "应当有 SERIAL 列");
+        Assert.True(serials > 0, "应当有自增列");
         Assert.Equal(serials, setvals);
     }
 

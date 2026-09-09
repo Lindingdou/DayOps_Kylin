@@ -61,7 +61,7 @@ INSERT INTO borehole (id, hole_id, x, y, z_collar, depth_total, terminate_horizo
   (47, '174-39', 4375102.99, 37615368.836, 1410.0, 157.6, NULL, '/2001-05-20', NULL, NULL, NULL, NULL, NULL, '原始', NULL, NULL, NULL),
   (48, '175-49', 4375841.465, 37615415.1, 1473.06, 218.6, NULL, '/1993-10-13', NULL, NULL, NULL, NULL, NULL, '原始', NULL, NULL, NULL),
   (49, '176-36', 4374914.965, 37615366.252, 1412.14, 157.6, NULL, '/2001-05-16', NULL, NULL, NULL, NULL, NULL, '原始', NULL, NULL, NULL),
-  (50, '176-52', 4376126.468, 37615429.885, 1447.85, 194.2, NULL, '/2001-04-25', NULL, NULL, NULL, NULL, NULL, '原始', NULL, NULL, NULL) ON CONFLICT DO NOTHING;
+  (50, '176-52', 4376126.468, 37615429.885, 1447.85, 194.2, NULL, '/2001-04-25', NULL, NULL, NULL, NULL, NULL, '原始', NULL, NULL, NULL) ON DUPLICATE KEY UPDATE x = x;
 INSERT INTO borehole (id, hole_id, x, y, z_collar, depth_total, terminate_horizon, drill_date, drill_unit, drill_rating, log_rating, overall_rating, category, coord_filled, coord_fill_basis, source_page, remark) VALUES
   (51, '180-34', 4374753.727, 37615474.764, 1435.78, 182.0, NULL, '/2000-03-31', NULL, NULL, NULL, NULL, NULL, '原始', NULL, NULL, NULL),
   (52, '180-36', 4374863.654, 37615467.129, 1435.24, 169.8, NULL, '/2000-03-27', NULL, NULL, NULL, NULL, NULL, '原始', NULL, NULL, NULL),
@@ -112,7 +112,7 @@ INSERT INTO borehole (id, hole_id, x, y, z_collar, depth_total, terminate_horizo
   (97, '285-48', 4375880.581, 37616499.699, 1484.17, 230.79, NULL, '/2003.7.4', NULL, NULL, NULL, NULL, NULL, '原始', NULL, NULL, NULL),
   (98, '297-53', 4376266.85, 37616605.473, 1420.22, 144.36, NULL, '2005.10.23-11.18', NULL, NULL, NULL, NULL, NULL, '原始', NULL, NULL, NULL),
   (99, '336-58', 4376638.357, 37616998.928, 1418.54, 134.6, NULL, '2005.7.30-10.3', NULL, NULL, NULL, NULL, NULL, '原始', NULL, NULL, NULL),
-  (100, '365-57', 4376581.018, 37617293.47, 1419.2, 112.8, NULL, '2005.8.5-8.25', NULL, NULL, NULL, NULL, NULL, '原始', NULL, NULL, NULL) ON CONFLICT DO NOTHING;
+  (100, '365-57', 4376581.018, 37617293.47, 1419.2, 112.8, NULL, '2005.8.5-8.25', NULL, NULL, NULL, NULL, NULL, '原始', NULL, NULL, NULL) ON DUPLICATE KEY UPDATE x = x;
 INSERT INTO borehole (id, hole_id, x, y, z_collar, depth_total, terminate_horizon, drill_date, drill_unit, drill_rating, log_rating, overall_rating, category, coord_filled, coord_fill_basis, source_page, remark) VALUES
   (101, '410-56', 4376534.878, 37617801.364, 1435.16, 128.66, NULL, '2005.6.30-7.26', NULL, NULL, NULL, NULL, NULL, '原始', NULL, NULL, NULL),
   (102, '417-45', 4375662.474, 37617832.195, 1450.38, 179.88, NULL, '2005.5.12-6.15', NULL, NULL, NULL, NULL, NULL, '原始', NULL, NULL, NULL),
@@ -163,7 +163,7 @@ INSERT INTO borehole (id, hole_id, x, y, z_collar, depth_total, terminate_horizo
   (147, 'B2313', 4375888.327, 37620405.643, 1349.96, 255.18, NULL, '1984.6.26-7.8', NULL, NULL, NULL, NULL, NULL, '原始', NULL, NULL, NULL),
   (148, 'B2406', 4375642.61, 37621034.895, 1316.7, 298.47, NULL, '1983.9.26-10.29', NULL, NULL, NULL, NULL, NULL, '原始', NULL, NULL, NULL),
   (149, 'B2407', 4376091.963, 37620874.479, 1291.22, 336.23, NULL, '1984.4.18-5.7', NULL, NULL, NULL, NULL, NULL, '原始', NULL, NULL, NULL),
-  (150, 'B2408', 4376555.928, 37620675.226, 1339.42, 338.49, NULL, '1984.4.26-6.5', NULL, NULL, NULL, NULL, NULL, '原始', NULL, NULL, NULL) ON CONFLICT DO NOTHING;
+  (150, 'B2408', 4376555.928, 37620675.226, 1339.42, 338.49, NULL, '1984.4.26-6.5', NULL, NULL, NULL, NULL, NULL, '原始', NULL, NULL, NULL) ON DUPLICATE KEY UPDATE x = x;
 INSERT INTO borehole (id, hole_id, x, y, z_collar, depth_total, terminate_horizon, drill_date, drill_unit, drill_rating, log_rating, overall_rating, category, coord_filled, coord_fill_basis, source_page, remark) VALUES
   (151, 'B2409', 4377011.339, 37620478.874, 1329.51, 306.34, NULL, '1984.4.7-4.22', NULL, NULL, NULL, NULL, NULL, '原始', NULL, NULL, NULL),
   (152, 'B2505', 4376294.789, 37621337.247, 1294.74, 303.94, NULL, '1984.4.2-4.14', NULL, NULL, NULL, NULL, NULL, '原始', NULL, NULL, NULL),
@@ -214,7 +214,7 @@ INSERT INTO borehole (id, hole_id, x, y, z_collar, depth_total, terminate_horizo
   (197, '220-23', 4373887.542, 37615892.135, 1394.55, 157.6, NULL, '1999.4.29', NULL, NULL, NULL, NULL, NULL, '高程补', '二维 IDW(k=5,p=2) 邻孔: 1009(100m,Z=1402.70); 205-24(159m,Z=1410.86); 210-26(204m,Z=1360.10)', NULL, NULL),
   (198, '255-13', 4373113.368, 37616229.074, 1316.24, 108.8, NULL, '1999.12.15', NULL, NULL, NULL, NULL, NULL, '高程补', '二维 IDW(k=5,p=2) 邻孔: 240-14(131m,Z=1291.83); 256-12(142m,Z=1300.73); Y86-11(176m,Z=1373.90)', NULL, NULL),
   (199, '263-16', 4373182.409, 37616327.758, 1338.16, 121.0, NULL, '1999.12.27', NULL, NULL, NULL, NULL, NULL, '高程补', '二维 IDW(k=5,p=2) 邻孔: 1106(170m,Z=1377.90); 240-14(236m,Z=1291.83); 256-12(239m,Z=1300.73)', NULL, NULL),
-  (200, '249-15', 4373224.425, 37616187.341, 1312.25, 102.7, NULL, '1999.12.30', NULL, NULL, NULL, NULL, NULL, '高程补', '二维 IDW(k=5,p=2) 邻孔: 240-14(131m,Z=1291.83); 234-18(145m,Z=1294.07); 1106(234m,Z=1377.90)', NULL, NULL) ON CONFLICT DO NOTHING;
+  (200, '249-15', 4373224.425, 37616187.341, 1312.25, 102.7, NULL, '1999.12.30', NULL, NULL, NULL, NULL, NULL, '高程补', '二维 IDW(k=5,p=2) 邻孔: 240-14(131m,Z=1291.83); 234-18(145m,Z=1294.07); 1106(234m,Z=1377.90)', NULL, NULL) ON DUPLICATE KEY UPDATE x = x;
 INSERT INTO borehole (id, hole_id, x, y, z_collar, depth_total, terminate_horizon, drill_date, drill_unit, drill_rating, log_rating, overall_rating, category, coord_filled, coord_fill_basis, source_page, remark) VALUES
   (201, '208-19', 4373472.367, 37615780.4, 1376.16, 67.6, NULL, '1991.1.18', NULL, NULL, NULL, NULL, NULL, '高程补', '二维 IDW(k=5,p=2) 邻孔: 1007(153m,Z=1395.99); 908(185m,Z=1400.98); 195-20(200m,Z=1347.97)', NULL, NULL),
   (202, '208-18', 4373430.701, 37615784.487, 1379.81, 67.7, NULL, '1991.1.12', NULL, NULL, NULL, NULL, NULL, '高程补', '二维 IDW(k=5,p=2) 邻孔: 1007(167m,Z=1395.99); 908(173m,Z=1400.98); 195-20(237m,Z=1347.97)', NULL, NULL),
@@ -256,7 +256,7 @@ INSERT INTO borehole (id, hole_id, x, y, z_collar, depth_total, terminate_horizo
   (238, '1407', 4373128.352, 37617646.188, 1378.75, 241.1, NULL, '1963.9.15', NULL, NULL, NULL, NULL, NULL, '原始', NULL, NULL, NULL),
   (239, '1504', 4373263.674, 37617963.769, 1367.82, 204.8, NULL, '1963.8.3', NULL, NULL, NULL, NULL, NULL, '原始', NULL, NULL, NULL),
   (240, '1206', 4373506.815, 37616697.796, 1357.23, 198.12, NULL, '1963.9.20', NULL, NULL, NULL, NULL, NULL, '原始', NULL, NULL, NULL),
-  (241, 'L1', 4377550.44, 37618982.289, 1350.89, 176.03, NULL, '1983.4.23', NULL, NULL, NULL, NULL, NULL, '原始', NULL, NULL, NULL) ON CONFLICT DO NOTHING;
+  (241, 'L1', 4377550.44, 37618982.289, 1350.89, 176.03, NULL, '1983.4.23', NULL, NULL, NULL, NULL, NULL, '原始', NULL, NULL, NULL) ON DUPLICATE KEY UPDATE x = x;
 
 -- ─── borehole_seam_result: 778 行 ────────────────
 INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, drill_seam_thickness, drill_structure, drill_recovery_rate, drill_quality, log_end_depth, log_seam_thickness, log_structure, log_quality, overall_thickness, adopted_thickness, weathered_coal_thickness, parting_thickness, roof_lithology, floor_lithology, floor_elevation, overall_rating, status, source_page, source_layout, remark) VALUES
@@ -309,7 +309,7 @@ INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, d
   (47, 29, '4（4-1）', 155.94, 13.19, NULL, 94.0, '甲', 156.03, 13.25, NULL, '乙', 13.19, 12.94, NULL, 0.25, NULL, NULL, 1083.23, '钻甲', '正常', 13, 'A19', NULL),
   (48, 30, '4（4-1）', 78.59, 8.87, NULL, 88.0, '甲', 78.43, 8.7, NULL, '乙', 8.87, 5.77, 3.1, NULL, NULL, NULL, 1299.29, '钻甲', '正常', 13, 'A19', NULL),
   (49, 31, '4（4-1）', 166.64, 14.31, NULL, 77.0, '甲', 166.25, 14.6, NULL, '乙', 14.31, 13.96, NULL, 0.35, NULL, NULL, 1165.37, '钻甲', '正常', 13, 'A19', NULL),
-  (50, 32, '4（4-1）', 215.34, 16.35, NULL, 89.0, '甲', 214.92, 16.58, NULL, '甲', 16.35, 15.75, NULL, 0.6, NULL, NULL, 1055.81, '钻甲', '正常', 13, 'A19', NULL) ON CONFLICT DO NOTHING;
+  (50, 32, '4（4-1）', 215.34, 16.35, NULL, 89.0, '甲', 214.92, 16.58, NULL, '甲', 16.35, 15.75, NULL, 0.6, NULL, NULL, 1055.81, '钻甲', '正常', 13, 'A19', NULL) ON DUPLICATE KEY UPDATE drill_end_depth = drill_end_depth;
 INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, drill_seam_thickness, drill_structure, drill_recovery_rate, drill_quality, log_end_depth, log_seam_thickness, log_structure, log_quality, overall_thickness, adopted_thickness, weathered_coal_thickness, parting_thickness, roof_lithology, floor_lithology, floor_elevation, overall_rating, status, source_page, source_layout, remark) VALUES
   (51, 17, '4（4-1）', 244.85, 13.21, NULL, 78.0, '乙', 244.6, 12.77, NULL, '乙', 13.21, 13.06, NULL, 0.15, NULL, NULL, 1056.82, '钻乙', '正常', 13, 'A19', NULL),
   (52, 11, '4（4-1）', 53.26, 6.1, NULL, 15.0, '合', NULL, NULL, NULL, '合', 6.1, 6.1, 6.1, NULL, NULL, NULL, 1379.64, '钻合', '风', 13, 'A19', NULL),
@@ -360,7 +360,7 @@ INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, d
   (97, 182, '4（4-1）', 134.9, 3.1, NULL, 52.0, NULL, 134.95, 3.35, NULL, NULL, 3.1, 3.1, NULL, NULL, '粗砂岩', '砂质泥岩', 1247.6, '测', '风', 17, 'B17', NULL),
   (98, 184, '4（4-1）', 114.85, 15.39, NULL, 90.0, '合', 114.1, 15.3, NULL, '优', 15.39, 10.07, NULL, NULL, '砂质泥岩', '泥岩', 1304.29, '钻合', '正常', 17, 'B17', NULL),
   (99, 190, '4（4-1）', 127.12, 4.33, NULL, 81.0, '合', 126.9, 4.5, NULL, '优', 4.33, 1.1, 1.1, NULL, '砂砾岩', '粉砂岩', 1263.02, '钻合', '正常', 17, 'B17', NULL),
-  (100, 187, '4（4-1）', 127.05, 15.85, NULL, 98.0, '优', 126.95, 15.95, NULL, '优', 15.85, 14.49, NULL, NULL, '砂质泥岩', '砂质泥岩', 1276.04, '钻优', '正常', 17, 'B17', NULL) ON CONFLICT DO NOTHING;
+  (100, 187, '4（4-1）', 127.05, 15.85, NULL, 98.0, '优', 126.95, 15.95, NULL, '优', 15.85, 14.49, NULL, NULL, '砂质泥岩', '砂质泥岩', 1276.04, '钻优', '正常', 17, 'B17', NULL) ON DUPLICATE KEY UPDATE drill_end_depth = drill_end_depth;
 INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, drill_seam_thickness, drill_structure, drill_recovery_rate, drill_quality, log_end_depth, log_seam_thickness, log_structure, log_quality, overall_thickness, adopted_thickness, weathered_coal_thickness, parting_thickness, roof_lithology, floor_lithology, floor_elevation, overall_rating, status, source_page, source_layout, remark) VALUES
   (101, 188, '4（4-1）', 132.17, 13.64, NULL, 93.0, '优', 131.65, 13.55, NULL, '优', 13.64, 10.07, 1.8, NULL, '中砂岩', '炭质泥岩', 1290.86, '钻优', '正常', 17, 'B17', NULL),
   (102, 189, '4（4-1）', 128.77, 4.36, NULL, 97.0, '优', 128.5, 4.35, NULL, '优', 4.36, 4.36, NULL, NULL, '细砂岩', '泥岩', 1315.99, '钻优', '正常', 17, 'B17', NULL),
@@ -411,7 +411,7 @@ INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, d
   (147, 235, '7-1', 146.31, 1.39, NULL, 87.0, '乙', 146.2, 1.3, NULL, '乙', 1.39, 1.21, NULL, NULL, '炭质泥岩', '炭质泥岩', 1240.03, '钻乙', '正常', 21, 'B17', NULL),
   (148, 211, '7-1', 147.6, 1.36, NULL, 97.0, '甲', 147.75, 1.25, NULL, '甲', 1.36, 0.97, NULL, NULL, '泥岩', '泥岩', 1261.39, '钻甲', '正常', 21, 'B17', NULL),
   (149, 160, '7-1', 131.19, 1.75, NULL, 96.0, '甲', 130.75, 1.15, NULL, '甲', 1.75, 1.0, NULL, NULL, '泥岩', '粉砂岩', 1290.23, '钻甲', '正常', 21, 'B17', NULL),
-  (150, 212, '7-1', 157.39, 1.6, NULL, 97.0, '乙', 157.3, 1.5, NULL, '甲', 1.6, 1.25, NULL, NULL, '泥岩', '粉砂岩', 1236.22, '测甲', '正常', 21, 'B17', NULL) ON CONFLICT DO NOTHING;
+  (150, 212, '7-1', 157.39, 1.6, NULL, 97.0, '乙', 157.3, 1.5, NULL, '甲', 1.6, 1.25, NULL, NULL, '泥岩', '粉砂岩', 1236.22, '测甲', '正常', 21, 'B17', NULL) ON DUPLICATE KEY UPDATE drill_end_depth = drill_end_depth;
 INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, drill_seam_thickness, drill_structure, drill_recovery_rate, drill_quality, log_end_depth, log_seam_thickness, log_structure, log_quality, overall_thickness, adopted_thickness, weathered_coal_thickness, parting_thickness, roof_lithology, floor_lithology, floor_elevation, overall_rating, status, source_page, source_layout, remark) VALUES
   (151, 213, '7-1', 143.66, 1.27, NULL, 50.0, '乙', 143.4, 1.2, NULL, '甲', 1.27, 1.2, NULL, NULL, '泥岩', '泥岩', 1251.68, '测甲', '正常', 22, 'B17', NULL),
   (152, 214, '7-1', 152.29, 1.61, NULL, 70.0, '乙', 152.0, 1.4, NULL, '甲', 1.61, 1.2, NULL, NULL, '泥岩', '泥岩', 1264.33, '钻乙', '正常', 22, 'B17', NULL),
@@ -462,7 +462,7 @@ INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, d
   (197, 146, '9', 234.46, 13.06, NULL, 80.0, '乙', 234.48, 13.33, NULL, '甲', 13.33, 11.6, NULL, 1.73, NULL, NULL, 1116.06, '测', '正常', 24, 'A20', NULL),
   (198, 147, '9', 195.9, 13.22, NULL, 85.0, '乙', 196.01, 13.25, NULL, '甲', 13.25, 12.79, NULL, 0.46, NULL, NULL, 1153.95, '测甲', '正常', 25, 'A19', NULL),
   (199, 128, '9', 259.28, 11.12, NULL, 95.0, '乙', 258.98, 11.14, NULL, '甲', 11.14, 10.01, NULL, 1.13, NULL, NULL, 1067.74, '测甲', '正常', 25, 'A19', NULL),
-  (200, 148, '9', 267.65, 14.71, NULL, 100.0, '乙', 267.15, 12.83, NULL, '甲', 12.83, 11.31, NULL, 1.52, NULL, NULL, 1049.55, '测甲', '正常', 25, 'A19', NULL) ON CONFLICT DO NOTHING;
+  (200, 148, '9', 267.65, 14.71, NULL, 100.0, '乙', 267.15, 12.83, NULL, '甲', 12.83, 11.31, NULL, 1.52, NULL, NULL, 1049.55, '测甲', '正常', 25, 'A19', NULL) ON DUPLICATE KEY UPDATE drill_end_depth = drill_end_depth;
 INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, drill_seam_thickness, drill_structure, drill_recovery_rate, drill_quality, log_end_depth, log_seam_thickness, log_structure, log_quality, overall_thickness, adopted_thickness, weathered_coal_thickness, parting_thickness, roof_lithology, floor_lithology, floor_elevation, overall_rating, status, source_page, source_layout, remark) VALUES
   (201, 149, '9', 268.27, 13.34, NULL, 81.0, '乙', 267.77, 14.86, NULL, '甲', 14.86, 11.97, NULL, 2.89, NULL, NULL, 1023.45, '测甲', '正常', 25, 'A19', NULL),
   (202, 150, '9', 299.97, 12.26, NULL, 91.0, '甲', 299.27, 12.16, NULL, '甲', 12.26, 12.06, NULL, 0.25, NULL, NULL, 1039.45, '钻甲', '正常', 25, 'A19', NULL),
@@ -513,7 +513,7 @@ INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, d
   (247, 180, '9', 151.38, 14.85, NULL, 93.0, '甲', 151.25, 14.6, NULL, '甲', 14.85, 14.69, NULL, 0.38, NULL, NULL, 1303.64, '钻甲', '正常', 27, 'A19', NULL),
   (248, 154, '9', 156.97, 16.01, NULL, 93.0, '甲', 156.55, 15.9, NULL, '甲', 14.84, 16.01, NULL, 1.16, NULL, NULL, 1148.81, '钻甲', '正常', 27, 'A19', NULL),
   (249, 159, '9', 155.91, 12.81, NULL, 97.0, '甲', 155.95, 13.5, NULL, '废', 12.81, 12.24, NULL, 0.57, NULL, NULL, 1273.78, '钻甲', '废', 27, 'A19', NULL),
-  (250, 160, '9', 149.43, 13.24, NULL, 91.0, '甲', NULL, NULL, NULL, NULL, 13.24, 13.06, NULL, 0.18, NULL, NULL, 1271.99, '钻甲', '未测', 27, 'A19', NULL) ON CONFLICT DO NOTHING;
+  (250, 160, '9', 149.43, 13.24, NULL, 91.0, '甲', NULL, NULL, NULL, NULL, 13.24, 13.06, NULL, 0.18, NULL, NULL, 1271.99, '钻甲', '未测', 27, 'A19', NULL) ON DUPLICATE KEY UPDATE drill_end_depth = drill_end_depth;
 INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, drill_seam_thickness, drill_structure, drill_recovery_rate, drill_quality, log_end_depth, log_seam_thickness, log_structure, log_quality, overall_thickness, adopted_thickness, weathered_coal_thickness, parting_thickness, roof_lithology, floor_lithology, floor_elevation, overall_rating, status, source_page, source_layout, remark) VALUES
   (251, 162, '9', 202.32, 14.36, NULL, 91.0, '甲', 202.3, 14.15, NULL, '乙', 14.36, 13.96, NULL, 0.43, NULL, NULL, 1272.9, '钻甲', '正常', 27, 'A19', NULL),
   (252, 163, '9', 203.87, 14.76, NULL, 94.0, '甲', 203.6, 14.95, NULL, '乙', 14.76, 13.9, NULL, 0.96, NULL, NULL, 1267.29, '钻甲', '正常', 27, 'A19', NULL),
@@ -564,7 +564,7 @@ INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, d
   (297, 135, '11', 159.82, 3.9, NULL, 85.0, '乙', 159.64, 3.88, NULL, '甲', 3.88, 3.65, NULL, 0.23, NULL, NULL, 1272.38, '测甲', '正常', 32, 'A20', NULL),
   (298, 136, '11', 169.98, 3.6, NULL, 100.0, '乙', 169.58, 3.38, NULL, '甲', 3.38, 3.38, NULL, NULL, NULL, NULL, 1252.99, '测甲', '正常', 32, 'A20', NULL),
   (299, 137, '11', 182.65, 3.53, NULL, 85.0, '乙', 182.05, 3.95, NULL, '甲', 3.95, 3.75, NULL, 0.2, NULL, NULL, 1268.45, '测甲', '正常', 32, 'A20', NULL),
-  (300, 138, '11', 161.18, 2.35, NULL, 45.0, '丙', 161.15, 4.21, NULL, '甲', 4.21, 4.14, NULL, 0.07, NULL, NULL, 1291.51, '测甲', '正常', 32, 'A20', NULL) ON CONFLICT DO NOTHING;
+  (300, 138, '11', 161.18, 2.35, NULL, 45.0, '丙', 161.15, 4.21, NULL, '甲', 4.21, 4.14, NULL, 0.07, NULL, NULL, 1291.51, '测甲', '正常', 32, 'A20', NULL) ON DUPLICATE KEY UPDATE drill_end_depth = drill_end_depth;
 INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, drill_seam_thickness, drill_structure, drill_recovery_rate, drill_quality, log_end_depth, log_seam_thickness, log_structure, log_quality, overall_thickness, adopted_thickness, weathered_coal_thickness, parting_thickness, roof_lithology, floor_lithology, floor_elevation, overall_rating, status, source_page, source_layout, remark) VALUES
   (301, 126, '11', 140.33, 3.89, NULL, 92.0, '乙', 139.47, 3.37, NULL, '甲', 3.37, 3.12, NULL, 0.25, NULL, NULL, 1226.31, '测甲', '正常', 32, 'A20', NULL),
   (302, 139, '11', 132.58, 3.76, NULL, 54.0, '丙', 132.36, 3.85, NULL, '甲', 3.85, 3.63, NULL, 0.22, NULL, NULL, 1247.94, '测甲', '正常', 32, 'A20', NULL),
@@ -615,7 +615,7 @@ INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, d
   (347, 16, '11', 214.6, 8.5, NULL, 95.0, '甲', 214.03, 8.66, NULL, '甲', 8.5, 8.1, NULL, 0.4, NULL, NULL, 1017.35, '钻甲', '正常', 33, 'A19', NULL),
   (348, 11, '11', 118.64, 3.86, NULL, 53.0, '丙', NULL, NULL, NULL, NULL, 3.86, 3.86, NULL, NULL, NULL, NULL, 1314.05, '钻丙', '正常', 34, 'A19', NULL),
   (349, 1, '11', 253.73, 3.0, NULL, 45.0, '次', 252.8, 4.15, NULL, '合', 4.15, 4.0, NULL, 0.15, NULL, NULL, 1080.84, '测合', '正常', 34, 'A19', NULL),
-  (350, 155, '11', 138.36, 4.49, NULL, 81.0, '乙', 138.6, 4.55, NULL, '乙', 4.49, 4.49, NULL, NULL, NULL, NULL, 1146.16, '钻乙', '正常', 34, 'A19', NULL) ON CONFLICT DO NOTHING;
+  (350, 155, '11', 138.36, 4.49, NULL, 81.0, '乙', 138.6, 4.55, NULL, '乙', 4.49, 4.49, NULL, NULL, NULL, NULL, 1146.16, '钻乙', '正常', 34, 'A19', NULL) ON DUPLICATE KEY UPDATE drill_end_depth = drill_end_depth;
 INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, drill_seam_thickness, drill_structure, drill_recovery_rate, drill_quality, log_end_depth, log_seam_thickness, log_structure, log_quality, overall_thickness, adopted_thickness, weathered_coal_thickness, parting_thickness, roof_lithology, floor_lithology, floor_elevation, overall_rating, status, source_page, source_layout, remark) VALUES
   (351, 168, '11', 191.19, 4.1, NULL, 92.0, '甲', 191.15, 3.75, NULL, '乙', 4.1, 4.1, NULL, NULL, NULL, NULL, 1141.57, '钻甲', '正常', 34, 'A19', NULL),
   (352, 156, '11', 206.21, 3.95, NULL, 91.0, '丙', 206.1, 4.1, NULL, '丙', 3.95, 3.95, NULL, NULL, NULL, NULL, 1153.97, '钻丙', '正常', 34, 'A19', NULL),
@@ -666,7 +666,7 @@ INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, d
   (397, 183, '11', 178.72, 4.12, NULL, NULL, '甲', NULL, NULL, NULL, NULL, 4.12, 3.87, NULL, NULL, '泥岩', '细砂岩', 1194.27, '钻甲', '未测', 36, 'B17', NULL),
   (398, 181, '11', 196.12, 3.05, NULL, 95.0, NULL, 196.7, 2.95, NULL, NULL, 3.05, 2.66, NULL, NULL, '粉砂岩', '泥岩', 1201.6, '测甲', '正常', 36, 'B17', NULL),
   (399, 182, '11', NULL, NULL, NULL, NULL, NULL, 195.82, 3.87, NULL, '甲', 3.87, 3.77, NULL, NULL, NULL, NULL, 1186.73, '测甲', '正常', 36, 'B17', NULL),
-  (400, 184, '11', 165.81, 3.55, NULL, 100.0, '优', 165.35, 3.5, NULL, '优', 3.55, 3.4, NULL, NULL, '泥岩', '粉砂岩', 1253.33, '钻优', '正常', 36, 'B17', NULL) ON CONFLICT DO NOTHING;
+  (400, 184, '11', 165.81, 3.55, NULL, 100.0, '优', 165.35, 3.5, NULL, '优', 3.55, 3.4, NULL, NULL, '泥岩', '粉砂岩', 1253.33, '钻优', '正常', 36, 'B17', NULL) ON DUPLICATE KEY UPDATE drill_end_depth = drill_end_depth;
 INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, drill_seam_thickness, drill_structure, drill_recovery_rate, drill_quality, log_end_depth, log_seam_thickness, log_structure, log_quality, overall_thickness, adopted_thickness, weathered_coal_thickness, parting_thickness, roof_lithology, floor_lithology, floor_elevation, overall_rating, status, source_page, source_layout, remark) VALUES
   (401, 190, '11', 185.96, 3.31, NULL, 99.0, '优', 185.65, 3.45, NULL, '优', 3.31, 3.26, NULL, NULL, '泥灰岩', '细砂岩', 1204.18, '钻优', '正常', 36, 'B17', NULL),
   (402, 187, '11', 178.55, 3.46, NULL, 96.0, '优', 178.47, 3.44, NULL, '优', 3.46, 3.11, NULL, NULL, '泥灰岩', '细砂岩', 1224.54, '钻优', '正常', 36, 'B17', NULL),
@@ -717,7 +717,7 @@ INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, d
   (447, 84, '4（4-1）', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 5.1, 5.1, NULL, NULL, NULL, NULL, 1319.5, NULL, '正常', 38, 'D6', NULL),
   (448, 85, '4（4-1）', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 8.31, 8.31, NULL, NULL, NULL, NULL, 1333.9, NULL, '正常', 38, 'D6', NULL),
   (449, 86, '4（4-1）', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 5.0, 0.0, 5.0, NULL, NULL, NULL, 1323.2, NULL, '正常', 38, 'D6', NULL),
-  (450, 88, '4（4-1）', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 5.43, 1.43, 4.0, NULL, NULL, NULL, 1321.3, NULL, '正常', 38, 'D6', NULL) ON CONFLICT DO NOTHING;
+  (450, 88, '4（4-1）', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 5.43, 1.43, 4.0, NULL, NULL, NULL, 1321.3, NULL, '正常', 38, 'D6', NULL) ON DUPLICATE KEY UPDATE drill_end_depth = drill_end_depth;
 INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, drill_seam_thickness, drill_structure, drill_recovery_rate, drill_quality, log_end_depth, log_seam_thickness, log_structure, log_quality, overall_thickness, adopted_thickness, weathered_coal_thickness, parting_thickness, roof_lithology, floor_lithology, floor_elevation, overall_rating, status, source_page, source_layout, remark) VALUES
   (451, 120, '4（4-1）', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 13.56, 13.56, NULL, NULL, NULL, NULL, 1319.5, NULL, '正常', 39, 'D6', NULL),
   (452, 121, '4（4-1）', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 14.78, 6.96, 7.82, NULL, NULL, NULL, 1330.4, NULL, '正常', 39, 'D6', NULL),
@@ -768,7 +768,7 @@ INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, d
   (497, 58, '4（4-1）', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '风氧化', 40, 'D6', NULL),
   (498, 60, '4（4-1）', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '风氧化', 40, 'D6', NULL),
   (499, 65, '4（4-1）', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '风氧化', 40, 'D6', NULL),
-  (500, 87, '4（4-1）', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '风氧化', 40, 'D6', NULL) ON CONFLICT DO NOTHING;
+  (500, 87, '4（4-1）', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '风氧化', 40, 'D6', NULL) ON DUPLICATE KEY UPDATE drill_end_depth = drill_end_depth;
 INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, drill_seam_thickness, drill_structure, drill_recovery_rate, drill_quality, log_end_depth, log_seam_thickness, log_structure, log_quality, overall_thickness, adopted_thickness, weathered_coal_thickness, parting_thickness, roof_lithology, floor_lithology, floor_elevation, overall_rating, status, source_page, source_layout, remark) VALUES
   (501, 99, '4（4-1）', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '风氧化', 40, 'D6', NULL),
   (502, 100, '4（4-1）', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '风氧化', 40, 'D6', NULL),
@@ -819,7 +819,7 @@ INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, d
   (547, 36, '9', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 10.8, 10.8, NULL, NULL, NULL, NULL, 1272.0, NULL, '正常', 42, 'D6', NULL),
   (548, 37, '9', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 9.4, 9.4, NULL, NULL, NULL, NULL, 1289.6, NULL, '正常', 42, 'D6', NULL),
   (549, 38, '9', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 7.6, 7.6, NULL, NULL, NULL, NULL, 1276.6, NULL, '正常', 42, 'D6', NULL),
-  (550, 39, '9', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 9.3, 9.3, NULL, NULL, NULL, NULL, 1284.1, NULL, '正常', 42, 'D6', NULL) ON CONFLICT DO NOTHING;
+  (550, 39, '9', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 9.3, 9.3, NULL, NULL, NULL, NULL, 1284.1, NULL, '正常', 42, 'D6', NULL) ON DUPLICATE KEY UPDATE drill_end_depth = drill_end_depth;
 INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, drill_seam_thickness, drill_structure, drill_recovery_rate, drill_quality, log_end_depth, log_seam_thickness, log_structure, log_quality, overall_thickness, adopted_thickness, weathered_coal_thickness, parting_thickness, roof_lithology, floor_lithology, floor_elevation, overall_rating, status, source_page, source_layout, remark) VALUES
   (551, 40, '9', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 9.3, 9.3, NULL, NULL, NULL, NULL, 1276.9, NULL, '正常', 42, 'D6', NULL),
   (552, 41, '9', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 8.4, 8.4, NULL, NULL, NULL, NULL, 1279.8, NULL, '正常', 42, 'D6', NULL),
@@ -870,7 +870,7 @@ INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, d
   (597, 86, '9', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 10.46, 10.46, NULL, NULL, NULL, NULL, 1272.9, NULL, '正常', 43, 'D6', NULL),
   (598, 87, '9', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 10.61, 10.61, NULL, NULL, NULL, NULL, 1280.1, NULL, '正常', 43, 'D6', NULL),
   (599, 88, '9', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '未达', 43, 'D6', NULL),
-  (600, 89, '9', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 12.9, 12.9, NULL, NULL, NULL, NULL, 1204.8, NULL, '正常', 43, 'D6', NULL) ON CONFLICT DO NOTHING;
+  (600, 89, '9', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 12.9, 12.9, NULL, NULL, NULL, NULL, 1204.8, NULL, '正常', 43, 'D6', NULL) ON DUPLICATE KEY UPDATE drill_end_depth = drill_end_depth;
 INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, drill_seam_thickness, drill_structure, drill_recovery_rate, drill_quality, log_end_depth, log_seam_thickness, log_structure, log_quality, overall_thickness, adopted_thickness, weathered_coal_thickness, parting_thickness, roof_lithology, floor_lithology, floor_elevation, overall_rating, status, source_page, source_layout, remark) VALUES
   (601, 90, '9', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11.38, 11.38, NULL, NULL, NULL, NULL, 1306.16, NULL, '正常', 43, 'D6', NULL),
   (602, 91, '9', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 13.37, 13.37, NULL, NULL, NULL, NULL, 1280.0, NULL, '正常', 43, 'D6', NULL),
@@ -921,7 +921,7 @@ INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, d
   (647, 193, '9', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '未达', 44, 'D6', NULL),
   (648, 194, '9', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '未达', 44, 'D6', NULL),
   (649, 195, '9', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '未达', 44, 'D6', NULL),
-  (650, 196, '9', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 8.85, 8.85, NULL, NULL, NULL, NULL, 1268.8, NULL, '正常', 44, 'D6', NULL) ON CONFLICT DO NOTHING;
+  (650, 196, '9', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 8.85, 8.85, NULL, NULL, NULL, NULL, 1268.8, NULL, '正常', 44, 'D6', NULL) ON DUPLICATE KEY UPDATE drill_end_depth = drill_end_depth;
 INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, drill_seam_thickness, drill_structure, drill_recovery_rate, drill_quality, log_end_depth, log_seam_thickness, log_structure, log_quality, overall_thickness, adopted_thickness, weathered_coal_thickness, parting_thickness, roof_lithology, floor_lithology, floor_elevation, overall_rating, status, source_page, source_layout, remark) VALUES
   (651, 197, '9', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 10.0, 10.0, NULL, NULL, NULL, NULL, 1261.0, NULL, '正常', 44, 'D6', NULL),
   (652, 198, '9', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11.3, 11.3, NULL, NULL, NULL, NULL, 1216.1, NULL, '正常', 44, 'D6', NULL),
@@ -972,7 +972,7 @@ INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, d
   (698, 69, '11', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 4.0, 2.8, 1.2, NULL, NULL, NULL, 1269.3, NULL, '正常', 45, 'D6', NULL),
   (699, 70, '11', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 4.4, 3.5, 0.9, NULL, NULL, NULL, 1251.9, NULL, '正常', 45, 'D6', NULL),
   (700, 71, '11', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 3.9, 2.8, 1.1, NULL, NULL, NULL, 1259.1, NULL, '正常', 45, 'D6', NULL),
-  (701, 72, '11', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 3.2, 2.0, 1.2, NULL, NULL, NULL, 1277.2, NULL, '正常', 45, 'D6', NULL) ON CONFLICT DO NOTHING;
+  (701, 72, '11', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 3.2, 2.0, 1.2, NULL, NULL, NULL, 1277.2, NULL, '正常', 45, 'D6', NULL) ON DUPLICATE KEY UPDATE drill_end_depth = drill_end_depth;
 INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, drill_seam_thickness, drill_structure, drill_recovery_rate, drill_quality, log_end_depth, log_seam_thickness, log_structure, log_quality, overall_thickness, adopted_thickness, weathered_coal_thickness, parting_thickness, roof_lithology, floor_lithology, floor_elevation, overall_rating, status, source_page, source_layout, remark) VALUES
   (702, 73, '11', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 4.55, 3.05, 1.5, NULL, NULL, NULL, 1267.8, NULL, '正常', 45, 'D6', NULL),
   (703, 74, '11', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '未达', 45, 'D6', NULL),
@@ -1023,7 +1023,7 @@ INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, d
   (748, 13, '11', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1.54, 1.54, NULL, NULL, NULL, NULL, 1160.09, NULL, '正常', 46, 'D6', NULL),
   (749, 185, '11', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 3.51, 3.51, NULL, NULL, NULL, NULL, 1243.0, NULL, '正常', 46, 'D6', NULL),
   (750, 165, '11', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 6.15, 6.15, NULL, NULL, NULL, NULL, 1229.61, NULL, '正常', 46, 'D6', NULL),
-  (751, 166, '11', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 4.26, 4.26, NULL, NULL, NULL, NULL, 1226.25, NULL, '正常', 46, 'D6', NULL) ON CONFLICT DO NOTHING;
+  (751, 166, '11', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 4.26, 4.26, NULL, NULL, NULL, NULL, 1226.25, NULL, '正常', 46, 'D6', NULL) ON DUPLICATE KEY UPDATE drill_end_depth = drill_end_depth;
 INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, drill_seam_thickness, drill_structure, drill_recovery_rate, drill_quality, log_end_depth, log_seam_thickness, log_structure, log_quality, overall_thickness, adopted_thickness, weathered_coal_thickness, parting_thickness, roof_lithology, floor_lithology, floor_elevation, overall_rating, status, source_page, source_layout, remark) VALUES
   (752, 167, '11', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 3.67, 3.67, NULL, NULL, NULL, NULL, 1169.87, NULL, '正常', 46, 'D6', NULL),
   (753, 174, '11', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 4.17, 4.17, NULL, NULL, NULL, NULL, 1273.6, NULL, '正常', 46, 'D6', NULL),
@@ -1052,7 +1052,7 @@ INSERT INTO borehole_seam_result (id, borehole_id, seam_code, drill_end_depth, d
   (776, 33, '11', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 4.88, 4.88, NULL, NULL, NULL, NULL, 1229.46, NULL, '正常', 46, 'D6', NULL),
   (777, 41, '11', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '未达', 46, 'D6', NULL),
   (778, 52, '11', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '未达', 46, 'D6', NULL),
-  (779, 56, '11', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '未达', 46, 'D6', NULL) ON CONFLICT DO NOTHING;
+  (779, 56, '11', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '未达', 46, 'D6', NULL) ON DUPLICATE KEY UPDATE drill_end_depth = drill_end_depth;
 
 -- ─── coal_observation_point: 119 行 ────────────────
 INSERT INTO coal_observation_point (id, point_id, seam_code, x, y, original_y_format, seam_thickness, coal_structure, estimated_thickness, floor_elevation, annual_report, source_page, remark) VALUES
@@ -1105,7 +1105,7 @@ INSERT INTO coal_observation_point (id, point_id, seam_code, x, y, original_y_fo
   (47, '47', '11', 4373717.425, 37617728.391, 6, 3.6, '2.20(0.30)1.10', 3.3, 1202.1, '2014年年报', 49, NULL),
   (48, '48', '11', 4373623.253, 37617694.671, 6, 4.3, '2.20(0.40)1.70', 3.9, 1197.4, '2014年年报', 49, NULL),
   (49, '16-1', '11', 4373850.498, 37616422.085, 6, 3.85, '0.85(0.15)2.85', 3.7, 1226.6, '2016年年报', 49, NULL),
-  (50, '16-2', '11', 4373634.93, 37616345.005, 6, 4.9, '3.30(0.03)0.47(0.10)1.00', 4.77, 1217.1, '2016年年报', 49, NULL) ON CONFLICT DO NOTHING;
+  (50, '16-2', '11', 4373634.93, 37616345.005, 6, 4.9, '3.30(0.03)0.47(0.10)1.00', 4.77, 1217.1, '2016年年报', 49, NULL) ON DUPLICATE KEY UPDATE x = x;
 INSERT INTO coal_observation_point (id, point_id, seam_code, x, y, original_y_format, seam_thickness, coal_structure, estimated_thickness, floor_elevation, annual_report, source_page, remark) VALUES
   (51, '16-3', '11', 4373603.883, 37616690.243, 6, 3.85, '0.90(0.10)2.85', 3.75, 1216.7, '2016年年报', 49, NULL),
   (52, '16-4', '11', 4374738.072, 37618117.046, 6, 3.5, '1.05(0.20)2.25', 3.3, 1245.7, '2016年年报', 49, NULL),
@@ -1156,7 +1156,7 @@ INSERT INTO coal_observation_point (id, point_id, seam_code, x, y, original_y_fo
   (97, 'ATB15-22', '9', 4377129.875, 37620892.872, 8, 10.3, '10.30', 10.3, 1051.9, '2023年年报', 51, NULL),
   (98, 'ATB16-12', '9', 4377230.639, 37620951.153, 8, 16.06, '16.06', 16.06, 1054.1, '2023年年报', 51, NULL),
   (99, 'ATB19-02', '9', 4377146.714, 37621085.815, 8, 12.49, '12.49', 12.49, 1047.9, '2023年年报', 51, NULL),
-  (100, 'ATB16-13', '9', 4377290.873, 37621136.311, 8, 13.44, '13.44', 13.44, 1054.6, '2023年年报', 51, NULL) ON CONFLICT DO NOTHING;
+  (100, 'ATB16-13', '9', 4377290.873, 37621136.311, 8, 13.44, '13.44', 13.44, 1054.6, '2023年年报', 51, NULL) ON DUPLICATE KEY UPDATE x = x;
 INSERT INTO coal_observation_point (id, point_id, seam_code, x, y, original_y_format, seam_thickness, coal_structure, estimated_thickness, floor_elevation, annual_report, source_page, remark) VALUES
   (101, 'B2409', '11', 4377005.203, 37620465.902, 8, 3.5, '3.50', 3.5, 1052.7, '2023年年报', 51, NULL),
   (102, 'L13', '11', 4377241.386, 37620847.786, 8, 3.58, '3.58', 3.58, 1047.2, '2023年年报', 51, NULL),
@@ -1176,7 +1176,7 @@ INSERT INTO coal_observation_point (id, point_id, seam_code, x, y, original_y_fo
   (116, 'ATB15-33', '11', 4376585.61, 37621229.913, 8, 4.86, '4.86', 4.86, 1023.8, '2023年年报', 51, NULL),
   (117, 'ATB18-24', '11', 4376540.848, 37621438.448, 8, 3.78, '3.78', 3.78, 1019.7, '2023年年报', 51, NULL),
   (118, 'ATB18-20', '11', 4376446.579, 37621329.272, 8, 4.6, '4.60', 4.6, 1020.6, '2023年年报', 51, NULL),
-  (119, 'ATB15-34', '11', 4376625.605, 37621394.522, 8, 3.65, '3.65', 3.65, 1022.5, '2023年年报', 51, NULL) ON CONFLICT DO NOTHING;
+  (119, 'ATB15-34', '11', 4376625.605, 37621394.522, 8, 3.65, '3.65', 3.65, 1022.5, '2023年年报', 51, NULL) ON DUPLICATE KEY UPDATE x = x;
 
 -- ─── coal_sample: 257 行 ────────────────
 INSERT INTO coal_sample (id, borehole_id, seam_code, depth_from, depth_to, sample_thickness, z_sample, apparent_density, true_density, mad_raw, ad_raw, vdaf_raw, fcd_raw, mad_clean, ad_clean, vdaf_clean, fcd_clean, std_raw, std_clean, qgr_d, qnet_ad, plastic_x_mm, plastic_y_mm, plastometric_curve, caking_g, char_residue_raw, char_residue_clean, clean_coal_yield, coal_type, source_page, remark) VALUES
@@ -1229,7 +1229,7 @@ INSERT INTO coal_sample (id, borehole_id, seam_code, depth_from, depth_to, sampl
   (47, 119, '4-1', 130.22, 140.04, 8.82, 1318.76, NULL, NULL, 3.74, 27.27, 38.82, NULL, 4.51, 10.8, 37.59, NULL, 0.68, 0.63, NULL, NULL, NULL, NULL, NULL, NULL, 2, 4, 53.44, 'QM', 4, NULL),
   (48, 119, '7-1', 153.41, 154.26, 0.75, 1300.055, NULL, NULL, 2.6, 20.9, 46.44, NULL, 2.83, 13.44, 45.54, NULL, 5.71, 3.53, NULL, NULL, 47.5, 13.0, NULL, 75.5, 3, 5, 69.39, 'QM', 5, NULL),
   (49, 119, '9', 167.4, 181.96, 12.94, 1279.21, NULL, NULL, 2.66, 24.05, 39.3, NULL, 2.95, 9.97, 38.43, NULL, 1.97, 1.91, NULL, NULL, NULL, NULL, NULL, NULL, 3, 4, 59.69, 'QM', 5, NULL),
-  (50, 119, '9', 183.45, 185.15, 0.7, 1269.59, NULL, NULL, 2.12, 13.59, 49.84, NULL, 2.26, 9.84, 50.09, NULL, 6.48, 5.91, NULL, NULL, NULL, NULL, NULL, 98.7, 4, 5, 73.44, 'QM', 5, NULL) ON CONFLICT DO NOTHING;
+  (50, 119, '9', 183.45, 185.15, 0.7, 1269.59, NULL, NULL, 2.12, 13.59, 49.84, NULL, 2.26, 9.84, 50.09, NULL, 6.48, 5.91, NULL, NULL, NULL, NULL, NULL, 98.7, 4, 5, 73.44, 'QM', 5, NULL) ON DUPLICATE KEY UPDATE depth_to = depth_to;
 INSERT INTO coal_sample (id, borehole_id, seam_code, depth_from, depth_to, sample_thickness, z_sample, apparent_density, true_density, mad_raw, ad_raw, vdaf_raw, fcd_raw, mad_clean, ad_clean, vdaf_clean, fcd_clean, std_raw, std_clean, qgr_d, qnet_ad, plastic_x_mm, plastic_y_mm, plastometric_curve, caking_g, char_residue_raw, char_residue_clean, clean_coal_yield, coal_type, source_page, remark) VALUES
   (51, 119, '11', 187.77, 193.1, 5.33, 1263.455, NULL, NULL, 2.5, 25.27, 37.09, NULL, 3.04, 10.78, 40.6, NULL, 3.03, 2.64, NULL, NULL, NULL, NULL, NULL, NULL, 3, 5, 31.67, 'QM', 5, NULL),
   (52, 158, '4-1', 100.05, 102.94, 2.81, 1299.485, 1.5, NULL, 1.65, 39.19, 36.73, NULL, 3.32, 13.75, 38.33, NULL, 0.22, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 4, NULL, NULL, NULL, 5, NULL),
@@ -1280,7 +1280,7 @@ INSERT INTO coal_sample (id, borehole_id, seam_code, depth_from, depth_to, sampl
   (97, 209, '11', 143.01, 144.94, 1.9, 1210.645, 1.55, NULL, 1.65, 34.42, 44.29, NULL, 2.31, 8.94, 41.52, NULL, 1.85, NULL, 30.61, NULL, NULL, NULL, NULL, NULL, 5, NULL, NULL, NULL, 8, NULL),
   (98, 209, '11', 145.08, 146.11, 1.03, 1209.025, 1.37, NULL, 1.99, 24.69, 38.16, NULL, 2.36, 9.98, 40.82, NULL, 2.1, NULL, 32.27, NULL, NULL, NULL, NULL, NULL, 5, NULL, NULL, NULL, 9, NULL),
   (99, 235, '4-1', 112.28, 113.13, 0.85, 1273.635, NULL, NULL, 2.08, 79.41, 90.03, NULL, NULL, NULL, NULL, NULL, 0.01, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 9, '原煤类标注: 风化煤'),
-  (100, 235, '4-1', 115.64, 118.45, 2.81, 1269.295, 1.46, NULL, 1.47, 24.95, 39.18, NULL, 3.06, 10.47, 39.55, NULL, 0.37, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 4, NULL, NULL, NULL, 9, NULL) ON CONFLICT DO NOTHING;
+  (100, 235, '4-1', 115.64, 118.45, 2.81, 1269.295, 1.46, NULL, 1.47, 24.95, 39.18, NULL, 3.06, 10.47, 39.55, NULL, 0.37, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 4, NULL, NULL, NULL, 9, NULL) ON DUPLICATE KEY UPDATE depth_to = depth_to;
 INSERT INTO coal_sample (id, borehole_id, seam_code, depth_from, depth_to, sample_thickness, z_sample, apparent_density, true_density, mad_raw, ad_raw, vdaf_raw, fcd_raw, mad_clean, ad_clean, vdaf_clean, fcd_clean, std_raw, std_clean, qgr_d, qnet_ad, plastic_x_mm, plastic_y_mm, plastometric_curve, caking_g, char_residue_raw, char_residue_clean, clean_coal_yield, coal_type, source_page, remark) VALUES
   (101, 235, '4-1', 118.45, 121.26, 2.81, 1266.485, 1.38, NULL, 2.59, 9.01, 41.22, NULL, 2.61, 7.65, 42.45, NULL, 0.39, NULL, NULL, NULL, 62.0, 7.0, '平滑激降', NULL, 4, NULL, NULL, NULL, 9, NULL),
   (102, 235, '4-1', 122.86, 126.49, 3.63, 1261.665, 1.35, NULL, 2.18, 19.39, 41.7, NULL, 3.17, 7.91, 41.52, NULL, 0.54, NULL, NULL, NULL, 62.0, 9.0, '平滑激降', NULL, 4, NULL, NULL, NULL, 9, NULL),
@@ -1331,7 +1331,7 @@ INSERT INTO coal_sample (id, borehole_id, seam_code, depth_from, depth_to, sampl
   (147, 232, '9', 166.99, 168.99, 2.0, 1284.77, 1.49, NULL, 1.74, 11.54, 38.57, NULL, 1.65, 5.94, 38.96, NULL, 1.24, 1.0, 33.57, NULL, 62.0, 10.0, '平滑激降', NULL, 4, NULL, NULL, NULL, 14, NULL),
   (148, 232, '9', 168.99, 170.99, 2.0, 1282.77, 1.35, NULL, 1.73, 12.66, 37.3, NULL, 1.71, 6.75, 38.13, NULL, 0.73, 0.77, 33.32, NULL, 59.0, 8.0, '平滑激降', NULL, 4, NULL, NULL, NULL, 14, NULL),
   (149, 232, '9', 170.99, 173.46, 2.47, 1280.535, 1.39, NULL, 1.26, 23.79, 39.71, NULL, 1.54, 9.51, 38.65, NULL, 1.21, 1.33, 32.05, NULL, 59.0, 9.0, '平滑激降', NULL, 4, NULL, NULL, NULL, 14, NULL),
-  (150, 232, '9', 173.56, 175.56, 2.0, 1278.2, 1.36, NULL, 1.32, 20.75, 38.98, NULL, 1.52, 6.71, 38.74, NULL, 1.21, 1.31, 32.67, NULL, 66.0, 9.0, '平滑激降', NULL, 4, NULL, NULL, NULL, 14, NULL) ON CONFLICT DO NOTHING;
+  (150, 232, '9', 173.56, 175.56, 2.0, 1278.2, 1.36, NULL, 1.32, 20.75, 38.98, NULL, 1.52, 6.71, 38.74, NULL, 1.21, 1.31, 32.67, NULL, 66.0, 9.0, '平滑激降', NULL, 4, NULL, NULL, NULL, 14, NULL) ON DUPLICATE KEY UPDATE depth_to = depth_to;
 INSERT INTO coal_sample (id, borehole_id, seam_code, depth_from, depth_to, sample_thickness, z_sample, apparent_density, true_density, mad_raw, ad_raw, vdaf_raw, fcd_raw, mad_clean, ad_clean, vdaf_clean, fcd_clean, std_raw, std_clean, qgr_d, qnet_ad, plastic_x_mm, plastic_y_mm, plastometric_curve, caking_g, char_residue_raw, char_residue_clean, clean_coal_yield, coal_type, source_page, remark) VALUES
   (151, 232, '9', 175.56, 177.9, 2.24, 1276.03, 1.3, NULL, 1.29, 14.28, 41.35, NULL, 1.51, 6.68, 42.28, NULL, 2.18, 1.54, 33.34, NULL, 66.0, 10.0, '平滑激降', NULL, 4, NULL, NULL, NULL, 14, NULL),
   (152, 232, '11', 186.16, 188.16, 2.0, 1265.6, 1.44, NULL, 1.08, 33.71, 39.1, NULL, 1.44, 9.97, 40.99, NULL, 2.8, 1.97, 31.3, NULL, 51.0, 11.0, '平滑激降', NULL, 4, NULL, NULL, NULL, 14, NULL),
@@ -1382,7 +1382,7 @@ INSERT INTO coal_sample (id, borehole_id, seam_code, depth_from, depth_to, sampl
   (197, 219, '9', 177.32, 179.34, 2.02, 1257.57, NULL, NULL, 1.65, 18.18, 39.64, NULL, 1.57, 7.98, 41.03, NULL, 2.13, 2.4, 33.08, NULL, 75.0, 10.0, '平滑下降', NULL, 4, NULL, NULL, NULL, 18, NULL),
   (198, 219, '9', 179.37, 180.89, 1.42, 1255.77, NULL, NULL, 1.68, 18.3, 42.64, NULL, 1.67, 6.75, NULL, NULL, 2.63, 2.6, 33.21, NULL, 10.0, NULL, '平滑下降', NULL, 4, NULL, NULL, NULL, 18, NULL),
   (199, 219, '9', 185.13, 186.08, 0.95, 1250.295, NULL, NULL, 1.62, 19.84, 48.73, NULL, 1.3, 10.19, 48.98, NULL, 5.33, 4.61, 33.81, NULL, 42.0, 17.5, '平滑下降', NULL, 5, NULL, NULL, 'QM', 18, NULL),
-  (200, 219, '11', 189.0, 190.7, 1.7, 1246.05, 1.49, NULL, 1.53, 26.74, 39.86, NULL, 1.31, 12.78, 40.89, NULL, 3.43, 2.68, 31.76, NULL, NULL, NULL, NULL, NULL, 4, NULL, NULL, NULL, 18, NULL) ON CONFLICT DO NOTHING;
+  (200, 219, '11', 189.0, 190.7, 1.7, 1246.05, 1.49, NULL, 1.53, 26.74, 39.86, NULL, 1.31, 12.78, 40.89, NULL, 3.43, 2.68, 31.76, NULL, NULL, NULL, NULL, NULL, 4, NULL, NULL, NULL, 18, NULL) ON DUPLICATE KEY UPDATE depth_to = depth_to;
 INSERT INTO coal_sample (id, borehole_id, seam_code, depth_from, depth_to, sample_thickness, z_sample, apparent_density, true_density, mad_raw, ad_raw, vdaf_raw, fcd_raw, mad_clean, ad_clean, vdaf_clean, fcd_clean, std_raw, std_clean, qgr_d, qnet_ad, plastic_x_mm, plastic_y_mm, plastometric_curve, caking_g, char_residue_raw, char_residue_clean, clean_coal_yield, coal_type, source_page, remark) VALUES
   (201, 219, '11', 190.7, 192.4, 1.65, 1244.35, 1.35, NULL, 1.62, 20.7, 41.66, NULL, 1.4, 8.38, 43.66, NULL, 4.3, 2.64, 32.99, NULL, 53.0, 15.0, '波型', NULL, 5, NULL, NULL, NULL, 18, NULL),
   (202, 219, '11', 192.4, 194.11, 1.71, 1242.645, 1.42, NULL, 1.61, 13.93, 39.97, NULL, 1.21, 9.7, 40.46, NULL, 2.07, 2.18, 33.29, NULL, 62.0, 13.0, '波型', NULL, 4, NULL, NULL, NULL, 18, NULL),
@@ -1433,7 +1433,7 @@ INSERT INTO coal_sample (id, borehole_id, seam_code, depth_from, depth_to, sampl
   (247, 179, '4-1', 91.68, 94.4, 2.72, 1327.09, 1.32, NULL, 3.56, 23.12, 38.42, NULL, 4.0, 11.33, 39.36, NULL, 0.45, 0.49, 32.16, NULL, 62.0, 5.0, '平滑下降', NULL, 3, NULL, NULL, NULL, 22, NULL),
   (248, 179, '4-1', 94.75, 97.01, 2.26, 1324.25, 1.32, NULL, 3.74, 20.79, 41.41, NULL, 4.06, 11.36, 40.9, NULL, 0.66, 0.63, 32.66, NULL, NULL, 7.0, '平滑下降', NULL, 4, NULL, NULL, NULL, 22, NULL),
   (249, 179, '9', 130.49, 132.49, 2.0, 1288.64, 1.49, NULL, 3.09, 36.84, 35.21, NULL, 3.99, 11.8, 37.84, NULL, 0.34, 0.62, 30.17, NULL, NULL, NULL, NULL, NULL, 3, NULL, NULL, NULL, 22, NULL),
-  (250, 179, '9', 132.49, 135.09, 2.6, 1286.34, NULL, NULL, 3.64, 14.6, 36.17, NULL, 3.77, 9.7, 36.93, NULL, 0.37, 0.56, 33.04, NULL, 4.0, NULL, '平滑下降', NULL, 3, NULL, NULL, NULL, 22, NULL) ON CONFLICT DO NOTHING;
+  (250, 179, '9', 132.49, 135.09, 2.6, 1286.34, NULL, NULL, 3.64, 14.6, 36.17, NULL, 3.77, 9.7, 36.93, NULL, 0.37, 0.56, 33.04, NULL, 4.0, NULL, '平滑下降', NULL, 3, NULL, NULL, NULL, 22, NULL) ON DUPLICATE KEY UPDATE depth_to = depth_to;
 INSERT INTO coal_sample (id, borehole_id, seam_code, depth_from, depth_to, sample_thickness, z_sample, apparent_density, true_density, mad_raw, ad_raw, vdaf_raw, fcd_raw, mad_clean, ad_clean, vdaf_clean, fcd_clean, std_raw, std_clean, qgr_d, qnet_ad, plastic_x_mm, plastic_y_mm, plastometric_curve, caking_g, char_residue_raw, char_residue_clean, clean_coal_yield, coal_type, source_page, remark) VALUES
   (251, 179, '9', 135.1, 137.1, 1.98, 1284.03, NULL, NULL, 3.05, 25.04, 37.6, NULL, 3.58, 10.61, 37.38, NULL, 0.65, 0.58, 32.14, NULL, 59.0, 5.0, '平滑下降', NULL, 3, NULL, NULL, NULL, 22, NULL),
   (252, 179, '9', 137.1, 138.29, 1.19, 1282.435, NULL, NULL, 3.39, 21.13, 37.34, NULL, 3.56, 8.23, 38.46, NULL, 0.71, 0.92, 32.62, NULL, 61.0, 5.0, '平滑下降', NULL, 4, NULL, NULL, NULL, 22, NULL),
@@ -1441,7 +1441,7 @@ INSERT INTO coal_sample (id, borehole_id, seam_code, depth_from, depth_to, sampl
   (254, 179, '9', 140.34, 142.13, 1.79, 1278.895, 1.33, NULL, 3.42, 11.9, 39.68, NULL, 3.28, 9.31, 38.41, NULL, 1.23, 1.24, 33.43, NULL, 52.0, 7.0, '平滑下降', NULL, 4, NULL, NULL, NULL, 22, NULL),
   (255, 179, '9', 143.11, 144.1, 0.99, 1276.525, NULL, NULL, 2.2, 39.15, 44.94, NULL, 2.91, 13.87, 44.55, NULL, 1.02, 1.96, 29.86, NULL, NULL, NULL, NULL, NULL, 5, NULL, NULL, NULL, 22, NULL),
   (256, 179, '11', 150.88, 152.88, 2.0, 1268.25, NULL, NULL, 2.86, 27.71, 36.29, NULL, 3.15, 11.43, 41.87, NULL, 1.85, 2.09, 31.79, NULL, NULL, NULL, NULL, NULL, 5, NULL, NULL, NULL, 22, NULL),
-  (257, 179, '11', 152.88, 155.12, 2.24, 1266.13, 1.37, NULL, 2.82, 29.97, 36.23, NULL, 3.4, 12.23, 40.16, NULL, 3.63, 1.85, 31.54, NULL, 53.0, 9.0, '平滑下降', NULL, 5, NULL, NULL, NULL, 22, NULL) ON CONFLICT DO NOTHING;
+  (257, 179, '11', 152.88, 155.12, 2.24, 1266.13, 1.37, NULL, 2.82, 29.97, 36.23, NULL, 3.4, 12.23, 40.16, NULL, 3.63, 1.85, 31.54, NULL, 53.0, 9.0, '平滑下降', NULL, 5, NULL, NULL, NULL, 22, NULL) ON DUPLICATE KEY UPDATE depth_to = depth_to;
 
 -- ─── coal_sample_summary: 88 行 ────────────────
 INSERT INTO coal_sample_summary (id, borehole_id, seam_code, sample_count, avg_thickness, avg_mad_raw, avg_mad_clean, avg_ad_raw, avg_ad_clean, avg_vdaf_raw, avg_vdaf_clean, avg_fcd_raw, avg_fcd_clean, avg_std_raw, avg_std_clean, avg_qgr_d, avg_qnet_ad, avg_caking_g, avg_plastic_y, avg_clean_yield, dominant_coal_type, is_from_source) VALUES
@@ -1494,7 +1494,7 @@ INSERT INTO coal_sample_summary (id, borehole_id, seam_code, sample_count, avg_t
   (47, 211, '4-1', 3, 1.0, 3.813, 2.72, 14.513, 8.457, 40.13, 40.567, NULL, NULL, 0.433, NULL, 32.587, NULL, NULL, 8.0, NULL, NULL, 0),
   (48, 211, '4-2', 1, 1.73, 2.92, 3.33, 25.22, 11.32, 40.97, 42.63, NULL, NULL, 0.39, NULL, 31.83, NULL, NULL, 7.0, NULL, 'QM', 0),
   (49, 211, '7-1', 1, 1.98, 2.01, 2.03, 19.81, 11.63, 45.8, 46.36, NULL, NULL, 5.06, NULL, 33.11, NULL, NULL, NULL, NULL, 'QM', 0),
-  (50, 211, '9', 6, 1.935, 2.14, 2.545, 21.473, 8.818, 37.842, 38.002, NULL, NULL, 0.747, NULL, 31.747, NULL, NULL, 7.7, NULL, NULL, 0) ON CONFLICT DO NOTHING;
+  (50, 211, '9', 6, 1.935, 2.14, 2.545, 21.473, 8.818, 37.842, 38.002, NULL, NULL, 0.747, NULL, 31.747, NULL, NULL, 7.7, NULL, NULL, 0) ON DUPLICATE KEY UPDATE sample_count = sample_count;
 INSERT INTO coal_sample_summary (id, borehole_id, seam_code, sample_count, avg_thickness, avg_mad_raw, avg_mad_clean, avg_ad_raw, avg_ad_clean, avg_vdaf_raw, avg_vdaf_clean, avg_fcd_raw, avg_fcd_clean, avg_std_raw, avg_std_clean, avg_qgr_d, avg_qnet_ad, avg_caking_g, avg_plastic_y, avg_clean_yield, dominant_coal_type, is_from_source) VALUES
   (51, 211, '11', 2, 2.365, 1.8, 1.71, 26.325, 12.465, 39.035, 41.18, NULL, NULL, 3.28, NULL, 32.18, NULL, NULL, 10.5, NULL, NULL, 0),
   (52, 160, '4-1', 2, 1.865, 7.14, NULL, 70.085, NULL, 50.165, NULL, NULL, NULL, 0.07, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0),
@@ -1533,4 +1533,4 @@ INSERT INTO coal_sample_summary (id, borehole_id, seam_code, sample_count, avg_t
   (85, 163, '11', 2, 2.305, 1.31, 1.95, 28.995, 10.245, 40.875, 41.875, NULL, NULL, 2.125, NULL, 31.775, NULL, NULL, 14.0, NULL, NULL, 0),
   (86, 179, '4-1', 5, 2.116, 3.404, 4.114, 25.66, 11.956, 38.576, 38.95, NULL, NULL, 0.438, 0.534, 31.728, NULL, NULL, 5.667, NULL, NULL, 0),
   (87, 179, '9', 7, 1.793, 3.107, 3.48, 24.713, 10.607, 38.22, 38.893, NULL, NULL, 0.72, 0.983, 31.886, NULL, NULL, 5.5, NULL, NULL, 0),
-  (88, 179, '11', 2, 2.12, 2.84, 3.275, 28.84, 11.83, 36.26, 41.015, NULL, NULL, 2.74, 1.97, 31.665, NULL, NULL, 9.0, NULL, NULL, 0) ON CONFLICT DO NOTHING;
+  (88, 179, '11', 2, 2.12, 2.84, 3.275, 28.84, 11.83, 36.26, 41.015, NULL, NULL, 2.74, 1.97, 31.665, NULL, NULL, 9.0, NULL, NULL, 0) ON DUPLICATE KEY UPDATE sample_count = sample_count;

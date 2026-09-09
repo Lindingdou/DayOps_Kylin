@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia;
@@ -59,15 +59,11 @@ public partial class DiagnoseDialog : Window
     {
         try
         {
-            var sel = ctx.SelectedMeshes();
-            MeshEntity? mesh = sel.Count > 0 ? sel[0] : null;
-            if (mesh == null)
-            {
-                var e = await ctx.PickEntityAsync("格网质量检测：在视口点选要检测的三角网（Esc 取消）", en => en is MeshEntity);
-                mesh = e as MeshEntity;
-                if (mesh == null) { ctx.Status("格网质量检测：未拾取到三角网"); return; }
-                ctx.Select(new SceneEntity[] { mesh });
-            }
+            // 同原版 DIAGNOSE：命令一激活就进拾取态提示点选，不拿"当前选中"顶替
+            // （"先激活命令再提示选择对象"是这一组命令统一的交互规矩）。
+            var e = await ctx.PickEntityAsync("格网质量检测：在视口点选要检测的三角网（Esc 取消）", en => en is MeshEntity);
+            if (e is not MeshEntity mesh) { ctx.Status("格网质量检测：未拾取到三角网"); return; }
+            ctx.Select(new SceneEntity[] { mesh });
             var report = await Task.Run(() => MeshDiagnoseMarkers.Collect(mesh.Verts, mesh.Tris));
             int total = TotalIssues(report);
             ctx.Status(total == 0 ? $"格网质量检测「{mesh.Name}」：未发现问题" : $"格网质量检测「{mesh.Name}」：{Summary(report)}（共 {total} 项问题）");

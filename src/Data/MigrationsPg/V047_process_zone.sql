@@ -39,23 +39,23 @@
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS process_zone (
-    id                 SERIAL PRIMARY KEY,
+    id                 BIGSERIAL PRIMARY KEY,
     period             TEXT NOT NULL,                  -- 期次 yyyy-MM(工序区是按期的)
     process            TEXT NOT NULL,                  -- 工序码:drill/blast_guard/load/dump_tip/dump_doze
     name               TEXT NOT NULL,                  -- 区域名(作业面名/炮次号;分块带 -2 -3 后缀)
     group_key          TEXT NOT NULL DEFAULT '',       -- 分组键(作业面名;警戒区按炮次)
-    piece_index        INTEGER NOT NULL DEFAULT 1,     -- 本组第几块(不相连时分块出,Z6)
-    piece_count        INTEGER NOT NULL DEFAULT 1,
+    piece_index        BIGINT NOT NULL DEFAULT 1,     -- 本组第几块(不相连时分块出,Z6)
+    piece_count        BIGINT NOT NULL DEFAULT 1,
 
     points_json        TEXT NOT NULL,                  -- 扁平 [x0,y0,z0,x1,y1,z1,...]，与 mineable_region 同口径
     z_source           TEXT NOT NULL,                  -- 高程出处(空 = 不许入库)
     cell_m             DOUBLE PRECISION NOT NULL,                  -- 栅格格距 m = 轮廓精度
     area_m2            DOUBLE PRECISION NOT NULL DEFAULT 0,        -- 栅格面积(不是描边环面积)
     ring_area_m2       DOUBLE PRECISION NOT NULL DEFAULT 0,        -- 描边环面积(与上面差得多 = 描边不可信)
-    clipped_at_border  INTEGER NOT NULL DEFAULT 0,     -- 1 = 膨胀顶到格网边界，本区被截断
+    clipped_at_border  BIGINT NOT NULL DEFAULT 0,     -- 1 = 膨胀顶到格网边界，本区被截断
 
     unit_ids           TEXT NOT NULL DEFAULT '',       -- 覆盖的采掘单元号，顿号分隔
-    unit_count         INTEGER NOT NULL DEFAULT 0,
+    unit_count         BIGINT NOT NULL DEFAULT 0,
     volume_m3          DOUBLE PRECISION,                           -- 本区的量(NULL=不适用,如警戒区)
     volume_basis       TEXT NOT NULL DEFAULT '',       -- 量口径:原位实方/控制方量/排弃占容(三者绝不许并成一列)
     equip_role         TEXT NOT NULL DEFAULT '',       -- 该区的设备角色:钻机/电铲/卡车/推土机
@@ -64,8 +64,8 @@ CREATE TABLE IF NOT EXISTS process_zone (
     guard_radius_m     DOUBLE PRECISION,                           -- 警戒半径 m(仅 blast_guard)
     band_width_m       DOUBLE PRECISION,                           -- 带宽 m(仅 dump_tip/dump_doze)
 
-    active             INTEGER NOT NULL DEFAULT 1,     -- 本期算不算数(与 visible 是两件事)
-    visible            INTEGER NOT NULL DEFAULT 1,     -- 画不画它
+    active             BIGINT NOT NULL DEFAULT 1,     -- 本期算不算数(与 visible 是两件事)
+    visible            BIGINT NOT NULL DEFAULT 1,     -- 画不画它
     note               TEXT NOT NULL DEFAULT '',       -- 记账:期次+分组+单元清单+格距+Z出处
     created_at         TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at         TEXT DEFAULT CURRENT_TIMESTAMP

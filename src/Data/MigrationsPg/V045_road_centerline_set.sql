@@ -26,13 +26,13 @@
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS road_centerline_set (
-    id           SERIAL PRIMARY KEY,
+    id           BIGSERIAL PRIMARY KEY,
     name         TEXT    NOT NULL DEFAULT '',       -- 存档名(可含时期,如"2026-06 提取+人工整理")
     captured_at  TEXT    NOT NULL DEFAULT '',       -- 存档时刻(app 写,"什么时候的中线")
     source       TEXT    NOT NULL DEFAULT '',       -- 来路标注:提取/手动/管理整理…(纯留痕,不参与逻辑)
     geometry_b64 TEXT    NOT NULL DEFAULT '',       -- GZip 二进制 base64(RCL1),opaque
-    line_count   INTEGER NOT NULL DEFAULT 0,
-    vertex_count INTEGER NOT NULL DEFAULT 0,
+    line_count   BIGINT NOT NULL DEFAULT 0,
+    vertex_count BIGINT NOT NULL DEFAULT 0,
     length_km    DOUBLE PRECISION    NOT NULL DEFAULT 0,        -- 三维总长 km(冗余,列表显示用)
     min_x        DOUBLE PRECISION    NOT NULL DEFAULT 0,
     min_y        DOUBLE PRECISION    NOT NULL DEFAULT 0,

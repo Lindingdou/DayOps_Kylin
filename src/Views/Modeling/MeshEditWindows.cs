@@ -15,5 +15,7 @@ public static class MeshEditWindows
         ModelingWindowFactory.Openers["构建等值线"] = (owner, ctx) => ModelingWindows.Show(ctx, () => new ContourBuilderWindow(ctx));
         ModelingWindowFactory.Openers["创建剖面"] = (owner, ctx) => ModelingWindows.Show(ctx, () => new SectionCutWindow(ctx));
         ModelingWindowFactory.Openers["动态剖面"] = (owner, ctx) => ModelingWindows.Show(ctx, () => new DynamicSectionWindow(ctx));
+        // 三角网体积：原版是"整体 + 分标高报量 + 导 HTML/CSV"的面板，不是一行状态栏 —— 与体素格网体积并列成窗
+        ModelingWindowFactory.Openers["三角网体积"] = (owner, ctx) => ModelingWindows.Show(ctx, () => new MeshVolumeWindow(ctx));
     }
 }

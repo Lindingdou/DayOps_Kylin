@@ -1,4 +1,4 @@
-<Window xmlns="https://github.com/avaloniaui"
+﻿<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="using:PitMine3D.Kylin.Controls"
         xmlns:dc="using:Dock.Avalonia.Controls"
@@ -6,7 +6,7 @@
         Width="1280" Height="800"
         MinWidth="900" MinHeight="600"
         Background="#F3F4F6"
-        Title="中煤平朔露天煤矿生产计划决策支撑系统 · DayOps">
+        Title="DayOps">
 
     <Grid RowDefinitions="Auto,*,Auto">   <!-- Ribbon / DockingManager(含信息栏 Tab) / StatusBar —— 同原版 mainGrid -->
 
@@ -471,6 +471,16 @@
                                                 <StackPanel Orientation="Horizontal"><Image Source="{StaticResource equip_capability}" /><TextBlock Text="设备综合评分" /></StackPanel>
                                             </Button>
                                         </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <Border Classes="ribbon-group">
+                                <DockPanel>
+                                    <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="数据源" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Classes="ribbon-btn large" Tag="数据库连接" Click="OnRibbonCommand" ToolTip.Tip="数据库连接：本机 SQLite 或局域网共享的 openGauss；可先测试连接再保存">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource db_connect}" /><TextBlock Text="数据库连接" /></StackPanel>
+                                        </Button>
                                     </StackPanel>
                                 </DockPanel>
                             </Border>
@@ -1402,7 +1412,8 @@
                     <TextBlock Grid.Column="2" x:Name="CmdPrompt" Text="" Foreground="#0A5AD4" VerticalAlignment="Center" Margin="0,0,6,0" FontFamily="Consolas,monospace" />
                     <TextBox Grid.Column="3" x:Name="CommandInput" Height="20" MinHeight="20" Padding="4,0" VerticalContentAlignment="Center"
                              Background="#FFFFFF" BorderBrush="#D3D7DE" BorderThickness="1" Foreground="#1E1F22"
-                             FontFamily="Consolas,monospace" Watermark="命令别名/中文命令后回车（LINE / 距离 / 俯视 …），↑↓ 回溯历史，Tab 补全"
+                             FontFamily="Consolas,monospace" HorizontalContentAlignment="Left"
+                             Watermark="请输入中文命令（如 直线 / 多段线 / 距离 / 俯视）：空格或回车执行，↑↓ 历史，Tab 补全，输入 帮助 看全部命令"
                              KeyDown="OnCommandKeyDown" TextChanged="OnCommandInputChanged" />
                 </Grid>
                 <!-- 命令自动补全候选：固定占一行(Opacity 显隐, 不用 IsVisible)——显隐不改变面板布局 -->
@@ -1432,7 +1443,13 @@
                            Foreground="#8A929C" VerticalAlignment="Center" Margin="10,0" FontSize="12" FontFamily="Consolas,monospace"
                            ToolTip.Tip="帧时间采样 — 启动后约 1 秒开始显示数据" />
                 <Border Grid.Column="3" Width="1" Background="#DCDFE4" Margin="0,4" />
-                <TextBlock Grid.Column="4" x:Name="StatusMsg" Text="就绪" Foreground="#3A3F46" VerticalAlignment="Center" Margin="12,0" FontSize="12" TextTrimming="CharacterEllipsis" />
+                <!-- 状态文案 + 大数据加载进度条(只在后台加载时显出, 平时占位为 0 宽) -->
+                <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock x:Name="StatusMsg" Text="就绪" Foreground="#3A3F46" VerticalAlignment="Center" Margin="12,0" FontSize="12" TextTrimming="CharacterEllipsis" />
+                    <ProgressBar x:Name="LoadBar" Width="180" Height="8" Minimum="0" Maximum="1" Value="0"
+                                 IsVisible="False" VerticalAlignment="Center" Margin="4,0,8,0"
+                                 Foreground="#0A5AD4" Background="#E3E7EE" />
+                </StackPanel>
                 <!-- extend(右侧): 正交 · 捕捉(左键开关, 右键捕捉模式) · 栅格 · 栅格捕捉 · 选项 —— 20x20 图标按钮同原版 -->
                 <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
                     <ToggleButton x:Name="OrthoToggle" Classes="status-toggle" Width="22" Height="22" Padding="0"

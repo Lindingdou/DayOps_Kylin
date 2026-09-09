@@ -11,7 +11,7 @@
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS load_unload_point (
-    id             SERIAL PRIMARY KEY,
+    id             BIGSERIAL PRIMARY KEY,
     name           TEXT    NOT NULL DEFAULT '',
     kind           TEXT    NOT NULL DEFAULT 'loading',   -- loading(采剥点/源) | unloading(卸载点/汇)
     unload_sub     TEXT,                                 -- crusher|dump|stockpile (仅卸载点)
@@ -19,8 +19,8 @@ CREATE TABLE IF NOT EXISTS load_unload_point (
     y              DOUBLE PRECISION    NOT NULL DEFAULT 0,
     z              DOUBLE PRECISION    NOT NULL DEFAULT 0,
     throughput_tph DOUBLE PRECISION    NOT NULL DEFAULT 0,
-    ref_region_id  INTEGER NOT NULL DEFAULT 0,           -- mineable_region.id, 0=未关联
-    visible        INTEGER NOT NULL DEFAULT 1,
+    ref_region_id  BIGINT NOT NULL DEFAULT 0,           -- mineable_region.id, 0=未关联
+    visible        BIGINT NOT NULL DEFAULT 1,
     note           TEXT,
     created_at     TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at     TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP

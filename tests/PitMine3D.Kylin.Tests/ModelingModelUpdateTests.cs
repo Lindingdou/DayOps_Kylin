@@ -19,7 +19,7 @@ public class ModelingModelUpdateTests
     [Fact]
     public void Sup_batch_create_rename_delete_round_trip()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var c = db.Connection;
         int before = SupAllBatches(c).Count;
         long id = SupCreateBatch(c, "手工录入", now: new DateTime(2026, 9, 7, 10, 30, 15));
@@ -50,7 +50,7 @@ public class ModelingModelUpdateTests
     [Fact]
     public void Sup_hole_and_horizons_round_trip_and_observations()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var c = db.Connection;
         long bid = SupCreateBatch(c, "手工录入");
         var h = new SupHoleRow { HoleId = "BK-T2", X = 10, Y = 20, ZCollar = null, BatchId = bid };
@@ -92,7 +92,7 @@ public class ModelingModelUpdateTests
     [Fact]
     public void Cs_batch_points_replace_delete_and_observations()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var c = db.Connection;
         long bid = CsCreateBatch(c, "拾取录入", now: new DateTime(2026, 1, 2, 3, 4, 5));
         Assert.Equal("CSR-20260102-030405", CsGetBatch(c, bid)!.Label);
@@ -126,7 +126,7 @@ public class ModelingModelUpdateTests
     [Fact]
     public void SeamStructure_default_from_dict_and_settings_persist()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         string tmp = Path.Combine(Path.GetTempPath(), "kylin_mu_" + Guid.NewGuid().ToString("N") + ".json");
         var old = MuSettingsPath;
         MuSettingsPath = tmp;
@@ -158,7 +158,7 @@ public class ModelingModelUpdateTests
     [Fact]
     public void Sup_csv_template_parse_import_export_round_trip()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var c = db.Connection;
         var seams = new List<(string code, string name)> { ("4", "4 号煤层"), ("9", "9 号煤层") };
         string tpl = SupCsvTemplate(seams);

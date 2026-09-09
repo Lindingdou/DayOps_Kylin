@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia.Platform.Storage;
@@ -11,7 +11,8 @@ namespace PitMine3D.Kylin.Views;
 public partial class MainWindow
 {
     private GeoDbContext? _geoCtx;
-    private Action<double, double>? _oneShotPick;   // 视口一次性拾取回调(NaN,NaN = 取消)
+    private Action<double, double>? _oneShotPick;   // 视口一次性拾取回调(NaN,NaN = 取消; +∞,+∞ = 确认结束)
+    private bool _pickConfirmable;                  // 本次拾取是否允许"右键/回车 = 确认结束"(如 删除三角面 逐面点选)
 
     /// <summary>构建(或复用)页面上下文; 数据库打开失败返回 null(状态栏已报)。</summary>
     private GeoDbContext? GeoCtx()
@@ -161,9 +162,21 @@ public partial class MainWindow
     private bool CancelOneShotPick()
     {
         if (_oneShotPick == null) return false;
-        var cb = _oneShotPick; _oneShotPick = null;
+        var cb = _oneShotPick; _oneShotPick = null; _pickConfirmable = false;
         cb(double.NaN, double.NaN);
         StatusMsg.Text = "已取消拾取";
+        return true;
+    }
+
+    /// <summary>
+    /// 右键 / 回车确认挂起的多次拾取（原版 DELFACES 等状态机的"右键 / 回车确认"）。
+    /// 只有把 <see cref="_pickConfirmable"/> 置起的拾取才吃这一手势, 其余拾取右键仍归视图漫游。
+    /// </summary>
+    private bool ConfirmOneShotPick()
+    {
+        if (_oneShotPick == null || !_pickConfirmable) return false;
+        var cb = _oneShotPick; _oneShotPick = null; _pickConfirmable = false;
+        cb(double.PositiveInfinity, double.PositiveInfinity);
         return true;
     }
 }

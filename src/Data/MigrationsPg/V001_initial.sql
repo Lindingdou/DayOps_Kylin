@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS mine_location (
     name            TEXT,
     elevation_m     DOUBLE PRECISION,
     team            TEXT,
-    is_active       INTEGER NOT NULL DEFAULT 1
+    is_active       BIGINT NOT NULL DEFAULT 1
 );
 
 -- ─── 维表:shift_calendar(班次日历)─────────────────────────────────────────
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS shift_calendar (
     shift             TEXT NOT NULL CHECK (shift IN ('A','B','C')),
     start_time        TEXT,
     leader_name       TEXT,
-    is_blast_shift    INTEGER NOT NULL DEFAULT 0,
+    is_blast_shift    BIGINT NOT NULL DEFAULT 0,
     weather           TEXT,
     notes             TEXT,
     PRIMARY KEY (date, shift)
@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS equipment (
     asset_code          TEXT UNIQUE,
     status              TEXT,
     acquisition_date    TEXT,
-    commission_year     INTEGER,
+    commission_year     BIGINT,
     cumulative_hours    DOUBLE PRECISION,
     last_overhaul_date  TEXT,
     operating_area      TEXT,
@@ -69,7 +69,7 @@ CREATE INDEX idx_equipment_status   ON equipment(status);
 
 -- ─── 事实表:production_record(班次生产记录)──────────────────────────────
 CREATE TABLE IF NOT EXISTS production_record (
-    id              SERIAL PRIMARY KEY,
+    id              BIGSERIAL PRIMARY KEY,
     equipment_id    TEXT NOT NULL,
     date            TEXT NOT NULL,
     shift           TEXT NOT NULL,
@@ -87,14 +87,14 @@ CREATE INDEX idx_prod_date     ON production_record(date);
 
 -- ─── 事实表:fault_event(故障事件)────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS fault_event (
-    id              SERIAL PRIMARY KEY,
+    id              BIGSERIAL PRIMARY KEY,
     equipment_id    TEXT NOT NULL,
     date            TEXT NOT NULL,
     shift           TEXT,
     fault_type      TEXT NOT NULL,
     duration_hours  DOUBLE PRECISION NOT NULL DEFAULT 0,
     description     TEXT,
-    is_resolved     INTEGER NOT NULL DEFAULT 0,
+    is_resolved     BIGINT NOT NULL DEFAULT 0,
     repair_team     TEXT,
     created_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (equipment_id) REFERENCES equipment(equipment_id) ON DELETE CASCADE ON UPDATE CASCADE
@@ -106,8 +106,8 @@ CREATE INDEX idx_fault_type     ON fault_event(fault_type);
 -- ─── 事实表:equipment_kpi_monthly(设备月度指标)──────────────────────────
 CREATE TABLE IF NOT EXISTS equipment_kpi_monthly (
     equipment_id              TEXT NOT NULL,
-    year                      INTEGER NOT NULL,
-    month                     INTEGER NOT NULL,
+    year                      BIGINT NOT NULL,
+    month                     BIGINT NOT NULL,
     plan_hours                DOUBLE PRECISION NOT NULL DEFAULT 0,
     work_hours                DOUBLE PRECISION NOT NULL DEFAULT 0,
     fault_hours               DOUBLE PRECISION NOT NULL DEFAULT 0,
@@ -127,8 +127,8 @@ CREATE INDEX idx_kpi_ym ON equipment_kpi_monthly(year, month);
 -- ─── 事实表:capacity_monthly(月度产能)──────────────────────────────────
 CREATE TABLE IF NOT EXISTS capacity_monthly (
     equipment_id    TEXT NOT NULL,
-    year            INTEGER NOT NULL,
-    month           INTEGER NOT NULL,
+    year            BIGINT NOT NULL,
+    month           BIGINT NOT NULL,
     output_m3       DOUBLE PRECISION NOT NULL DEFAULT 0,
     PRIMARY KEY (equipment_id, year, month),
     FOREIGN KEY (equipment_id) REFERENCES equipment(equipment_id) ON DELETE CASCADE ON UPDATE CASCADE
@@ -138,15 +138,15 @@ CREATE INDEX idx_cap_dev_year ON capacity_monthly(equipment_id, year);
 
 -- ─── 事实表:blast_event(爆破事件)────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS blast_event (
-    id                          SERIAL PRIMARY KEY,
+    id                          BIGSERIAL PRIMARY KEY,
     blast_date                  TEXT NOT NULL,
     blast_time                  TEXT,
-    blast_seq                   INTEGER,
+    blast_seq                   BIGINT,
     drill_id                    TEXT,
     location_code               TEXT,
     material                    TEXT,
     diameter_mm                 DOUBLE PRECISION,
-    hole_count                  INTEGER,
+    hole_count                  BIGINT,
     total_hole_length_m         DOUBLE PRECISION,
     explosive_kg                DOUBLE PRECISION,
     blast_volume_m3             DOUBLE PRECISION,
@@ -176,8 +176,8 @@ CREATE TABLE IF NOT EXISTS daily_mine_summary (
 
 -- ─── 事实表:monthly_plan(月度计划)──────────────────────────────────────
 CREATE TABLE IF NOT EXISTS monthly_plan (
-    year                          INTEGER NOT NULL,
-    month                         INTEGER NOT NULL,
+    year                          BIGINT NOT NULL,
+    month                         BIGINT NOT NULL,
     plan_strip_wan_m3             DOUBLE PRECISION NOT NULL DEFAULT 0,
     plan_coal_wan_t               DOUBLE PRECISION NOT NULL DEFAULT 0,
     plan_outsource_strip_wan_m3   DOUBLE PRECISION NOT NULL DEFAULT 0,
@@ -191,9 +191,9 @@ CREATE TABLE IF NOT EXISTS monthly_plan (
 
 -- ─── 子表:monthly_plan_shovel(月度铲位安排)─────────────────────────────
 CREATE TABLE IF NOT EXISTS monthly_plan_shovel (
-    id              SERIAL PRIMARY KEY,
-    year            INTEGER NOT NULL,
-    month           INTEGER NOT NULL,
+    id              BIGSERIAL PRIMARY KEY,
+    year            BIGINT NOT NULL,
+    month           BIGINT NOT NULL,
     equipment_id    TEXT NOT NULL,
     location_code   TEXT NOT NULL,
     FOREIGN KEY (year, month)    REFERENCES monthly_plan(year, month) ON DELETE CASCADE ON UPDATE CASCADE,
@@ -205,8 +205,8 @@ CREATE INDEX idx_plan_shovel_ym ON monthly_plan_shovel(year, month);
 
 -- ─── 事实表:workforce_monthly(工种月度效率)─────────────────────────────
 CREATE TABLE IF NOT EXISTS workforce_monthly (
-    year                         INTEGER NOT NULL,
-    month                        INTEGER NOT NULL,
+    year                         BIGINT NOT NULL,
+    month                        BIGINT NOT NULL,
     headcount                    DOUBLE PRECISION NOT NULL DEFAULT 0,
     attendance_workdays          DOUBLE PRECISION NOT NULL DEFAULT 0,
     coal_headcount               DOUBLE PRECISION NOT NULL DEFAULT 0,
@@ -221,12 +221,12 @@ CREATE TABLE IF NOT EXISTS workforce_monthly (
 
 -- ─── 事实表:long_term_metric(长周期指标 EAV)───────────────────────────
 CREATE TABLE IF NOT EXISTS long_term_metric (
-    id      SERIAL PRIMARY KEY,
+    id      BIGSERIAL PRIMARY KEY,
     source  TEXT NOT NULL,
     item    TEXT NOT NULL,
     unit    TEXT,
-    year    INTEGER NOT NULL,
-    month   INTEGER,
+    year    BIGINT NOT NULL,
+    month   BIGINT,
     value   DOUBLE PRECISION NOT NULL DEFAULT 0
 );
 
@@ -235,15 +235,15 @@ CREATE INDEX idx_lt_ym          ON long_term_metric(year, month);
 
 -- ─── 配置表:dispatch_rule(编组规则)─────────────────────────────────────
 CREATE TABLE IF NOT EXISTS dispatch_rule (
-    id                          SERIAL PRIMARY KEY,
+    id                          BIGSERIAL PRIMARY KEY,
     shovel_model                TEXT NOT NULL,
     truck_model                 TEXT NOT NULL,
     bucket_loads_per_truck      DOUBLE PRECISION NOT NULL DEFAULT 0,
-    recommended_truck_count     INTEGER NOT NULL DEFAULT 0,
+    recommended_truck_count     BIGINT NOT NULL DEFAULT 0,
     cycle_time_min              DOUBLE PRECISION NOT NULL DEFAULT 0,
-    efficiency_score            INTEGER NOT NULL DEFAULT 0,
+    efficiency_score            BIGINT NOT NULL DEFAULT 0,
     effective_from              TEXT,
-    is_active                   INTEGER NOT NULL DEFAULT 1,
+    is_active                   BIGINT NOT NULL DEFAULT 1,
     FOREIGN KEY (shovel_model) REFERENCES equipment_model(model) ON UPDATE CASCADE,
     FOREIGN KEY (truck_model)  REFERENCES equipment_model(model) ON UPDATE CASCADE
 );

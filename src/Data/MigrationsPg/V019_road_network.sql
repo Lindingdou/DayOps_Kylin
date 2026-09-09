@@ -11,12 +11,12 @@
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS road_network (
-    id          SERIAL PRIMARY KEY,
+    id          BIGSERIAL PRIMARY KEY,
     name        TEXT    NOT NULL DEFAULT '',          -- 路网名称(可含时期含义,如"2026-06 现状")
     captured_at TEXT    NOT NULL DEFAULT '',          -- 所属/采集时刻(app 写,"什么时候的路网")
     graph_json  TEXT    NOT NULL DEFAULT '{}',        -- RoadLib 序列化的图(节点+边),opaque
-    node_count  INTEGER NOT NULL DEFAULT 0,
-    edge_count  INTEGER NOT NULL DEFAULT 0,
+    node_count  BIGINT NOT NULL DEFAULT 0,
+    edge_count  BIGINT NOT NULL DEFAULT 0,
     length_km   DOUBLE PRECISION    NOT NULL DEFAULT 0,           -- 总里程 km(冗余,列表显示用)
     note        TEXT,
     created_at  TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -27,7 +27,7 @@ VALUES
     ('DMH90',    'Drill',    92,  559, NULL, NULL, '12.8 × 6.5 × 13.6', 200, NULL, NULL),
     ('D10N',     'Dozer',    66,  354, NULL, NULL, '8.7 × 4.7 × 4.2',  NULL, NULL, NULL),
     ('GD825A-2', 'Grader',   26,  209, NULL, NULL, '10.0 × 3.4 × 3.6', NULL, '23.5R25', NULL),
-    ('水鹤',     'WaterTruck', NULL, NULL, NULL, NULL, '4.5 × 1.2 × 6.8', NULL, NULL, NULL) ON CONFLICT (model) DO UPDATE SET category = EXCLUDED.category, working_weight_t = EXCLUDED.working_weight_t, power_kw = EXCLUDED.power_kw, bucket_m3 = EXCLUDED.bucket_m3, load_t = EXCLUDED.load_t, dimensions_lwh = EXCLUDED.dimensions_lwh, drill_diameter_mm = EXCLUDED.drill_diameter_mm, tire_spec = EXCLUDED.tire_spec, std_daily_cap_wan_m3 = EXCLUDED.std_daily_cap_wan_m3;
+    ('水鹤',     'WaterTruck', NULL, NULL, NULL, NULL, '4.5 × 1.2 × 6.8', NULL, NULL, NULL) ON DUPLICATE KEY UPDATE category = VALUES(category), working_weight_t = VALUES(working_weight_t), power_kw = VALUES(power_kw), bucket_m3 = VALUES(bucket_m3), load_t = VALUES(load_t), dimensions_lwh = VALUES(dimensions_lwh), drill_diameter_mm = VALUES(drill_diameter_mm), tire_spec = VALUES(tire_spec), std_daily_cap_wan_m3 = VALUES(std_daily_cap_wan_m3);
 
 -- ─── ② 智能修补现有 equipment 表的 model/category ────────────────────────────
 -- capacity_history.csv 的 model 列是 "Shovel"/"Truck" 占位,
@@ -113,16 +113,14 @@ VALUES
     ('1750', 'Shovel', '4100XPC', 'Joy Global / Komatsu Mining', '美国', 'JG-4100-08891', 'ATB-S-1750',
         '在用', '2016-07-22', 47120, '2023-09-04', '1195 平盘 · 生产二队',
         '2023 年主力电铲,与 1748 同型')
-ON CONFLICT(equipment_id) DO UPDATE SET
-    category = excluded.category,
-    model = excluded.model,
-    manufacturer = excluded.manufacturer,
-    origin = excluded.origin,
-    serial_number = excluded.serial_number,
-    asset_code = excluded.asset_code,
-    status = excluded.status,
-    acquisition_date = excluded.acquisition_date,
-    cumulative_hours = excluded.cumulative_hours,
-    last_overhaul_date = excluded.last_overhaul_date,
-    operating_area = excluded.operating_area,
-    notes = excluded.notes;
+ON DUPLICATE KEY UPDATE
+    category = VALUES(category),
+    model = VALUES(model),
+    manufacturer = VALUES(manufacturer),
+    origin = VALUES(origin),
+    status = VALUES(status),
+    acquisition_date = VALUES(acquisition_date),
+    cumulative_hours = VALUES(cumulative_hours),
+    last_overhaul_date = VALUES(last_overhaul_date),
+    operating_area = VALUES(operating_area),
+    notes = VALUES(notes);

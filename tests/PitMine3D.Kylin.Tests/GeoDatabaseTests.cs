@@ -12,7 +12,7 @@ public class GeoDatabaseTests
     [Fact]
     public void Builds_all_migrations_in_memory()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         // 断言"内嵌几个就应用几个", 不写死数字 —— 写死的话每加一个迁移这里都要红一次,
         // 而它想守的其实是"没有迁移被漏掉", 与总数具体是多少无关。
         Assert.Equal(EmbeddedMigrationCount(), db.AppliedMigrationCount());
@@ -21,7 +21,7 @@ public class GeoDatabaseTests
     [Fact]
     public void Core_tables_created()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         foreach (var t in new[] { "equipment_model", "equipment", "production_record",
                                   "capacity_monthly", "fault_event", "monthly_plan", "dispatch_rule" })
         {
@@ -33,7 +33,7 @@ public class GeoDatabaseTests
     [Fact]
     public void Seed_data_present()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         // V002 灌 9 型号 + 15 设备；V020+ 灌真实车队/产能/生产
         Assert.True(db.ScalarLong("SELECT COUNT(*) FROM equipment_model") >= 5, "设备型号种子");
         Assert.True(db.ScalarLong("SELECT COUNT(*) FROM equipment") >= 5, "设备台账种子");
@@ -48,8 +48,8 @@ public class GeoDatabaseTests
         try
         {
             int n = EmbeddedMigrationCount();
-            using (var db1 = GeoDatabase.OpenSeeded(path)) Assert.Equal(n, db1.AppliedMigrationCount());
-            using (var db2 = GeoDatabase.OpenSeeded(path)) Assert.Equal(n, db2.AppliedMigrationCount());  // 重开不重复应用
+            using (var db1 = TestDb.Open(path)) Assert.Equal(n, db1.AppliedMigrationCount());
+            using (var db2 = TestDb.Open(path)) Assert.Equal(n, db2.AppliedMigrationCount());  // 重开不重复应用
         }
         finally { try { System.IO.File.Delete(path); } catch { /* 清理失败无碍 */ } }
     }
@@ -57,8 +57,9 @@ public class GeoDatabaseTests
     /// <summary>程序内嵌的 SQLite 迁移份数(资源名形如 ….Data.Migrations.V001_initial.sql)。</summary>
     private static int EmbeddedMigrationCount()
     {
+        // SQLite 版迁移嵌在**测试**程序集里 —— 产品已移除 SQLite, 主程序集只有 openGauss 那套。
         int n = 0;
-        foreach (var r in typeof(GeoDatabase).Assembly.GetManifestResourceNames())
+        foreach (var r in typeof(SqliteDialect).Assembly.GetManifestResourceNames())
             if (r.Contains(".Data.Migrations.") && r.EndsWith(".sql", System.StringComparison.OrdinalIgnoreCase)) n++;
         return n;
     }

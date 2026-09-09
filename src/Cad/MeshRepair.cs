@@ -10,7 +10,7 @@ namespace PitMine3D.Kylin.Cad;
 /// 次序关键：焊接须最先(否则重合但未共享的顶点使朝向/补洞失效)。纯逻辑、可单测。
 /// (非流形边拆分/自交去除属内核级修复，不含；此为常见拓扑修复。)
 /// </summary>
-public static class MeshRepair
+public static partial class MeshRepair
 {
     public readonly record struct Result(
         List<(double x, double y, double z)> Verts, List<(int a, int b, int c)> Tris,

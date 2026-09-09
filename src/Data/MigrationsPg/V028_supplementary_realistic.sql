@@ -12,7 +12,7 @@
 
 -- ─── 主表: supplementary_borehole (补勘钻孔) ────────────────────────────────
 CREATE TABLE IF NOT EXISTS supplementary_borehole (
-    id          SERIAL PRIMARY KEY,
+    id          BIGSERIAL PRIMARY KEY,
     hole_id     TEXT    NOT NULL UNIQUE,          -- 孔号 (业务唯一键)
     x           DOUBLE PRECISION    NOT NULL,                 -- 经距 (与 borehole.x 同坐标系, 已去带号)
     y           DOUBLE PRECISION    NOT NULL,                 -- 纬距
@@ -42,12 +42,12 @@ EXECUTE PROCEDURE fn_touch_updated_at();
 -- 一孔一层一条;顶板 / 底板高程都直接存(写实),厚度 = 顶 - 底 由上层派生,不落库。
 -- 不加 seam_code→coal_seam_def 外键:写实允许用户自定义煤层结构,保持灵活。
 CREATE TABLE IF NOT EXISTS supplementary_seam_horizon (
-    id                SERIAL PRIMARY KEY,
-    sup_borehole_id   INTEGER NOT NULL,
+    id                BIGSERIAL PRIMARY KEY,
+    sup_borehole_id   BIGINT NOT NULL,
     seam_code         TEXT    NOT NULL,           -- 煤层编号 (4/7-1/9/11/...)
     roof_elevation    DOUBLE PRECISION,                       -- 顶板高程 (m, 显式存)
     floor_elevation   DOUBLE PRECISION,                       -- 底板高程 (m, 显式存)
-    sort_order        INTEGER NOT NULL DEFAULT 0, -- 层序 (浅→深, 决定上下关系)
+    sort_order        BIGINT NOT NULL DEFAULT 0, -- 层序 (浅→深, 决定上下关系)
     remark            TEXT,
     created_at        TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at        TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,

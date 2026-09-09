@@ -21,7 +21,7 @@ INSERT INTO mine_location (location_code, name, elevation_m, team, is_active) VA
     ('1210', '1210 平盘', 1210, 'team1',     1),
     ('1225', '1225 平盘', 1225, 'team1',     1),
     ('1240', '1240 平盘', 1240, 'team1',     1),
-    ('1270', '1270 平盘', 1270, 'team1',     1) ON CONFLICT (location_code) DO UPDATE SET name = EXCLUDED.name, elevation_m = EXCLUDED.elevation_m, team = EXCLUDED.team, is_active = EXCLUDED.is_active;
+    ('1270', '1270 平盘', 1270, 'team1',     1) ON DUPLICATE KEY UPDATE name = VALUES(name), elevation_m = VALUES(elevation_m), team = VALUES(team), is_active = VALUES(is_active);
 
 -- ─── 工作面(5 个活跃)──────────────────────────────────────────────────────
 INSERT INTO working_face (face_code, location_code, equipment_id, bench_height_m, bench_slope_angle_deg,
@@ -36,7 +36,7 @@ INSERT INTO working_face (face_code, location_code, equipment_id, bench_height_m
     ('WF-1240-A', '1240', '3017', 13.0, 68, 40, 8, 45, 200, 40, 'rh', 'hard',
         '2023-10-15', 'active', 'WK-35 新国产电铲,试生产工作面'),
     ('WF-1270-A', '1270', '1740', 15.0, 70, 45, 8, 50, 220, 45, 'rh', 'hard',
-        '2023-06-01', 'active', '4100XPC 高位剥离工作面');
+        '2023-06-01', 'active', '4100XPC 高位剥离工作面') ON DUPLICATE KEY UPDATE location_code = VALUES(location_code), equipment_id = VALUES(equipment_id), bench_height_m = VALUES(bench_height_m), bench_slope_angle_deg = VALUES(bench_slope_angle_deg), working_platform_width_m = VALUES(working_platform_width_m), safety_platform_width_m = VALUES(safety_platform_width_m), mining_width_m = VALUES(mining_width_m), face_length_m = VALUES(face_length_m), advance_rate_m_per_month = VALUES(advance_rate_m_per_month), material = VALUES(material), rock_hardness = VALUES(rock_hardness), effective_from = VALUES(effective_from), status = VALUES(status), notes = VALUES(notes);
 
 -- ─── 排土场(2 个)─────────────────────────────────────────────────────────
 INSERT INTO dump_site (dump_id, name, dump_type, design_capacity_wan_m3, current_filled_wan_m3,
@@ -47,7 +47,7 @@ INSERT INTO dump_site (dump_id, name, dump_type, design_capacity_wan_m3, current
         '外排土场,主排土,容量充足'),
     ('D-I1', '内排土场', 'internal', 5000, 3200, 45, 12, 30, 36, 4.0,
         '2018-09-01', 'D10N-01', 'active',
-        '内排土,减少运距,优先排土区') ON CONFLICT (dump_id) DO UPDATE SET name = EXCLUDED.name, dump_type = EXCLUDED.dump_type, design_capacity_wan_m3 = EXCLUDED.design_capacity_wan_m3, current_filled_wan_m3 = EXCLUDED.current_filled_wan_m3, max_height_m = EXCLUDED.max_height_m, bench_height_m = EXCLUDED.bench_height_m, overall_slope_angle_deg = EXCLUDED.overall_slope_angle_deg, bench_slope_angle_deg = EXCLUDED.bench_slope_angle_deg, service_years_remaining = EXCLUDED.service_years_remaining, start_date = EXCLUDED.start_date, responsible_dozer_id = EXCLUDED.responsible_dozer_id, status = EXCLUDED.status, notes = EXCLUDED.notes;
+        '内排土,减少运距,优先排土区') ON DUPLICATE KEY UPDATE name = VALUES(name), dump_type = VALUES(dump_type), design_capacity_wan_m3 = VALUES(design_capacity_wan_m3), current_filled_wan_m3 = VALUES(current_filled_wan_m3), max_height_m = VALUES(max_height_m), bench_height_m = VALUES(bench_height_m), overall_slope_angle_deg = VALUES(overall_slope_angle_deg), bench_slope_angle_deg = VALUES(bench_slope_angle_deg), service_years_remaining = VALUES(service_years_remaining), start_date = VALUES(start_date), responsible_dozer_id = VALUES(responsible_dozer_id), status = VALUES(status), notes = VALUES(notes);
 
 -- ─── 边坡设计(4 帮)───────────────────────────────────────────────────────
 INSERT INTO slope_design (side_name, side_type, working_slope_angle_deg, final_slope_angle_deg,
@@ -64,7 +64,7 @@ INSERT INTO slope_design (side_name, side_type, working_slope_angle_deg, final_s
         '最终帮,坡顶有排土场,需关注堆载效应'),
     ('北帮',   'working',   26, NULL, 300, 1.30, 75, 33, '砂岩为主', -42,
         '2022-06-01', 'v2.2', '中煤设计院',
-        '工作帮,推进中');
+        '工作帮,推进中') ON DUPLICATE KEY UPDATE side_name = VALUES(side_name), side_type = VALUES(side_type), working_slope_angle_deg = VALUES(working_slope_angle_deg), final_slope_angle_deg = VALUES(final_slope_angle_deg), max_depth_m = VALUES(max_depth_m), safety_factor = VALUES(safety_factor), cohesion_kpa = VALUES(cohesion_kpa), friction_angle_deg = VALUES(friction_angle_deg), rock_type = VALUES(rock_type), groundwater_level_m = VALUES(groundwater_level_m), effective_from = VALUES(effective_from), design_version = VALUES(design_version), designed_by = VALUES(designed_by), notes = VALUES(notes);
 
 -- ─── 道路网络(6 段)───────────────────────────────────────────────────────
 INSERT INTO haul_road (road_id, name, road_type, start_location, end_location, length_m,
@@ -88,4 +88,4 @@ INSERT INTO haul_road (road_id, name, road_type, start_location, end_location, l
         '排土场内部道路'),
     ('R-DUMP-02', '内排土通道',     'dump',   '采坑', '内排土场', 1500, 8, 6, 30, 35,
         'gravel',   172, '730E',  '排土工区', '2023-10-12', 'fair',
-        '内排土,运距短') ON CONFLICT (road_id) DO UPDATE SET name = EXCLUDED.name, road_type = EXCLUDED.road_type, start_location = EXCLUDED.start_location, end_location = EXCLUDED.end_location, length_m = EXCLUDED.length_m, max_slope_pct = EXCLUDED.max_slope_pct, avg_slope_pct = EXCLUDED.avg_slope_pct, road_width_m = EXCLUDED.road_width_m, turning_radius_m = EXCLUDED.turning_radius_m, pavement_type = EXCLUDED.pavement_type, max_load_t = EXCLUDED.max_load_t, primary_truck_model = EXCLUDED.primary_truck_model, maintenance_team = EXCLUDED.maintenance_team, last_maintenance_date = EXCLUDED.last_maintenance_date, condition = EXCLUDED.condition, notes = EXCLUDED.notes;
+        '内排土,运距短') ON DUPLICATE KEY UPDATE name = VALUES(name), road_type = VALUES(road_type), start_location = VALUES(start_location), end_location = VALUES(end_location), length_m = VALUES(length_m), max_slope_pct = VALUES(max_slope_pct), avg_slope_pct = VALUES(avg_slope_pct), road_width_m = VALUES(road_width_m), turning_radius_m = VALUES(turning_radius_m), pavement_type = VALUES(pavement_type), max_load_t = VALUES(max_load_t), primary_truck_model = VALUES(primary_truck_model), maintenance_team = VALUES(maintenance_team), last_maintenance_date = VALUES(last_maintenance_date), condition = VALUES(condition), notes = VALUES(notes);

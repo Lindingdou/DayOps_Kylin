@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS drill_plan (
     end_time          TEXT NOT NULL,                   -- 止 HH:mm(同日内;跨零点拆两条)
     zone              TEXT NOT NULL DEFAULT '',        -- 待爆区/平盘(对 blast_event.location_code 或作业面名)
     bench_elevation_m DOUBLE PRECISION,                            -- 台阶标高 m(NULL=未录,0 是合法值)
-    hole_count        INTEGER,                         -- 计划孔数(NULL=未录)
+    hole_count        BIGINT,                         -- 计划孔数(NULL=未录)
     hole_length_m     DOUBLE PRECISION,                            -- 计划延米 m(NULL=未录)
     status            TEXT NOT NULL DEFAULT '计划',    -- 计划 / 进行中 / 完成 / 取消
     note              TEXT,

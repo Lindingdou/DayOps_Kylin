@@ -38,14 +38,14 @@ public class RowVersionTests
     [Fact]
     public void 种子行初始版本号为零()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         Assert.Equal(0, Scalar(db, "SELECT COALESCE(MAX(row_version),0) FROM equipment"));
     }
 
     [Fact]
     public void 更新一行_版本号恰好加一()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         string eq = AnyEquipmentId(db);
 
         Assert.Equal(1, Exec(db, $"UPDATE equipment SET manufacturer='甲厂' WHERE equipment_id='{eq}'"));
@@ -57,7 +57,7 @@ public class RowVersionTests
     [Fact]
     public void 连续更新_版本号持续递增()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         string eq = AnyEquipmentId(db);
 
         for (int i = 1; i <= 3; i++)
@@ -70,7 +70,7 @@ public class RowVersionTests
     [Fact]
     public void 带正确版本号的更新_成功影响一行()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         string eq = AnyEquipmentId(db);
         long seen = Scalar(db, $"SELECT row_version FROM equipment WHERE equipment_id='{eq}'");
 
@@ -83,7 +83,7 @@ public class RowVersionTests
     [Fact]
     public void 带过期版本号的更新_影响零行_冲突被拦住()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         string eq = AnyEquipmentId(db);
         long seen = Scalar(db, $"SELECT row_version FROM equipment WHERE equipment_id='{eq}'");
 
@@ -106,7 +106,7 @@ public class RowVersionTests
     {
         // 这条是"为什么不用 updated_at"的可执行论据: 同一秒内两次更新,
         // updated_at 很可能一模一样(SQLite CURRENT_TIMESTAMP 精确到秒), row_version 一定不同。
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         string eq = AnyEquipmentId(db);
 
         Exec(db, $"UPDATE equipment SET manufacturer='A' WHERE equipment_id='{eq}'");
@@ -120,7 +120,7 @@ public class RowVersionTests
     [Fact]
     public void 三十一张表都有了行版本号列()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         foreach (var t in new[] { "equipment", "borehole", "coal_sample", "haul_road", "working_face",
                                   "dump_site", "process_template", "drill_plan", "sink_profile", "process_zone" })
         {

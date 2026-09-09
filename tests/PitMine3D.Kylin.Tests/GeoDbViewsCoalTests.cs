@@ -14,7 +14,7 @@ public class GeoDbViewsCoalTests
     [Fact]
     public void Seed_dictionaries_and_samples_load()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var seams = GeoDbViews.CoalSeamDefs(db.Connection);
         Assert.Equal(7, seams.Count);                                          // V005 种子 7 个煤层
         Assert.Equal("4", seams[0].Code);                                      // sort_order 10 首位
@@ -39,7 +39,7 @@ public class GeoDbViewsCoalTests
     [Fact]
     public void Seam_color_from_dictionary_with_fallback()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var seams = GeoDbViews.CoalSeamDefs(db.Connection);
         Assert.Equal(((byte)0x4A, (byte)0x7C, (byte)0x2E), GeoDbViews.CoalSeamColor(seams, "9"));
         Assert.Equal(((byte)0x55, (byte)0x55, (byte)0x55), GeoDbViews.CoalSeamColor(seams, "不存在"));
@@ -51,7 +51,7 @@ public class GeoDbViewsCoalTests
     [Fact]
     public void Insert_update_delete_roundtrip_writes_db()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var bh = GeoDbViews.CoalBoreholes(db.Connection).First();
         int before = GeoDbViews.CoalLoadSamples(db.Connection).Count;
         var row = new GeoDbViews.CoalSampleRow
@@ -83,7 +83,7 @@ public class GeoDbViewsCoalTests
     [Fact]
     public void Rebuild_summary_writes_one_row_per_hole_seam()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var rows = GeoDbViews.CoalLoadSamples(db.Connection);
         int groups = rows.Select(r => (r.BoreholeId, r.SeamCode)).Distinct().Count();
         int n = GeoDbViews.CoalRebuildSummary(db.Connection);
@@ -108,7 +108,7 @@ public class GeoDbViewsCoalTests
         Assert.StartsWith("孔号,煤层,采样起深", tpl);
         Assert.Contains("示例行", tpl);
 
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var all = GeoDbViews.CoalLoadSamples(db.Connection);
         var two = all.Take(2).ToList();
         string csv = GeoDbViews.CoalCsvText(two.Select(GeoDbViews.CoalRowCells));
@@ -145,7 +145,7 @@ public class GeoDbViewsCoalTests
     [Fact]
     public void Stats_by_seam_on_seed()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var rows = GeoDbViews.CoalLoadSamples(db.Connection);
         var st = GeoDbViews.CoalStatsBySeam(rows, "ad_raw");
         Assert.True(st.Count >= 3);
@@ -181,7 +181,7 @@ public class GeoDbViewsCoalTests
         Assert.Equal(1.0, GeoDbViews.CoalPearson(new[] { 1.0, 2, 3 }, new[] { 2.0, 4, 6 })!.Value, 6);
         Assert.Null(GeoDbViews.CoalPearson(new[] { 1.0, 2 }, new[] { 1.0, 2 }));
 
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var rows = GeoDbViews.CoalLoadSamples(db.Connection);
         var m = GeoDbViews.CoalCorrelationMatrix(rows, false);
         int n = GeoDbViews.CoalCorrNames.Length;
@@ -200,7 +200,7 @@ public class GeoDbViewsCoalTests
     [Fact]
     public void Outliers_grade_counts_type_counts()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var rows = GeoDbViews.CoalLoadSamples(db.Connection);
         var od = GeoDbViews.CoalDetectOutliers(rows, "ad_raw", null);
         Assert.Equal(rows.Count(r => r.AdRaw.HasValue), od.N);
@@ -270,7 +270,7 @@ public class GeoDbViewsCoalTests
         Assert.Equal(0.5, GeoDbViews.CoalConfidenceKeep(5, 10, 0, 100), 6);
         Assert.Equal(0.12, GeoDbViews.CoalConfidenceKeep(null, 0, 10000, 100), 6);
 
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var rows = GeoDbViews.CoalLoadSamples(db.Connection).Where(r => r.ZSample.HasValue).ToList();
         var cov = GeoDbViews.CoalCoverageOf(rows)!;
         Assert.Equal(rows.Count, cov.N);
@@ -284,7 +284,7 @@ public class GeoDbViewsCoalTests
     [Fact]
     public void Boreholes_with_samples_seam_results_hole_summary()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var holes = GeoDbViews.CoalBoreholesWithSamples(db.Connection);
         var rows = GeoDbViews.CoalLoadSamples(db.Connection);
         Assert.Equal(rows.Select(r => r.BoreholeId).Distinct().Count(), holes.Count);
@@ -308,7 +308,7 @@ public class GeoDbViewsCoalTests
     [Fact]
     public void Analytics_bridge_from_full_rows()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var rows = GeoDbViews.CoalLoadSamples(db.Connection);
         var an = rows.Select(r => r.ToAnalytics()).ToList();
         Assert.Equal(rows.Count, an.Count);

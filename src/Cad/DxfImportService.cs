@@ -365,29 +365,49 @@ public static class DxfImportService
         public List<string> LayerOrder { get; } = new();
         public Dictionary<string, int> TypeCounts { get; } = new();
         public List<string> Warnings { get; } = new();
+        /// <summary>逐图元代表点（各自包围盒中心），供 <see cref="RobustExtent"/> 判定远处离群图元。</summary>
+        public List<(double x, double y)> Centers { get; } = new();
     }
 
     /// <summary>读 DXF/DWG 为可编辑场景实体（Line/Circle/Arc/Polyline/Point/Ellipse/Spline/Insert 展开）。</summary>
-    public static EntityImportResult LoadEntities(string filePath)
+    /// <param name="progress">读取阶段的进度回调（0~1 与说明），供大图纸显示进度条；可空。</param>
+    public static EntityImportResult LoadEntities(string filePath, Action<double, string>? progress = null)
     {
         var result = new EntityImportResult();
         CadDocument doc;
         try
         {
             string ext = Path.GetExtension(filePath).ToLowerInvariant();
-            doc = ext switch
-            {
-                ".dxf" => DxfReader.Read(filePath),
-                ".dwg" => DwgReader.Read(filePath),
-                _ => throw new NotSupportedException($"不支持的 CAD 格式：{ext}")
-            };
+            progress?.Invoke(0.02, "正在读取文件…");
+            doc = ext == ".dwg" ? ReadDwg(filePath)
+                : ext == ".dxf" ? DxfReader.Read(filePath)
+                : throw new NotSupportedException($"不支持的 CAD 格式：{ext}");
+            progress?.Invoke(0.70, "正在转换图元…");
         }
         catch (Exception ex) { result.Error = $"读取失败：{ex.Message}"; return result; }
-        return MapDocument(doc, result);
+        var r = MapDocument(doc, result, progress);
+        progress?.Invoke(1.0, "读取完成");
+        return r;
+    }
+
+    /// <summary>
+    /// 读 DWG。把用不上的检查/对象关掉 —— 实测 51MB 图纸 6465ms → 5582ms（约 14%）：
+    /// CRC 校验（我们不修复损坏文件，坏了自然会解析失败）、摘要信息（作者/标题，界面不用）、
+    /// 以及"未知实体/未知非图形对象"（本来就映射不了，留着只是白占内存）。
+    /// </summary>
+    private static CadDocument ReadDwg(string filePath)
+    {
+        using var reader = new DwgReader(filePath, null);
+        var c = reader.Configuration;
+        c.CrcCheck = false;
+        c.ReadSummaryInfo = false;
+        c.KeepUnknownEntities = false;
+        c.KeepUnknownNonGraphicalObjects = false;
+        return reader.Read();
     }
 
     /// <summary>把 CadDocument 映射为场景实体（可单测：测试直接传入内存 doc）。</summary>
-    public static EntityImportResult MapDocument(CadDocument doc, EntityImportResult? into = null)
+    public static EntityImportResult MapDocument(CadDocument doc, EntityImportResult? into = null, Action<double, string>? progress = null)
     {
         var result = into ?? new EntityImportResult();
         double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
@@ -405,11 +425,15 @@ public static class DxfImportService
             se.LayerName = layer;
             result.Entities.Add(se);
             var o = new List<float>(); se.Tessellate(o);
+            double eMinX = double.MaxValue, eMinY = double.MaxValue, eMaxX = double.MinValue, eMaxY = double.MinValue;
             for (int i = 0; i + 1 < o.Count; i += 6)
             {
                 float x = o[i], y = o[i + 1];
                 if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y;
+                if (x < eMinX) eMinX = x; if (y < eMinY) eMinY = y; if (x > eMaxX) eMaxX = x; if (y > eMaxY) eMaxY = y;
             }
+            // 本图元的中心：导入后据此判断"绝大多数图元挤在哪"，好把视图定到那儿而不是被远处孤立图元拽走
+            if (eMaxX >= eMinX) result.Centers.Add(((eMinX + eMaxX) * 0.5, (eMinY + eMaxY) * 0.5));
         }
 
         // 取实体代表标高 Z(世界单位): 均匀高程(等高线/水平图元)忠实原(原亦按 Elevation 统一给 Z);
@@ -717,6 +741,8 @@ public static class DxfImportService
         try
         {
             var model = doc.BlockRecords["*Model_Space"];
+            int total = 0; foreach (var _ in model.Entities) total++;      // 先数一遍, 好给进度条一个分母
+            int done = 0, tick = System.Math.Max(1, total / 50);           // 每 2% 报一次, 别把回调本身变成开销
             foreach (var e in model.Entities)
             {
                 string layer = SafeLayerName(e);
@@ -724,6 +750,8 @@ public static class DxfImportService
                 var cn = CnTypeName(e);
                 if (cn != null) result.TypeCounts[cn] = result.TypeCounts.GetValueOrDefault(cn) + 1;
                 Emit(e, null, ColorOf(e), layer, 0);
+                if (progress != null && ++done % tick == 0)
+                    progress(0.70 + 0.28 * done / System.Math.Max(1, total), $"正在转换图元 {done:N0}/{total:N0}…");
             }
             foreach (var ly in doc.Layers)   // 图层表状态(开/冻结/锁定) → round-trip 保真
             {

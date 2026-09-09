@@ -23,7 +23,7 @@
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS seam_bench_param (
-    id                      SERIAL PRIMARY KEY,
+    id                      BIGSERIAL PRIMARY KEY,
     seam_code               TEXT    NOT NULL,               -- → coal_seam_def.code (4 / 9 / 11 ...)
 
     -- 覆盖 parameter_definition 的煤台阶三项(NULL = 不覆盖,回落全矿默认)
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS seam_bench_param (
 
     design_version          TEXT,
     notes                   TEXT,
-    is_active               INTEGER NOT NULL DEFAULT 1,
+    is_active               BIGINT NOT NULL DEFAULT 1,
     created_at              TEXT    DEFAULT CURRENT_TIMESTAMP,
     updated_at              TEXT    DEFAULT CURRENT_TIMESTAMP,
 
@@ -71,4 +71,4 @@ EXECUTE PROCEDURE fn_touch_updated_at();
 -- strip_width / min_mineable_thick 在 parameter_definition 里没有对口项,给出初值。
 INSERT INTO seam_bench_param (seam_code, strip_width_m, layering_mode, min_mineable_thick_m, datum, notes)
 SELECT code, 20.0, 'inclined', 0.8, 'floor', '自动建行:参数全部回落全矿默认,按需逐项覆盖'
-FROM coal_seam_def ON CONFLICT DO NOTHING;
+FROM coal_seam_def ON DUPLICATE KEY UPDATE strip_width_m = strip_width_m;

@@ -8,6 +8,9 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- 可执行文件/快捷方式图标：中煤标志，由 Views/Startup/BrandLogo.cs 那份矢量渲染而来。
+         窗口标题栏与任务栏的图标走 BrandLogo.Apply(运行时渲染同一份矢量)，两处同源。 -->
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <RootNamespace>PitMine3D.Kylin</RootNamespace>
     <AssemblyName>PitMine3D.Kylin</AssemblyName>

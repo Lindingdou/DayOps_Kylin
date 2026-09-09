@@ -89,7 +89,7 @@ public class CoalAnalyticsTests
     [Fact]
     public void Compliance_from_seed_runs()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var samples = GeoDataQueries.GetCoalSamples(db.Connection);
         Assert.NotEmpty(samples);
         var r = CoalAnalytics.Evaluate(samples, Lim());
@@ -251,7 +251,7 @@ public class CoalAnalyticsTests
     [Fact]
     public void Utilization_from_seed_runs()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var s = GeoDataQueries.GetCoalSamples(db.Connection);
         var util = CoalAnalytics.UtilizationBySeam(s);
         Assert.NotEmpty(util);

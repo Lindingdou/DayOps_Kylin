@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Avalonia.OpenGL;
 using static Avalonia.OpenGL.GlConsts;
@@ -26,7 +26,9 @@ internal sealed class GlRenderer
     private GlExtras _ext = null!;
     private int _program;
     private int _uMvp;
+    private int _uPointSize;
     private int _vao;
+    private bool _programPointSize;   // 桌面 GL 核心档需显式开 GL_PROGRAM_POINT_SIZE, 顶点着色器写的 gl_PointSize 才生效
 
     /// <summary>着色器实际采用的方言(诊断用)：330 core / 300 es / 110 兼容(老驱动回退)。</summary>
     public string ShaderProfile { get; private set; } = "(未初始化)";
@@ -66,6 +68,8 @@ internal sealed class GlRenderer
         if (errs.Count > 0) Console.Error.WriteLine($"[GL] 回退到 {ShaderProfile}(前面失败: {string.Join(" | ", errs)})");
 
         _uMvp = gl.GetUniformLocationString(_program, "uMVP");
+        _uPointSize = gl.GetUniformLocationString(_program, "uPointSize");
+        _programPointSize = !isGles;   // GLES 恒按 gl_PointSize 走; 桌面档要 Enable 才认
 
         _vao = _ext.GenVertexArray();   // 老驱动无 VAO 扩展时返回 0, BindVertexArray 变空操作(每次 Draw 都重设属性指针, 不依赖 VAO)
         _ext.BindVertexArray(_vao);
@@ -73,11 +77,13 @@ internal sealed class GlRenderer
 
     private bool TryBuildProgram(GlInterface gl, string header, bool modern, out string error)
     {
+        // gl_PointSize: 点云走 GL_POINTS, 点径必须由顶点着色器给(GLES 无 glPointSize; 桌面核心档也只认这个)。
+        // 画线/画面时它被忽略, 故同一份着色器通吃 线/面/点 三种图元。
         string vs = modern
-            ? header + "in vec3 aPos;\nin vec3 aColor;\nuniform mat4 uMVP;\nout vec3 vColor;\n" +
-                       "void main() { vColor = aColor; gl_Position = uMVP * vec4(aPos, 1.0); }"
-            : header + "attribute vec3 aPos;\nattribute vec3 aColor;\nuniform mat4 uMVP;\nvarying vec3 vColor;\n" +
-                       "void main() { vColor = aColor; gl_Position = uMVP * vec4(aPos, 1.0); }";
+            ? header + "in vec3 aPos;\nin vec3 aColor;\nuniform mat4 uMVP;\nuniform float uPointSize;\nout vec3 vColor;\n" +
+                       "void main() { vColor = aColor; gl_PointSize = uPointSize; gl_Position = uMVP * vec4(aPos, 1.0); }"
+            : header + "attribute vec3 aPos;\nattribute vec3 aColor;\nuniform mat4 uMVP;\nuniform float uPointSize;\nvarying vec3 vColor;\n" +
+                       "void main() { vColor = aColor; gl_PointSize = uPointSize; gl_Position = uMVP * vec4(aPos, 1.0); }";
         string fs = modern
             ? header + "in vec3 vColor;\nout vec4 oColor;\nvoid main() { oColor = vec4(vColor, 1.0); }"
             : header + "varying vec3 vColor;\nvoid main() { gl_FragColor = vec4(vColor, 1.0); }";
@@ -176,7 +182,24 @@ internal sealed class GlRenderer
     /// <summary>叠加层用：临时改视口（如左下角罗盘区）。</summary>
     public void SetViewport(int x, int y, int w, int h) => _gl.Viewport(x, y, w, h);
 
-    /// <summary>用给定 MVP 画一块网格。primMode = GL_LINES / GL_TRIANGLES。</summary>
+    private const int GL_PROGRAM_POINT_SIZE = 0x8642;
+    private const int GL_DEPTH_LESS = 0x0201, GL_DEPTH_LEQUAL = 0x0203;
+
+    /// <summary>
+    /// 深度比较：默认 LESS；点云那一趟切 LEQUAL —— 各点云算子都是非破坏的，产物点与源点
+    /// 坐标完全重合，LESS 下先画的(源点云)恒赢，着色结果被压在下面，看着就像"命令没生效"。
+    /// LEQUAL 让同深度时后画的赢，最新的点云自然浮在最上层。
+    /// </summary>
+    public void SetDepthLessEqual(bool on) => _ext.DepthFunc(on ? GL_DEPTH_LEQUAL : GL_DEPTH_LESS);
+
+    /// <summary>点云点径(像素)。GL_POINTS 那一趟前调用；其它图元不受影响。</summary>
+    public void SetPointSize(float px)
+    {
+        if (_programPointSize) _gl.Enable(GL_PROGRAM_POINT_SIZE);
+        _ext.Uniform1f(_uPointSize, px);
+    }
+
+    /// <summary>用给定 MVP 画一块网格。primMode = GL_LINES / GL_TRIANGLES / GL_POINTS。</summary>
     public void Draw(in Mesh m, int primMode, float[] mvp)
     {
         if (m.IsEmpty) return;

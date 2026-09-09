@@ -358,7 +358,9 @@ public static partial class GeoDbViews
     // ═══════════════════════════════════════════════════════════════════════
 
     private const string BindingCols = "id AS Id, phase_id AS PhaseId, location_code AS LocationCode, bound_template_id AS BoundTemplateId, started_at AS StartedAt, ended_at AS EndedAt, is_active AS IsActive, notes AS Notes FROM phase_location_binding";
-    private const string ActiveBindingWhere = "is_active = 1 AND (ended_at IS NULL OR ended_at >= date('now'))";
+    // 日期比较写成 CAST(CURRENT_DATE AS TEXT): SQLite 的 date('now') 在 PG 里不存在(date 是类型名,
+    // 报 syntax error at or near "("); 而直接用 CURRENT_DATE 又会变成 date 类型, 与 TEXT 列比较类型不匹配。
+    private const string ActiveBindingWhere = "is_active = 1 AND (ended_at IS NULL OR ended_at >= CAST(CURRENT_DATE AS TEXT))";
 
     /// <summary>平盘列表(activeOnly=true 仅 is_active, ORDER BY elevation_m)。</summary>
     public static List<ProcLocation> ProcLocations(DbConnection conn, bool activeOnly = true)
@@ -567,7 +569,7 @@ public static partial class GeoDbViews
     /// <summary>现行边坡设计的最小安全系数(effective_to 为空或未到期; 无记录返回 null; safety_factor NULL 按 0)。</summary>
     public static double? ProcMinSlopeSafetyFactor(DbConnection conn)
     {
-        var vals = conn.Query<double?>("SELECT safety_factor FROM slope_design WHERE effective_to IS NULL OR effective_to >= date('now')").ToList();
+        var vals = conn.Query<double?>("SELECT safety_factor FROM slope_design WHERE effective_to IS NULL OR effective_to >= CAST(CURRENT_DATE AS TEXT)").ToList();
         if (vals.Count == 0) return null;
         return vals.Min(v => v ?? 0);
     }

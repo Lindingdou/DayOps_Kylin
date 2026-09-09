@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS sink_profile (
     accept_tph          DOUBLE PRECISION    NOT NULL DEFAULT 0,        -- 通过能力 t/h,0=不限;仅排土场侧权威(卸载点见 throughput_tph)
     accepted_materials  TEXT    NOT NULL DEFAULT '',       -- 可接物料码白名单,逗号分隔;空=按物料自身 AllowedSinks 判定
     work_line_length_m  DOUBLE PRECISION    NOT NULL DEFAULT 0,        -- 排土工作线长 m;推进距离 d = V容/(L×h)
-    active_bench_level  INTEGER NOT NULL DEFAULT 1,        -- 当前可排台阶层(自下而上,1 起)
+    active_bench_level  BIGINT NOT NULL DEFAULT 1,        -- 当前可排台阶层(自下而上,1 起)
     fallback_haul_km    DOUBLE PRECISION    NOT NULL DEFAULT 0,        -- 路网不可解时的兜底运距 km(三层兜底最后一层)
     open_from_hour      DOUBLE PRECISION    NOT NULL DEFAULT 0,        -- 当日开放时窗起(0..24)
     open_to_hour        DOUBLE PRECISION    NOT NULL DEFAULT 24,       -- 当日开放时窗止(0..24);0/24=全天
@@ -61,7 +61,7 @@ EXECUTE PROCEDURE fn_touch_updated_at();
 -- 确需修正(实测扫描、历史补录、口径纠偏)时走盘点:留下改前/改后/差额/原因,只增不改。
 -- 单位一律【占容方 m³】,与 SinkNode.FilledM3 同口径(不是 dump_site 的万 m³)。
 CREATE TABLE IF NOT EXISTS sink_stocktake (
-    id              SERIAL PRIMARY KEY,
+    id              BIGSERIAL PRIMARY KEY,
     sink_id         TEXT    NOT NULL DEFAULT '',
     sink_name       TEXT    NOT NULL DEFAULT '',
     before_filled_m3 DOUBLE PRECISION   NOT NULL DEFAULT 0,           -- 盘点前已填(占容方 m³)
@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS working_face_routing (
     haul_distance_km        DOUBLE PRECISION    NOT NULL DEFAULT 0,   -- 运距 km
     equiv_haul_km           DOUBLE PRECISION    NOT NULL DEFAULT 0,   -- 等效运距 km(含坡度折算)
     day_target_m3           DOUBLE PRECISION    NOT NULL DEFAULT 0,   -- 当日目标 m³ 实方
-    derived_from_inbound    INTEGER NOT NULL DEFAULT 0,   -- 1=排土面,日目标由入方推导,不手工填
+    derived_from_inbound    BIGINT NOT NULL DEFAULT 0,   -- 1=排土面,日目标由入方推导,不手工填
     shovel_model_pref       TEXT    NOT NULL DEFAULT '',  -- 主铲型号偏好(编组求解用)
     main_equipment          TEXT    NOT NULL DEFAULT '',  -- 主设备(同时写回 working_face.equipment_id)
     splits_json             TEXT    NOT NULL DEFAULT '[]',-- MaterialDestination[] JSON,opaque

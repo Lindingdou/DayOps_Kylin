@@ -9,10 +9,10 @@
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS mineable_region (
-    id           SERIAL PRIMARY KEY,
+    id           BIGSERIAL PRIMARY KEY,
     name         TEXT    NOT NULL DEFAULT '',
     points_json  TEXT    NOT NULL DEFAULT '[]',        -- 扁平顶点 [x0,y0,z0,x1,y1,z1,...]
-    visible      INTEGER NOT NULL DEFAULT 1,           -- 是否在视口显示(0/1)
+    visible      BIGINT NOT NULL DEFAULT 1,           -- 是否在视口显示(0/1)
     note         TEXT,
     created_at   TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at   TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP

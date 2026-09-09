@@ -87,7 +87,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Grade_rules_by_type_preserve_open_bounds_and_classify()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var ash = GeoDataQueries.GetGradeRulesByType(db.Connection, "ash");
         Assert.True(ash.Count >= 3);
         Assert.Null(ash[0].ValueMin);      // 首级开下界 −∞(nullable 保真, 非 COALESCE 成 0)
@@ -106,15 +106,15 @@ public class GeoDataQueriesTests
     [Fact]
     public void Data_dictionary_lists_tables_and_columns()
     {
-        using var db = GeoDatabase.OpenSeeded();
-        var tables = GeoDataQueries.ListTables(db.Connection);
+        using var db = TestDb.Open();
+        var tables = GeoDataQueries.ListTables(db.Connection, new SqliteDialect());
         Assert.NotEmpty(tables);
         Assert.Contains("borehole", tables);
         Assert.Contains("coal_sample", tables);
         Assert.Contains("equipment", tables);
         Assert.DoesNotContain(tables, t => t.StartsWith("sqlite_"));   // 排除内部表
 
-        string csv = GeoDataQueries.DataDictionaryCsv(db.Connection);
+        string csv = GeoDataQueries.DataDictionaryCsv(db.Connection, new SqliteDialect());
         Assert.StartsWith("table,column,type,notnull,pk", csv);        // 表头
         // borehole 的关键列应在字典里
         Assert.Contains("borehole,hole_id,", csv);
@@ -129,7 +129,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Equipment_roster_from_seed()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var r = GeoDataQueries.GetEquipmentRoster(db.Connection);
         Assert.True(r.Total >= 5, $"设备总数 {r.Total}");
         Assert.NotEmpty(r.ByCategory);
@@ -146,7 +146,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Production_stats_from_seed()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var s = GeoDataQueries.GetProductionStats(db.Connection);
         Assert.True(s.Records > 0, "生产记录数");
         Assert.True(s.OutputM3 > 0, "总产量");
@@ -156,7 +156,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Capacity_ranking_sorted_desc()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var rows = GeoDataQueries.GetCapacityRanking(db.Connection, 5);
         Assert.NotEmpty(rows);
         for (int i = 1; i < rows.Count; i++)
@@ -166,7 +166,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Fault_stats_from_seed()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var f = GeoDataQueries.GetFaultStats(db.Connection);
         Assert.True(f.Events > 0, "故障事件数");
         Assert.True(f.DowntimeHours >= 0);
@@ -176,7 +176,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Kpi_stats_from_seed()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var k = GeoDataQueries.GetKpiStats(db.Connection);
         Assert.True(k.Records > 0, "KPI 记录数");
         Assert.InRange(k.AvgAvailabilityPct, 0, 100);
@@ -186,7 +186,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Borehole_stats_from_seed()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var b = GeoDataQueries.GetBoreholeStats(db.Connection);
         Assert.True(b.Holes > 100, $"钻孔数 {b.Holes}");     // 种子 241 孔
         Assert.True(b.TotalDepthM > 0);
@@ -197,7 +197,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Coal_quality_stats_from_seed()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var q = GeoDataQueries.GetCoalQualityStats(db.Connection);
         Assert.True(q.Samples > 100, $"煤样数 {q.Samples}");   // 种子 257 样
         Assert.True(q.Seams > 0, "煤层数");
@@ -211,7 +211,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Coal_seams_from_seed()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var seams = GeoDataQueries.GetCoalSeams(db.Connection);
         Assert.NotEmpty(seams);                                // 种子 7 煤层
     }
@@ -219,7 +219,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Seam_intersections_from_seed()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var rows = GeoDataQueries.GetSeamIntersections(db.Connection);
         Assert.NotEmpty(rows);                                 // borehole_seam_result 778 行
         Assert.All(rows, r => Assert.True(r.Holes > 0));
@@ -229,7 +229,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Coal_quality_by_seam_from_seed()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var rows = GeoDataQueries.GetCoalQualityBySeam(db.Connection);
         Assert.NotEmpty(rows);
         Assert.All(rows, r => Assert.True(r.Samples > 0));
@@ -239,7 +239,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Production_by_shift_from_seed()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var rows = GeoDataQueries.GetProductionByShift(db.Connection);
         Assert.NotEmpty(rows);
         Assert.All(rows, r => Assert.InRange(r.UtilizationPct, 0, 100));
@@ -249,7 +249,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Capacity_by_category_shares_sum_to_100()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var rows = GeoDataQueries.GetCapacityByCategory(db.Connection);
         Assert.NotEmpty(rows);
         for (int i = 1; i < rows.Count; i++) Assert.True(rows[i - 1].TotalOutputM3 >= rows[i].TotalOutputM3);   // 按产量降序
@@ -260,7 +260,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Import_production_records_insert_update_skip()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         long before = db.ScalarLong("SELECT COUNT(*) FROM production_record");
         string eq;
         using (var c = db.Connection.CreateCommand()) { c.CommandText = "SELECT equipment_id FROM equipment LIMIT 1"; eq = (string)c.ExecuteScalar(); }  // 既有设备(过 FK)
@@ -287,7 +287,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Import_seam_results_from_csv()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         string hole, seam;
         using (var c = db.Connection.CreateCommand()) { c.CommandText = "SELECT hole_id FROM borehole LIMIT 1"; hole = (string)c.ExecuteScalar(); }
         using (var c = db.Connection.CreateCommand()) { c.CommandText = "SELECT code FROM coal_seam_def ORDER BY code DESC LIMIT 1"; seam = (string)c.ExecuteScalar(); }
@@ -304,7 +304,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void RecordsToCsv_reflects_properties_and_values()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         // 产能排名(记录含 EquipmentId/Model/TotalOutputM3) → CSV 表头 + 行
         var rows = GeoDataQueries.GetCapacityRanking(db.Connection, 5);
         string csv = GeoDataQueries.RecordsToCsv(rows);
@@ -361,7 +361,7 @@ public class GeoDataQueriesTests
     public void Import_parses_numbers_invariantly_under_comma_decimal_locale()
     {
         // 建库在默认 culture 下; 仅"导入"切到逗号小数 locale(de-DE)验证数字按 InvariantCulture 解析(与导出对称)
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         string eq;
         using (var q = db.Connection.CreateCommand()) { q.CommandText = "SELECT equipment_id FROM equipment LIMIT 1"; eq = (string)q.ExecuteScalar(); }
         var prev = System.Threading.Thread.CurrentThread.CurrentCulture;
@@ -390,7 +390,7 @@ public class GeoDataQueriesTests
     public void Fault_stats_computes_reliability_mtbf_mttr_availability()
     {
         // 可靠性: MTBF=Σ运行时长/故障次数, MTTR=累计停机/故障次数, A_ss=MTBF/(MTBF+MTTR)
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var f = GeoDataQueries.GetFaultStats(db.Connection);
         Assert.True(f.Events > 0, "种子应有故障事件");
         Assert.Equal(f.DowntimeHours / f.Events, f.MttrHours, 4);              // MTTR
@@ -408,7 +408,7 @@ public class GeoDataQueriesTests
     public void Fault_stats_overhaul_warning_matches_condition()
     {
         // 大修预警 warn = 可用率趋势<−0.2pt/月 或 最新<80% 或 稳态<85%(忠实原阈值)
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var f = GeoDataQueries.GetFaultStats(db.Connection);
         if (f.LatestAvailPct > 0)   // 有 KPI 月度序列
         {
@@ -422,7 +422,7 @@ public class GeoDataQueriesTests
     public void Kpi_stats_computes_oee_from_three_rates()
     {
         // OEE = 可用率×作业率×利用率(忠实原 CsvDataStore.Oee)
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var k = GeoDataQueries.GetKpiStats(db.Connection);
         Assert.True(k.Records > 0);
         Assert.True(k.AvgRunRatePct > 0, "作业率均值 > 0(种子有 actual_run_rate)");
@@ -436,7 +436,7 @@ public class GeoDataQueriesTests
     public void Production_stats_computes_efficiency_avg_and_peak()
     {
         // 台效 = 产量/工时: 均值(=总产量/总工时) + 峰值(=逐记录 max output/work_hours)
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var s = GeoDataQueries.GetProductionStats(db.Connection);
         Assert.True(s.WorkHours > 0);
         Assert.Equal(s.OutputM3 / s.WorkHours, s.AvgEfficiencyM3PerH, 4);
@@ -447,7 +447,7 @@ public class GeoDataQueriesTests
     public void Coal_quality_stats_computes_ash_cv_and_uniformity()
     {
         // 灰分变异系数 CV=σ/均值×100 (样本 σ, n-1) + 均匀性评价档(忠实原)
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var q = GeoDataQueries.GetCoalQualityStats(db.Connection);
         Assert.True(q.Samples > 2);
         var vals = new System.Collections.Generic.List<double>();
@@ -486,7 +486,7 @@ public class GeoDataQueriesTests
     public void Fault_by_type_pareto_cumulative_prefix_sum_and_ends_at_100()
     {
         // 帕累托: 按停机降序 + 累计占比=前缀和 + 单调不减 + 末类=100%
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var rows = GeoDataQueries.GetFaultByType(db.Connection);
         Assert.NotEmpty(rows);
         double running = 0;
@@ -507,7 +507,7 @@ public class GeoDataQueriesTests
     public void Kpi_trend_includes_run_rate_three_rates()
     {
         // KPI 趋势应含三率(可用/作业/利用), 此前缺作业率
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var rows = GeoDataQueries.GetKpiTrend(db.Connection);
         Assert.NotEmpty(rows);
         Assert.All(rows, r => Assert.InRange(r.AvgRunRatePct, 0, 100));   // 作业率归一化到 %
@@ -519,7 +519,7 @@ public class GeoDataQueriesTests
     public void Production_by_shift_computes_efficiency()
     {
         // 班次台效 = 产量/工时 (供班次生产率对比)
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var rows = GeoDataQueries.GetProductionByShift(db.Connection);
         Assert.NotEmpty(rows);
         foreach (var r in rows)
@@ -530,7 +530,7 @@ public class GeoDataQueriesTests
     public void Coal_type_distribution_counts_shares_descending()
     {
         // 煤种分布(原煤类饼量化): 按样本数降序 + 占比和=100 + 总数=coal_sample 计数
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var dist = GeoDataQueries.GetCoalTypeDistribution(db.Connection);
         Assert.NotEmpty(dist);
         for (int i = 1; i < dist.Count; i++) Assert.True(dist[i].Samples <= dist[i - 1].Samples, "按样本数降序");
@@ -546,7 +546,7 @@ public class GeoDataQueriesTests
     public void Equipment_scores_ranked_and_dims_normalized()
     {
         // 设备五维综合评分(熵权): 综合得分降序 + 五维皆归一 [0,1] + 综合=加权和≤1
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var rows = GeoDataQueries.GetEquipmentScores(db.Connection);
         Assert.NotEmpty(rows);
         for (int i = 1; i < rows.Count; i++) Assert.True(rows[i].CompositeScore <= rows[i - 1].CompositeScore + 1e-9, "综合得分降序");
@@ -564,7 +564,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Coal_data_health_coverage_and_self_consistency()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         string hole, seam;
         using (var q = db.Connection.CreateCommand()) { q.CommandText = "SELECT hole_id FROM borehole LIMIT 1"; hole = (string)q.ExecuteScalar(); }
         using (var q = db.Connection.CreateCommand()) { q.CommandText = "SELECT code FROM coal_seam_def LIMIT 1"; seam = (string)q.ExecuteScalar(); }
@@ -593,7 +593,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Ash_vertical_trend_label_consistent_with_diff()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         string hole, seam;
         using (var q = db.Connection.CreateCommand()) { q.CommandText = "SELECT hole_id FROM borehole LIMIT 1"; hole = (string)q.ExecuteScalar(); }
         using (var q = db.Connection.CreateCommand()) { q.CommandText = "SELECT code FROM coal_seam_def LIMIT 1"; seam = (string)q.ExecuteScalar(); }
@@ -611,7 +611,7 @@ public class GeoDataQueriesTests
     public void Fleet_cockpit_lights_partition_and_watch_consistent()
     {
         // 机群驾驶舱: 红绿灯划分完备(绿+黄+红=在评数) + 需关注=黄+红 + OEE/瓶颈达标率∈[0,100] + 可解锁≥0
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var c = GeoDataQueries.GetFleetCockpit(db.Connection);
         Assert.True(c.WithKpi > 0);
         Assert.Equal(c.WithKpi, c.Green + c.Yellow + c.Red);
@@ -624,7 +624,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Export_table_then_reimport_roundtrips()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         // 导出 production_record 原始表(全列) → 解析 → 再导入(按列名, 忽略 id/created_at) → 全部更新(既有键)
         string csv = GeoDataQueries.ExportTableToCsv(db.Connection, "production_record");
         var rows = GeoDataQueries.ParseCsv(csv);
@@ -653,7 +653,7 @@ public class GeoDataQueriesTests
         var vals = lines[1].Split(',');
         var row = new Dictionary<string, string>();
         for (int i = 0; i < headers.Length && i < vals.Length; i++) row[headers[i]] = vals[i];
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var o = GeoDataQueries.ImportMonthlyPlans(db.Connection, new[] { (IReadOnlyDictionary<string, string>)row }, overwrite: true);
         Assert.Equal(0, o.Errors);                       // 模板示例行可被导入(表头/类型自洽)
         Assert.Equal(1, o.Inserted + o.Updated);
@@ -662,7 +662,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Import_monthly_plan_fills_empty_fields()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         // 导入未来月计划(填 煤量/剥采比, 种子这些字段空) → 插入
         var o1 = GeoDataQueries.ImportMonthlyPlans(db.Connection, new[]
         { (IReadOnlyDictionary<string,string>)new Dictionary<string,string>{["year"]="2099",["month"]="7",["plan_coal_wan_t"]="120",["ratio_strip_coal"]="5.5",["plan_strip_wan_m3"]="660"} }, true);
@@ -685,7 +685,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Import_observation_points_from_csv()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         string seam;
         using (var c = db.Connection.CreateCommand()) { c.CommandText = "SELECT code FROM coal_seam_def LIMIT 1"; seam = (string)c.ExecuteScalar(); }
         long before = db.ScalarLong("SELECT COUNT(*) FROM coal_observation_point");
@@ -705,7 +705,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Import_coal_samples_from_csv_with_hole_lookup()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         string hole; string seam;
         using (var c = db.Connection.CreateCommand()) { c.CommandText = "SELECT hole_id FROM borehole LIMIT 1"; hole = (string)c.ExecuteScalar(); }
         using (var c = db.Connection.CreateCommand()) { c.CommandText = "SELECT code FROM coal_seam_def LIMIT 1"; seam = (string)c.ExecuteScalar(); }
@@ -728,7 +728,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Import_kpi_and_equipment_ledger_from_csv()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         // 设备台账: 新设备插入(无 FK 依赖, 是父表) + 同键更新
         // model 留空(避免 FK→equipment_model); 新设备插入(equipment 是父表)
         var eqOut = GeoDataQueries.ImportEquipmentLedger(db.Connection, new[]
@@ -751,7 +751,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Import_capacity_and_fault_from_csv()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         string eq;
         using (var c = db.Connection.CreateCommand()) { c.CommandText = "SELECT equipment_id FROM equipment LIMIT 1"; eq = (string)c.ExecuteScalar(); }
         // 月度产能: 新键插入 + 同键更新
@@ -775,7 +775,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Import_haul_roads_from_csv()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         long before = db.ScalarLong("SELECT COUNT(*) FROM haul_road");
         // 新路 → 插入
         var o1 = GeoDataQueries.ImportHaulRoads(db.Connection, new[]
@@ -805,7 +805,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Import_slope_designs_from_csv()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         long before = db.ScalarLong("SELECT COUNT(*) FROM slope_design");
         // 插入型 → 每行新增
         var o1 = GeoDataQueries.ImportSlopeDesigns(db.Connection, new[]
@@ -828,7 +828,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Horizon_points_floor_and_roof_from_seed()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var pts = GeoDataQueries.GetHorizonPoints(db.Connection);
         Assert.NotEmpty(pts);
         Assert.Contains(pts, p => !p.IsRoof);                 // 有底板点
@@ -846,7 +846,7 @@ public class GeoDataQueriesTests
     public void Horizon_points_include_coal_observation_points()
     {
         // 忠实原双源展点：见煤点 coal_observation_point 也应参与层位展点(底=floor_elevation, 顶=底+见煤厚度)
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         int before = GeoDataQueries.GetHorizonPoints(db.Connection).Count;
         string seam;
         using (var q = db.Connection.CreateCommand()) { q.CommandText = "SELECT code FROM coal_seam_def LIMIT 1"; seam = (string)q.ExecuteScalar(); }
@@ -866,7 +866,7 @@ public class GeoDataQueriesTests
     public void Coal_sample_import_loads_moisture_and_fixed_carbon()
     {
         // 补全工业分析: 导入应载 mad_raw(水分)+fcd_raw(固定碳)(此前 import 漏解析→恒 NULL), 分煤层汇总应呈现
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         string hole, seam;
         using (var q = db.Connection.CreateCommand()) { q.CommandText = "SELECT hole_id FROM borehole LIMIT 1"; hole = (string)q.ExecuteScalar(); }
         using (var q = db.Connection.CreateCommand()) { q.CommandText = "SELECT code FROM coal_seam_def LIMIT 1"; seam = (string)q.ExecuteScalar(); }
@@ -899,7 +899,7 @@ public class GeoDataQueriesTests
     public void Equipment_ledger_import_is_lossless()
     {
         // 台账无损: 投产年份/累计台时/出厂编号/备注 等非 FK 列此前 import 漏解析→丢, 现应入库(SQL查询/导出可取)
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var o = GeoDataQueries.ImportEquipmentLedger(db.Connection, new[]
         {
             (IReadOnlyDictionary<string,string>)new Dictionary<string,string>
@@ -922,7 +922,7 @@ public class GeoDataQueriesTests
     public void Haul_road_import_loads_condition_and_extra_columns()
     {
         // 导入路况: condition(修前 import 漏→恒默认 good, 路况列表全 good) + 转弯半径/载重/路面 此前丢
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var o = GeoDataQueries.ImportHaulRoads(db.Connection, new[]
         {
             (IReadOnlyDictionary<string,string>)new Dictionary<string,string>
@@ -944,7 +944,7 @@ public class GeoDataQueriesTests
     public void Haul_road_import_invalid_condition_falls_back_to_default()
     {
         // 非法 condition 枚举(违反 CHECK)→ 跳过该列留 DEFAULT 'good', 不整行失败
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var o = GeoDataQueries.ImportHaulRoads(db.Connection, new[]
         {
             (IReadOnlyDictionary<string,string>)new Dictionary<string,string>
@@ -960,7 +960,7 @@ public class GeoDataQueriesTests
     public void Kpi_import_loads_idle_delay_and_fault_attribution()
     {
         // KPI 无损: idle_hours/delay_hours + internal/external_fault_rate_pct 此前 import 漏→丢, 现入库 + 汇总呈现故障归因
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         string eq;
         using (var q = db.Connection.CreateCommand()) { q.CommandText = "SELECT equipment_id FROM equipment LIMIT 1"; eq = (string)q.ExecuteScalar(); }
         var o = GeoDataQueries.ImportKpiMonthly(db.Connection, new[]
@@ -991,7 +991,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Kpi_trend_by_year_ratios_normalized()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var rows = GeoDataQueries.GetKpiTrend(db.Connection);
         Assert.NotEmpty(rows);
         Assert.All(rows, r => Assert.InRange(r.AvgAvailabilityPct, 0, 100));   // 比率归一到百分比
@@ -1002,7 +1002,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Fault_by_equipment_ranked_by_downtime()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var rows = GeoDataQueries.GetFaultByEquipment(db.Connection, 8);
         Assert.NotEmpty(rows);
         for (int i = 1; i < rows.Count; i++) Assert.True(rows[i - 1].DowntimeHours >= rows[i].DowntimeHours);   // 停机时降序
@@ -1011,7 +1011,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Annual_output_from_seed_sorted_by_year()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var rows = GeoDataQueries.GetAnnualOutput(db.Connection);
         Assert.NotEmpty(rows);
         Assert.All(rows, r => Assert.True(r.OutputWanM3 > 0));
@@ -1021,7 +1021,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Dispatch_rules_sorted_by_score()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var d = GeoDataQueries.GetDispatchRules(db.Connection, 6);
         Assert.True(d.Active > 0, "在役规则");
         for (int i = 1; i < d.Top.Count; i++)
@@ -1032,7 +1032,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Process_architecture_from_seed()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var p = GeoDataQueries.GetProcessArchitecture(db.Connection);
         Assert.True(p.Systems > 0, "工艺系统");
         Assert.True(p.Phases > 0, "工序");
@@ -1041,7 +1041,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Acceptance_stats_from_seed()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var a = GeoDataQueries.GetAcceptanceStats(db.Connection);
         Assert.True(a.Records > 0, "验收记录");                 // 种子 156
         Assert.InRange(a.PassPct, 0, 100);
@@ -1051,7 +1051,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Acceptance_by_phase_pass_rate_ascending()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var rows = GeoDataQueries.GetAcceptanceByPhase(db.Connection);
         Assert.NotEmpty(rows);
         Assert.All(rows, r => Assert.True(r.Passed <= r.Records));
@@ -1062,7 +1062,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Fault_by_type_downtime_shares_sum_to_100()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var rows = GeoDataQueries.GetFaultByType(db.Connection);
         Assert.NotEmpty(rows);
         for (int i = 1; i < rows.Count; i++) Assert.True(rows[i - 1].DowntimeHours >= rows[i].DowntimeHours);   // 停机时降序
@@ -1073,7 +1073,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Working_faces_from_seed()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var f = GeoDataQueries.GetWorkingFaces(db.Connection);
         Assert.NotEmpty(f);                                    // 种子 5 面
     }
@@ -1081,7 +1081,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Param_templates_from_seed()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var p = GeoDataQueries.GetParamTemplates(db.Connection);
         Assert.True(p.Definitions > 0, "参数定义");            // 种子 29
         Assert.True(p.TemplateValues > 0, "模板取值");         // 种子 42
@@ -1090,7 +1090,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Monthly_plans_from_seed()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var plans = GeoDataQueries.GetMonthlyPlans(db.Connection);
         Assert.NotEmpty(plans);
         for (int i = 1; i < plans.Count; i++)                  // 按年月升序
@@ -1104,7 +1104,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Haul_roads_and_slopes_from_seed()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         Assert.NotEmpty(GeoDataQueries.GetHaulRoads(db.Connection));      // 种子 6
         Assert.NotEmpty(GeoDataQueries.GetSlopeDesigns(db.Connection));   // 种子 4
     }
@@ -1112,7 +1112,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Borehole_coords_all_have_xy()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var pts = GeoDataQueries.GetBoreholeCoords(db.Connection);
         Assert.True(pts.Count > 100, $"带坐标钻孔 {pts.Count}");   // 种子 241
         Assert.All(pts, p => Assert.NotEqual(0.0, p.x + p.y));    // 坐标非全零
@@ -1121,7 +1121,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Fleet_overview_and_coal_class_from_seed()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var f = GeoDataQueries.GetFleetOverview(db.Connection);
         Assert.True(f.Total >= 5);
         Assert.NotEmpty(f.ByStatus);
@@ -1131,7 +1131,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Seam_bench_constraints_grades_from_seed()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         Assert.NotEmpty(GeoDataQueries.GetSeamBenchParams(db.Connection));        // 种子 7
         Assert.True(GeoDataQueries.GetEquipmentConstraints(db.Connection).Total > 0);  // 种子 15
         Assert.NotEmpty(GeoDataQueries.GetCoalGradeRules(db.Connection));         // 种子 15
@@ -1140,7 +1140,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Observation_points_and_locations_from_seed()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var obs = GeoDataQueries.GetObservationPoints(db.Connection);
         Assert.True(obs.Count > 50, $"观测点 {obs.Count}");                        // 种子 119
         Assert.All(obs, p => Assert.NotEqual(0.0, p.x + p.y));
@@ -1150,7 +1150,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Efficiency_forecast_from_seed()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var f = GeoDataQueries.GetEfficiencyForecast(db.Connection);
         Assert.True(f.BaselineMonthlyWanM3 > 0, "基线月产");
         Assert.InRange(f.AvgAvailabilityPct, 0, 100);
@@ -1166,7 +1166,7 @@ public class GeoDataQueriesTests
     [Fact]
     public void Export_table_to_csv()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         string csv = GeoDataQueries.ExportTableToCsv(db.Connection, "equipment_model");
         var lines = csv.TrimEnd('\n').Split('\n');
         Assert.True(lines.Length > 5, "表头 + 数据行");                 // 50 型号 + 表头

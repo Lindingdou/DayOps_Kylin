@@ -382,7 +382,7 @@ public class ModelingBlockModelTests
     [Fact]
     public void CoalQualityLink_estimates_from_seed_samples()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var samples = GeoDataQueries.GetCoalSamples(db.Connection);
         Assert.NotEmpty(samples);
         var (col, get, _) = BlockCoalQualityLink.Indicator("ad", false);
@@ -424,7 +424,7 @@ public class ModelingBlockModelTests
     [Fact]
     public void CoalQualityLink_kriging_writes_sigma_column()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var samples = GeoDataQueries.GetCoalSamples(db.Connection);
         var (_, get, _) = BlockCoalQualityLink.Indicator("ad", false);
         var seam = samples.Where(s => s.Z.HasValue && get(s).HasValue).GroupBy(s => s.SeamCode).OrderByDescending(g => g.Count()).First().Key;

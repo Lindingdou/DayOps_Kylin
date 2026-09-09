@@ -1,3 +1,4 @@
+using PitMine3D.Kylin.Tests;
 using System.Data.Common;
 using System.Collections.Generic;
 using PitMine3D.Kylin.Data;
@@ -33,7 +34,7 @@ public class CompatibleModelsTests
     [Fact]
     public void CompatibleModels_unknown_param_blocks_none()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var (compatible, blocked) = GeoDataQueries.CompatibleModels(db.Connection, "no_such_param_xyz", 999);
         Assert.Empty(blocked);                               // 无参数→无约束→无被禁
         // 全部机型可用(= equipment_model 全表)
@@ -44,7 +45,7 @@ public class CompatibleModelsTests
     [Fact]
     public void CompatibleModels_partitions_all_models_no_overlap()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         // 取一个有硬约束的参数 code + 一个极端值, 验 可用/被禁 划分全机型且不重叠。
         string? code;
         using (var cmd = db.Connection.CreateCommand())

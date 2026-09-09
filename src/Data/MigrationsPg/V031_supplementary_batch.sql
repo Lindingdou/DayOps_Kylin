@@ -12,7 +12,7 @@
 
 -- ─── 主表: supplementary_batch (补勘写实批次) ──────────────────────────────
 CREATE TABLE IF NOT EXISTS supplementary_batch (
-    id          SERIAL PRIMARY KEY,
+    id          BIGSERIAL PRIMARY KEY,
     label       TEXT    NOT NULL UNIQUE,       -- 系统唯一时间标签 SBW-yyyyMMdd-HHmmss[-nn]
     name        TEXT    NOT NULL DEFAULT '',   -- 友好名(可改)
     source      TEXT,                          -- 手工录入 / Excel导入 / 迁移归集
@@ -37,7 +37,7 @@ FOR EACH ROW
 EXECUTE PROCEDURE fn_touch_updated_at();
 
 -- ─── 补勘孔归批: supplementary_borehole 加 batch_id ────────────────────────
-ALTER TABLE supplementary_borehole ADD COLUMN batch_id INTEGER;
+ALTER TABLE supplementary_borehole ADD COLUMN batch_id BIGINT;
 CREATE INDEX idx_supbh_batch ON supplementary_borehole(batch_id);
 
 -- ─── 已有未分批补勘孔 → 归入「历史写实」批次(无未分批孔则不建) ────────────

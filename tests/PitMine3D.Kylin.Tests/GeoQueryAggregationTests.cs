@@ -1,3 +1,4 @@
+using PitMine3D.Kylin.Tests;
 using Microsoft.Data.Sqlite;
 using System.Collections.Generic;
 using System.Data.Common;
@@ -129,7 +130,7 @@ public class GeoQueryAggregationTests
     {
         // 上面各测用手写内存 schema, 验的是查询逻辑; 此测对真实迁移 schema 跑同批查询,
         // 验列名/表名与迁移一致(迁移与查询列名不符会在此抛 "no such column/table")。
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var c = db.Connection;
         Assert.Null(Record.Exception(() => GeoDataQueries.GetFaultShare(c)));
         Assert.Null(Record.Exception(() => GeoDataQueries.GetMonthlyOutputSeries(c)));
@@ -144,7 +145,7 @@ public class GeoQueryAggregationTests
     {
         // 手写 schema 的导入测只验解析逻辑; 此测对真实迁移库插入, 验 INSERT 列名与迁移一致
         // (列不符则 Import 内 try/catch 吞异常→Inserted=0→此断言失败, 抓迁移-导入漂移)。
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var c = db.Connection;
         var blast = GeoDataQueries.ImportBlastEvents(c, new List<IReadOnlyDictionary<string, string>>
         {

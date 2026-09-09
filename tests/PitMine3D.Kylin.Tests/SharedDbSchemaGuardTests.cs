@@ -67,7 +67,7 @@ public class SharedDbSchemaGuardTests
     public void 嵌入式库照旧能自足建库()
     {
         // 回归: 改了启动逻辑后, SQLite 路径必须还是"打开即可用"。
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         Assert.True(db.AppliedMigrationCount() >= 50);
     }
 }

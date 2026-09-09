@@ -16,13 +16,13 @@
 
 -- ─── ① process_system(工艺系统字典)───────────────────────────────────────
 CREATE TABLE IF NOT EXISTS process_system (
-    system_id        SERIAL PRIMARY KEY,
+    system_id        BIGSERIAL PRIMARY KEY,
     code             TEXT NOT NULL UNIQUE,        -- 系统编码 'blasting' / 'mining' / ...
     name             TEXT NOT NULL,                -- 显示名 穿爆系统 / 采装系统 / ...
     category         TEXT,                          -- 主类:drilling/mining/transport/dumping/slope/safety/aux/economic
     description      TEXT,
-    display_order    INTEGER NOT NULL DEFAULT 0,    -- UI 排序
-    is_active        INTEGER NOT NULL DEFAULT 1,
+    display_order    BIGINT NOT NULL DEFAULT 0,    -- UI 排序
+    is_active        BIGINT NOT NULL DEFAULT 1,
     created_at       TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at       TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -42,14 +42,14 @@ EXECUTE PROCEDURE fn_touch_updated_at();
 
 -- ─── ② process_phase(工艺环节)─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS process_phase (
-    phase_id                       SERIAL PRIMARY KEY,
-    system_id                      INTEGER NOT NULL,
+    phase_id                       BIGSERIAL PRIMARY KEY,
+    system_id                      BIGINT NOT NULL,
     code                           TEXT NOT NULL,    -- 'drilling' / 'charging' / 'blasting_exec' / ...
     name                           TEXT NOT NULL,    -- 显示名 钻孔 / 装药 / 起爆 / ...
-    sequence_order                 INTEGER NOT NULL DEFAULT 0,   -- 系统内环节先后顺序
+    sequence_order                 BIGINT NOT NULL DEFAULT 0,   -- 系统内环节先后顺序
     typical_equipment_category     TEXT,             -- 该环节典型适用设备类别 Drill/Shovel/Truck/Dozer/...
     description                    TEXT,
-    is_active                      INTEGER NOT NULL DEFAULT 1,
+    is_active                      BIGINT NOT NULL DEFAULT 1,
     created_at                     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at                     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (system_id, code),
@@ -66,8 +66,8 @@ EXECUTE PROCEDURE fn_touch_updated_at();
 
 -- ─── ③ parameter_definition(参数定义)──────────────────────────────────────
 CREATE TABLE IF NOT EXISTS parameter_definition (
-    param_id             SERIAL PRIMARY KEY,
-    phase_id             INTEGER NOT NULL,
+    param_id             BIGSERIAL PRIMARY KEY,
+    phase_id             BIGINT NOT NULL,
     code                 TEXT NOT NULL UNIQUE,     -- 'hole_diameter' / 'hole_depth' / ...(全表唯一,供公式引用)
     name                 TEXT NOT NULL,             -- 显示名 孔径 / 孔深 / ...
     unit                 TEXT,                       -- 单位 mm / m / kg / kg/m³ / °  / ...
@@ -77,13 +77,13 @@ CREATE TABLE IF NOT EXISTS parameter_definition (
     standard_default     DOUBLE PRECISION,                       -- 默认推荐值
     alarm_low            DOUBLE PRECISION,                       -- 报警下限(超低则红)
     alarm_high           DOUBLE PRECISION,                       -- 报警上限
-    is_required          INTEGER NOT NULL DEFAULT 0, -- 是否必填
+    is_required          BIGINT NOT NULL DEFAULT 0, -- 是否必填
     calc_formula         TEXT,                       -- 派生公式(可空,如 "explosive_kg / blast_volume_m3")
     source_table         TEXT,                       -- 可派生自哪张事实表(可空)
     source_column        TEXT,                       -- 派生字段
     description          TEXT,
-    display_order        INTEGER NOT NULL DEFAULT 0,
-    is_active            INTEGER NOT NULL DEFAULT 1,
+    display_order        BIGINT NOT NULL DEFAULT 0,
+    is_active            BIGINT NOT NULL DEFAULT 1,
     created_at           TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at           TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (phase_id) REFERENCES process_phase(phase_id) ON DELETE CASCADE ON UPDATE CASCADE
@@ -100,8 +100,8 @@ EXECUTE PROCEDURE fn_touch_updated_at();
 
 -- ─── ④ equipment_constraint(参数 → 设备能力约束)──────────────────────────
 CREATE TABLE IF NOT EXISTS equipment_constraint (
-    id                SERIAL PRIMARY KEY,
-    param_id          INTEGER NOT NULL,
+    id                BIGSERIAL PRIMARY KEY,
+    param_id          BIGINT NOT NULL,
     equipment_model   TEXT NOT NULL,                 -- equipment_model.model FK
     constraint_type   TEXT NOT NULL CHECK (constraint_type IN ('min','max','range','equals','contains')),
     limit_value       DOUBLE PRECISION,                          -- 单值约束
@@ -112,9 +112,9 @@ CREATE TABLE IF NOT EXISTS equipment_constraint (
                                                     -- hard: 违反→不可用
                                                     -- soft: 违反→降效
                                                     -- informational: 仅提示
-    priority          INTEGER NOT NULL DEFAULT 3,    -- 1-5,5 最严
+    priority          BIGINT NOT NULL DEFAULT 3,    -- 1-5,5 最严
     description       TEXT,
-    is_active         INTEGER NOT NULL DEFAULT 1,
+    is_active         BIGINT NOT NULL DEFAULT 1,
     created_at        TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (param_id)        REFERENCES parameter_definition(param_id) ON DELETE CASCADE ON UPDATE CASCADE,
     FOREIGN KEY (equipment_model) REFERENCES equipment_model(model) ON DELETE CASCADE ON UPDATE CASCADE

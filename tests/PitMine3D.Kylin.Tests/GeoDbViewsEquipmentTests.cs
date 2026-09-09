@@ -15,7 +15,7 @@ public class GeoDbViewsEquipmentTests
     [Fact]
     public void Ledger_loads_seed_fleet_with_model_params_and_categories()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var items = EqLoadLedger(db.Connection);
         Assert.True(items.Count > 100, $"种子台账 510 台量级, 实得 {items.Count}");
         Assert.All(items, i => Assert.Contains(i.Category, EqCategories));
@@ -27,7 +27,7 @@ public class GeoDbViewsEquipmentTests
     [Fact]
     public void Ledger_save_upserts_new_and_deletes_missing()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var items = EqLoadLedger(db.Connection);
         int before = items.Count;
         var removed = items[0];
@@ -77,7 +77,7 @@ public class GeoDbViewsEquipmentTests
     [Fact]
     public void Active_working_face_links_to_equipment_when_present()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var linked = db.Connection.Query<string>("SELECT equipment_id FROM working_face WHERE status='active' AND equipment_id IS NOT NULL LIMIT 1").FirstOrDefault();
         if (linked == null) return;
         var face = EqActiveWorkingFace(db.Connection, linked);
@@ -89,7 +89,7 @@ public class GeoDbViewsEquipmentTests
     [Fact]
     public void Capacity_kpi_fault_production_load_seed_magnitudes()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var cap = EqLoadCapacity(db.Connection);
         var kpi = EqLoadKpi(db.Connection);
         var faults = EqLoadFaults(db.Connection);
@@ -112,7 +112,7 @@ public class GeoDbViewsEquipmentTests
     [Fact]
     public void Production_save_rewrites_whole_table()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var rows = EqLoadProduction(db.Connection);
         int n = rows.Count;
         rows.RemoveAt(0);
@@ -127,7 +127,7 @@ public class GeoDbViewsEquipmentTests
     [Fact]
     public void Production_filter_and_analytics()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var rows = EqLoadProduction(db.Connection);
         var a = EqAnalyzeProduction(rows);
         Assert.Equal(rows.Count, a.Rows);
@@ -148,7 +148,7 @@ public class GeoDbViewsEquipmentTests
     [Fact]
     public void Dispatch_rules_join_model_params_and_inventory()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var rules = EqLoadDispatchRules(db.Connection);
         Assert.True(rules.Count >= 10);
         var r = rules.First(x => x.ShovelModel == "2800XPB" && x.TruckModel == "730E");
@@ -169,7 +169,7 @@ public class GeoDbViewsEquipmentTests
     [Fact]
     public void Fleet_cockpit_traffic_light_and_bottleneck()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var r = EqComputeFleetCockpit(db.Connection);
         Assert.True(r.HasData);
         Assert.True(r.InRoster >= r.Total && r.Total > 50);
@@ -193,7 +193,7 @@ public class GeoDbViewsEquipmentTests
     [Fact]
     public void Analysis_period_filter_stats_weibull_and_cards()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var kpiAll = EqLoadKpi(db.Connection);
         var opts = EqPeriodOptions(kpiAll);
         Assert.Equal("近 12 个月", opts[1]); Assert.Contains("2026 年", opts);
@@ -244,7 +244,7 @@ public class GeoDbViewsEquipmentTests
     [Fact]
     public void Shift_forecast_stats_entropy_scores_and_verdicts()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var prod = EqLoadProduction(db.Connection); var kpi = EqLoadKpi(db.Connection); var faults = EqLoadFaults(db.Connection);
         var w = EqFleetEntropyWeights(prod, kpi, faults);
         Assert.Equal(5, w.Length); Assert.Equal(1.0, w.Sum(), 6); Assert.All(w, x => Assert.InRange(x, 0, 1));
@@ -277,7 +277,7 @@ public class GeoDbViewsEquipmentTests
     [Fact]
     public void Forecast_baseline_benchmark_and_conclusion()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var cap = EqLoadCapacity(db.Connection); var kpi = EqLoadKpi(db.Connection);
         var sums = EqEquipmentSummaries(cap);
         Assert.True(sums.Count > 50);
@@ -299,7 +299,7 @@ public class GeoDbViewsEquipmentTests
     [Fact]
     public void Capability_yearly_annualized_peers_verdict_and_diagnosis()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var cap = EqLoadCapacity(db.Connection); var kpi = EqLoadKpi(db.Connection);
         var sel = EqEquipmentSummaries(cap).First(s => s.Model == "4100XPC");
         var recs = cap.Where(c => c.EquipmentId == sel.EquipmentId).OrderBy(c => c.Year).ThenBy(c => c.Month).ToList();
@@ -338,7 +338,7 @@ public class GeoDbViewsEquipmentTests
         Assert.All(specs, s => { Assert.Equal(s.Headers.Length, s.Example.Length); Assert.All(s.Required, r => Assert.Contains(r, s.Headers)); });
         var tpl = EqTemplateCsv(specs[1]);
         Assert.StartsWith("﻿设备编号,年,月,产量_m3\n3001,2026,5,6051898\n", tpl);
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         foreach (var s in specs)
         {
             var rows = EqExportRows(db.Connection, s.Key);
@@ -356,7 +356,7 @@ public class GeoDbViewsEquipmentTests
     [Fact]
     public void Import_csv_roundtrip_skip_vs_overwrite()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var specs = EqImportSpecs();
         // 月度产能: 新增 1 + 既有 1(跳过)
         var capSpec = specs[1];

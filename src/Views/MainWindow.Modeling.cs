@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -49,6 +49,47 @@ public partial class MainWindow
     {
         var pl = new PolylineEntity { Closed = closed, Zs = new List<double>(pts.Count), Cr = r, Cg = g, Cb = b };
         foreach (var p in pts) { pl.Points.Add((p.x, p.y)); pl.Zs.Add(p.z); }
+        return pl;
+    }
+
+    /// <summary>
+    /// 由已有多段线派生一条新多段线（裁剪/加密/抽稀/连接产生的碎片都走这里）。
+    ///
+    /// 两件事必须一起做，少一件属性就走样：
+    ///   ① 样式全随源 —— 图层 / 颜色 / 线型 / 线宽 / 透明度 / 可见 / 标高（<see cref="SceneEntity.CopyStyleFrom"/>）；
+    ///   ② 逐点 Z 按源标高**回基** —— <c>ZAt = Zs[i] + Elevation</c>，把绝对 Z 直接塞进 Zs
+    ///      会把标高再加一遍（标高 50 的三维线裁完变成 100+，用户看到的就是"命令改了图元属性"）。
+    /// 源是平面线（Has3D=false）时不给 Zs，高程仍由 Elevation 单独承载。
+    /// </summary>
+    private static PolylineEntity DerivePolyline(
+        PolylineEntity src, IReadOnlyList<(double x, double y, double z)> pts3, bool closed)
+    {
+        var pl = new PolylineEntity { Closed = closed };
+        pl.CopyStyleFrom(src);
+        foreach (var p in pts3) pl.Points.Add((p.x, p.y));
+        if (src.Has3D)
+        {
+            pl.Zs = new List<double>(pts3.Count);
+            foreach (var p in pts3) pl.Zs.Add(p.z - src.Elevation);
+        }
+        return pl;
+    }
+
+    /// <summary>同上，但新点表只有 XY（加密/抽稀/连接）：逐点 Z 沿源线重采后再回基。</summary>
+    private static PolylineEntity DerivePolyline(
+        PolylineEntity src, IReadOnlyList<(double x, double y)> pts2, bool closed,
+        PolylineEntity? zSource = null)
+    {
+        var zsrc = zSource ?? src;
+        var pl = new PolylineEntity { Closed = closed };
+        pl.CopyStyleFrom(src);
+        pl.Points.AddRange(pts2);
+        if (zsrc.Has3D)
+        {
+            var abs = PolylineEdit.SampleZAlong(zsrc.Points,
+                Enumerable.Range(0, zsrc.Points.Count).Select(zsrc.ZAt).ToList(), pts2);
+            pl.Zs = PolylineEdit.RebaseZ(abs, pl.Elevation);
+        }
         return pl;
     }
 
@@ -315,12 +356,14 @@ public partial class MainWindow
     private async Task<bool> TryModelingCommandCoreAsync(string cmd)
     {
         if (ModelingWindowFactory.TryOpen(this, MdlCtx(), cmd)) return true;   // 已登记独立窗口的功能项优先走窗口
+        if (await TryEditGroupCommandAsync(cmd)) return true;                  // 「编辑」组(点/线/面/体/工具)忠实移植见 MainWindow.EditGroup.cs
         switch (cmd)
         {
             // 建模
             case "创建三角网": case "转化为三角格网": case "三角网": case "2.5D TIN": case "转三角网": await MdlCreateTinAsync(cmd); return true;
-            case "多段线嵌入三角网": case "约束三角网": case "约束Delaunay": await MdlEmbedPolylineAsync(); return true;
-            case "裁剪三角网": case "闭合线裁剪面": case "裁剪面": case "三角网裁剪": await MdlClipMeshByLoopAsync(); return true;
+            case "约束三角网": case "约束Delaunay": await MdlEmbedPolylineAsync(); return true;
+            case "分割三角网": await EdMeshSplitAlongAsync(); return true;
+            case "裁剪三角网": case "三角网裁剪": await MdlClipMeshByLoopAsync(); return true;
             case "固化成体": await MdlSolidifyAsync(); return true;
             case "侧面三角网": await MdlSideSurfaceAsync(); return true;
             case "快速建模": await MdlQuickModelAsync(); return true;
@@ -332,30 +375,13 @@ public partial class MainWindow
             // 倾斜摄影
             case "加载倾斜摄影": StatusMsg.Text = "加载倾斜摄影：OSGB 倾斜摄影模型解析/纹理需原生渲染内核，本机记录为受阻；可先用「展点」/「导入三角网」加载点或三角网"; return true;
             // 点编辑
-            case "修改高程点": case "修改高程": await MdlSetPointZAsync(); return true;
-            case "修改点样式": case "点样式": await MdlPointStyleAsync(); return true;
-            case "赋节点高程": case "点落到面上": await MdlDrapePointsAsync(cmd); return true;
-            case "顶点焊接": case "网格焊接": await MdlWeldAsync(); return true;
             // 线编辑
-            case "闭合线裁剪": await MdlClipLinesByLoopAsync(); return true;
-            case "统一线高程": await MdlUnifyLineZAsync(); return true;
-            case "抽稀等值线": SimplifyPolyline(); return true;
-            case "标识起点": case "标识线序": StatusMsg.Text = $"{cmd}：原程序为功能预留(占位)，未实现"; return true;
-            case "线落到面上": await MdlDrapePolylinesAsync(); return true;
             // 面编辑
-            case "生成三角网边界": case "网格边界": await MdlMeshBoundaryAsync(); return true;
-            case "沿线分割三角网": case "分割三角网": await MdlSplitAlongLineAsync(); return true;
-            case "合并三角网": await MdlMergeMeshesAsync(); return true;
-            case "面交线": case "两网交线": case "网格交线": await MdlIntersectMeshesAsync(); return true;
-            case "修复拓扑关系": case "网格修复": await MdlRepairAsync(); return true;
-            case "删除三角面": await MdlDeleteTrisAsync(); return true;
             case "格网质量检测": case "网格诊断": await MdlDiagnoseAsync(); return true;
             case "补洞": await MdlHoleFillAsync(); return true;
             case "网格光顺": case "光顺": await MdlSmoothAsync(); return true;
             // 体编辑
             case "两期三角网算量": await MdlCutFillAsync(); return true;
-            case "分割地质体": StatusMsg.Text = "分割地质体：闭合体被任意曲面切分需鲁棒网格布尔(内核)，记录为受阻；竖直面切分请用「沿线分割三角网」"; return true;
-            case "布尔-并集": case "布尔-交集": case "布尔-差集": case "布尔-补集": StatusMsg.Text = $"{cmd}：网格布尔运算需 C++ 内核(精确谓词+重网格)，本机记录为受阻"; return true;
             case "三角网体积": case "网格度量": await MdlMeshVolumeAsync(); return true;
             case "体素格网体积": await MdlVoxelVolumeAsync(); return true;
             case "实体转块体": case "离散化模型": await MdlEntityToBlocksAsync(); return true;
@@ -581,7 +607,7 @@ public partial class MainWindow
         var vb = CurrentViewBounds();
         double span = vb != null ? Math.Max(vb[2] - vb[0], vb[3] - vb[1]) : 100;
         double def = Math.Max(1, Math.Round(span / 10));
-        PromptDialog? dlg;
+        PromptValues? dlg;
         if (kind == "立方体") dlg = await PromptDialog.AskAsync(this, "基本几何体 · 立方体", new[] { new PromptDialog.Field("sx", "长 X", def.ToString(Inv), "m"), new PromptDialog.Field("sy", "宽 Y", def.ToString(Inv), "m"), new PromptDialog.Field("sz", "高 Z", def.ToString(Inv), "m"), new PromptDialog.Field("z", "底面高程", "0", "m") });
         else if (kind == "球体") dlg = await PromptDialog.AskAsync(this, "基本几何体 · 球体", new[] { new PromptDialog.Field("r", "半径", (def / 2).ToString(Inv), "m"), new PromptDialog.Field("z", "球心高程", "0", "m") });
         else dlg = await PromptDialog.AskAsync(this, "基本几何体 · 圆柱", new[] { new PromptDialog.Field("r", "半径", (def / 2).ToString(Inv), "m"), new PromptDialog.Field("h", "高", def.ToString(Inv), "m"), new PromptDialog.Field("z", "底面高程", "0", "m") });
@@ -608,224 +634,11 @@ public partial class MainWindow
         if (name != null) StatusMsg.Text = $"导出三角网：{meshes.Count} 网 {t.Count} 三角 → {name}";
     }
 
-    // ═══════════════════ 点/线编辑 ═══════════════════
-    private async Task MdlSetPointZAsync()
-    {
-        var pts = SelectedPoints();
-        var ents = _selected.Where(e => e is not MeshEntity).ToList();
-        if (ents.Count == 0) { StatusMsg.Text = "修改高程点：请先选中点(或其它平面实体)"; return; }
-        var dlg = await PromptDialog.AskAsync(this, "修改高程点", new[] { new PromptDialog.Field("z", "高程 Z", (pts.Count > 0 ? pts[0].Elevation : ents[0].Elevation).ToString("0.###", Inv), "m") }, $"把选中的 {ents.Count} 个实体的高程统一设为指定值");
-        if (dlg == null) return;
-        BeginChange();
-        foreach (var e in ents) { e.Elevation = dlg.D("z"); if (e is PolylineEntity pl) pl.Zs = null; }
-        RefreshScene();
-        StatusMsg.Text = $"修改高程点：{ents.Count} 个实体高程 → {dlg.D("z"):0.###}";
-    }
-
-    private async Task MdlPointStyleAsync()
-    {
-        var pts = SelectedPoints();
-        if (pts.Count == 0) { StatusMsg.Text = "修改点样式：请先选中点"; return; }
-        var dlg = await PromptDialog.AskAsync(this, "修改点样式", new[] { new PromptDialog.Field("style", "点样式(0..4)", pts[0].Style.ToString(Inv)), new PromptDialog.Field("size", "点大小", pts[0].Size.ToString("0.##", Inv), "世界单位") });
-        if (dlg == null) return;
-        BeginChange();
-        foreach (var p in pts) { p.Style = Math.Clamp(dlg.I("style"), 0, 4); if (dlg.D("size") > 0) p.Size = dlg.D("size"); }
-        RefreshScene();
-        StatusMsg.Text = $"修改点样式：{pts.Count} 点 → 样式 {Math.Clamp(dlg.I("style"), 0, 4)} · 大小 {dlg.D("size"):0.##}";
-    }
-
     private double? MeshZ(MeshEntity? m, double x, double y)
     {
         if (m == null) return null;
         if (!_surfGrids.TryGetValue(m, out var g)) { var (fv, ft) = m.Flatten(); var b = m.Bounds; g = new SurfaceVolume.TriGrid(fv, ft, Math.Max(b.maxX - b.minX, b.maxY - b.minY) / 200 + 1e-9); _surfGrids[m] = g; }
         return g.Sample(x, y);
-    }
-
-    private async Task MdlDrapePointsAsync(string cmd)
-    {
-        var pts = SelectedPoints();
-        if (pts.Count == 0) { StatusMsg.Text = $"{cmd}：请先选中点(可同时选中目标三角网)"; return; }
-        var meshes = SelectedMeshes(); if (meshes.Count == 0) meshes = await PickMeshesAsync(cmd, 1, 1);
-        if (meshes.Count == 0) return;
-        BeginChange();
-        int hit = 0;
-        foreach (var p in pts) { var z = MeshZ(meshes[0], p.X, p.Y); if (z.HasValue) { p.Elevation = z.Value; hit++; } }
-        RefreshScene();
-        StatusMsg.Text = $"{cmd}：{hit}/{pts.Count} 点取「{meshes[0].Name}」面高程{(hit < pts.Count ? $"，{pts.Count - hit} 点在面外未动" : "")}";
-    }
-
-    private async Task MdlWeldAsync()
-    {
-        var meshes = await PickMeshesAsync("顶点焊接", 1);
-        if (meshes.Count == 0) return;
-        var dlg = await PromptDialog.AskAsync(this, "顶点焊接", new[] { new PromptDialog.Field("tol", "焊接容差", "0", "m(0=自动 包围盒对角×1e-4)") });
-        if (dlg == null) return;
-        int totalIn = 0, totalOut = 0;
-        foreach (var m in meshes)
-        {
-            var b = m.Bounds; double diag = Math.Sqrt((b.maxX - b.minX) * (b.maxX - b.minX) + (b.maxY - b.minY) * (b.maxY - b.minY) + (b.maxZ - b.minZ) * (b.maxZ - b.minZ));
-            double tol = dlg.D("tol") > 0 ? dlg.D("tol") : (diag > 0 ? diag * 1e-4 : 1e-6);
-            var w = MeshWeld.Weld(m.Verts, m.Tris, tol, dropDuplicateTris: true);
-            totalIn += w.InputVerts; totalOut += w.OutputVerts;
-            ReplaceMesh(m, new MeshEntity(m.Name, w.Verts, w.Tris));
-        }
-        StatusMsg.Text = $"顶点焊接：{meshes.Count} 网 顶点 {totalIn} → {totalOut}";
-    }
-
-    private async Task MdlClipLinesByLoopAsync()
-    {
-        var lines = SelectedPolylines();
-        var loops = lines.Where(l => l.Closed && l.Points.Count >= 3).ToList();
-        var targets = lines.Where(l => !loops.Contains(l)).ToList();
-        if (loops.Count == 0 || targets.Count == 0) { StatusMsg.Text = "闭合线裁剪：请选中 1 条闭合多段线(边界) + 若干被裁多段线"; return; }
-        var dlg = await PromptDialog.AskAsync(this, "闭合线裁剪", new[] { new PromptDialog.Field("side", "保留", "内侧", null, null, false, new[] { "内侧", "外侧" }) });
-        if (dlg == null) return;
-        bool inside = dlg.S("side") == "内侧";
-        BeginChange();
-        int made = 0;
-        var added = new List<SceneEntity>();
-        foreach (var l in targets)
-        {
-            var pieces = PolylineClipper.ClipPolyline(loops[0].Points, Line3(l), l.Closed, inside);
-            _scene.Remove(l);
-            foreach (var pc in pieces) { var pl = Poly3(pc, false, l.Cr, l.Cg, l.Cb); pl.CopyStyleFrom(l); if (!l.Has3D) { pl.Zs = null; } _scene.Add(pl); added.Add(pl); made++; }
-        }
-        RefreshScene(); SelectEntities(added);
-        StatusMsg.Text = $"闭合线裁剪：{targets.Count} 条线保留{(inside ? "内" : "外")}侧 → {made} 段";
-    }
-
-    private async Task MdlUnifyLineZAsync()
-    {
-        var lines = SelectedPolylines();
-        if (lines.Count == 0) { StatusMsg.Text = "统一线高程：请先选中多段线"; return; }
-        var dlg = await PromptDialog.AskAsync(this, "统一线高程", new[] { new PromptDialog.Field("z", "高程 Z", lines[0].Elevation.ToString("0.###", Inv), "m") });
-        if (dlg == null) return;
-        BeginChange();
-        foreach (var l in lines) { l.Elevation = dlg.D("z"); l.Zs = null; }
-        RefreshScene();
-        StatusMsg.Text = $"统一线高程：{lines.Count} 条线 → {dlg.D("z"):0.###}";
-    }
-
-    private async Task MdlDrapePolylinesAsync()
-    {
-        var lines = SelectedPolylines();
-        if (lines.Count == 0) { StatusMsg.Text = "线落到面上：请先选中多段线(可同时选中目标三角网)"; return; }
-        var meshes = SelectedMeshes(); if (meshes.Count == 0) meshes = await PickMeshesAsync("线落到面上", 1, 1);
-        if (meshes.Count == 0) return;
-        BeginChange();
-        int miss = 0, tot = 0;
-        foreach (var l in lines)
-        {
-            var zs = new List<double>(l.Points.Count);
-            foreach (var (x, y) in l.Points) { var z = MeshZ(meshes[0], x, y); tot++; if (z.HasValue) zs.Add(z.Value); else { zs.Add(l.ZAt(zs.Count)); miss++; } }
-            l.Zs = zs; l.Elevation = 0;
-        }
-        RefreshScene();
-        StatusMsg.Text = $"线落到面上：{lines.Count} 条线 {tot} 顶点落到「{meshes[0].Name}」{(miss > 0 ? $"，{miss} 点在面外保持原高程" : "")}";
-    }
-
-    // ═══════════════════ 面/体编辑 ═══════════════════
-    private async Task MdlMeshBoundaryAsync()
-    {
-        var meshes = await PickMeshesAsync("生成三角网边界", 1);
-        if (meshes.Count == 0) return;
-        BeginChange();
-        var added = new List<SceneEntity>(); int loopsN = 0;
-        foreach (var m in meshes)
-        {
-            var loops = MeshBoundaryLoops.Extract(m.Verts, OrientUp(m.Verts, m.Tris));
-            foreach (var lp in loops) { if (lp.Count < 2) continue; var pl = Poly3(lp, true, 0.95f, 0.5f, 0.2f); pl.LayerName = m.LayerName; _scene.Add(pl); added.Add(pl); loopsN++; }
-        }
-        RefreshScene(); SelectEntities(added);
-        StatusMsg.Text = $"生成三角网边界：{meshes.Count} 网 → {loopsN} 条边界环(三维多段线, 含断层缝/空洞)";
-    }
-
-    private async Task MdlSplitAlongLineAsync()
-    {
-        var lines = SelectedPolylines().Where(l => l.Points.Count >= 2).ToList();
-        var lineEnts = _selected.OfType<LineEntity>().ToList();
-        var meshes = await PickMeshesAsync("沿线分割三角网", 1, 1);
-        if (meshes.Count == 0) return;
-        (double x0, double y0, double x1, double y1)? seg = null;
-        if (lineEnts.Count > 0) seg = (lineEnts[0].X0, lineEnts[0].Y0, lineEnts[0].X1, lineEnts[0].Y1);
-        else if (lines.Count > 0) { var l = lines[0]; seg = (l.Points[0].x, l.Points[0].y, l.Points[^1].x, l.Points[^1].y); if (l.Points.Count > 2) StatusMsg.Text = "沿线分割三角网：多段折线按首尾两点的竖直面切分(逐段折线切分需内核)"; }
-        if (seg == null) { StatusMsg.Text = "沿线分割三角网：请同时选中一条直线/多段线作分割线"; return; }
-        var m = meshes[0];
-        var (left, right) = MeshPlaneSplit.Split(m.Verts, m.Tris, seg.Value.x0, seg.Value.y0, seg.Value.x1, seg.Value.y1);
-        if (left.t.Count == 0 || right.t.Count == 0) { StatusMsg.Text = "沿线分割三角网：分割线未穿过三角网"; return; }
-        BeginChange();
-        _scene.Remove(m); _selected.Remove(m);
-        var a = new MeshEntity(NewMeshName(m.Name + "-左"), left.v, left.t); a.CopyStyleFrom(m);
-        var b = new MeshEntity(NewMeshName(m.Name + "-右"), right.v, right.t); b.CopyStyleFrom(m); b.Cg = Math.Min(1, b.Cg + 0.15f);
-        _scene.Add(a); _scene.Add(b); RefreshScene(); SelectEntities(new SceneEntity[] { a, b });
-        StatusMsg.Text = $"沿线分割三角网「{m.Name}」：左 {left.t.Count} / 右 {right.t.Count} 三角(面积守恒)";
-    }
-
-    private async Task MdlMergeMeshesAsync()
-    {
-        var meshes = await PickMeshesAsync("合并三角网", 2);
-        if (meshes.Count < 2) { StatusMsg.Text = "合并三角网：请选中 ≥2 张三角网"; return; }
-        var (verts, tris) = MeshWeld.Concat(meshes.Select(m => ((IReadOnlyList<(double x, double y, double z)>)m.Verts, (IReadOnlyList<(int a, int b, int c)>)m.Tris)).ToList());
-        var mm = MeshMetrics.Compute(verts, tris);
-        double diag = Math.Sqrt((mm.MaxX - mm.MinX) * (mm.MaxX - mm.MinX) + (mm.MaxY - mm.MinY) * (mm.MaxY - mm.MinY) + (mm.MaxZ - mm.MinZ) * (mm.MaxZ - mm.MinZ));
-        var w = MeshWeld.Weld(verts, tris, diag > 0 ? diag * 1e-4 : 1e-6, dropDuplicateTris: true);
-        BeginChange();
-        foreach (var m in meshes) { _scene.Remove(m); _selected.Remove(m); _surfGrids.Remove(m); }
-        var me = new MeshEntity(NewMeshName("合并网"), w.Verts, w.Tris); me.CopyStyleFrom(meshes[0]);
-        _scene.Add(me); RefreshScene(); SelectEntities(new SceneEntity[] { me });
-        var d = MeshDiagnose.Analyze(w.Verts, w.Tris);
-        StatusMsg.Text = $"合并三角网「{me.Name}」：{meshes.Count} 网 → {w.OutputTris} 三角(焊接去重 {w.DuplicateTris}) · 开放边 {d.BoundaryEdges} · 非流形 {d.NonManifoldEdges}";
-    }
-
-    private async Task MdlIntersectMeshesAsync()
-    {
-        var meshes = await PickMeshesAsync("面交线", 2, 2);
-        if (meshes.Count < 2) { StatusMsg.Text = "面交线：请选中 2 张三角网"; return; }
-        var segs = MeshIntersect.IntersectionSegments(meshes[0].Verts, meshes[0].Tris, meshes[1].Verts, meshes[1].Tris);
-        if (segs.Count == 0) { StatusMsg.Text = "面交线：两网不相交"; return; }
-        var s2 = segs.Select(s => (s.A.x, s.A.y, s.B.x, s.B.y)).ToList();
-        var b = meshes[0].Bounds; double tol = Math.Max(b.maxX - b.minX, b.maxY - b.minY) * 1e-6;
-        var chains = Contour.LinkSegments(s2, tol);
-        var zLookup = new Dictionary<(long, long), double>();
-        foreach (var s in segs) { zLookup[((long)Math.Round(s.A.x / tol), (long)Math.Round(s.A.y / tol))] = s.A.z; zLookup[((long)Math.Round(s.B.x / tol), (long)Math.Round(s.B.y / tol))] = s.B.z; }
-        BeginChange();
-        var added = new List<SceneEntity>();
-        foreach (var ch in chains)
-        {
-            if (ch.Count < 2) continue;
-            var pts = ch.Select(p => (p.x, p.y, zLookup.TryGetValue(((long)Math.Round(p.x / tol), (long)Math.Round(p.y / tol)), out var z) ? z : (MeshZ(meshes[0], p.x, p.y) ?? 0))).ToList();
-            var pl = Poly3(pts, false, 0.95f, 0.3f, 0.3f); AssignLayer(pl); _scene.Add(pl); added.Add(pl);
-        }
-        RefreshScene(); SelectEntities(added);
-        StatusMsg.Text = $"面交线「{meshes[0].Name}」∩「{meshes[1].Name}」：{segs.Count} 段 → {added.Count} 条三维交线";
-    }
-
-    private async Task MdlRepairAsync()
-    {
-        var meshes = await PickMeshesAsync("修复拓扑关系", 1);
-        if (meshes.Count == 0) return;
-        var parts = new List<string>();
-        foreach (var m in meshes)
-        {
-            var r = MeshRepair.Repair(m.Verts, m.Tris);
-            ReplaceMesh(m, new MeshEntity(m.Name, r.Verts, r.Tris));
-            parts.Add($"{m.Name}: 顶点 {r.VertsBefore}→{r.VertsAfter} · 补洞 {r.FilledHoles} · 开放边 {r.BoundaryBefore}→{r.BoundaryAfter}");
-        }
-        StatusMsg.Text = "修复拓扑关系：" + string.Join(" ; ", parts);
-    }
-
-    private async Task MdlDeleteTrisAsync()
-    {
-        var loops = SelectedPolylines().Where(l => l.Closed && l.Points.Count >= 3).ToList();
-        var meshes = await PickMeshesAsync("删除三角面", 1, 1);
-        if (meshes.Count == 0) return;
-        if (loops.Count == 0) { StatusMsg.Text = "删除三角面：请同时选中一条闭合多段线圈定要删的三角(按质心判定)"; return; }
-        var m = meshes[0];
-        var inside = PolylineClipper.TrianglesInside(m.Verts, m.Tris, loops[0].Points);
-        if (inside.Count == 0) { StatusMsg.Text = "删除三角面：闭合线内无三角"; return; }
-        var (nv, nt) = PolylineClipper.RemoveTriangles(m.Verts, m.Tris, inside);
-        ReplaceMesh(m, new MeshEntity(m.Name, nv, nt));
-        StatusMsg.Text = $"删除三角面「{m.Name}」：删除 {inside.Count} 三角，余 {nt.Count}";
     }
 
     private async Task MdlDiagnoseAsync()
@@ -939,11 +752,28 @@ public partial class MainWindow
         if (ModelingWindowFactory.TryOpen(this, MdlCtx(), "构建等值线")) return;
         var meshes = await PickMeshesAsync("构建等值线", 1, 1);
         if (meshes.Count == 0) return;
-        var m = meshes[0]; var b = m.Bounds;
+        await MdlContourFromMeshAsync(meshes[0], "构建等值线", null);
+    }
+
+    /// <summary>
+    /// 从一张三角网按等高距抽等值线入库（「构建等值线」与点云组「等高线生产」共用）。
+    /// defaultDz 为 null 时按网格高差的 1/10 取默认；点云组按原版给 5m。
+    /// </summary>
+    private async Task MdlContourFromMeshAsync(MeshEntity m, string title, double? defaultDz)
+    {
+        var b = m.Bounds;
         double zr = b.maxZ - b.minZ;
-        var dlg = await PromptDialog.AskAsync(this, "构建等值线", new[] { new PromptDialog.Field("dz", "等高距", (zr > 0 ? Math.Max(Math.Round(zr / 10, 1), 0.1) : 1).ToString("0.###", Inv), "m"), new PromptDialog.Field("cell", "采样格距", (Math.Max(b.maxX - b.minX, b.maxY - b.minY) / 200).ToString("0.###", Inv), "m") }, $"从三角网「{m.Name}」采样栅格提取等值线");
+        double dzDef = defaultDz ?? (zr > 0 ? Math.Max(Math.Round(zr / 10, 1), 0.1) : 1);
+        var dlg = await PromptDialog.AskAsync(this, title, new[] { new PromptDialog.Field("dz", "等高距", dzDef.ToString("0.###", Inv), "m"), new PromptDialog.Field("cell", "采样格距", (Math.Max(b.maxX - b.minX, b.maxY - b.minY) / 200).ToString("0.###", Inv), "m") }, $"从三角网「{m.Name}」采样栅格提取等值线");
         if (dlg == null) return;
-        double cell = Math.Max(dlg.D("cell"), 1e-6), dz = Math.Max(dlg.D("dz"), 1e-6);
+        await MdlContourCoreAsync(m, title, Math.Max(dlg.D("dz"), 1e-6), Math.Max(dlg.D("cell"), 1e-6));
+    }
+
+    /// <summary>等值线抽取本体（对话框已取好参数）：栅格采样 + Marching Squares + 连段入库。</summary>
+    private async Task MdlContourCoreAsync(MeshEntity m, string title, double dz, double cell)
+    {
+        await Task.Yield();
+        var b = m.Bounds;
         var (fv, ft) = m.Flatten();
         var g = new SurfaceVolume.TriGrid(fv, ft, cell);
         int nx = (int)Math.Ceiling((b.maxX - b.minX) / cell) + 1, ny = (int)Math.Ceiling((b.maxY - b.minY) / cell) + 1;
@@ -965,7 +795,7 @@ public partial class MainWindow
             }
         }
         RefreshScene(); SelectEntities(added);
-        StatusMsg.Text = $"构建等值线「{m.Name}」：{levels.Count} 层(等高距 {dz:0.##}) → {added.Count} 条三维等值线({segsN} 段, 格距 {cell:0.##})";
+        StatusMsg.Text = $"{title}「{m.Name}」：{levels.Count} 层(等高距 {dz:0.##}) → {added.Count} 条三维等值线({segsN} 段, 格距 {cell:0.##})";
     }
 
     private async Task MdlSectionAsync()
@@ -999,24 +829,57 @@ public partial class MainWindow
         StatusMsg.Text = added.Count == 0 ? "创建剖面：剖面线未穿过三角网" : $"创建剖面(长 {len:0.#})：{string.Join(" ; ", parts)}（三维剖面线已入场景）";
     }
 
+    /// <summary>
+    /// 实时曲面坐标（开关）：开启后鼠标在三角网上移动时，光标旁浮动气泡实时显示落点的真实三维坐标。
+    /// 状态栏那份仍是投影平面坐标 —— 两者不是一回事，原版特意区分开。
+    /// </summary>
     private void MdlToggleSurfaceCoord()
     {
         _surfCoordOn = !_surfCoordOn;
-        if (!_surfCoordOn) _surfGrids.Clear();
-        StatusMsg.Text = _surfCoordOn ? "实时曲面坐标：开（光标处三角网高程显示在坐标栏）" : "实时曲面坐标：关";
+        if (!_surfCoordOn)
+        {
+            _surfGrids.Clear();
+            HideSurfaceCoordTip();
+        }
+        StatusMsg.Text = _surfCoordOn
+            ? "实时曲面坐标：开（光标移到三角网上，旁边气泡显示落点真实 X/Y/Z；再点一次关闭）"
+            : "实时曲面坐标：关";
     }
 
-    /// <summary>指针移动时(开关开)采样光标下三角网高程, 附到坐标栏。</summary>
-    private string SurfaceCoordSuffix((double x, double y)? w)
+    private void HideSurfaceCoordTip()
     {
-        if (!_surfCoordOn || w == null) return "";
+        var tip = _active.SurfTip;
+        if (tip == null || tip.Opacity == 0) return;
+        tip.Opacity = 0;
+        (tip.Parent as Avalonia.Controls.Control)?.InvalidateVisual();
+    }
+
+    /// <summary>
+    /// 指针移动时刷新曲面坐标气泡：取光标 XY 落点所在三角形、Z 最高的那张网的曲面高程。
+    /// 关着、或光标不在任何三角网上，就把气泡收起来。
+    /// </summary>
+    private void UpdateSurfaceCoordTip(Avalonia.Point screen, (double x, double y)? world)
+    {
+        var tip = _active.SurfTip;
+        if (tip == null) return;
+        if (!_surfCoordOn || world == null) { HideSurfaceCoordTip(); return; }
+
+        double bestZ = double.NegativeInfinity;
+        MeshEntity? hit = null;
         foreach (var m in AllMeshes())
         {
-            var b = m.Bounds; if (w.Value.x < b.minX || w.Value.x > b.maxX || w.Value.y < b.minY || w.Value.y > b.maxY) continue;
-            var z = MeshZ(m, w.Value.x, w.Value.y);
-            if (z.HasValue) return $"  Z {z.Value:0.00} [{m.Name}]";
+            var b = m.Bounds;
+            if (world.Value.x < b.minX || world.Value.x > b.maxX || world.Value.y < b.minY || world.Value.y > b.maxY) continue;
+            var z = MeshZ(m, world.Value.x, world.Value.y);
+            if (z.HasValue && z.Value > bestZ) { bestZ = z.Value; hit = m; }
         }
-        return "  Z —";
+        if (hit == null) { HideSurfaceCoordTip(); return; }
+
+        ((Avalonia.Controls.TextBlock)tip.Child!).Text =
+            $"X {world.Value.x:0.00}  Y {world.Value.y:0.00}  Z {bestZ:0.00}   [{hit.Name}]";
+        tip.Margin = new Avalonia.Thickness(screen.X + 18, Math.Max(0, screen.Y - 30), 0, 0);
+        tip.Opacity = 1;
+        (tip.Parent as Avalonia.Controls.Control)?.InvalidateVisual();
     }
 }
 

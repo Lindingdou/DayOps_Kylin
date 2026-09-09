@@ -65,6 +65,7 @@ public static class BlockMeshBuilder
     {
         var res = new Result();
         if (cells == null || cells.Count == 0) return res;
+        if (cells.Count > maxCells) return BuildDecimated(cells, maxCells);
         var edgeSeen = new HashSet<(long, long, long, long, long, long)>();
 
         // ① 每张面出现几次：出现两次 = 被两个可见块共用。
@@ -85,6 +86,34 @@ public static class BlockMeshBuilder
             if (buried) { res.CulledCells++; continue; }
             if (res.DrawnCells >= maxCells) { res.TruncatedCells++; continue; }
             for (int f = 0; f < 6; f++) EmitFace(res, c, f, edgeSeen);
+            res.DrawnCells++;
+        }
+        return res;
+    }
+
+    /// <summary>
+    /// 块数远超上限时的快路：**跳过内部面剔除，按等间隔抽稀取 maxCells 块**。
+    ///
+    /// 为什么跳过剔除：剔除靠"同尺寸且正对的邻居把六张面都占住"，要先给每块的 6 张面建一张
+    /// 面表。311 万块就是 1870 万次字典操作、字典本身预留 936 万槽 —— 实测 5.9 秒、内存冲到
+    /// 4.1 GB，而八叉树模型里子块尺寸参差，面根本配不上对，**实测剔掉 0 块**。既然最后横竖
+    /// 只画 maxCells 块，这趟表纯属白建。
+    ///
+    /// 为什么抽稀而不是取前 N 块：取前缀会让画出来的块偏向文件里靠前的那部分；等间隔抽稀
+    /// 至少在整个模型上均匀铺开。两者都只是"看个大概"，真要逐块看得靠筛选/剖切把块数降下来。
+    /// </summary>
+    private static Result BuildDecimated(IReadOnlyList<Cell> cells, int maxCells)
+    {
+        var res = new Result();
+        var edgeSeen = new HashSet<(long, long, long, long, long, long)>();
+        double stride = (double)cells.Count / maxCells;      // >1
+        double acc = 0;
+        for (int i = 0; i < cells.Count; i++)
+        {
+            if (i < acc) { res.TruncatedCells++; continue; }
+            acc += stride;
+            if (res.DrawnCells >= maxCells) { res.TruncatedCells++; continue; }
+            for (int f = 0; f < 6; f++) EmitFace(res, cells[i], f, edgeSeen);
             res.DrawnCells++;
         }
         return res;

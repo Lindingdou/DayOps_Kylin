@@ -8,7 +8,7 @@ namespace PitMine3D.Kylin.Cad;
 /// 原走 C++ 引擎(EngineInterop.PitMine_SetSnapMode)，但六模式皆标准可见几何 → 托管重算。
 /// 输入为从场景抽取的原语(线段/圆/圆弧/点)，纯逻辑、可单测。
 /// </summary>
-public static class ObjectSnap
+public static partial class ObjectSnap
 {
     /// <summary>六捕捉模式（位掩码 = 1&lt;&lt;(int)Mode）。优先级见 Find。</summary>
     public enum Mode { Endpoint = 0, Midpoint = 1, Center = 2, Intersection = 3, Perpendicular = 4, Nearest = 5 }
@@ -55,6 +55,13 @@ public static class ObjectSnap
     public static Hit? Find(
         IReadOnlyList<Seg> segs, IReadOnlyList<Circ> circles, IReadOnlyList<ArcP> arcs, IReadOnlyList<(double x, double y)> pts,
         double cx, double cy, double tol, int modeMask, (double x, double y)? anchor)
+        => Find(segs, circles, arcs, pts, cx, cy, tol, modeMask, anchor, null);
+
+    // cand≠null 时只遍历网格给的候选(见 Index)：候选是几何超集且按原下标升序，
+    // 故命中与全量遍历完全一致，只是不再逐帧扫全场景。
+    internal static Hit? Find(
+        IReadOnlyList<Seg> segs, IReadOnlyList<Circ> circles, IReadOnlyList<ArcP> arcs, IReadOnlyList<(double x, double y)> pts,
+        double cx, double cy, double tol, int modeMask, (double x, double y)? anchor, Cand? cand)
     {
         if (tol <= 0) return null;
         double tol2 = tol * tol;
@@ -72,8 +79,9 @@ public static class ObjectSnap
 
         // 端点 / 中点 / 最近（线段）
         if (segs != null)
-            foreach (var s in segs)
+            for (int k = 0, kn = cand?.Segs.Count ?? segs.Count; k < kn; k++)
             {
+                var s = segs[cand == null ? k : cand.Segs[k]];
                 if (On(Mode.Endpoint)) { Consider(s.X1, s.Y1, Mode.Endpoint); Consider(s.X2, s.Y2, Mode.Endpoint); }
                 if (On(Mode.Midpoint)) Consider((s.X1 + s.X2) * 0.5, (s.Y1 + s.Y2) * 0.5, Mode.Midpoint);
                 if (On(Mode.Nearest)) { var (px, py) = ClosestOnSeg(s, cx, cy); Consider(px, py, Mode.Nearest); }
@@ -83,20 +91,23 @@ public static class ObjectSnap
 
         // 点原语（=端点/节点捕捉）
         if (pts != null && On(Mode.Endpoint))
-            foreach (var p in pts) Consider(p.x, p.y, Mode.Endpoint);
+            for (int k = 0, kn = cand?.Pts.Count ?? pts.Count; k < kn; k++)
+            { var p = pts[cand == null ? k : cand.Pts[k]]; Consider(p.x, p.y, Mode.Endpoint); }
 
         // 圆：圆心 / 最近（径向投影）
         if (circles != null)
-            foreach (var c in circles)
+            for (int k = 0, kn = cand?.Circles.Count ?? circles.Count; k < kn; k++)
             {
+                var c = circles[cand == null ? k : cand.Circles[k]];
                 if (On(Mode.Center)) Consider(c.Cx, c.Cy, Mode.Center);
                 if (On(Mode.Nearest)) { var (px, py) = ClosestOnCircle(c, cx, cy); Consider(px, py, Mode.Nearest); }
             }
 
         // 圆弧：圆心 / 端点 / 中点 / 最近
         if (arcs != null)
-            foreach (var a in arcs)
+            for (int k = 0, kn = cand?.Arcs.Count ?? arcs.Count; k < kn; k++)
             {
+                var a = arcs[cand == null ? k : cand.Arcs[k]];
                 if (On(Mode.Center)) Consider(a.Cx, a.Cy, Mode.Center);
                 if (On(Mode.Endpoint))
                 {
@@ -115,15 +126,20 @@ public static class ObjectSnap
         // 交点：线段∩线段 / 线段∩圆 / 圆∩圆（仅取落在光标容差内的）。为控代价，先快拒远原语。
         if (On(Mode.Intersection) && segs != null)
         {
-            var near = new List<Seg>();
-            foreach (var s in segs) if (SegNearCursor(s, cx, cy, tol)) near.Add(s);
+            var near = cand?.NearBuf ?? new List<Seg>();
+            near.Clear();
+            for (int k = 0, kn = cand?.SegsWide.Count ?? segs.Count; k < kn; k++)
+            { var s = segs[cand == null ? k : cand.SegsWide[k]]; if (SegNearCursor(s, cx, cy, tol)) near.Add(s); }
             for (int i = 0; i < near.Count; i++)
                 for (int j = i + 1; j < near.Count; j++)
                     if (SegSegIntersect(near[i], near[j], out double ix, out double iy)) Consider(ix, iy, Mode.Intersection);
             if (circles != null)
                 foreach (var s in near)
-                    foreach (var c in circles)
+                    for (int k = 0, kn = cand?.CirclesWide.Count ?? circles.Count; k < kn; k++)
+                    {
+                        var c = circles[cand == null ? k : cand.CirclesWide[k]];
                         if (CircNearCursor(c, cx, cy, tol) && SegCircleIntersect(s, c, cx, cy, tol, Consider)) { }
+                    }
         }
 
         return best;

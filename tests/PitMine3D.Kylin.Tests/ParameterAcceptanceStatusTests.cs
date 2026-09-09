@@ -1,3 +1,4 @@
+using PitMine3D.Kylin.Tests;
 using PitMine3D.Kylin.Data;
 using Xunit;
 
@@ -66,7 +67,7 @@ public class ParameterAcceptanceStatusTests
     [Fact]
     public void GetBenchDesignBaseline_reads_seeded_project_params()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var bd = GeoDataQueries.GetBenchDesignBaseline(db.Connection);
         // V007/V026 种子: bench_height/bench_slope_angle/safety_platform_width 的 standard_default 齐备 → FromDb。
         Assert.True(bd.FromDb, "采场台阶设计基准(H/α/W)应齐备(V007+V026 种子)");
@@ -82,14 +83,14 @@ public class ParameterAcceptanceStatusTests
     [Fact]
     public void GetParameterNorm_unknown_code_returns_null()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         Assert.Null(GeoDataQueries.GetParameterNorm(db.Connection, "no_such_param_xyz"));
     }
 
     [Fact]
     public void GetParameterNorm_seeded_code_roundtrips_and_default_passes()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         // 取种子库任一参数定义 code, 验其范围可取回, 且标准默认值判为 pass(默认值应落标准范围内)。
         string? code;
         using (var cmd = db.Connection.CreateCommand())

@@ -303,7 +303,7 @@ Maintainer: DayOps <noreply@example.com>
 Installed-Size: $INSTALLED_KB
 Depends: libc6
 Recommends: libx11-6, libice6, libsm6, libgl1, libfontconfig1
-Description: PitMine3D 露天矿三维平台 (麒麟版)
+Description: DayOps 露天矿三维平台 (麒麟版)
  露天煤矿二三维一体化生产计划决策支撑系统的麒麟/Linux 版本。
  基于 Avalonia + OpenGL, 自包含 .NET 8 运行时, 随包携带 ICU, 目标机无需联网装依赖。
 CTRL

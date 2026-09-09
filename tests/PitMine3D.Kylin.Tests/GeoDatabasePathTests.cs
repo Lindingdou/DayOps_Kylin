@@ -35,9 +35,9 @@ public class GeoDatabasePathTests
         string p = Path.Combine(Path.GetDirectoryName(GeoDatabase.DefaultPath())!, $"test-{Guid.NewGuid():N}.db");
         try
         {
-            using var db = GeoDatabase.OpenSeeded(p);
+            using var db = TestDb.Open(p);
             Assert.True(File.Exists(p));
-            var tables = GeoDataQueries.ListTables(db.Connection);
+            var tables = GeoDataQueries.ListTables(db.Connection, new SqliteDialect());
             Assert.Contains("equipment", tables);
             Assert.True(tables.Count > 30, $"种子库应有数十张表, 实 {tables.Count}");
         }

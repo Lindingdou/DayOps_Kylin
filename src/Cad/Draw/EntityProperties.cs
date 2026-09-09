@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -83,6 +83,18 @@ public static class EntityProperties
                 r.Add(("几何", "范围Y", N(mb.minY) + " ~ " + N(mb.maxY)));
                 r.Add(("几何", "高程", N(mb.minZ) + " ~ " + N(mb.maxZ)));
                 r.Add(("几何", "表面积", N(me.SurfaceArea())));
+                break;
+            case PointCloudEntity pc:
+                r.Add(("几何", "名称", pc.Name));
+                r.Add(("几何", "点数", pc.PointCount.ToString(Inv)));
+                var pb = pc.Bounds;
+                r.Add(("几何", "范围X", N(pb.minX) + " ~ " + N(pb.maxX)));
+                r.Add(("几何", "范围Y", N(pb.minY) + " ~ " + N(pb.maxY)));
+                r.Add(("几何", "高程", N(pb.minZ) + " ~ " + N(pb.maxZ)));
+                r.Add(("几何", "逐点色", pc.HasColors ? "有" : "无"));
+                r.Add(("几何", "真实色", pc.HasRgb ? "有" : "无"));
+                r.Add(("几何", "法向缓存", pc.HasNormals ? "有" : "无"));
+                if (pc.Source != null) r.Add(("几何", "源文件", System.IO.Path.GetFileName(pc.Source)));
                 break;
             case PolylineEntity pl:
                 r.Add(("几何", "闭合", pl.Closed ? "是" : "否"));
@@ -208,6 +220,7 @@ public static class EntityProperties
         TextEntity t => Style(e, new TextEntity { X = t.X, Y = t.Y, Height = t.Height, Text = t.Text, Rotation = t.Rotation }),
         PolylineEntity pl => Style(e, new PolylineEntity { Points = new List<(double, double)>(pl.Points), Closed = pl.Closed, Zs = pl.Has3D ? new List<double>(pl.Zs!) : null }),
         MeshEntity me => Style(e, new MeshEntity(me.Name, me.Verts, me.Tris)),
+        PointCloudEntity pc => Style(e, pc.Clone()),
         _ => null,
     };
 

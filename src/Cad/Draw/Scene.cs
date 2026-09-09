@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace PitMine3D.Kylin.Cad.Draw;
@@ -921,8 +921,60 @@ public sealed class TextEntity : SceneEntity
     public override void Tessellate(List<float> o)
     {
         if (ScreenFacing) return;   // 公告板文字由视口按相机基向量单独绘制
+        Strokes(o, skipFilled: true);
+    }
+
+    /// <summary>
+    /// 粗略包围盒 —— 只按排版步进算，不生成任何字形几何。供空间索引粗筛用。
+    ///
+    /// 为什么不复用细分结果：真字体下一条注记要么出上百个实心三角、要么出几十段轮廓，
+    /// 3.7 万条注记走一遍就是 1.9~3 秒（真机上"第一次点选卡两三秒"就是这么来的）。
+    /// 粗筛框只用来挑候选，精确判定仍走 DistanceTo，所以这里**宁大勿小**：
+    /// 框大一点只是多几次精确判定，框小了就会有字点不中。
+    /// </summary>
+    public (double minX, double minY, double maxX, double maxY) ApproxBounds()
+    {
+        double wf = WidthFactor <= 0 ? 1 : WidthFactor;
+        double lo = double.MaxValue, hi = double.MinValue, vlo = double.MaxValue, vhi = double.MinValue;
+        Layout((ch, cursor, vOff) =>
+        {
+            if (cursor < lo) lo = cursor;
+            if (cursor > hi) hi = cursor;
+            if (vOff < vlo) vlo = vOff;
+            if (vOff > vhi) vhi = vOff;
+        });
+        if (lo > hi) { lo = hi = 0; vlo = vhi = 0; }          // 空串：退化成锚点
+
+        double padX = Height * 1.5 * Math.Max(1, wf), padY = Height * 1.5;
+        double x0 = lo - padX, x1 = hi + padX, y0 = vlo - padY, y1 = vhi + padY;
+
         double c = Math.Cos(Rotation), s = Math.Sin(Rotation);
-        foreach (var (lx0, ly0, lx1, ly1) in LocalStrokes(skipFilled: true))
+        double ax = double.MaxValue, ay = double.MaxValue, bx = double.MinValue, by = double.MinValue;
+        Span<(double lx, double ly)> corners = stackalloc (double, double)[4] { (x0, y0), (x1, y0), (x1, y1), (x0, y1) };
+        foreach (var (lx, ly) in corners)
+        {
+            double wx = X + lx * c - ly * s, wy = Y + lx * s + ly * c;
+            if (wx < ax) ax = wx; if (wy < ay) ay = wy;
+            if (wx > bx) bx = wx; if (wy > by) by = wy;
+        }
+        return (ax, ay, bx, by);
+    }
+
+    /// <summary>
+    /// 只出轮廓笔画（连本可实心填充的字形一起描边）。
+    /// 谁要是把实心填充那一路关掉，就必须改走这条 —— 否则那些字既没有实心三角、
+    /// 笔画又被 <c>skipFilled</c> 跳过，屏幕上就彻底没字了（踩过一次）。
+    /// </summary>
+    public void TessellateOutline(List<float> o)
+    {
+        if (ScreenFacing) return;
+        Strokes(o, skipFilled: false);
+    }
+
+    private void Strokes(List<float> o, bool skipFilled)
+    {
+        double c = Math.Cos(Rotation), s = Math.Sin(Rotation);
+        foreach (var (lx0, ly0, lx1, ly1) in LocalStrokes(skipFilled))
             Seg(o, X + lx0 * c - ly0 * s, Y + lx0 * s + ly0 * c,
                    X + lx1 * c - ly1 * s, Y + lx1 * s + ly1 * c);   // 旋转后平移到锚点
     }
@@ -950,6 +1002,7 @@ public static class EntityTypeName
         PolygonEntity => "正多边形",
         TextEntity => "文字",
         MeshEntity => "三角网",
+        PointCloudEntity => "点云",
         _ => "其他"
     };
 }
@@ -968,12 +1021,17 @@ public sealed class Scene
         return true;
     }
 
-    /// <summary>拾取：容差 tol 内离 (x,y) 最近的实体；无则 null。canSelect 为 null 时不按图层过滤。</summary>
-    public SceneEntity? Pick(double x, double y, double tol, Func<string, bool>? canSelect = null)
+    /// <summary>
+    /// 拾取：容差 tol 内离 (x,y) 最近的实体；无则 null。canSelect 为 null 时不按图层过滤。
+    /// 给了 <paramref name="index"/> 就只算光标附近格子里的图元（图元一多，全场景逐个算距离要上百毫秒）。
+    /// </summary>
+    public SceneEntity? Pick(double x, double y, double tol, Func<string, bool>? canSelect = null, SceneIndex? index = null)
     {
         SceneEntity? best = null;
         double bestD = tol;
-        foreach (var e in Entities)
+        foreach (var e in index != null
+                     ? index.Query(x - tol, y - tol, x + tol, y + tol)
+                     : (IEnumerable<SceneEntity>)Entities)
         {
             if (!e.Visible) continue;                                     // 隐藏对象不可拾取
             if (canSelect != null && !canSelect(e.LayerName)) continue;   // 锁定/隐藏层不可选
@@ -1045,6 +1103,19 @@ public sealed class Scene
         return list;
     }
 
+    /// <summary>
+    /// 可见点云的逐点顶点(交错 P3_C3, GL_POINTS)。点云独占一条通道 —— 不能塞进线段通道:
+    /// 一份点云动辄几十万点, 按"每点画个小十字"要 12 倍的顶点, 且画出来是十字不是点。
+    /// </summary>
+    public float[] BuildCloudPoints(Func<string, bool>? isShown = null)
+    {
+        var o = new List<float>();
+        foreach (var e in Entities)
+            if (e is PointCloudEntity pc && pc.Visible && (isShown == null || isShown(pc.LayerName)))
+                pc.TessellatePoints(o);
+        return o.ToArray();
+    }
+
     /// <summary>可见实体的着色三角面(交错 P3_C3, GL_TRIANGLES)。</summary>
     public float[] BuildFaces(Func<string, bool>? isShown = null)
     {
@@ -1052,6 +1123,15 @@ public sealed class Scene
         foreach (var e in Entities)
             if (e.Visible && (isShown == null || isShown(e.LayerName))) e.TessellateFaces(o);
         return o.ToArray();
+    }
+
+    /// <summary>可见注记条数（供性能诊断：注记是大图纸上屏耗时的主要来源）。</summary>
+    public int VisibleTextCount(Func<string, bool>? isShown = null)
+    {
+        int n = 0;
+        foreach (var e in Entities)
+            if (e is TextEntity && e.Visible && (isShown == null || isShown(e.LayerName))) n++;
+        return n;
     }
 
     /// <summary>对象捕捉候选点(端点/中点/圆心/象限/顶点)，交错 P3_C3(仅位置)。供 osnap。</summary>

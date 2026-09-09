@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace PitMine3D.Kylin.Cad;
@@ -10,11 +10,29 @@ namespace PitMine3D.Kylin.Cad;
 /// </summary>
 public static class PointNormals
 {
+    /// <summary>
+    /// 一个点的表面属性：法向 + 坡度° + 坡向°(罗盘) + 曲率(表面变异度 λmin/Σλ)。
+    /// 曲率取 PCA 表面变异度 —— 平面上 λmin≈0(曲率≈0), 折棱/尖点处 λmin 抬起(曲率大),
+    /// 与原版「曲率 (表面变异度)」同口径; 它不需要建面, 垂直壁与反坡同样算得出。
+    /// </summary>
+    public readonly record struct PointAttrib(
+        (double x, double y, double z) Normal, double SlopeDeg, double AspectDeg, double Curvature);
+
     /// <summary>逐点 (法向, 坡度°, 坡向°)。k=近邻数。点不足返回空。</summary>
     public static List<((double x, double y, double z) n, double slope, double aspect)> Compute(
         IReadOnlyList<(double x, double y, double z)> pts, int k)
     {
-        var res = new List<((double, double, double), double, double)>();
+        var full = ComputeFull(pts, k);
+        var r = new List<((double, double, double), double, double)>(full.Count);
+        foreach (var a in full) r.Add((a.Normal, a.SlopeDeg, a.AspectDeg));
+        return r;
+    }
+
+    /// <summary>逐点法向 + 坡度 + 坡向 + 曲率（一次 kNN PCA 全出，三个分析共用，不必重算三遍）。</summary>
+    public static List<PointAttrib> ComputeFull(
+        IReadOnlyList<(double x, double y, double z)> pts, int k)
+    {
+        var res = new List<PointAttrib>();
         int n = pts?.Count ?? 0;
         if (n < 3) return res;
         if (k < 3) k = 3;
@@ -75,11 +93,14 @@ public static class PointNormals
             int s = 0; if (eval[1] < eval[s]) s = 1; if (eval[2] < eval[s]) s = 2;
             double nx = evec[s][0], ny = evec[s][1], nz = evec[s][2];
             double nn = Math.Sqrt(nx * nx + ny * ny + nz * nz);
-            if (nn < 1e-12) { res.Add(((0, 0, 1), 0, 0)); continue; }
+            // 曲率 = 表面变异度 λmin / (λ0+λ1+λ2)：平面 ≈0, 折棱/尖点抬起(0 ~ 1/3)
+            double lsum = Math.Abs(eval[0]) + Math.Abs(eval[1]) + Math.Abs(eval[2]);
+            double curv = lsum < 1e-18 ? 0 : Math.Abs(eval[s]) / lsum;
+            if (nn < 1e-12) { res.Add(new PointAttrib((0, 0, 1), 0, 0, curv)); continue; }
             if (nz < 0) { nx = -nx; ny = -ny; nz = -nz; }   // 法向朝上
             double slope = Math.Acos(Math.Min(1.0, Math.Abs(nz) / nn)) * 180.0 / Math.PI;
             double az = Math.Atan2(nx, -ny) * 180.0 / Math.PI; az %= 360.0; if (az < 0) az += 360.0;
-            res.Add(((nx / nn, ny / nn, nz / nn), slope, az));
+            res.Add(new PointAttrib((nx / nn, ny / nn, nz / nn), slope, az, curv));
         }
         return res;
     }

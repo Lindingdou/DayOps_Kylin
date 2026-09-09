@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace PitMine3D.Kylin.Cad.Draw;
@@ -19,6 +19,14 @@ public sealed class MeshEntity : SceneEntity
     /// 块体模型这类「一张网格里每块颜色不同」的情形需要它 —— 否则只能按颜色拆成成百上千个实体。
     /// </summary>
     public List<(float r, float g, float b)>? VertColors;
+
+    /// <summary>
+    /// 逐顶点真实色（建面时从带 RGB 的点云带过来）。<see cref="VertColors"/> 是"当前显示用的色"，
+    /// 会被高程/坡度等着色覆盖；这一份留着，「三角网着色 → 点云真实色」才有得可恢复。
+    /// </summary>
+    public List<(float r, float g, float b)>? RgbColors;
+
+    public bool HasRgbColors => RgbColors != null && RgbColors.Count == Verts.Count;
 
     private bool HasVertColors => VertColors != null && VertColors.Count == Verts.Count;
 
@@ -121,8 +129,25 @@ public sealed class MeshEntity : SceneEntity
     /// AutoFromFill 由填充色压暗得到，Fixed 用这里给的色。
     /// </summary>
     public (float r, float g, float b)? EdgeColorFixed;
-    /// <summary>面按高程着色(地形色带), 否则按实体颜色。</summary>
-    public static bool ColorByElevation;
+    /// <summary>
+    /// 全局面着色模式（原版视口级 ShadingMode：对场景内所有三角网生效、只改显示不出数值）：
+    /// 实体色 / 高程色带 / 按坡度 / 按坡向。「坡度着色」「坡向着色」两个按钮切的就是它。
+    /// </summary>
+    public enum FaceShade { Entity, Elevation, Slope, Aspect }
+
+    /// <summary>当前全局面着色模式。</summary>
+    public static FaceShade ShadeMode = FaceShade.Entity;
+
+    /// <summary>面按高程着色(地形色带), 否则按实体颜色。等价于 <see cref="ShadeMode"/> 的高程档。</summary>
+    public static bool ColorByElevation
+    {
+        get => ShadeMode == FaceShade.Elevation;
+        set
+        {
+            if (value) ShadeMode = FaceShade.Elevation;
+            else if (ShadeMode == FaceShade.Elevation) ShadeMode = FaceShade.Entity;
+        }
+    }
     /// <summary>平行光方向(世界系, 单位化)；两面受光。</summary>
     private static readonly (double x, double y, double z) Light = Normalize((0.35, 0.25, 0.9));
     private static (double x, double y, double z) Normalize((double x, double y, double z) v)
@@ -161,13 +186,13 @@ public sealed class MeshEntity : SceneEntity
 
     // 镶嵌缓存：大网(数万三角)每次 RefreshScene 都重算边线/着色面太慢；按 (模式, 高程着色, 颜色, 标高) 键缓存, 几何改动 Invalidate() 清。
     private float[]? _edgeCache, _faceCache;
-    private (DisplayMode mode, bool byElev, float r, float g, float b, double elev) _edgeKey, _faceKey;
+    private (DisplayMode mode, FaceShade shade, float r, float g, float b, double elev) _edgeKey, _faceKey;
 
     public override void Tessellate(List<float> o)
     {
         var mode = EffectiveMode;
         if (mode == DisplayMode.Shaded) return;   // 纯着色面模式不画边线
-        var key = (mode, ColorByElevation, Cr, Cg, Cb, Elevation);
+        var key = (mode, ShadeMode, Cr, Cg, Cb, Elevation);
         if (_edgeCache == null || _edgeKey != key)
         {
             var tmp = new List<float>(Edges.Count * 12);
@@ -182,7 +207,7 @@ public sealed class MeshEntity : SceneEntity
     public override void TessellateFaces(List<float> o)
     {
         if (EffectiveMode == DisplayMode.Wireframe) return;
-        var key = (EffectiveMode, ColorByElevation, Cr, Cg, Cb, Elevation);
+        var key = (EffectiveMode, ShadeMode, Cr, Cg, Cb, Elevation);
         if (_faceCache != null && _faceKey == key) { o.AddRange(_faceCache); return; }
         // 逐顶点色不进 key（改色一律走 Invalidate 重建），只在这里选取色源
         var tmp = new List<float>(Tris.Count * 18);
@@ -203,16 +228,59 @@ public sealed class MeshEntity : SceneEntity
             var n = Normalize((uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx));
             double lambert = Math.Abs(n.x * Light.x + n.y * Light.y + n.z * Light.z);
             float k = (float)(0.42 + 0.58 * lambert);
+            // 坡度/坡向是**面**属性(由三角面法向来), 三个顶点同色; 高程/逐顶点色才逐顶点取。
+            (float r, float g, float b)? faceColor = null;
+            if (ShadeMode == FaceShade.Slope)
+            {
+                double slopeDeg = Math.Acos(Math.Clamp(Math.Abs(n.z), 0, 1)) * 180.0 / Math.PI;
+                faceColor = SlopeRamp(slopeDeg);
+            }
+            else if (ShadeMode == FaceShade.Aspect)
+            {
+                double az = Math.Atan2(n.x, -n.y) * 180.0 / Math.PI; az %= 360.0; if (az < 0) az += 360.0;
+                faceColor = AspectRamp(az);
+            }
             void V((double x, double y, double z) w, int vi)
             {
                 float cr = Cr, cg = Cg, cb = Cb;
                 if (perVert) (cr, cg, cb) = VertColors![vi];
-                if (ColorByElevation) { var t = zr > 1e-9 ? (w.z - b.minZ) / zr : 0.5; (cr, cg, cb) = TerrainRamp(t); }
+                if (ShadeMode == FaceShade.Elevation) { var t = zr > 1e-9 ? (w.z - b.minZ) / zr : 0.5; (cr, cg, cb) = TerrainRamp(t); }
+                else if (faceColor is { } fc) (cr, cg, cb) = fc;
                 o.Add((float)w.x); o.Add((float)w.y); o.Add((float)(w.z + Elevation));
                 o.Add(Math.Min(1f, cr * k)); o.Add(Math.Min(1f, cg * k)); o.Add(Math.Min(1f, cb * k));
             }
             V(p, a); V(q, bb); V(r, c);
         }
+    }
+
+    /// <summary>坡度色带(忠实原版 Slope 着色)：蓝(平) → 绿 → 黄 → 红(陡)，0~70° 拉满。</summary>
+    public static (float r, float g, float b) SlopeRamp(double slopeDeg)
+    {
+        double t = Math.Clamp(slopeDeg / 70.0, 0, 1);
+        (float, float, float)[] stops = { (0.20f, 0.45f, 0.85f), (0.20f, 0.75f, 0.30f), (0.95f, 0.90f, 0.25f), (0.90f, 0.15f, 0.10f) };
+        double s = t * (stops.Length - 1); int i = Math.Min(stops.Length - 2, (int)Math.Floor(s)); float f = (float)(s - i);
+        var (r0, g0, b0) = stops[i]; var (r1, g1, b1) = stops[i + 1];
+        return (r0 + (r1 - r0) * f, g0 + (g1 - g0) * f, b0 + (b1 - b0) * f);
+    }
+
+    /// <summary>坡向色带(忠实原版 Aspect 着色的 HSV 色环)：北红、东黄绿、南绿、西蓝紫。</summary>
+    public static (float r, float g, float b) AspectRamp(double azDeg)
+    {
+        double h = ((azDeg % 360) + 360) % 360;
+        return HsvToRgb(h, 0.75, 0.95);
+    }
+
+    private static (float r, float g, float b) HsvToRgb(double h, double s, double v)
+    {
+        double c = v * s, x = c * (1 - Math.Abs((h / 60.0) % 2 - 1)), m = v - c;
+        double r = 0, g = 0, b = 0;
+        if (h < 60) { r = c; g = x; }
+        else if (h < 120) { r = x; g = c; }
+        else if (h < 180) { g = c; b = x; }
+        else if (h < 240) { g = x; b = c; }
+        else if (h < 300) { r = x; b = c; }
+        else { r = c; b = x; }
+        return ((float)(r + m), (float)(g + m), (float)(b + m));
     }
 
     /// <summary>地形色带：低=绿 → 黄 → 棕 → 高=白。</summary>

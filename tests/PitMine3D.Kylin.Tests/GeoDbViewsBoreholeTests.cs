@@ -17,7 +17,7 @@ public class GeoDbViewsBoreholeTests
     [Fact]
     public void LoadBoreholes_seed_has_hundreds_sorted_by_hole_id()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var rows = GeoDbViews.LoadBoreholes(db.Connection);
         Assert.True(rows.Count > 100, $"种子钻孔应有上百个, 实得 {rows.Count}");
         Assert.All(rows, r => Assert.False(string.IsNullOrEmpty(r.HoleId)));
@@ -31,7 +31,7 @@ public class GeoDbViewsBoreholeTests
     [Fact]
     public void Insert_update_delete_borehole_round_trip()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var c = db.Connection;
         Assert.Null(GeoDbViews.GetBoreholeByHoleId(c, "T-NEW-1"));
         var b = new GeoDbViews.BoreholeRow { HoleId = "T-NEW-1", X = 100, Y = 200, ZCollar = 1200.5, DepthTotal = 88, Category = "生产" };
@@ -94,7 +94,7 @@ public class GeoDbViewsBoreholeTests
     [Fact]
     public void Preview_import_flags_invalid_duplicate_new_and_existing()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var existing = GeoDbViews.LoadBoreholes(db.Connection)[0].HoleId;
         var text = "孔号,经距X,纬距Y,孔口高程\n" +
                    ",1,2,3\n" +           // 缺孔号
@@ -122,7 +122,7 @@ public class GeoDbViewsBoreholeTests
     [Fact]
     public void Apply_import_inserts_updates_and_respects_overwrite_switch()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var c = db.Connection;
         var existing = GeoDbViews.LoadBoreholes(c)[0];
         string text = $"孔号,经距X,纬距Y,孔口高程,类别\nNEW-A,10,20,30,补勘\n{existing.HoleId},{existing.X},{existing.Y},999.5,改类别\n";
@@ -143,7 +143,7 @@ public class GeoDbViewsBoreholeTests
     [Fact]
     public void Direct_import_skips_invalid_and_reports_header_problem()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var c = db.Connection;
         int before = GeoDbViews.LoadBoreholes(c).Count;
         var recs = GeoDbViews.BoreholeReadCsvRecords("孔号,经距X,纬距Y\nD1,1,2\nD1,3,4\n,5,6\nD2,x,7\nD3,8,9\n");
@@ -160,7 +160,7 @@ public class GeoDbViewsBoreholeTests
     [Fact]
     public void Export_csv_has_12_columns_and_one_line_per_hole()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var rows = GeoDbViews.LoadBoreholes(db.Connection);
         var csv = GeoDbViews.BoreholeExportCsv(rows);
         var lines = csv.Split('\n', StringSplitOptions.RemoveEmptyEntries);
@@ -174,7 +174,7 @@ public class GeoDbViewsBoreholeTests
     [Fact]
     public void Seam_results_and_seam_defs_from_seed()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var c = db.Connection;
         var normal = GeoDbViews.LoadSeamResultsByStatus(c, "正常");
         Assert.True(normal.Count > 300, $"种子 '正常' 见煤成果应有数百条, 实得 {normal.Count}");
@@ -199,7 +199,7 @@ public class GeoDbViewsBoreholeTests
     [Fact]
     public void Borehole_columns_from_seed_produce_columns_and_labels()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var holes = GeoDbViews.LoadBoreholes(db.Connection);
         // 展绘钻孔的数据来自随包 SQLite 种子库(迁移 V013, 真实平朔地质数据), 不是造的:
         Assert.Equal(241, holes.Count);                                        // borehole 表 241 孔
@@ -297,7 +297,7 @@ public class GeoDbViewsBoreholeTests
     [Fact]
     public void Original_segments_on_seed_hole_have_coal()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var defs = GeoDbViews.LoadSeamDefs(db.Connection);
         var hole = GeoDbViews.LoadBoreholes(db.Connection).First(h => h.ZCollar != null && h.DepthTotal > 0
             && GeoDbViews.LoadSeamResultsByBorehole(db.Connection, h.Id).Any(s => s.Status == "正常"));
@@ -312,7 +312,7 @@ public class GeoDbViewsBoreholeTests
     [Fact]
     public void Horizon_points_available_seams_ordered_and_layers_built()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var c = db.Connection;
         var seams = GeoDbViews.HorizonAvailableSeams(c);
         Assert.NotEmpty(seams);
@@ -363,7 +363,7 @@ public class GeoDbViewsBoreholeTests
     [Fact]
     public void Vd_surfaces_upsert_meta_and_clear()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var c = db.Connection;
         Assert.False(GeoDbViews.VdHasAnySurface(c));
         var verts = new double[] { 0, 0, 100, 10, 0, 100, 0, 10, 100, 10, 10, 100 };
@@ -399,7 +399,7 @@ public class GeoDbViewsBoreholeTests
     [Fact]
     public void Vd_drill_intersects_surface_and_seams()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var c = db.Connection;
         var (sv, st) = Plane(100);
         GeoDbViews.VdSaveSurface(c, "surface", "", 0, "", "", sv, st);

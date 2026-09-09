@@ -1,3 +1,4 @@
+using PitMine3D.Kylin.Tests;
 using System.Collections.Generic;
 using PitMine3D.Kylin.Data;
 using Xunit;
@@ -27,7 +28,7 @@ public class ImportSchemaConsistencyTests
     [Fact]
     public void All_imports_write_into_real_migrated_schema()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var c = db.Connection;
         // 本测只验"INSERT 列名与迁移一致"(列不符→no such column→Errors); FK 完整性是正交关注(生产层管),
         // 故关 FK 强制以隔离列检查(否则合规列的 INSERT 会因 FK 父行缺失误报)。

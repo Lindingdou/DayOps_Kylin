@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Runtime.InteropServices;
 using Avalonia.OpenGL;
 
@@ -17,12 +17,16 @@ internal sealed class GlExtras
     public delegate void GlDeleteVertexArrays(int n, int[] arrays);
     public delegate void GlUniformMatrix4fv(int location, int count, int transpose, float[] value);
     public delegate void GlPolygonOffset(float factor, float units);
+    public delegate void GlUniform1f(int location, float v0);
+    public delegate void GlDepthFunc(int func);
 
     private readonly GlGenVertexArrays? _gen;
     private readonly GlBindVertexArray? _bind;
     private readonly GlDeleteVertexArrays? _del;
     private readonly GlUniformMatrix4fv _uniformMatrix4fv;
     private readonly GlPolygonOffset? _polygonOffset;
+    private readonly GlUniform1f? _uniform1f;
+    private readonly GlDepthFunc? _depthFunc;
 
     public GlExtras(GlInterface gl)
     {
@@ -32,15 +36,25 @@ internal sealed class GlExtras
         _uniformMatrix4fv = Load<GlUniformMatrix4fv>(gl, "glUniformMatrix4fv")
                             ?? throw new InvalidOperationException("glUniformMatrix4fv 不可用");
         _polygonOffset = Load<GlPolygonOffset>(gl, "glPolygonOffset");
+        _uniform1f = Load<GlUniform1f>(gl, "glUniform1f");
+        _depthFunc = Load<GlDepthFunc>(gl, "glDepthFunc");
     }
 
     /// <summary>各扩展入口点是否解析到(原生崩溃排查用: 空指针被调用就是段错误)。</summary>
     public string Resolved =>
         $"VAO={( _gen != null && _bind != null && _del != null ? "有" : "无")}" +
-        $" glPolygonOffset={(_polygonOffset != null ? "有" : "无")}";
+        $" glPolygonOffset={(_polygonOffset != null ? "有" : "无")}" +
+        $" glUniform1f={(_uniform1f != null ? "有" : "无")}" +
+        $" glDepthFunc={(_depthFunc != null ? "有" : "无")}";
 
     /// <summary>多边形深度偏移(着色面后退, 让边线/高亮浮在面上)；GL/GLES 均有。</summary>
     public void PolygonOffset(float factor, float units) => _polygonOffset?.Invoke(factor, units);
+
+    /// <summary>标量 uniform(点云的屏幕点径 uPointSize)；老驱动解析不到时为空操作(点径退回 1 像素)。</summary>
+    public void Uniform1f(int loc, float v) { if (loc >= 0) _uniform1f?.Invoke(loc, v); }
+
+    /// <summary>深度比较函数(点云那一趟改 LEQUAL, 同深度时后画的赢)；GL/GLES 均有。</summary>
+    public void DepthFunc(int func) => _depthFunc?.Invoke(func);
 
     private static T? Load<T>(GlInterface gl, params string[] names) where T : Delegate
     {

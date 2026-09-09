@@ -1,39 +1,8 @@
+using System.Collections.Generic;
 using System;
 using System.Data.Common;
-using Microsoft.Data.Sqlite;
 
 namespace PitMine3D.Kylin.Data;
-
-/// <summary>
-/// 嵌入式 SQLite —— 移植前的原行为, 保持逐字不变(默认方言)。
-/// 库文件随程序走, 无需外部服务, 单测直接开内存库。
-/// </summary>
-public sealed class SqliteDialect : GeoDbDialect
-{
-    public override string Name => "sqlite";
-    public override char ParamPrefix => '@';
-    public override string MigrationMarker => ".Data.Migrations.";
-
-    public override DbConnection CreateConnection(string? path)
-        => new SqliteConnection(string.IsNullOrEmpty(path) ? "Data Source=:memory:" : $"Data Source={path}");
-
-    public override void EnsureSchemaMigrationTable(DbConnection conn)
-        => Exec(conn, @"CREATE TABLE IF NOT EXISTS _schema_migration (
-            version TEXT NOT NULL PRIMARY KEY,
-            applied_at TEXT NOT NULL DEFAULT (datetime('now'))
-        );");
-
-    // 迁移期关外键(种子跨表插入顺序会临时违约; 原 SqlLib.MigrationRunner 同此)。PRAGMA 须在事务外设。
-    public override void BeforeMigrations(DbConnection conn) => Exec(conn, "PRAGMA foreign_keys=OFF;");
-    public override void AfterMigrations(DbConnection conn) => Exec(conn, "PRAGMA foreign_keys=ON;");
-
-    private static void Exec(DbConnection conn, string sql)
-    {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = sql;
-        cmd.ExecuteNonQuery();
-    }
-}
 
 /// <summary>
 /// openGauss（华为系, PostgreSQL 内核衍生）—— 局域网内一个共享库 + 多客户端的目标形态。
@@ -64,11 +33,30 @@ public sealed class OpenGaussDialect : GeoDbDialect
     public override DbConnection CreateConnection(string? path)
     {
         // path 对 openGauss 无意义(不是文件库)。连接串必须由环境给, 不硬编码任何凭据。
+        // 环境变量优先(部署脚本用); 否则用界面/站点配置里存的那份。
         string? cs = Environment.GetEnvironmentVariable("PITMINE_DB_CONN");
         if (string.IsNullOrWhiteSpace(cs))
+        {
+            var s = DbConnectionSettings.LoadEffective();
+            if (s.IsRemote) cs = s.BuildConnectionString();
+        }
+        if (string.IsNullOrWhiteSpace(cs))
             throw new InvalidOperationException(
-                "PITMINE_DB=opengauss 但没给 PITMINE_DB_CONN。" +
-                "例: Host=192.168.1.10;Port=5432;Database=pitmine;Username=pitmine;Password=***");
+                "选了 openGauss 但没有可用的连接信息。" +
+                "请在「数据库连接」里填写主机/库名/账号, 或设置 PITMINE_DB_CONN。");
+
+        // Npgsql 把连接还给连接池时会发 DISCARD ALL 重置会话状态, 而 openGauss 不认:
+        //   0A000: DISCARD statement is not yet supported
+        // 于是每次复用连接都炸。关掉这个重置即可 —— 实测(openGauss 6.0.0-lite)必须加,
+        // 所以在这里兜底补上, 不指望部署方记得往连接串里写。
+        if (cs.IndexOf("No Reset On Close", StringComparison.OrdinalIgnoreCase) < 0)
+            cs = cs.TrimEnd(';') + ";No Reset On Close=true";
+
+        // Npgsql 默认连接超时 15 秒。服务器没开或地址填错时, 界面要僵这么久 ——
+        // 用户会以为程序死了。8 秒足够局域网握手, 失败也能早点把话说清楚。
+        if (cs.IndexOf("Timeout", StringComparison.OrdinalIgnoreCase) < 0)
+            cs = cs.TrimEnd(';') + ";Timeout=8";
+
         return new Npgsql.NpgsqlConnection(cs);
     }
 
@@ -90,6 +78,49 @@ public sealed class OpenGaussDialect : GeoDbDialect
     /// </summary>
     public override void BeforeMigrations(DbConnection conn) => TrySet(conn, "replica");
     public override void AfterMigrations(DbConnection conn) => TrySet(conn, "origin");
+
+    public override List<string> ListTables(DbConnection conn)
+    {
+        var list = new List<string>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT table_name FROM information_schema.tables " +
+            "WHERE table_schema='public' AND table_type='BASE TABLE' ORDER BY table_name";
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read()) list.Add(rd.GetString(0));
+        return list;
+    }
+
+    public override List<(string Name, string Type, bool NotNull, bool Pk)> TableColumns(DbConnection conn, string table)
+    {
+        var list = new List<(string, string, bool, bool)>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT c.column_name,
+                   c.data_type,
+                   CASE WHEN c.is_nullable = 'NO' THEN 1 ELSE 0 END AS notnull,
+                   CASE WHEN pk.column_name IS NOT NULL THEN 1 ELSE 0 END AS ispk
+            FROM information_schema.columns c
+            LEFT JOIN (
+                SELECT kcu.column_name
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                     ON kcu.constraint_name = tc.constraint_name
+                    AND kcu.table_schema   = tc.table_schema
+                WHERE tc.table_schema = 'public'
+                  AND tc.table_name   = @t
+                  AND tc.constraint_type = 'PRIMARY KEY'
+            ) pk ON pk.column_name = c.column_name
+            WHERE c.table_schema = 'public' AND c.table_name = @t
+            ORDER BY c.ordinal_position";
+        cmd.AddWithValue("t", table);
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+            list.Add((rd.GetString(0), rd.GetString(1),
+                      Convert.ToInt64(rd.GetValue(2)) != 0,
+                      Convert.ToInt64(rd.GetValue(3)) != 0));
+        return list;
+    }
 
     private static void TrySet(DbConnection conn, string role)
     {

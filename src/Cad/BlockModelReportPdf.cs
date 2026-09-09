@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
@@ -51,7 +51,7 @@ public static class BlockModelReportPdf
             page.Content().Element(c => BuildBody(c, r));
             page.Footer().AlignRight().Text(t =>
             {
-                t.Span("PitMine3D 块体模型 · ").FontSize(8).FontColor(Colors.Grey.Medium);
+                t.Span("DayOps 块体模型 · ").FontSize(8).FontColor(Colors.Grey.Medium);
                 t.Span("第 ").FontSize(8).FontColor(Colors.Grey.Medium);
                 t.CurrentPageNumber().FontSize(8).FontColor(Colors.Grey.Medium);
                 t.Span(" / ").FontSize(8).FontColor(Colors.Grey.Medium);

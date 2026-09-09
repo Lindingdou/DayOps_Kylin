@@ -10,14 +10,14 @@
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS process_template (
-    template_id          SERIAL PRIMARY KEY,
+    template_id          BIGSERIAL PRIMARY KEY,
     code                 TEXT NOT NULL UNIQUE,           -- 'rh_standard_v1.2'
     name                 TEXT NOT NULL,                  -- 显示名 '硬岩区标准 v1.2'
     description          TEXT,
     applicable_material  TEXT,                            -- 'rh' / 'c4' / 'c9' / 'coal' / NULL=通用
     applicable_hardness  TEXT,                            -- 'hard' / 'medium' / 'soft' / NULL
     version              TEXT NOT NULL DEFAULT 'v1.0',
-    is_current           INTEGER NOT NULL DEFAULT 1,      -- 是否为现行版本
+    is_current           BIGINT NOT NULL DEFAULT 1,      -- 是否为现行版本
     status               TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','archived','draft')),
     created_by           TEXT,
     created_at           TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -42,9 +42,9 @@ FOR EACH ROW
 EXECUTE PROCEDURE fn_touch_updated_at();
 
 CREATE TABLE IF NOT EXISTS template_param_value (
-    id                    SERIAL PRIMARY KEY,
-    template_id           INTEGER NOT NULL,
-    param_id              INTEGER NOT NULL,
+    id                    BIGSERIAL PRIMARY KEY,
+    template_id           BIGINT NOT NULL,
+    param_id              BIGINT NOT NULL,
     recommended_value     DOUBLE PRECISION,                            -- 本模板推荐值
     min_value             DOUBLE PRECISION,                            -- 本模板下限(可覆盖参数定义的 standard_min)
     max_value             DOUBLE PRECISION,                            -- 本模板上限

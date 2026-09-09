@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using Avalonia;
@@ -65,6 +65,15 @@ public partial class CadGlViewport : OpenGlControlBase
     private bool _facesDirty;
     private double _sceneZc;          // 场景几何高程中心(供 ZE/FitBounds 把注视点放到模型高度)
 
+    // 点云(GL_POINTS): 一份场景可有多份点云, 合成一条通道整体上传
+    private GlRenderer.Mesh _cloud;
+    private bool _hasCloud;
+    private float[]? _pendingCloud;
+    private bool _cloudDirty;
+    private float _cloudPx = 2f;      // 点径(像素)
+    private double[]? _cloudBounds;   // 点云 XY 包围盒(点云不进线段通道, ZE 得单独并进来)
+    private const int GL_POINTS = 0x0000;   // Avalonia 的 GlConsts 没导出它
+
     // 选中高亮的着色面(选中三角网表面盖高亮色, GL_TRIANGLES)
     private GlRenderer.Mesh _highlightFaces;
     private bool _hasHighlightFaces;
@@ -90,6 +99,14 @@ public partial class CadGlViewport : OpenGlControlBase
     private bool _hasHighlight;
     private float[]? _pendingHighlight;
     private bool _highlightDirty;
+
+    // 进行中的绘制/编辑预览（橡皮筋、拖拽跟随、滑动采样）——鼠标每动一次就换一遍。
+    // 与静态场景分通道: 混在场景缓冲里的话, 每动一次鼠标就要把整篇场景重算包围盒并整体重传 GPU,
+    // 图元一多光标就拖不动。预览就那么几条线, 复用同一 VBO 重灌即可。
+    private GlRenderer.Mesh _preview;
+    private bool _hasPreview;
+    private float[]? _pendingPreview;
+    private bool _previewDirty;
 
     // 对象捕捉标记（光标吸附点的十字）
     private GlRenderer.Mesh _snap;
@@ -184,8 +201,10 @@ public partial class CadGlViewport : OpenGlControlBase
         if (_pendingScene != null) _sceneDirty = true;
         if (_pendingHighlight != null) _highlightDirty = true;
         if (_pendingFaces != null) _facesDirty = true;
+        if (_pendingCloud != null) _cloudDirty = true;
         if (_pendingHighlightFaces != null) _highlightFacesDirty = true;
         if (_pendingSnap != null) _snapDirty = true;
+        if (_pendingPreview != null) _previewDirty = true;
     }
 
     protected override void OnOpenGlDeinit(GlInterface gl)
@@ -198,8 +217,10 @@ public partial class CadGlViewport : OpenGlControlBase
         if (_hasImported) _renderer.DeleteMesh(_imported);
         if (_hasHighlight) _renderer.DeleteMesh(_highlight);
         if (_hasSnap) _renderer.DeleteMesh(_snap);
+        if (_hasPreview) _renderer.DeleteMesh(_preview);
         if (_hasScene) _renderer.DeleteMesh(_scene);
         if (_hasFaces) _renderer.DeleteMesh(_faces);
+        if (_hasCloud) _renderer.DeleteMesh(_cloud);
         if (_hasHighlightFaces) _renderer.DeleteMesh(_highlightFaces);
         if (_hasBillboards) _renderer.DeleteMesh(_billboards);
         if (_hasBillboardFills) _renderer.DeleteMesh(_billboardFills);
@@ -207,10 +228,11 @@ public partial class CadGlViewport : OpenGlControlBase
         _renderer.Deinit();
         // 上下文销毁——句柄失效, 复位标志; 否则重建后旧 id 可能撞上新网格(grid/cube/gizmo)致误删/花屏。
         // 保留的托管源(_pendingImport/_pendingScene/…)不动, OnOpenGlInit 会据此重新入队重传。
-        _hasImported = _hasScene = _hasHighlight = _hasSnap = _hasFaces = _hasHighlightFaces = false;
+        _hasImported = _hasScene = _hasHighlight = _hasSnap = _hasFaces = _hasHighlightFaces = _hasPreview = _hasCloud = false;
         _hasGrid = false; _hasGridPlan = false;
         _hasBillboards = false; _hasBillboardFills = false; _bbYaw = double.NaN;
         if (_pendingFaces != null) _facesDirty = true;
+        if (_pendingCloud != null) _cloudDirty = true;
         if (_pendingHighlightFaces != null) _highlightFacesDirty = true;
         _hasCursor = false; _curBuiltSx = double.NaN;   // 十字光标下次移动即按当前上下文重建
     }
@@ -267,12 +289,28 @@ public partial class CadGlViewport : OpenGlControlBase
             _hasSnap = !_snap.IsEmpty;
         }
 
+        if (_previewDirty)
+        {
+            // 同捕捉标记: 鼠标一动就换一次, 复用同一 VBO 重灌, 不删缓冲不重建
+            _previewDirty = false;
+            _renderer.UpdateMesh(ref _preview, Localize(_pendingPreview!));
+            _hasPreview = !_preview.IsEmpty;
+        }
+
         if (_facesDirty)
         {
             _facesDirty = false;
             if (_hasFaces) _renderer.DeleteMesh(_faces);
             _faces = _renderer.Upload(Localize(_pendingFaces!));
             _hasFaces = !_faces.IsEmpty;
+        }
+
+        if (_cloudDirty)
+        {
+            _cloudDirty = false;
+            if (_hasCloud) _renderer.DeleteMesh(_cloud);
+            _cloud = _renderer.Upload(Localize(_pendingCloud!));
+            _hasCloud = !_cloud.IsEmpty;
         }
 
         if (_highlightFacesDirty)
@@ -384,8 +422,16 @@ public partial class CadGlViewport : OpenGlControlBase
     {
         _renderer.BeginPass(depthTest: true);
         if (_hasFaces) { _renderer.SetPolygonOffset(true); _renderer.Draw(_faces, GL_TRIANGLES, vp); _renderer.SetPolygonOffset(false); }   // 着色面先画, 深度偏移让边线浮在面上
+        if (_hasCloud)
+        {
+            _renderer.SetPointSize(_cloudPx);
+            _renderer.SetDepthLessEqual(true);    // 同深度后画的赢: 算子产物(与源点重合)浮在源点云之上
+            _renderer.Draw(_cloud, GL_POINTS, vp);
+            _renderer.SetDepthLessEqual(false);
+        }
         if (_hasImported) _renderer.Draw(_imported, GL_LINES, vp);
         if (_hasScene) _renderer.Draw(_scene, GL_LINES, vp);
+        if (_hasPreview) _renderer.Draw(_preview, GL_LINES, vp);   // 进行中的橡皮筋/拖拽预览, 紧跟场景之后(与合缓冲时同序)
         // 注记始终朝屏幕: 实心字形先画三角(忠实原版 fillTris), 缺字回退的简笔画再画线
         if (_hasBillboardFills) _renderer.Draw(_billboardFills, GL_TRIANGLES, vp);
         if (_hasBillboards) _renderer.Draw(_billboards, GL_LINES, vp);
@@ -565,7 +611,7 @@ public partial class CadGlViewport : OpenGlControlBase
     public void ZoomExtents()
     {
         // 框住 导入几何 ∪ 手绘场景几何；无任何几何才不动。(LocalizeBounds 按当前原点态一致换算)
-        var b = UnionBounds(_lastBounds, _sceneBounds);
+        var b = UnionBounds(UnionBounds(_lastBounds, _sceneBounds), _cloudBounds);
         if (b == null) return;
         var lb = LocalizeBounds(b)!; _camera.FitBounds(lb[0], lb[1], lb[2], lb[3], _sceneZc);
         RequestNextFrameRendering();
@@ -602,6 +648,17 @@ public partial class CadGlViewport : OpenGlControlBase
         var dst = (float[])src.Clone();
         for (int i = 0; i + 5 < dst.Length; i += 6) { dst[i + 3] = r; dst[i + 4] = g; dst[i + 5] = b; }
         return dst;
+    }
+
+    /// <summary>
+    /// 设置进行中的绘制/编辑预览几何（P3_C3，已含颜色）；null/空 → 清除。
+    /// 独立于场景几何: 预览随光标每帧变，场景不重传；ZE 的包围盒也因此只按落地的图元算(橡皮筋不再撑大范围)。
+    /// </summary>
+    public void SetPreviewGeometry(float[]? verts)
+    {
+        _pendingPreview = (verts == null || verts.Length == 0) ? Array.Empty<float>() : verts;
+        _previewDirty = true;
+        RequestNextFrameRendering();
     }
 
     /// <summary>设置对象捕捉标记几何（P3_C3，已含颜色）；null/空 → 清除。</summary>
@@ -926,6 +983,23 @@ public partial class CadGlViewport
     {
         _pendingFaces = tris ?? Array.Empty<float>();
         _facesDirty = true;
+        RequestNextFrameRendering();
+    }
+
+    /// <summary>
+    /// 设置点云顶点(交错 P3_C3, GL_POINTS)与点径(像素)。空数组 = 场景无点云。
+    /// 点云单独一条通道: 它既不是线也不是面, 且一份点云的顶点数常是其余图元的百倍,
+    /// 混进线段缓冲会让每次重画都重传整份点云。
+    /// </summary>
+    public void SetSceneCloud(float[] verts, float pointPixels = 2f)
+    {
+        _pendingCloud = verts ?? Array.Empty<float>();
+        _cloudBounds = ComputeXYBounds(_pendingCloud);
+        // 场景里只有点云时, 注视点高程得取点云的 —— 否则相机盯着 z=0, 而矿区点云在 +1200m,
+        // 三维视图下"加载完什么都看不见"。有其它几何时以它们为准(RefreshScene 先设线段几何再设点云)。
+        if (_pendingScene == null || _pendingScene.Length == 0) _sceneZc = ComputeZCenter(_pendingCloud);
+        _cloudPx = pointPixels > 0 ? pointPixels : 2f;
+        _cloudDirty = true;
         RequestNextFrameRendering();
     }
 

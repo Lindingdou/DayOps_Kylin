@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace PitMine3D.Kylin.Cad.Draw;
@@ -12,6 +12,7 @@ public static class SelectionBox
     public static bool Match(SceneEntity e, double minX, double minY, double maxX, double maxY, bool crossing)
     {
         if (e is MeshEntity me) return MatchMesh(me, minX, minY, maxX, maxY, crossing);
+        if (e is PointCloudEntity pc) return MatchCloud(pc, minX, minY, maxX, maxY, crossing);
         var o = new List<float>();
         e.Tessellate(o);
         if (o.Count == 0) return false;
@@ -56,11 +57,40 @@ public static class SelectionBox
         return me.ContainsXY(cx, cy);
     }
 
+    /// <summary>
+    /// 点云框选：窗口选=包围盒全在框内；交叉选=包围盒相交 且 有(抽样)点落框内。
+    /// 点云没有边线，只能按点判 —— 百万点全量扫描会把一次框选拖成几秒，故按 PickStride 抽样。
+    /// </summary>
+    public static bool MatchCloud(PointCloudEntity pc, double minX, double minY, double maxX, double maxY, bool crossing)
+    {
+        if (pc.PointCount == 0) return false;
+        var b = pc.Bounds;
+        bool boxInside = b.minX >= minX && b.maxX <= maxX && b.minY >= minY && b.maxY <= maxY;
+        if (!crossing) return boxInside;
+        if (boxInside) return true;
+        if (b.maxX < minX || b.minX > maxX || b.maxY < minY || b.minY > maxY) return false;
+        int step = PointCloudEntity.PickStride(pc.PointCount);
+        for (int i = 0; i < pc.PointCount; i += step)
+            if (In(pc.Pts[i].x, pc.Pts[i].y, minX, minY, maxX, maxY)) return true;
+        return false;
+    }
+
     /// <summary>实体是否被多边形圈选。crossing=false 全含(所有顶点在多边形内)；true 任一顶点在内。</summary>
     public static bool MatchPolygon(SceneEntity e, IReadOnlyList<(double x, double y)> poly, bool crossing)
     {
         if (poly.Count < 3) return false;
         var o = new List<float>();
+        if (e is PointCloudEntity pcp)
+        {
+            if (pcp.PointCount == 0) return false;
+            int st = PointCloudEntity.PickStride(pcp.PointCount);
+            bool anyIn = false, allIn = true;
+            for (int i = 0; i < pcp.PointCount; i += st)
+            {
+                if (LineMath.PointInPolygon(pcp.Pts[i].x, pcp.Pts[i].y, poly)) anyIn = true; else allIn = false;
+            }
+            return crossing ? anyIn : allIn;
+        }
         if (e is MeshEntity mm) mm.TessellateEdges(o); else e.Tessellate(o);
         if (o.Count == 0) return false;
         bool all = true, any = false;
@@ -80,6 +110,23 @@ public static class SelectionBox
         Func<double, double, double, (double sx, double sy)?> project)
     {
         var o = new List<float>();
+        if (e is PointCloudEntity pcs)
+        {
+            if (pcs.PointCount == 0) return false;
+            double mnX = Math.Min(sx0, sx1), mxX = Math.Max(sx0, sx1), mnY = Math.Min(sy0, sy1), mxY = Math.Max(sy0, sy1);
+            int st = PointCloudEntity.PickStride(pcs.PointCount);
+            bool anyIn = false, allIn = true;
+            for (int i = 0; i < pcs.PointCount; i += st)
+            {
+                var pp = pcs.Pts[i];
+                var sp = project(pp.x, pp.y, pp.z + pcs.Elevation);
+                if (sp == null) { allIn = false; continue; }
+                if (In(sp.Value.sx, sp.Value.sy, mnX, mnY, mxX, mxY)) anyIn = true; else allIn = false;
+                if (crossing && anyIn) return true;
+                if (!crossing && !allIn) return false;
+            }
+            return crossing ? anyIn : allIn;
+        }
         if (e is MeshEntity me) me.TessellateEdges(o); else e.Tessellate(o);
         if (o.Count == 0) return false;
         double minX = Math.Min(sx0, sx1), maxX = Math.Max(sx0, sx1), minY = Math.Min(sy0, sy1), maxY = Math.Max(sy0, sy1);
@@ -152,6 +199,20 @@ public static class SelectionBox
                     if (depth < bestDepth) { bestDepth = depth; bestFace = me; }
                 }
                 if (MeshEntity.RenderMode != MeshEntity.DisplayMode.Shaded) me.TessellateEdges(o);   // 有线框显示时边线也可点中
+            }
+            else if (e is PointCloudEntity pc)
+            {
+                // 点云: 按"最近的(抽样)点在容差内"命中, 取屏幕距离最小者(点云没有边线可测)
+                int st = PointCloudEntity.PickStride(pc.PointCount);
+                for (int i = 0; i < pc.PointCount; i += st)
+                {
+                    var pp = pc.Pts[i];
+                    var sp = project(pp.x, pp.y, pp.z + pc.Elevation);
+                    if (sp == null) continue;
+                    double dd2 = Math.Sqrt((sx - sp.Value.sx) * (sx - sp.Value.sx) + (sy - sp.Value.sy) * (sy - sp.Value.sy));
+                    if (dd2 <= bestD) { bestD = dd2; bestEdge = e; }
+                }
+                continue;
             }
             else e.Tessellate(o);
             for (int i = 0; i + 11 < o.Count; i += 12)

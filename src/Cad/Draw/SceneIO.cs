@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -36,6 +36,10 @@ public static class SceneIO
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public int Va { get; set; }         // 文字垂直对齐(0=基线)
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public double[]? V { get; set; }    // 三角网顶点 x,y,z 扁平
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public int[]? I { get; set; }       // 三角网三角索引 a,b,c 扁平
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public double? E { get; set; }    // 实体标高(null=0)
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public float[]? Pc { get; set; }    // 点云逐点色 r,g,b 扁平(null=全份基色)
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public float[]? Mc { get; set; }    // 三角网逐顶点色(着色结果; 原版「随工程持久化」)
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public float[]? Mr { get; set; }    // 三角网逐顶点真实色(建面时自点云带来)
     }
 
     private sealed class LayerDto
@@ -84,6 +88,7 @@ public static class SceneIO
                 TextEntity tx => new Dto { T = "text", N = new[] { tx.X, tx.Y, tx.Height, tx.Rotation }, S = tx.Text },
                 PolylineEntity pl => PolyDto(pl),
                 MeshEntity me => MeshDto(me),
+                PointCloudEntity pc => CloudDto(pc),
                 _ => null
             };
             if (d == null) continue;
@@ -93,6 +98,9 @@ public static class SceneIO
             d.W = e.LineWeight == -1 ? (short?)null : e.LineWeight;    // 线宽(ByLayer 省略)
             d.Tr = e.Transparency == -1 ? (short?)null : e.Transparency;   // 透明度(随层省略)
             d.H = !e.Visible;                                          // 隐藏
+            // 标高必须存：ZAt = Zs[i] + Elevation，只存 Zs 的话三维线一存一读就掉基准，
+            // 平面线(等高线/台阶线)更是整条塌回 0 —— 撤销/重做同走这条路，所以撤销也会把标高抹掉。
+            d.E = e.Elevation != 0 ? e.Elevation : (double?)null;      // 标高(0 省略)
             if (e is TextEntity txe)                                   // 文字格式
             {
                 if (txe.WidthFactor != 1) d.Wf = txe.WidthFactor;
@@ -119,6 +127,7 @@ public static class SceneIO
                 "text" when d.N.Length >= 3 => new TextEntity { X = d.N[0], Y = d.N[1], Height = d.N[2], Rotation = d.N.Length >= 4 ? d.N[3] : 0, Text = d.S ?? "" },
                 "poly" => BuildPoly(d),
                 "mesh" when d.V != null && d.I != null => BuildMesh(d),
+                "cloud" when d.V != null => BuildCloud(d),
                 _ => null
             };
             if (e == null) continue;
@@ -128,6 +137,8 @@ public static class SceneIO
             e.LineWeight = d.W ?? -1;                  // 线宽(缺=ByLayer)
             e.Transparency = d.Tr ?? -1;              // 透明度(缺=随层)
             e.Visible = !d.H;                          // 隐藏
+            // 只在字段存在时覆盖：老档案里三角网的标高存在 N[0]，BuildMesh 已经读过了，别用 0 顶掉
+            if (d.E.HasValue) e.Elevation = d.E.Value;  // 标高
             if (e is TextEntity txe)                   // 文字格式
             {
                 txe.WidthFactor = d.Wf ?? 1; txe.ObliqueAngle = d.Ob; txe.HAlign = d.Ha; txe.VAlign = d.Va;
@@ -209,7 +220,60 @@ public static class SceneIO
         for (int i = 0; i < me.Verts.Count; i++) { v[i * 3] = me.Verts[i].x; v[i * 3 + 1] = me.Verts[i].y; v[i * 3 + 2] = me.Verts[i].z; }
         var idx = new int[me.Tris.Count * 3];
         for (int i = 0; i < me.Tris.Count; i++) { idx[i * 3] = me.Tris[i].a; idx[i * 3 + 1] = me.Tris[i].b; idx[i * 3 + 2] = me.Tris[i].c; }
-        return new Dto { T = "mesh", V = v, I = idx, S = me.Name, N = new[] { me.Elevation } };
+        return new Dto
+        {
+            T = "mesh", V = v, I = idx, S = me.Name, N = new[] { me.Elevation },
+            Mc = FlatColors(me.VertColors, me.Verts.Count),
+            Mr = FlatColors(me.RgbColors, me.Verts.Count),
+        };
+    }
+
+    /// <summary>逐顶点色 → 扁平 r,g,b 数组；个数对不上或为空时返回 null（不存）。</summary>
+    private static float[]? FlatColors(List<(float r, float g, float b)>? cols, int n)
+    {
+        if (cols == null || cols.Count != n || n == 0) return null;
+        var a = new float[n * 3];
+        for (int i = 0; i < n; i++) { a[i * 3] = cols[i].r; a[i * 3 + 1] = cols[i].g; a[i * 3 + 2] = cols[i].b; }
+        return a;
+    }
+
+    /// <summary>扁平 r,g,b → 逐顶点色；长度不足返回 null。</summary>
+    private static List<(float r, float g, float b)>? UnflatColors(float[]? a, int n)
+    {
+        if (a == null || n == 0 || a.Length < n * 3) return null;
+        var l = new List<(float, float, float)>(n);
+        for (int i = 0; i < n; i++) l.Add((a[i * 3], a[i * 3 + 1], a[i * 3 + 2]));
+        return l;
+    }
+
+    // ── 点云 DTO(点 x,y,z 扁平存 V; 逐点色扁平存 Pc; 名称存 S) ────────────
+    // 法向缓存(Normals)不存档: 它是可再算的派生缓存(重开工程按需重估), 存下来会让工程文件翻倍。
+    private static Dto CloudDto(PointCloudEntity pc)
+    {
+        var v = new double[pc.Pts.Count * 3];
+        for (int i = 0; i < pc.Pts.Count; i++) { v[i * 3] = pc.Pts[i].x; v[i * 3 + 1] = pc.Pts[i].y; v[i * 3 + 2] = pc.Pts[i].z; }
+        float[]? cols = null;
+        if (pc.HasColors)
+        {
+            cols = new float[pc.Pts.Count * 3];
+            for (int i = 0; i < pc.Pts.Count; i++) { var c = pc.Colors![i]; cols[i * 3] = c.r; cols[i * 3 + 1] = c.g; cols[i * 3 + 2] = c.b; }
+        }
+        return new Dto { T = "cloud", V = v, Pc = cols, S = pc.Name, N = new[] { pc.Elevation, pc.PointPixels } };
+    }
+
+    private static PointCloudEntity BuildCloud(Dto d)
+    {
+        var pc = new PointCloudEntity { Name = string.IsNullOrEmpty(d.S) ? "点云" : d.S! };
+        var v = d.V!;
+        for (int i = 0; i + 2 < v.Length; i += 3) pc.Pts.Add((v[i], v[i + 1], v[i + 2]));
+        if (d.Pc != null && d.Pc.Length >= pc.Pts.Count * 3)
+        {
+            pc.Colors = new List<(float, float, float)>(pc.Pts.Count);
+            for (int i = 0; i < pc.Pts.Count; i++) pc.Colors.Add((d.Pc[i * 3], d.Pc[i * 3 + 1], d.Pc[i * 3 + 2]));
+        }
+        if (d.N.Length >= 1) pc.Elevation = d.N[0];
+        if (d.N.Length >= 2 && d.N[1] > 0) pc.PointPixels = (float)d.N[1];
+        return pc;
     }
 
     private static MeshEntity BuildMesh(Dto d)
@@ -219,6 +283,8 @@ public static class SceneIO
         for (int i = 0; i + 2 < v.Length; i += 3) me.Verts.Add((v[i], v[i + 1], v[i + 2]));
         for (int i = 0; i + 2 < idx.Length; i += 3) me.Tris.Add((idx[i], idx[i + 1], idx[i + 2]));
         if (d.N.Length >= 1) me.Elevation = d.N[0];
+        me.VertColors = UnflatColors(d.Mc, me.Verts.Count);
+        me.RgbColors = UnflatColors(d.Mr, me.Verts.Count);
         return me;
     }
 }

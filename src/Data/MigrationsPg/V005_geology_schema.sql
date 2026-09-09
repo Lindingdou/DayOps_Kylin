@@ -12,10 +12,10 @@
 
 -- ─── 字典:coal_seam_def(煤层定义)──────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS coal_seam_def (
-    id            SERIAL PRIMARY KEY,
+    id            BIGSERIAL PRIMARY KEY,
     code          TEXT    NOT NULL UNIQUE,         -- "4-1"/"9"/"11"/...
     name          TEXT    NOT NULL,                -- 显示名 "4-1 号煤层"
-    sort_order    INTEGER NOT NULL DEFAULT 0,
+    sort_order    BIGINT NOT NULL DEFAULT 0,
     avg_thickness DOUBLE PRECISION,                            -- 矿区平均厚度 (柱状图比例尺)
     color_hex     TEXT,                            -- 显示颜色
     description   TEXT
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS coal_classification (
     g_max       DOUBLE PRECISION,
     y_min       DOUBLE PRECISION,
     y_max       DOUBLE PRECISION,
-    sort_order  INTEGER NOT NULL DEFAULT 0,
+    sort_order  BIGINT NOT NULL DEFAULT 0,
     description TEXT
 );
 
@@ -42,21 +42,21 @@ CREATE INDEX idx_cc_sort ON coal_classification(sort_order);
 
 -- ─── 字典:coal_grade_rule(灰分/硫分/发热量分级规则)─────────────────────────
 CREATE TABLE IF NOT EXISTS coal_grade_rule (
-    id          SERIAL PRIMARY KEY,
+    id          BIGSERIAL PRIMARY KEY,
     rule_type   TEXT    NOT NULL,                  -- ash/sulfur/qnet/volatile
     level_code  TEXT    NOT NULL,                  -- extra_low/low/medium/high/extra_high
     level_name  TEXT    NOT NULL,                  -- 显示名 "特低灰"/"低灰"/...
     value_min   DOUBLE PRECISION,
     value_max   DOUBLE PRECISION,
     color_hex   TEXT,
-    sort_order  INTEGER NOT NULL DEFAULT 0
+    sort_order  BIGINT NOT NULL DEFAULT 0
 );
 
 CREATE INDEX idx_cgr_type ON coal_grade_rule(rule_type, sort_order);
 
 -- ─── 主表:borehole(钻孔基础)──────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS borehole (
-    id                  SERIAL PRIMARY KEY,
+    id                  BIGSERIAL PRIMARY KEY,
     hole_id             TEXT    NOT NULL UNIQUE,           -- 孔号 (1610/B2812/J702/ATB15-08)
     x                   DOUBLE PRECISION    NOT NULL,                  -- 纬距 (CGCS2000, m)
     y                   DOUBLE PRECISION    NOT NULL,                  -- 经距 (含 37 带号, m)
@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS borehole (
     category            TEXT,                              -- 类别 (2007核实/2014补勘/生产)
     coord_filled        TEXT    NOT NULL DEFAULT '原始',   -- 原始/经距补/高程补/+
     coord_fill_basis    TEXT,                              -- IDW 邻孔依据
-    source_page         INTEGER,
+    source_page         BIGINT,
     remark              TEXT,
     created_at          TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at          TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -96,8 +96,8 @@ EXECUTE PROCEDURE fn_touch_updated_at();
 
 -- ─── 主表:borehole_seam_result(钻孔煤层成果, 附表2)───────────────────────
 CREATE TABLE IF NOT EXISTS borehole_seam_result (
-    id                          SERIAL PRIMARY KEY,
-    borehole_id                 INTEGER NOT NULL,
+    id                          BIGSERIAL PRIMARY KEY,
+    borehole_id                 BIGINT NOT NULL,
     seam_code                   TEXT    NOT NULL,
     -- 钻探
     drill_end_depth             DOUBLE PRECISION,                       -- 钻探-止煤深度 (m)
@@ -123,7 +123,7 @@ CREATE TABLE IF NOT EXISTS borehole_seam_result (
     -- 状态
     status                      TEXT    NOT NULL DEFAULT '正常',
         -- 正常/未达/尖灭/全风化/陷落柱/空巷/未测/不取芯/废/合并/参考/风/风化/风氧化
-    source_page                 INTEGER,
+    source_page                 BIGINT,
     source_layout               TEXT,                       -- A20/A19/B17/D6
     remark                      TEXT,
     created_at                  TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -145,8 +145,8 @@ EXECUTE PROCEDURE fn_touch_updated_at();
 
 -- ─── 主表:coal_sample(煤芯煤样化验明细, 附表4)────────────────────────────
 CREATE TABLE IF NOT EXISTS coal_sample (
-    id                  SERIAL PRIMARY KEY,
-    borehole_id         INTEGER NOT NULL,
+    id                  BIGSERIAL PRIMARY KEY,
+    borehole_id         BIGINT NOT NULL,
     seam_code           TEXT    NOT NULL,
     -- 采样位置
     depth_from          DOUBLE PRECISION,                              -- 采样起深 (m)
@@ -178,13 +178,13 @@ CREATE TABLE IF NOT EXISTS coal_sample (
     plastometric_curve  TEXT,                              -- 曲线形状/熔合状况
     -- 粘结 + 焦渣
     caking_g            DOUBLE PRECISION,                              -- 粘结指数 G
-    char_residue_raw    INTEGER,                           -- 原煤焦渣 1-8
-    char_residue_clean  INTEGER,                           -- 浮煤焦渣 1-8
+    char_residue_raw    BIGINT,                           -- 原煤焦渣 1-8
+    char_residue_clean  BIGINT,                           -- 浮煤焦渣 1-8
     -- 洗选 + 煤类
     clean_coal_yield    DOUBLE PRECISION,                              -- 浮煤回收率 %
     coal_type           TEXT,                              -- GB/T 5751
     -- 元数据
-    source_page         INTEGER,
+    source_page         BIGINT,
     remark              TEXT,
     created_at          TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at          TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -207,10 +207,10 @@ EXECUTE PROCEDURE fn_touch_updated_at();
 
 -- ─── 衍生表:coal_sample_summary(每孔每层化验平均)────────────────────────
 CREATE TABLE IF NOT EXISTS coal_sample_summary (
-    id                  SERIAL PRIMARY KEY,
-    borehole_id         INTEGER NOT NULL,
+    id                  BIGSERIAL PRIMARY KEY,
+    borehole_id         BIGINT NOT NULL,
     seam_code           TEXT    NOT NULL,
-    sample_count        INTEGER NOT NULL DEFAULT 0,
+    sample_count        BIGINT NOT NULL DEFAULT 0,
     avg_thickness       DOUBLE PRECISION,
     avg_mad_raw         DOUBLE PRECISION,
     avg_mad_clean       DOUBLE PRECISION,
@@ -228,7 +228,7 @@ CREATE TABLE IF NOT EXISTS coal_sample_summary (
     avg_plastic_y       DOUBLE PRECISION,
     avg_clean_yield     DOUBLE PRECISION,
     dominant_coal_type  TEXT,
-    is_from_source      INTEGER NOT NULL DEFAULT 0,        -- 1=PDF 原"平均"行, 0=程序聚合
+    is_from_source      BIGINT NOT NULL DEFAULT 0,        -- 1=PDF 原"平均"行, 0=程序聚合
     last_built_at       TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(borehole_id, seam_code),
     FOREIGN KEY (borehole_id) REFERENCES borehole(id) ON DELETE CASCADE ON UPDATE CASCADE,
@@ -239,18 +239,18 @@ CREATE INDEX idx_css_seam ON coal_sample_summary(seam_code);
 
 -- ─── 主表:coal_observation_point(见煤点, 附表3)──────────────────────────
 CREATE TABLE IF NOT EXISTS coal_observation_point (
-    id                  SERIAL PRIMARY KEY,
+    id                  BIGSERIAL PRIMARY KEY,
     point_id            TEXT    NOT NULL,
     seam_code           TEXT    NOT NULL,
     x                   DOUBLE PRECISION    NOT NULL,
     y                   DOUBLE PRECISION    NOT NULL,
-    original_y_format   INTEGER NOT NULL DEFAULT 8,        -- 8 含带号, 6 无带号(已补 +37000000)
+    original_y_format   BIGINT NOT NULL DEFAULT 8,        -- 8 含带号, 6 无带号(已补 +37000000)
     seam_thickness      DOUBLE PRECISION,
     coal_structure      TEXT,
     estimated_thickness DOUBLE PRECISION,
     floor_elevation     DOUBLE PRECISION,
     annual_report       TEXT,                              -- "2014年年报"/"2023年年报"
-    source_page         INTEGER,
+    source_page         BIGINT,
     remark              TEXT,
     created_at          TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at          TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -269,8 +269,8 @@ EXECUTE PROCEDURE fn_touch_updated_at();
 
 -- ─── 主表:borehole_lithology_segment(钻孔岩性分层, 柱状图核心)────────────
 CREATE TABLE IF NOT EXISTS borehole_lithology_segment (
-    id              SERIAL PRIMARY KEY,
-    borehole_id     INTEGER NOT NULL,
+    id              BIGSERIAL PRIMARY KEY,
+    borehole_id     BIGINT NOT NULL,
     depth_from      DOUBLE PRECISION    NOT NULL,
     depth_to        DOUBLE PRECISION    NOT NULL,
     lithology_code  TEXT    NOT NULL,                      -- sand/silt/mud/coal/limestone/...
@@ -279,7 +279,7 @@ CREATE TABLE IF NOT EXISTS borehole_lithology_segment (
     pattern         TEXT,                                  -- SVG pattern key
     description     TEXT,
     source          TEXT    NOT NULL DEFAULT '推断',       -- '附表2推断'/'外部录入'/'人工'
-    sort_order      INTEGER NOT NULL DEFAULT 0,
+    sort_order      BIGINT NOT NULL DEFAULT 0,
     FOREIGN KEY (borehole_id) REFERENCES borehole(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -287,10 +287,10 @@ CREATE INDEX idx_bls_bid_depth ON borehole_lithology_segment(borehole_id, depth_
 
 -- ─── 衍生表:coal_audit_finding(煤质数据审核发现)────────────────────────
 CREATE TABLE IF NOT EXISTS coal_audit_finding (
-    id              SERIAL PRIMARY KEY,
+    id              BIGSERIAL PRIMARY KEY,
     audit_run_id    TEXT,                                  -- 一次审核的批次 ID
-    sample_id       INTEGER,
-    seam_result_id  INTEGER,
+    sample_id       BIGINT,
+    seam_result_id  BIGINT,
     severity        TEXT    NOT NULL,                      -- 严重/警告/信息
     category        TEXT    NOT NULL,                      -- 工分自洽/煤类反推/同层离群/...
     message         TEXT    NOT NULL,
@@ -401,7 +401,7 @@ INSERT INTO coal_seam_def (code, name, sort_order, color_hex, description) VALUE
     ('4（4-1）', '4(4-1) 合并煤层',  13, '#D4A017', '4 与 4-1 合并'),
     ('7-1',      '7-1 号煤层',       20, '#8B6914', ''),
     ('9',        '9 号煤层',         30, '#4A7C2E', '主采煤层'),
-    ('11',       '11 号煤层',        40, '#2C5F8D', '主采煤层') ON CONFLICT DO NOTHING;
+    ('11',       '11 号煤层',        40, '#2C5F8D', '主采煤层') ON DUPLICATE KEY UPDATE name = name;
 
 -- GB/T 5751 煤类 (节选 14 种)
 INSERT INTO coal_classification (code, name_cn, name_short, vdaf_min, vdaf_max, g_min, g_max, y_min, y_max, sort_order, description) VALUES
@@ -420,7 +420,7 @@ INSERT INTO coal_classification (code, name_cn, name_short, vdaf_min, vdaf_max, 
     ('RN',    '弱粘煤',      '弱粘', 20,   37,   5,    35,   NULL, NULL, 50, ''),
     ('BN',    '不粘煤',      '不粘', 20,   37,   0,    5,    NULL, NULL, 51, ''),
     ('CY',    '长焰煤',      '长焰', 37,   NULL, 0,    35,   NULL, NULL, 60, ''),
-    ('HM',    '褐煤',        '褐',   37,   NULL, NULL, NULL, NULL, NULL, 70, '另需透光率指标') ON CONFLICT DO NOTHING;
+    ('HM',    '褐煤',        '褐',   37,   NULL, NULL, NULL, NULL, NULL, 70, '另需透光率指标') ON DUPLICATE KEY UPDATE name_cn = name_cn;
 
 -- 分级规则 (灰分 / 硫分 / 发热量, 颜色用于空间分布着色)
 INSERT INTO coal_grade_rule (rule_type, level_code, level_name, value_min, value_max, color_hex, sort_order) VALUES
@@ -441,4 +441,4 @@ INSERT INTO coal_grade_rule (rule_type, level_code, level_name, value_min, value
     ('qnet',   'low',        '中低',   17,   21,   '#F57C00', 20),
     ('qnet',   'medium',     '中',     21,   24,   '#FBC02D', 30),
     ('qnet',   'high',       '中高',   24,   27,   '#558B2F', 40),
-    ('qnet',   'extra_high', '高热值', 27,   NULL, '#1B5E20', 50) ON CONFLICT DO NOTHING;
+    ('qnet',   'extra_high', '高热值', 27,   NULL, '#1B5E20', 50) ON DUPLICATE KEY UPDATE rule_type = rule_type;

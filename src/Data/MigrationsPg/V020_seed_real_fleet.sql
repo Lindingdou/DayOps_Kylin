@@ -11,7 +11,7 @@ INSERT INTO mine_location (location_code, name, elevation_m, team, is_active) VA
   ('安太堡矿', '安太堡露天矿', NULL, NULL, 1),
   ('安家岭矿', '安家岭露天矿', NULL, NULL, 1),
   ('东露天矿', '东露天露天矿', NULL, NULL, 1),
-  ('其他单位', '其他单位/辅业', NULL, NULL, 1) ON CONFLICT DO NOTHING;
+  ('其他单位', '其他单位/辅业', NULL, NULL, 1) ON DUPLICATE KEY UPDATE name = name;
 
 INSERT INTO equipment_model (model, category, working_weight_t, power_kw, bucket_m3, load_t, dimensions_lwh, drill_diameter_mm, tire_spec, std_daily_cap_wan_m3)
  VALUES
@@ -61,7 +61,7 @@ INSERT INTO equipment_model (model, category, working_weight_t, power_kw, bucket
   ('WK-35', 'Shovel', NULL, NULL, 35, NULL, NULL, NULL, NULL, 17.0584),
   ('WK-55', 'Shovel', NULL, NULL, 55, NULL, NULL, NULL, NULL, 32.9384),
   ('XE4000', 'Shovel', NULL, NULL, 22, NULL, NULL, NULL, NULL, 11.8476),
-  ('YZ35C', 'Drill', NULL, NULL, NULL, NULL, NULL, 219, NULL, 21.2435) ON CONFLICT (model) DO UPDATE SET category = EXCLUDED.category, working_weight_t = EXCLUDED.working_weight_t, power_kw = EXCLUDED.power_kw, bucket_m3 = EXCLUDED.bucket_m3, load_t = EXCLUDED.load_t, dimensions_lwh = EXCLUDED.dimensions_lwh, drill_diameter_mm = EXCLUDED.drill_diameter_mm, tire_spec = EXCLUDED.tire_spec, std_daily_cap_wan_m3 = EXCLUDED.std_daily_cap_wan_m3;
+  ('YZ35C', 'Drill', NULL, NULL, NULL, NULL, NULL, 219, NULL, 21.2435) ON DUPLICATE KEY UPDATE category = VALUES(category), working_weight_t = VALUES(working_weight_t), power_kw = VALUES(power_kw), bucket_m3 = VALUES(bucket_m3), load_t = VALUES(load_t), dimensions_lwh = VALUES(dimensions_lwh), drill_diameter_mm = VALUES(drill_diameter_mm), tire_spec = VALUES(tire_spec), std_daily_cap_wan_m3 = VALUES(std_daily_cap_wan_m3);
 
 INSERT INTO equipment
   (equipment_id, category, model, manufacturer, origin, serial_number, asset_code, status,

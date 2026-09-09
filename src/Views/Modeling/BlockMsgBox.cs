@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -16,6 +16,12 @@ internal static class BlockMsgBox
 
     private static async Task<bool> ShowAsync(Window owner, string title, string message, string okText, string? cancelText, bool warn)
     {
+        // 自检：不弹窗, 直接走主操作(同 PromptDialog 的 PITMINE_SELFTEST 取默认值直通), 否则批量脚本会卡在模态框上
+        if (System.Environment.GetEnvironmentVariable("PITMINE_SELFTEST") is { Length: > 0 })
+        {
+            PitMine3D.Kylin.CrashLog.Write("自检对话框", title + " → 自动「" + okText + "」");
+            return true;
+        }
         var win = new Window
         {
             Title = title, Width = 460, SizeToContent = SizeToContent.Height, CanResize = false,

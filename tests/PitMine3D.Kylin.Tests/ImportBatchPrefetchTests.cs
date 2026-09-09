@@ -33,7 +33,7 @@ public class ImportBatchPrefetchTests
 
     private static GeoDatabase Seeded()
     {
-        var db = GeoDatabase.OpenSeeded();
+        var db = TestDb.Open();
         // 与 ImportSchemaConsistencyTests 同法: 关 FK 以隔离本测关注点(键去重), 免父行缺失干扰。
         using var p = db.Connection.CreateCommand();
         p.CommandText = "PRAGMA foreign_keys=OFF";

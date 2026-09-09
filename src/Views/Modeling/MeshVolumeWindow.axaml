@@ -1,0 +1,62 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="PitMine3D.Kylin.Views.Modeling.MeshVolumeWindow" x:CompileBindings="False"
+        Classes="geodb" Title="三角网体积" Width="640" Height="720" WindowStartupLocation="CenterOwner">
+  <Grid Margin="14" RowDefinitions="*,Auto">
+    <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+      <StackPanel Spacing="8">
+        <Border Classes="panel" Padding="12">
+          <StackPanel>
+            <DockPanel LastChildFill="False">
+              <TextBlock Classes="panel-title" Text="选中对象（三角网）" DockPanel.Dock="Left"/>
+              <Button x:Name="btnReselect" Content="重新选择对象" DockPanel.Dock="Right" Padding="10,3" Click="OnReselect"/>
+            </DockPanel>
+            <TextBlock x:Name="selInfoLabel" TextWrapping="Wrap" Margin="0,6,0,0" Classes="muted" Text="尚未选择对象。"/>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="panel" Padding="12">
+          <StackPanel>
+            <TextBlock Classes="panel-title" Text="分标高水平（标高边界列表）"/>
+            <TextBlock Margin="0,2,0,4" FontSize="11" Classes="muted"
+                       Text="每行一个或逗号分隔，按升序去重；N 个边界 → N-1 个标高区间 [低,高)。留空则仅报整体。"/>
+            <Grid ColumnDefinitions="Auto,80,Auto,*" Margin="0,0,0,6">
+              <TextBlock Grid.Column="0" Text="等间距" VerticalAlignment="Center" Margin="0,0,6,0"/>
+              <TextBox x:Name="txtStep" Grid.Column="1" Text="10"/>
+              <Button Grid.Column="2" Content="按间距填充" Margin="8,0,0,0" Padding="8,3" Click="OnFillLevels"/>
+              <TextBlock Grid.Column="3" VerticalAlignment="Center" Margin="10,0,0,0" Classes="muted"
+                         Text="边界对齐到间距整数倍，便于与台阶标高对上"/>
+            </Grid>
+            <TextBox x:Name="txtLevels" MinHeight="72" MaxHeight="140" AcceptsReturn="True"
+                     TextWrapping="Wrap" FontFamily="Consolas,monospace"/>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="panel" Padding="12">
+          <StackPanel>
+            <TextBlock Classes="panel-title" Text="报量结果（解析散度法，不转块体）"/>
+            <TextBlock x:Name="totalLabel" Margin="0,4,0,2" FontWeight="SemiBold" Text="整体体积：（点「计算」）"/>
+            <TextBlock x:Name="detailLabel" Margin="0,0,0,6" TextWrapping="Wrap" Classes="muted" Text=""/>
+            <DataGrid x:Name="levelGrid" AutoGenerateColumns="False" IsReadOnly="True" MinHeight="140" MaxHeight="260">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="标高区间 (m)" Binding="{Binding Range}" Width="*"/>
+                <DataGridTextColumn Header="层高 (m)" Binding="{Binding Thickness}" Width="Auto"/>
+                <DataGridTextColumn Header="体积 (m³)" Binding="{Binding Volume}" Width="Auto"/>
+                <DataGridTextColumn Header="占比" Binding="{Binding Pct}" Width="Auto"/>
+              </DataGrid.Columns>
+            </DataGrid>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+
+    <DockPanel Grid.Row="1" LastChildFill="False" Margin="0,10,0,0">
+      <Button x:Name="btnCompute" Content="计算" DockPanel.Dock="Left" MinWidth="90" Padding="0,5" Margin="0,0,8,0"
+              Click="OnCompute" FontWeight="SemiBold" Classes="primary"/>
+      <Button x:Name="btnClose" Content="关闭" DockPanel.Dock="Right" MinWidth="80" Padding="0,5" Click="OnClose"/>
+      <Button x:Name="btnExportHtml" Content="导出 HTML" DockPanel.Dock="Right" MinWidth="90" Padding="0,5" Margin="0,0,8,0"
+              Click="OnExportHtml" IsEnabled="False"/>
+      <Button x:Name="btnExportCsv" Content="导出 CSV" DockPanel.Dock="Right" MinWidth="90" Padding="0,5" Margin="0,0,8,0"
+              Click="OnExportCsv" IsEnabled="False"/>
+    </DockPanel>
+  </Grid>
+</Window>

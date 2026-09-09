@@ -27,17 +27,17 @@
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS dump_strip (
-    id                  SERIAL PRIMARY KEY,
+    id                  BIGSERIAL PRIMARY KEY,
 
-    region_id           INTEGER NOT NULL,           -- → mineable_region.id(排土场)
+    region_id           BIGINT NOT NULL,           -- → mineable_region.id(排土场)
     region_name         TEXT    NOT NULL DEFAULT '',-- 冗余名字:清单直接可读,不必每次连表
     category            TEXT    NOT NULL DEFAULT 'external_dump',  -- external_dump / internal_dump
 
     code                TEXT    NOT NULL,           -- 位置编号 '外排1-L3-P02-S05'
-    level_index         INTEGER NOT NULL,           -- 台阶级序(1 = 最上一级)
-    panel_index         INTEGER NOT NULL,           -- 沿走向第几幅(1 起)
-    panel_count         INTEGER NOT NULL DEFAULT 1, -- 本级共几幅
-    step_index          INTEGER NOT NULL,           -- 沿推进方向第几带(1 = 当前排土线那一带)
+    level_index         BIGINT NOT NULL,           -- 台阶级序(1 = 最上一级)
+    panel_index         BIGINT NOT NULL,           -- 沿走向第几幅(1 起)
+    panel_count         BIGINT NOT NULL DEFAULT 1, -- 本级共几幅
+    step_index          BIGINT NOT NULL,           -- 沿推进方向第几带(1 = 当前排土线那一带)
 
     crest_z             DOUBLE PRECISION    NOT NULL,           -- 坡顶标高(m)
     toe_z               DOUBLE PRECISION    NOT NULL,           -- 坡底标高(m)
@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS dump_strip (
     crest_json          TEXT    NOT NULL DEFAULT '[]',
     toe_json            TEXT    NOT NULL DEFAULT '[]',
 
-    entity_handle       INTEGER NOT NULL DEFAULT 0, -- 图上壳子体的 handle(0 = 还没建体)
+    entity_handle       BIGINT NOT NULL DEFAULT 0, -- 图上壳子体的 handle(0 = 还没建体)
 
     design_version      TEXT,                       -- 多方案比选:同一排土场并存几种切法
     notes               TEXT,

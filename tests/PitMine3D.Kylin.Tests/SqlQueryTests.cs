@@ -9,7 +9,7 @@ public class SqlQueryTests
     [Fact]
     public void Select_returns_header_and_rows()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var (ok, text, rows) = GeoDataQueries.RunSelectCsv(db.Connection,
             "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name LIMIT 3");
         Assert.True(ok, text);
@@ -22,7 +22,7 @@ public class SqlQueryTests
     [Fact]
     public void Aggregate_query_runs()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var (ok, text, rows) = GeoDataQueries.RunSelectCsv(db.Connection,
             "SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table'");
         Assert.True(ok, text);
@@ -35,7 +35,7 @@ public class SqlQueryTests
     [Fact]
     public void Pragma_allowed()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var (ok, _, _) = GeoDataQueries.RunSelectCsv(db.Connection, "PRAGMA table_list");
         Assert.True(ok);
     }
@@ -47,7 +47,7 @@ public class SqlQueryTests
     [InlineData("INSERT INTO equipment VALUES (1)")]
     public void Non_readonly_rejected(string sql)
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var (ok, text, _) = GeoDataQueries.RunSelectCsv(db.Connection, sql);
         Assert.False(ok);
         Assert.Contains("只读", text);
@@ -66,7 +66,7 @@ public class SqlQueryTests
     [Fact]
     public void Bad_sql_returns_error_not_throw()
     {
-        using var db = GeoDatabase.OpenSeeded();
+        using var db = TestDb.Open();
         var (ok, text, _) = GeoDataQueries.RunSelectCsv(db.Connection, "SELECT * FROM no_such_table_xyz");
         Assert.False(ok);
         Assert.False(string.IsNullOrEmpty(text));   // 返回错误信息而非抛出
