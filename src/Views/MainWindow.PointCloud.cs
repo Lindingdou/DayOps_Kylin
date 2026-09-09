@@ -94,14 +94,62 @@ public partial class MainWindow
     /// 点云组的命令一律不去弹"选个 CSV"的文件框：原版这些命令只吃已加载的点云，
     /// 弹文件框既不是原版行为，也会让用户以为这条命令跟点云无关。
     /// </summary>
-    private bool PcNeedCloud(string what, out PointCloudEntity cur, out List<PointCloudEntity> all)
+    private bool PcNeedCloud(string what, out PointCloudEntity cur, out List<PointCloudEntity> all, bool quiet = false)
     {
         all = PcClouds();
         cur = PcCurrentCloud!;
         if (cur != null) return true;
         cur = null!;
-        EditEcho($"{what}：场景中没有已加载的点云，请先「加载点云」。", EchoLevel.Error);
+        // quiet: 供 PcNeedCloudAsync 先静默探一次 —— 提醒弹窗自己会把话说清楚, 不必先在信息栏留一行
+        if (!quiet) EditEcho($"{what}：场景中没有已加载的点云，请先「加载点云」。", EchoLevel.Error);
         return false;
+    }
+
+    /// <summary>
+    /// 点云算子的入口守卫：有点云就直接给（当前点云 + 全部清单）；没有就弹交互提醒，
+    /// 用户点「加载点云…」即走真实的加载通路，加载成功后**接着把原命令执行下去**。
+    /// 取消或没加载成功则回 null（调用方直接返回，命令视为结束）。
+    /// </summary>
+    private async Task<(PointCloudEntity cur, List<PointCloudEntity> all)?> PcNeedCloudAsync(string what)
+    {
+        if (PcNeedCloud(what, out var cur, out var all, quiet: true)) return (cur, all);
+
+        var act = await PcNeedDataDialog.AskAsync(this, what, PcNeedDataDialog.Need.Cloud);
+        if (act == PcNeedDataDialog.Act.Go)
+        {
+            await PcLoadAsync();   // 走「加载点云」那条真实通路(文件对话框 + 入场景 + 设为当前)
+            if (PcNeedCloud(what, out cur, out all, quiet: true))
+            {
+                EditEcho($"{what}：已加载点云「{cur.Name}」，继续执行。", EchoLevel.Info);
+                return (cur, all);
+            }
+        }
+        EditEcho($"{what}：场景中没有已加载的点云，请先「加载点云」。", EchoLevel.Error);
+        return null;
+    }
+
+    /// <summary>
+    /// 网格算子的入口守卫：场景里没有三角网时弹交互提醒，用户点「去建三角网」即跑 2.5D TIN
+    /// （它自己会在没点云时再提醒加载），建成后接着往下走。返回 null = 用户取消/仍没有网。
+    /// </summary>
+    private async Task<List<MeshEntity>?> PcNeedMeshAsync(string what, string pickLabel = "三角网")
+    {
+        var meshes = await PcSelectAsync<MeshEntity>(what, pickLabel);
+        if (meshes.Count > 0) return meshes;
+
+        var act = await PcNeedDataDialog.AskAsync(this, what, PcNeedDataDialog.Need.Mesh);
+        if (act == PcNeedDataDialog.Act.Go)
+        {
+            await PcBuildTinAsync();   // 走「2.5D TIN」那条真实通路(参数窗 + 建面入场景 + 选中)
+            meshes = await PcSelectAsync<MeshEntity>(what, pickLabel);
+            if (meshes.Count > 0)
+            {
+                EditEcho($"{what}：三角网「{meshes[0].Name}」已就绪，继续执行。", EchoLevel.Info);
+                return meshes;
+            }
+        }
+        EditEcho($"{what}：场景里没有三角网，请先用「2.5D TIN」把点云建成面。", EchoLevel.Error);
+        return null;
     }
 
     /// <summary>「源点云」下拉行（同原版各算子对话框首项）。</summary>
@@ -329,7 +377,9 @@ public partial class MainWindow
     /// <summary>点云着色：真实色 (RGB) / 任意单色 / 高程色带。忠实原 ColorModeDialog 的十个预设色。</summary>
     private async Task<bool> PcColorizeAsync()
     {
-        if (!PcNeedCloud("点云着色", out var cur, out var all)) return true;   // 无点云 → 报"请先加载点云"(同原版)，不落到选 CSV
+        var need = await PcNeedCloudAsync("点云着色");   // 无点云 → 弹提醒并可当场加载
+        if (need == null) return true;
+        var (cur, all) = need.Value;
         string[] modes = { "恢复真实颜色 (RGB)", "单色", "高程色带" };
         string[] presets = { "白", "红", "橙", "黄", "绿", "青", "蓝", "紫", "灰", "黑" };
         // 窗体组织忠实原 Coloring/ColorModeDialog：模式单选 + 十个预设色
@@ -410,7 +460,9 @@ public partial class MainWindow
     /// </summary>
     private async Task<bool> PcGroundFilterAsync()
     {
-        if (!PcNeedCloud("地面点滤波", out var cur, out var all)) return true;   // 无点云 → 报"请先加载点云"(同原版)，不落到选 CSV
+        var need = await PcNeedCloudAsync("地面点滤波");   // 无点云 → 弹提醒并可当场加载
+        if (need == null) return true;
+        var (cur, all) = need.Value;
         // 窗体组织忠实原 Repair/GroundFilterDialog：说明 → 源点云 → 「按最大待剔物体尺寸」预设 → 参数 → 输出开关
         var form = new PcForm
         {
@@ -485,8 +537,8 @@ public partial class MainWindow
     /// </summary>
     private async Task<bool> PcFillHoleAsync()
     {
-        var meshes = await PcSelectAsync<MeshEntity>("补洞(三角网)", "三角网");
-        if (meshes.Count == 0) { EditEcho("补洞(三角网)：场景里没有三角网，请先用「2.5D TIN」把点云建成面。", EchoLevel.Error); return true; }
+        var meshes = await PcNeedMeshAsync("补洞(三角网)");
+        if (meshes == null) return true;
         var m = meshes[0];
         var form = new PcForm
         {
@@ -522,8 +574,8 @@ public partial class MainWindow
     /// </summary>
     private async Task<bool> PcRemoveObstaclesAsync()
     {
-        var meshes = await PcSelectAsync<MeshEntity>("剔面(三角网)", "三角网");
-        if (meshes.Count == 0) { EditEcho("剔面(三角网)：场景里没有三角网，请先用「2.5D TIN」把点云建成面。", EchoLevel.Error); return true; }
+        var meshes = await PcNeedMeshAsync("剔面(三角网)");
+        if (meshes == null) return true;
         var m = meshes[0];
         var form = new PcForm
         {
@@ -628,7 +680,9 @@ public partial class MainWindow
     /// <summary>点云抽稀：体素 / 随机 / 距离(最小间距) / 自适应保特征。结果作为新点云。</summary>
     private async Task<bool> PcDecimateAsync()
     {
-        if (!PcNeedCloud("点云抽稀", out var cur, out var all)) return true;   // 无点云 → 报"请先加载点云"(同原版)，不落到选 CSV
+        var need = await PcNeedCloudAsync("点云抽稀");   // 无点云 → 弹提醒并可当场加载
+        if (need == null) return true;
+        var (cur, all) = need.Value;
         string[] modes =
         {
             "体素抽稀（均匀降密）", "随机抽稀（按比例）", "距离抽稀（最小间距）",
@@ -673,7 +727,9 @@ public partial class MainWindow
     /// <summary>分割点云：用选中的闭合多段线裁剪（圈内/圈外），结果作为新点云。</summary>
     private async Task<bool> PcSegmentAsync()
     {
-        if (!PcNeedCloud("分割点云", out var cur, out var all)) return true;   // 无点云 → 报"请先加载点云"(同原版)，不落到选 CSV
+        var need = await PcNeedCloudAsync("分割点云");   // 无点云 → 弹提醒并可当场加载
+        if (need == null) return true;
+        var (cur, all) = need.Value;
         var bnds = await PcSelectAsync<PolylineEntity>("分割点云", "闭合多段线（裁剪边界）", p => p.Closed && p.Points.Count >= 3);
         if (bnds.Count == 0) { EditEcho("分割点云：场景里没有闭合多段线可作裁剪边界（先画一条，或用「高程截断」按高程裁）", EchoLevel.Error); return true; }
         var bnd = bnds[0];
@@ -707,7 +763,9 @@ public partial class MainWindow
     /// <summary>高程截断：按高程区间裁剪点云，结果作为新点云（非破坏）。</summary>
     private async Task<bool> PcZClipAsync()
     {
-        if (!PcNeedCloud("高程截断", out var cur, out var all)) return true;   // 无点云 → 报"请先加载点云"(同原版)，不落到选 CSV
+        var need = await PcNeedCloudAsync("高程截断");   // 无点云 → 弹提醒并可当场加载
+        if (need == null) return true;
+        var (cur, all) = need.Value;
         var b = cur.Bounds;
         // 窗体组织忠实原 Segment/ZClipDialog：一句说明 + 最低/最高两行
         var form = new PcForm
@@ -739,7 +797,9 @@ public partial class MainWindow
     /// <summary>坐标转换：点云平移 + 绕 Z 旋转（仿射），结果作为新点云（非破坏）。</summary>
     private async Task<bool> PcTransformAsync()
     {
-        if (!PcNeedCloud("坐标转换", out var cur, out var all)) return true;   // 无点云 → 报"请先加载点云"(同原版)，不落到选 CSV
+        var need = await PcNeedCloudAsync("坐标转换");   // 无点云 → 弹提醒并可当场加载
+        if (need == null) return true;
+        var (cur, all) = need.Value;
         var b = cur.Bounds;
         double cx = (b.minX + b.maxX) / 2, cy = (b.minY + b.maxY) / 2;
         // 窗体组织忠实原 Segment/TransformDialog：说明 → 旋转角 → 旋转中心(X/Y) → 平移(ΔX/ΔY/ΔZ)
@@ -788,7 +848,9 @@ public partial class MainWindow
     /// </summary>
     private async Task<bool> PcPointAttribAsync()
     {
-        if (!PcNeedCloud("逐点属性分析", out var cur, out var all)) return true;   // 无点云 → 报"请先加载点云"(同原版)，不落到选 CSV
+        var need = await PcNeedCloudAsync("逐点属性分析");   // 无点云 → 弹提醒并可当场加载
+        if (need == null) return true;
+        var (cur, all) = need.Value;
         string[] attrs = { "坡度 (°)", "坡向 (罗盘°)", "曲率 (表面变异度)" };
         string[] maps = { "地形色（蓝→红）", "灰阶", "分歧色（蓝-白-红）" };
         // 窗体组织忠实原 Analysis/PointAttribDialog：说明 → 蓝框(为何不建面) → 源点云 → 分析项单选
@@ -871,7 +933,9 @@ public partial class MainWindow
     /// <summary>法向估计：kNN PCA 逐点法向 → 缓存在点云上，供坡度/坡向/曲率复用不再重算。</summary>
     private async Task<bool> PcEstimateNormalsAsync()
     {
-        if (!PcNeedCloud("法向估计", out var cur, out var all)) return true;   // 无点云 → 报"请先加载点云"(同原版)，不落到选 CSV
+        var need = await PcNeedCloudAsync("法向估计");   // 无点云 → 弹提醒并可当场加载
+        if (need == null) return true;
+        var (cur, all) = need.Value;
         // 原版无参数框：直接对当前点云按 k=16 估法向并缓存（已有缓存时先问要不要覆盖）
         var pc = cur;
         const int kNormals = 16;
@@ -896,7 +960,9 @@ public partial class MainWindow
     /// </summary>
     private async Task<bool> PcCloudProfileAsync()
     {
-        if (!PcNeedCloud("点云剖面", out var cur, out var all)) return true;   // 无点云 → 报"请先加载点云"(同原版)，不落到选 CSV
+        var need = await PcNeedCloudAsync("点云剖面");   // 无点云 → 弹提醒并可当场加载
+        if (need == null) return true;
+        var (cur, all) = need.Value;
         var line = await PcSelectLineAsync("点云剖面");
         if (line == null) { EditEcho("点云剖面：场景里没有可作剖面线的线（先画一条穿过点云的线）", EchoLevel.Error); return true; }
         string[] aggs = { "最低点（地面）", "均值", "最高点（顶面）" };
@@ -969,7 +1035,9 @@ public partial class MainWindow
     /// </summary>
     private async Task<bool> PcC2cAsync()
     {
-        if (!PcNeedCloud("位移监测 C2C", out var cur, out var all)) return true;   // 无点云 → 报"请先加载点云"(同原版)，不落到选 CSV
+        var need = await PcNeedCloudAsync("位移监测 C2C");   // 无点云 → 弹提醒并可当场加载
+        if (need == null) return true;
+        var (cur, all) = need.Value;
         if (all.Count < 2) { EditEcho("位移监测 C2C：需要两期点云，请先把两期都加载进场景", EchoLevel.Error); return true; }
         string[] maps = { "地形色（蓝→红）", "灰阶", "分歧色（蓝-白-红）" };
         var choices = PcChoices(all);
@@ -1037,7 +1105,9 @@ public partial class MainWindow
     /// <summary>质量统计：点数 / 密度 / 平均点间距 / 包围盒 / 高程分布。原版无参数框，直接对当前点云出报告。</summary>
     private async Task<bool> PcQualityStatsAsync()
     {
-        if (!PcNeedCloud("质量统计", out var cur, out _)) return true;   // 无点云 → 报"请先加载点云"(同原版)，不落到选 CSV
+        var need = await PcNeedCloudAsync("质量统计");   // 无点云 → 弹提醒并可当场加载
+        if (need == null) return true;
+        var cur = need.Value.cur;
         var pc = cur;
         var pts = PcPts(pc);
         var s = await Task.Run(() => PointCloudStats.Compute(pts));
@@ -1072,7 +1142,9 @@ public partial class MainWindow
     /// </summary>
     private async Task<bool> PcSlopeLinesAsync()
     {
-        if (!PcNeedCloud("坡顶底线提取", out var cur, out var all)) return true;   // 无点云 → 报"请先加载点云"(同原版)，不落到选 CSV
+        var need = await PcNeedCloudAsync("坡顶底线提取");   // 无点云 → 弹提醒并可当场加载
+        if (need == null) return true;
+        var (cur, all) = need.Value;
         // 窗体组织忠实原 SlopeLine/SlopeLineDialog：说明 → DEM 网格 / 挡墙最小高 / 最小台阶高 / 陡坡阈值 / 最短线长
         var form = new PcForm
         {
@@ -1151,7 +1223,9 @@ public partial class MainWindow
             EditEcho("2.5D TIN：场景中没有已加载的点云，请先「加载点云」。", EchoLevel.Error);
             return true;
         }
-        if (!PcNeedCloud("2.5D TIN", out var cur, out var all)) return true;
+        var need = await PcNeedCloudAsync("2.5D TIN");   // 无点云 → 弹提醒并可当场加载
+        if (need == null) return true;
+        var (cur, all) = need.Value;
         // 窗体组织忠实原 Views/TinOptionsDialog：标题行 → 「三角网参数」组 → 预设按钮 → 折叠的「高级（数据源）」
         var form = new PcForm
         {
@@ -1249,7 +1323,9 @@ public partial class MainWindow
     /// <summary>两期点云算量：两期点云 → 同格网差值 → 挖方/填方/净值 + 分标高带/连通块明细。</summary>
     private async Task<bool> PcTwoEpochVolumeAsync()
     {
-        if (!PcNeedCloud("两期点云算量", out var cur, out var all)) return true;   // 无点云 → 报"请先加载点云"(同原版)，不落到选 CSV
+        var need = await PcNeedCloudAsync("两期点云算量");   // 无点云 → 弹提醒并可当场加载
+        if (need == null) return true;
+        var (cur, all) = need.Value;
         if (all.Count < 2) { EditEcho("两期点云算量：需要两期点云，请先把两期都加载进场景", EchoLevel.Error); return true; }
         var choices = PcChoices(all);
         var ca0 = all[0];
@@ -1437,7 +1513,9 @@ public partial class MainWindow
     /// </summary>
     private async Task<bool> PcRangeVolumeAsync()
     {
-        if (!PcNeedCloud("圈范围算量", out var cur, out var all)) return true;   // 无点云 → 报"请先加载点云"(同原版)，不落到选 CSV
+        var need = await PcNeedCloudAsync("圈范围算量");   // 无点云 → 弹提醒并可当场加载
+        if (need == null) return true;
+        var (cur, all) = need.Value;
         var bnds = await PcSelectAsync<PolylineEntity>("圈范围算量", "闭合多段线（范围边界）", p => p.Closed && p.Points.Count >= 3);
         if (bnds.Count == 0) { EditEcho("圈范围算量：场景里没有闭合多段线可作范围边界（先画一条圈定范围）", EchoLevel.Error); return true; }
         var bnd = bnds[0];
@@ -1497,8 +1575,8 @@ public partial class MainWindow
     /// <summary>三角网着色：对选中三角网按 素色/高程/坡度/坡向/等高线 逐顶点上色（随工程存档）。</summary>
     private async Task<bool> PcTinShadingAsync()
     {
-        var meshes = await PcSelectAsync<MeshEntity>("三角网着色", "三角网");
-        if (meshes.Count == 0) { EditEcho("三角网着色：场景里没有三角网（先用「2.5D TIN」把点云建成面）", EchoLevel.Error); return true; }
+        var meshes = await PcNeedMeshAsync("三角网着色");   // 无三角网 → 弹提醒并可当场建面
+        if (meshes == null) return true;
         // 窗体组织忠实原 Shading/TinShadingDialog：说明 → 模式单选(素色/真实色/高程/坡度/坡向/等高线/清除)
         // → 色带 → 等高线间距。正射影像贴图那一档需要纹理管线，本版渲染器无纹理，故不摆这个选项。
         string[] modes =
@@ -1619,8 +1697,8 @@ public partial class MainWindow
     /// </summary>
     private async Task<bool> PcContourAsync()
     {
-        var meshes = await PcSelectAsync<MeshEntity>("等高线生产", "三角网");
-        if (meshes.Count == 0) { EditEcho("等高线生产：场景里没有三角网，请先用「2.5D TIN」把点云建成面。", EchoLevel.Error); return true; }
+        var meshes = await PcNeedMeshAsync("等高线生产");   // 无三角网 → 弹提醒并可当场建面
+        if (meshes == null) return true;
         var m = meshes[0];
         // 窗体组织忠实原 Contour/ContourDialog：一句说明 + 等高距一行（采样格距是本实现的必要项，收进「高级」）
         var b = m.Bounds;
@@ -1643,8 +1721,8 @@ public partial class MainWindow
     /// <summary>剖面分析：选中三角网 + 1 条剖面线 → 沿线在网格上采样出高程剖面图。</summary>
     private async Task<bool> PcMeshProfileAsync()
     {
-        var meshes = await PcSelectAsync<MeshEntity>("剖面分析", "三角网");
-        if (meshes.Count == 0) { EditEcho("剖面分析：场景里没有三角网，请先用「2.5D TIN」把点云建成面。", EchoLevel.Error); return true; }
+        var meshes = await PcNeedMeshAsync("剖面分析");   // 无三角网 → 弹提醒并可当场建面
+        if (meshes == null) return true;
         var line = await PcSelectLineAsync("剖面分析");
         if (line == null) { EditEcho("剖面分析：场景里没有可作剖面线的线，请先画一条穿过三角网的线。", EchoLevel.Error); return true; }
         var prof = PcSampleMeshProfile(meshes[0], line);
@@ -1677,8 +1755,8 @@ public partial class MainWindow
     /// <summary>工艺参数分析：选中三角网 + 1 条剖面线 → 台阶高/坡面角/平盘宽/整体帮坡角。</summary>
     private async Task<bool> PcProcessParamAsync()
     {
-        var meshes = await PcSelectAsync<MeshEntity>("工艺参数分析", "三角网");
-        if (meshes.Count == 0) { EditEcho("工艺参数分析：场景里没有三角网，请先用「2.5D TIN」把点云建成面。", EchoLevel.Error); return true; }
+        var meshes = await PcNeedMeshAsync("工艺参数分析");   // 无三角网 → 弹提醒并可当场建面
+        if (meshes == null) return true;
         var line = await PcSelectLineAsync("工艺参数分析");
         if (line == null) { EditEcho("工艺参数分析：场景里没有可作剖面线的线，请先画一条穿过三角网的线。", EchoLevel.Error); return true; }
         var v = await PromptDialog.AskAsync(this, "工艺参数分析", new[]
@@ -1726,8 +1804,8 @@ public partial class MainWindow
     private async Task<bool> PcMeshAttribAsync(bool curvature)
     {
         string what = curvature ? "曲率" : "粗糙度";
-        var meshes = await PcSelectAsync<MeshEntity>(what + "分析", "三角网");
-        if (meshes.Count == 0) { EditEcho($"{what}分析：场景里没有三角网，请先用「2.5D TIN」把点云建成面。", EchoLevel.Error); return true; }
+        var meshes = await PcNeedMeshAsync(what + "分析");   // 无三角网 → 弹提醒并可当场建面
+        if (meshes == null) return true;
         // 原版这两项无参数框：选中三角网后直接算并着色（曲率有正负用分歧色，粗糙度用地形色）
         int map = curvature ? 2 : 0;
 
