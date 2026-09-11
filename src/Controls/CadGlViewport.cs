@@ -233,6 +233,9 @@ public partial class CadGlViewport : OpenGlControlBase
         // 保留的托管源(_pendingImport/_pendingScene/…)不动, OnOpenGlInit 会据此重新入队重传。
         _hasImported = _hasScene = _hasHighlight = _hasSnap = _hasFaces = _hasHighlightFaces = _hasPreview = _hasCloud = false;
         _hasGrid = false; _hasGridPlan = false;
+        // 走 UpdateMesh「复用同一 VBO 重灌」的三块(光标/捕捉标记/预览)还攥着旧上下文的缓冲名, 也要清零:
+        // 否则重建后 BindBuffer(旧名) 会撞上新上下文里恰好同名的别的缓冲(场景/格网), 把它灌成光标线段——花屏/丢线。
+        _cursor = default; _snap = default; _preview = default;
         _hasBillboards = false; _hasBillboardFills = false; _bbYaw = double.NaN;
         if (_pendingFaces != null) _facesDirty = true;
         if (_pendingCloud != null) _cloudDirty = true;
@@ -1038,6 +1041,12 @@ public partial class CadGlViewport
 
 public partial class CadGlViewport
 {
+    /// <summary>GPU 侧状态串(自检用): 上下文有没有、画了几帧、各通道"托管源有/已上传/待传"——多文档切标签后"空白"就看它。</summary>
+    public string GlDebug()
+        => $"帧={_frameCount} 失败={GlFailed} 附着={Avalonia.VisualTree.VisualExtensions.IsAttachedToVisualTree(this)} 尺寸={Bounds.Width:0}x{Bounds.Height:0} "
+         + $"场景线(源{_pendingScene?.Length ?? -1}/传{_hasScene}/待{_sceneDirty}) 面(源{_pendingFaces?.Length ?? -1}/传{_hasFaces}/待{_facesDirty}) "
+         + $"导入(源{_pendingImport?.Length ?? -1}/传{_hasImported}/待{_importedDirty}) 网格={_showGrid}/{_hasGrid}";
+
     /// <summary>相机/包围盒调试串(自检用)。</summary>
     public string CameraDebug()
     {

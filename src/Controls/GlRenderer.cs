@@ -114,6 +114,10 @@ internal sealed class GlRenderer
     {
         if (_program != 0) _gl.DeleteProgram(_program);
         _ext.DeleteVertexArray(_vao);
+        // 句柄必须归零：切文档标签会销毁再重建 GL 上下文, 新上下文里的名字从头编号——
+        // 若留着旧 id, 下次 Init 里 TryBuildProgram 的 "先删旧程序" 会把**刚链接好的新程序**(同名 3)删掉,
+        // 之后 UseProgram 用的就是个已删除的程序, 每帧只剩清屏色: 切回来的文档一片黑、网格都没有(实测)。
+        _program = 0; _vao = 0;
     }
 
     /// <summary>上传一块静态网格（交错 P3_C3，6 float/顶点）。</summary>

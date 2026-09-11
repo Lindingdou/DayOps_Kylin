@@ -944,6 +944,7 @@ public partial class MainWindow : Window
     {
         if (d is not DMC.Document doc) return;
         var st = _docs.FirstOrDefault(x => x.Vm == doc);
+        PitMine3D.Kylin.CrashLog.Write("文档", $"活动标签 → {doc.Title}（此前 {_active?.Title}）");
         if (st == null || st == _active) return;
         // 离开的那个文档: 选择集是窗口级的(下面清掉), 它视口上的高亮/捕捉标记也得一起撤, 否则切回来时"看着选中了、其实什么都没选"。
         var prev = _active;
@@ -10651,6 +10652,63 @@ public partial class MainWindow : Window
                                    + (hit == null ? "未命中" : $"命中 {hit.GetType().Name} 层「{hit.LayerName}」");
                     if (hit != null) { _selected.Clear(); _selected.Add(hit); HighlightSelection(); }
                 }
+                return;
+            }
+            if (cmd.StartsWith("@稍后 "))   // @稍后 <毫秒> <步骤>: 真回到消息循环等这么久再跑该步(切标签会销毁/重建 GL 上下文, 得让它真的渲染过才有意义)
+            {
+                var a = cmd.Substring(4).Trim();
+                int sp = a.IndexOf(' ');
+                if (sp > 0 && int.TryParse(a.Substring(0, sp), out int ms))
+                {
+                    string later = a.Substring(sp + 1).Trim();
+                    var t = new Avalonia.Threading.DispatcherTimer { Interval = System.TimeSpan.FromMilliseconds(ms) };
+                    t.Tick += (_, _) =>
+                    {
+                        t.Stop();
+                        try { RunSelftestStep(later); } catch (System.Exception ex) { StatusMsg.Text = "自检步骤异常: " + ex.Message; }
+                        PitMine3D.Kylin.CrashLog.Write("自检", $"(+{ms}ms) {later}  →  状态栏「{StatusMsg.Text}」");
+                    };
+                    t.Start();
+                }
+                return;
+            }
+            if (cmd.StartsWith("@标签坐标 "))   // @标签坐标 <序号>: 记第 n 个文档标签页签的屏幕中心(供外部真点一下, 核对"点标签切文档"这条路)
+            {
+                if (int.TryParse(cmd.Substring(5).Trim(), out int ti) && ti >= 1 && ti <= _docs.Count)
+                {
+                    var vm = _docs[ti - 1].Vm;
+                    var tab = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(this)
+                        .OfType<Control>().FirstOrDefault(c => ReferenceEquals(c.DataContext, vm) && c.GetType().Name.Contains("TabStripItem"));
+                    if (tab != null)
+                    {
+                        var c = tab.PointToScreen(new Point(tab.Bounds.Width / 2, tab.Bounds.Height / 2));
+                        StatusMsg.Text = $"标签{ti} {tab.GetType().Name} 屏幕({c.X},{c.Y}) 尺寸{tab.Bounds.Width:0}x{tab.Bounds.Height:0}";
+                    }
+                    else StatusMsg.Text = $"标签{ti}: 找不到页签控件";
+                }
+                return;
+            }
+            if (cmd.StartsWith("@标签点 "))   // @标签点 <序号>: 走页签条的选中路径切文档(= 用鼠标点页签; 真鼠标进不了 Avalonia)
+            {
+                if (int.TryParse(cmd.Substring(4).Trim(), out int ti) && ti >= 1 && ti <= _docs.Count)
+                {
+                    var strip = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(this)
+                        .OfType<Avalonia.Controls.Primitives.SelectingItemsControl>().FirstOrDefault(c => c.GetType().Name == "DocumentTabStrip");
+                    if (strip != null) { strip.SelectedItem = _docs[ti - 1].Vm; StatusMsg.Text = $"标签点{ti}: 页签条选中={((strip.SelectedItem as DMC.Document)?.Title)} 活动={((_docDock.ActiveDockable as DMC.Document)?.Title)} 当前={_active.Title}"; }
+                    else StatusMsg.Text = "标签点: 找不到页签条";
+                }
+                return;
+            }
+            if (cmd == "@标签态")   // 页签条选中 / DocumentDock.ActiveDockable / _active 三者是否一致
+            {
+                var strip = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(this)
+                    .OfType<Avalonia.Controls.Primitives.SelectingItemsControl>().FirstOrDefault(c => c.GetType().Name == "DocumentTabStrip");
+                StatusMsg.Text = $"页签条选中={((strip?.SelectedItem as DMC.Document)?.Title ?? "?")} 活动={((_docDock.ActiveDockable as DMC.Document)?.Title)} 当前={_active.Title} 视口父级={_active.Host?.Parent?.GetType().Name ?? "无"}";
+                return;
+            }
+            if (cmd == "@GL状态")   // 当前文档视口的 GPU 侧状态(帧数/附着/各通道 源·传·待), 判"切回来空白"是没渲染还是没重传
+            {
+                StatusMsg.Text = $"GL {Viewport.GlDebug()}";
                 return;
             }
             if (cmd.StartsWith("@文档 "))   // @文档 <序号>: 切到第 n 个文档标签(多文档互不串扰的核对用; 1 起)
