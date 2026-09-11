@@ -553,11 +553,12 @@ public partial class MainWindow
         if (lines.Count < 2) { StatusMsg.Text = "侧面三角网：请选中 2 条多段线(顶线与底线, 高程取逐点 z 或线标高)"; return; }
         var a = Line3(lines[0]); var b = Line3(lines[1]);
         if (LayerSolid.MeanZ(a) < LayerSolid.MeanZ(b)) (a, b) = (b, a);
-        var (v, t) = SideSurface.Loft(a, b, lines[0].Closed && lines[1].Closed, false);
+        bool closed = lines[0].Closed || lines[1].Closed;   // 照原版 SIDEMESH：任一闭合即按环形侧壁
+        var (v, t) = SideSurface.Loft(a, b, closed, false);
         if (t.Count == 0) { StatusMsg.Text = "侧面三角网：放样失败(线太短或退化)"; return; }
         var me = AddMesh(new MeshEntity(NewMeshName("侧面"), v, t) { Cr = 0.8f, Cg = 0.7f, Cb = 0.4f }, false);
         SelectEntities(new SceneEntity[] { me });
-        StatusMsg.Text = $"侧面三角网「{me.Name}」：顶线 {a.Count} 点 / 底线 {b.Count} 点 → {t.Count} 三角(弧长拉链放样)";
+        StatusMsg.Text = $"侧面三角网「{me.Name}」：顶线 {a.Count} 点 / 底线 {b.Count} 点 → {t.Count} 三角({(closed ? "闭合环壁" : "开放侧面")}·最短横档放样)";
     }
 
     private async Task MdlQuickModelAsync()

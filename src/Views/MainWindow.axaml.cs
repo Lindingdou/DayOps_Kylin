@@ -4087,7 +4087,7 @@ public partial class MainWindow : Window
         return pts;
     }
 
-    // 侧面三角网：选顶线 CSV + 底线 CSV → 弧长拉链放样 → 保存 OFF + 报表
+    // 侧面三角网：选顶线 CSV + 底线 CSV → 最短横档 DP 放样 → 保存 OFF + 报表
     private async Task SideSurfaceAsync()
     {
         var tf = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
@@ -4108,7 +4108,8 @@ public partial class MainWindow : Window
         if (bfp.Count == 0) return;
         var bot = ReadLineCsv(bfp[0].Path.LocalPath);
         if (bot == null || bot.Count < 2) { StatusMsg.Text = "侧面三角网：底线需 ≥2 点(x,y,z)"; return; }
-        bool closed = top.Count >= 3 && System.Math.Abs(top[0].x - top[^1].x) < 1e-6 && System.Math.Abs(top[0].y - top[^1].y) < 1e-6;
+        static bool Ring(List<(double x, double y, double z)> l) => l.Count >= 3 && System.Math.Abs(l[0].x - l[^1].x) < 1e-6 && System.Math.Abs(l[0].y - l[^1].y) < 1e-6;
+        bool closed = Ring(top) || Ring(bot);   // 照原版：任一闭合即按环形侧壁
         var (verts, tris) = SideSurface.Loft(top, bot, closed, flip: false);
         if (tris.Count == 0) { StatusMsg.Text = "侧面三角网：放样失败(点太少/退化)"; return; }
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
