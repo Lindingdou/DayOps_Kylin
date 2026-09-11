@@ -650,6 +650,13 @@ public partial class CadGlViewport : OpenGlControlBase
         RequestNextFrameRendering();
     }
 
+    /// <summary>网格/轴显隐(GRID)。多标签各有各的视口, 新建标签的视口要按主窗口当前的网格开关对齐, 否则"翻一次"就反了。</summary>
+    public bool GridVisible
+    {
+        get => _showGrid;
+        set { if (_showGrid == value) return; _showGrid = value; RequestNextFrameRendering(); }
+    }
+
     /// <summary>高亮一组几何（P3_C3 位置，默认重着色为高亮色；recolor=false 保留自带颜色，供夹点冷/热/选中配色）；null/空 → 清除高亮。</summary>
     public void SetHighlight(float[]? geom, bool recolor = true)
     {

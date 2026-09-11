@@ -881,6 +881,7 @@ public partial class MainWindow : Window
         Dock.Factory = f;
         Dock.Layout = root;
         f.ActiveDockableChanged += (_, e) => OnActiveDocChanged(e.Dockable);   // 标签切换 → 切当前文档
+        f.DockableClosed += (_, e) => OnDockableClosed(e.Dockable);            // 标签关闭 → 摘掉该文档
 
         // 内容模板：匹配我的叶子面板(按 Id)或任一文档(Doc*), 返回暂存控件; 框架容器仍用内建主题渲染。
         // 关键：注册到 Application 级(而非 Dock 级)——浮动时面板进入独立宿主窗口(另一个 DockControl),
@@ -938,20 +939,45 @@ public partial class MainWindow : Window
         _dockFactory.SetActiveDockable(st.Vm);   // 触发 ActiveDockableChanged → OnActiveDocChanged 完成切换
     }
 
-    // 标签切换/激活 → 切当前文档: _active 换掉(其 _scene/_layers 随之切), 取消进行中命令, 刷面板与场景。
+    // 标签切换/激活 → 切当前文档: _active 换掉(其 场景/图层/撤销栈/路径 随之切), 取消进行中命令, 刷面板与场景。
     private void OnActiveDocChanged(DCore.IDockable? d)
     {
         if (d is not DMC.Document doc) return;
         var st = _docs.FirstOrDefault(x => x.Vm == doc);
         if (st == null || st == _active) return;
+        // 离开的那个文档: 选择集是窗口级的(下面清掉), 它视口上的高亮/捕捉标记也得一起撤, 否则切回来时"看着选中了、其实什么都没选"。
+        var prev = _active;
+        if (prev.Vp != null) { prev.Vp.SetHighlight(null); prev.Vp.SetHighlightFaces(null); prev.Vp.SetSnapMarker(null); }
         _active = st;
-        _tool = null; _measure = null; _angle = null; _selected.Clear();
+        _tool = null; _measure = null; _angle = null; _selected.Clear(); _prevSelected = new();
+        _grips.Clear(); _gripHover = -1; _snapShown = false;
         _editMode = EditMode.None; _editAwaitSelect = false; FinishSelectObjects(false); _lastImport = null;
         // 访问 Viewport 即懒建当前文档的独立视口(EnsureHost); 各标签各有其宿主, 切换不再空白。
         // 不清导入几何——每文档视口自留其线框(切换会重建 GL 上下文, CadGlViewport 会据保留源重传)。
         PopulateDrawingLayers();
+        _lastSceneCount = -1;   // 对象树按"实体数变了才重建", 两个文档实体数恰好相等时会留着上一个文档的树 —— 强制重建
         RefreshScene();
+        Viewport.GridVisible = _gridOn;   // 网格开关是窗口级的, 切到哪个视口就把哪个对齐到状态栏那颗钮
+        UpdatePropertyPanel();  // 特性面板空选时显示的是"文档状态"(文件名/实体数), 得跟着换
+        SyncWindowTitle();
         StatusMsg.Text = $"当前文档「{st.Title}」";
+    }
+
+    // 文档标签被关掉 → 从文档表摘除(否则「切换窗口」下拉还列着它, 点了切到一个已不在布局里的标签);
+    // 关的恰是当前文档时, Dock 会把活动标签挪到别的文档并触发 ActiveDockableChanged, 这里只兜底一次。
+    private void OnDockableClosed(DCore.IDockable? d)
+    {
+        if (d is not DMC.Document doc) return;
+        var st = _docs.FirstOrDefault(x => x.Vm == doc);
+        if (st == null || _docs.Count <= 1) return;
+        _docs.Remove(st);
+        if (ReferenceEquals(st, _active))
+        {
+            var next = _docDock.ActiveDockable as DMC.Document;
+            var target = _docs.FirstOrDefault(x => x.Vm == next) ?? _docs[0];
+            if (ReferenceEquals(_docDock.ActiveDockable, target.Vm)) OnActiveDocChanged(target.Vm);
+            else _dockFactory.SetActiveDockable(target.Vm);
+        }
     }
 
     private enum NavMode { None, Orbit, Pan }
@@ -967,7 +993,7 @@ public partial class MainWindow : Window
     // 扩展捕捉模式(交点/最近/垂足)——SnapCandidates 未覆盖, 由 ObjectSnap 从场景原语补算。默认仅交点开(最近/垂足按需)。
     private int _snapExtraMask = 1 << (int)ObjectSnap.Mode.Intersection;
     private ObjectSnap.Mode? _snapHitMode;         // 本次捕捉命中的扩展模式(交点/最近/垂足), null=顶点候选或未命中
-    private string? _currentPath;                  // 当前 .pmx 文档路径(保存直接回写)
+    private string? _currentPath { get => _active.Path; set => _active.Path = value; }   // 当前文档的 .pmx 路径(保存直接回写; 归文档, 见 DocState)
     private double _snapTolPx = 12.0;              // 对象捕捉容差(屏幕像素, 选项可调)
     private bool _gridOn = true;                    // 网格显示状态(选项/GRID 同步)
     private bool _snapShown;                     // 捕捉标记是否已显示
@@ -982,6 +1008,10 @@ public partial class MainWindow : Window
         public Scene Scene = new();
         public LayerTable Layers = new();
         public DMC.Document Vm = null!;
+        // 撤销栈与文件路径也归文档：此前两者是窗口级单例 —— 在文档 2 按撤销会弹出文档 1 的快照灌进文档 2 的场景,
+        // 在文档 2 按保存会把文档 2 的内容写进文档 1 打开的那个 .pmx(实测"两个文档互相干扰"的根子)。
+        public UndoManager Undo = new();
+        public string? Path;                                       // 该文档的 .pmx 路径(null=未命名)
         public Panel? Host;                                        // 该文档独立视口宿主(懒建)
         public PitMine3D.Kylin.Controls.CadGlViewport? Vp;         // 该文档独立 3D 视口
         public Border? DragTip;                                    // 绘制时跟随光标的即时信息浮标(长度/角度/半径…)
@@ -1012,7 +1042,7 @@ public partial class MainWindow : Window
     private void EnsureHost(DocState st)
     {
         if (st.Host != null) return;
-        var vp = new PitMine3D.Kylin.Controls.CadGlViewport();
+        var vp = new PitMine3D.Kylin.Controls.CadGlViewport { GridVisible = _gridOn };   // 新标签继承网格开关(窗口级状态, 视口各一份)
         var host = new Panel { Background = Avalonia.Media.Brushes.Transparent, ContextMenu = BuildViewportContextMenu() };
         var cursorNone = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.None);
         var cursorArrow = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Arrow);
@@ -1119,7 +1149,7 @@ public partial class MainWindow : Window
         if (_onHostDoubleTapped != null) host.DoubleTapped += _onHostDoubleTapped;
         if (_onHostExited != null) host.PointerExited += _onHostExited;
     }
-    private readonly UndoManager _undo = new();   // 撤销/重做
+    private UndoManager _undo => _active.Undo;    // 撤销/重做(当前文档自己的栈, 见 DocState)
     private DrawTool? _tool;                      // 当前激活的绘制工具
     private readonly List<SceneEntity> _selected = new();   // 选择集
     private List<SceneEntity> _prevSelected = new();         // 上次选择集
@@ -1832,12 +1862,18 @@ public partial class MainWindow : Window
         StatusMsg.Text = "新建图形（已重置：绘图/导入/图层/选择/撤销）";
     }
 
-    // 设置当前文档路径并更新窗口标题
+    // 设置当前文档路径并更新窗口标题 + 文档标签名(打开/另存后标签显示文件名, 多标签才分得清哪个是哪个)
     private void SetDocPath(string? path)
     {
         _currentPath = path;
-        Title = "中煤平朔露天煤矿生产计划决策支撑系统 · DayOps — " + (path == null ? "未命名" : Path.GetFileName(path));   // 原版系统名 + 当前文档名(桌面/软件名另用 DayOps)
+        _active.Title = path != null ? Path.GetFileName(path) : $"未命名 {_active.Id.Substring(3)}";   // Id 形如 Doc3
+        _active.Vm.Title = _active.Title;
+        SyncWindowTitle();
     }
+
+    // 窗口标题 = 原版系统名 + 当前活动文档名(桌面/软件名另用 DayOps); 切标签时也要重设, 否则标题一直挂着上一个文档的文件名
+    private void SyncWindowTitle()
+        => Title = "中煤平朔露天煤矿生产计划决策支撑系统 · DayOps — " + (_active.Path == null ? _active.Title : Path.GetFileName(_active.Path));
 
     private async Task SaveSceneAsync()
     {
@@ -8248,7 +8284,7 @@ public partial class MainWindow : Window
         if (GridToggle != null && GridToggle.IsChecked != on) GridToggle.IsChecked = on;   // 状态栏栅格钮同步(触发 OnGridToggle 后下一行早退)
         if (on == _gridOn) return;
         _gridOn = on;
-        Viewport.ToggleGrid();
+        Viewport.GridVisible = on;   // 直设而非翻转: 各标签视口各有自己的网格位, 翻转会把没对齐的那个翻反
     }
 
     // ── 状态栏(同原版 extend 项)：栅格开关 / 捕捉模式右键菜单 / 选项 ──
@@ -10615,6 +10651,13 @@ public partial class MainWindow : Window
                                    + (hit == null ? "未命中" : $"命中 {hit.GetType().Name} 层「{hit.LayerName}」");
                     if (hit != null) { _selected.Clear(); _selected.Add(hit); HighlightSelection(); }
                 }
+                return;
+            }
+            if (cmd.StartsWith("@文档 "))   // @文档 <序号>: 切到第 n 个文档标签(多文档互不串扰的核对用; 1 起)
+            {
+                if (int.TryParse(cmd.Substring(3).Trim(), out int di) && di >= 1 && di <= _docs.Count)
+                    _dockFactory.SetActiveDockable(_docs[di - 1].Vm);
+                else StatusMsg.Text = $"自检：无第 {cmd.Substring(3).Trim()} 个文档(共 {_docs.Count} 个)";
                 return;
             }
             if (cmd == "@视口")   // 报告"屏幕上到底有没有东西": 可见世界范围 + 落在其中的顶点比例
