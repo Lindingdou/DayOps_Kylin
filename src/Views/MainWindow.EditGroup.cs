@@ -235,8 +235,9 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// 多段线嵌入三角网 (EMBED)：容差对话框 → 把选中多段线作为约束边嵌入选中三角网，原地细分。
-    /// 严格 / 部分嵌入按原版逐条回显。
+    /// 多段线嵌入三角网 (EMBED)：容差对话框 → 多段线落面(节点重算：与每条三角边的交点都成节点, 高程取自面)
+    /// + 三角网原地保形细分(线段成为网边, 面形不变) → 同时替换三角网与多段线实体。严格 / 部分嵌入按原版逐条回显。
+    /// 此前整张重做约束 Delaunay：地形网原有结构被推倒, 线在两顶点之间穿山悬空 —— 用户截图"没能正确嵌入"。
     /// </summary>
     private async Task EdEmbedPolylineAsync()
     {
@@ -250,30 +251,52 @@ public partial class MainWindow
         if (mesh == null) { EditEcho("多段线嵌入三角网：未指定目标三角网", EchoLevel.Warn); return; }
         double? tol = await AskToleranceAsync("嵌入多段线参数", 1e-6);
         if (tol == null) return;
-        EditEcho($"> EMBED (多段线嵌入三角网) tolerance={tol.Value:G}");
+        EditEcho($"EMBED (多段线嵌入三角网) tolerance={tol.Value:G}");
+        var res = EmbedPolylinesIntoMesh(mesh, lines, tol.Value);
+        if (res == null) { EditEcho("嵌入失败：三角网为空或退化", EchoLevel.Error); return; }
+        int nodes = 0; foreach (var pl in res.Polylines) nodes += pl.Count;
+        int srcNodes = 0; foreach (var l in lines) srcNodes += l.Points.Count;
+        EditEcho($"细分: 面 {res.OriginalFaces} → {res.NewFaces} (被分 {res.SplitFaces}, 新增点 {res.InsertedPoints}) · "
+               + $"多段线节点重算: {srcNodes} → {nodes} 节点(补 {Math.Max(0, nodes - srcNodes)} 个与三角边的交点), 逐点贴面");
+        if (res.Strict) EditEcho("严格嵌入：所有 segment 已成为 mesh 边", EchoLevel.Success);
+        else EditEcho($"部分嵌入：{res.Unembedded} 个 segment 未能落到 mesh 边上（{res.OutsideNodes} 个节点在三角网范围外, 保留原高程）", EchoLevel.Warn);
+    }
 
-        var p3 = mesh.Verts.ToList();
-        int origFaces = mesh.Tris.Count;
-        var cons = new List<(int u, int v)>();
+    /// <summary>
+    /// 多段线落面 + 三角网保形细分, 并把新网、新线换进场景(一步可撤销)。返回 null 表示网退化。
+    /// 新线一律带逐点 Z(Zs 按源标高回基), 网外节点保留源高程。
+    /// </summary>
+    private MeshEmbed.Result? EmbedPolylinesIntoMesh(MeshEntity mesh, IReadOnlyList<PolylineEntity> lines, double tol)
+    {
+        var input = new List<MeshEmbed.Line>(lines.Count);
         foreach (var l in lines)
+            input.Add(new MeshEmbed.Line(l.Points, Enumerable.Range(0, l.Points.Count).Select(l.ZAt).ToList(), l.Closed));
+        var res = MeshEmbed.Embed(mesh.Verts, mesh.Tris, input, tol);
+        if (res == null || res.Tris.Count == 0) return null;
+        BeginChange();
+        var nu = new MeshEntity(mesh.Name, res.Verts, OrientUp(res.Verts, res.Tris));
+        SwapEntity(mesh, nu);
+        _surfGrids.Remove(mesh);
+        for (int i = 0; i < lines.Count && i < res.Polylines.Count; i++)
         {
-            int start = p3.Count;
-            for (int i = 0; i < l.Points.Count; i++)
-                p3.Add((l.Points[i].x, l.Points[i].y,
-                        l.Has3D ? l.ZAt(i) : (MeshZ(mesh, l.Points[i].x, l.Points[i].y) ?? l.Elevation)));
-            for (int i = 0; i + 1 < l.Points.Count; i++) cons.Add((start + i, start + i + 1));
-            if (l.Closed && l.Points.Count > 2) cons.Add((start + l.Points.Count - 1, start));
+            var src = lines[i]; var pts = res.Polylines[i];
+            if (pts.Count == 0) continue;
+            var pl = new PolylineEntity { Closed = src.Closed && pts.Count > 2 };
+            pl.CopyStyleFrom(src);
+            pl.Zs = new List<double>(pts.Count);
+            foreach (var p in pts) { pl.Points.Add((p.x, p.y)); pl.Zs.Add(p.z - src.Elevation); }
+            SwapEntity(src, pl);
         }
-        int insertedPoints = p3.Count - mesh.Verts.Count;
-        var tris = Delaunay.TriangulateConstrained(
-            p3.Select(p => (p.x, p.y)).ToList(), cons, out int inserted, out int skipped);
-        if (tris.Count == 0) { EditEcho("嵌入失败：剖分未产生三角面", EchoLevel.Error); return; }
-        tris = OrientUp(p3, tris);
-        var nu = new MeshEntity(mesh.Name, p3, tris);
-        ReplaceMesh(mesh, nu);
-        EditEcho($"细分: 面 {origFaces} → {tris.Count} (约束 {cons.Count} 段, 新增点 {insertedPoints})");
-        if (skipped == 0) EditEcho("✓ 严格嵌入：所有 segment 已成为 mesh 边", EchoLevel.Success);
-        else EditEcho($"⚠ 部分嵌入：{skipped} 个 segment 未能落到 mesh 边上（可能因数据冲突或预算保护）", EchoLevel.Warn);
+        RefreshScene(); HighlightSelection();
+        return res;
+    }
+
+    /// <summary>原位替换场景实体(保留次序与选中态)；不记撤销, 调用方自己 BeginChange。</summary>
+    private void SwapEntity(SceneEntity old, SceneEntity nu)
+    {
+        int idx = _scene.Entities.IndexOf(old);
+        if (idx >= 0) _scene.Entities[idx] = nu; else _scene.Add(nu);
+        int si = _selected.IndexOf(old); if (si >= 0) _selected[si] = nu;
     }
 
     // ══════════════════════════════ 体编辑 ══════════════════════════════

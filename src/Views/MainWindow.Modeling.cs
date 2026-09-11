@@ -497,21 +497,31 @@ public partial class MainWindow
         var lines = SelectedPolylines().Where(l => l.Points.Count >= 2).ToList();
         if (lines.Count == 0) { StatusMsg.Text = "多段线嵌入三角网：请先选中 ≥1 条约束线(可同时选中三角网, 否则用选中的点)"; return; }
         var meshes = SelectedMeshes();
-        var p3 = meshes.Count > 0 ? meshes[0].Verts.ToList() : Pts3(SelectedPoints());
+        if (meshes.Count > 0)
+        {
+            // 已有三角网：落面 + 原位保形细分(线节点重算、逐点贴面), 不整张重剖
+            var res = EmbedPolylinesIntoMesh(meshes[0], lines, 1e-6);
+            if (res == null) { StatusMsg.Text = "多段线嵌入三角网：三角网退化"; return; }
+            int nodes = 0; foreach (var pl in res.Polylines) nodes += pl.Count;
+            StatusMsg.Text = $"多段线嵌入三角网「{meshes[0].Name}」：{lines.Count} 条线重算为 {nodes} 节点贴面 · 面 {res.OriginalFaces} → {res.NewFaces}(被分 {res.SplitFaces}, 新增点 {res.InsertedPoints})"
+                           + (res.Strict ? " · 严格嵌入" : $" · 部分嵌入({res.Unembedded} 段未成边, {res.OutsideNodes} 节点在网外)");
+            return;
+        }
+        var p3 = Pts3(SelectedPoints());
         if (p3.Count < 3) { StatusMsg.Text = "多段线嵌入三角网：需选中一张三角网或 ≥3 个点"; return; }
         var cons = new List<(int u, int v)>();
         foreach (var l in lines)
         {
             int start = p3.Count;
-            for (int i = 0; i < l.Points.Count; i++) p3.Add((l.Points[i].x, l.Points[i].y, l.Has3D ? l.ZAt(i) : (MeshZ(meshes.Count > 0 ? meshes[0] : null, l.Points[i].x, l.Points[i].y) ?? l.Elevation)));
+            for (int i = 0; i < l.Points.Count; i++) p3.Add((l.Points[i].x, l.Points[i].y, l.ZAt(i)));
             for (int i = 0; i + 1 < l.Points.Count; i++) cons.Add((start + i, start + i + 1));
             if (l.Closed && l.Points.Count > 2) cons.Add((start + l.Points.Count - 1, start));
         }
         var tris = Delaunay.TriangulateConstrained(p3.Select(p => (p.x, p.y)).ToList(), cons);
         if (tris.Count == 0) { StatusMsg.Text = "多段线嵌入三角网：剖分失败"; return; }
         tris = OrientUp(p3, tris);
-        var me = new MeshEntity(meshes.Count > 0 ? meshes[0].Name : NewMeshName("约束三角网"), p3, tris);
-        if (meshes.Count > 0) ReplaceMesh(meshes[0], me); else { AddMesh(me, true); SelectEntities(new SceneEntity[] { me }); }
+        var me = new MeshEntity(NewMeshName("约束三角网"), p3, tris);
+        AddMesh(me, true); SelectEntities(new SceneEntity[] { me });
         StatusMsg.Text = $"多段线嵌入三角网「{me.Name}」：嵌入 {lines.Count} 条线 {cons.Count} 段约束 → {tris.Count} 三角";
     }
 
@@ -530,6 +540,50 @@ public partial class MainWindow
         if (keep.Tris.Count == 0) { StatusMsg.Text = "闭合线裁剪面：保留侧无三角"; return; }
         ReplaceMesh(m, new MeshEntity(m.Name, keep.Verts, keep.Tris));
         StatusMsg.Text = $"闭合线裁剪面「{m.Name}」：保留{(inside ? "内" : "外")}侧 {keep.Tris.Count} 三角，去除 {(inside ? pout : pin).Tris.Count}";
+    }
+
+    /// <summary>
+    /// 自检：起伏地形 + 两条同样走向的平面线 —— 红线原样(不嵌入, 穿山悬空), 黄线走「多段线嵌入三角网」
+    /// (节点重算贴面 + 网保形细分)。东南等轴测压低视角, 截图核对黄线严丝合缝贴面、红线穿面。
+    /// </summary>
+    private void SelftestSampleEmbed()
+    {
+        const int nx = 40, ny = 24; const double w = 200, h = 120;
+        var v = new List<(double x, double y, double z)>((nx + 1) * (ny + 1));
+        for (int j = 0; j <= ny; j++)
+            for (int i = 0; i <= nx; i++)
+            {
+                double x = i * w / nx, y = j * h / ny;
+                double z = 1200 + 12 * Math.Sin(x / 23.0) * Math.Cos(y / 17.0) + 0.04 * x;
+                v.Add((x, y, z));
+            }
+        var t = new List<(int a, int b, int c)>(nx * ny * 2);
+        for (int j = 0; j < ny; j++)
+            for (int i = 0; i < nx; i++)
+            {
+                int a = j * (nx + 1) + i, b = a + 1, c = a + nx + 1, d = c + 1;
+                t.Add((a, b, d)); t.Add((a, d, c));
+            }
+        var path = new[] { (12.0, 18.0), (58.0, 41.0), (97.0, 30.0), (131.0, 72.0), (186.0, 96.0) };
+        var raw = new PolylineEntity { Cr = 1f, Cg = 0.2f, Cb = 0.2f, LayerName = "自检原线", Elevation = 1206 };
+        raw.Points.AddRange(path.Select(p => (p.Item1, p.Item2 + 14)));   // 平行错开 14m, 同一张面上对照
+        var line = new PolylineEntity { Cr = 1f, Cg = 0.95f, Cb = 0.2f, LayerName = "自检嵌入线", Elevation = 1206 };
+        line.Points.AddRange(path.Select(p => (p.Item1, p.Item2)));
+
+        BeginChange();
+        var me = new MeshEntity(NewMeshName("自检三角网"), v, t);
+        AssignLayer(me); _scene.Add(me); _scene.Add(raw); _scene.Add(line);
+        me.Cr = 0.93f; me.Cg = 0.55f; me.Cb = 0.15f;   // AssignLayer 会套层色, 颜色要在它之后给
+        RefreshScene();
+        var res = EmbedPolylinesIntoMesh(me, new[] { line }, 1e-6);
+        Viewport.SetViewMode(false); Viewport.SetView("se");
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => Viewport.FitBounds(new[] { 0.0, 0.0, w, h }), Avalonia.Threading.DispatcherPriority.Background);
+        var tm = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(2500) };
+        tm.Tick += (_, _) => { tm.Stop(); Viewport.Orbit(0, -0.35); RefreshScene(); };
+        tm.Start();
+        StatusMsg.Text = res == null ? "自检嵌入：失败" :
+            $"自检嵌入：面 {res.OriginalFaces}→{res.NewFaces}(被分 {res.SplitFaces}·新增点 {res.InsertedPoints}) · 黄线 {path.Length}→{res.Polylines[0].Count} 节点贴面 · {(res.Strict ? "严格嵌入" : $"未嵌入 {res.Unembedded}")} · 红线为未嵌入对照";
+        PitMine3D.Kylin.CrashLog.Write("自检", StatusMsg.Text);
     }
 
     private async Task MdlSolidifyAsync()

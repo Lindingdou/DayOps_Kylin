@@ -10565,6 +10565,11 @@ public partial class MainWindow : Window
                 SelftestSamplePointCloud(cn, rn, dz);
                 return;
             }
+            if (cmd == "@嵌入示例")   // @嵌入示例: 起伏三角网 + 红线(原样穿山悬空) + 黄线(嵌入后贴面), 东南视角压低(截图核对贴面)
+            {
+                SelftestSampleEmbed();
+                return;
+            }
             if (cmd.StartsWith("@线示例"))   // @线示例 [圈]: 造一条剖面线(默认)或闭合边界并选中(点云剖面/分割/圈量/剖面分析用)
             {
                 SelftestSampleLine(cmd.Contains("圈") || cmd.Contains("闭合"));
