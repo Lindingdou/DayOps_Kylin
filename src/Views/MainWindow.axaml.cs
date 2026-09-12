@@ -781,6 +781,8 @@ public partial class MainWindow : Window
             if (e.Key == Key.Escape && CancelParamAsk()) { e.Handled = true; return; }   // 参数问答中 Esc = 放弃该命令
             if ((e.Key == Key.Enter || e.Key == Key.Return) && ConfirmOneShotPick()) { e.Handled = true; return; }
             if ((e.Key == Key.Enter || e.Key == Key.Return) && FinishSelectObjects(true)) { e.Handled = true; return; }
+            // 焦点在命令框时回车已由 SubmitCommandLine 处理(它不标 Handled 会冒泡到这), 别再确认一次
+            if ((e.Key == Key.Enter || e.Key == Key.Return) && e.Source is not TextBox && ConfirmEditByKey()) { e.Handled = true; return; }
             if (e.Key == Key.Escape && CancelOneShotPick()) { e.Handled = true; return; }
             if (e.Key == Key.Escape && FinishSelectObjects(false)) { e.Handled = true; return; }
             if (e.Key == Key.Escape)
@@ -795,7 +797,7 @@ public partial class MainWindow : Window
                 _tool = null;
                 _measure = null;
                 _angle = null;
-                _editMode = EditMode.None; _editAwaitSelect = false;
+                _editMode = EditMode.None; _editAwaitSelect = false; _editDisplacement = false;
                 FinishSelectObjects(false);
                 _editPts.Clear();
                 _offsetActive = false;
@@ -1166,6 +1168,9 @@ public partial class MainWindow : Window
     private Avalonia.Point _pressPos;             // 按下位置（区分点击/拖拽）
     private enum EditMode { None, Move, Copy, Mirror, Rotate, Scale }
     private EditMode _editMode = EditMode.None;
+    // 移动/复制的「位移(D)」模式(忠实原版 EditCommandState::WaitingDisplacement)：不取基点，
+    // 下一次在命令行键入的坐标就是位移向量(相对原点)，直接平移/复制。
+    private bool _editDisplacement;
     private bool _editAwaitSelect;                                  // 编辑命令的"选择对象"阶段(右键确定后转取点)
     private string _editName = "";                                  // 当前编辑命令名(用于提示)
     private readonly List<(double x, double y)> _editPts = new();   // 编辑取的点（基点/目标点/参照…）
@@ -8430,7 +8435,7 @@ public partial class MainWindow : Window
         if (_editAwaitSelect) return $"{_editName}：选择对象 — 单击选取 · 按住拖动框选 · 再点取消选 · 右键确定（已选 {_selected.Count}）";
         if (_editMode != EditMode.None)
             return _editPts.Count == 0
-                ? $"{_editName}：{(_editMode == EditMode.Mirror ? "指定镜像线的第一点" : "指定基点 或 [位移(D)]")}"
+                ? $"{_editName}：{EditFirstPrompt()}"
                 : EditPrompt(_editMode, _editPts.Count);
         if (_gripDrag.Active) return _gripDrag.Prompt;
         if (_measure != null) return "测量：指定下一点（右键/Esc 结束）";
@@ -9220,6 +9225,8 @@ public partial class MainWindow : Window
         // 编辑组命令(点/线/面/体编辑)有自己的等待者, 先给它收尾; 否则才走 移动/复制/镜像 的取点流程。
         if (_selectObjectsTcs != null) { e.Cancel = true; FinishSelectObjects(true); return; }
         if (_editAwaitSelect) { e.Cancel = true; ConfirmEditSelection(); return; }
+        // 取点阶段右键 = 确认(移动/复制定了基点 → 用第一个点作为位移; 其余 → 结束命令), 同原版
+        if (_editMode != EditMode.None && ConfirmEditPoint()) { e.Cancel = true; return; }
         // 视图模式三项：隐藏当前所处那一项(忠实原版 RefreshCtxToggleViewState)
         bool is2D = Viewport.Is2DView;
         if (_ctxTo2D != null) _ctxTo2D.IsVisible = !is2D;
@@ -9843,7 +9850,7 @@ public partial class MainWindow : Window
     // 已有预选(名词-动词)则作为初始选择集, 右键即可直接确定。
     private void StartEdit(EditMode mode, string name)
     {
-        _editMode = mode; _editName = name; _editPts.Clear();
+        _editMode = mode; _editName = name; _editPts.Clear(); _editDisplacement = false;
         _tool = null; _measure = null; _lastInputPoint = null;
         _editAwaitSelect = true;
         StatusMsg.Text = $"{name}：选择对象（单击/框选，右键确定" + (_selected.Count > 0 ? $"，已选 {_selected.Count}" : "") + "）";
@@ -9856,7 +9863,7 @@ public partial class MainWindow : Window
         _editAwaitSelect = false;
         if (_selected.Count == 0) { _editMode = EditMode.None; HideDragTip(); StatusMsg.Text = $"{_editName}：未选对象，命令取消"; return; }
         HighlightSelection();
-        StatusMsg.Text = $"{_editName}：{(_editMode == EditMode.Mirror ? "指定镜像线第一点" : "指定基点")}（已选 {_selected.Count}）";
+        StatusMsg.Text = $"{_editName}：{EditFirstPrompt()}（已选 {_selected.Count}）";
         RefreshScene();
     }
 
@@ -10256,11 +10263,117 @@ public partial class MainWindow : Window
         SyncPrompt();
     }
 
+    /// <summary>
+    /// 编辑取点阶段的命令行选项与数值(忠实原版 EditCommandState::OnTextInput 的 MOVE/COPY 分支)：
+    ///   · 基点提示下键入 D / 位移 / DISPLACEMENT → 位移模式：下一次键入的坐标即位移向量，不取基点；
+    ///   · 位移模式下 "dx,dy" / "@dx,dy" / "d&lt;ang" 一律按相对原点解析 → 直接平移/复制；
+    ///   · 第二点提示下键入纯数字 = 直接距离：沿 基点→当前光标 方向移动该距离。
+    /// 认领了返回 true。须早于坐标解析(位移模式的坐标不能相对基点算)与命令解析(D 别被当成「标注样式」)。
+    /// </summary>
+    private bool TryEditOption(string cmd)
+    {
+        if (_editMode is not (EditMode.Move or EditMode.Copy) || _editAwaitSelect) return false;
+        if (_editPts.Count == 0)
+        {
+            if (!_editDisplacement)
+            {
+                if (!IsDisplacementKeyword(cmd)) return false;
+                _editDisplacement = true;
+                StatusMsg.Text = $"{_editName}：指定位移 <dx,dy>（键入 dx,dy 或 d<角度）";
+                SyncPrompt();
+                return true;
+            }
+            var v = ParseCoord(cmd, (0, 0));   // 位移是向量：@dx,dy 与 dx,dy 同义(相对原点)
+            if (v == null) { StatusMsg.Text = $"{_editName}：位移须为 dx,dy 或 d<角度（如 100,50 / 50<30）"; return true; }
+            ApplyDisplacement(v.Value.x, v.Value.y);
+            return true;
+        }
+        if (_editPts.Count == 1 && double.TryParse(cmd, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double dist))
+        {
+            var t = DirectDistanceTarget(_editPts[0], _cursorWorld, dist);
+            if (t == null) { StatusMsg.Text = $"{_editName}：直接距离输入要靠光标给方向——先把光标移到目标方向再键入距离"; return true; }
+            FeedPoint(t.Value.x, t.Value.y);
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>移动/复制「位移(D)」关键字：D / DISPLACEMENT / 位移(忽略大小写与空白，同原版 IsDisplacementKeyword)。</summary>
+    internal static bool IsDisplacementKeyword(string s)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (char c in s) if (!char.IsWhiteSpace(c)) sb.Append(char.ToUpperInvariant(c));
+        string k = sb.ToString();
+        return k == "D" || k == "DISPLACEMENT" || k == "位移";
+    }
+
+    /// <summary>直接距离输入：由基点沿 基点→光标 方向走 dist 得到第二点；光标缺失或与基点重合(方向不明)返回 null。</summary>
+    internal static (double x, double y)? DirectDistanceTarget((double x, double y) b, (double x, double y)? cursor, double dist)
+    {
+        if (cursor == null) return null;
+        double dx = cursor.Value.x - b.x, dy = cursor.Value.y - b.y;
+        double len = System.Math.Sqrt(dx * dx + dy * dy);
+        if (len < 1e-9) return null;
+        return (b.x + dx / len * dist, b.y + dy / len * dist);
+    }
+
+    /// <summary>按位移向量落地移动/复制(位移模式 / 第二点回车「使用第一个点作为位移」)，并结束命令。</summary>
+    private void ApplyDisplacement(double dx, double dy)
+    {
+        bool copy = _editMode == EditMode.Copy;
+        string name = _editName;
+        _editMode = EditMode.None; _editPts.Clear(); _editDisplacement = false;   // 先退出取点态再落地(理由见 FeedPoint)
+        ApplyEditTransform(Affine2.Translate(dx, dy), copy);
+        HideDragTip();
+        StatusMsg.Text = $"{name}完成：位移 Δx {dx:0.###}  Δy {dy:0.###}";
+        SyncPrompt();
+    }
+
+    /// <summary>
+    /// 取点阶段的 回车/空格/右键(忠实原版 EditCommandState::OnInput 的 confirm 分支)：
+    /// 移动/复制已定基点 → 「使用第一个点作为位移」：位移向量 = 基点坐标本身；其余情形 = 结束命令(不改实体)。
+    /// 不在取点阶段返回 false。
+    /// </summary>
+    private bool ConfirmEditPoint()
+    {
+        if (_editMode == EditMode.None || _editAwaitSelect) return false;
+        if (_editMode is EditMode.Move or EditMode.Copy && _editPts.Count == 1)
+        {
+            var b = _editPts[0];
+            ApplyDisplacement(b.x, b.y);
+            return true;
+        }
+        string name = _editName;
+        _editMode = EditMode.None; _editPts.Clear(); _editDisplacement = false;
+        HideDragTip(); RefreshScene();
+        StatusMsg.Text = $"{name}：已结束（未改动）";
+        SyncPrompt();
+        return true;
+    }
+
+    /// <summary>回车/空格 = 右键(AutoCAD 三者等价)：编辑命令的选择对象阶段 → 确定选择集；取点阶段 → <see cref="ConfirmEditPoint"/>。</summary>
+    private bool ConfirmEditByKey()
+    {
+        if (_editMode == EditMode.None) return false;
+        if (_editAwaitSelect) { if (_selectObjectsTcs != null) return false; ConfirmEditSelection(); return true; }
+        return ConfirmEditPoint();
+    }
+
+    /// <summary>取点阶段第一步的提示(同原版 PromptForStep)：镜像=镜像线第一点；移动/复制=基点或位移(D)，位移模式下=指定位移。</summary>
+    private string EditFirstPrompt() => _editMode switch
+    {
+        EditMode.Mirror => "指定镜像线的第一点",
+        EditMode.Move or EditMode.Copy => _editDisplacement ? "指定位移 <dx,dy>" : "指定基点 或 [位移(D)] <位移>",
+        _ => "指定基点"
+    };
+
     private bool TryCoordinateInput(string cmd)
     {
         if (_tool == null && _editMode == EditMode.None) return false;   // 仅取点态接受坐标
         var pt = ParseCoord(cmd, _lastInputPoint);
         if (pt == null) return false;
+        // 「选择对象」阶段键入坐标 = 在该点点选一次(同 AutoCAD 的选择对象提示)，不能当基点攒进 _editPts
+        if (_editAwaitSelect) { SelftestPickWorld(pt.Value.x, pt.Value.y); return true; }
         FeedPoint(pt.Value.x, pt.Value.y);
         return true;
     }
@@ -10305,6 +10418,9 @@ public partial class MainWindow : Window
         _lastInputPoint = (x, y);
         if (_editMode != EditMode.None)
         {
+            // 位移模式只认命令行键入的向量(同原版 WaitingDisplacement)：矿区坐标动辄几十万，
+            // 把点到的绝对坐标当位移会把实体甩出图外。
+            if (_editDisplacement && _editPts.Count == 0) { StatusMsg.Text = $"{_editName}：位移模式——请在命令行键入 dx,dy（如 100,50）或 d<角度"; return; }
             _editPts.Add((x, y));
             if (_editPts.Count >= EditPointCount(_editMode))
             {
@@ -10356,6 +10472,8 @@ public partial class MainWindow : Window
 
     private static string EditPrompt(EditMode m, int have) => (m, have) switch
     {
+        (EditMode.Move, 1) => "移动：指定第二个点 或 <使用第一个点作为位移>",
+        (EditMode.Copy, 1) => "复制：指定第二个点 或 <使用第一个点作为位移>",
         (EditMode.Mirror, 1) => "镜像：指定镜像线第二点",
         (EditMode.Rotate, 1) => "旋转：指定旋转角参照点",
         (EditMode.Scale, 1) => "缩放：指定参考长度点",
@@ -10433,7 +10551,7 @@ public partial class MainWindow : Window
         var dim = EditDragHint(c);
         if (dim != null) return dim;
         return _editPts.Count == 0
-            ? $"{_editName}：{(_editMode == EditMode.Mirror ? "指定镜像线第一点" : "指定基点")}"
+            ? $"{_editName}：{EditFirstPrompt()}"
             : EditPrompt(_editMode, _editPts.Count);
     }
 
@@ -10735,7 +10853,7 @@ public partial class MainWindow : Window
                 et.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Source = et, Key = Key.Escape });
                 return;
             }
-            if (cmd == "@确认") { if (!ConfirmOneShotPick()) FinishSelectObjects(true); return; }   // 右键/回车确认(逐面点选 / 选择对象阶段)
+            if (cmd == "@确认") { if (!ConfirmOneShotPick() && !ConfirmEditPoint()) FinishSelectObjects(true); return; }   // 右键/回车确认(逐面点选 / 选择对象阶段)
             if (cmd == "@取消") { if (!CancelOneShotPick()) FinishSelectObjects(false); return; }
             if (cmd.StartsWith("@示例两体")) { SelftestTwoSolids(); return; }   // 两个相互重叠的立方体(布尔/刀切用)
             if (cmd.StartsWith("@示例点线")) { SelftestPointsAndLines(); return; }   // 若干高程点 + 两条多段线并选中(点/线编辑用)
@@ -12864,6 +12982,8 @@ public partial class MainWindow : Window
         {
             // 多点绘制中回车 = 结束（同 AutoCAD：PLINE 敲回车收笔）。原先只能双击或 Esc。
             if (_tool is { IsMultiPoint: true }) { tb.Text = string.Empty; FinishMultiPointTool(); return; }
+            // 编辑命令中回车 = 右键：选择对象阶段确定选择集；移动/复制定了基点后 = 用第一个点作为位移
+            if (ConfirmEditByKey()) { tb.Text = string.Empty; return; }
             // 空命令行 + Enter = 重复上次命令（AutoCAD 行为；仅空闲态，不干预进行中的交互）
             if (!CommandIdle() || string.IsNullOrEmpty(_lastCommand)) return;
             cmd = _lastCommand!;
@@ -12911,6 +13031,7 @@ public partial class MainWindow : Window
         }
 
         if (TryToolOption(cmd)) return;        // 绘制中的选项关键字（多段线 闭合C/放弃U · 圆 3P/2P/T）—— 早于命令解析, 否则 C 会被当成 CIRCLE
+        if (TryEditOption(cmd)) return;        // 移动/复制的 位移(D) / 位移向量 / 直接距离 —— 早于坐标与命令解析, 否则 D 会被当成 标注样式
         if (TryCoordinateInput(cmd)) return;   // 绘制/编辑取点时优先当坐标
 
         _lastCommand = cmd;                    // 记录供"空命令行 + Enter 重复"（坐标已在上一步返回，不会记为命令）
