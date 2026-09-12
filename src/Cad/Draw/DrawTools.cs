@@ -375,3 +375,155 @@ public sealed class PolygonTool : DrawTool
     public override string? DragHint(double x, double y) => _c == null ? null : $"半径 {Dist(_c.Value.x, _c.Value.y, x, y):0.##}  边 {Sides}";
     public override void Reset() => _c = null;
 }
+
+/// <summary>
+/// 文字：忠实原版 TextJigAdapter 的四步 —— 指定起点 → 字高 &lt;2.5&gt; → 旋转角 &lt;0&gt; → 输入文字。
+/// 起点用点击/键入坐标；字高与角度既可在命令行键入数值，也可像原版那样点第二点(取到起点的距离/方向)；
+/// 回车取默认。落点 = 文字左端基线(原版 AcDbText(pos))，不再是"视口中心"。
+/// 预览与原版一致：内容未输入前先用占位串 "TEXT" 按当前起点/字高/角度描一份轮廓跟着光标走。
+/// </summary>
+public sealed class TextTool : DrawTool
+{
+    public enum Step { Start, Height, Rotation, Content }
+
+    public const double DefaultHeight = 2.5;      // 原版 "指定文字高度 <2.5000>:"
+    private const string Placeholder = "TEXT";    // 原版 createPreview 未得内容时的占位串
+
+    public Step Stage { get; private set; } = Step.Start;
+    /// <summary>多行文字：内容里的 '|' 作换行。</summary>
+    public bool MultiLine;
+
+    private (double x, double y)? _p;
+    private double _height = DefaultHeight;
+    private double _rot;                          // 弧度
+
+    public (double x, double y)? Start => _p;
+    public double Height => _height;
+    public double RotationDeg => _rot * 180.0 / Math.PI;
+
+    private string Name => MultiLine ? "多行文字" : "文字";
+
+    public override string Prompt => Stage switch
+    {
+        Step.Start => $"{Name}：指定文字的起点",
+        Step.Height => $"{Name}：指定文字高度 <{DefaultHeight:0.####}>（键入数值或点第二点）",
+        Step.Rotation => $"{Name}：指定文字的旋转角度 <0>（键入度数或点方向点）",
+        _ => MultiLine ? $"{Name}：输入文字（| 分行）并回车" : $"{Name}：输入文字并回车"
+    };
+
+    /// <summary>正在等内容：命令行这一行是文字, 不是命令/选项/坐标(空格也是文字的一部分)。</summary>
+    public bool AwaitingText => Stage == Step.Content;
+
+    public override SceneEntity? AddPoint(double x, double y)
+    {
+        switch (Stage)
+        {
+            case Step.Start:
+                _p = (x, y); Stage = Step.Height; return null;
+            case Step.Height:
+            {
+                // 同原版 InputType::Distance 的点击分支：取到上一个点的距离
+                double d = Dist(_p!.Value.x, _p.Value.y, x, y);
+                if (d > 1e-9) _height = d;
+                Stage = Step.Rotation; return null;
+            }
+            case Step.Rotation:
+            {
+                double dx = x - _p!.Value.x, dy = y - _p.Value.y;
+                if (dx * dx + dy * dy > 1e-18) _rot = Math.Atan2(dy, dx);
+                Stage = Step.Content; return null;
+            }
+            default:
+                return null;   // 等内容时视口点击不作数(内容只能从命令行来)
+        }
+    }
+
+    /// <summary>
+    /// 命令行键入：字高/角度步接受数值；内容步接受任意串并出实体。
+    /// 坐标样式的输入(x,y / @… / d&lt;a)不认领 —— 交给外层按坐标喂点(点第二点的键盘等价)。
+    /// </summary>
+    public override OptionResult Invoke(string key)
+    {
+        string s = (key ?? "").Trim();
+        switch (Stage)
+        {
+            case Step.Start:
+                return new(false);
+            case Step.Height:
+                if (LooksLikeCoord(s)) return new(false);
+                if (!TryNum(s, out double h)) return new(true, Message: "需要数值字高或第二点");
+                if (h <= 0) return new(true, Message: "字高必须大于 0");
+                _height = h; Stage = Step.Rotation;
+                return new(true, Message: $"字高 = {h:0.####}");
+            case Step.Rotation:
+                if (LooksLikeCoord(s)) return new(false);
+                if (!TryNum(s, out double deg)) return new(true, Message: "需要角度(度)或方向点");
+                _rot = deg * Math.PI / 180.0; Stage = Step.Content;
+                return new(true, Message: $"旋转角 = {deg:0.##}°");
+            default:
+                if (s.Length == 0) return new(true, EndsCommand: true, Message: $"{Name}：内容为空，已取消");
+                var ent = Build(MultiLine ? s.Replace("|", "\n") : s);
+                Reset();
+                return new(true, Entity: ent, EndsCommand: true, Message: $"已放置{Name}「{s}」（字高 {ent.Height:0.##}）");
+        }
+    }
+
+    /// <summary>空回车：字高/角度步取默认值；内容步 = 空内容, 结束命令(同原版/AutoCAD 空串不出实体)。</summary>
+    public OptionResult AcceptDefault() => Stage switch
+    {
+        Step.Height => Advance(Step.Rotation, $"字高 = {DefaultHeight:0.####}（默认）"),
+        Step.Rotation => Advance(Step.Content, "旋转角 = 0°（默认）"),
+        Step.Content => new(true, EndsCommand: true, Message: $"{Name}：内容为空，已取消"),
+        _ => new(false)
+    };
+
+    private OptionResult Advance(Step next, string msg) { Stage = next; return new(true, Message: msg); }
+
+    private TextEntity Build(string text) => new()
+    {
+        X = _p!.Value.x, Y = _p.Value.y, Height = _height, Rotation = _rot, HAlign = 0, VAlign = 0, Text = text
+    };
+
+    public override void AppendPreview(List<float> o, (double x, double y)? cursor)
+    {
+        // 同原版 updatePreview：把光标推导成当前步的输入, 再按 createPreview 出占位文字
+        double px, py, h = _height, r = _rot;
+        if (Stage == Step.Start)
+        {
+            if (cursor == null) return;
+            px = cursor.Value.x; py = cursor.Value.y; h = DefaultHeight; r = 0;
+        }
+        else
+        {
+            px = _p!.Value.x; py = _p.Value.y;
+            if (cursor != null)
+            {
+                double dx = cursor.Value.x - px, dy = cursor.Value.y - py;
+                if (Stage == Step.Height) { double d = Math.Sqrt(dx * dx + dy * dy); if (d > 1e-9) h = d; r = 0; }
+                else if (Stage == Step.Rotation && dx * dx + dy * dy > 1e-18) r = Math.Atan2(dy, dx);
+            }
+        }
+        Tint(new TextEntity { X = px, Y = py, Height = h, Rotation = r, Text = Placeholder }).TessellatePick(o);   // 轮廓(真字体也描边)
+    }
+
+    public override string? DragHint(double x, double y)
+    {
+        if (_p == null) return null;
+        if (Stage == Step.Height) return $"字高 {Dist(_p.Value.x, _p.Value.y, x, y):0.##}";
+        if (Stage == Step.Rotation)
+        {
+            double ang = Math.Atan2(y - _p.Value.y, x - _p.Value.x) * 180.0 / Math.PI;
+            if (ang < 0) ang += 360.0;
+            return $"角 {ang:0.#}°";
+        }
+        return null;
+    }
+
+    public override void Reset() { Stage = Step.Start; _p = null; _height = DefaultHeight; _rot = 0; }
+
+    private static bool TryNum(string s, out double v)
+        => double.TryParse(s, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out v);
+
+    /// <summary>x,y / @dx,dy / d&lt;ang —— 交给坐标解析而不是当数值。</summary>
+    private static bool LooksLikeCoord(string s) => s.StartsWith("@") || s.Contains(',') || s.Contains('<');
+}

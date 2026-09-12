@@ -861,4 +861,90 @@ public class DrawToolsTests
         t.AddPoint(10, 0);                             // 最近顶点 (10,0)
         Assert.Equal("长 5  角 90°", t.DragHint(10, 5));   // 从 (10,0) 向上 5
     }
+    // ── 文字：忠实原版 TextJigAdapter 四步(起点 → 字高<2.5> → 旋转角<0> → 内容) ──────────
+
+    [Fact]
+    public void TextTool_start_point_then_typed_height_rotation_content()
+    {
+        var t = new TextTool();
+        Assert.Equal(TextTool.Step.Start, t.Stage);
+        Assert.False(t.Invoke("5").Handled);               // 起点步不认数值(交给坐标解析/命令)
+        Assert.Null(t.AddPoint(100, 200));                 // 起点 = 点击处, 不再是视口中心
+        Assert.Equal(TextTool.Step.Height, t.Stage);
+        Assert.Contains("2.5", t.Prompt);                  // 原版 "<2.5000>"
+        var r = t.Invoke("5");
+        Assert.True(r.Handled); Assert.Null(r.Entity); Assert.False(r.EndsCommand);
+        Assert.Equal(TextTool.Step.Rotation, t.Stage);
+        Assert.True(t.Invoke("30").Handled);
+        Assert.Equal(TextTool.Step.Content, t.Stage);
+        Assert.True(t.AwaitingText);
+        r = t.Invoke("A B");                                // 内容里的空格保留
+        Assert.True(r.Handled); Assert.True(r.EndsCommand);
+        var te = Assert.IsType<TextEntity>(r.Entity);
+        Assert.Equal(100, te.X); Assert.Equal(200, te.Y);
+        Assert.Equal(5, te.Height);
+        Assert.Equal(30 * System.Math.PI / 180, te.Rotation, 9);
+        Assert.Equal("A B", te.Text);
+        Assert.Equal(0, te.HAlign); Assert.Equal(0, te.VAlign);   // 原版 AcDbText(pos) = 左端基线
+        Assert.Equal(TextTool.Step.Start, t.Stage);        // 出实体后复位
+    }
+
+    [Fact]
+    public void TextTool_height_and_rotation_by_second_point_like_original_jig()
+    {
+        var t = new TextTool();
+        t.AddPoint(10, 10);
+        Assert.Equal("字高 5", t.DragHint(13, 14));         // 3-4-5
+        Assert.Null(t.AddPoint(13, 14));                   // 距离 = 5 → 字高
+        Assert.Equal(5, t.Height);
+        Assert.Equal("角 90°", t.DragHint(10, 20));
+        Assert.Null(t.AddPoint(10, 20));                   // 方向 = +Y → 90°
+        Assert.Equal(90, t.RotationDeg, 9);
+        Assert.Equal(TextTool.Step.Content, t.Stage);
+        Assert.Null(t.AddPoint(0, 0));                     // 等内容时点击不作数
+        Assert.Equal(TextTool.Step.Content, t.Stage);
+    }
+
+    [Fact]
+    public void TextTool_empty_enter_takes_defaults_and_empty_content_cancels()
+    {
+        var t = new TextTool();
+        Assert.False(t.AcceptDefault().Handled);           // 起点没有默认值
+        t.AddPoint(0, 0);
+        Assert.True(t.AcceptDefault().Handled);            // 字高 <2.5>
+        Assert.Equal(TextTool.DefaultHeight, t.Height);
+        Assert.True(t.AcceptDefault().Handled);            // 角度 <0>
+        Assert.Equal(0, t.RotationDeg);
+        var r = t.AcceptDefault();                          // 空内容 → 结束不出实体
+        Assert.True(r.Handled); Assert.True(r.EndsCommand); Assert.Null(r.Entity);
+    }
+
+    [Fact]
+    public void TextTool_height_step_rejects_bad_values_but_leaves_coords_to_caller()
+    {
+        var t = new TextTool();
+        t.AddPoint(0, 0);
+        Assert.False(t.Invoke("3,4").Handled);             // 坐标样式 → 外层按"点第二点"喂
+        Assert.False(t.Invoke("@3<0").Handled);
+        var r = t.Invoke("abc");
+        Assert.True(r.Handled); Assert.Equal(TextTool.Step.Height, t.Stage);   // 认领但不前进(报错)
+        r = t.Invoke("0");
+        Assert.True(r.Handled); Assert.Equal(TextTool.Step.Height, t.Stage);
+        Assert.True(t.Invoke("2").Handled); Assert.Equal(TextTool.Step.Rotation, t.Stage);
+    }
+
+    [Fact]
+    public void TextTool_multiline_splits_on_bar_and_preview_uses_placeholder_outline()
+    {
+        var t = new TextTool { MultiLine = true };
+        var pv = new List<float>();
+        t.AppendPreview(pv, (5, 5));                        // 起点步: 占位 "TEXT" 跟着光标
+        Assert.NotEmpty(pv);
+        t.AddPoint(1, 2); t.Invoke("4"); t.Invoke("0");
+        var r = t.Invoke("ab|cd");
+        var te = Assert.IsType<TextEntity>(r.Entity);
+        Assert.Equal("ab\ncd", te.Text);
+        Assert.Equal(4, te.Height);
+    }
 }
+

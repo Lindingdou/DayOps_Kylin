@@ -194,4 +194,37 @@ public class GlyphFontTests : IDisposable
         Assert.Empty(bb[1].Fills);                        // 回退简笔画 → 仍是线
         Assert.NotEmpty(bb[1].Strokes);
     }
+    /// <summary>
+    /// 真字体下字形走面通道、Tessellate 什么都不出 —— 拾取/框选/高亮若仍走 Tessellate 就"文字点不中"。
+    /// 现在这三路都走 TessellatePick(轮廓)。方框字形 'A' 在 100.5..104.5 × 200..207 (0.05..0.45 × 0..0.7 × 字高 10)。
+    /// </summary>
+    [Fact]
+    public void RealFontText_IsPickable_BoxSelectable_AndHighlightable()
+    {
+        InstallTinyFont();
+        var t = new TextEntity { X = 100, Y = 200, Height = 10, Text = "A" };
+        var lines = new List<float>(); t.Tessellate(lines);
+        Assert.Empty(lines);                                 // 显示走面通道(前提成立)
+        var pick = new List<float>(); t.TessellatePick(pick);
+        Assert.NotEmpty(pick);                               // 拾取/高亮有轮廓可用
+
+        Assert.InRange(t.DistanceTo(100.5, 203), 0, 1e-6);   // 左边线上
+        Assert.InRange(t.DistanceTo(102.5, 207), 0, 1e-6);   // 顶边线上
+        Assert.InRange(t.DistanceTo(102.5, 209), 1.99, 2.01); // 顶边上方 2
+
+        var sc = new Scene(); sc.Add(t);
+        Assert.Same(t, sc.Pick(101, 203, tol: 1));           // 点选命中
+        Assert.Null(sc.Pick(120, 203, tol: 1));
+
+        Assert.True(SelectionBox.Match(t, 99, 199, 106, 208, crossing: false));    // 窗口选: 整字在框内
+        Assert.True(SelectionBox.Match(t, 103, 203, 120, 220, crossing: true));    // 交叉选: 框穿过字
+        Assert.False(SelectionBox.Match(t, 103, 203, 120, 220, crossing: false));
+        Assert.False(SelectionBox.Match(t, 110, 210, 120, 220, crossing: true));
+
+        var bb = new TextEntity { X = 100, Y = 200, Height = 10, Text = "A", ScreenFacing = true, Rotation = 1.0 };
+        var bbPick = new List<float>(); bb.TessellatePick(bbPick);
+        Assert.NotEmpty(bbPick);                             // 公告板文字同样可拾取(按未旋转排版)
+        Assert.InRange(bb.DistanceTo(100.5, 203), 0, 1e-6);
+    }
 }
+

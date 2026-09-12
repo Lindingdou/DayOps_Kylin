@@ -23,6 +23,13 @@ public abstract class SceneEntity
     /// <summary>把自身镶嵌为着色三角面（交错 P3_C3, 每三角 3 顶点）追加到 o。默认无面(仅三角网等面实体覆盖)。</summary>
     public virtual void TessellateFaces(List<float> o) { }
 
+    /// <summary>
+    /// 拾取 / 框选 / 选中高亮用的线段镶嵌。默认同 <see cref="Tessellate"/>；
+    /// 文字这类"字形本体走面通道、线段通道什么都不出"的实体必须覆盖成轮廓，
+    /// 否则点不中、框不到、选中了也没高亮。
+    /// </summary>
+    public virtual void TessellatePick(List<float> o) => Tessellate(o);
+
     protected void Seg(List<float> o, double x0, double y0, double x1, double y1)
     {
         float z = (float)Elevation;
@@ -48,7 +55,7 @@ public abstract class SceneEntity
     public virtual double DistanceTo(double px, double py)
     {
         var o = new List<float>();
-        Tessellate(o);
+        TessellatePick(o);                        // 文字等面通道实体走轮廓, 见 TessellatePick
         double best = double.MaxValue;
         for (int i = 0; i + 11 < o.Count; i += 12)
         {
@@ -971,9 +978,19 @@ public sealed class TextEntity : SceneEntity
         Strokes(o, skipFilled: false);
     }
 
-    private void Strokes(List<float> o, bool skipFilled)
+    /// <summary>
+    /// 拾取 / 框选 / 高亮一律用轮廓笔画（实心字形也描边）。
+    /// 真字体下 <see cref="Tessellate"/> 对可填充字形什么都不出（字形走面通道），拾取若走它，
+    /// 点在字上算出的距离是 +∞ —— "文字点不中、框不到、选中了没高亮"就是这么来的（踩过）。
+    /// 公告板文字按未旋转的平面排版取几何：2D 视图下它就是这么画的。
+    /// </summary>
+    public override void TessellatePick(List<float> o) => Strokes(o, skipFilled: false, rotation: ScreenFacing ? 0 : Rotation);
+
+    private void Strokes(List<float> o, bool skipFilled) => Strokes(o, skipFilled, Rotation);
+
+    private void Strokes(List<float> o, bool skipFilled, double rotation)
     {
-        double c = Math.Cos(Rotation), s = Math.Sin(Rotation);
+        double c = Math.Cos(rotation), s = Math.Sin(rotation);
         foreach (var (lx0, ly0, lx1, ly1) in LocalStrokes(skipFilled))
             Seg(o, X + lx0 * c - ly0 * s, Y + lx0 * s + ly0 * c,
                    X + lx1 * c - ly1 * s, Y + lx1 * s + ly1 * c);   // 旋转后平移到锚点

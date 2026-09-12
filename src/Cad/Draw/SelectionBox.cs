@@ -14,7 +14,7 @@ public static class SelectionBox
         if (e is MeshEntity me) return MatchMesh(me, minX, minY, maxX, maxY, crossing);
         if (e is PointCloudEntity pc) return MatchCloud(pc, minX, minY, maxX, maxY, crossing);
         var o = new List<float>();
-        e.Tessellate(o);
+        e.TessellatePick(o);   // 文字走轮廓(真字体下 Tessellate 是空的)
         if (o.Count == 0) return false;
 
         bool all = true, hit = false;
@@ -91,7 +91,7 @@ public static class SelectionBox
             }
             return crossing ? anyIn : allIn;
         }
-        if (e is MeshEntity mm) mm.TessellateEdges(o); else e.Tessellate(o);
+        if (e is MeshEntity mm) mm.TessellateEdges(o); else e.TessellatePick(o);
         if (o.Count == 0) return false;
         bool all = true, any = false;
         for (int i = 0; i + 1 < o.Count; i += 6)
@@ -127,7 +127,7 @@ public static class SelectionBox
             }
             return crossing ? anyIn : allIn;
         }
-        if (e is MeshEntity me) me.TessellateEdges(o); else e.Tessellate(o);
+        if (e is MeshEntity me) me.TessellateEdges(o); else e.TessellatePick(o);
         if (o.Count == 0) return false;
         double minX = Math.Min(sx0, sx1), maxX = Math.Max(sx0, sx1), minY = Math.Min(sy0, sy1), maxY = Math.Max(sy0, sy1);
         bool all = true, hit = false;
@@ -214,7 +214,7 @@ public static class SelectionBox
                 }
                 continue;
             }
-            else e.Tessellate(o);
+            else e.TessellatePick(o);
             for (int i = 0; i + 11 < o.Count; i += 12)
             {
                 var a = project(o[i], o[i + 1], o[i + 2]); var b = project(o[i + 6], o[i + 7], o[i + 8]);

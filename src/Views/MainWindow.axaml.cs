@@ -781,6 +781,7 @@ public partial class MainWindow : Window
             if (e.Key == Key.Escape && CancelParamAsk()) { e.Handled = true; return; }   // 参数问答中 Esc = 放弃该命令
             if ((e.Key == Key.Enter || e.Key == Key.Return) && ConfirmOneShotPick()) { e.Handled = true; return; }
             if ((e.Key == Key.Enter || e.Key == Key.Return) && FinishSelectObjects(true)) { e.Handled = true; return; }
+            if ((e.Key == Key.Enter || e.Key == Key.Return) && !(CommandInput?.IsFocused ?? false) && TextToolAcceptDefault()) { e.Handled = true; return; }
             // 焦点在命令框时回车已由 SubmitCommandLine 处理(它不标 Handled 会冒泡到这), 别再确认一次
             if ((e.Key == Key.Enter || e.Key == Key.Return) && e.Source is not TextBox && ConfirmEditByKey()) { e.Handled = true; return; }
             if (e.Key == Key.Escape && CancelOneShotPick()) { e.Handled = true; return; }
@@ -808,7 +809,6 @@ public partial class MainWindow : Window
                 _pasteBaseActive = false;
                 _benchActive = false; _benchEntity = null;
                 _spotActive = false;
-                _textActive = false;
                 _dimActive = false; _dimP1 = null; _dimP2 = null; _dimContinue = false;
                 _dimRadActive = false; _dimRadCircle = null; _dimDiameter = false;
                 _dimAngActive = false; _angVertex = null; _angP1 = null;
@@ -1204,8 +1204,6 @@ public partial class MainWindow : Window
     }
     private bool _spotActive;                       // 高程查询：点击报高程
     private System.Collections.Generic.List<(double x, double y, double z)>? _spotTerrain;
-    private bool _textActive;                        // 文字：等待命令行输入内容
-    private bool _mtextMode;                          // 多行文字模式：输入中 '|' 作换行分隔
     private bool _dimActive;                          // 线性标注：取两点
     private (double x, double y)? _dimP1;
     private bool _dimRadActive;                        // 半径标注：选圆/弧后指定方向
@@ -1575,8 +1573,8 @@ public partial class MainWindow : Window
             if (cmd == "矿床识别" || cmd == "自动识别" || cmd == "矿床类型识别") { await DepositDetectAsync(); return; }
             if (cmd == "方案综合对比" || cmd == "方案比选" || cmd == "方案对比") { await ProgramCompareAsync(); return; }
             if (cmd == "高程查询" || cmd == "虚拟钻孔" || cmd == "查询高程") { await StartSpotQueryAsync(); return; }
-            if (cmd == "文字" || cmd == "单行文字") { _mtextMode = false; ArmText(); return; }
-            if (cmd == "多行文字" || cmd == "多行文本") { _mtextMode = true; _textActive = true; _tool = null; _measure = null; StatusMsg.Text = "多行文字：命令行输入内容, 用 | 分行, 回车放置（数字/符号/XYZM 可显）"; return; }
+            if (cmd == "文字" || cmd == "单行文字") { ArmText(false); return; }
+            if (cmd == "多行文字" || cmd == "多行文本") { ArmText(true); return; }
             if (cmd == "对齐标注") { StartDim(true); return; }                                        // 对齐: 平行测线,真距
             if (cmd == "标注" || cmd == "线性标注" || cmd == "尺寸标注" || cmd == "标注台阶标高") { StartDim(false); return; }   // 线性: 轴对齐,量 X/Y
             if (cmd == "半径标注" || cmd == "半径") { StartDimRadial(); return; }
@@ -6519,23 +6517,34 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"线型已设：{name}（{(_currentDash == null ? "实线" : $"虚线, {_currentDash.Length} 段样式")}；未选中实体，新画直线/多段线用此线型）";
     }
 
-    // 文字：进入模式，下一条命令行输入即文字内容
-    private void ArmText()
+    // 文字：忠实原版 TextJigAdapter 四步 —— 指定起点 → 字高<2.5> → 旋转角<0> → 输入文字。
+    // 起点点击/键入坐标, 字高与角度可键数值或点第二点, 内容从命令行来(空格是内容的一部分, 见 SpaceSubmitsNow)。
+    // 原先是"命令行输入内容 → 放在视口中心", 文字落在哪由视图决定而不是由用户决定 —— 位置不对就是这么来的。
+    private void ArmText(bool multiLine)
     {
-        _textActive = true; _tool = null; _measure = null;
-        StatusMsg.Text = "文字：在命令行输入内容并回车（数字/符号/XYZM 可显，中文暂空）";
+        _tool = new TextTool { MultiLine = multiLine };
+        _measure = null; Viewport.SetSnapMarker(null); _snapShown = false; _lastInputPoint = null;
+        StatusMsg.Text = _tool.Prompt + "（ESC 退出）";
+        SyncPrompt();
     }
 
-    private void PlaceText(string content)
+    /// <summary>文字 jig 的空回车：字高/角度取默认值, 内容为空则结束。返回 true 表示已消费。</summary>
+    private bool TextToolAcceptDefault()
     {
-        double w = ViewportHost.Bounds.Width, h = ViewportHost.Bounds.Height;
-        var c = Viewport.ScreenToWorld(w / 2, h / 2) ?? (0, 0);
-        double height = System.Math.Max(SnapTolWorld(new Avalonia.Point(w / 2, h / 2)) * 3, 1e-3);
-        var tx = new TextEntity { X = c.x, Y = c.y, Height = height, Text = content };
-        AssignLayer(tx);
-        BeginChange(); _scene.Add(tx); RefreshScene();
-        StatusMsg.Text = $"已放置文字「{content}」（视口中心，字高 {height:0.##}）";
+        if (_tool is not TextTool tt) return false;
+        var r = tt.AcceptDefault();
+        if (!r.Handled) return false;
+        if (r.EndsCommand) _tool = null;
+        if (!string.IsNullOrEmpty(r.Message)) { LogCommand("  " + r.Message); StatusMsg.Text = r.Message!; }
+        HideDragTip();
+        RefreshScene();
+        SyncPrompt();
+        return true;
     }
+
+    /// <summary>此刻空格还能不能当回车：文字 jig 正等内容时空格是文字的一部分（同 AutoCAD 的 TEXT）。</summary>
+    private bool SpaceSubmitsNow(string typed)
+        => !(_tool is TextTool { AwaitingText: true }) && AcadCommands.SpaceSubmits(typed);
 
     // 面积/周长：对选中的多段线(闭合优先)算面积+周长，报状态栏
     private void MeasureArea()
@@ -8444,7 +8453,6 @@ public partial class MainWindow : Window
         if (_trimActive) return "修剪/延伸：先选边界，再点要修剪或延伸的对象（Esc 退出）";
         if (_breakActive) return _breakPts.Count == 0 ? "打断：指定第一个打断点" : "打断：指定第二个打断点";
         if (_slideActive) return _slideDragging ? "滑动多段线：拖动中…松开结束" : "滑动多段线：按住左键拖动绘制";
-        if (_textActive) return _mtextMode ? "多行文字：在命令行输入内容（| 换行）后回车" : "文字：在命令行输入内容后回车";
         if (_ttrActive) return _ttrAwaitRadius ? "圆TTR：在命令行输入半径并回车" : _ttrRef1 == null ? "圆TTR：选择第一个相切对象（直线/圆）" : "圆TTR：选择第二个相切对象";
         if (_serActive) return _serAwaitRadius ? "圆弧SER：在命令行输入半径并回车（负值取另一侧）" : _serStart == null ? "圆弧SER：指定起点" : "圆弧SER：指定端点";
         if (_dimActive) return _dimP1 == null ? "标注：指定第一条尺寸界线原点" : _dimP2 == null ? "标注：指定第二条尺寸界线原点" : "标注：指定尺寸线位置";
@@ -8877,7 +8885,7 @@ public partial class MainWindow : Window
             // 点云选中: 画三维包围盒线框。逐点重着色既慢(几十万点)又看不出"这一份被选中"——
             // 点太小, 换个颜色仍分不清边界; 框住它才一眼看出选的是哪一份。
             else if (e is PointCloudEntity pcSel) pcSel.TessellateBoundsBox(ent);
-            else e.Tessellate(ent);
+            else e.TessellatePick(ent);   // 文字走轮廓: 真字体下 Tessellate 是空的, 选中了看不见高亮
         }
         var o = new List<float>(Controls.CadGlViewport.Recolor(ent.ToArray(), hr, hg, hb));   // 实体=高亮青；夹点保留自身配色
         Viewport.SetHighlightFaces(faces.Count > 0 ? faces.ToArray() : null);
@@ -10623,7 +10631,7 @@ public partial class MainWindow : Window
     /// <summary>命令行是否空闲（无进行中的绘制/编辑/测量/交互）——空 Enter 仅在此态重复上次命令。</summary>
     private bool CommandIdle() =>
         _tool == null && _measure == null && _angle == null && _editMode == EditMode.None
-        && !_textActive && !_ttrActive && !_serActive && !_offsetActive && !_trimActive
+        && !_ttrActive && !_serActive && !_offsetActive && !_trimActive
         && !_breakActive && !_slideActive && !_dimActive && !_dimRadActive && !_dimAngActive;
 
     /// <summary>空命令行 → 上次命令；否则用输入。纯逻辑，可单测。</summary>
@@ -12862,7 +12870,7 @@ public partial class MainWindow : Window
     private void OnCommandInputChanged(object? sender, TextChangedEventArgs e)
     {
         if (CmdSuggest == null || CommandInput == null) return;
-        if (AskingParams) { CmdSuggest.Opacity = 0; return; }    // 正在答参数, 这一行是值不是命令名
+        if (AskingParams || _tool is TextTool { AwaitingText: true }) { CmdSuggest.Opacity = 0; return; }    // 正在答参数/输文字内容, 这一行不是命令名
         string t = CommandInput.Text?.Trim() ?? "";
         if (t.Length == 0) { CmdSuggest.Opacity = 0; return; }
         var hits = CommandCandidates(t, 8);
@@ -12941,7 +12949,7 @@ public partial class MainWindow : Window
         if (e.Key == Key.Tab) { CompleteCommand(tb); e.Handled = true; return; }      // Tab 补全首个候选
         // 空格 = 回车(AutoCAD 习惯)。例外见 AcadCommands.SpaceSubmits：中文命令(留给输入法)、
         // 行内已有空格、以及在同一行跟参数的命令(图案填充 45 2 / SOR 8 1.0 / POLYGON 6)不劫持空格。
-        if (e.Key == Key.Space && AcadCommands.SpaceSubmits(tb.Text ?? "")) { e.Handled = true; }
+        if (e.Key == Key.Space && SpaceSubmitsNow(tb.Text ?? "")) { e.Handled = true; }
         else if (e.Key != Key.Enter) return;
         SubmitCommandLine(tb);
     }
@@ -12964,7 +12972,7 @@ public partial class MainWindow : Window
 
         CommandInput.Focus();
         e.Handled = true;
-        if (c == ' ') { SubmitCommandLine(CommandInput); return; }              // 空格 = 回车
+        if (c == ' ' && SpaceSubmitsNow(CommandInput.Text ?? "")) { SubmitCommandLine(CommandInput); return; }   // 空格 = 回车(文字内容步除外)
         CommandInput.Text = (CommandInput.Text ?? "") + e.Text;
         CommandInput.CaretIndex = CommandInput.Text.Length;
     }
@@ -12980,6 +12988,8 @@ public partial class MainWindow : Window
         string cmd = (tb.Text ?? "").Trim();
         if (cmd.Length == 0)
         {
+            // 文字 jig 空回车 = 字高/角度取默认值(原版 "<2.5000>" / "<0>")；等内容时空回车 = 结束
+            if (_tool is TextTool) { tb.Text = string.Empty; TextToolAcceptDefault(); return; }
             // 多点绘制中回车 = 结束（同 AutoCAD：PLINE 敲回车收笔）。原先只能双击或 Esc。
             if (_tool is { IsMultiPoint: true }) { tb.Text = string.Empty; FinishMultiPointTool(); return; }
             // 编辑命令中回车 = 右键：选择对象阶段确定选择集；移动/复制定了基点后 = 用第一个点作为位移
@@ -12996,9 +13006,6 @@ public partial class MainWindow : Window
             var gp = ParseCoord(cmd, _gripDrag.Base);
             if (gp != null) { CommitGripDrag(gp.Value); return; }
         }
-
-        // 文字：下一条命令行输入即内容
-        if (_textActive) { _textActive = false; bool mt = _mtextMode; _mtextMode = false; if (cmd.Length > 0) PlaceText(mt ? cmd.Replace("|", "\n") : cmd); return; }
 
         // 圆 TTR：等待半径
         if (_ttrActive && _ttrAwaitRadius && _ttrRef1 != null && _ttrRef2 != null && double.TryParse(cmd, out double ttrR) && ttrR > 0)
@@ -13201,7 +13208,7 @@ public partial class MainWindow : Window
                 break;
             case "TEXT":
             case "DT":
-                ArmText();
+                ArmText(false);
                 break;
             // 线性/对齐是 AutoCAD 里两条不同命令(轴对齐量 X/Y ↔ 平行测线量真距), 原先都落到 StartDim() = 线性,
             // 打 DIMALIGNED 得到的其实是线性标注 —— 按 AutoCAD 拆开。
