@@ -51,6 +51,20 @@ public class MeshProjectorTests
     }
 
     [Fact]
+    public void DrapePolyline_inserts_node_where_segment_crosses_triangle_edge()
+    {
+        var (v, t) = SlopedPlane();   // 两三角共边 = 对角线 (-100,-100)→(100,100)
+        var pts = new List<(double x, double y)> { (-50, 20), (60, -30) };   // 斜穿对角线
+        var (draped, missed) = MeshProjector.DrapePolyline(v, t, pts);
+        Assert.Equal(0, missed);
+        Assert.Equal(3, draped.Count);                       // 两端 + 对角线交点
+        Assert.Equal(-50.0, draped[0].z, 6); Assert.Equal(60.0, draped[2].z, 6);
+        Assert.Equal(draped[1].x, draped[1].y, 6);           // 交点在对角线上
+        Assert.Equal(draped[1].x, draped[1].z, 6);           // z=x 贴面
+        Assert.True(draped[1].x > -50 && draped[1].x < 60);
+    }
+
+    [Fact]
     public void Drape_preserves_xy()
     {
         var (v, t) = SlopedPlane();

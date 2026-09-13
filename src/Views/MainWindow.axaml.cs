@@ -521,24 +521,6 @@ public partial class MainWindow : Window
                 }
             }
 
-            // 拖放移动文字(AutoCAD：选中对象后按住其本体拖动即移动，松开落地；Ctrl/Shift 仍归选集加减)。
-            // 只在 2D、按在【已选中】的文字上才挂起；按在别的东西/空白上照旧走点选/框选。
-            if (props.IsLeftButtonPressed && _selected.Count > 0 && Viewport.Is2DView && e.KeyModifiers == KeyModifiers.None
-                && _tool == null && _measure == null && _editMode == EditMode.None
-                && !_offsetActive && !_trimActive && !_breakActive && !_slideActive)
-            {
-                var wp = Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
-                if (wp != null && PickWorld2D(wp.Value.x, wp.Value.y, SnapTolWorld(_lastPointer)) is TextEntity hitText
-                    && _selected.Contains(hitText) && !IsLayerLocked(hitText))
-                {
-                    _textDragPending = true; _textDragging = false;
-                    _textDragStart = _lastPointer; _textDragBase = wp.Value;   // 基点 = 按下处(不吸附)，目标点照常吸附/正交
-                    _nav = NavMode.None;
-                    e.Pointer.Capture(ViewportHost);
-                    return;
-                }
-            }
-
             // 选择：2D 左键拖=选择框；3D 默认左键拖=轨道旋转，开「选择模式」后左键只做框选/点选(不旋转)。
             // Shift+左键作临时选择(不必开模式)。两种情形单击不拖都=点选。
             bool navShift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
@@ -568,17 +550,6 @@ public partial class MainWindow : Window
             Viewport.SetCursorScreen(p.X, p.Y);   // CAD 十字光标随动
             SyncPrompt();                          // 异步命令(对话框后)切换的状态在此兜底刷新提示
             var w = Viewport.ScreenToWorld(p.X, p.Y);
-
-            // 拖放移动文字：拖过 4px 才算拖(否则松开就是点选)；一旦算拖, 就地变成一次「移动」命令 ——
-            // 基点 = 按下处, 之后的幽灵/橡皮筋/正交/吸附全走编辑拖拽那条现成的路, 松开 = 第二点。
-            if (_textDragPending)
-            {
-                if (System.Math.Abs(p.X - _textDragStart.X) < 4 && System.Math.Abs(p.Y - _textDragStart.Y) < 4) { _lastPointer = p; return; }
-                _textDragPending = false; _textDragging = true;
-                _editMode = EditMode.Move; _editName = "移动"; _editAwaitSelect = false; _editDisplacement = false;
-                _editPts.Clear(); _editPts.Add(_textDragBase);
-                SyncPrompt();
-            }
 
             // 窗口框选：画选框(交叉=蓝，窗口=绿)
             if (_selBoxActive)
@@ -710,26 +681,6 @@ public partial class MainWindow : Window
                 }
             }
 
-            // 拖放移动文字：松开 → 没拖过阈值就是一次点选; 拖了就当「移动」的第二点落地(一步 Undo)
-            if (_textDragPending || _textDragging)
-            {
-                bool dragged = _textDragging;
-                _textDragPending = false; _textDragging = false;
-                e.Pointer.Capture(null);
-                if (!dragged) { PickAt(rel); return; }
-                var wp = _snapWorld ?? Viewport.ScreenToWorld(rel.X, rel.Y);
-                if (wp != null && _editMode == EditMode.Move)
-                {
-                    var dst = _snapWorld == null ? ApplyDraftAids(wp.Value.x, wp.Value.y) : wp.Value;
-                    FeedPoint(dst.x, dst.y);
-                    StatusMsg.Text = $"拖放移动完成（{_selected.Count} 个实体）";
-                }
-                else { _editMode = EditMode.None; _editPts.Clear(); RefreshScene(); }
-                HideDragTip();
-                SyncPrompt();
-                return;
-            }
-
             // 窗口框选：松开 → 拖动成框则框选，未拖动则点选
             if (_selBoxActive)
             {
@@ -848,7 +799,6 @@ public partial class MainWindow : Window
                 _measure = null;
                 _angle = null;
                 _editMode = EditMode.None; _editAwaitSelect = false; _editDisplacement = false;
-                _textDragPending = false; _textDragging = false;
                 FinishSelectObjects(false);
                 _editPts.Clear();
                 _offsetActive = false;
@@ -1081,7 +1031,6 @@ public partial class MainWindow : Window
     private System.EventHandler<Avalonia.Input.PointerPressedEventArgs>? _onHostPressed;
     private System.EventHandler<Avalonia.Input.PointerEventArgs>? _onHostMoved;
     private System.EventHandler<Avalonia.Input.PointerReleasedEventArgs>? _onHostReleased;
-    private Pointer? _selftestPointer;   // 自检 @鼠标 用的合成指针(同一支笔按下/移动/松开, 捕获才对得上)
     private System.EventHandler<Avalonia.Input.PointerWheelEventArgs>? _onHostWheel;
     private System.EventHandler<Avalonia.Input.TappedEventArgs>? _onHostDoubleTapped;
     private System.EventHandler<Avalonia.Input.PointerEventArgs>? _onHostExited;
@@ -1222,11 +1171,6 @@ public partial class MainWindow : Window
     // 移动/复制的「位移(D)」模式(忠实原版 EditCommandState::WaitingDisplacement)：不取基点，
     // 下一次在命令行键入的坐标就是位移向量(相对原点)，直接平移/复制。
     private bool _editDisplacement;
-    // 拖放移动(AutoCAD 拖放编辑：选中对象后按住其本体拖动即移动)。原版只有夹点拖；按用户要求给文字补上。
-    // 按下先只挂起(_textDragPending)——没拖过阈值松开就是普通点选；拖过阈值才转成一次「移动」命令(基点 = 按下处)。
-    private bool _textDragPending, _textDragging;
-    private Avalonia.Point _textDragStart;
-    private (double x, double y) _textDragBase;
     private bool _editAwaitSelect;                                  // 编辑命令的"选择对象"阶段(右键确定后转取点)
     private string _editName = "";                                  // 当前编辑命令名(用于提示)
     private readonly List<(double x, double y)> _editPts = new();   // 编辑取的点（基点/目标点/参照…）
@@ -4411,7 +4355,8 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"网格剖面：{prof.Count} 断面点 · 长 {gLen.ToString("0.#", inv)} · 高程 {zmin.ToString("0.#", inv)}~{zmax.ToString("0.#", inv)}（带里程/标高轴）";
     }
 
-    // 线落到面上：选网格 OFF + 线 CSV(lineId,x,y) → 逐顶点重心插值取 Z → 落 .draped.csv(lineId,x,y,z) + 线入场景
+    // 线落到面上：选网格 OFF + 线 CSV(lineId,x,y) → 节点重算落面(顶点投 Z + 每段与三角边交点补节点, 逐段贴面)
+    // → 落 .draped.csv(lineId,x,y,z) + 三维线入场景
     private async Task ProjectPolylinesToMeshAsync()
     {
         var mf = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
@@ -4439,12 +4384,12 @@ public partial class MainWindow : Window
         {
             var xy = new List<(double x, double y)>();
             foreach (var p in ln.Centerline) xy.Add((p.X, p.Y));
-            var (draped, miss) = MeshProjector.Drape(v, t, xy);
+            var (draped, miss) = MeshProjector.DrapePolyline(v, t, xy);
             missed += miss; totV += draped.Count;
-            var pl = new PolylineEntity { Cr = 0.35f, Cg = 0.9f, Cb = 0.55f };
+            var pl = new PolylineEntity { Cr = 0.35f, Cg = 0.9f, Cb = 0.55f, Zs = new List<double>(draped.Count) };
             foreach (var (x, y, z) in draped)
             {
-                pl.Points.Add((x, y));
+                pl.Points.Add((x, y)); pl.Zs.Add(z);
                 sb.Append(ln.Id).Append(',').Append(x.ToString("R", inv)).Append(',').Append(y.ToString("R", inv)).Append(',').Append(z.ToString("R", inv)).Append('\n');
                 if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y;
             }
@@ -10827,44 +10772,6 @@ public partial class MainWindow : Window
             if (cmd.StartsWith("@导入 "))   // @导入 <路径>: 跳过文件对话框直接导入(核对大图纸能否打开/耗时)
             {
                 _ = ImportPath(cmd.Substring(4).Trim().Trim('"'));
-                return;
-            }
-            if (cmd.StartsWith("@鼠标 "))   // @鼠标 <按下|移动|松开> <x> <y> [右]: 世界坐标→屏幕后向视口宿主投一次真实指针事件(走 _onHostPressed/Moved/Released 全链)
-            {
-                var a = cmd.Substring(4).Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
-                if (a.Length >= 3 && double.TryParse(a[1], out double mx) && double.TryParse(a[2], out double my)
-                    && Viewport.WorldToScreen(mx, my, 0) is { } msp)
-                {
-                    bool right = a.Length >= 4 && a[3] == "右";
-                    var pos = new Avalonia.Point(msp.sx, msp.sy);
-                    _selftestPointer ??= new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true);
-                    ulong ts = (ulong)System.Environment.TickCount64;
-                    switch (a[0])
-                    {
-                        case "按下":
-                        {
-                            var pp = new PointerPointProperties(right ? RawInputModifiers.RightMouseButton : RawInputModifiers.LeftMouseButton,
-                                                                right ? PointerUpdateKind.RightButtonPressed : PointerUpdateKind.LeftButtonPressed);
-                            _onHostPressed?.Invoke(ViewportHost, new PointerPressedEventArgs(ViewportHost, _selftestPointer, ViewportHost, pos, ts, pp, KeyModifiers.None));
-                            break;
-                        }
-                        case "移动":
-                        {
-                            var pp = new PointerPointProperties(right ? RawInputModifiers.RightMouseButton : RawInputModifiers.LeftMouseButton, PointerUpdateKind.Other);
-                            _onHostMoved?.Invoke(ViewportHost, new PointerEventArgs(InputElement.PointerMovedEvent, ViewportHost, _selftestPointer, ViewportHost, pos, ts, pp, KeyModifiers.None));
-                            break;
-                        }
-                        case "松开":
-                        {
-                            var pp = new PointerPointProperties(RawInputModifiers.None, right ? PointerUpdateKind.RightButtonReleased : PointerUpdateKind.LeftButtonReleased);
-                            _onHostReleased?.Invoke(ViewportHost, new PointerReleasedEventArgs(ViewportHost, _selftestPointer, ViewportHost, pos, ts, pp, KeyModifiers.None, right ? MouseButton.Right : MouseButton.Left));
-                            break;
-                        }
-                        default: StatusMsg.Text = "自检鼠标：动作须为 按下/移动/松开"; return;
-                    }
-                    StatusMsg.Text += $"  [自检鼠标 {a[0]} ({mx:0.#},{my:0.#}) 屏幕({pos.X:0},{pos.Y:0}) 拖拽={_gripDrag.Active} 框选={_selBoxActive} 选集: {string.Join(",", _selected.Select(EntityTypeName.Of))}]";
-                }
-                else StatusMsg.Text = "自检鼠标：参数须为 <按下|移动|松开> <x> <y> [右] 且点在视口内";
                 return;
             }
             if (cmd.StartsWith("@点选 "))   // @点选 <x> <y>: 按世界坐标走真实点选路径(含空间索引), 计时见 TRACE

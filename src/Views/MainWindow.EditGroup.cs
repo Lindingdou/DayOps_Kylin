@@ -780,13 +780,17 @@ public partial class MainWindow
         EditEcho($"✓ 找到 {all.Count} 个交点，已创建 POINT 实体", EchoLevel.Success);
     }
 
-    /// <summary>线落到面上 (POLYPROJECT)：选 N 多段线 + 1 三角网 → 顶点 Z 投影到面。</summary>
+    /// <summary>
+    /// 线落到面上 (POLYPROJECT)：选 N 多段线 + 1 三角网 → 节点重算落面：原顶点 Z 投到面上, 且每段与三角边的交点
+    /// 都补成节点(高程沿边插值), 整条线逐段贴面。此前只投顶点(同原版内核), 两顶点之间的直段穿山悬空
+    /// —— 用户截图"只是节点在面上, 中间没有插值在面上"。网外顶点保留原高程。
+    /// </summary>
     private async Task EdPolylineProjectAsync()
     {
         var picked = await SelectObjectsAsync<SceneEntity>("线落到面上", "多段线（可连同目标三角网一起选）", 1,
             e => e is PolylineEntity or MeshEntity);
         if (picked.Count == 0) return;
-        var lines = picked.OfType<PolylineEntity>().ToList();
+        var lines = picked.OfType<PolylineEntity>().Where(l => l.Points.Count > 0).ToList();
         if (lines.Count == 0) { EditEcho("线落到面上：所选里没有多段线", EchoLevel.Warn); return; }
         var mesh = picked.OfType<MeshEntity>().FirstOrDefault()
                    ?? await PickEntityInViewportAsync<MeshEntity>("线落到面上：请在视口中点选目标三角网…（Esc 取消）");
@@ -794,22 +798,26 @@ public partial class MainWindow
         double? tol = await AskToleranceAsync("线落到面上", 1e-6);
         if (tol == null) return;
         EditEcho($"> POLYPROJECT tolerance={tol.Value:G}");
-        BeginChange();
-        int miss = 0, tot = 0;
+        var input = new List<MeshEmbed.Line>(lines.Count);
         foreach (var l in lines)
+            input.Add(new MeshEmbed.Line(l.Points, Enumerable.Range(0, l.Points.Count).Select(l.ZAt).ToList(), l.Closed));
+        var res = MeshEmbed.Drape(mesh.Verts, mesh.Tris, input, tol.Value);
+        if (res == null) { EditEcho("线落到面上：三角网为空或退化", EchoLevel.Error); return; }
+        BeginChange();
+        for (int i = 0; i < lines.Count && i < res.Polylines.Count; i++)
         {
-            var zs = new List<double>(l.Points.Count);
-            for (int i = 0; i < l.Points.Count; i++)
-            {
-                var (x, y) = l.Points[i];
-                var z = MeshZ(mesh, x, y); tot++;
-                if (z.HasValue) zs.Add(z.Value); else { zs.Add(l.ZAt(i)); miss++; }
-            }
-            l.Zs = zs; l.Elevation = 0;
+            var l = lines[i]; var pts = res.Polylines[i];
+            if (pts.Count == 0) continue;
+            // 原地改点串 + 逐点 Z(按源标高回基), 实体身份/图层/颜色/选中态都不动
+            var xy = new List<(double x, double y)>(pts.Count); var zs = new List<double>(pts.Count);
+            foreach (var p in pts) { xy.Add((p.x, p.y)); zs.Add(p.z - l.Elevation); }
+            l.Points = xy; l.Zs = zs;
+            if (l.Closed && xy.Count < 3) l.Closed = false;
         }
         RefreshScene();
-        if (miss > 0) EditEcho($"⚠ {miss} 个顶点未能投影到 mesh 范围内", EchoLevel.Warn);
-        EditEcho($"✓ {lines.Count} 条多段线 / {tot} 个顶点已投影到「{mesh.Name}」", EchoLevel.Success);
+        if (res.OutsideNodes > 0) EditEcho($"⚠ {res.OutsideNodes} 个顶点在 mesh 范围外, 保留原高程", EchoLevel.Warn);
+        EditEcho($"✓ {lines.Count} 条多段线已投影到「{mesh.Name}」：节点重算 {res.InputNodes} → {res.OutputNodes}"
+               + $"(补 {Math.Max(0, res.OutputNodes - res.InputNodes)} 个与三角边的交点), 逐段贴面", EchoLevel.Success);
     }
 
     // ══════════════════════════════ 面编辑 ══════════════════════════════

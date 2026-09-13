@@ -18,6 +18,7 @@ namespace PitMine3D.Kylin.Cad;
 ///      约束 Delaunay(约束 = 落在它里面的线段 + 各边上的节点链), 新顶点全在原三角形所在平面上,
 ///      **面形一点不变**；边上的节点被相邻两个三角形共用, 不产生 T 形接头。未被经过的三角形原样保留。
 /// 输出：新网 + 落面后的各条线(供替换原多段线实体) + 统计(细分面数/新增点/未嵌入段/网外节点)。
+/// 第 ① 步单独以 <see cref="Drape"/> 暴露给「线落到面上」(POLYPROJECT)：只重算线节点、网不动。
 /// 纯几何、可单测。2.5D 假设：网在 XY 上是单值面(地形/层位面)。
 /// </summary>
 public static class MeshEmbed
@@ -48,6 +49,42 @@ public static class MeshEmbed
 
     private const long EdgeShift = 32;
 
+    /// <summary>只落面、不动网(POLYPROJECT 线落到面上)的结果。</summary>
+    public sealed class DrapeResult
+    {
+        /// <summary>落面后的各条线(与输入同序)：节点 = 原顶点 + 与每条三角边的交点, 高程取自面；网外节点保留输入高程。</summary>
+        public List<List<(double x, double y, double z)>> Polylines = new();
+        /// <summary>落在网投影范围外的原顶点数。</summary>
+        public int OutsideNodes;
+        /// <summary>输入顶点总数 / 输出节点总数(差 = 补进的交点数)。</summary>
+        public int InputNodes, OutputNodes;
+    }
+
+    /// <summary>
+    /// 多段线落到面上(节点重算)：只做 <see cref="Embed"/> 的第 ① 步 —— 原顶点按重心插值取面高程, 每段与三角边的交点
+    /// (高程沿边插值)都插成节点；网不动。原版内核 PolylineProjector 只投顶点, 两顶点之间的直段照样穿山悬空
+    /// —— 用户截图"只是节点在面上, 中间没有插值在面上"；故与 EMBED 同口径补交点, 整条线逐段贴面。
+    /// </summary>
+    public static DrapeResult? Drape(IReadOnlyList<(double x, double y, double z)> verts, IReadOnlyList<(int a, int b, int c)> tris,
+        IReadOnlyList<Line> lines, double tolerance = 1e-6)
+    {
+        if (verts == null || tris == null || verts.Count < 3 || tris.Count == 0 || lines == null) return null;
+        var ctx = new Ctx(verts, tris, Math.Max(tolerance, 1e-9));
+        var seqs = DrapeLines(ctx, lines, tolerance, crossLines: false);
+        var res = new DrapeResult();
+        for (int li = 0; li < lines.Count; li++)
+        {
+            var outl = new List<(double x, double y, double z)>(seqs[li].Count);
+            foreach (var nd in seqs[li]) outl.Add((nd.X, nd.Y, nd.Z));
+            res.Polylines.Add(outl);
+            res.InputNodes += lines[li].Points?.Count ?? 0;
+            res.OutputNodes += outl.Count;
+            if (lines[li].Points != null)
+                foreach (var (x, y) in lines[li].Points) if (ctx.Locate(x, y, out _, out _, out _) < 0) res.OutsideNodes++;
+        }
+        return res;
+    }
+
     public static Result? Embed(IReadOnlyList<(double x, double y, double z)> verts, IReadOnlyList<(int a, int b, int c)> tris,
         IReadOnlyList<Line> lines, double tolerance = 1e-6)
     {
@@ -55,55 +92,8 @@ public static class MeshEmbed
         var ctx = new Ctx(verts, tris, Math.Max(tolerance, 1e-9));
         var res = new Result { OriginalFaces = tris.Count };
 
-        // ── ① 落面：每条线 → 节点串 ──
-        var seqs = new List<List<Node>>(lines.Count);
-        var segs = new List<(int line, int seg, Node a, Node b, List<(double s, Node n)> cross)>();
-        foreach (var ln in lines)
-        {
-            var seq = new List<Node>();
-            if (ln.Points == null || ln.Points.Count == 0) { seqs.Add(seq); continue; }
-            // 去掉相邻重复点(零长段会让节点/归属退化)；退化成单点的线只探高程, 不往网里插点
-            var pts = new List<(double x, double y)>(); var zs = new List<double>();
-            for (int i = 0; i < ln.Points.Count; i++)
-            {
-                var p = ln.Points[i];
-                if (pts.Count > 0 && Math.Abs(pts[^1].x - p.x) <= tolerance && Math.Abs(pts[^1].y - p.y) <= tolerance) continue;
-                pts.Add(p); zs.Add(ln.Z != null && i < ln.Z.Count ? ln.Z[i] : 0);
-            }
-            if (ln.Closed && pts.Count > 1 && Math.Abs(pts[^1].x - pts[0].x) <= tolerance && Math.Abs(pts[^1].y - pts[0].y) <= tolerance) { pts.RemoveAt(pts.Count - 1); zs.RemoveAt(zs.Count - 1); }
-            int n = pts.Count;
-            int segCount = ln.Closed && n > 2 ? n : n - 1;
-            if (segCount <= 0) { seq.Add(ctx.Probe(pts[0].x, pts[0].y, zs[0])); seqs.Add(seq); continue; }
-            var ends = new Node[n];
-            for (int i = 0; i < n; i++) ends[i] = ctx.NodeAtXY(pts[i].x, pts[i].y, zs[i]);
-            int lineIdx = seqs.Count;
-            for (int i = 0; i < segCount; i++)
-            {
-                var a = ends[i]; var b = ends[(i + 1) % n];
-                var cross = ctx.CrossEdges(pts[i].x, pts[i].y, pts[(i + 1) % n].x, pts[(i + 1) % n].y);
-                segs.Add((lineIdx, i, a, b, cross));
-            }
-            seqs.Add(seq);
-        }
-        // 线与线(含自身不相邻段)交叉处补节点
-        ctx.CrossSegments(segs, lines);
-        // 组装节点串
-        var segsByLine = new Dictionary<int, List<(int seg, Node a, Node b, List<(double s, Node n)> cross)>>();
-        foreach (var s in segs) (segsByLine.TryGetValue(s.line, out var l) ? l : segsByLine[s.line] = new()).Add((s.seg, s.a, s.b, s.cross));
-        for (int li = 0; li < lines.Count; li++)
-        {
-            if (!segsByLine.TryGetValue(li, out var ls)) continue;
-            ls.Sort((p, q) => p.seg.CompareTo(q.seg));
-            var seq = seqs[li];
-            foreach (var (_, a, b, cross) in ls)
-            {
-                if (seq.Count == 0 || !ReferenceEquals(seq[^1], a)) Push(seq, a);
-                cross.Sort((p, q) => p.s.CompareTo(q.s));
-                foreach (var (_, nd) in cross) Push(seq, nd);
-                Push(seq, b);
-            }
-            if (lines[li].Closed && seq.Count > 1 && ReferenceEquals(seq[0], seq[^1])) seq.RemoveAt(seq.Count - 1);
-        }
+        // ── ① 落面：每条线 → 节点串(线与线交叉处也补节点, 免得局部约束互相打架) ──
+        var seqs = DrapeLines(ctx, lines, tolerance, crossLines: true);
 
         // ── ② 线段归属三角形 ──
         var pieces = new Dictionary<int, List<(Node a, Node b)>>();
@@ -146,6 +136,63 @@ public static class MeshEmbed
             res.Polylines.Add(outl);
         }
         return res;
+    }
+
+    /// <summary>
+    /// 落面：每条线 → 节点串。原顶点按重心插值取面高程(网外保留输入高程), 每段与三角边的交点(高程沿边插值)按线段参数
+    /// 插入其间, 因此输出逐段都落在某一个三角形内(或沿边)、严格贴面。<paramref name="crossLines"/> 时线与线交叉处也补节点。
+    /// </summary>
+    private static List<List<Node>> DrapeLines(Ctx ctx, IReadOnlyList<Line> lines, double tolerance, bool crossLines)
+    {
+        var seqs = new List<List<Node>>(lines.Count);
+        var segs = new List<(int line, int seg, Node a, Node b, List<(double s, Node n)> cross)>();
+        foreach (var ln in lines)
+        {
+            var seq = new List<Node>();
+            if (ln.Points == null || ln.Points.Count == 0) { seqs.Add(seq); continue; }
+            // 去掉相邻重复点(零长段会让节点/归属退化)；退化成单点的线只探高程, 不往网里插点
+            var pts = new List<(double x, double y)>(); var zs = new List<double>();
+            for (int i = 0; i < ln.Points.Count; i++)
+            {
+                var p = ln.Points[i];
+                if (pts.Count > 0 && Math.Abs(pts[^1].x - p.x) <= tolerance && Math.Abs(pts[^1].y - p.y) <= tolerance) continue;
+                pts.Add(p); zs.Add(ln.Z != null && i < ln.Z.Count ? ln.Z[i] : 0);
+            }
+            if (ln.Closed && pts.Count > 1 && Math.Abs(pts[^1].x - pts[0].x) <= tolerance && Math.Abs(pts[^1].y - pts[0].y) <= tolerance) { pts.RemoveAt(pts.Count - 1); zs.RemoveAt(zs.Count - 1); }
+            int n = pts.Count;
+            int segCount = ln.Closed && n > 2 ? n : n - 1;
+            if (segCount <= 0) { seq.Add(ctx.Probe(pts[0].x, pts[0].y, zs[0])); seqs.Add(seq); continue; }
+            var ends = new Node[n];
+            for (int i = 0; i < n; i++) ends[i] = ctx.NodeAtXY(pts[i].x, pts[i].y, zs[i]);
+            int lineIdx = seqs.Count;
+            for (int i = 0; i < segCount; i++)
+            {
+                var a = ends[i]; var b = ends[(i + 1) % n];
+                var cross = ctx.CrossEdges(pts[i].x, pts[i].y, pts[(i + 1) % n].x, pts[(i + 1) % n].y);
+                segs.Add((lineIdx, i, a, b, cross));
+            }
+            seqs.Add(seq);
+        }
+        // 线与线(含自身不相邻段)交叉处补节点(嵌入约束用; 纯落面不需要)
+        if (crossLines) ctx.CrossSegments(segs, lines);
+        // 组装节点串
+        var segsByLine = new Dictionary<int, List<(int seg, Node a, Node b, List<(double s, Node n)> cross)>>();
+        foreach (var s in segs) (segsByLine.TryGetValue(s.line, out var l) ? l : segsByLine[s.line] = new()).Add((s.seg, s.a, s.b, s.cross));
+        for (int li = 0; li < lines.Count; li++)
+        {
+            if (!segsByLine.TryGetValue(li, out var ls)) continue;
+            ls.Sort((p, q) => p.seg.CompareTo(q.seg));
+            var seq = seqs[li];
+            foreach (var (_, a, b, cross) in ls)
+            {
+                if (seq.Count == 0 || !ReferenceEquals(seq[^1], a)) Push(seq, a);
+                cross.Sort((p, q) => p.s.CompareTo(q.s));
+                foreach (var (_, nd) in cross) Push(seq, nd);
+                Push(seq, b);
+            }
+            if (lines[li].Closed && seq.Count > 1 && ReferenceEquals(seq[0], seq[^1])) seq.RemoveAt(seq.Count - 1);
+        }
+        return seqs;
     }
 
     private static void Push(List<Node> seq, Node n)

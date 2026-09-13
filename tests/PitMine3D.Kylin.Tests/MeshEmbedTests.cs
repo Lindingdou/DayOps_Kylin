@@ -211,6 +211,70 @@ public class MeshEmbedTests
         Assert.Equal(AreaXY(v, t), AreaXY(r.Verts, r.Tris), 6);
     }
 
+    // ── 线落到面上 (POLYPROJECT) 只重算线节点、网不动 ──
+    // 用户截图：二维两点线落面后"只是节点在面上, 中间没有插值在面上"——直段穿山悬空。
+
+    /// <summary>落面后的线每节点、每段中点都贴面(中点贴面 ⇒ 整段在某三角形平面内)。</summary>
+    private static void AssertLiesOnSurface(Sampler s, List<(double x, double y, double z)> pl, bool closed)
+    {
+        int m = closed ? pl.Count : pl.Count - 1;
+        for (int i = 0; i < m; i++)
+        {
+            var a = pl[i]; var b = pl[(i + 1) % pl.Count];
+            Assert.True(s.TrySampleZ(a.x, a.y, out double za)); Assert.Equal(za, a.z, 6);
+            Assert.True(s.TrySampleZ(0.5 * (a.x + b.x), 0.5 * (a.y + b.y), out double zm), $"段 {i} 中点落网外");
+            Assert.Equal(zm, 0.5 * (a.z + b.z), 6);
+        }
+    }
+
+    [Fact]
+    public void Drape_two_point_flat_line_gets_edge_crossings_and_lies_on_surface_without_touching_mesh()
+    {
+        var (v, t) = Terrain(12, 10, 10, Hill);
+        var s = new Sampler(v, t);
+        var line = new MeshEmbed.Line(new[] { (3.3, 7.1), (113.4, 82.6) }, null, false);
+        var r = MeshEmbed.Drape(v, t, new[] { line })!;
+        Assert.NotNull(r);
+        var pl = r.Polylines[0];
+        Assert.True(pl.Count > 20, $"两点直线跨十几个格子必须补出交点节点, 实得 {pl.Count}");
+        Assert.Equal(2, r.InputNodes); Assert.Equal(pl.Count, r.OutputNodes); Assert.Equal(0, r.OutsideNodes);
+        // 首尾还是原顶点(XY 不变), 中间节点按线段参数单调排列
+        Assert.Equal(3.3, pl[0].x, 9); Assert.Equal(7.1, pl[0].y, 9);
+        Assert.Equal(113.4, pl[^1].x, 9); Assert.Equal(82.6, pl[^1].y, 9);
+        for (int i = 1; i < pl.Count; i++) Assert.True(pl[i].x > pl[i - 1].x, $"节点 {i} 次序错");
+        AssertLiesOnSurface(s, pl, false);
+        // 只投顶点的老做法：段中点高程 ≠ 面高程(否则此测试无意义)
+        s.TrySampleZ(0.5 * (3.3 + 113.4), 0.5 * (7.1 + 82.6), out double zmSurf);
+        Assert.NotEqual(zmSurf, 0.5 * (pl[0].z + pl[^1].z), 1);
+    }
+
+    [Fact]
+    public void Drape_closed_loop_lies_on_surface_including_closing_segment()
+    {
+        var (v, t) = Terrain(10, 10, 10, Hill);
+        var s = new Sampler(v, t);
+        var loop = new MeshEmbed.Line(new[] { (23.0, 27.0), (71.0, 31.0), (66.0, 78.0), (19.0, 64.0) }, null, true);
+        var r = MeshEmbed.Drape(v, t, new[] { loop })!;
+        var pl = r.Polylines[0];
+        Assert.True(pl.Count > 8);
+        Assert.False(Math.Abs(pl[0].x - pl[^1].x) < 1e-9 && Math.Abs(pl[0].y - pl[^1].y) < 1e-9, "闭合线不重复首点");
+        AssertLiesOnSurface(s, pl, true);
+    }
+
+    [Fact]
+    public void Drape_keeps_outside_vertices_with_input_z_and_adds_boundary_crossing()
+    {
+        var (v, t) = Terrain(6, 6, 10, Hill);
+        var s = new Sampler(v, t);
+        var line = new MeshEmbed.Line(new[] { (-15.0, 25.0), (25.0, 25.0), (45.0, 45.0) }, new[] { 50.0, 50.0, 50.0 }, false);
+        var r = MeshEmbed.Drape(v, t, new[] { line })!;
+        Assert.Equal(1, r.OutsideNodes);
+        var pl = r.Polylines[0];
+        Assert.Equal(50.0, pl[0].z);                                  // 网外顶点保留输入高程
+        Assert.Contains(pl.Skip(1), p => Math.Abs(p.x) < 1e-7);       // 进网处(x=0 边界)补了节点
+        AssertLiesOnSurface(s, pl.Skip(1).ToList(), false);
+    }
+
     [Fact]
     public void Degenerate_inputs_are_safe()
     {
