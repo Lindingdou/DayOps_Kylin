@@ -1,130 +1,85 @@
 using System.Collections.Generic;
 using System.Linq;
-using PitMine3D.Kylin.Cad;
+using PitMine3D.Kylin.Cad.Transport;
+using PitMine3D.Kylin.Cad.RoadLayout;
 using Xunit;
 
-/// <summary>
-/// 坑线选线器(RampRouteGenerator.Generate)已知值回归。忠实移植原 MineAssLib.RoadLayout.RampRouteGenerator
-/// (Layer-1 选线, 纯几何可单测)——逐对相邻非工作帮台阶按 "可用帮长 vs ΔH/i" 判 斜坡道/转弯坡道/螺旋。
-/// 默认约束: i=8% → needLen(ΔH=10)=125; 回头需平盘 2·R=20; 单车道年运力 (3600/30)·0.8·5000·90=43,200,000t。
-/// </summary>
+namespace PitMine3D.Kylin.Tests.RoadLayout;
+
+/// <summary>选线器「每级多候选 + 沿帮中心线」纯逻辑测试(不碰几何核,确定性)。</summary>
 public class RampRouteGeneratorTests
 {
-    // 标高 level、坡顶线长 crestLen(水平)、平盘宽 berm 的非工作帮台阶。
-    private static RampBenchLine Bench(double level, double crestLen, double berm, bool working = false) => new()
+    /// <summary>
+    /// 造 3 级方环台阶线:边长 200m 的正方形 4 顶点。
+    /// 开口折线长 600m ≥ 需展线长(ΔH15 ÷ 8% = 187.5m) → 三级都判斜坡道;闭合周长 800m 供起坡点均分。
+    /// </summary>
+    private static RoadLayoutInput MakeBenchInput()
     {
-        Level = level,
-        BermWidth = berm,
-        IsWorkingWall = working,
-        Crest = new List<(double X, double Y, double Z)> { (0, 0, level), (crestLen, 0, level) },
-    };
-
-    [Fact]
-    public void Straight_when_available_length_meets_required_run()
-    {
-        // 上帮坡顶线长 200 ≥ 需 125(ΔH=10, i=8%) → 斜坡道, 回头半径 0。
-        var benches = new List<RampBenchLine> { Bench(100, 200, 30), Bench(90, 200, 30) };
-        var c = RampRouteGenerator.Generate(benches);
-        var r = Assert.Single(c);
-        Assert.Equal(RampForm.Straight, r.Form);
-        Assert.Equal(125.0, r.RequiredLengthM, 6);
-        Assert.Equal(200.0, r.AvailableLengthM, 6);
-        Assert.Equal(0.0, r.TurnRadius, 6);
-        Assert.True(r.GeomFeasible);
-        Assert.Equal(100, r.FromLevel, 6);
-        Assert.Equal(90, r.ToLevel, 6);
-    }
-
-    [Fact]
-    public void Switchback_when_short_leg_but_berm_fits_turn()
-    {
-        // 坡顶线长 100 < 需 125, 但平盘 25 ≥ 回头需 20 → 转弯坡道(回头), 半径=卡车转弯半径 10。
-        var benches = new List<RampBenchLine> { Bench(100, 100, 25), Bench(90, 100, 25) };
-        var r = Assert.Single(RampRouteGenerator.Generate(benches));
-        Assert.Equal(RampForm.Switchback, r.Form);
-        Assert.Equal(10.0, r.TurnRadius, 6);
-        Assert.True(r.GeomFeasible);
-    }
-
-    [Fact]
-    public void Spiral_when_neither_leg_nor_berm_fits()
-    {
-        // 坡顶线长 100 < 需 125, 平盘 5 < 回头需 20 → 螺旋兜底。
-        var benches = new List<RampBenchLine> { Bench(100, 100, 5), Bench(90, 100, 5) };
-        var r = Assert.Single(RampRouteGenerator.Generate(benches));
-        Assert.Equal(RampForm.Spiral, r.Form);
-        Assert.Equal(10.0, r.TurnRadius, 6);
-    }
-
-    [Fact]
-    public void Per_lane_capacity_is_known_value_from_defaults()
-    {
-        // (3600/30)·(80/100)·5000·90 = 43,200,000 t/期·车道。
-        var benches = new List<RampBenchLine> { Bench(100, 200, 30), Bench(90, 200, 30) };
-        var r = Assert.Single(RampRouteGenerator.Generate(benches));
-        Assert.Equal(43_200_000.0, r.PerLaneCapacityTons, 3);
-        Assert.Equal((0, 0, 100), r.PortalStart);   // 起坡点 = 上帮坡顶线首点
-    }
-
-    [Fact]
-    public void Working_walls_excluded_and_levels_sorted_high_to_low()
-    {
-        // 乱序 + 一工作帮: 只在非工作帮相邻对间选线, 按标高降序配对。
-        var benches = new List<RampBenchLine>
+        var benches = new List<BenchLine>();
+        foreach (double lv in new[] { 100.0, 85.0, 70.0 })
+            benches.Add(new BenchLine
+            {
+                Level = lv,
+                Crest = new List<(double, double, double)>
+                {
+                    (0, 0, lv), (200, 0, lv), (200, 200, lv), (0, 200, lv)
+                },
+                BermWidth = 40,        // ≥ 回头直径(2×转弯半径 10),不致因平盘窄改判
+                IsWorkingWall = false, // 固定坑线只布非工作帮
+            });
+        return new RoadLayoutInput
         {
-            Bench(90, 200, 30), Bench(100, 200, 30), Bench(80, 200, 30, working: true), Bench(70, 200, 30)
+            Sources = new List<LoadingPoint> { new() { Id = "S1", OreTons = 1000 } },
+            Sinks = new List<UnloadingPoint> { new() { Id = "U1", Kind = UnloadKind.Crusher } },
+            Constraints = new TransportConstraintSettings(),
+            Benches = benches,
         };
-        var c = RampRouteGenerator.Generate(benches);
-        // 非工作帮 {100,90,70} 降序配对 → (100→90),(90→70)
-        Assert.Equal(2, c.Count);
-        Assert.Equal(100, c[0].FromLevel, 6);
-        Assert.Equal(90, c[0].ToLevel, 6);
-        Assert.Equal(90, c[1].FromLevel, 6);
-        Assert.Equal(70, c[1].ToLevel, 6);
     }
 
     [Fact]
-    public void Tally_counts_forms_and_infeasible()
+    public void SameLevelPair_YieldsMultipleCandidates_WithDistinctPortals()
     {
-        var benches = new List<RampBenchLine>
+        var cands = new RampRouteGenerator().Generate(MakeBenchInput());
+        var groups = RampRouteGenerator.GroupByLevelPair(cands);
+
+        // 3 级台阶 → 2 对相邻水平;每对按弧长均分出 CandidatesPerLevel 个候选。
+        Assert.Equal(2, groups.Count);
+        Assert.All(groups, g => Assert.Equal(RampRouteGenerator.CandidatesPerLevel, g.Count));
+
+        foreach (var g in groups)
         {
-            Bench(100, 200, 30),   // →90 斜坡道
-            Bench(90, 100, 25),    // →80 转弯
-            Bench(80, 100, 5),     // →70 螺旋
-            Bench(70, 200, 30),
-        };
-        var c = RampRouteGenerator.Generate(benches);
-        var (s, sb, sp, bad) = RampRouteGenerator.Tally(c);
-        Assert.Equal(1, s);
-        Assert.Equal(1, sb);
-        Assert.Equal(1, sp);
-        Assert.Equal(0, bad);
+            // 同一组的上/下标高一致(确实是"同一级的多候选",不是串到别级去了)。
+            Assert.Single(g.Select(c => (c.FromLevel, c.ToLevel)).Distinct());
+            // 起坡点沿环错开 → 平面位置两两不同,才谈得上"择路"。
+            var portals = g.Select(c => (c.PortalStart.X, c.PortalStart.Y)).ToList();
+            Assert.Equal(portals.Count, portals.Distinct().Count());
+            // 展线长/形式相同(现口径:多候选只差位置),首条起坡点仍落在坡顶线首点,与首版一致。
+            Assert.Single(g.Select(c => c.RequiredLengthM).Distinct());
+            Assert.Equal(0.0, g[0].PortalStart.X, 6);
+            Assert.Equal(0.0, g[0].PortalStart.Y, 6);
+        }
     }
 
     [Fact]
-    public void Zero_grade_marks_infeasible()
+    public void EveryCandidate_HasNonEmptyCenterline_DescendingFromUpperToLowerLevel()
     {
-        var benches = new List<RampBenchLine> { Bench(100, 200, 30), Bench(90, 200, 30) };
-        var c = RampRouteGenerator.Generate(benches, new RampRouteConstraints { MaxGradePct = 0 });
-        var r = Assert.Single(c);
-        Assert.False(r.GeomFeasible);   // needLen=+∞ & i≤0 → 不可行
-    }
+        var cands = new RampRouteGenerator().Generate(MakeBenchInput());
+        Assert.NotEmpty(cands);
 
-    [Fact]
-    public void Generated_candidates_feed_layout_solver_end_to_end()
-    {
-        // Layer-1 选线 → 映射为 Layer-2 RoadLayoutSolver 候选 → 求解出方案(证两层贯通)。
-        var benches = new List<RampBenchLine>
+        foreach (var c in cands)
         {
-            Bench(100, 200, 30), Bench(90, 200, 30), Bench(80, 200, 30)
-        };
-        var gen = RampRouteGenerator.Generate(benches);
-        Assert.Equal(2, gen.Count);
-        var cands = gen.Select(g => new RoadLayoutSolver.RampCand(
-            g.FromLevel, g.ToLevel, g.RequiredLengthM, g.GeomFeasible, g.Note)).ToList();
-        var res = RoadLayoutSolver.Solve(cands, demandTons: 1_000_000, perLaneTons: 500_000, haulUnitCost: 2);
-        Assert.True(res.Success);
-        Assert.NotNull(res.Recommended);
-        Assert.Equal(3, res.Schemes.Count);
+            // 中心线不再是"只有起坡一点"的占位:至少两点才构得成线。
+            Assert.True(c.Centerline.Count >= 2, $"中心线点数 {c.Centerline.Count} 过少");
+            var head = c.Centerline[0];
+            var tail = c.Centerline[c.Centerline.Count - 1];
+            // 首点 = 起坡点(平面)、Z 起于上水平;末点 Z 落到下水平。
+            Assert.Equal(c.PortalStart.X, head.X, 6);
+            Assert.Equal(c.PortalStart.Y, head.Y, 6);
+            Assert.Equal(c.FromLevel, head.Z, 6);
+            Assert.Equal(c.ToLevel, tail.Z, 6);
+            // Z 单调不升(按已走弧长线插,不得中途回弹)。
+            for (int i = 1; i < c.Centerline.Count; i++)
+                Assert.True(c.Centerline[i].Z <= c.Centerline[i - 1].Z + 1e-9, "中心线 Z 出现回弹");
+        }
     }
 }

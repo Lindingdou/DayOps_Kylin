@@ -1750,7 +1750,8 @@ public partial class MainWindow : Window
             if (cmd == "侧面三角网" || cmd == "侧面放样" || cmd == "放样侧面") { await SideSurfaceAsync(); return; }
             if (cmd == "道路横断面" || cmd == "路面加宽超高" || cmd == "弯道加宽") { RoadCrossSectionCmd(); return; }
             if (cmd.StartsWith("道路设计参数") || cmd.StartsWith("最小平曲线半径") || cmd.StartsWith("平曲线半径") || cmd.StartsWith("道路设计校核")) { RoadDesignParamsCmd(cmd); return; }
-            if (cmd.StartsWith("运输布局方案") || cmd.StartsWith("道路布局求解") || cmd.StartsWith("坑线布局方案") || cmd.StartsWith("运输系统布局") || cmd.StartsWith("运量驱动布线") || cmd == "运量驱动布线") { await RoadLayoutCmd(cmd); return; }
+            if (cmd == "运量驱动布线") { RoadLayoutDrivenCmd(); return; }   // 原 CreateRoadLayoutCommand: 装卸点台账 + 约束 + 台阶线 → RoadLayoutSolver 三方案 → 比选窗 → 采用出真中线, 见 MainWindow.RoadLayoutDriven.cs
+            if (cmd.StartsWith("运输布局方案") || cmd.StartsWith("道路布局求解") || cmd.StartsWith("坑线布局方案") || cmd.StartsWith("运输系统布局") || cmd.StartsWith("运量驱动布线 ")) { await RoadLayoutCmd(cmd); return; }   // 命令行带参形式: 候选 CSV/环 + 需求吨数(早期切片)
             if (cmd == "路面生成" || cmd == "生成路面" || cmd == "中线外扩" || cmd.StartsWith("路面生成 ") || cmd.StartsWith("生成路面 ")) { RoadSurfaceCmd(cmd); return; }
             if (cmd == "纵坡分析" || cmd == "纵坡" || cmd == "坡度分档" || cmd == "限坡校核" || cmd.StartsWith("纵坡分析 ") || cmd.StartsWith("限坡校核 ")) { await GradeProfileAsync(cmd); return; }
             if (cmd == "竖曲线平滑" || cmd == "竖曲线" || cmd == "纵断面竖曲线" || cmd.StartsWith("竖曲线平滑 ") || cmd.StartsWith("竖曲线 ")) { await VerticalCurveAsync(cmd); return; }
