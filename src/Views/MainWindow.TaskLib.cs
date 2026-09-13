@@ -15,6 +15,47 @@ public partial class MainWindow
 {
     private readonly Dictionary<Type, Window> _taskWindows = new();
 
+    /// <summary>自检用的一盘样例（两面采装 + 一台钻机 + 12:00 一炮），只为核对甘特画法；不进任何台账。</summary>
+    private static PitMine3D.Kylin.TaskLib.Engine.ExploderResult TaskLibSelftestPlan()
+    {
+        var cfg = new PitMine3D.Kylin.TaskLib.Engine.ExploderConfig
+        {
+            DateLabel = "2026-06-17 周三", IdPrefix = "D", NowHour = 10.5, BlastStart = 12, BlastEnd = 12.5,
+            Shifts = { new("早", 0, 8), new("中", 8, 16), new("夜", 16, 24) },
+            Blend = new PitMine3D.Kylin.TaskLib.Engine.BlendStandard { MaxAshPct = 12.5 },
+        };
+        cfg.Faces.Add(new PitMine3D.Kylin.TaskLib.Engine.FaceInput
+        {
+            Zone = "4煤南", Process = PitMine3D.Kylin.TaskLib.Domain.ProcessType.Load, DayTargetM3 = 4800, MaterialCode = "coal",
+            DestinationName = "1号破碎站", DestinationKind = PitMine3D.Kylin.TaskLib.Domain.SinkKind.Crusher, HaulDistanceKm = 2.6,
+            Group = new PitMine3D.Kylin.TaskLib.Domain.EquipmentGroup { MainEquipment = "WK-35A", GroupCapacityM3PerH = 350, RecommendedTrucks = 5, Trucks = { "T1", "T2", "T3", "T4", "T5" } },
+        });
+        cfg.Faces.Add(new PitMine3D.Kylin.TaskLib.Engine.FaceInput
+        {
+            Zone = "4煤北", Process = PitMine3D.Kylin.TaskLib.Domain.ProcessType.Load, DayTargetM3 = 3600, MaterialCode = "rock",
+            DestinationName = "内排土场", DestinationKind = PitMine3D.Kylin.TaskLib.Domain.SinkKind.InternalDump, HaulDistanceKm = 1.4,
+            Group = new PitMine3D.Kylin.TaskLib.Domain.EquipmentGroup { MainEquipment = "PH2800", GroupCapacityM3PerH = 300, RecommendedTrucks = 4, Trucks = { "T6", "T7", "T8" } },
+        });
+        cfg.Drills.Add(new PitMine3D.Kylin.TaskLib.Engine.DrillInput { EquipId = "ZJ-01", Zone = "4煤南", Start = 0, End = 6 });
+        return PitMine3D.Kylin.TaskLib.Engine.TaskExploder.Explode(cfg);
+    }
+
+    /// <summary>样例盘子的设备行（照 ProductionPlanContext.Roster 的排法：主设备一行、卡车紧跟自己的铲）。</summary>
+    private static List<PitMine3D.Kylin.TaskLib.Domain.RosterEntry> TaskLibSelftestRoster(PitMine3D.Kylin.TaskLib.Engine.ExploderResult plan)
+    {
+        static string Cat(string id) => id.StartsWith("ZJ") || id.StartsWith("DR") ? "钻机" : id.StartsWith("T") ? "卡车" : id.StartsWith("BD") ? "推土机" : "电铲";
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var list = new List<PitMine3D.Kylin.TaskLib.Domain.RosterEntry>();
+        foreach (var t in plan.Tasks)
+        {
+            string main = t.Group?.MainEquipment ?? "";
+            if (main.Length == 0) { if (seen.Add(t.Process.ToString())) list.Add(new(t.Process + "（未指定执行人）", t.Process + "（未指定执行人）", "爆破", false)); continue; }
+            if (seen.Add(main)) list.Add(new(main, $"{main} {Cat(main)}", Cat(main), false));
+            foreach (var tr in t.Group!.Trucks) if (seen.Add(tr)) list.Add(new(tr, $"{tr} 卡车", "卡车", true));
+        }
+        return list;
+    }
+
     private void OpenTaskWindow<T>(Func<T> factory) where T : Window
     {
         try
@@ -32,6 +73,14 @@ public partial class MainWindow
             win.Closed += (_, _) => _taskWindows.Remove(typeof(T));
             GeoDb.GeoDbWindows.NoteLast(win);   // 让 @页面截图 自检拍得到
             win.Show(this);
+            // 自检：台账为空时甘特一行都没有，拍不出条形 —— 带「甘特样例」字样时喂原版 DailyGanttModel.Sample() 核对画法
+            if (win is Views.TaskLib.DailyGanttWindow gw
+                && (Environment.GetEnvironmentVariable("PITMINE_SELFTEST") ?? "").Contains("甘特样例"))
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    var plan = TaskLibSelftestPlan();
+                    gw.SetPlan(plan, "2026-06-17 周三", 10.5, 12, 12.5, TaskLibSelftestRoster(plan));
+                });   // Show 里 Opened 已同步触发过，挂事件晚了
         }
         catch (Exception ex)
         {

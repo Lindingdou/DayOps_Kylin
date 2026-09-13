@@ -1635,8 +1635,9 @@ public partial class MainWindow : Window
             if (cmd == "排土场容量校核" || cmd == "容量校核" || cmd == "排土容量") { await DumpCapacityCheckCmd(cmd); return; }   // 原 DumpCapacityDialog: 图上选面 → 填方容积 → 与 dump_site 台账对账/写回, 见 MainWindow.DumpAdvance.cs
             if (cmd == "两期容量校核") { await DumpCapacityAsync(); return; }   // 命令行别名: 两份高程点 CSV 的两期算量(早期切片)
             if (cmd == "生产量核算" || cmd == "任务量汇总" || cmd == "分账合计" || cmd == "生产任务量") { await ProductionQuantityAsync(); return; }
-            if (cmd == "生产任务编制" || cmd == "排产" || cmd == "任务裂解" || cmd == "裂解装箱" || cmd == "班次排产"
-                || cmd.StartsWith("生产任务编制 ") || cmd.StartsWith("排产 ")) { TaskExplodeCmd(cmd); return; }
+            if (cmd == "生产任务编制") { OpenTaskWindow(() => new Views.TaskLib.DailyGanttWindow()); return; }   // 原 TaskLib DailyGanttWindow：引擎裂解装箱 → 设备作业甘特（五视图 / 点条七问 / 计划校核 / 快照翻页）
+            if (cmd == "排产" || cmd == "任务裂解" || cmd == "裂解装箱" || cmd == "班次排产"
+                || cmd.StartsWith("生产任务编制 ") || cmd.StartsWith("排产 ")) { TaskExplodeCmd(cmd); return; }   // 旧切片：状态行一句话（命令行别名保留）
             if (cmd == "采剥平衡" || cmd == "采剥平衡分析" || cmd == "剥采平衡" || cmd == "物料平衡") { await StripBalanceAsync(); return; }
             if (cmd == "配煤核算" || cmd == "配煤" || cmd == "煤质混合" || cmd == "配煤计算") { await CoalBlendAsync(); return; }
             if (cmd == "工序进度跟踪" || cmd == "工序进度") { OpenTaskWindow(() => new Views.TaskLib.ProcessProgressWindow()); return; }   // 原 TaskLib ProcessProgressWindow：区×工序 聚合引擎任务，按班
