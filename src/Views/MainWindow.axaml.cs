@@ -1378,9 +1378,13 @@ public partial class MainWindow : Window
             if (cmd == "示例三角网" || cmd == "三角网示例") { GenerateSampleTrimesh(); return; }
             if (cmd == "坡度着色" || cmd == "三角网着色" || cmd == "坡度") { await ShadeTinAsync("坡度着色", "绿=平 → 红=陡", TerrainAnalysis.BuildSlopeMap); return; }
             if (cmd == "坡顶底线" || cmd == "坡顶坡底线" || cmd == "断棱线提取" || cmd == "坡顶底线提取" || cmd.StartsWith("坡顶底线 ")) { await CrestToeAsync(cmd); return; }
-            if (cmd == "平盘标高清单" || cmd == "平盘清单" || cmd == "标高清单" || cmd == "平盘标高统计" || cmd.StartsWith("平盘标高清单 ") || cmd.StartsWith("平盘清单 ")) { await BenchLevelInventoryAsync(cmd); return; }
+            if (cmd == "平盘标高清单") { OpenBenchLevel(); return; }   // 原 CreateOpenBenchLevelCommand：平盘标高清单窗（取线/限区域/归并/明细）
+            if (cmd == "平盘清单" || cmd == "标高清单" || cmd == "平盘标高统计" || cmd.StartsWith("平盘标高清单 ") || cmd.StartsWith("平盘清单 ")) { await BenchLevelInventoryAsync(cmd); return; }   // 旧切片：CSV(命令行别名保留)
             if (cmd == "现状参数提取" || cmd == "台阶参数反推" || cmd == "现状台阶参数" || cmd == "参数反推" || cmd.StartsWith("现状参数提取 ") || cmd.StartsWith("台阶参数反推 ")) { await BenchParameterExtractAsync(cmd); return; }
-            if (cmd == "标注台阶标高" || cmd == "台阶标高标注" || cmd == "标高标注" || cmd.StartsWith("标注台阶标高 ") || cmd.StartsWith("台阶标高标注 ")) { await BenchElevationAnnotateAsync(cmd); return; }
+            if (cmd == "标注台阶标高") { OpenBenchElevation(); return; }   // 原 CreateOpenBenchElevationCommand：标注台阶标高窗（SplitButton 主钮）
+            if (cmd == "查询台阶平盘标高") { _ = BenchElevationQueryAsync(); return; }   // 原 CreateOpenBenchElevationQueryCommand：连续取点放「点+高程」标记
+            if (cmd == "标注台阶标高设置") { _ = OpenBenchElevationConfigAsync(); return; }   // 原 CreateBenchElevationConfigCommand：样式配置(大小/字体/颜色/倾斜)
+            if (cmd == "台阶标高标注" || cmd == "标高标注" || cmd.StartsWith("标注台阶标高 ") || cmd.StartsWith("台阶标高标注 ")) { await BenchElevationAnnotateAsync(cmd); return; }   // 旧切片：CSV(命令行别名保留)
             if (cmd == "参数校核" || cmd == "台阶参数校核" || cmd == "现状参数校核" || cmd.StartsWith("参数校核 ") || cmd.StartsWith("台阶参数校核 ")) { await BenchParameterVerifyAsync(cmd); return; }
             if (cmd.StartsWith("平盘宽反算") || cmd.StartsWith("反算平盘宽") || cmd.StartsWith("帮坡角反算")) { BermForAngleCmd(cmd); return; }
             if (cmd == "趋势整合台阶" || cmd == "趋势整合" || cmd == "整合台阶" || cmd == "趋势规整台阶" || cmd.StartsWith("趋势整合台阶 ") || cmd.StartsWith("趋势整合 ")) { await TrendIntegrateAsync(cmd); return; }
@@ -10909,6 +10913,7 @@ public partial class MainWindow : Window
             if (cmd == "@采排圈定示例") { _ = SelftestMineableAreaSample(); return; }   // @采排圈定示例: 合成采场/排土场台阶线 + 连库 + 开圈定窗自动识别(实机核对用)
             if (cmd == "@短期示例") { SelftestShortTermSample(); return; }   // @短期示例: 短期派生窗生成并编制 + 月度计划编制一键(实机核对用)
             if (cmd == "@采场参数示例") { SelftestShortTermFieldSample(); return; }   // @采场参数示例: 合成坡顶/坡底环并选中 → 采场参数识别窗提取校核 + 平盘宽识别(实机核对用)
+            if (cmd == "@标注台阶标高示例") { SelftestBenchElevationSample(); return; }   // @标注台阶标高示例: 合成台阶环 → 一键标注 + 平盘标高清单统计(实机核对用)
             if (cmd.StartsWith("@块体示例"))   // @块体示例 [nx ny nz]: 建一个规则块体模型并入场景(截图核对体素显示用)
             {
                 var a = cmd.Length > 5 ? cmd.Substring(5).Split(' ', System.StringSplitOptions.RemoveEmptyEntries) : System.Array.Empty<string>();

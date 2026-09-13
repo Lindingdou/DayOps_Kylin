@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using PitMine3D.Kylin.Cad.Plan;
 using BenchParameterExtractor = PitMine3D.Kylin.Cad.BenchParameterExtractor;
+using BenchElevationAnnotator = PitMine3D.Kylin.Cad.BenchElevationAnnotator;
 using Xunit;
 using CalendarScenario = PitMine3D.Kylin.Cad.Plan.CalendarScenario;
 using DispatchStrategy = PitMine3D.Kylin.Cad.Plan.DispatchStrategy;
@@ -309,5 +310,30 @@ public class ParameterVerifierTests
         var exact = Measure(design.H, design.A, design.W);
         var rep2 = ParameterVerifier.Verify(exact, false);
         Assert.Equal("pass", rep2.Rows[0].Status);
+    }
+}
+
+/// <summary>标注台阶标高：样式配置 → 选项映射 · 查询标记 · 区域归属。</summary>
+public class BenchElevationFamilyTests
+{
+    [Fact]
+    public void 配置映射_查询标记_点在区域()
+    {
+        var cfg = new BenchElevationConfig { SizeMeters = 8, AutoColorByCategory = false, FixedColorRgb = 0x112233, TiltAxis = 3, TiltDeg = -15, FontName = "SimHei", PlaceOnBenchCenter = false };
+        var opt = cfg.ToOptions();
+        Assert.Equal(8, opt.SymbolSize, 6); Assert.Equal(0x112233u, opt.FixedColorRgb); Assert.False(opt.PlaceOnBenchCenter); Assert.Equal(3, opt.TiltAxis); Assert.Equal(-15, opt.TiltDeg, 6); Assert.Equal("SimHei", opt.FontName);
+        Assert.Null(new BenchElevationConfig().ToOptions().FixedColorRgb);   // 自动配色 → null
+
+        var m = BenchElevationAnnotator.BuildQueryMarker(10, 20, 1179.6, new BenchElevationAnnotator.Options());
+        Assert.Equal(1180, m.Elevation); Assert.Equal("+1180", m.Label); Assert.Equal((0x00, 0xC8, 0xFF), (m.R, m.G, m.B));
+        var m2 = BenchElevationAnnotator.BuildQueryMarker(0, 0, -3.2, new BenchElevationAnnotator.Options { FixedColorRgb = 0xFF0000 });
+        Assert.Equal("-3", m2.Label); Assert.Equal(0xFF, m2.R);
+        var (tx, ty) = BenchElevationAnnotator.QueryTextAnchorXY(10, 20, 10); Assert.Equal(12.5, tx, 6); Assert.Equal(21.5, ty, 6);
+
+        var ring = new[] { 0.0, 0, 0, 100, 0, 0, 100, 100, 0, 0, 100, 0 };
+        var regs = new List<(double[] poly, string cat)> { (ring, "pit") };
+        Assert.Equal("pit", Views.Plan.BenchElevationWindow.CategoryOf(new[] { 40.0, 40, 0, 60, 60, 0 }, regs));
+        Assert.Equal("", Views.Plan.BenchElevationWindow.CategoryOf(new[] { 400.0, 40, 0, 460, 60, 0 }, regs));
+        Assert.Contains(BenchElevationAnnotator.Fonts, f => f.Alias == "SimHei");
     }
 }

@@ -440,6 +440,8 @@ public partial class MainWindow
         public void EndRegionBrushEdit(bool commit) => _w.EndRegionBrush(commit);
         public int SetRegionBrushRadiusPx(int px) => _w.SetRegionBrushRadius(px);
         public object? OwnerWindow => _w;
+        public IReadOnlyList<string> LayerNames() => _w._layers.Layers.Select(l => l.Name).ToList();
+        public void ClearSelection() { _w._selected.Clear(); _w.RefreshScene(); }
         public void Echo(string text, bool warn = false) => _w.EditEcho(text, warn ? EchoLevel.Warn : EchoLevel.Info);
         public void Refresh() => _w.RefreshScene();
     }
@@ -544,6 +546,17 @@ public partial class MainWindow
     /// <summary>@采场参数示例：合成 6 级降深采场的坡顶/坡底环（台阶高 10 m · 坡面角 ≈ 40° · 平盘 ≈ 18 m）入图并全部选中 → 开「采场参数识别」→ 提取并校核 + 按平盘宽度 ≥ 15 m 识别。</summary>
     private void SelftestShortTermFieldSample()
     {
+        SelftestBenchRings();
+        OpenShortTermField();
+        var w = _shortTermFieldWin!;
+        string s1 = w.SelftestExtract();
+        string s2 = w.SelftestIdentify(15);
+        StatusMsg.Text = $"自检：采场参数示例 —— 12 环选中 → 校核 {w.SelftestRowCount} 行｜{s1}｜{s2}";
+    }
+
+    /// <summary>合成 6 级降深采场坡顶/坡底环入图并全部选中（标注台阶标高 / 平盘标高清单 / 采场参数识别 自检共用）。</summary>
+    private void SelftestBenchRings()
+    {
         BeginChange();
         _layers.EnsureImported("点云_坡顶线", 0.9f, 0.3f, 0.2f); _layers.EnsureImported("点云_坡底线", 0.2f, 0.5f, 0.9f);
         var made = new List<SceneEntity>();
@@ -563,10 +576,120 @@ public partial class MainWindow
         _selected.Clear(); _selected.AddRange(made);
         RefreshScene();
         Avalonia.Threading.Dispatcher.UIThread.Post(() => Viewport.FitBounds(new[] { -450.0, -350.0, 450.0, 350.0 }), Avalonia.Threading.DispatcherPriority.Background);
-        OpenShortTermField();
-        var w = _shortTermFieldWin!;
-        string s1 = w.SelftestExtract();
-        string s2 = w.SelftestIdentify(15);
-        StatusMsg.Text = $"自检：采场参数示例 —— 12 环选中 → 校核 {w.SelftestRowCount} 行｜{s1}｜{s2}";
+    }
+
+    /// <summary>@标注台阶标高示例：合成坡顶/坡底环并选中 → 开「标注台阶标高」一键标注（用选中的线）→ 开「平盘标高清单」全图统计。</summary>
+    private void SelftestBenchElevationSample()
+    {
+        SelftestBenchRings();
+        OpenBenchElevation();
+        _benchElevWin!.OnAnnotate();
+        string s1 = _benchElevWin.SelftestStatus;
+        OpenBenchLevel();
+        _benchLevelWin!.SelftestSource(all: true);
+        _benchLevelWin.OnCompute();
+        StatusMsg.Text = $"自检：标注台阶标高示例 —— {s1}｜平盘标高清单 {_benchLevelWin.SelftestLevelCount} 级：{_benchLevelWin.SelftestSummary}";
+    }
+}
+
+public partial class MainWindow
+{
+    // ───────────── 短期组「标注台阶标高」SplitButton：主钮 + 查询台阶平盘标高 / 平盘标高清单… / 标注设置…（原 CreateOpenBenchElevation*Command）─────────────
+    private BenchElevationWindow? _benchElevWin;
+    private BenchLevelWindow? _benchLevelWin;
+    private TinSampler? _queryTin;   // 「查询台阶平盘标高」的后端 TIN（只驻内存、不入场景、建一次复用）
+
+    /// <summary>主钮「标注台阶标高」：一键给台阶线标 ▽ + 整数高程（单例窗）。</summary>
+    private void OpenBenchElevation()
+    {
+        if (_benchElevWin != null) { _benchElevWin.Activate(); GeoDb.GeoDbWindows.NoteLast(_benchElevWin); StatusMsg.Text = "标注台阶标高窗口已在前台"; return; }
+        var w = new BenchElevationWindow(PlanHost);
+        _benchElevWin = w;
+        w.Closed += (_, _) => _benchElevWin = null;
+        w.Show(this);
+        GeoDb.GeoDbWindows.NoteLast(w);
+        StatusMsg.Text = "标注台阶标高：全部工作帮 / 按区域勾选 → 一键标注（▽ + 整数高程，落平盘中央）；样式在下拉「标注设置…」";
+    }
+
+    /// <summary>下拉「平盘标高清单…」（单例窗）。</summary>
+    private void OpenBenchLevel()
+    {
+        if (_benchLevelWin != null) { _benchLevelWin.Activate(); GeoDb.GeoDbWindows.NoteLast(_benchLevelWin); StatusMsg.Text = "平盘标高清单窗口已在前台"; return; }
+        var w = new BenchLevelWindow(PlanHost);
+        _benchLevelWin = w;
+        w.Closed += (_, _) => _benchLevelWin = null;
+        w.Show(this);
+        GeoDb.GeoDbWindows.NoteLast(w);
+        StatusMsg.Text = "平盘标高清单：视口选中 / 指定图层 / 全图 → 可限定可采区域 → 按标高归并成级 → 统计 / 选中该级 / 复制 / 导出";
+    }
+
+    /// <summary>下拉「标注设置…」：模态配置窗（大小/字体/颜色/倾斜/落平盘），保存后写用户设置，标注时自动套用。</summary>
+    private async Task OpenBenchElevationConfigAsync()
+    {
+        var dlg = new BenchElevationConfigWindow(BenchElevationConfig.Load());
+        GeoDb.GeoDbWindows.NoteLast(dlg);
+        await dlg.ShowDialog(this);
+        if (dlg.Result != null) { BenchElevationConfig.Save(dlg.Result); StatusMsg.Text = $"标注设置已保存：大小 {(dlg.Result.SizeMeters > 0 ? dlg.Result.SizeMeters.ToString("0.##") + "m" : "自动")} · {(dlg.Result.AutoColorByCategory ? "按类别配色" : "#" + dlg.Result.FixedColorRgb.ToString("X6"))} · 倾斜 轴{dlg.Result.TiltAxis} {dlg.Result.TiltDeg:0.#}°"; }
+    }
+
+    /// <summary>
+    /// 下拉「查询台阶平盘标高」：连续取点，每点放一个「点 + 整数高程」标记（图层 台阶标高查询）；Esc/右键结束。
+    /// 取 Z 的来源：① 已建好的后端 TIN；② 场景可见三角网；③ 都没有 → 问是否用全图多段线顶点建一张隐藏 TIN（只驻内存，建一次复用）。
+    /// </summary>
+    private async Task BenchElevationQueryAsync()
+    {
+        bool useBackendTin = _queryTin != null;
+        if (!useBackendTin && !_scene.Entities.OfType<MeshEntity>().Any(m => m.Visible && m.Tris.Count > 0))
+        {
+            bool yes = await GeoDb.CoalMsgBox.ConfirmAsync(this, "需要三角网",
+                "「查询台阶平盘标高」靠三角网取点高程。当前没有可用的三角网。\n\n是否用当前视图中的所有图元创建一张三角网？（只在后端用于取高程，不显示、创建一次后续复用）\n\n「是」= 建后端 TIN 后继续取点；「否」= 终止命令。", "是", "否");
+            if (!yes) return;
+            if (!TryBuildBackendTin()) return;
+            useBackendTin = true;
+        }
+        var cfg = BenchElevationConfig.Load();
+        int n = 0;
+        while (true)
+        {
+            var (kind, x, y) = await PickPointOrConfirmAsync($"查询台阶平盘标高：左键点平盘取高程（已标 {n}）· 右键/回车/Esc 结束", confirmable: true, quiet: n > 0);
+            if (kind != PickKind.Picked) break;
+            double? z = useBackendTin ? (_queryTin!.TrySampleZ(x, y, out double tz) ? tz : null) : SampleSurfaceZ(x, y);
+            if (z == null) { EditEcho("查询台阶平盘标高：该点不在三角网内，忽略", EchoLevel.Warn); continue; }
+            var m = BenchElevationAnnotator.BuildQueryMarker(x, y, z.Value, cfg.ToOptions());
+            double size = cfg.SizeMeters > 0 ? cfg.SizeMeters : 10.0;
+            var batch = new PlanEntityBatch { Layer = BenchElevationAnnotator.QueryLayer, LayerColor = (0x00, 0xC8, 0xFF) };
+            var (tx, ty) = BenchElevationAnnotator.QueryTextAnchorXY(x, y, size);
+            batch.Texts.Add((tx, ty, z.Value, size, m.Label, 0, 0, m.R, m.G, m.B));
+            var ids = PlanHost.Import(batch);
+            BeginChange();
+            _scene.Add(new PointEntity { X = x, Y = y, Elevation = z.Value, LayerName = BenchElevationAnnotator.QueryLayer, Cr = m.R / 255f, Cg = m.G / 255f, Cb = m.B / 255f });
+            RefreshScene();
+            n++;
+            EditEcho($"查询台阶平盘标高：({x:0.##}, {y:0.##}) → {m.Label} m", EchoLevel.Info);
+        }
+        StatusMsg.Text = n > 0 ? $"查询台阶平盘标高：已放 {n} 个标记（图层「{BenchElevationAnnotator.QueryLayer}」，可整层删除）" : "查询台阶平盘标高：已结束（未放标记）";
+    }
+
+    /// <summary>用全图多段线顶点做 2.5D Delaunay，解析成只驻内存的后端 TIN（原 TryBuildBackendTin：ALL → 约束 CDT → QueryTin）。</summary>
+    private bool TryBuildBackendTin()
+    {
+        var pts = new List<(double x, double y, double z)>();
+        foreach (var e in _scene.Entities)
+        {
+            if (e is not PolylineEntity pl || !pl.Visible || pl.LayerName == BenchElevationAnnotator.Layer || pl.LayerName == BenchElevationAnnotator.QueryLayer) continue;
+            for (int i = 0; i < pl.Points.Count; i++) pts.Add((pl.Points[i].x, pl.Points[i].y, pl.Elevation + (pl.Zs != null && i < pl.Zs.Count ? pl.Zs[i] : 0)));
+        }
+        if (pts.Count < 3) { StatusMsg.Text = "建三角网未成功（请确认视图中有带节点的台阶线 / 多段线）。"; return false; }
+        try
+        {
+            var xy = pts.Select(p => (p.x, p.y)).ToList();
+            var tris = Cad.Delaunay.Triangulate(xy);
+            var tin = TinSampler.TryBuild(pts, tris);
+            if (tin == null || tin.TriangleCount < 1) { StatusMsg.Text = "建三角网未成功（顶点共线或过少）。"; return false; }
+            _queryTin = tin;
+            StatusMsg.Text = $"已用 {pts.Count} 个顶点建后端三角网（{tin.TriangleCount} 三角，不入场景）→ 开始取点";
+            return true;
+        }
+        catch (Exception ex) { StatusMsg.Text = "建三角网失败：" + ex.Message; return false; }
     }
 }

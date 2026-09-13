@@ -73,6 +73,10 @@ public interface IPlanEntityHost
     void EndRegionBrushEdit(bool commit);
     /// <summary>调笔刷半径(px，4~80)，返回生效值。</summary>
     int SetRegionBrushRadiusPx(int px);
+    /// <summary>图层名清单（原 IDocumentCapability.GetLayerNames）。</summary>
+    IReadOnlyList<string> LayerNames();
+    /// <summary>清空选集（原 ISelectionCapability.ClearSelection）。</summary>
+    void ClearSelection();
     /// <summary>宿主窗口（弹模态框用）。</summary>
     object? OwnerWindow { get; }
     /// <summary>激活块体模型（无返回 null）。</summary>

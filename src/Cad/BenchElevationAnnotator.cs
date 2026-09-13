@@ -19,6 +19,13 @@ namespace PitMine3D.Kylin.Cad;
 public sealed class BenchElevationAnnotator
 {
     public const string Layer = "台阶标高标注";
+    /// <summary>「查询台阶平盘标高」的标记图层(点 + 高程, 可单独清除)。</summary>
+    public const string QueryLayer = "台阶标高查询";
+    /// <summary>可选字体(显示名, 别名); 别名空 = 引擎默认(宋体)。原版清单照抄。</summary>
+    public static readonly (string Display, string Alias)[] Fonts =
+    {
+        ("默认(宋体)", ""), ("宋体 SimSun", "SimSun"), ("黑体 SimHei", "SimHei"), ("仿宋 FangSong", "FangSong"), ("楷体 KaiTi", "KaiTi"), ("Arial", "Arial"),
+    };
 
     /// <summary>一条台阶线(接近等高的多段线) + 其作业区域类别(配色/过滤)。</summary>
     public sealed class BenchLine
@@ -37,6 +44,12 @@ public sealed class BenchElevationAnnotator
         public bool PlaceOnBenchCenter = true;
         /// <summary>统一固定颜色(0xRRGGBB); null = 按区域类别自动配色。</summary>
         public uint? FixedColorRgb = null;
+        /// <summary>倾斜轴: 0=正立 / 1=绕 X / 2=绕 Y / 3=绕 Z(原版三维文字朝向; Kylin 平面文字只把 绕 Z 当作旋转角, 其余记录不变)。</summary>
+        public int TiltAxis = 1;
+        /// <summary>倾斜角(度, 带符号)。</summary>
+        public double TiltDeg = 30;
+        /// <summary>字体别名(见 <see cref="Fonts"/>); 空 = 默认。</summary>
+        public string FontName = "";
     }
 
     /// <summary>一处标注的放置结果(命令层据此画 ▽ + 引线 + 文字)。</summary>
@@ -238,6 +251,20 @@ public sealed class BenchElevationAnnotator
         }
         return hit;
     }
+
+    /// <summary>「查询台阶平盘标高」单点标记(原 BuildQueryMarkerPmbi): 拾取点本身一个点 + 紧挨右上方的整数高程文字。单点无范围 → 符号大小缺省 10 m; 配色有固定色用固定色, 否则醒目青色(0x00C8FF)以区别正式标注。</summary>
+    public static Marker BuildQueryMarker(double x, double y, double z, Options? opt = null)
+    {
+        opt ??= new Options();
+        double size = opt.SymbolSize > 0 ? opt.SymbolSize : 10.0;
+        int e = (int)Math.Round(z);
+        string label = (e > 0 ? "+" : "") + e.ToString();
+        (byte cr, byte cg, byte cb) = opt.FixedColorRgb is uint rgb ? ((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb) : ((byte)0x00, (byte)0xC8, (byte)0xFF);
+        return new Marker { X = x, Y = y, Z = z, Elevation = e, Label = label, Category = "", R = cr, G = cg, B = cb };
+    }
+
+    /// <summary>查询标记的文字锚点(点右上方 0.25·size / 0.15·size)。</summary>
+    public static (double x, double y) QueryTextAnchorXY(double x, double y, double size) => (x + size * 0.25, y + size * 0.15);
 
     private static (byte r, byte g, byte b) ColorOf(string? cat) => cat switch
     {

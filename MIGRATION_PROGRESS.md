@@ -4236,3 +4236,13 @@ DelineationMethod/EconRatioMethod 四枚举 · EconParams 四式 · WallAngle ·
 **验证**：`ParameterVerifierTests` 1 条（合成 3 级台阶 H12/α70/W4 → 4 行、规范默认来源、稳定性 F、排土场基准、无库回写为空、来源本地兜底、一致判合格）；实机 `@采场参数示例` 截图：提取到 6 级台阶 H≈10m·α≈39.8°·W≈18m·β≈18.4°，已按图层分出坡顶/坡底；校核表 4 行（设计 12/70/4/55.1，偏差 −16.7%/−43.1%/+350%/−66.5% 判偏差，来源本地兜底）；平盘宽 ≥15 m 识别出 3 块达标平盘（232m/9.7ha…）。
 
 **下一步**：标注台阶标高 3 子项 / 确定开采程序 / 采排配对复核 / 量驱动采剥接续 / 采掘单元清单。
+
+## §四〇三 短期组「标注台阶标高」SplitButton 主钮 + 3 子项按原版重做 (2026-09-14)
+
+**症状**：Kylin 的「标注台阶标高」只是一个普通按钮，命中旧切片 `BenchElevationAnnotateAsync`（选 CSV 台阶线）；原版是 SplitButton：主钮开「标注台阶标高」窗（按区域/选中线一键标注，落独立图层可重刷），下拉三项「查询台阶平盘标高」（连续取点放 点+高程 标记，无三角网时问是否建后端 TIN）/「平盘标高清单…」（取线→限区域→按标高归并成级→逐级明细/选中该级/复制/导出）/「标注设置…」（大小/字体/倾斜/颜色/落平盘，写用户设置）。
+
+**做法**：`Cad/BenchElevationAnnotator` 补 `QueryLayer`/`Fonts`/`Options.TiltAxis·TiltDeg·FontName`/`BuildQueryMarker`/`QueryTextAnchorXY`（原 BuildQueryMarkerPmbi 的托管等价）；`Cad/Plan/BenchElevationConfig.cs`（配置 + `UserSettings` 键 bench.elevation.config 读写 + ToOptions）；`Views/Plan/BenchElevationConfigWindow.cs`（模态：大小/字体六选/绕轴+角度+方向/自动配色|统一色 Hex 预览/落平盘 → Result）；`BenchElevationWindow.cs`（全部工作帮|区域勾选(mineable_region)、仅选中线、取线优先级 选中→台阶线图层→全图多段线(剔除自己的标注层)、区域过滤按代表点归属、删旧+整批导入 ▽+引线+文字）；`BenchLevelWindow.cs`（视口选中/指定图层(含线数，排除标注层)/全图 · 限定可采区域 · 归并容差/只统计水平线/碎线阈值 · 大数字结论 + 7 列明细 + 警示 · 选中该级的线/复制清单/导出 CSV；`BenchLevelInventory` 复用既有端口）；宿主 `MainWindow.Plan.cs`：`OpenBenchElevation/OpenBenchLevel/OpenBenchElevationConfigAsync/BenchElevationQueryAsync`（后端 TIN = 全图多段线顶点 Delaunay → `TinSampler`，只驻内存；每点 点实体 + 高程文字落「台阶标高查询」层）；`IPlanEntityHost` 加 `LayerNames/ClearSelection`。Ribbon：按钮改为带 MenuFlyout 的 SplitButton（主项 + 分隔 + 3 子项，Tag `标注台阶标高 / 查询台阶平盘标高 / 平盘标高清单 / 标注台阶标高设置`），旧 CSV 命令留别名 `台阶标高标注/平盘清单…`。自检 `@标注台阶标高示例`。
+
+**验证**：`BenchElevationFamilyTests` 1 条（配置→选项映射、查询标记取整/正负号/青色、文字锚点、区域归属、字体表）；实机 `@标注台阶标高示例`：12 环选中 → 一键标注生成 7 处（10 处落平盘中央）落「台阶标高标注」层；平盘标高清单全图统计 7 级 40~100 m（级间距中位 10 m，12 条线）。CheckBox 文案含 "_" 被当助记键吃掉 → 一律用 TextBlock 作 Content。
+
+**下一步**：确定开采程序（ShortTermSequenceWindow）/ 采排配对复核 / 量驱动采剥接续 / 采掘单元清单。

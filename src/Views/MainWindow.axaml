@@ -1186,8 +1186,17 @@
                                             <Button Classes="ribbon-btn small" Tag="采场参数识别" Click="OnRibbonCommand" ToolTip.Tip="采场参数识别">
                                                 <StackPanel Orientation="Horizontal"><Image Source="{StaticResource plan_st_param_extract}" /><TextBlock Text="采场参数识别" /></StackPanel>
                                             </Button>
-                                            <Button Classes="ribbon-btn small" Tag="标注台阶标高" Click="OnRibbonCommand" ToolTip.Tip="标注台阶标高">
-                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource plan_st_bench_label}" /><TextBlock Text="标注台阶标高" /></StackPanel>
+                                            <Button Classes="ribbon-btn small" ToolTip.Tip="标注台阶标高（原版 SplitButton）：一键标注 · 查询台阶平盘标高 · 平盘标高清单… · 标注设置…">
+                                                <Button.Flyout>
+                                                    <MenuFlyout>
+                                                        <MenuItem Header="标注台阶标高" Tag="标注台阶标高" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource plan_st_bench_label}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                        <Separator />
+                                                        <MenuItem Header="查询台阶平盘标高" Tag="查询台阶平盘标高" Click="OnRibbonCommand" />
+                                                        <MenuItem Header="平盘标高清单…" Tag="平盘标高清单" Click="OnRibbonCommand" />
+                                                        <MenuItem Header="标注设置…" Tag="标注台阶标高设置" Click="OnRibbonCommand" />
+                                                    </MenuFlyout>
+                                                </Button.Flyout>
+                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource plan_st_bench_label}" /><TextBlock Text="标注台阶标高 ▾" /></StackPanel>
                                             </Button>
                                             <Button Classes="ribbon-btn small" Tag="确定开采程序" Click="OnRibbonCommand" ToolTip.Tip="确定开采程序">
                                                 <StackPanel Orientation="Horizontal"><Image Source="{StaticResource plan_st_mine_program}" /><TextBlock Text="确定开采程序" /></StackPanel>

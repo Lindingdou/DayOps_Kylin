@@ -67,6 +67,8 @@ public class PitSchemeFamilyTests
         public void EndRegionBrushEdit(bool commit) { }
         public int SetRegionBrushRadiusPx(int px) => px;
         public object? OwnerWindow => null;
+        public IReadOnlyList<string> LayerNames() => Array.Empty<string>();
+        public void ClearSelection() { }
     }
 
     [Fact]
