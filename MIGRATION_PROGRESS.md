@@ -3970,3 +3970,16 @@ commit `79108dd` / `cf3294c` / `3efa126`; 测试 2188 → 2200 全绿(新增 12:
 - **做法**：`SceneIO.Snapshot(scene, heavy)` / `Restore(snapshot, heavy)` —— 与 Save 同一份 DTO，唯独点云的 点/逐点色/真实色/法向 四个列表按引用登记到新 `SnapshotHeavyStore`(引用同一性去重 ConditionalWeakTable + 强引用字典)，DTO 只记 `K=[4 key]` + `Src`；200 万点快照几百字节。撤销回来仍是**新实体**(语义同旧快照：着色可撤、删点云可撤)，但列表不复制；顺带真实色/法向随撤销保住（旧快照不存这两项，撤销一次真实色就丢）。`UndoManager` 改存 `Snapshot(Json, Keys)` 自带 `Heavy` 仓，**只在 Push 时清扫**两头都不引用的条目（Undo/Redo 刚弹出的快照正要恢复，那时清扫会扔掉正要用的列表），Clear 连仓清；字符串重载保留。存档 Save/SaveDoc/Load/LoadDoc 一律 heavy=null，格式一字不变。
 - **前提**：点云四个列表创建后从不原地改（着色=整份换新 List、单色=置 null；grep 全库无 `Pts.Add`/`Colors[i]=`）。以后要原地改点云列表的代码必须先 Clone。三角网 Verts/Tris 有原地改(嵌入/修复)，**没有**纳入，大 TIN 的撤销快照仍是整份 JSON。
 - **实测**：DLT20251222.las 200 万点 → 坡顶底线提取 → `U` 瞬时撤销、点云(真实色)仍在、283 条线撤掉 → `REDO` 回 284 实体 → 再 `U`×2 到空场景。全套单测 3882 通过 + 新增 UndoSnapshotTests 7 项。
+
+## §三九〇 标注取点过程橡皮筋跟随 + 「标注样式」设置面板 (2026-09-13)
+
+**起因**：用户要求「标注也需要支持橡皮筋拖拽，同时标注样式要提供设置面板」。之前线性/对齐/半径/角度/坐标标注取点过程视口里什么都不画（只有状态栏提示），尺寸线落在哪、数字多少要点下去才知道；「标注样式」只有命令行 `标注样式 <字高> [小数位] [箭头比]`。commit ec28cf4。
+
+**做法**：
+- 橡皮筋 [MainWindow.DimJig.cs](src/Views/MainWindow.DimJig.cs)：`AppendScenePreview` 出口接 `AppendDimPreview` —— 按"已取点 + 光标"用**落地时同一套 DimTools** 现推整条标注画到预览通道（同原版 AlignedDimensionJigAdapter/RadialDimensionJigAdapter 的 jig 思路，所见即所得）：线性/对齐 第二界线原点阶段拉白色虚线，尺寸线位置阶段整条标注（界线/尺寸线/箭头/数字）随光标滑；连续标注沿用上条偏移；半径/直径按光标方向；角度 顶点+第一边后整段弧随光标；坐标标注十字+引线跟着光标。文字走 `TessellatePick`（真字体下线通道为空，预览通道只有线）。光标浮标接实时读数 `DimJigHint`（距离/ΔX/ΔY/R/Ø/角度/坐标）。触发挂在光标移动（Gizmo 悬停那行之后），命令结束/Esc 后下一次移动把预览擦净（`_dimJigShown`）。
+- 设置面板 [DimStyleWindow.cs](src/Views/DimStyleWindow.cs)（代码建窗，页脚 Dock 到底 + 内容 ScrollViewer）：「文字」字高(0=自动)/小数位/文字偏移，「直线和箭头」箭头长/半宽/端刻度/界线偏移/界线延伸；右侧样例（对齐标注 100 单位）随每格输入实时重画；逐格校验（`DimStyleStore.TrySet`，越界/非数值报错不写）；恢复默认/确定/取消。无参「标注样式」命令与功能区键打开（带参命令行直设仍可用，也落盘）。`DimStyleStore` 存到用户目录 `dimstyle.json`（与 crash.log 同目录，PITMINE_DATA_DIR 生效时跟着走），`_dimStyle` 字段初始化时读回。自检下非模态打开好截图。
+- 与原版关系：原版 `DimensionStyleWindow` 是**逐条标注**的特性编辑器（§三二七 已落到特性面板），本面板是**样式级**（AutoCAD DIMSTYLE 的 DIM 变量），两者互补。
+
+**验证**：+4 单测 [DimStyleStoreTests](tests/PitMine3D.Kylin.Tests/DimStyleStoreTests.cs)（克隆/复制全字段、校验写入与越界拒绝、JSON 往返与坏值兜底、描述）。实机自检（合成指针）：`对齐标注` 点 (20,60) 后 `@光标 70 100` 预览 5 段（虚线）→ 点 (120,60) 后整条标注随光标 815 段（含数字轮廓，截图见界线从测点起、随光标 y 走）；`角度标注` 顶点+第一边后 1135 段；`坐标标注` 981 段；Esc 后均 0 段。`标注样式` 面板截图：两组八格 + 预览样例 + 三键齐全。
+
+**注意**：HEAD 自 574f3ae(11:42)/2a734e1(11:55) 起本身编不过（PointThin.cs 引用 PackedKeyComparer、MainWindow.PointCloud.cs/RoadCenterline.cs 引用 MineableRegions/RegionRecord/Layer.LineWeight/DxfImportService.AciToRgb 等工作树里未提交的类型，共 30 处），不是本节改动引起：HEAD 工作树 build 不含/含本节文件均为同样 30 错，本节文件 0 错。待相关会话把那几份补提交。
