@@ -120,6 +120,10 @@ public partial class MainWindow
                     var plan = TaskLibSelftestPlan();
                     gw.SetPlan(plan, "2026-06-17 周三", 10.5, 12, 12.5, TaskLibSelftestRoster(plan));
                 });   // Show 里 Opened 已同步触发过，挂事件晚了
+            // 自检：当日无任务时演示面板是空的 —— 带「面板样例」字样时喂合成图元核对 SimPanelOverlay 的画法
+            if (win is Views.TaskLib.DynamicAdjustWindow dw
+                && (Environment.GetEnvironmentVariable("PITMINE_SELFTEST") ?? "").Contains("面板样例"))
+                Avalonia.Threading.Dispatcher.UIThread.Post(dw.SelftestPanelSample, Avalonia.Threading.DispatcherPriority.Background);
         }
         catch (Exception ex)
         {

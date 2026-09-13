@@ -1012,6 +1012,86 @@ public sealed class DynamicAdjustWindow : Window
         _ => "剩余量顺延",
     };
 
+    // ═════════════════════════ 自检 ═════════════════════════
+
+    /// <summary>
+    /// 自检（PITMINE_SELFTEST 含「面板样例」时由宿主调用）：真库当日无任务时面板是空的，拍不到画法 ——
+    /// 往窗内面板喂一组合成图元（合成正射栅格 + 两块带明暗的台阶体 + 推进带线 + 设备点 + 铭牌）并装满相机，
+    /// 核对 SimPanelOverlay 的栅格贴图 / painter's 排序 / 朗伯明暗 / 底图折线合并 / 铭牌省绘 五条画法。
+    /// </summary>
+    internal void SelftestPanelSample()
+    {
+        const double X = 620000, Y = 4380000, Z = 1200;
+        // 合成栅格：256² 的棋盘渐变（左上暗右下亮），铺 800×600 m
+        var wb = new Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(256, 256), new Vector(96, 96), Avalonia.Platform.PixelFormat.Bgra8888, Avalonia.Platform.AlphaFormat.Unpremul);
+        using (var fb = wb.Lock())
+        {
+            unsafe
+            {
+                byte* d = (byte*)fb.Address;
+                for (int y = 0; y < 256; y++)
+                    for (int x = 0; x < 256; x++)
+                    {
+                        int o = y * fb.RowBytes + x * 4;
+                        bool chk = ((x / 32) + (y / 32)) % 2 == 0;
+                        byte v = (byte)(60 + (x + y) / 4);
+                        d[o] = (byte)(chk ? v : v / 2); d[o + 1] = (byte)(v * 0.8); d[o + 2] = (byte)(v * 0.6); d[o + 3] = 255;
+                    }
+            }
+        }
+        _panel.SetRaster("selftest.raster", wb, X - 100, Y - 100, X + 700, Y + 500, Z - 1, 0.9);
+        _panel.SetGroupLayer("selftest.grid", SimPanelLayer.Base);
+        _panel.SetGroupBackdrop("selftest.grid", true);
+
+        // 底图层：路网样的折线网格（同色同宽首尾相接 → 会被并成折线）
+        var grid = new List<double>(); var gcol = new List<uint>();
+        for (int i = 0; i <= 8; i++)
+        {
+            double t = i * 100;
+            grid.AddRange(new[] { X - 100, Y - 100 + t, Z, X + 700, Y - 100 + t, Z }); gcol.Add(0x66FFFFFFu);
+            grid.AddRange(new[] { X - 100 + t, Y - 100, Z, X - 100 + t, Y + 500, Z }); gcol.Add(0x66FFFFFFu);
+        }
+        _panel.SetLines("selftest.grid", grid.ToArray(), gcol.ToArray(), gcol.Count);
+
+        // 两块台阶体：底面 + 顶面 + 四侧面（每面两三角），前一块挡住后一块的一角 → 看 painter's 与明暗
+        var tri = new List<double>(); var tcol = new List<uint>();
+        void Box(double x0, double y0, double x1, double y1, double z0, double z1, uint rgb)
+        {
+            void Quad(double ax, double ay, double az, double bx, double by, double bz, double cx, double cy, double cz, double dx, double dy, double dz)
+            {
+                tri.AddRange(new[] { ax, ay, az, bx, by, bz, cx, cy, cz }); tcol.Add(0xFF000000u | rgb);
+                tri.AddRange(new[] { ax, ay, az, cx, cy, cz, dx, dy, dz }); tcol.Add(0xFF000000u | rgb);
+            }
+            Quad(x0, y0, z1, x1, y0, z1, x1, y1, z1, x0, y1, z1);   // 顶
+            Quad(x0, y0, z0, x1, y0, z0, x1, y0, z1, x0, y0, z1);   // 南
+            Quad(x1, y0, z0, x1, y1, z0, x1, y1, z1, x1, y0, z1);   // 东
+            Quad(x1, y1, z0, x0, y1, z0, x0, y1, z1, x1, y1, z1);   // 北
+            Quad(x0, y1, z0, x0, y0, z0, x0, y0, z1, x0, y1, z1);   // 西
+        }
+        Box(X + 60, Y + 60, X + 320, Y + 240, Z, Z + 15, 0x185FA5);
+        Box(X + 260, Y + 180, X + 520, Y + 380, Z, Z + 30, 0xD97706);
+        _panel.SetFaces(StageSimPlayer.GBand, tri.ToArray(), tcol.ToArray(), tcol.Count);
+
+        // 推进带：当前环（粗）与目标环（细）
+        double[] ring(double x0, double y0, double x1, double y1, double z) => new[] { x0, y0, z, x1, y0, z, x1, y0, z, x1, y1, z, x1, y1, z, x0, y1, z, x0, y1, z, x0, y0, z };
+        _panel.SetLines(StageSimPlayer.GCurrent, ring(X + 40, Y + 40, X + 340, Y + 260, Z + 16), new[] { 0xFF22C55Eu, 0xFF22C55Eu, 0xFF22C55Eu, 0xFF22C55Eu }, 4);
+        _panel.SetLines(StageSimPlayer.GTarget, ring(X + 20, Y + 20, X + 360, Y + 280, Z + 16), new[] { 0x9922C55Eu, 0x9922C55Eu, 0x9922C55Eu, 0x9922C55Eu }, 4);
+
+        // 设备点 + 铭牌
+        _panel.SetMarkers(StageSimPlayer.GEquip, new[] { X + 190, Y + 150, Z + 16, X + 390, Y + 280, Z + 31 }, new[] { 0xFFFACC15u, 0xFFF87171u }, new[] { 11f, 9f }, null, 2);
+
+        _panel.Camera.TiltDeg = 55; _panel.Camera.AzimuthDeg = 30;
+        if (_panel.Camera.Width < 2) { _panel.Camera.Width = Math.Max(400, _host?.Bounds.Width ?? 800); _panel.Camera.Height = Math.Max(200, _host?.Bounds.Height ?? 400); }
+        _panel.Camera.FitTo(X - 100, Y - 100, Z - 20, X + 700, Y + 500, Z + 40);
+        // 铭牌字高按相机尺度反推成 ~11 px（与 SyncLabelHeight 同一口径：写死世界米在拉远时会被整批省绘）
+        float lh = (float)Math.Max(4.5, 11.0 / Math.Max(1e-9, _panel.Camera.Scale));
+        _panel.SetLabels(StageSimPlayer.GLabel, new[] { X + 190, Y + 150, Z + 16, X + 390, Y + 280, Z + 31 }, new[] { "WK-10 电铲 4m³", "T-03 卡车" }, new[] { 0xFFFFFFFFu, 0xFFFDE68Au }, new[] { lh, lh }, null, null, 2);
+        _panel.RequestRender();
+        _selected = null;
+        txtViewInfo.Text = $"自检样例：{_panel.DrawnFaces} 面 / {_panel.DrawnSegments} 段 / {_panel.DrawnMarkers} 点 / {_panel.DrawnLabels} 字 / {_panel.DrawnRasters} 栅格　1 px ≈ {(_panel.Camera.Scale > 1e-9 ? 1 / _panel.Camera.Scale : 0):0.#} m";
+        ShowHint(simPanel, "自检样例：合成栅格 + 两块台阶体（painter's 排序 + 朗伯明暗）+ 推进环 + 设备点 + 铭牌。");
+    }
+
     // ═════════════════════════ 小部件 ═════════════════════════
 
     private static void ShowHint(Panel p, string text)
