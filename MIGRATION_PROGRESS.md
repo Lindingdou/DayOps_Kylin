@@ -4183,3 +4183,18 @@ DelineationMethod/EconRatioMethod 四枚举 · EconParams 四式 · WallAngle ·
 **验证**：`VpBalanceSessionTests` 5 条（模拟数据投产 2025/基建 4800/达产 2027/时相序列/总量 · 分段在曲线上方偏离非负、阶段递增、校核通过、阶梯取数 · 指定期数与经济比报警 · 无设计能力退化 · 增加期/全基建）全过；
 实机自检 `剥采比均衡;@等待;@页面截图` 出图：三阶段(4.13/5.50/6.82)、投产 2025·基建 4800·超前 16 月、达产 2027、峰值超前 2600、校核通过，与原版同一数据同一结论。
 **下一步**：中长远 7 钮（LongTermPlan/Config/Solve/Derive/Compare/Chart + 采场/排土场圈定）。
+
+## §三九九 中长远进度计划编制组 5 钮按原 PlanLib.LongTerm 整族重做 (2026-09-13)
+
+**症状**：中长远组 5 钮全是旧切片——「中长远进度计划编制」命中命令行一次排产 `LongTermPlanCmd`（写死参数、无窗）、「规划计算」命中 `ProgramEvaluateCmd`（开采程序评价，不是排产）、「派生计划方案」命中 `DerivePlansCmd`（按倍率造方案，工作线是写死的）、「方案综合对比」命中 `ProgramCompareAsync`（开采程序对比）、「进度计划方案出图」是六页签窗但读的是命令行排出的扁平方案。原版：五个独立窗 + 会话方案库，量只来自块体（BM1），工作线只认图上实体（LT4）。
+
+**做法**（原 `Modules/PlanLib/LongTerm` 14 文件 → Kylin，逐文件对齐）：
+- 引擎/模型 `src/Cad/Plan/LongTermPlan.cs`（RampProfileKind/PlanPhase/RampPreset/DecisionWeights/WorkLineAdvanceVariant/PlanPeriod(20 列含均衡段·排土侧)/LongTermResult/LongTermPlan/LongTermBase/LongTermSchemeStore：库初始为空 LT3、`SpecifiedWorkLines` 按源实体去重、`NeedWorkLineHint`、`AutoInheritIfNeeded` 自动续源）+ `LongTermEngine.cs`（`LongTermBlockSource.Build` = `BlockModelCells.Build` + `TemplateDrivingEngine.BuildAdvanceProfile` 沿工作线分箱累计曲线；`WorkLinePicker` 从选中实体取 L/方位/平行·扇形/回转中心、按 handle 刷新（LT5）；`LongTermDumpBridge` 读 dump_strip 台账做内排率几何反算/排满年/排不下（LT6，无库空池不抛）；`LongTermScheduler.Schedule` 划期→基建→爬坡→VP 均衡（`VpBalanceSolver`）→削峰→现金流/NPV→`Evaluate`，`ComposeFrom` 一键比选，`Generate` 工作线×能力档×节奏笛卡尔积，`ToLegacy` 转旧扁平模型喂动态模拟；`LongTermComparer.Score` 方向感知加权）。`IPlanEntityHost` 新增 `SelectedWorkLine/WorkLineByHandle`（宿主用 `WorkLineSamplesOf`）。
+- 窗口 `src/Views/Plan/LongTermConfigWindow.cs`（八组基础约束 + 继承开采程序 + 储量÷能力反算 + 试算）/ `LongTermDeriveWindow.cs`（拾取选中工作线/按实体刷新/移除/清空 + 能力档·节奏勾选 + 生成多套方案 + 加载块体模型）/ `LongTermSolveWindow.cs`（⚡一键排产比选/排产全部/排产选中 + 逐年进度图 + 九指标 + 逐年进度表 + ✔确定进度计划 + 导出报表 `BuildReport`）/ `LongTermCompareWindow.cs`（联合对比评分：缺排产先补排 + 对比矩阵冻结首列横滚 + 四维图 + 雷达 + 推荐 + 排名）/ `LongTermChartWindow.cs`（**替换**旧六页签窗：方案下拉 + ⚡一键排产并出图 `EnsureRecommended`(LT4 拦住) + 单张进度图 + 导出 PNG(RenderTargetBitmap)/CSV）/ `LongTermBlockPickerWindow.cs`（列块体·标有无煤属性·设为活动·导入直通建模「导入块体」）/ `LongTermCharts.cs`（产量+达产线/SR(t)/NPV(t)/时相甘特/雷达/进度图，Canvas 手绘）。
+- 接线 `MainWindow.Plan.cs`：`OpenLongTermConfig/Derive/Solve(cmd)/Compare/Chart` 单例；Ribbon `中长远进度计划编制`→配置窗、`规划计算`(+「规划计算 一键」直通)→排产窗、`派生计划方案`→派生窗、`方案综合对比`→对比窗、`进度计划方案出图`→出图窗；旧切片留命令行别名（`中长远进度计划 [args]`/`开采程序评价`/`派生方案`/`方案比选`）。「剥采比均衡」的从计划提取改为先读新库（已确定→已排产首套）。动态模拟改读 `LongTermPlansForSim`（新库 `ToLegacy` ∪ 旧命令行方案）。
+- 表头：`PlanUi.FitHeaders/Table` 按 14px 正文估最小列宽撑开（XAML 定宽在 Kylin 逐个截字，见 [[datagrid-star-column-fit]]），`PlanUi.Header` 副标题改 DockPanel 可换行。
+- 自检 `@中长远示例`：自检块体 + 西缘工作线选中 + A_p 压到 15 → 派生窗拾取+生成；`派生窗.SelftestPickAndGenerate`。
+
+**验证**：`LongTermFamilyTests` 11 条（拾取方位 90°/扇形回转/零矢量拒绝 · 累计曲线总量守恒 48.6 万t/60 万m³ 单调 · 排产：基建 1 年→爬坡 35%/68%→达产 2029→末期减产、累计守恒、内排起转年、NPV=折现和 · 无块体/无煤拦住 · 派生 2×2×2=8 套命名 · 联合评分 · 一键比选 · 方案库空/去重/续源 · 排土桥空池 · 转旧口径 · 报表）+ 既有规划家族 444 条全过。实机 `@块体示例 20 6 8;@中长远示例;规划计算 一键;方案综合对比;进度计划方案出图` 五窗截图：派生拾到「工作线1·L=120m·90°·平行推进·#3E9」排出 1 套；规划计算一键比选 → 推荐工作线1（服务年限 10a·达产 2030·峰值剥采比 2.2·内排率 96%·NPV 14,953 万·校核通过）逐年表 11 行；对比窗四图+雷达+排名；出图窗单张进度图。
+
+**下一步**：「采场/排土场圈定」（原 ShortTermMineableAreaWindow + MineableAreaIdentifier/LandformClassifier/RegionGeometry）→ 短期生产计划编制组 10 钮 + 标注台阶标高 3 子项。

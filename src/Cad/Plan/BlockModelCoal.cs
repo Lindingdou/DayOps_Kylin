@@ -296,3 +296,28 @@ public static class PitSectionSolver
         };
     }
 }
+
+/// <summary>块体 → 驱动引擎单元表（原 <c>MineUnitAdapter</c> 那条路的 Kylin 版：按煤岩判别器逐块判煤/岩，子块按尺寸倍数）。</summary>
+public static class BlockModelCells
+{
+    public static List<CellBox>? Build(BlockModelMeta? model, out string provenance)
+    {
+        provenance = "";
+        if (model == null || model.Blocks.Count == 0) return null;
+        if (!BlockModelCoal.TryGetClassifier(model, out var attr, out var cls)) return null;
+        var arr = model.GetAttr(attr);
+        if (arr == null) return null;
+        var cells = new List<CellBox>(model.Blocks.Count);
+        int n = Math.Min(model.Blocks.Count, arr.Length);
+        for (int i = 0; i < n; i++)
+        {
+            if (model.DeletedIds.Contains(i)) continue;
+            var b = model.Blocks[i];
+            double k = model.CellScale(b);
+            double v = arr[i];
+            cells.Add(new CellBox { Cx = b.X, Cy = b.Y, Cz = b.Z, Sx = k * model.Sx, Sy = k * model.Sy, Sz = k * model.Sz, IsCoal = cls.IsCoal(v), IsRock = cls.IsRock(v), SourceIndex = i });
+        }
+        provenance = $"块体「{model.Name}」 {cells.Count} 块 · 煤属性「{attr}」煤码[{string.Join(",", cls.CoalCodes)}]{(cls.RockCodes.Length > 0 ? $"·岩码[{string.Join(",", cls.RockCodes)}]" : "·非煤即岩")}";
+        return cells;
+    }
+}

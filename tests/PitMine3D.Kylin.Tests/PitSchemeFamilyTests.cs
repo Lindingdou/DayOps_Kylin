@@ -55,6 +55,8 @@ public class PitSchemeFamilyTests
         public void SelectByHandle(long handle, bool addToSelection = false) { }
         public void Echo(string text, bool warn = false) { }
         public void Refresh() { }
+        public WorkLineSamples? SelectedWorkLine(out long handle, out string error) { handle = 0; error = ""; return null; }
+        public WorkLineSamples? WorkLineByHandle(long handle) => null;
     }
 
     [Fact]

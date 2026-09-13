@@ -63,7 +63,7 @@ internal sealed class VpCurveWindow : Window
             ("剥采比\n(m³/t)", "RatioText", 80, true), ("超前\n(万m³)", "DeviationText", 86, true),
         }, double.NaN);
         _grid.CellEditEnded += (_, _) => { if (!_loading) Recompute("已按录入重算。"); };
-        _stageGrid = RoadUi.Table(new (string, string, double)[]
+        _stageGrid = PlanUi.Table(new (string, string, double)[]
         {
             ("阶段", "No", 56), ("起", "FromLabel", 64), ("止", "ToLabel", 64), ("生产剥采比\n(m³/t)", "RatioText", 100), ("持续\n(年)", "Years", 64), ("峰值超前\n(万m³)", "AdvanceText", 100),
         }, multi: false);

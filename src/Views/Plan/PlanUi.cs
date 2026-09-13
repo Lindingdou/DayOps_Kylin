@@ -23,8 +23,9 @@ internal static class PlanUi
     /// <summary>原 PlanLib 窗口统一的 teal 渐变标题栏：标题 + 副题。</summary>
     public static Border Header(string title, string subtitle, Color? from = null, Color? to = null)
     {
-        var sp = new StackPanel { Orientation = Orientation.Horizontal };
-        sp.Children.Add(new TextBlock { Text = title, Foreground = Brushes.White, FontSize = 16, FontWeight = FontWeight.Bold, VerticalAlignment = VerticalAlignment.Center });
+        var sp = new DockPanel();   // 标题靠左定宽，副标题占余下宽度可换行（横排 StackPanel 会把长副标题裁掉）
+        var t = new TextBlock { Text = title, Foreground = Brushes.White, FontSize = 16, FontWeight = FontWeight.Bold, VerticalAlignment = VerticalAlignment.Center };
+        DockPanel.SetDock(t, Avalonia.Controls.Dock.Left); sp.Children.Add(t);
         sp.Children.Add(new TextBlock
         {
             Text = subtitle, Foreground = new SolidColorBrush(Color.FromRgb(0xCC, 0xFB, 0xF1)), FontSize = 12,
@@ -142,6 +143,25 @@ internal static class PlanUi
             });
         return dg;
     }
+
+    /// <summary>
+    /// 表头按 Kylin 正文字号(表头实为 14px + 列头内边距 + 排序指示位)估最小列宽，把 XAML 里搬来的定宽撑到不截字（原版 WPF 13px 的定宽在这儿差一截）。
+    /// 星号列不动；估值：汉字 14.5 · 字母数字 8.5 · 标点/上标 7 + 表头附加 48（实测 40 仍截「时相」）。
+    /// </summary>
+    public static DataGrid FitHeaders(DataGrid dg)
+    {
+        foreach (var c in dg.Columns)
+        {
+            if (c.Header is not string h || c.Width.IsStar || c.Width.IsAuto) continue;
+            double w = 48;
+            foreach (char ch in h) w += ch > 0x2E80 ? 14.5 : char.IsLetterOrDigit(ch) ? 8.5 : 7;
+            if (c.Width.Value < w) c.Width = new DataGridLength(Math.Ceiling(w));
+        }
+        return dg;
+    }
+
+    /// <summary>只读表格（同 <see cref="RoadUi.Table"/>）+ 表头撑宽。</summary>
+    public static DataGrid Table(IReadOnlyList<(string Header, string Path, double Width)> cols, bool multi = true) => FitHeaders(RoadUi.Table(cols, multi));
 
     public static void Place(Window w, double width, double height)
     {

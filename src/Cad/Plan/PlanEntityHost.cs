@@ -49,6 +49,10 @@ public interface IPlanEntityHost
     Task<(double x, double y)?> PickPointAsync(string prompt);
     /// <summary>视口高亮某实体。</summary>
     void SelectByHandle(long handle, bool addToSelection = false);
+    /// <summary>当前选集里恰好 1 条「工作线」→ 投影几何（基线 + 逐段推进方向 [+ 回转中心]）与 handle；不是恰好 1 条工作线返回 null + 人话原因。</summary>
+    WorkLineSamples? SelectedWorkLine(out long handle, out string error);
+    /// <summary>按 handle 重读工作线几何（实体已删/非工作线返回 null）。</summary>
+    WorkLineSamples? WorkLineByHandle(long handle);
     /// <summary>激活块体模型（无返回 null）。</summary>
     BlockModelMeta? ActiveBlockModel { get; }
     /// <summary>已连接的数据库连接（未连接返回 null；规划窗口不自动弹连接流程，只提示）。</summary>

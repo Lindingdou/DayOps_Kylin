@@ -1555,9 +1555,12 @@ public partial class MainWindow : Window
             if (cmd == "开采程序确定" || cmd == "开采程序比选" || cmd.StartsWith("开采程序确定 ")) { OpenMiningProgramSolve(cmd); return; }   // 原 CreateOpenMiningProgramSolveCommand: MiningProgramSolveWindow(一键划分·比选·确定落地); 「开采程序确定 一键」直通
             if (cmd == "采区" || cmd == "储量均衡划分" || cmd == "采区切分") { PanelSplitCmd(); return; }   // 旧切片: 最近块体默认参数等煤量切采区(命令行别名保留)
             if (cmd == "拉沟推荐" || cmd == "首采区推荐" || cmd == "拉沟位置推荐" || cmd == "拉沟推进推荐") { BoxcutRecommendCmd(); return; }
-            if (cmd == "规划计算" || cmd == "开采程序评价" || cmd == "程序评价") { ProgramEvaluateCmd(); return; }
-            if (cmd == "派生计划方案" || cmd == "派生方案" || cmd == "多方案派生") { DerivePlansCmd(); return; }
-            if (cmd == "中长远进度计划" || cmd == "中长远规划" || cmd == "中长期计划" || cmd == "中长远进度计划编制" || cmd.StartsWith("中长远进度计划 ") || cmd.StartsWith("中长远规划 ")) { await LongTermPlanCmd(cmd); return; }
+            if (cmd == "规划计算" || cmd.StartsWith("规划计算 ")) { OpenLongTermSolve(cmd); return; }   // 原 CreateOpenLongTermSolveCommand：规划计算·排产窗（「规划计算 一键」直通一键排产比选）
+            if (cmd == "开采程序评价" || cmd == "程序评价") { ProgramEvaluateCmd(); return; }   // 旧切片（命令行别名保留）
+            if (cmd == "派生计划方案") { OpenLongTermDerive(); return; }   // 原 CreateOpenLongTermDeriveCommand：派生进度计划方案窗（工作线只认图上选中实体）
+            if (cmd == "派生方案" || cmd == "多方案派生") { DerivePlansCmd(); return; }   // 旧切片（命令行别名保留）
+            if (cmd == "中长远进度计划编制") { OpenLongTermConfig(); return; }   // 原 CreateOpenLongTermConfigCommand：中长远基础约束窗
+            if (cmd == "中长远进度计划" || cmd == "中长远规划" || cmd == "中长期计划" || cmd.StartsWith("中长远进度计划 ") || cmd.StartsWith("中长远规划 ")) { await LongTermPlanCmd(cmd); return; }   // 旧切片：命令行一次排产（别名保留）
             if (cmd == "短期生产计划" || cmd == "短期生产计划编制" || cmd == "月度计划编制" || cmd == "月度计划" || cmd.StartsWith("短期生产计划 ") || cmd.StartsWith("月度计划 ")) { await ShortTermPlanCmd(cmd); return; }
             if (cmd == "剖面分析" || cmd == "剖面" || cmd == "点云剖面") { await SectionProfileAsync(); return; }
             if (cmd == "粗糙度" || cmd == "地表粗糙度") { await RoughnessAsync(); return; }
@@ -1700,7 +1703,9 @@ public partial class MainWindow : Window
             if (cmd == "SOR去噪" || cmd == "统计去噪" || cmd == "SOR" || cmd.StartsWith("SOR去噪 ") || cmd.StartsWith("SOR ")) { await DenoiseAsync(false, cmd); return; }   // SOR [k σ]
             if (cmd == "ROR去噪" || cmd == "半径去噪" || cmd == "ROR" || cmd.StartsWith("ROR去噪 ") || cmd.StartsWith("ROR ")) { await DenoiseAsync(true, cmd); return; }     // ROR [半径 下限]
             if (cmd == "矿床识别" || cmd == "自动识别" || cmd == "矿床类型识别") { await DepositDetectAsync(); return; }
-            if (cmd == "方案综合对比" || cmd == "方案比选" || cmd == "方案对比") { await ProgramCompareAsync(); return; }
+            if (cmd == "方案综合对比") { OpenLongTermCompare(); return; }   // 原 CreateOpenLongTermCompareCommand：多套进度计划联合对比窗
+            if (cmd == "进度计划方案出图" || cmd == "方案出图" || cmd == "进度计划出图") { OpenLongTermChart(); return; }   // 原 CreateOpenLongTermChartCommand：单方案逐年进度图窗
+            if (cmd == "方案比选" || cmd == "方案对比") { await ProgramCompareAsync(); return; }   // 旧切片（命令行别名保留）
             if (cmd == "高程查询" || cmd == "虚拟钻孔" || cmd == "查询高程") { await StartSpotQueryAsync(); return; }
             if (cmd == "文字" || cmd == "单行文字") { ArmText(false); return; }
             if (cmd == "编辑文字" || cmd == "文字编辑" || cmd == "修改文字") { _ = TextEditCommandAsync(); return; }   // TEXTEDIT/DDEDIT/ED: 在位改内容(双击文字同此)
@@ -10878,6 +10883,7 @@ public partial class MainWindow : Window
                 while (System.DateTime.Now < end) { Avalonia.Threading.Dispatcher.UIThread.RunJobs(); System.Threading.Thread.Sleep(15); }
                 return;
             }
+            if (cmd == "@中长远示例") { SelftestLongTermSample(); return; }   // @中长远示例: 自检块体+西缘工作线并选中 → 派生窗拾取+生成多套方案(中长远五窗实机核对用)
             if (cmd.StartsWith("@块体示例"))   // @块体示例 [nx ny nz]: 建一个规则块体模型并入场景(截图核对体素显示用)
             {
                 var a = cmd.Length > 5 ? cmd.Substring(5).Split(' ', System.StringSplitOptions.RemoveEmptyEntries) : System.Array.Empty<string>();

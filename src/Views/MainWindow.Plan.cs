@@ -93,10 +93,99 @@ public partial class MainWindow
     /// <summary>「从计划提取」取数（原 LoadFromEntities 的优先级）：① 已确定短期月度方案（逐月按物料流聚合）② 已排产首套 ③ 已确定中长远 ④ 已排产中长远；都没有 → null。</summary>
     private (string src, List<(string Label, double Coal, double Strip)> rows)? ExtractPlanPeriodsForVp()
     {
+        // ③④ 中长远（新库：派生/规划计算/出图共用的 LongTermSchemeStore）
+        var conf = LongTermSchemeStore.Confirmed;
+        var cur = conf is { Result: not null } ? conf : LongTermSchemeStore.Schemes.FirstOrDefault(s => s.Result != null && s.Periods.Count > 0);
+        if (cur != null)
+        {
+            var rr = cur.Periods.Select(pp => (pp.Label, Math.Round(pp.CoalWanT, 1), Math.Round(pp.StripWanM3, 0))).ToList();
+            return ($"中长远进度计划「{cur.Name}」（{(cur == conf ? "已确定" : "未确定，取已排产的首套")}） · {cur.Periods.Count} 期（逐年）", rr);
+        }
+        // 旧命令行「中长远进度计划 …」排出的方案（会话内）
         var lt = _longTermSchemes.FirstOrDefault(s => s.Periods.Count > 0);
         if (lt == null) return null;
         var rows = lt.Periods.Select(pp => (pp.Label, Math.Round(pp.CoalWanT, 1), Math.Round(pp.StripWanM3, 0))).ToList();
         return ($"中长远进度计划「{lt.Name}」（未确定，取已排产的首套） · {lt.Periods.Count} 期（逐年）", rows);
+    }
+
+    // ───────────── 中长远进度计划编制组（原 CreateOpenLongTermConfig/Derive/Solve/Compare/ChartCommand）─────────────
+    private LongTermConfigWindow? _longTermConfigWin;
+    private LongTermDeriveWindow? _longTermDeriveWin;
+    private LongTermSolveWindow? _longTermSolveWin;
+    private LongTermCompareWindow? _longTermCompareWin;
+
+    /// <summary>「加载块体模型」小窗（LT7 配套入口）：列出/激活/导入块体。「导入块体…」直通建模页签的导入块体对话框。</summary>
+    private void OpenLongTermBlockPicker(Avalonia.Controls.Window owner)
+    {
+        var w = new LongTermBlockPickerWindow(o => ModelingWindowFactory.TryOpen(this, MdlCtx(), "导入块体"));
+        GeoDb.GeoDbWindows.NoteLast(w);
+        _ = w.ShowDialog(owner);
+    }
+
+    /// <summary>中长远①「中长远进度计划编制」= 原 CreateOpenLongTermConfigCommand：打开「中长远进度计划编制 · 基础约束」窗口（单例）。</summary>
+    private void OpenLongTermConfig()
+    {
+        if (_longTermConfigWin != null) { _longTermConfigWin.Activate(); StatusMsg.Text = "中长远进度计划编制窗口已在前台"; return; }
+        var w = new LongTermConfigWindow(PlanHost, MiningProgramStore.Schemes);
+        _longTermConfigWin = w;
+        w.Closed += (_, _) => _longTermConfigWin = null;
+        w.Show(this);
+        GeoDb.GeoDbWindows.NoteLast(w);
+        StatusMsg.Text = "中长远进度计划编制：继承开采程序 → 产能/达产爬坡/剥采比限值/排土/经济/决策权重 → 试算 → 保存基础约束（方案在「派生计划方案」按工作线生成）";
+    }
+
+    /// <summary>中长远③「派生计划方案」= 原 CreateOpenLongTermDeriveCommand：打开「派生进度计划方案」窗口（单例）。工作线只认图上选中的实体。</summary>
+    private void OpenLongTermDerive()
+    {
+        if (_longTermDeriveWin != null) { _longTermDeriveWin.Activate(); StatusMsg.Text = "派生计划方案窗口已在前台"; return; }
+        var w = new LongTermDeriveWindow(PlanHost, OpenLongTermBlockPicker);
+        _longTermDeriveWin = w;
+        w.Closed += (_, _) => _longTermDeriveWin = null;
+        w.Show(this);
+        GeoDb.GeoDbWindows.NoteLast(w);
+        StatusMsg.Text = "派生计划方案：图上选中工作线 → 拾取 → 勾产能/坡道档 → 生成多套方案（工作线 × 产能 × 坡道）→ 规划计算/综合对比/出图";
+    }
+
+    /// <summary>中长远②「规划计算」= 原 CreateOpenLongTermSolveCommand：打开「规划计算 · 排产」窗口（单例）。「规划计算 一键」直通一键排产比选。</summary>
+    private void OpenLongTermSolve(string cmd = "规划计算")
+    {
+        bool oneClick = cmd.Contains("一键");
+        if (_longTermSolveWin != null) { _longTermSolveWin.Activate(); if (oneClick) _longTermSolveWin.OneClickAuto(); StatusMsg.Text = "规划计算窗口已在前台"; return; }
+        var w = new LongTermSolveWindow(PlanHost, MiningProgramStore.Schemes, OpenLongTermBlockPicker);
+        _longTermSolveWin = w;
+        w.Closed += (_, _) => _longTermSolveWin = null;
+        w.Show(this);
+        GeoDb.GeoDbWindows.NoteLast(w);
+        if (oneClick) w.OneClickAuto();
+        StatusMsg.Text = "规划计算：⚡一键排产比选 / 排产全部 / 排产选中 → 逐年进度图 + 九指标 + 逐年进度表 → ✔确定进度计划 / 导出报表";
+    }
+
+    /// <summary>中长远④「方案综合对比」= 原 CreateOpenLongTermCompareCommand：打开「方案综合对比」窗口（单例）。</summary>
+    private void OpenLongTermCompare()
+    {
+        if (_longTermCompareWin != null) { _longTermCompareWin.Activate(); StatusMsg.Text = "方案综合对比窗口已在前台"; return; }
+        var w = new LongTermCompareWindow(PlanHost);
+        _longTermCompareWin = w;
+        w.Closed += (_, _) => _longTermCompareWin = null;
+        w.Show(this);
+        GeoDb.GeoDbWindows.NoteLast(w);
+        StatusMsg.Text = "方案综合对比：联合对比矩阵 + 四维论证图表 + 雷达 + 方向感知加权评分排名 → 推荐方案";
+    }
+
+    /// <summary>中长远⑤「进度计划方案出图」= 原 CreateOpenLongTermChartCommand：单方案逐年进度图窗（单例）。方案取自 LongTermSchemeStore；⚡一键排产并出图只按已指定工作线重排(LT4)；导出 PNG/CSV。</summary>
+    private LongTermChartWindow? _longTermChartWin;
+    private void OpenLongTermChart()
+    {
+        if (_longTermChartWin != null) { _longTermChartWin.Reload(); _longTermChartWin.Activate(); StatusMsg.Text = "进度计划方案出图已在前台"; return; }
+        var w = new LongTermChartWindow(PlanHost, programs: MiningProgramStore.Schemes);
+        _longTermChartWin = w;
+        w.Closed += (_, _) => _longTermChartWin = null;
+        w.Show(this);
+        GeoDb.GeoDbWindows.NoteLast(w);
+        int n = LongTermSchemeStore.Schemes.Count(s => s.Result != null);
+        StatusMsg.Text = n > 0
+            ? $"进度计划方案出图：已载入 {n} 个已排产方案"
+            : "进度计划方案出图：还没有已排产方案 —— 先到「派生计划方案」指定工作线生成方案, 再「规划计算」或「⚡一键排产并出图」";
     }
 
     /// <summary>
@@ -109,6 +198,31 @@ public partial class MainWindow
         public PlanEntityHost(MainWindow w) => _w = w;
 
         public BlockModelMeta? ActiveBlockModel => Modeling.BlockModelStore.Active ?? Modeling.BlockModelStore.PickDefault();
+
+        /// <summary>选集里恰好 1 条「工作线」层的多段线（原 IPitDesignCapability.TryGetSelectedSingleWorkLineMeta + GetSelectedWorkLineGeometry）。</summary>
+        public WorkLineSamples? SelectedWorkLine(out long handle, out string error)
+        {
+            handle = 0; error = "";
+            var wls = _w._selected.OfType<PolylineEntity>().Where(p => p.LayerName == WorkLineLayer && p.Points.Count >= 2).ToList();
+            if (wls.Count != 1)
+            {
+                error = wls.Count == 0
+                    ? "请在图上**选中恰好 1 条工作线**（不是普通多段线 —— 用「创建工作线」先转化）"
+                    : $"选集里有 {wls.Count} 条工作线，请只选 1 条";
+                return null;
+            }
+            var s = _w.WorkLineSamplesOf(wls[0]);
+            if (s == null || !s.Success) { error = "工作线几何读取失败：" + (s?.Error ?? "基线点 < 2"); return null; }
+            handle = EntityHandles.Of(wls[0]);
+            return s;
+        }
+
+        public WorkLineSamples? WorkLineByHandle(long handle)
+        {
+            if (EntityHandles.Find(_w._scene, handle) is not PolylineEntity pl || pl.LayerName != WorkLineLayer) return null;
+            var s = _w.WorkLineSamplesOf(pl);
+            return s is { Success: true } ? s : null;
+        }
         public System.Data.Common.DbConnection? Db => _w._geoDb?.Connection;
 
         public bool TryGetPolylineWorldVertices(long handle, out double[] xyz, out bool closed)
@@ -236,5 +350,41 @@ public partial class MainWindow
 
         public void Echo(string text, bool warn = false) => _w.EditEcho(text, warn ? EchoLevel.Warn : EchoLevel.Info);
         public void Refresh() => _w.RefreshScene();
+    }
+}
+
+public partial class MainWindow
+{
+    /// <summary>
+    /// @中长远示例：自检直通 —— 没块体就造「自检块体 20×6×8」（底 30% 层为煤），在块体西缘造 1 条南北向工作线（往 +X 推进）并选中，
+    /// 把基础约束的产能压到 15 万t/a（示例块体煤量只有 ~130 万t，按 1000 万t/a 一年就采完），打开「派生计划方案」→ 拾取 → 生成多套方案。
+    /// 之后 「规划计算 一键」/「方案综合对比」/「进度计划方案出图」都能直接跑（合成几何，非业务数据）。
+    /// </summary>
+    private void SelftestLongTermSample()
+    {
+        if (Modeling.BlockModelStore.Active == null && Modeling.BlockModelStore.Models.Count == 0) SelftestSampleBlockModel(20, 6, 8);
+        var m = PlanHost.ActiveBlockModel;
+        if (m == null) { StatusMsg.Text = "自检：没有块体模型"; return; }
+        var bb = m.Bounds;
+        double zTop = bb.maxZ;
+        BeginChange();
+        foreach (var e in _scene.Entities.Where(e => e.LayerName == WorkLineLayer || e.LayerName == WorkLineLayer + "_结束线").ToList()) _scene.Remove(e);
+        _layers.EnsureImported(WorkLineLayer, 0.2f, 0.8f, 0.95f);
+        var wl = new PolylineEntity { LayerName = WorkLineLayer, Elevation = zTop, Cr = 0.2f, Cg = 0.8f, Cb = 0.95f };
+        wl.Points.Add((bb.minX, bb.minY)); wl.Points.Add((bb.minX, bb.maxY));          // 基线沿 y，往 +x 推进
+        var end = new PolylineEntity { LayerName = WorkLineLayer + "_结束线", Elevation = zTop, Cr = 0.2f, Cg = 0.8f, Cb = 0.95f, Dash = new[] { 4.0, 2.0 } };
+        double xe = bb.minX + (bb.maxX - bb.minX) * 0.5;
+        end.Points.Add((xe, bb.minY)); end.Points.Add((xe, bb.maxY));
+        _scene.Add(wl); _scene.Add(end);
+        _selected.Clear(); _selected.Add(wl);
+        RefreshScene();
+
+        LongTermSchemeStore.Reset();
+        LongTermSchemeStore.Base.DesignCapacityWanTa = 15;
+        LongTermSchemeStore.Base.BasicStrippingYears = 1;
+        LongTermSchemeStore.Base.InnerDumpStartYear = 2;
+        OpenLongTermDerive();
+        string s = _longTermDeriveWin!.SelftestPickAndGenerate();
+        StatusMsg.Text = $"自检：中长远示例 —— 块体「{m.Name}」· 工作线 1 条(西缘, 往 +X) · A_p 15 万t/a｜{s}";
     }
 }
