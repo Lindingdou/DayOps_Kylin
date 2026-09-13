@@ -1513,6 +1513,9 @@ public partial class MainWindow : Window
             if (cmd == "任务下达") { OpenTaskWindow(() => new Views.TaskLib.TaskDispatchWindow()); return; }   // 原 TaskLib TaskDispatchWindow：校验 → 任务实例 + 回执落盘 → 可撤回；单据流水面板
             if (cmd == "生产任务书") { OpenTaskWindow(() => new Views.TaskLib.TaskOrderWindow()); return; }   // 原 TaskLib TaskOrderWindow：白纸单据 + 十二列 + 缺卸点标红 + 横向 PDF 导出
             if (cmd == "派车单") { OpenTaskWindow(() => new Views.TaskLib.DispatchOrderWindow()); return; }   // 原 TaskLib DispatchOrderWindow：三规则展开 + 按车分组 + KPI 抬头 + 实绩回填落盘 + 交叉核对
+            if (cmd == "班组派工") { OpenTaskWindow(() => new Views.TaskLib.CrewAssignWindow()); return; }   // 原 TaskLib CrewAssignWindow：花名册 + 自动派工（类别↔持证）+ 持证/出勤真校核 + 车号↔司机配死落盘
+            if (cmd == "实绩录入") { OpenTaskWindow(() => new Views.TaskLib.ActualEntryWindow()); return; }   // 原 TaskLib ActualEntryWindow：班末录入 → 回灌任务台账 + 占容方扣库容 + 故障工时汇总 + 原因码 + 派车单对账 + 偏差处置建议
+            if (cmd == "编制配置") { OpenTaskWindow(() => new Views.TaskLib.CompileConfigWindow()); return; }   // 原 TaskLib CompileConfigWindow：当日能力预算条 + 三组切分规则锚点 + 链路体检 + 铲—车编组真联动（MF 条）
             if (cmd == "作业面" || cmd == "工作面台账" || cmd == "采场参数") { WorkingFacesCmd(); return; }   // 旧切片：working_face 概览状态行（命令行别名保留）
             if (cmd == "参数化模板" || cmd == "开采模板" || cmd == "采场模板") { OpenBenchTemplateEditor(dump: false); return; }   // 剥采排·参数化模板 = 原 MiningTemplateEditorWindow(勿再指到库参数模板统计)
             if (cmd == "参数模板库" || cmd == "参数模板" || cmd == "参数定义") { ParamTemplatesCmd(); return; }
