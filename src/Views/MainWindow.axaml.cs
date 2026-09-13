@@ -1811,7 +1811,8 @@ public partial class MainWindow : Window
             if (cmd == "煤岩台阶判定" || cmd == "煤岩判定" || cmd == "台阶煤岩" || cmd.StartsWith("煤岩台阶判定 ")) { await BenchCoalCmd(cmd); return; }
             if (cmd == "煤层露头线" || cmd == "露头线" || cmd == "煤层露头" || cmd == "露头线提取" || cmd.StartsWith("煤层露头线 ")) { await SeamOutcropCmd(cmd); return; }
             if (cmd == "更新煤层面" || cmd == "更新现状面" || cmd == "煤层面更新" || cmd.StartsWith("更新煤层面 ")) { await SurfaceUpdateCmd(cmd); return; }
-            if (cmd == "平行推进" || cmd == "确定开采程序" || cmd == "工作线推进") { AdvanceCmd(AdvanceMode.Parallel, "平行推进"); return; }   // 「开采程序确定」已改走 OpenMiningProgramSolve(原④窗); 「确定开采程序」(短期组)待按原 ShortTermSequenceWindow 重做
+            if (cmd == "确定开采程序") { OpenShortTermSequence(); return; }   // 短期组: 原 ShortTermSequenceWindow(作业面/设备类型/工艺流程); 「开采程序确定」(中长远)走 OpenMiningProgramSolve
+            if (cmd == "平行推进" || cmd == "工作线推进") { AdvanceCmd(AdvanceMode.Parallel, "平行推进"); return; }
             if (cmd == "定点回转" || cmd == "定点回转推进") { AdvanceCmd(AdvanceMode.FixedPivot, "定点回转"); return; }
             if (cmd == "动点回转" || cmd == "动点回转推进") { AdvanceCmd(AdvanceMode.MovingPivot, "动点回转"); return; }
             if (cmd == "螺旋坑线" || cmd == "螺旋斜坡道" || cmd.StartsWith("螺旋坑线 ")) { await SpiralRampInsertCmd(cmd); return; }   // 原 InsertRampSpiralDialog → 中线+边线+路面一次落地, 见 MainWindow.RampInsert.cs
@@ -10916,6 +10917,8 @@ public partial class MainWindow : Window
             if (cmd == "@短期示例") { SelftestShortTermSample(); return; }   // @短期示例: 短期派生窗生成并编制 + 月度计划编制一键(实机核对用)
             if (cmd == "@采场参数示例") { SelftestShortTermFieldSample(); return; }   // @采场参数示例: 合成坡顶/坡底环并选中 → 采场参数识别窗提取校核 + 平盘宽识别(实机核对用)
             if (cmd == "@标注台阶标高示例") { SelftestBenchElevationSample(); return; }   // @标注台阶标高示例: 合成台阶环 → 一键标注 + 平盘标高清单统计(实机核对用)
+            if (cmd == "@确定开采程序示例") { SelftestShortTermSequenceSample(); return; }   // @确定开采程序示例: 开窗 + 增面/归一/校核 + 开工艺对话框(实机核对用)
+            if (cmd == "@确定开采程序确认") { SelftestShortTermSequenceConfirm(); return; }   // @确定开采程序确认: 工艺对话框确定 + 保存开采程序
             if (cmd.StartsWith("@块体示例"))   // @块体示例 [nx ny nz]: 建一个规则块体模型并入场景(截图核对体素显示用)
             {
                 var a = cmd.Length > 5 ? cmd.Substring(5).Split(' ', System.StringSplitOptions.RemoveEmptyEntries) : System.Array.Empty<string>();

@@ -693,3 +693,49 @@ public partial class MainWindow
         catch (Exception ex) { StatusMsg.Text = "建三角网失败：" + ex.Message; return false; }
     }
 }
+
+public partial class MainWindow
+{
+    // ───────────── 短期组「确定开采程序」：作业面 / 设备类型 / 工艺流程（原 CreateOpenShortTermSequenceCommand → ShortTermSequenceWindow）─────────────
+    private ShortTermSequenceWindow? _shortTermSeqWin;
+
+    /// <summary>短期「确定开采程序」= 原 <c>ShortTermSequenceWindow</c>：编辑 <see cref="Cad.Plan.ShortTermSchemeStore.Base"/> 的作业面清单（份额/备采/物料/去向）+ 设备工艺树（型号约束/配车/工艺链）。非模态单例。</summary>
+    private void OpenShortTermSequence()
+    {
+        if (_shortTermSeqWin != null) { _shortTermSeqWin.Activate(); GeoDb.GeoDbWindows.NoteLast(_shortTermSeqWin); StatusMsg.Text = "确定开采程序窗口已在前台"; return; }
+        if (EnsureGeoDb() == null) return;   // 型号字典/工作面台账/去向台账全在库里（原版插件加载即已连库）；未连则先连库、连上后照这条命令重跑
+        var w = new ShortTermSequenceWindow(Cad.Plan.ShortTermSchemeStore.Base);
+        _shortTermSeqWin = w;
+        w.Closed += (_, _) => _shortTermSeqWin = null;
+        w.Show(this);
+        GeoDb.GeoDbWindows.NoteLast(w);
+        StatusMsg.Text = "确定开采程序：① 设定工作面(份额/备采/面编号) → ② 制定设备类型(穿·采·运·排型号约束 + 配车) → ③ 物料与去向；右侧设备工艺树就地改；按本期单元派生作业面 / 编辑工艺流程 / 校核设备配置 / 保存开采程序";
+    }
+
+    /// <summary>@确定开采程序示例：开窗 → 增加一个作业面 → 归一份额 → 校核设备配置 → 打开第 1 面的工艺对话框（供截图；随后 @确定开采程序确认 关掉）。</summary>
+    private void SelftestShortTermSequenceSample()
+    {
+        try { _geoDb ??= Data.GeoDatabase.OpenSeeded(); } catch (Exception ex) { StatusMsg.Text = "自检：连库失败 " + ex.Message; return; }
+        OpenShortTermSequence();
+        var w = _shortTermSeqWin!;
+        w.SelftestAddFace();
+        w.SelftestMakeRock(2, "KY-250");
+        w.SelftestNormalize();
+        w.SelftestCheckEquip();
+        string s1 = w.SelftestStatus;
+        w.SelftestSelect(0);
+        w.SelftestOpenProcessDialog();
+        StatusMsg.Text = $"自检：确定开采程序示例 —— {w.SelftestFaceCount} 面 / 树 {w.SelftestTreeRoots} 根｜{s1.Replace('\n', ' ')}";
+    }
+
+    /// <summary>@确定开采程序确认：按「确定」关掉工艺对话框并保存开采程序。</summary>
+    private void SelftestShortTermSequenceConfirm()
+    {
+        var w = _shortTermSeqWin; if (w == null) { StatusMsg.Text = "自检：确定开采程序窗口未开"; return; }
+        w.SelftestCloseProcessDialog(ok: true);
+        w.SelftestCollapseExcept(2);
+        w.SelftestSave();
+        GeoDb.GeoDbWindows.NoteLast(w);
+        StatusMsg.Text = $"自检：确定开采程序确认 —— {w.SelftestStatus.Replace('\n', ' ')}｜{w.SelftestTreeStatus.Replace('\n', ' ')}";
+    }
+}
