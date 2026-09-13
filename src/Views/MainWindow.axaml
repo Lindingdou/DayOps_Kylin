@@ -1,4 +1,4 @@
-﻿<Window xmlns="https://github.com/avaloniaui"
+<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="using:PitMine3D.Kylin.Controls"
         xmlns:dc="using:Dock.Avalonia.Controls"
@@ -190,7 +190,7 @@
                                             <Button Classes="ribbon-btn small" Tag="3D" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_3D}" /><TextBlock Text="3D" /></StackPanel></Button>
                                             <Button Classes="ribbon-btn small" Tag="范围缩放" Click="OnRibbonCommand" ToolTip.Tip="缩放全图 (ZE)"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_Zoom}" /><TextBlock Text="缩放" /></StackPanel></Button>
                                             <Button Classes="ribbon-btn small" Tag="平移" Click="OnRibbonCommand" ToolTip.Tip="平移视图（按住鼠标中键拖拽）"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_Pan}" /><TextBlock Text="平移" /></StackPanel></Button>
-                                            <Button Classes="ribbon-btn small" Tag="夹点开关" Click="OnRibbonCommand" ToolTip.Tip="切换夹点（Gizmo）显示"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_gizmo}" /><TextBlock Text="Gizmo" /></StackPanel></Button>
+                                            <Button Classes="ribbon-btn small" Tag="Gizmo" Click="OnRibbonCommand" ToolTip.Tip="切换三轴变换手柄（Gizmo）显示：选中对象后拖 X/Y/Z 轴沿轴移动"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_gizmo}" /><TextBlock Text="Gizmo" /></StackPanel></Button>
                                             <Button Classes="ribbon-btn small" Tag="清理标记" Click="OnRibbonCommand" ToolTip.Tip="清除视图中所有 × 标记 (CLRMARK)"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_clear_marks}" /><TextBlock Text="清理标记" /></StackPanel></Button>
                                             <Button Classes="ribbon-btn small" Tag="清空视图" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_clear_marks}" /><TextBlock Text="清空视图" /></StackPanel></Button>
                                         </WrapPanel>

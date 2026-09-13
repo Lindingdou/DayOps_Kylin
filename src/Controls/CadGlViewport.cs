@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using Avalonia;
@@ -820,6 +820,13 @@ public partial class CadGlViewport : OpenGlControlBase
     {
         var p = _camera.ScreenToViewPlane(sx, sy, Bounds.Width, Bounds.Height);
         return p == null ? null : (p.Value.x + _ox, p.Value.y + _oy, p.Value.z);
+    }
+
+    /// <summary>屏幕点 → 世界射线(起点 + 单位方向)：3D 透视为眼点出发过该像素, 2D 正交为竖直向下。Gizmo 沿轴拖拽求"光标射线到轴的最近点"用。</summary>
+    public (double ox, double oy, double oz, double dx, double dy, double dz)? ScreenRay(double sx, double sy)
+    {
+        var r = _camera.ScreenRay(sx, sy, Bounds.Width, Bounds.Height);
+        return r == null ? null : (r.Value.ox + _ox, r.Value.oy + _oy, r.Value.oz, r.Value.dx, r.Value.dy, r.Value.dz);
     }
 
     // ---------- 几何（示例内容；接入内核后由 AcDb worldDraw 提供）----------

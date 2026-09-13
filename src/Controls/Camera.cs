@@ -236,6 +236,25 @@ internal sealed class Camera
         return (Target[0] + dx * rx - dy * ux, Target[1] + dx * ry - dy * uy, Target[2] + dx * rz - dy * uz);
     }
 
+    /// <summary>
+    /// 屏幕点 → 世界(局部)射线(起点 + 单位方向)：近/远裁面反投影两点连线。3D 透视 = 眼点出发过该像素；
+    /// 2D 正交 = 竖直向下。Gizmo 沿轴拖拽求"光标射线到轴的最近点"用。不可逆返回 null。
+    /// </summary>
+    public (double ox, double oy, double oz, double dx, double dy, double dz)? ScreenRay(double sx, double sy, double vw, double vh)
+    {
+        if (vw < 1 || vh < 1) return null;
+        double ndcX = 2.0 * sx / vw - 1.0;
+        double ndcY = 1.0 - 2.0 * sy / vh;
+        float[]? inv = Mat4.Invert(ViewProj((float)(vw / vh)));
+        if (inv == null) return null;
+        var near = UnprojectNdc(inv, ndcX, ndcY, -1.0);
+        var far = UnprojectNdc(inv, ndcX, ndcY, 1.0);
+        double dx = far.x - near.x, dy = far.y - near.y, dz = far.z - near.z;
+        double l = Math.Sqrt(dx * dx + dy * dy + dz * dz);
+        if (l < 1e-12 || !double.IsFinite(l)) return null;
+        return (near.x, near.y, near.z, dx / l, dy / l, dz / l);
+    }
+
     private static (double x, double y, double z) UnprojectNdc(float[] inv, double nx, double ny, double nz)
     {
         double x = inv[0] * nx + inv[4] * ny + inv[8] * nz + inv[12];

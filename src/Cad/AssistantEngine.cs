@@ -90,7 +90,7 @@ public sealed class AssistantEngine
         {
             new("缩放全部", "ZOOMEXTENTS", "view_menu"), new("平移", "PAN", "view_menu"),
             new("三维旋转", "3DORBIT", "view_menu"), new("2D/3D 切换", "3DVIEW", "view_menu"),
-            new("夹点开关", "GIZMO", "view_menu"), Back,
+            new("Gizmo 手柄", "GIZMO", "view_menu"), Back,
         }),
 
         "help_text" => new Reply(HelpText, new List<Option> { Back }),

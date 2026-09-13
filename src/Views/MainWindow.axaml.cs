@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.IO;
 using Avalonia.VisualTree;
 using System.Linq;
@@ -487,6 +487,16 @@ public partial class MainWindow : Window
                 return;
             }
 
+            // Gizmo 三轴手柄：空闲态左键按在某根轴上 → 沿该轴拖动选择集(松开落地, 一步 Undo)。见 MainWindow.Gizmo.cs
+            if (props.IsLeftButtonPressed && _selected.Count > 0 && _measure == null && _tool == null
+                && _editMode == EditMode.None && !_offsetActive && !_trimActive && !_breakActive && !_slideActive
+                && e.KeyModifiers == KeyModifiers.None && GizmoTryBeginDrag(_lastPointer))
+            {
+                _nav = NavMode.None;
+                if (_gizmoDrag != null) e.Pointer.Capture(ViewportHost);
+                return;
+            }
+
             // 夹点编辑(忠实原版 GripEditor.OnMouseDown)：空闲态左键按在夹点上 →
             //   Ctrl/Shift = 只改夹点选择集(Ctrl 逐个加减 / Shift 沿线区间)，本次不拖；
             //   无修饰键   = 点已选中的夹点拖整组，点未选中的清空后只选它再拖。
@@ -648,6 +658,10 @@ public partial class MainWindow : Window
             // 「实时曲面坐标」：状态栏保持投影平面坐标(同原版), 真实三维坐标走光标旁的浮动气泡
             UpdateSurfaceCoordTip(p, shown);
 
+            // Gizmo 拖拽中：沿轴求光标射线最近点, 幽灵 + 手柄一起挪；空闲态则做轴悬停(压上变黄)。见 MainWindow.Gizmo.cs
+            if (_gizmoDrag != null) { GizmoDragMove(p); _lastPointer = p; return; }
+            if (_nav == NavMode.None && _tool == null && _editMode == EditMode.None && !_gripDrag.Active) GizmoHover(p);
+
             // 夹点拖拽：按当前模式(拉伸/移动/旋转/缩放)实时预览变换后的实体 + 光标旁模式提示
             if (_gripDrag.Active)
             {
@@ -744,6 +758,9 @@ public partial class MainWindow : Window
                     BoxSelect(_selBoxStart, rel);   // 拖动成框 → 框选
                 return;
             }
+
+            // Gizmo 拖拽：松开 → 沿轴位移落地(一步 Undo)；没拖过阈值当没动。见 MainWindow.Gizmo.cs
+            if (_gizmoDrag != null) { e.Pointer.Capture(null); GizmoDragEnd(rel); return; }
 
             // 夹点拖拽：松开 → 按当前模式落地(整组一步 Undo)；取不到世界点则取消
             if (_gripDrag.Active)
@@ -866,6 +883,7 @@ public partial class MainWindow : Window
                 _dimAngActive = false; _angVertex = null; _angP1 = null;
                 _coordLabelActive = false;
                 _gripDrag.Cancel(); _snapVertsDrag = null; _gripHover = -1;
+                GizmoCancel();
                 _selBoxActive = false;
                 _ttrActive = false; _ttrAwaitRadius = false; _ttrRef1 = null; _ttrRef2 = null;
                 _serActive = false; _serAwaitRadius = false; _serStart = null; _serEnd = null;
@@ -1250,7 +1268,7 @@ public partial class MainWindow : Window
     private readonly GripDrag _gripDrag = new();      // 夹点拖拽状态：拉伸/移动/旋转/缩放四模式(原版 GripEditor)
     private int _gripHover = -1;                      // 悬停(热)夹点序号(-1=无)
     private float[]? _snapVertsDrag;                  // 拖拽期间的捕捉候选(已排除被拖点，原版 excludePoint)
-    private bool _gripsOn = true;                    // 夹点显示开关(GIZMO)
+    private bool _gripsOn = true;                    // 夹点显示开关(命令 夹点开关/夹点; GIZMO 是三轴手柄 _gizmoOn, 见 MainWindow.Gizmo.cs)
     private bool _pathActive;                       // 点对点寻径：等待取两点
     private (double x, double y)? _pathP1;
     private bool _kpathMode;                         // 备选路径(K 最短路)模式(复用 _pathActive 取两点)
@@ -1765,7 +1783,8 @@ public partial class MainWindow : Window
             if (cmd == "圆弧SER" || cmd == "圆弧(起点端点半径)") { StartArcSer(); return; }
             if (cmd == "打断") { await BreakCmdAsync(); return; }
             if (cmd == "选择模式" || cmd == "框选模式" || cmd == "SELECTMODE") { if (Viewport.Is2DView) Viewport.SetViewMode(false); SetSelectMode(!_selectMode); return; }
-            if (cmd == "夹点开关" || cmd == "夹点" || cmd == "Gizmo" || cmd == "GIZMO") { ToggleGizmo(); return; }
+            if (cmd == "夹点开关" || cmd == "夹点") { ToggleGrips(); return; }
+            if (cmd == "Gizmo" || cmd == "GIZMO") { ToggleGizmo(); return; }   // 三轴变换手柄, 见 MainWindow.Gizmo.cs
             if (cmd == "正交" || cmd == "正交开关") { _orthoOn = !_orthoOn; SyncDraftToggles(); StatusMsg.Text = _orthoOn ? "正交: 开" : "正交: 关"; return; }
             if (cmd == "栅格" || cmd == "栅格显示" || cmd == "显示栅格" || cmd == "GRID") { SetGrid(!_gridOn); StatusMsg.Text = _gridOn ? "栅格: 开" : "栅格: 关"; return; }
             if (cmd == "栅格捕捉" || cmd == "捕捉开关") { _snapOn = !_snapOn; SyncDraftToggles(); StatusMsg.Text = _snapOn ? $"栅格捕捉: 开（步长 {_snapStep:0.##}）" : "栅格捕捉: 关"; return; }
@@ -8933,6 +8952,7 @@ public partial class MainWindow : Window
         UpdatePropertyPanel();
         _grips.Rebuild(_selected);
         _gripHover = -1;
+        GizmoRebuild();   // 三轴手柄锚点随选择集重算, 见 MainWindow.Gizmo.cs
         RedrawHighlight();
     }
 
@@ -8960,6 +8980,7 @@ public partial class MainWindow : Window
         var o = new List<float>(Controls.CadGlViewport.Recolor(ent.ToArray(), hr, hg, hb));   // 实体=高亮青；夹点保留自身配色
         Viewport.SetHighlightFaces(faces.Count > 0 ? faces.ToArray() : null);
         if (_gripsOn) AppendGripTable(o);
+        AppendGizmo(o);   // 三轴变换手柄画在最上层(与夹点同通道), 见 MainWindow.Gizmo.cs
         Viewport.SetHighlight(o.ToArray(), recolor: false);
     }
 
@@ -10125,8 +10146,8 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"批量台阶扩帮：生成 {rings.Count} 圈台阶线(台阶距 {d:0.##} · {basis})";
     }
 
-    // GIZMO：切换夹点显示；关时选中实体不显方块、也不可拖夹点
-    private void ToggleGizmo()
+    // 夹点开关：切换夹点显示；关时选中实体不显方块、也不可拖夹点。(GIZMO 命令是三轴变换手柄, 见 MainWindow.Gizmo.cs)
+    private void ToggleGrips()
     {
         _gripsOn = !_gripsOn;
         if (!_gripsOn) { _gripDrag.Cancel(); _snapVertsDrag = null; _gripHover = -1; }
