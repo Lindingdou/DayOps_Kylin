@@ -1525,6 +1525,7 @@ public partial class MainWindow : Window
             if (cmd == "生产任务动态调整") { OpenTaskWindow(() => new Views.TaskLib.DynamicAdjustWindow()); return; }   // 原 TaskLib DynamicAdjustWindow：跨天「区域×工序」甘特 + 窗内三维推进演示（SimPanelHost 轴测相机·正射底图）+ 原因码路由 + 日内重排 + 跨天顺延
             if (cmd == "班内工艺·工序推演") { OpenTaskWindow(() => new Views.TaskLib.ShiftProcessWindow()); return; }   // 原 TaskLib ShiftProcessWindow：班内时钟 + 正射影像/作业区域/工艺线/工序标记/铭牌/瓶颈六层面板 + 工序链条带 + 系统状态与工序内部细衔接
             if (cmd == "生产报告") { OpenTaskWindow(() => new Views.TaskLib.ReportHubWindow()); return; }   // 原 TaskLib ReportHubWindow：报表中心（一键生成·纸张预览·PDF/Word·归档）/ 报表模板设计 / 指标·计算规则库 / 存档回溯·两期对比 四页签
+            if (cmd == "作业区划分") { OpenTaskWindow(() => new Views.TaskLib.WorkZoneLayoutWindow()); return; }   // 原 TaskLib WorkZoneLayoutWindow：正射影像画布 + 手工圈画（矩形/多边形·Z 出处）+ 按月计划生成候选 + 工序作业区 + 改顶点/等距/重画/撤销 + 推演关联诊断
             if (cmd == "作业面" || cmd == "工作面台账" || cmd == "采场参数") { WorkingFacesCmd(); return; }   // 旧切片：working_face 概览状态行（命令行别名保留）
             if (cmd == "参数化模板" || cmd == "开采模板" || cmd == "采场模板") { OpenBenchTemplateEditor(dump: false); return; }   // 剥采排·参数化模板 = 原 MiningTemplateEditorWindow(勿再指到库参数模板统计)
             if (cmd == "参数模板库" || cmd == "参数模板" || cmd == "参数定义") { ParamTemplatesCmd(); return; }
