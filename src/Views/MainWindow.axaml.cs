@@ -1543,7 +1543,9 @@ public partial class MainWindow : Window
             if (cmd.StartsWith("经济剥采比") || cmd.StartsWith("经济合理剥采比") || cmd.StartsWith("允许剥采比")) { EconStrippingRatioCmd(cmd); return; }
             if (cmd.StartsWith("产能推算") || cmd.StartsWith("推进产能") || cmd.StartsWith("产能推进")) { AdvanceCapacityCmd(cmd); return; }
             if (cmd == "开采程序切分" || cmd == "逐期量核算" || cmd == "分期量表" || cmd == "分期剥采比" || cmd.StartsWith("开采程序切分 ")) { await DriveSequenceCmd(cmd); return; }
-            if (cmd == "采区划分" || cmd == "采区" || cmd == "储量均衡划分") { PanelSplitCmd(); return; }
+            if (cmd == "采区划分" || cmd == "采区划分设置" || cmd == "开采程序方案") { OpenMiningProgramConfig(); return; }   // 原 CreateOpenMiningProgramConfigCommand: MiningProgramConfigWindow(方案配置窗), 见 MainWindow.Plan.cs
+            if (cmd == "开采程序确定" || cmd == "开采程序比选" || cmd.StartsWith("开采程序确定 ")) { OpenMiningProgramSolve(cmd); return; }   // 原 CreateOpenMiningProgramSolveCommand: MiningProgramSolveWindow(一键划分·比选·确定落地); 「开采程序确定 一键」直通
+            if (cmd == "采区" || cmd == "储量均衡划分" || cmd == "采区切分") { PanelSplitCmd(); return; }   // 旧切片: 最近块体默认参数等煤量切采区(命令行别名保留)
             if (cmd == "拉沟推荐" || cmd == "首采区推荐" || cmd == "拉沟位置推荐" || cmd == "拉沟推进推荐") { BoxcutRecommendCmd(); return; }
             if (cmd == "规划计算" || cmd == "开采程序评价" || cmd == "程序评价") { ProgramEvaluateCmd(); return; }
             if (cmd == "派生计划方案" || cmd == "派生方案" || cmd == "多方案派生") { DerivePlansCmd(); return; }
@@ -1764,7 +1766,7 @@ public partial class MainWindow : Window
             if (cmd == "煤岩台阶判定" || cmd == "煤岩判定" || cmd == "台阶煤岩" || cmd.StartsWith("煤岩台阶判定 ")) { await BenchCoalCmd(cmd); return; }
             if (cmd == "煤层露头线" || cmd == "露头线" || cmd == "煤层露头" || cmd == "露头线提取" || cmd.StartsWith("煤层露头线 ")) { await SeamOutcropCmd(cmd); return; }
             if (cmd == "更新煤层面" || cmd == "更新现状面" || cmd == "煤层面更新" || cmd.StartsWith("更新煤层面 ")) { await SurfaceUpdateCmd(cmd); return; }
-            if (cmd == "平行推进" || cmd == "开采程序确定" || cmd == "确定开采程序" || cmd == "工作线推进") { AdvanceCmd(AdvanceMode.Parallel, "平行推进"); return; }
+            if (cmd == "平行推进" || cmd == "确定开采程序" || cmd == "工作线推进") { AdvanceCmd(AdvanceMode.Parallel, "平行推进"); return; }   // 「开采程序确定」已改走 OpenMiningProgramSolve(原④窗); 「确定开采程序」(短期组)待按原 ShortTermSequenceWindow 重做
             if (cmd == "定点回转" || cmd == "定点回转推进") { AdvanceCmd(AdvanceMode.FixedPivot, "定点回转"); return; }
             if (cmd == "动点回转" || cmd == "动点回转推进") { AdvanceCmd(AdvanceMode.MovingPivot, "动点回转"); return; }
             if (cmd == "螺旋坑线" || cmd == "螺旋斜坡道" || cmd.StartsWith("螺旋坑线 ")) { await SpiralRampInsertCmd(cmd); return; }   // 原 InsertRampSpiralDialog → 中线+边线+路面一次落地, 见 MainWindow.RampInsert.cs

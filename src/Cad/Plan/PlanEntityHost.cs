@@ -20,6 +20,8 @@ public sealed class PlanEntityBatch
     /// <summary>闭合环（逐环一条三维多段线，比散段可整条选）。</summary>
     public readonly List<(double[] x, double[] y, double z, byte r, byte g, byte b)> Rings = new();
     public readonly List<(string name, List<(double x, double y, double z)> verts, List<(int a, int b, int c)> tris, byte r, byte g, byte b)> Meshes = new();
+    /// <summary>文字（x,y,z,字高,内容,hAlign 0左/1中/2右,vAlign 0底/1中/2顶,色）。</summary>
+    public readonly List<(double x, double y, double z, double height, string text, int hAlign, int vAlign, byte r, byte g, byte b)> Texts = new();
 }
 
 /// <summary>

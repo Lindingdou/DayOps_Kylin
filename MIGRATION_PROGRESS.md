@@ -4136,3 +4136,33 @@ DelineationMethod/EconRatioMethod 四枚举 · EconParams 四式 · WallAngle ·
 **登记差异**：本机另一会话正在工作树里移植 `src/TaskLib/`（108 个未跟踪文件，尚编不过），本节全部构建/测试在 scratchpad 的镜像副本（排除 TaskLib）里跑；
 原窗「导出报表」原版即 TODO，照回显；「境界平面/横剖面预览」「境界剥采比–深度曲线」原版为占位，照保留（结果里已带逐层曲线数据备用）。
 **下一步**：③采区划分 / ④开采程序确定（MiningProgramPlan + Config/Solve 两窗 + PanelSplitter/PanelDelineator/ProgramMaterializer/MiningProgramCharts）→ ⑥剥采比均衡 VpCurveWindow 核对 → 中长远组 → 短期组。
+
+## §三九七 优化开采设计③④「采区划分 / 开采程序确定」按原 PlanLib 整族重做 (2026-09-13)
+
+**此前**：「采区划分」= `PanelSplitCmd` 对最近块体按默认参数等煤量切矩形入图（无对话框、无境界来源、无拉沟推进）；「开采程序确定」`cmd==` 命中的是
+`AdvanceCmd(Parallel)` 平行推进（**接线错**）。原版是两个窗口：③ `MiningProgramConfigWindow`（八区方案配置）④ `MiningProgramSolveWindow`（一键划分·比选·确定落地）。
+
+### 落地（原 BoundaryOptimization 的 MiningProgram 半边逐文件移植）
+`src/Cad/Plan/MiningProgramPlan.cs`：`MiningStrategy / SplitObjective(原序 ByCapacity·ByLife·FixedN) / BoxcutMode` · `FirstPanelWeights` · `BoxcutWeights` · `BoxcutAdvanceOption`（六约束分 + Recompute）·
+`MiningPanel` · `ProgramResult` · `MiningProgramPlan`（八区字段 · Q=L·v·H·ρ 正逆算 · Clone · CreateSamples 三样例）· `MiningProgramStore` 会话方案集。AdvanceMode/DumpMode/StripRatioField 复用 Kylin `Cad` 既有定义。
+`src/Cad/Plan/MiningProgramSolver.cs`：`PlanStripRatioFieldSampler.Sample(BlockModelMeta)`（原 StripRatioFieldSampler：煤岩判别器 + 逐 XY 列聚 煤/岩体积 + 煤厚 + 埋深，子块按尺寸倍数）·
+`ProgramPanelDelineator`（南/北/东/西近边带 + 剥采比梯度候选，六约束真值打分，境界弯直度定工作线形态，`ResolveOutline` 取地表界/底周界/块体足迹）·
+`ProgramPanelSplitter`（沿推进轴切 slab，FixedN 等推进距离 / ByLife·ByCapacity 等煤量，采区数自适应钳 1..16，首采外排其余内排 + 起转期）·
+`ProgramPlanEvaluator`（服务年限 / 峰值剥采比 / 储量均衡系数 1−CV / 基建剥离 / 内排容量平衡(松散 1.2 只能填已采采空容积) / 达产 / 煤量加权运距 / 分期现金流 NPV / 推进度与工作线校核）·
+`ProgramPlanComparer`（七指标方向感知归一加权 → 综合分 + 可行最高分推荐）· `MiningProgramGenerator`（按三种推进方式派生）·
+`ProgramMaterializer`（采区环按 Sutherland-Hodgman 裁到境界 / 块体足迹兜底 + 采区名文字(原 vAlign=2 → Kylin 1) + 首采区高亮 + 拉沟线 + 推进箭头，按方案图层幂等）。
+`PlanEntityBatch` 加 `Texts`，宿主 `Import` 落 `TextEntity`。
+
+`src/Views/Plan/MiningProgramConfigWindow.cs`：原八区照搬——①产状/策略(块体 PCA) ②境界来源(必选，只列已「确定最终境界」的方案，选定即继承产状/走向/策略，`Activated` 时刷新) ③首采区权重归一
+④拉沟·推进(全自动/人工两态；人工拾取拉沟线 + 方位；约束权重归一；「推荐候选」有带煤块体从剥采比场真生成、否则重排样例) ⑤采区数/均衡 ⑥内排 ⑦产能约束(按设备派生 采宽/最小工作线/推进度上限 + Q 校核)
+⑧经济；全部自动重填 / 保存(境界来源必选闸) / 新建·克隆·删除。
+`src/Views/Plan/MiningProgramSolveWindow.cs` + `MiningProgramCharts.cs`：一键划分/求解选中/求解全部 → 对比矩阵 + 拉沟候选表(采用选中 / 视口布置工作线·推进：两点取开段沟→方位垂直朝场内+工作线长→即时重划 / 工作线形态下拉回写)
++ 四张 Canvas 图(SR(t) 削峰曲线 / 五轴雷达 / 内外排堆叠柱 / 采区接续甘特) + 指标九格 + 采区表 + 平面图占位(照原) + ✔确定开采程序落地 + 导出 CSV 报表(原 BuildReport 四段)。
+`MainWindow.Plan.cs`：`OpenMiningProgramConfig` / `OpenMiningProgramSolve(cmd)`（单例；「开采程序确定 一键」直通）。Ribbon：`采区划分`→③窗，`开采程序确定`→④窗；旧切片留别名 `采区/储量均衡划分/采区切分`；
+`确定开采程序`(短期组同名钮)暂仍指平行推进，待按原 ShortTermSequenceWindow 重做。
+
+**验证**：`MiningProgramFamilyTests` 12 条（场采样列守恒/埋深/煤厚 · 五候选与可行性 · 形态三档 · FixedN 切分守恒与首采外排 · 自适应采区数 · 评价含内排容量平衡 40% 手算 ·
+级2评分推荐 · 派生三态 · 落地环/文字/拉沟箭头 + 三角境界裁矩形 · 视口布置方位四象限 · 报表 · 产能互逆/设备规格）全过；实机自检 `@块体示例 20 6 8;开采程序确定 一键;@等待;@页面截图;采区划分;@页面截图`
+两窗按原版布局出图，一键划分对自检块体三方案真切采区、四图表与指标回填。另一会话的 TaskLib 已提交(5887928)，镜像现可整体编译。
+**登记差异**：④窗「采区平面图」原版即占位，照保留；对比表/候选表列宽按 1.3 倍放宽（14px 正文下原像素宽压表头）。
+**下一步**：⑥ 剥采比均衡 `VpCurveWindow`(719 行) 核对/重做 → 中长远 7 钮 → 短期 10 钮。

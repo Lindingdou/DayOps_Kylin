@@ -47,6 +47,35 @@ public partial class MainWindow
         StatusMsg.Text = "确定境界：求解 → 方案对比矩阵 → 选定后「确定最终境界」落地三维台阶面 + 台阶线";
     }
 
+    private MiningProgramConfigWindow? _miningProgramConfigWin;
+    private MiningProgramSolveWindow? _miningProgramSolveWin;
+
+    /// <summary>优化开采设计③「采区划分」= 原 CreateOpenMiningProgramConfigCommand：打开「采区划分设置」窗口（单例）。境界来源 = ①②确定的方案。</summary>
+    private void OpenMiningProgramConfig()
+    {
+        if (_miningProgramConfigWin != null) { _miningProgramConfigWin.Activate(); StatusMsg.Text = "采区划分设置已在前台"; return; }
+        var w = new MiningProgramConfigWindow(PlanHost);
+        _miningProgramConfigWin = w;
+        w.Closed += (_, _) => _miningProgramConfigWin = null;
+        w.Show(this);
+        GeoDb.GeoDbWindows.NoteLast(w);
+        StatusMsg.Text = "采区划分设置：产状/策略 · 境界来源(必选已确定境界) · 首采区权重 · 拉沟·推进候选 · 采区数/内排 · 产能约束 · 经济";
+    }
+
+    /// <summary>优化开采设计④「开采程序确定」= 原 CreateOpenMiningProgramSolveCommand：打开「计算·比选·确定开采程序」窗口（单例）。「开采程序确定 一键」直通一键划分。</summary>
+    private void OpenMiningProgramSolve(string cmd = "开采程序确定")
+    {
+        bool oneClick = cmd.Contains("一键");
+        if (_miningProgramSolveWin != null) { _miningProgramSolveWin.Activate(); if (oneClick) _miningProgramSolveWin.OneClickAuto(); StatusMsg.Text = "开采程序窗口已在前台"; return; }
+        var w = new MiningProgramSolveWindow(PlanHost);
+        _miningProgramSolveWin = w;
+        w.Closed += (_, _) => _miningProgramSolveWin = null;
+        w.Show(this);
+        GeoDb.GeoDbWindows.NoteLast(w);
+        if (oneClick) w.OneClickAuto();
+        StatusMsg.Text = "开采程序确定：一键划分 → 对比矩阵 + 拉沟候选 + 四图表 → ✔确定 落地采区/拉沟/推进箭头";
+    }
+
     /// <summary>
     /// 规划模块对宿主的依赖（原 IEntityCapability / ISelectionCapability / IPitDesignCapability 被 PlanLib 用到的那一截）。
     /// 全部按 <see cref="EntityHandles"/> 的会话 handle 说话。
@@ -154,6 +183,11 @@ public partial class MainWindow
             {
                 var me = new MeshEntity(name, verts, tris) { LayerName = batch.Layer, Cr = r / 255f, Cg = g / 255f, Cb = b / 255f };
                 _w._scene.Add(me); made.Add(me);
+            }
+            foreach (var (x, y, z, height, text, ha, va, r, g, b) in batch.Texts)
+            {
+                var te = new TextEntity { X = x, Y = y, Elevation = z, Height = height, Text = text, HAlign = ha, VAlign = va, LayerName = batch.Layer, Cr = r / 255f, Cg = g / 255f, Cb = b / 255f };
+                _w._scene.Add(te); made.Add(te);
             }
             _w.RefreshScene();
             return made.Select(EntityHandles.Of).ToArray();
