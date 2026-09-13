@@ -3942,7 +3942,7 @@ commit `79108dd` / `cf3294c` / `3efa126`; 测试 2188 → 2200 全绿(新增 12:
 
 **验证**：+6 单测 [PointThinXyMinZTests](tests/PitMine3D.Kylin.Tests/PointThinXyMinZTests.cs)（最低点/零格恒等/负坐标格号不撞/平坡格分流/全平等价体素法/200 万点 <10s 护栏，实测 0.25s），全套 3856 通过。同源对拍 30 万点：旧 ThinAdaptive 2547ms→7,681 点，新 27ms→72,878 点。实机 `@点云示例 60 40;2.5D TIN;取消选择;东北等轴测` 截图：三角网平盘赭黄/坡面深褐/黑煤带与点云一色，矿卡被最低点法剔掉只剩黄点悬空；真实 LAS `DLT20251222.las`（200 万点 → 184 万顶点/369 万三角）：抽稀 0.5s/剖分 2.1s，含入场景整链 ≤7s，`@取景 622600 4380900 500` 放大后台阶纹理即正射影像效果。
 
-## §三八六 提取道路中心线改回原版骨架路由法：原 RoadCenterlineRunner 编排 + 对话框 + TIN + 作业区域 + 连通增强 (2026-09-13)
+## §三八七 提取道路中心线改回原版骨架路由法：原 RoadCenterlineRunner 编排 + 对话框 + TIN + 作业区域 + 连通增强 (2026-09-13)
 
 用户反馈「提取道路中心线没有使用 PitMine3D 中的算法」。核对原版：RoadLib「路网构建」首钮 → `PointCloudLib.RoadCenterline.RoadCenterlineRunner.RunAsync` → **`RoadSkeletonExtractor.Extract(台阶线, TIN, 参数)`（骨架路由法）**；「坡线配对取中线」`RoadCenterlineExtractor` 在原版里**没有任何按钮调用**。Kylin 原命令却是：选 2 条→`RoadTools.Centerline` 中点连线（原版没有）、否则→配对法 `RoadCenterlineExtractor`，且**所有点 Z=0**（注释还写着"Kylin 场景为 2D"，早已过时）。骨架法 875 行早移植好了（`RoadSkeletonExtractor`），只是没接到命令上。
 
