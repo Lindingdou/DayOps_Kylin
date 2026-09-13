@@ -309,7 +309,12 @@ public partial class MainWindow
             },
         });
         if (files.Count == 0) return;
-        string path = files[0].Path.LocalPath;
+        await PcLoadPathAsync(files[0].Path.LocalPath);
+    }
+
+    /// <summary>按路径加载点云(「加载点云」选完文件后的那段；自检 @点云导入 也走这里, 与用户操作同一条路)。</summary>
+    internal async Task PcLoadPathAsync(string path)
+    {
         string name = System.IO.Path.GetFileNameWithoutExtension(path);
         EditEcho($"加载点云：正在读取 {name} …", EchoLevel.Success);
 

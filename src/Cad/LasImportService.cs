@@ -1,3 +1,5 @@
+using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 
@@ -5,7 +7,7 @@ namespace PitMine3D.Kylin.Cad;
 
 /// <summary>
 /// LAS 点云导入 —— 忠实公开 ASPRS LAS 1.2/1.4 规范(非依赖原 native LasLib): 读头(scale/offset/点数/记录长)
-/// + 逐点 X/Y/Z int32→世界坐标(×scale+offset)。大文件按步长直接 seek 抽稀(O(maxPoints) 次寻址)。
+/// + 逐点 X/Y/Z int32→世界坐标(×scale+offset)。大文件在全文件上均匀取样封顶(测区范围完整, 密度按比例降)。
 /// 曾误记"native 无托管源", 实则格式公开+有样本→可逆向可验(同 KDF/TDM)。纯逻辑、可单测(合成/真实样本)。
 /// </summary>
 public static class LasImportService
@@ -28,8 +30,9 @@ public static class LasImportService
 
     public static LasResult Load(string path, int maxPoints = 500000)
     {
-        try { using var fs = File.OpenRead(path); return Read(fs, maxPoints); }
-        catch (System.Exception ex) { return new LasResult { Error = ex.Message }; }
+        // bufferSize=1: 自己按块读盘, 不让 FileStream 再套一层 4 KB 缓冲(逐条 seek 时每条都拖一页)
+        try { using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1); return Read(fs, maxPoints); }
+        catch (Exception ex) { return new LasResult { Error = ex.Message }; }
     }
 
     public static LasResult Read(Stream s, int maxPoints = 500000)
@@ -61,33 +64,75 @@ public static class LasImportService
         if (recLen < 12 || offsetToPoints < 227 || pointCount <= 0) { r.Success = true; return r; }   // 头有效但无点
 
         int rgbOff = RgbOffset(r.PointFormat);   // 有 RGB 的点格式 → 逐点读真实色
-        int classOff = r.PointFormat <= 5 ? 15 : 16;   // 分类码字节偏移(ASPRS: 格式0-5=15, 格式6-10=16)
-        long step = (maxPoints > 0 && pointCount > maxPoints) ? pointCount / maxPoints : 1;
-        if (step < 1) step = 1;
-        for (long i = 0; i < pointCount; i += step)
+        int classOff = r.PointFormat <= 5 ? 15 : 16;   // 分类码字节偏移(ASPRS: 格式0-5=15, 格式≥6=16)
+
+        // 抽稀 = 在全文件上均匀取样: 第 k 个样本取第 k·N/take 条记录, 从文件头一直取到文件尾。
+        // 曾经写成 step=N/maxPoints(取整)+读满 maxPoints 就 break: 398 万点封顶 200 万时 step=1,
+        // 只读了前 200 万条就停 —— 航测 LAS 是按空间分块落盘的, 文件前一半恰是测区的西南半幅,
+        // 视口里点云"只显示了一半"。均匀取样后无论封顶多少, 测区范围都完整, 只是密度按比例降。
+        long take = (maxPoints > 0 && pointCount > maxPoints) ? maxPoints : pointCount;
+        long strideBytes = Math.Max(1, pointCount / take) * recLen;
+        // 读盘按块: 样本稀(块间距大)就一条一条 seek; 样本密就一次读几 MB 顺着挑, 免得 200 万次 seek 各拖一页盘。
+        int chunk = (int)Math.Min(4 << 20, Math.Max(recLen, Math.Min(int.MaxValue, strideBytes * 64)));
+        var buf = new byte[chunk];
+        long bufStart = -1; int bufLen = 0;
+        int rgbMax = 0;                          // 8 位色写进 16 位字段(常见于部分航测软件)时的判据
+        for (long k = 0; k < take; k++)
         {
+            long i = k * pointCount / take;      // k < 2^31, N < 2^40 → 积不溢出
             long off = offsetToPoints + i * (long)recLen;
             if (off + 12 > s.Length) break;
-            s.Seek(off, SeekOrigin.Begin);
-            int xi = br.ReadInt32(), yi = br.ReadInt32(), zi = br.ReadInt32();
+            if (bufStart < 0 || off < bufStart || off + recLen > bufStart + bufLen)
+            {
+                s.Seek(off, SeekOrigin.Begin);
+                bufStart = off;
+                bufLen = ReadFully(s, buf, (int)Math.Min(chunk, s.Length - off));
+                if (bufLen < 12) break;
+            }
+            int p = (int)(off - bufStart);
+            if (p + 12 > bufLen) break;          // 末条记录被截断
+            var span = buf.AsSpan(p);
+            int xi = BinaryPrimitives.ReadInt32LittleEndian(span);
+            int yi = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(4));
+            int zi = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(8));
             r.Points.Add((xi * sx + ox, yi * sy + oy, zi * sz + oz));
-            r.Intensity.Add(off + 14 <= s.Length ? br.ReadUInt16() : 0);   // 强度: 偏移12(紧接XYZ), 原值
-            if (off + classOff + 1 <= s.Length) { s.Seek(off + classOff, SeekOrigin.Begin); r.Classification.Add(br.ReadByte()); }
-            else r.Classification.Add(0);         // 分类码: 格式≤5 偏移15 / 格式≥6 偏移16
+            r.Intensity.Add(p + 14 <= bufLen ? BinaryPrimitives.ReadUInt16LittleEndian(span.Slice(12)) : 0);   // 强度: 偏移12(紧接XYZ), 原值
+            r.Classification.Add(p + classOff + 1 <= bufLen ? buf[p + classOff] : (byte)0);   // 分类码: 格式≤5 偏移15 / 格式≥6 偏移16
             if (rgbOff >= 0)                      // 真实色(RGB uint16 归一化); 保 Colors 与 Points 同长
             {
                 r.Colors ??= new List<(float, float, float)>();
-                if (off + rgbOff + 6 <= s.Length)
+                if (p + rgbOff + 6 <= bufLen)
                 {
-                    s.Seek(off + rgbOff, SeekOrigin.Begin);
-                    ushort rr = br.ReadUInt16(), gg = br.ReadUInt16(), bb = br.ReadUInt16();
+                    ushort rr = BinaryPrimitives.ReadUInt16LittleEndian(span.Slice(rgbOff));
+                    ushort gg = BinaryPrimitives.ReadUInt16LittleEndian(span.Slice(rgbOff + 2));
+                    ushort bb = BinaryPrimitives.ReadUInt16LittleEndian(span.Slice(rgbOff + 4));
+                    if (rr > rgbMax) rgbMax = rr; if (gg > rgbMax) rgbMax = gg; if (bb > rgbMax) rgbMax = bb;
                     r.Colors.Add((rr / 65535f, gg / 65535f, bb / 65535f));
                 }
                 else r.Colors.Add((0, 0, 0));    // 截断记录兜底
             }
-            if (maxPoints > 0 && r.Points.Count >= maxPoints) break;
         }
+        // 整份色值都没超过 255 → 写入方存的是 8 位色(规范虽要求 16 位, CloudCompare/PDAL 同样按此兜底), 否则一片黑
+        if (r.Colors != null && rgbMax > 0 && rgbMax <= 255)
+            for (int j = 0; j < r.Colors.Count; j++)
+            {
+                var c = r.Colors[j];
+                r.Colors[j] = (c.r * 257f, c.g * 257f, c.b * 257f);   // 65535/255 = 257
+            }
         r.Success = true;
         return r;
+    }
+
+    /// <summary>读满 count 字节(流可能分多次给); 返回实际读到的字节数(到 EOF 时小于 count)。</summary>
+    private static int ReadFully(Stream s, byte[] buf, int count)
+    {
+        int got = 0;
+        while (got < count)
+        {
+            int n = s.Read(buf, got, count - got);
+            if (n <= 0) break;
+            got += n;
+        }
+        return got;
     }
 }

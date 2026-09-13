@@ -166,4 +166,46 @@ public class LasImportServiceTests
         Assert.True(r.Success, r.Error);
         Assert.Null(r.Colors);                                     // 格式 0 无 RGB
     }
+
+    [Fact]
+    public void Decimation_samples_whole_file_not_just_head()
+    {
+        // 航测 LAS 按空间分块落盘: 前一半记录在西区(x≈1000), 后一半在东区(x≈5000)。
+        // 封顶 = 总数一半时, 旧实现 step=N/max=1 读满就停 → 只有西区, 东区整片缺失(视口里"点云只显示一半")。
+        var pts = new (double, double, double)[40];
+        for (int i = 0; i < 40; i++) pts[i] = (i < 20 ? 1000 + i : 5000 + i, 2000, 0);
+        var r = LasImportService.Read(new MemoryStream(MakeLas(pts)), maxPoints: 20);
+        Assert.Equal(20, r.Points.Count);
+        int west = 0, east = 0;
+        foreach (var p in r.Points) { if (p.x < 3000) west++; else east++; }
+        Assert.Equal(10, west);                       // 两区各取一半 —— 全文件均匀
+        Assert.Equal(10, east);
+        Assert.Equal(1000 + 0, r.Points[0].x, 6);     // 首条
+        Assert.Equal(5000 + 38, r.Points[^1].x, 6);   // 末样本落在文件尾附近(第 38 条), 不是停在中途
+    }
+
+    [Fact]
+    public void Decimation_with_non_integer_ratio_covers_tail()
+    {
+        // N=50, 封顶 30: 旧实现 step=1 → 只读前 30 条(60%); 现在 30 个样本铺满 0..49
+        var pts = new (double, double, double)[50];
+        for (int i = 0; i < 50; i++) pts[i] = (1000 + i, 2000, 0);
+        var r = LasImportService.Read(new MemoryStream(MakeLas(pts)), maxPoints: 30);
+        Assert.Equal(30, r.Points.Count);
+        Assert.True(r.Points[^1].x >= 1000 + 48, $"末样本 x={r.Points[^1].x}, 应逼近文件尾");
+        // 强度/分类与 Points 同长(抽样路径不能漏加)
+        Assert.Equal(30, r.Intensity.Count);
+        Assert.Equal(30, r.Classification.Count);
+    }
+
+    [Fact]
+    public void Eight_bit_rgb_in_16bit_field_is_rescaled()
+    {
+        // 部分写入方把 0..255 直接塞进 uint16 字段: 全份最大值 ≤255 → 按 8 位解释, 否则一片黑
+        var bytes = MakeLasRgb((1000.5, 2000.5, 5.0, 255, 0, 0), (1001.0, 2002.0, 10.0, 0, 128, 0));
+        var r = LasImportService.Read(new MemoryStream(bytes));
+        Assert.True(r.Success, r.Error);
+        Assert.Equal(1f, r.Colors![0].r, 3);
+        Assert.Equal(128f / 255f, r.Colors[1].g, 3);
+    }
 }

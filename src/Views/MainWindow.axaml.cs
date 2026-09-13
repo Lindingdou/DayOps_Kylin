@@ -10798,6 +10798,11 @@ public partial class MainWindow : Window
                 SelftestSampleBlockModel(nx, ny, nz);
                 return;
             }
+            if (cmd.StartsWith("@点云导入 "))   // @点云导入 <路径>: 跳过文件对话框直接加载 LAS/CSV 点云(核对真实航测点云的覆盖范围/耗时), 同「加载点云」那条路
+            {
+                _ = PcLoadPathAsync(cmd.Substring(6).Trim().Trim('"'));
+                return;
+            }
             if (cmd.StartsWith("@点云示例"))   // @点云示例 [列 行]: 合成一份台阶地形点云入场景(截图核对点云渲染/算子用)
             {
                 var a = cmd.Length > 5 ? cmd.Substring(5).Split(' ', System.StringSplitOptions.RemoveEmptyEntries) : System.Array.Empty<string>();

@@ -107,4 +107,22 @@ public class SceneIndexTests
         var idx = new SceneIndex(s.Entities);
         Assert.Single(idx.Query(30, 30, 5, 5));
     }
+
+    /// <summary>
+    /// 点云的 Tessellate 是空的(点走 GL_POINTS 专用通道), 索引必须改问它自己的 Bounds ——
+    /// 否则点云在索引里是"空盒": 点不中, 且只有点云的场景定不下渲染局部原点, 矿区坐标下整份不显示。
+    /// </summary>
+    [Fact]
+    public void Point_cloud_has_real_aabb_in_index()
+    {
+        var s = new Scene();
+        var pts = new List<(double x, double y, double z)>();
+        for (int i = 0; i < 100; i++) pts.Add((620000 + i * 10.0, 4380000 + (i % 10) * 10.0, 1000 + i));
+        s.Add(new PointCloudEntity("pc", pts));
+        var idx = new SceneIndex(s.Entities);
+        Assert.Single(idx.Query(620400, 4380040, 620420, 4380060));      // 盒内 → 命中
+        Assert.Empty(idx.Query(0, 0, 10, 10));                           // 远处 → 不命中
+        var picked = s.Pick(620500, 4380000, 5.0, null, idx);            // 走索引的点选也拿得到点云
+        Assert.IsType<PointCloudEntity>(picked);
+    }
 }

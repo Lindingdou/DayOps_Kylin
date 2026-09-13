@@ -74,7 +74,7 @@ public sealed class SceneIndex
 
     /// <summary>
     /// 图元的二维包围盒。按类型走最便宜的那条路 —— 建索引要把全场景过一遍，这里贵一点点就是几秒：
-    /// · 三角网：直接问它自己的 Bounds（O(1)），别去细分几十万三角；
+    /// · 三角网 / 点云：直接问它自己的 Bounds（O(1)），别去细分几十万三角 / 百万个点；
     /// · 文字：走 <see cref="TextEntity.ApproxBounds"/>（只按排版步进算，不生成字形几何）。
     ///   有真字体时 <see cref="TextEntity.Tessellate"/> 对可填充字形什么都不出（由实心三角负责），
     ///   拿它算包围盒会得到空盒 → 文字点不中；而走实心三角/轮廓笔画，3.7 万条注记要 1.9~3 秒
@@ -90,6 +90,15 @@ public sealed class SceneIndex
             return (mb.minX, mb.minY, mb.maxX, mb.maxY);
         }
         if (e is TextEntity te) return te.ApproxBounds();   // 只按排版步进算, 不生成字形几何
+        if (e is PointCloudEntity pc)
+        {
+            // 点云的 Tessellate 是空的(点走 GL_POINTS 专用通道), 按"细分取极值"算出来是空盒 →
+            // 点云既进不了索引(点不中), 也进不了 Scene.WorldBoundsXY —— 场景里只有一份点云时
+            // 渲染局部原点定不下来, 百万级矿区坐标直接转 float 上 GPU, 点云整份不显示(实测 |x|>1.6 万即消失)。
+            if (pc.PointCount == 0) return (double.MaxValue, double.MaxValue, double.MinValue, double.MinValue);
+            var pb = pc.Bounds;
+            return (pb.minX, pb.minY, pb.maxX, pb.maxY);
+        }
         e.Tessellate(buf);
         if (buf.Count == 0) e.TessellateFaces(buf);
 
