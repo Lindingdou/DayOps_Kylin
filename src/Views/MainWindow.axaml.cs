@@ -624,13 +624,13 @@ public partial class MainWindow : Window
             {
                 double tol = SnapTolWorld(p);
                 // ① 顶点候选(端点/中点/圆心/象限) —— 高优先精确点
-                var vhit3 = snapSrc.Length > 0 ? SnapVertIndex(snapSrc).FindNearest3(w.Value.x, w.Value.y, tol) : null;
+                var vhit3 = snapSrc.Length > 0 ? SnapVertIndex(snapSrc)?.FindNearest3(w.Value.x, w.Value.y, tol) : null;
                 (double x, double y)? vhit = vhit3 == null ? null : (vhit3.Value.x, vhit3.Value.y);
                 double dv = vhit != null ? Dist2(vhit.Value, w.Value) : double.MaxValue;
                 // ② 扩展模式(交点/最近/垂足) —— 顶点未覆盖, 从场景原语补算; 垂足以上一取点为锚
                 ObjectSnap.Hit? ohit = null;
                 if (_snapExtraMask != 0)
-                    ohit = SnapGeomIndex().Find(w.Value.x, w.Value.y, tol, _snapExtraMask, _lastInputPoint);
+                    ohit = SnapGeomIndex()?.Find(w.Value.x, w.Value.y, tol, _snapExtraMask, _lastInputPoint);
                 // ③ 合并: 交点若不比顶点远则取交点; 否则取顶点; 最近/垂足仅在无顶点时兜底
                 if (ohit != null && ohit.Value.Mode == ObjectSnap.Mode.Intersection && Dist2((ohit.Value.X, ohit.Value.Y), w.Value) <= dv)
                 { _snapWorld = (ohit.Value.X, ohit.Value.Y); _snapHitMode = ObjectSnap.Mode.Intersection; }
@@ -8703,7 +8703,17 @@ public partial class MainWindow : Window
     private ObjectSnap.Index? _snapGeomIdx;            // 上表的网格索引(懒建, 与上表同寿)
     private SnapPoints.Index? _snapVertIdx;            // 顶点捕捉网格索引(按源数组引用缓存)
 
-    private void InvalidateSnapGeom() { _snapGeomCache = null; _snapGeomIdx = null; _sceneIdx = null; }
+    private void InvalidateSnapGeom() { _snapGeomCache = null; _snapGeomIdx = null; _sceneIdx = null; _snapGeomVersion++; }
+
+    // 大图的捕捉索引改为【后台建】：几十万段的网格索引要建几百毫秒到一秒, 早先是在场景变了之后第一次移鼠标时同步建,
+    // 表现为"开了捕捉, 每做完一个命令再一动鼠标就顿一下"。现在小图仍同步(几毫秒), 大图交给线程池, 建好前那几帧只退化为
+    // "不算扩展模式 / 不算顶点捕捉", 光标照走不卡; 场景版本对不上的结果直接丢(索引建到一半场景又变了)。
+    private const int SnapAsyncSegThreshold = 20000;     // 段数超过它才后台建
+    private const int SnapAsyncVertThreshold = 100000;   // 顶点数超过它才后台建
+    private int _snapGeomVersion;                        // 每次 InvalidateSnapGeom +1
+    private bool _snapGeomBuilding;
+    private float[]? _snapVertBuildingSrc;               // 正在后台建索引的源数组(引用判重)
+
 
     private SceneIndex? _sceneIdx;   // 点选/框选的图元空间索引(懒建; 场景一变就丢, 同上面几个缓存)
 
@@ -8714,19 +8724,47 @@ public partial class MainWindow : Window
     /// </summary>
     private SceneIndex SceneIdx() => _sceneIdx ??= new SceneIndex(_scene.Entities);
 
-    /// <summary>捕捉原语的网格索引 —— 逐帧只查光标邻域, 图元上万也不拖光标。</summary>
-    private ObjectSnap.Index SnapGeomIndex()
+    /// <summary>捕捉原语的网格索引 —— 逐帧只查光标邻域, 图元上万也不拖光标。大图在后台建, 建好前返回 null(本帧跳过扩展模式)。</summary>
+    private ObjectSnap.Index? SnapGeomIndex()
     {
         if (_snapGeomIdx != null) return _snapGeomIdx;
-        var (segs, circles, arcs, pts) = BuildSnapGeom();
-        return _snapGeomIdx = new ObjectSnap.Index(segs, circles, arcs, pts);
+        if (_snapGeomBuilding) return null;
+        var (segs, circles, arcs, pts) = BuildSnapGeom();   // 抽原语在 UI 线程(要读实体), 建网格才是大头
+        if (segs.Count + circles.Count + arcs.Count + pts.Count < SnapAsyncSegThreshold)
+            return _snapGeomIdx = new ObjectSnap.Index(segs, circles, arcs, pts);
+        int ver = _snapGeomVersion;
+        _snapGeomBuilding = true;
+        System.Threading.Tasks.Task.Run(() =>
+        {
+            ObjectSnap.Index? built = null;
+            try { built = new ObjectSnap.Index(segs, circles, arcs, pts); } catch { }
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                _snapGeomBuilding = false;
+                if (built != null && ver == _snapGeomVersion && _snapGeomIdx == null) _snapGeomIdx = built;
+            });
+        });
+        return null;
     }
 
-    /// <summary>顶点捕捉的网格索引；源数组换了(场景重建/夹点自避)才重建。</summary>
-    private SnapPoints.Index SnapVertIndex(float[] src)
+    /// <summary>顶点捕捉的网格索引；源数组换了(场景重建/夹点自避)才重建。大图在后台建, 建好前返回 null(本帧跳过顶点捕捉)。</summary>
+    private SnapPoints.Index? SnapVertIndex(float[] src)
     {
-        if (_snapVertIdx == null || !ReferenceEquals(_snapVertIdx.Source, src)) _snapVertIdx = new SnapPoints.Index(src);
-        return _snapVertIdx;
+        if (_snapVertIdx != null && ReferenceEquals(_snapVertIdx.Source, src)) return _snapVertIdx;
+        if (src.Length / 6 < SnapAsyncVertThreshold) return _snapVertIdx = new SnapPoints.Index(src);
+        if (ReferenceEquals(_snapVertBuildingSrc, src)) return null;   // 正在建这份
+        _snapVertBuildingSrc = src;
+        System.Threading.Tasks.Task.Run(() =>
+        {
+            SnapPoints.Index? built = null;
+            try { built = new SnapPoints.Index(src); } catch { }
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                if (ReferenceEquals(_snapVertBuildingSrc, src)) _snapVertBuildingSrc = null;
+                if (built != null) _snapVertIdx = built;   // 源数组引用不同时下次查会再判, 不会拿旧索引查新数组
+            });
+        });
+        return null;
     }
 
     private (List<ObjectSnap.Seg> segs, List<ObjectSnap.Circ> circles, List<ObjectSnap.ArcP> arcs, List<(double x, double y)> pts) BuildSnapGeom()
