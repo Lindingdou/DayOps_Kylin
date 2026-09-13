@@ -260,4 +260,42 @@ public class SnapIndexBench
         Assert.True(idxMs < 1500,
             $"{queries} 次对象捕捉用了 {idxMs} ms —— 实测约 5 ms, 超这么多说明退回了逐帧全表扫描");
     }
+
+    /// <summary>
+    /// 长线占多数时的对拍 + 预算：早先线段按包围盒铺格、超 24 格进旁路，图一大格子一细，稍长的斜线全进旁路，
+    /// 每次查询都把它们扫一遍（15 万条长线实测 5 ms/次，开着捕捉光标就拖不动）。改按路径铺格后 0.14 ms/次，且命中与线性版逐点一致。
+    /// </summary>
+    [Fact]
+    public void Geom_index_long_segments_do_not_fall_into_bypass_and_stay_exact()
+    {
+        var r = new Random(23);
+        var segs = new List<ObjectSnap.Seg>();
+        for (int i = 0; i < 60000; i++)
+        {
+            double x = r.NextDouble() * 10000, y = r.NextDouble() * 10000, a = r.NextDouble() * Math.PI * 2;
+            segs.Add(new ObjectSnap.Seg(x, y, x + 5 * Math.Cos(a), y + 5 * Math.Sin(a)));
+        }
+        for (int i = 0; i < 40000; i++)   // 40% 长线：300~2000 m
+        {
+            double x = r.NextDouble() * 10000, y = r.NextDouble() * 10000, a = r.NextDouble() * Math.PI * 2, L = 300 + r.NextDouble() * 1700;
+            segs.Add(new ObjectSnap.Seg(x, y, x + L * Math.Cos(a), y + L * Math.Sin(a)));
+        }
+        var idx = new ObjectSnap.Index(segs, null, null, null);
+        int[] masks = { ObjectSnap.AllModes, ObjectSnap.MaskOf(ObjectSnap.Mode.Intersection), ObjectSnap.MaskOf(ObjectSnap.Mode.Nearest), ObjectSnap.MaskOf(ObjectSnap.Mode.Perpendicular) };
+        for (int q = 0; q < 400; q++)
+        {
+            double cx = r.NextDouble() * 10000, cy = r.NextDouble() * 10000, tol = 2 + r.NextDouble() * 20;
+            var anchor = q % 2 == 0 ? ((double x, double y)?)(r.NextDouble() * 10000, r.NextDouble() * 10000) : null;
+            int mask = masks[q % masks.Length];
+            var lin = ObjectSnap.Find(segs, null, null, null, cx, cy, tol, mask, anchor);
+            var got = idx.Find(cx, cy, tol, mask, anchor);
+            Assert.Equal(lin.HasValue, got.HasValue);
+            if (lin.HasValue) { Assert.Equal(lin.Value.Mode, got!.Value.Mode); Assert.Equal(lin.Value.X, got.Value.X); Assert.Equal(lin.Value.Y, got.Value.Y); }
+        }
+        // 预算：交点模式 300 次查询 ≤ 300 ms（旧旁路实现同规模要 1.5 s 以上）
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        int xm = ObjectSnap.MaskOf(ObjectSnap.Mode.Intersection);
+        for (int q = 0; q < 300; q++) idx.Find(r.NextDouble() * 10000, r.NextDouble() * 10000, 8, xm, null);
+        Assert.True(sw.ElapsedMilliseconds < 300, $"300 次交点捕捉耗时 {sw.ElapsedMilliseconds} ms");
+    }
 }

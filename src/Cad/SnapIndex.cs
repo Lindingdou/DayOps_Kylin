@@ -12,7 +12,11 @@ namespace PitMine3D.Kylin.Cad;
 /// </summary>
 internal sealed class UniformGrid
 {
-    private const int MaxCellsPerItem = 24;      // 一件最多铺 24 格, 超了走旁路
+    // 一件最多铺多少格, 超了走旁路。线段按【路径】铺格(只铺它真正穿过的格, 长度/格边), 不再按包围盒铺,
+    // 所以 2048 足够放下整张图最长的线(10km 线 / 5m 格 = 2000 格)；旁路只留给真正的巨物(大圆/非有限坐标)。
+    // 早先是包围盒铺格 + 上限 24：图元一多格子就细, 稍长一点的斜线包围盒就超 24 格进旁路 ——
+    // 旁路是"每次查询都带上"，几十万条长线在旁路里, 每动一下鼠标就把它们全扫一遍, 开着捕捉光标就拖不动。
+    private const int MaxCellsPerItem = 2048;
     private const int MaxDim = 1024;             // 每轴最多 1024 格(封顶内存)
 
     private readonly double _minX, _minY, _maxX, _maxY, _cell;
@@ -23,9 +27,18 @@ internal sealed class UniformGrid
     private readonly int[] _stamp;               // 去重标记(一件跨多格会重复命中)
     private int _query;
 
-    /// <summary>按 count 件的 AABB 建格。aabb 会被调用两遍(计数 + 填充), 须是纯函数。</summary>
-    public UniformGrid(int count, Func<int, (double minX, double minY, double maxX, double maxY)> aabb)
+    private readonly Func<int, (double x1, double y1, double x2, double y2)?>? _segment;
+    private readonly List<int> _cellBuf = new();
+
+    /// <summary>
+    /// 按 count 件的 AABB 建格。aabb 会被调用两遍(计数 + 填充), 须是纯函数。
+    /// <paramref name="segment"/> 给出时, 返回非 null 的件按【线段路径】铺格(网格遍历, 只铺穿过的格; 角点处两侧格都铺,
+    /// 保证"线段任一点所在格 ⊆ 已铺格"), 返回 null 的件仍按 AABB 铺。
+    /// </summary>
+    public UniformGrid(int count, Func<int, (double minX, double minY, double maxX, double maxY)> aabb,
+                       Func<int, (double x1, double y1, double x2, double y2)?>? segment = null)
     {
+        _segment = segment;
         _stamp = new int[Math.Max(count, 1)];
         double gx0 = double.MaxValue, gy0 = double.MaxValue, gx1 = double.MinValue, gy1 = double.MinValue;
         int finite = 0;
@@ -55,9 +68,8 @@ internal sealed class UniformGrid
         int total = 0;
         for (int i = 0; i < count; i++)
         {
-            if (!TrySpan(aabb(i), out int x0, out int y0, out int x1, out int y1)) { _big.Add(i); continue; }
-            for (int y = y0; y <= y1; y++)
-                for (int x = x0; x <= x1; x++) { counts[y * _nx + x + 1]++; total++; }
+            if (!TryCells(i, aabb)) { _big.Add(i); continue; }
+            foreach (int c in _cellBuf) { counts[c + 1]++; total++; }
         }
         _start = counts;
         for (int c = 0; c < _nx * _ny; c++) _start[c + 1] += _start[c];
@@ -66,10 +78,61 @@ internal sealed class UniformGrid
         Array.Copy(_start, cursor, _nx * _ny);
         for (int i = 0; i < count; i++)
         {
-            if (!TrySpan(aabb(i), out int x0, out int y0, out int x1, out int y1)) continue;
-            for (int y = y0; y <= y1; y++)
-                for (int x = x0; x <= x1; x++) _items[cursor[y * _nx + x]++] = i;
+            if (!TryCells(i, aabb)) continue;
+            foreach (int c in _cellBuf) _items[cursor[c]++] = i;
         }
+    }
+
+    /// <summary>第 i 件要铺的格(写入 _cellBuf)；超上限/坐标非有限 → false(走旁路)。</summary>
+    private bool TryCells(int i, Func<int, (double minX, double minY, double maxX, double maxY)> aabb)
+    {
+        _cellBuf.Clear();
+        var seg = _segment?.Invoke(i);
+        if (seg is { } sg)
+        {
+            if (!double.IsFinite(sg.x1) || !double.IsFinite(sg.y1) || !double.IsFinite(sg.x2) || !double.IsFinite(sg.y2)) return false;
+            return TraverseSegment(sg.x1, sg.y1, sg.x2, sg.y2);
+        }
+        if (!TrySpan(aabb(i), out int x0, out int y0, out int x1, out int y1)) return false;
+        for (int y = y0; y <= y1; y++)
+            for (int x = x0; x <= x1; x++) _cellBuf.Add(y * _nx + x);
+        return true;
+    }
+
+    /// <summary>
+    /// 线段穿过的格(Amanatides–Woo 网格遍历)。t 相等(正好穿角)时两个方向都走一步, 把角上相邻的格一并铺上；
+    /// 起止格夹住的范围之外不会多铺。超 MaxCellsPerItem → false。
+    /// </summary>
+    private bool TraverseSegment(double x1, double y1, double x2, double y2)
+    {
+        int cx = CellX(x1), cy = CellY(y1), ex = CellX(x2), ey = CellY(y2);
+        int stepX = x2 > x1 ? 1 : x2 < x1 ? -1 : 0, stepY = y2 > y1 ? 1 : y2 < y1 ? -1 : 0;
+        double dx = x2 - x1, dy = y2 - y1;
+        double tMaxX = stepX == 0 ? double.PositiveInfinity : ((_minX + (cx + (stepX > 0 ? 1 : 0)) * _cell) - x1) / dx;
+        double tMaxY = stepY == 0 ? double.PositiveInfinity : ((_minY + (cy + (stepY > 0 ? 1 : 0)) * _cell) - y1) / dy;
+        double tDeltaX = stepX == 0 ? double.PositiveInfinity : Math.Abs(_cell / dx);
+        double tDeltaY = stepY == 0 ? double.PositiveInfinity : Math.Abs(_cell / dy);
+        _cellBuf.Add(cy * _nx + cx);
+        int guard = MaxCellsPerItem * 2;
+        while ((cx != ex || cy != ey) && guard-- > 0)
+        {
+            const double eps = 1e-12;
+            bool goX = tMaxX <= tMaxY + eps, goY = tMaxY <= tMaxX + eps;
+            if (goX && goY)
+            {
+                // 正好穿过角点：两侧的格都算(线段可能贴着格边走), 再走到对角格
+                if (cx != ex) _cellBuf.Add(cy * _nx + Math.Clamp(cx + stepX, 0, _nx - 1));
+                if (cy != ey) _cellBuf.Add(Math.Clamp(cy + stepY, 0, _ny - 1) * _nx + cx);
+                if (cx != ex) { cx += stepX; tMaxX += tDeltaX; }
+                if (cy != ey) { cy += stepY; tMaxY += tDeltaY; }
+            }
+            else if (goX) { if (cx == ex) break; cx += stepX; tMaxX += tDeltaX; }
+            else { if (cy == ey) break; cy += stepY; tMaxY += tDeltaY; }
+            cx = Math.Clamp(cx, 0, _nx - 1); cy = Math.Clamp(cy, 0, _ny - 1);
+            _cellBuf.Add(cy * _nx + cx);
+            if (_cellBuf.Count > MaxCellsPerItem) return false;
+        }
+        return guard > 0;
     }
 
     /// <summary>把与查询窗相交的候选下标(升序、去重)写入 outIdx。</summary>
@@ -199,7 +262,7 @@ public static partial class ObjectSnap
             {
                 var s = _segs[i];
                 return (Math.Min(s.X1, s.X2), Math.Min(s.Y1, s.Y2), Math.Max(s.X1, s.X2), Math.Max(s.Y1, s.Y2));
-            });
+            }, i => { var s = _segs[i]; return (s.X1, s.Y1, s.X2, s.Y2); });   // 线段按路径铺格：长线不进旁路
             // 圆/弧一律用整圆 AABB: 既含圆周(最近), 也含圆心(圆心捕捉)与端点/中点。
             _gCirc = new UniformGrid(_circles.Count, i =>
             {
