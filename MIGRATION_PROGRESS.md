@@ -3963,3 +3963,10 @@ commit `79108dd` / `cf3294c` / `3efa126`; 测试 2188 → 2200 全绿(新增 12:
 - **一处有意偏离**：终次覆盖裁剪世界→格坐标减回 EmitRun 的 +0.5。原版没减，贴 DEM 边界行的顶点 lround 出界判未覆盖，两顶点的直台阶线整条丢(合成矩形点云 100% 复现；单测 `Stacked_benches_reaching_dem_border_keep_every_crest_and_toe` 回归)。
 - **实测**：合成 6.1M 点 / DEM 2000×1500@1m：6 坡顶 + 6 坡底，0.4s，+350MB；真实 `DLT20251222.las` 200 万点：坡顶 157 条(14 km)/坡底 126 条(26 km)，DEM 843×594@7.61m，0.2s，线沿台阶缘排布(截图核对)。单测 8 项。
 - **遗留**：`BeginChange()` 的 Undo 快照把整份点云序列化成 JSON(SceneIO.CloudDto)，百万点级每次编辑几百 MB 字符串，超 ~2000 万点会 OOM——所有点云命令共有，另开任务。
+
+### §三八九 撤销快照不再逐点序列化点云：列表按引用进 SnapshotHeavyStore、JSON 只记 key（2026-09-13, commit f01beba）
+
+- **问题**（§三八八遗留）：`BeginChange()` 每次 `SceneIO.Save(_scene)` 把整个场景含点云全部点+逐点色写成 JSON 字符串，撤销栈每层各留一份；200 万点每次编辑上百 MB，两千万点撞 .NET 字符串上限 OOM。加载点云后任何普通编辑 + 点云组几十处 BeginChange 全中。
+- **做法**：`SceneIO.Snapshot(scene, heavy)` / `Restore(snapshot, heavy)` —— 与 Save 同一份 DTO，唯独点云的 点/逐点色/真实色/法向 四个列表按引用登记到新 `SnapshotHeavyStore`(引用同一性去重 ConditionalWeakTable + 强引用字典)，DTO 只记 `K=[4 key]` + `Src`；200 万点快照几百字节。撤销回来仍是**新实体**(语义同旧快照：着色可撤、删点云可撤)，但列表不复制；顺带真实色/法向随撤销保住（旧快照不存这两项，撤销一次真实色就丢）。`UndoManager` 改存 `Snapshot(Json, Keys)` 自带 `Heavy` 仓，**只在 Push 时清扫**两头都不引用的条目（Undo/Redo 刚弹出的快照正要恢复，那时清扫会扔掉正要用的列表），Clear 连仓清；字符串重载保留。存档 Save/SaveDoc/Load/LoadDoc 一律 heavy=null，格式一字不变。
+- **前提**：点云四个列表创建后从不原地改（着色=整份换新 List、单色=置 null；grep 全库无 `Pts.Add`/`Colors[i]=`）。以后要原地改点云列表的代码必须先 Clone。三角网 Verts/Tris 有原地改(嵌入/修复)，**没有**纳入，大 TIN 的撤销快照仍是整份 JSON。
+- **实测**：DLT20251222.las 200 万点 → 坡顶底线提取 → `U` 瞬时撤销、点云(真实色)仍在、283 条线撤掉 → `REDO` 回 284 实体 → 再 `U`×2 到空场景。全套单测 3882 通过 + 新增 UndoSnapshotTests 7 项。
