@@ -1400,7 +1400,9 @@ public partial class MainWindow : Window
             if (cmd == "最终并段" || cmd == "最终帮并段") { SkeletonEcho("最终帮并段", "选境界 + 从第 N 级并几级 + 并段后坡角 → mergeCount(几何已实现,仅缺入口)"); return; }   // 原版 SkeletonCommand 桩
             if (cmd == "批量扩坑" || cmd.StartsWith("批量扩坑 ")) { await SeamPitCmd(cmd); return; }
             if (cmd == "动态调整" || cmd == "动态调整台阶形态") { BenchDesignJigCmd(); return; }   // 剥采排·动态调整 = 原 StartBenchDesignJig(内核实时 jig), 与 TaskLib 的生产任务动态调整不是一回事
-            if (cmd == "组合工作线" || cmd == "合并多段线" || cmd == "连接台阶线") { await JoinPolylinesCmdAsync(); return; }   // 「连接多段线」= 编辑组 POLYJOIN(带端点容差)
+            if (cmd == "组合工作线") { WorkLineGroupCmd(); return; }   // 原 CreateWorkLineGroupFromSelection: 组(软连接段), 不合并几何, 见 MainWindow.WorkLineGroup.cs
+            if (cmd == "连接台阶线" || cmd.StartsWith("连接台阶线 ")) { await JoinBenchLinesCmd(cmd); return; }   // 原 JoinBenchLineDialog + JoinBenchLines: 保台阶语义(图层/颜色/标高)
+            if (cmd == "合并多段线") { await JoinPolylinesCmdAsync(); return; }   // 「连接多段线」= 编辑组 POLYJOIN(带端点容差)
             if (cmd == "块体模型" || cmd == "导入块体" || cmd == "地质体建模") { await ImportBlockModelAsync(); return; }
             if (cmd == "导入PMB" || cmd == "加载PMB" || cmd == "PMB导入" || cmd == "导入块体模型文件" || cmd.StartsWith("导入PMB ")) { await LoadPmbAsync(cmd); return; }
             if (cmd == "导入BLK" || cmd == "加载BLK" || cmd == "BLK导入" || cmd == "导入八叉树块体" || cmd.StartsWith("导入BLK ")) { await LoadBlkAsync(cmd); return; }
@@ -6372,7 +6374,7 @@ public partial class MainWindow : Window
 
     private async Task JoinPolylinesCmdAsync()
     {
-        var polys = await SelectObjectsAsync<PolylineEntity>("组合工作线", "多段线", 2);
+        var polys = await SelectObjectsAsync<PolylineEntity>("合并多段线", "多段线", 2);
         if (polys.Count < 2) return;
         JoinPolylines();
     }
@@ -7470,7 +7472,7 @@ public partial class MainWindow : Window
     private void JoinPolylines()
     {
         var polys = _selected.FindAll(e => e is PolylineEntity);
-        if (polys.Count < 2) { StatusMsg.Text = "组合工作线：请先选中至少两条多段线"; return; }
+        if (polys.Count < 2) { StatusMsg.Text = "合并多段线：请先选中至少两条多段线"; return; }
         var inputs = new List<System.Collections.Generic.IReadOnlyList<(double x, double y)>>();
         foreach (var p in polys) inputs.Add(((PolylineEntity)p).Points);
         double tol = System.Math.Max(1e-6, SnapTolWorld(_lastPointer) * 0.5);
@@ -7486,7 +7488,7 @@ public partial class MainWindow : Window
         }
         _selected.Clear(); Viewport.SetHighlight(null); Viewport.SetHighlightFaces(null);
         RefreshScene();
-        StatusMsg.Text = $"组合工作线：{polys.Count} 条 → {merged.Count} 条";
+        StatusMsg.Text = $"合并多段线：{polys.Count} 条 → {merged.Count} 条";
     }
 
     // ═══════════════════ 原版 SkeletonCommand 桩（分帮扩帮 / 最终帮并段）═══════════════════
