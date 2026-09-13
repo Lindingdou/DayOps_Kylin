@@ -1177,25 +1177,28 @@ public sealed class Scene
     public float[] SnapCandidates(Func<string, bool>? isShown = null)
     {
         var o = new List<float>();
-        void P(double x, double y) { o.Add((float)x); o.Add((float)y); o.Add(0); o.Add(0); o.Add(0); o.Add(0); }
+        // 第三分量放顶点真实高程(夹点 z / 三维多段线逐点 z / 其余取标高)：编辑时捕捉到的基点/目标点才有 z,
+        // 「基点到指定 x,y,z」和顶点对顶点的三维移动靠它。
+        void P(double x, double y, double z) { o.Add((float)x); o.Add((float)y); o.Add((float)z); o.Add(0); o.Add(0); o.Add(0); }
         foreach (var e in Entities)
         {
             if (!e.Visible) continue;                              // 隐藏对象不参与捕捉
             if (isShown != null && !isShown(e.LayerName)) continue;
-            foreach (var g in e.Grips()) P(g.x, g.y);              // 端点/中点/圆心/象限/顶点
+            var gs = e.Grips();                                     // 端点/中点/圆心/象限/顶点
+            for (int i = 0; i < gs.Count; i++) P(gs[i].x, gs[i].y, e is PolylineEntity p3 ? p3.ZAt(i) : e.Elevation);   // 三维多段线逐点 z, 其余标高
             if (e is PolylineEntity pl)                             // 补：段中点
                 for (int i = 0; i + 1 < pl.Points.Count; i++)
-                    P((pl.Points[i].x + pl.Points[i + 1].x) / 2, (pl.Points[i].y + pl.Points[i + 1].y) / 2);
+                    P((pl.Points[i].x + pl.Points[i + 1].x) / 2, (pl.Points[i].y + pl.Points[i + 1].y) / 2, (pl.ZAt(i) + pl.ZAt(i + 1)) / 2);
             else if (e is RectEntity r)                             // 补：矩形中心 + 边中点
             {
-                P((r.X0 + r.X1) / 2, (r.Y0 + r.Y1) / 2);
-                P((r.X0 + r.X1) / 2, r.Y0); P((r.X0 + r.X1) / 2, r.Y1);
-                P(r.X0, (r.Y0 + r.Y1) / 2); P(r.X1, (r.Y0 + r.Y1) / 2);
+                P((r.X0 + r.X1) / 2, (r.Y0 + r.Y1) / 2, r.Elevation);
+                P((r.X0 + r.X1) / 2, r.Y0, r.Elevation); P((r.X0 + r.X1) / 2, r.Y1, r.Elevation);
+                P(r.X0, (r.Y0 + r.Y1) / 2, r.Elevation); P(r.X1, (r.Y0 + r.Y1) / 2, r.Elevation);
             }
             else if (e is ArcEntity a)                              // 补：圆弧圆心
             {
                 var cc = ArcMath.Circumcircle(a.X1, a.Y1, a.X2, a.Y2, a.X3, a.Y3);
-                if (cc != null) P(cc.Value.cx, cc.Value.cy);
+                if (cc != null) P(cc.Value.cx, cc.Value.cy, a.Elevation);
             }
         }
         return o.ToArray();

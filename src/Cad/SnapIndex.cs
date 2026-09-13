@@ -139,16 +139,20 @@ public static partial class SnapPoints
 
         /// <summary>容差 tol 内离 (cx,cy) 最近的顶点；无则 null。语义同 <see cref="SnapPoints.FindNearest"/>。</summary>
         public (double x, double y)? FindNearest(double cx, double cy, double tol)
+            => FindNearest3(cx, cy, tol) is { } h ? (h.x, h.y) : null;
+
+        /// <summary>同 <see cref="FindNearest"/>，连顶点的 z(第三分量)一起给 —— 编辑取基点/目标点时让捕捉到的顶点带高程。</summary>
+        public (double x, double y, double z)? FindNearest3(double cx, double cy, double tol)
         {
             if (_v.Length < 6 || tol <= 0) return null;
             _grid.Query(cx - tol, cy - tol, cx + tol, cy + tol, _buf);
             double best = tol * tol;
-            (double x, double y)? found = null;
+            (double x, double y, double z)? found = null;
             foreach (int i in _buf)
             {
                 double dx = _v[i * 6] - cx, dy = _v[i * 6 + 1] - cy;
                 double d2 = dx * dx + dy * dy;
-                if (d2 <= best) { best = d2; found = (_v[i * 6], _v[i * 6 + 1]); }
+                if (d2 <= best) { best = d2; found = (_v[i * 6], _v[i * 6 + 1], _v[i * 6 + 2]); }
             }
             return found;
         }

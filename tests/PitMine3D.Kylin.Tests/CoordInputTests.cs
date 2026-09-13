@@ -1,3 +1,6 @@
+using System.Collections.Generic;
+using PitMine3D.Kylin.Cad;
+using PitMine3D.Kylin.Cad.Draw;
 using PitMine3D.Kylin.Views;
 using Xunit;
 
@@ -118,5 +121,54 @@ public class MoveDisplacementInputTests
     {
         Assert.Null(MainWindow.DirectDistanceTarget((0, 0), null, 10));
         Assert.Null(MainWindow.DirectDistanceTarget((5, 5), (5, 5), 10));   // 光标压在基点上：方向不明
+    }
+}
+
+/// <summary>移动/复制的三分量输入：x,y,z / @dx,dy,dz 解析，捕捉候选带顶点 z，捕捉索引把 z 一起给。</summary>
+public class MoveZInputTests
+{
+    [Fact]
+    public void Absolute_xyz_and_xy()
+    {
+        var p = MainWindow.ParseCoord3("10,20,30", null, 0);
+        Assert.Equal((10.0, 20.0), (p!.Value.x, p.Value.y));
+        Assert.Equal(30.0, p.Value.z);
+        var q = MainWindow.ParseCoord3("10,20", null, 0);
+        Assert.Null(q!.Value.z);   // 没给 z → 调用方按"纯 XY"处理
+    }
+
+    [Fact]
+    public void Relative_dz_adds_to_lastZ()
+    {
+        var p = MainWindow.ParseCoord3("@5,3,-2", (10, 20), 100);
+        Assert.Equal(15.0, p!.Value.x, 9); Assert.Equal(23.0, p.Value.y, 9);
+        Assert.Equal(98.0, p.Value.z!.Value, 9);
+        var q = MainWindow.ParseCoord3("@5,3", (10, 20), 100);
+        Assert.Null(q!.Value.z);
+    }
+
+    [Fact]
+    public void Polar_has_no_z_and_bad_input_is_null()
+    {
+        var p = MainWindow.ParseCoord3("@10<90", (0, 0), 5);
+        Assert.Equal(10.0, p!.Value.y, 6); Assert.Null(p.Value.z);
+        Assert.Null(MainWindow.ParseCoord3("1,2,3,4", null, 0));
+        Assert.Null(MainWindow.ParseCoord3("a,b,c", null, 0));
+        Assert.Null(MainWindow.ParseCoord3("@1,2,3", null, 0));   // 相对坐标没有上一点
+    }
+
+    [Fact]
+    public void Snap_candidates_carry_vertex_z()
+    {
+        var scene = new Scene();
+        scene.Add(new PolylineEntity { Points = { (0, 0), (10, 0) }, Elevation = 100, Zs = new List<double> { -1, 1 } });   // 三维线 99 / 101
+        scene.Add(new LineEntity { X0 = 50, Y0 = 0, X1 = 60, Y1 = 0, Elevation = 7 });
+        var v = scene.SnapCandidates();
+        var idx = new SnapPoints.Index(v);
+        Assert.Equal(99.0, idx.FindNearest3(0, 0, 0.5)!.Value.z, 6);
+        Assert.Equal(101.0, idx.FindNearest3(10, 0, 0.5)!.Value.z, 6);
+        Assert.Equal(100.0, idx.FindNearest3(5, 0, 0.5)!.Value.z, 6);    // 段中点 = 两端均值
+        Assert.Equal(7.0, idx.FindNearest3(55, 0, 0.5)!.Value.z, 6);     // 平面直线中点 = 标高
+        Assert.Equal((0.0, 0.0), idx.FindNearest(0, 0, 0.5)!.Value);      // 二维口径不变
     }
 }

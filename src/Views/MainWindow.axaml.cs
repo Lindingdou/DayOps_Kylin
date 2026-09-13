@@ -202,7 +202,7 @@ public partial class MainWindow : Window
             {
                 _nav = NavMode.None;
                 var wp = PickWorld();
-                if (wp != null) FeedPoint(wp.Value.x, wp.Value.y);
+                if (wp != null) FeedPoint(wp.Value.x, wp.Value.y, ClickZForEdit());
                 return;
             }
 
@@ -607,14 +607,15 @@ public partial class MainWindow : Window
             }
 
             // 对象捕捉：吸附到最近顶点（优先场景几何；显示态导入用其网格顶点）
-            _snapWorld = null;
+            _snapWorld = null; _snapWorldZ = null;
             var snapSrc = _gripDrag.Active && _snapVertsDrag != null ? _snapVertsDrag : (_lastImport?.LineVertices ?? _snapVerts);   // 夹点拖拽中排除被拖点
             _snapHitMode = null;
             if (w != null && SnapToggle.IsChecked == true)
             {
                 double tol = SnapTolWorld(p);
                 // ① 顶点候选(端点/中点/圆心/象限) —— 高优先精确点
-                var vhit = snapSrc.Length > 0 ? SnapVertIndex(snapSrc).FindNearest(w.Value.x, w.Value.y, tol) : null;
+                var vhit3 = snapSrc.Length > 0 ? SnapVertIndex(snapSrc).FindNearest3(w.Value.x, w.Value.y, tol) : null;
+                (double x, double y)? vhit = vhit3 == null ? null : (vhit3.Value.x, vhit3.Value.y);
                 double dv = vhit != null ? Dist2(vhit.Value, w.Value) : double.MaxValue;
                 // ② 扩展模式(交点/最近/垂足) —— 顶点未覆盖, 从场景原语补算; 垂足以上一取点为锚
                 ObjectSnap.Hit? ohit = null;
@@ -623,7 +624,7 @@ public partial class MainWindow : Window
                 // ③ 合并: 交点若不比顶点远则取交点; 否则取顶点; 最近/垂足仅在无顶点时兜底
                 if (ohit != null && ohit.Value.Mode == ObjectSnap.Mode.Intersection && Dist2((ohit.Value.X, ohit.Value.Y), w.Value) <= dv)
                 { _snapWorld = (ohit.Value.X, ohit.Value.Y); _snapHitMode = ObjectSnap.Mode.Intersection; }
-                else if (vhit != null) _snapWorld = vhit;
+                else if (vhit != null) { _snapWorld = vhit; _snapWorldZ = vhit3!.Value.z; }
                 else if (ohit != null) { _snapWorld = (ohit.Value.X, ohit.Value.Y); _snapHitMode = ohit.Value.Mode; }
                 else _snapWorld = null;
 
@@ -721,7 +722,7 @@ public partial class MainWindow : Window
                 if (wp != null && _editMode == EditMode.Move)
                 {
                     var dst = _snapWorld == null ? ApplyDraftAids(wp.Value.x, wp.Value.y) : wp.Value;
-                    FeedPoint(dst.x, dst.y);
+                    FeedPoint(dst.x, dst.y, ClickZForEdit());
                     StatusMsg.Text = $"拖放移动完成（{_selected.Count} 个实体）";
                 }
                 else { _editMode = EditMode.None; _editPts.Clear(); RefreshScene(); }
@@ -1040,6 +1041,7 @@ public partial class MainWindow : Window
     private MeasureState? _measure;
     private AngleState? _angle;                  // 三点测角(MANG)
     private (double x, double y)? _snapWorld;   // 当前捕捉到的世界点
+    private double? _snapWorldZ;                // 捕捉到顶点时该顶点的 z(交点/最近/垂足等算出来的点没有 z → null)
     private (double x, double y)? _cursorWorld; // 当前光标世界点(橡皮筋预览用)
     private (double x, double y)? _lastInputPoint; // 上一取点(命令行相对坐标 @ 的基点)
     private float[] _snapVerts = System.Array.Empty<float>();   // 场景几何顶点缓存(对象捕捉源: 端点/中点/圆心/象限)
@@ -1222,6 +1224,13 @@ public partial class MainWindow : Window
     // 移动/复制的「位移(D)」模式(忠实原版 EditCommandState::WaitingDisplacement)：不取基点，
     // 下一次在命令行键入的坐标就是位移向量(相对原点)，直接平移/复制。
     private bool _editDisplacement;
+    // 编辑基点的 z 与"这次落地的 z 位移"(仅移动/复制用, 忠实原版 MOVE 的 x,y,z 三分量):
+    //   基点 z 来自 键入的第三分量 / 捕捉到的顶点; 都没有就是 0(平面, 同 AutoCAD 在 z=0 的 UCS 上取点)。
+    //   目标点键入了 z → dz = z − 基点 z; 只键入 x,y 或 @dx,dy → 纯 XY(同原版 "没给 z 就保持基点高程");
+    //   鼠标点目标顶点只有在基点 z 也明确时才动 z —— 否则和从前一样纯 XY, 免得随手一捕捉就把实体抬走。
+    private double _editBaseZ;
+    private bool _editBaseZKnown;
+    private double _editDz;
     // 拖放移动(AutoCAD 拖放编辑：选中对象后按住其本体拖动即移动)。原版只有夹点拖；按用户要求给文字补上。
     // 按下先只挂起(_textDragPending)——没拖过阈值松开就是普通点选；拖过阈值才转成一次「移动」命令(基点 = 按下处)。
     private bool _textDragPending, _textDragging;
@@ -10344,13 +10353,13 @@ public partial class MainWindow : Window
             {
                 if (!IsDisplacementKeyword(cmd)) return false;
                 _editDisplacement = true;
-                StatusMsg.Text = $"{_editName}：指定位移 <dx,dy>（键入 dx,dy 或 d<角度）";
+                StatusMsg.Text = $"{_editName}：指定位移 <dx,dy,dz>（键入 dx,dy 或 dx,dy,dz 或 d<角度）";
                 SyncPrompt();
                 return true;
             }
-            var v = ParseCoord(cmd, (0, 0));   // 位移是向量：@dx,dy 与 dx,dy 同义(相对原点)
-            if (v == null) { StatusMsg.Text = $"{_editName}：位移须为 dx,dy 或 d<角度（如 100,50 / 50<30）"; return true; }
-            ApplyDisplacement(v.Value.x, v.Value.y);
+            var v = ParseCoord3(cmd, (0, 0), 0);   // 位移是向量：@dx,dy 与 dx,dy 同义(相对原点); 没给 dz 就是 0(不动 z)
+            if (v == null) { StatusMsg.Text = $"{_editName}：位移须为 dx,dy / dx,dy,dz 或 d<角度（如 100,50 / 100,50,-5 / 50<30）"; return true; }
+            ApplyDisplacement(v.Value.x, v.Value.y, v.Value.z ?? 0);
             return true;
         }
         if (_editPts.Count == 1 && double.TryParse(cmd, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double dist))
@@ -10383,14 +10392,14 @@ public partial class MainWindow : Window
     }
 
     /// <summary>按位移向量落地移动/复制(位移模式 / 第二点回车「使用第一个点作为位移」)，并结束命令。</summary>
-    private void ApplyDisplacement(double dx, double dy)
+    private void ApplyDisplacement(double dx, double dy, double dz = 0)
     {
         bool copy = _editMode == EditMode.Copy;
         string name = _editName;
         _editMode = EditMode.None; _editPts.Clear(); _editDisplacement = false;   // 先退出取点态再落地(理由见 FeedPoint)
-        ApplyEditTransform(Affine2.Translate(dx, dy), copy);
+        ApplyEditTransform(Affine2.Translate(dx, dy), copy, dz);
         HideDragTip();
-        StatusMsg.Text = $"{name}完成：位移 Δx {dx:0.###}  Δy {dy:0.###}";
+        StatusMsg.Text = $"{name}完成：位移 Δx {dx:0.###}  Δy {dy:0.###}  Δz {dz:0.###}";
         SyncPrompt();
     }
 
@@ -10405,7 +10414,7 @@ public partial class MainWindow : Window
         if (_editMode is EditMode.Move or EditMode.Copy && _editPts.Count == 1)
         {
             var b = _editPts[0];
-            ApplyDisplacement(b.x, b.y);
+            ApplyDisplacement(b.x, b.y, _editBaseZ);   // 位移向量 = 基点三分量(键入 x,y,z 的 z 也算数)
             return true;
         }
         string name = _editName;
@@ -10428,13 +10437,21 @@ public partial class MainWindow : Window
     private string EditFirstPrompt() => _editMode switch
     {
         EditMode.Mirror => "指定镜像线的第一点",
-        EditMode.Move or EditMode.Copy => _editDisplacement ? "指定位移 <dx,dy>" : "指定基点 或 [位移(D)] <位移>",
+        EditMode.Move or EditMode.Copy => _editDisplacement ? "指定位移 <dx,dy,dz>" : "指定基点 或 [位移(D)] <位移>",
         _ => "指定基点"
     };
 
     private bool TryCoordinateInput(string cmd)
     {
         if (_tool == null && _editMode == EditMode.None) return false;   // 仅取点态接受坐标
+        if (_editMode != EditMode.None && !_editAwaitSelect)
+        {
+            // 编辑取点认三分量：x,y,z / @dx,dy,dz 的 z 进 dz(移动/复制)；只给 x,y 就是纯 XY
+            var p3 = ParseCoord3(cmd, _lastInputPoint, _editPts.Count > 0 ? _editBaseZ : 0);
+            if (p3 == null) return false;
+            FeedPoint(p3.Value.x, p3.Value.y, p3.Value.z);
+            return true;
+        }
         var pt = ParseCoord(cmd, _lastInputPoint);
         if (pt == null) return false;
         // 「选择对象」阶段键入坐标 = 在该点点选一次(同 AutoCAD 的选择对象提示)，不能当基点攒进 _editPts
@@ -10442,6 +10459,36 @@ public partial class MainWindow : Window
         FeedPoint(pt.Value.x, pt.Value.y);
         return true;
     }
+
+    /// <summary>
+    /// 三分量坐标：x,y[,z]=绝对；@dx,dy[,dz]=相对上一点(z 相对 lastZ)；[@]d&lt;ang=极坐标(无 z)。
+    /// z 为 null 表示"没给"——调用方据此决定动不动 z(同原版 parsePoint 的 hasZ)。无法解析返回 null。
+    /// </summary>
+    internal static (double x, double y, double? z)? ParseCoord3(string s, (double x, double y)? last, double lastZ)
+    {
+        s = s.Trim();
+        if (s.IndexOf('<') > 0) return ParseCoord(s, last) is { } p ? (p.x, p.y, null) : null;   // 极坐标沿用二维解析
+        bool rel = s.StartsWith("@");
+        if (rel) s = s.Substring(1).Trim();
+        var parts = s.Split(',');
+        if (parts.Length is not (2 or 3)) return null;
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        const System.Globalization.NumberStyles ns = System.Globalization.NumberStyles.Float;
+        if (!double.TryParse(parts[0].Trim(), ns, inv, out double x) || !double.TryParse(parts[1].Trim(), ns, inv, out double y)) return null;
+        double? z = null;
+        if (parts.Length == 3) { if (!double.TryParse(parts[2].Trim(), ns, inv, out double zz)) return null; z = zz; }
+        if (!rel) return (x, y, z);
+        if (last == null) return null;
+        return (last.Value.x + x, last.Value.y + y, z.HasValue ? lastZ + z.Value : null);
+    }
+
+    /// <summary>
+    /// 视口点击给编辑取点的 z：只有捕捉到顶点才有；作目标点时还须基点 z 明确(键入含 z / 捕捉到顶点)，
+    /// 否则 null = 纯 XY 移动(与从前一致)。
+    /// </summary>
+    private double? ClickZForEdit()
+        => _snapWorld == null || _snapWorldZ == null ? null
+         : (_editPts.Count == 0 || _editBaseZKnown ? _snapWorldZ : null);
 
     /// <summary>解析坐标：x,y=绝对直角；@dx,dy=相对；d&lt;ang=绝对极(角度°)；@d&lt;ang=相对极。无法解析返回 null。</summary>
     internal static (double x, double y)? ParseCoord(string s, (double x, double y)? last)
@@ -10478,22 +10525,27 @@ public partial class MainWindow : Window
     }
 
     // 把一个世界点喂给当前取点态(编辑/绘制)，等效一次点击
-    private void FeedPoint(double x, double y)
+    private void FeedPoint(double x, double y, double? z = null)
     {
         _lastInputPoint = (x, y);
         if (_editMode != EditMode.None)
         {
             // 位移模式只认命令行键入的向量(同原版 WaitingDisplacement)：矿区坐标动辄几十万，
             // 把点到的绝对坐标当位移会把实体甩出图外。
-            if (_editDisplacement && _editPts.Count == 0) { StatusMsg.Text = $"{_editName}：位移模式——请在命令行键入 dx,dy（如 100,50）或 d<角度"; return; }
+            if (_editDisplacement && _editPts.Count == 0) { StatusMsg.Text = $"{_editName}：位移模式——请在命令行键入 dx,dy / dx,dy,dz（如 100,50,-5）或 d<角度"; return; }
+            bool moveCopy = _editMode is EditMode.Move or EditMode.Copy;
+            if (_editPts.Count == 0) { _editBaseZ = z ?? 0; _editBaseZKnown = z.HasValue; _editDz = 0; }
+            else if (moveCopy && z.HasValue) _editDz = z.Value - _editBaseZ;   // 目标点给了 z 才动 z(见字段说明)
             _editPts.Add((x, y));
             if (_editPts.Count >= EditPointCount(_editMode))
             {
-                ApplyEditTransform(BuildEditTransform(), _editMode == EditMode.Copy);
+                double dz = moveCopy ? _editDz : 0;
+                ApplyEditTransform(BuildEditTransform(), _editMode == EditMode.Copy, dz);
                 _editMode = EditMode.None; _editPts.Clear();
-                StatusMsg.Text = "编辑完成";
+                StatusMsg.Text = dz != 0 ? $"编辑完成（Δz {dz:0.###}）" : "编辑完成";
             }
-            else StatusMsg.Text = EditPrompt(_editMode, _editPts.Count);
+            else StatusMsg.Text = EditPrompt(_editMode, _editPts.Count)
+                                + (moveCopy && _editBaseZKnown ? $"（基点 z={_editBaseZ:0.###}）" : "");
             return;
         }
         if (_tool != null)
@@ -10621,13 +10673,16 @@ public partial class MainWindow : Window
     }
 
     // 对选择集施加仿射变换；copy=true 则加副本，否则替换原实体
-    private void ApplyEditTransform(Affine2 m, bool copy)
+    // dz：沿 Z 的位移(仅移动/复制会给)。各类实体的 z 都是 Elevation 打底(三角网/点云逐顶点 z 再加 Elevation),
+    // 所以整体抬降改 Elevation 即可, 逐顶点 z 原样保留。
+    private void ApplyEditTransform(Affine2 m, bool copy, double dz = 0)
     {
         BeginChange();
         var newSel = new List<SceneEntity>();
         foreach (var e in _selected)
         {
             var e2 = e.Apply(m);
+            if (dz != 0) e2.Elevation += dz;
             if (copy) _scene.Add(e2); else _scene.Replace(e, e2);
             newSel.Add(e2);
         }
