@@ -33,3 +33,88 @@ public static class PlanDb
         return rows;
     }
 }
+
+/// <summary>
+/// 可采区域边界表 <c>mineable_region</c> 的读写（原 <c>IMineableRegionService</c> 的 All/Insert/Update/Delete 四件；
+/// 「采场/排土场圈定」窗口专用）。列：id / name / category / points_json / visible / note / color（created/updated 交给库默认与触发器）。
+/// 没接库时 All 返回空表、写入返回错误文本，不抛。
+/// </summary>
+public static class MineableRegionRepo
+{
+    private static string L(string? s) => s == null ? "NULL" : "'" + s.Replace("'", "''") + "'";
+
+    public static List<Data.Entities.MineableRegion> All(DbConnection? conn)
+    {
+        var list = new List<Data.Entities.MineableRegion>();
+        if (conn == null) return list;
+        try
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT id, name, category, points_json, visible, note, color FROM mineable_region ORDER BY id";
+            using var rd = cmd.ExecuteReader();
+            while (rd.Read())
+                list.Add(new Data.Entities.MineableRegion
+                {
+                    Id = Convert.ToInt64(rd.GetValue(0)),
+                    Name = rd.IsDBNull(1) ? "" : rd.GetValue(1)?.ToString() ?? "",
+                    Category = rd.IsDBNull(2) || string.IsNullOrWhiteSpace(rd.GetValue(2)?.ToString()) ? Data.Entities.MineableRegion.CatMineable : rd.GetValue(2)!.ToString()!.Trim(),
+                    PointsJson = rd.IsDBNull(3) ? "[]" : rd.GetValue(3)?.ToString() ?? "[]",
+                    Visible = rd.IsDBNull(4) ? 1 : Convert.ToInt64(rd.GetValue(4)),
+                    Note = rd.IsDBNull(5) ? null : rd.GetValue(5)?.ToString(),
+                    Color = rd.IsDBNull(6) ? null : rd.GetValue(6)?.ToString(),
+                });
+        }
+        catch { }
+        return list;
+    }
+
+    /// <summary>新建；返回新 id（失败 0，err 带原因）。</summary>
+    public static long Insert(DbConnection? conn, Data.Entities.MineableRegion e, out string err)
+    {
+        err = "";
+        if (conn == null) { err = "没有数据库连接"; return 0; }
+        try
+        {
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "INSERT INTO mineable_region (name, category, points_json, visible, note, color) VALUES ("
+                    + L(e.Name) + ", " + L(e.Category) + ", " + L(e.PointsJson) + ", " + e.Visible + ", " + L(e.Note) + ", " + L(string.IsNullOrWhiteSpace(e.Color) ? null : e.Color!.Trim().TrimStart('#')) + ")";
+                cmd.ExecuteNonQuery();
+            }
+            using var q = conn.CreateCommand();
+            q.CommandText = "SELECT MAX(id) FROM mineable_region";
+            object? v = q.ExecuteScalar();
+            e.Id = v == null || v is DBNull ? 0 : Convert.ToInt64(v);
+            return e.Id;
+        }
+        catch (Exception ex) { err = ex.Message; return 0; }
+    }
+
+    public static string Update(DbConnection? conn, Data.Entities.MineableRegion e)
+    {
+        if (conn == null) return "没有数据库连接";
+        try
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "UPDATE mineable_region SET name = " + L(e.Name) + ", category = " + L(e.Category) + ", points_json = " + L(e.PointsJson)
+                + ", visible = " + e.Visible + ", note = " + L(e.Note) + ", color = " + L(string.IsNullOrWhiteSpace(e.Color) ? null : e.Color!.Trim().TrimStart('#'))
+                + " WHERE id = " + e.Id;
+            cmd.ExecuteNonQuery();
+            return "";
+        }
+        catch (Exception ex) { return ex.Message; }
+    }
+
+    public static string Delete(DbConnection? conn, long id)
+    {
+        if (conn == null) return "没有数据库连接";
+        try
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "DELETE FROM mineable_region WHERE id = " + id;
+            cmd.ExecuteNonQuery();
+            return "";
+        }
+        catch (Exception ex) { return ex.Message; }
+    }
+}

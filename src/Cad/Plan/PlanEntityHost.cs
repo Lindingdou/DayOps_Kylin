@@ -53,6 +53,28 @@ public interface IPlanEntityHost
     WorkLineSamples? SelectedWorkLine(out long handle, out string error);
     /// <summary>按 handle 重读工作线几何（实体已删/非工作线返回 null）。</summary>
     WorkLineSamples? WorkLineByHandle(long handle);
+    /// <summary>当前选集里全部实体的 handle（原 IEntityCapability.GetSelectedHandles）。</summary>
+    long[] SelectedHandles();
+
+    // ── 区域圈画 / overlay / 笔刷（原 IPitDesignCapability 被「采场/排土场圈定」用到的那一截）──
+    /// <summary>进入视口逐点取点：左键每点一次回调一次（Z 取该处地表三角网的采样值，采不到为 0），右键/回车/Esc 结束 → onCancel。返回 false = 宿主不支持。</summary>
+    bool BeginScreenPointPick(Action<double, double, double> onPicked, Action onCancel);
+    /// <summary>主动退出逐点取点（幂等）。</summary>
+    void EndScreenPointPick();
+    /// <summary>清掉取点期间的临时标记。</summary>
+    void ClearScreenPickMarkers();
+    /// <summary>整通道替换式显示区域环（每环一色 RRGGBB）。</summary>
+    void ShowMineableAreaOverlay(IReadOnlyList<double[]> rings, IReadOnlyList<uint> colors);
+    void ClearMineableAreaOverlay();
+    /// <summary>进入选区笔刷（PS 式）：targetRing 被编辑的区域；context 其它区域只显示。完成回调改后的环（擦空回空数组），取消回调 onCancel。</summary>
+    bool BeginRegionBrushEdit(double[] targetRing, uint targetColor, IReadOnlyList<double[]> contextRings, IReadOnlyList<uint> contextColors,
+                              Action<double[]> onCommit, Action onCancel);
+    /// <summary>结束笔刷（commit=true 回调改后环；false 取消）。幂等。</summary>
+    void EndRegionBrushEdit(bool commit);
+    /// <summary>调笔刷半径(px，4~80)，返回生效值。</summary>
+    int SetRegionBrushRadiusPx(int px);
+    /// <summary>宿主窗口（弹模态框用）。</summary>
+    object? OwnerWindow { get; }
     /// <summary>激活块体模型（无返回 null）。</summary>
     BlockModelMeta? ActiveBlockModel { get; }
     /// <summary>已连接的数据库连接（未连接返回 null；规划窗口不自动弹连接流程，只提示）。</summary>

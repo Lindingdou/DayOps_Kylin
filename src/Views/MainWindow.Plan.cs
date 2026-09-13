@@ -172,6 +172,22 @@ public partial class MainWindow
         StatusMsg.Text = "方案综合对比：联合对比矩阵 + 四维论证图表 + 雷达 + 方向感知加权评分排名 → 推荐方案";
     }
 
+    private MineableAreaWindow? _mineableAreaWin;
+
+    /// <summary>中长远组「采场/排土场圈定」= 原 CreateOpenMineableAreaCommand：区域管理窗（单例）——自动识别 / 圈画 / 笔刷编辑 / 颜色，落 mineable_region。</summary>
+    private void OpenMineableArea()
+    {
+        if (_mineableAreaWin != null) { _mineableAreaWin.Activate(); StatusMsg.Text = "采场/排土场圈定窗口已在前台"; return; }
+        var w = new MineableAreaWindow(PlanHost);
+        _mineableAreaWin = w;
+        w.Closed += (_, _) => _mineableAreaWin = null;
+        w.Show(this);
+        GeoDb.GeoDbWindows.NoteLast(w);
+        StatusMsg.Text = _geoDb == null
+            ? "采场/排土场圈定：GeoDataBase 未连接 —— 区域要落 mineable_region 表，请先「连接数据库」"
+            : "采场/排土场圈定：自动识别（读现状线）/ 圈画新区域（视口逐点）/ 笔刷编辑（Alt+拖扩、拖缩）/ 按类着色";
+    }
+
     /// <summary>中长远⑤「进度计划方案出图」= 原 CreateOpenLongTermChartCommand：单方案逐年进度图窗（单例）。方案取自 LongTermSchemeStore；⚡一键排产并出图只按已指定工作线重排(LT4)；导出 PNG/CSV。</summary>
     private LongTermChartWindow? _longTermChartWin;
     private void OpenLongTermChart()
@@ -348,6 +364,17 @@ public partial class MainWindow
             _w.SelectEntities(list);
         }
 
+        public long[] SelectedHandles() => _w._selected.Select(EntityHandles.Of).ToArray();
+        public bool BeginScreenPointPick(Action<double, double, double> onPicked, Action onCancel) => _w.BeginRegionPointPick(onPicked, onCancel);
+        public void EndScreenPointPick() => _w.EndRegionPointPick();
+        public void ClearScreenPickMarkers() { }
+        public void ShowMineableAreaOverlay(IReadOnlyList<double[]> rings, IReadOnlyList<uint> colors) => _w.ShowRegionOverlay(rings, colors);
+        public void ClearMineableAreaOverlay() => _w.ClearRegionOverlay();
+        public bool BeginRegionBrushEdit(double[] targetRing, uint targetColor, IReadOnlyList<double[]> contextRings, IReadOnlyList<uint> contextColors, Action<double[]> onCommit, Action onCancel)
+            => _w.BeginRegionBrush(targetRing, targetColor, contextRings, contextColors, onCommit, onCancel);
+        public void EndRegionBrushEdit(bool commit) => _w.EndRegionBrush(commit);
+        public int SetRegionBrushRadiusPx(int px) => _w.SetRegionBrushRadius(px);
+        public object? OwnerWindow => _w;
         public void Echo(string text, bool warn = false) => _w.EditEcho(text, warn ? EchoLevel.Warn : EchoLevel.Info);
         public void Refresh() => _w.RefreshScene();
     }
@@ -386,5 +413,51 @@ public partial class MainWindow
         OpenLongTermDerive();
         string s = _longTermDeriveWin!.SelftestPickAndGenerate();
         StatusMsg.Text = $"自检：中长远示例 —— 块体「{m.Name}」· 工作线 1 条(西缘, 往 +X) · A_p 15 万t/a｜{s}";
+    }
+}
+
+public partial class MainWindow
+{
+    /// <summary>
+    /// @采排圈定示例：合成一个降深采场（6 级坡顶/坡底环，800×600 m）+ 一个抬升外排土场（4 级，700×500 m）的台阶线入图，
+    /// 连本机 SQLite，打开「采场/排土场圈定」→ 自动识别（跳过清空确认）→ 选中首块（合成几何，非业务数据）。
+    /// </summary>
+    private async Task SelftestMineableAreaSample()
+    {
+        try { _geoDb ??= Data.GeoDatabase.OpenSeeded(); } catch (Exception ex) { StatusMsg.Text = "自检：连库失败 " + ex.Message; return; }
+        BeginChange();
+        _layers.EnsureImported("点云_坡顶线", 0.9f, 0.3f, 0.2f); _layers.EnsureImported("点云_坡底线", 0.2f, 0.5f, 0.9f);
+        void Ring(double cx, double cy, double hx, double hy, double z, bool crest)
+        {
+            var pl = new PolylineEntity { LayerName = crest ? "点云_坡顶线" : "点云_坡底线", Closed = true, Elevation = z, Cr = crest ? 0.9f : 0.2f, Cg = crest ? 0.3f : 0.5f, Cb = crest ? 0.2f : 0.9f };
+            int n = 24;
+            for (int i = 0; i < n; i++)
+            {
+                double t = 2 * Math.PI * i / n;
+                pl.Points.Add((cx + hx * Math.Cos(t), cy + hy * Math.Sin(t)));   // 椭圆环（凹坑/凸堆都是同心环）
+            }
+            _scene.Add(pl);
+        }
+        for (int k = 0; k < 6; k++)   // 采场：逐级降深，环逐级内缩
+        {
+            double hx = 400 - 30 * k, hy = 300 - 30 * k;
+            Ring(0, 0, hx, hy, 100 - 10 * k, crest: true);
+            Ring(0, 0, hx - 12, hy - 12, 100 - 10 * (k + 1), crest: false);
+        }
+        for (int k = 0; k < 4; k++)   // 外排土场：逐级抬升（合成两坨时趋势面互相牵扯，分类器只保证识出主采场；真现场按台阶线成对/成级识别）
+        {
+            double hx = 350 - 30 * k, hy = 250 - 30 * k;
+            Ring(1300, 0, hx, hy, 100 + 10 * k, crest: false);
+            Ring(1300, 0, hx - 12, hy - 12, 100 + 10 * (k + 1), crest: true);
+        }
+        _selected.Clear();
+        RefreshScene();
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => Viewport.FitBounds(new[] { -450.0, -400.0, 1900.0, 400.0 }), Avalonia.Threading.DispatcherPriority.Background);
+        OpenMineableArea();
+        var w = _mineableAreaWin!;
+        w.SelftestAutoConfirm = true;
+        await w.SelftestAutoIdentifyAsync();
+        w.SelftestSelect(0);
+        StatusMsg.Text = $"自检：采排圈定示例 —— 台阶线 20 环入图 → 识别 {w.SelftestRowCount} 块｜{w.SelftestStatus}";
     }
 }

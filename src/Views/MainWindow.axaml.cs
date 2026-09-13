@@ -434,6 +434,8 @@ public partial class MainWindow : Window
                 return;
             }
 
+            if (RegionBrushOnPressed(e)) return;   // 区域选区笔刷：左键落笔(Alt=并入/扩, 否则移出/缩), 见 MainWindow.RegionBrush.cs
+
             // 滑动多段线：按住左键开始，拖动自动采样，松开成线
             if (_slideActive && props.IsLeftButtonPressed)
             {
@@ -578,6 +580,8 @@ public partial class MainWindow : Window
             Viewport.SetCursorScreen(p.X, p.Y);   // CAD 十字光标随动
             SyncPrompt();                          // 异步命令(对话框后)切换的状态在此兜底刷新提示
             var w = Viewport.ScreenToWorld(p.X, p.Y);
+
+            if (RegionBrushOnMoved(p)) return;   // 区域选区笔刷：圆圈跟随 + 按住左键涂改, 见 MainWindow.RegionBrush.cs
 
             // 拖放移动文字：拖过 4px 才算拖(否则松开就是点选)；一旦算拖, 就地变成一次「移动」命令 ——
             // 基点 = 按下处, 之后的幽灵/橡皮筋/正交/吸附全走编辑拖拽那条现成的路, 松开 = 第二点。
@@ -773,6 +777,8 @@ public partial class MainWindow : Window
                 return;
             }
 
+            if (RegionBrushOnReleased(e)) return;   // 区域选区笔刷：抬笔
+
             // 滑动多段线：松开 → 采样点成多段线
             if (_slideDragging)
             {
@@ -848,6 +854,7 @@ public partial class MainWindow : Window
                 return;
             }
             if (e.Key == Key.Escape && CancelParamAsk()) { e.Handled = true; return; }   // 参数问答中 Esc = 放弃该命令
+            if (e.Key == Key.Escape && RegionBrushOnEscape()) { e.Handled = true; return; }   // 区域选区笔刷中 Esc = 弃改退出
             if (e.Key == Key.Escape && CancelPcBackground()) { e.Handled = true; return; }   // 后台点云长计算(坡顶底线提取)中 Esc = 取消
             if ((e.Key == Key.Enter || e.Key == Key.Return) && ConfirmOneShotPick()) { e.Handled = true; return; }
             if ((e.Key == Key.Enter || e.Key == Key.Return) && FinishSelectObjects(true)) { e.Handled = true; return; }
@@ -1546,7 +1553,8 @@ public partial class MainWindow : Window
             if (cmd == "画道路中线" || cmd == "道路中线绘制") { await DrawRoadCenterlineCmd(); return; }   // 原 CreateDrawRoadCenterlineCommand(RS13–RS25): 拾点吸面 → 道路参数 → 统一落地管线 → 登记路网, 见 MainWindow.DrawRoadCenterline.cs
             if (cmd == "境界圈定" || cmd == "境界圈定设置" || cmd == "境界方案") { OpenPitSchemeConfig(); return; }   // 原 CreateOpenPitConfigCommand: PitSchemeConfigWindow(方案配置窗), 见 MainWindow.Plan.cs
             if (cmd == "确定境界" || cmd == "境界优化" || cmd == "方案比选·确定境界" || cmd.StartsWith("确定境界 ")) { OpenPitOptimize(cmd); return; }   // 原 CreateOpenPitOptimizeCommand: PitOptimizeWindow(求解·对比·确定最终境界); 「确定境界 一键」直通一键圈定
-            if (cmd == "凸包" || cmd == "采场圈定" || cmd == "采场/排土场圈定" || cmd == "点凸包") { await BoundaryHullAsync(); return; }   // 旧切片: 点集凸包(命令行别名保留)
+            if (cmd == "采场/排土场圈定" || cmd == "采场排土场圈定") { OpenMineableArea(); return; }   // 原 CreateOpenMineableAreaCommand：区域管理窗（识别 / 圈画 / 笔刷 / 颜色）
+            if (cmd == "凸包" || cmd == "采场圈定" || cmd == "点凸包") { await BoundaryHullAsync(); return; }   // 旧切片: 点集凸包(命令行别名保留)
             if (cmd == "最优坑深" || cmd == "经济境界" || cmd == "经济坑深") { PitDepthCmd(); return; }   // 旧切片: 最近块体一键经济坑深(命令行别名保留)
             if (cmd.StartsWith("生成境界") || cmd.StartsWith("境界线") || cmd.StartsWith("几何圈定") || cmd.StartsWith("境界壳")) { PitEnvelopeCmd(cmd); return; }
             if (cmd.StartsWith("境界建模") || cmd.StartsWith("境界落地") || cmd.StartsWith("生成台阶面") || cmd.StartsWith("三维境界")) { await BenchModelAsync(cmd); return; }
@@ -8951,6 +8959,7 @@ public partial class MainWindow : Window
         _tool?.AppendPreview(list, _cursorWorld);
         RoadAppendJigPreview(list);   // 「手动标定线路」画线 jig(交点标记 + 已定走向 + 橡皮筋), 见 MainWindow.RoadTransport.Centerline.cs; 没在画时空转
         BenchJigAppendPreview(list);   // 「动态调整」台阶交互设计 jig(逐级坡脚环随光标深度变), 见 MainWindow.BenchJig.cs; 没在调时空转
+        RegionBrushAppendPreview(list);   // 「采场/排土场圈定」选区笔刷圆圈随光标, 见 MainWindow.RegionBrush.cs; 没在涂时空转
         AppendDimPreview(list);   // 标注橡皮筋(线性/对齐/连续/半径/直径/角度/坐标标注取点中整条随光标), 见 MainWindow.DimJig.cs
         if (_slideDragging && _slidePts.Count > 1)     // 滑动多段线拖动预览
         {
@@ -10887,6 +10896,7 @@ public partial class MainWindow : Window
                 return;
             }
             if (cmd == "@中长远示例") { SelftestLongTermSample(); return; }   // @中长远示例: 自检块体+西缘工作线并选中 → 派生窗拾取+生成多套方案(中长远五窗实机核对用)
+            if (cmd == "@采排圈定示例") { _ = SelftestMineableAreaSample(); return; }   // @采排圈定示例: 合成采场/排土场台阶线 + 连库 + 开圈定窗自动识别(实机核对用)
             if (cmd.StartsWith("@块体示例"))   // @块体示例 [nx ny nz]: 建一个规则块体模型并入场景(截图核对体素显示用)
             {
                 var a = cmd.Length > 5 ? cmd.Substring(5).Split(' ', System.StringSplitOptions.RemoveEmptyEntries) : System.Array.Empty<string>();

@@ -56,6 +56,16 @@ public class MiningProgramFamilyTests
         public void Refresh() { }
         public WorkLineSamples? SelectedWorkLine(out long handle, out string error) { handle = 0; error = ""; return null; }
         public WorkLineSamples? WorkLineByHandle(long handle) => null;
+        public long[] SelectedHandles() => Array.Empty<long>();
+        public bool BeginScreenPointPick(Action<double, double, double> onPicked, Action onCancel) => false;
+        public void EndScreenPointPick() { }
+        public void ClearScreenPickMarkers() { }
+        public void ShowMineableAreaOverlay(IReadOnlyList<double[]> rings, IReadOnlyList<uint> colors) { }
+        public void ClearMineableAreaOverlay() { }
+        public bool BeginRegionBrushEdit(double[] targetRing, uint targetColor, IReadOnlyList<double[]> contextRings, IReadOnlyList<uint> contextColors, Action<double[]> onCommit, Action onCancel) => false;
+        public void EndRegionBrushEdit(bool commit) { }
+        public int SetRegionBrushRadiusPx(int px) => px;
+        public object? OwnerWindow => null;
     }
 
     [Fact]

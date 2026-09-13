@@ -4198,3 +4198,18 @@ DelineationMethod/EconRatioMethod 四枚举 · EconParams 四式 · WallAngle ·
 **验证**：`LongTermFamilyTests` 11 条（拾取方位 90°/扇形回转/零矢量拒绝 · 累计曲线总量守恒 48.6 万t/60 万m³ 单调 · 排产：基建 1 年→爬坡 35%/68%→达产 2029→末期减产、累计守恒、内排起转年、NPV=折现和 · 无块体/无煤拦住 · 派生 2×2×2=8 套命名 · 联合评分 · 一键比选 · 方案库空/去重/续源 · 排土桥空池 · 转旧口径 · 报表）+ 既有规划家族 444 条全过。实机 `@块体示例 20 6 8;@中长远示例;规划计算 一键;方案综合对比;进度计划方案出图` 五窗截图：派生拾到「工作线1·L=120m·90°·平行推进·#3E9」排出 1 套；规划计算一键比选 → 推荐工作线1（服务年限 10a·达产 2030·峰值剥采比 2.2·内排率 96%·NPV 14,953 万·校核通过）逐年表 11 行；对比窗四图+雷达+排名；出图窗单张进度图。
 
 **下一步**：「采场/排土场圈定」（原 ShortTermMineableAreaWindow + MineableAreaIdentifier/LandformClassifier/RegionGeometry）→ 短期生产计划编制组 10 钮 + 标注台阶标高 3 子项。
+
+## §四〇〇 中长远组「采场/排土场圈定」按原 ShortTermMineableAreaWindow 整窗重做 + 宿主选区笔刷 (2026-09-14)
+
+**症状**：Ribbon「采场/排土场圈定」命中的是旧切片 `BoundaryHullAsync`（选 CSV 点集算凸包画一圈），与原版风马牛不相及。原版是一个区域管理窗：自动识别（`LandformClassifier`）+ 视口逐点圈画 + 数据库 `mineable_region` 台账（名称/类别/显隐/自定义色）+ 按类着色 overlay + 选中高亮 + **选区笔刷**（PS 式涂改边界，替代夹点）+ 空间唯一（重叠时问"以哪个为主"并裁剪，工作帮↔母范围豁免）。
+
+**做法**：
+- `src/Cad/Plan/RegionGeometry.cs`：原 `RegionGeometry`（栅格化重叠判定 ≥2% / 求差留最大块 + 平面拟合 Z）逐行搬 + 原宿主 `RegionBrushSession`（掩膜 + 圆盘/线段涂改 + 减法只留最大块 + Moore 描边 + DP）整搬。
+- `src/Cad/Plan/PlanDb.cs` 加 `MineableRegionRepo`（All/Insert/Update/Delete，列 id/name/category/points_json/visible/note/color；用已提交实体 `Data.Entities.MineableRegion`，不依赖工作树里另一会话未提交的 `Data/MineableRegions.cs`）。
+- `IPlanEntityHost` 加原 IPitDesignCapability 那一截：`SelectedHandles / BeginScreenPointPick / EndScreenPointPick / ClearScreenPickMarkers / ShowMineableAreaOverlay / ClearMineableAreaOverlay / BeginRegionBrushEdit / EndRegionBrushEdit / SetRegionBrushRadiusPx / OwnerWindow`。宿主实现在新分部 `MainWindow.RegionBrush.cs`：overlay = 图层「可采区域」上的闭合三维多段线（整通道替换）；逐点取点 = `PickPointOrConfirmAsync` 循环（左键加点、右键/回车/Esc 结束 → onCancel），Z 取该处可见三角网采样；笔刷 = 指针按下/移动/松开 + Esc 四处钩子（`RegionBrushOnPressed/Moved/Released/Escape`，插在 MainWindow.axaml.cs 滑动多段线分支之前）+ 预览里画白色笔刷圆圈（`RegionBrushAppendPreview`），半径按屏幕 px 随缩放换算。
+- `src/Views/Plan/MineableAreaWindow.cs`：原窗逐段对应（区域列表色块/名称/类别/顶点/显示 · 识别 · 类别下拉+应用类别 · 圈画/完成/取消 · 应用名称/显示隐藏/删除 · 颜色(ColorSwatchPicker 选色即写库)/恢复类别色 · 类别默认色图例 · 笔刷开/±/完成/取消 · 状态栏）；`ResolveSpatialUniquenessAsync` 三选一（以本区域为主/以已有为主/保留重叠）；`OnAutoIdentify` 优先视口选中的多段线、否则图中全部；命名 采场1/外排土场1…。
+- 接线：`采场/排土场圈定`→`OpenMineableArea`（单例；未连库时状态栏说清要先连库），旧 `凸包/采场圈定/点凸包` 留命令行别名。自检 `@采排圈定示例`（合成 6 级降深采场环 + 4 级抬升排土环 → 连本机 SQLite → 开窗自动识别 → 选中首块）。
+
+**验证**：`MineableAreaFamilyTests` 5 条（重叠：成片算/共边不算/薄条 <2% 不算 · 求差：切东半 ≈5000 m²、完全覆盖为空、切槽只留大块、Z 沿主体平面 · 笔刷：移出减面/Alt 并入(须连通)增面/竖切留西块/擦空 · 表增改删查 + 颜色去井号 + 无连接不抛 · 类别语义豁免对）+ 规划家族 63 条全过。实机 `@采排圈定示例;@页面截图`：识别到「采场1」（35 顶点）入库，列表色块/类别/顶点/显示齐，选中后名称/类别/色板同步，状态栏「识别到 采场 1 块…已入库 1 块」。合成数据两坨并放时趋势面互相牵扯（只识出主采场或只识出排土场），是分类器对合成几何的既有行为，与窗口无关。
+
+**下一步**：短期生产计划编制组 10 钮 + 标注台阶标高 3 子项。
