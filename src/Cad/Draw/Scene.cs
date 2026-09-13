@@ -986,6 +986,28 @@ public sealed class TextEntity : SceneEntity
     /// </summary>
     public override void TessellatePick(List<float> o) => Strokes(o, skipFilled: false, rotation: ScreenFacing ? 0 : Rotation);
 
+    /// <summary>
+    /// 到轮廓的距离，且点落在实心字形内部即 0 —— 同 AutoCAD 里 TrueType 填充字：点在笔画实心处就选中。
+    /// 大字/粗体放大后笔画比拾取框还宽，只量轮廓会出现"点在字上却选不中"（按住拖放时尤其）。
+    /// </summary>
+    public override double DistanceTo(double px, double py)
+    {
+        double d = base.DistanceTo(px, py);
+        if (d <= 0) return 0;
+        double rot = ScreenFacing ? 0 : Rotation;
+        double c = Math.Cos(rot), s = Math.Sin(rot);
+        double lx = (px - X) * c + (py - Y) * s, ly = -(px - X) * s + (py - Y) * c;   // 逆旋转回排版局部系
+        foreach (var (ax, ay, bx, by, cx2, cy2) in LocalFillTriangles())
+        {
+            double d1 = (lx - bx) * (ay - by) - (ax - bx) * (ly - by);
+            double d2 = (lx - cx2) * (by - cy2) - (bx - cx2) * (ly - cy2);
+            double d3 = (lx - ax) * (cy2 - ay) - (cx2 - ax) * (ly - ay);
+            bool neg = d1 < 0 || d2 < 0 || d3 < 0, pos = d1 > 0 || d2 > 0 || d3 > 0;
+            if (!(neg && pos)) return 0;
+        }
+        return d;
+    }
+
     private void Strokes(List<float> o, bool skipFilled) => Strokes(o, skipFilled, Rotation);
 
     private void Strokes(List<float> o, bool skipFilled, double rotation)
@@ -999,10 +1021,10 @@ public sealed class TextEntity : SceneEntity
     {
         var (x, y) = m.Map(X, Y);
         double addRot = Math.Atan2(m.B, m.A);   // 仿射的旋转分量并入文字角
-        return Colored(new TextEntity { X = x, Y = y, Height = Height * m.ScaleMag, Rotation = Rotation + addRot, HAlign = HAlign, VAlign = VAlign, WidthFactor = WidthFactor, ObliqueAngle = ObliqueAngle, Text = Text });
+        return Colored(new TextEntity { X = x, Y = y, Height = Height * m.ScaleMag, Rotation = Rotation + addRot, HAlign = HAlign, VAlign = VAlign, WidthFactor = WidthFactor, ObliqueAngle = ObliqueAngle, ScreenFacing = ScreenFacing, Text = Text });
     }
     public override List<(double x, double y)> Grips() => new() { (X, Y) };
-    public override SceneEntity? MoveGrip(int i, double nx, double ny) => Colored(new TextEntity { X = nx, Y = ny, Height = Height, Rotation = Rotation, HAlign = HAlign, VAlign = VAlign, WidthFactor = WidthFactor, ObliqueAngle = ObliqueAngle, Text = Text });
+    public override SceneEntity? MoveGrip(int i, double nx, double ny) => Colored(new TextEntity { X = nx, Y = ny, Height = Height, Rotation = Rotation, HAlign = HAlign, VAlign = VAlign, WidthFactor = WidthFactor, ObliqueAngle = ObliqueAngle, ScreenFacing = ScreenFacing, Text = Text });
 }
 
 /// <summary>实体 → 类型中文名（对象树 / 快速选择用；椭圆/样条导入后并为多段线）。</summary>

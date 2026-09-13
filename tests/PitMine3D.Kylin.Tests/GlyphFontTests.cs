@@ -226,5 +226,26 @@ public class GlyphFontTests : IDisposable
         Assert.NotEmpty(bbPick);                             // 公告板文字同样可拾取(按未旋转排版)
         Assert.InRange(bb.DistanceTo(100.5, 203), 0, 1e-6);
     }
+    /// <summary>
+    /// 实心字形内部也算命中(同 AutoCAD 的 TrueType 填充字)：大字放大后笔画比拾取框宽, 只量轮廓会点在字上却选不中。
+    /// 方框字形 'A' 在 100.5..104.5 × 200..207：中心 (102.5, 203.5) 离最近边 2, 但落在实心内 → 0。
+    /// </summary>
+    [Fact]
+    public void RealFontText_FilledInteriorCountsAsHit_AndMovesKeepScreenFacing()
+    {
+        InstallTinyFont();
+        var t = new TextEntity { X = 100, Y = 200, Height = 10, Text = "A" };
+        Assert.InRange(t.DistanceTo(102.5, 203.5), 0, 1e-9);        // 实心内
+        Assert.InRange(t.DistanceTo(102.5, 209), 1.99, 2.01);       // 字形外仍量轮廓
+        Assert.InRange(t.DistanceTo(99, 203.5), 1.49, 1.51);        // 左边线外 1.5
+        var rot = new TextEntity { X = 100, Y = 200, Height = 10, Text = "A", Rotation = System.Math.PI / 2 };   // 转 90°: 字形落在 x 93..100, y 200.5..204.5
+        Assert.InRange(rot.DistanceTo(96.5, 202.5), 0, 1e-9);
+        Assert.InRange(rot.DistanceTo(102.5, 203.5), 2.49, 2.51);
+
+        var sf = new TextEntity { X = 1, Y = 2, Height = 3, Text = "A", ScreenFacing = true };
+        Assert.True(((TextEntity)sf.MoveGrip(0, 5, 6)!).ScreenFacing);                       // 夹点拖 / 拖放移动 / 变换都不该把公告板文字变成平面字
+        Assert.True(((TextEntity)sf.Apply(Affine2.Translate(3, 4))).ScreenFacing);
+    }
 }
+
 
