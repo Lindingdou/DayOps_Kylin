@@ -1395,7 +1395,8 @@ public partial class MainWindow : Window
             if (cmd == "演化对比" || cmd == "路网演化" || cmd == "两期路网对比") { await RoadEvolutionCompareAsync(); return; }
             if (cmd == "时段快照" || cmd == "路网快照") { RoadSnapshotCmd(); return; }
             if (cmd == "纪元快照") { await SnapshotEpochAsync(); return; }
-            if (cmd == "排土条带" || cmd == "条带填充" || cmd == "排土条带划分") { DumpStrips(); return; }
+            if (cmd == "排土条带" || cmd == "排土条带划分") { DumpStripCmd(); return; }   // 原 DumpStripDialog: 台阶壳子 × 分割长度 × 条带宽 → 潜在排土位置, 见 MainWindow.DumpStrip.cs
+            if (cmd == "条带填充") { DumpStrips(); return; }   // 命令行别名: 闭合范围内平行线填充(早期切片)
             if (cmd == "分帮扩帮") { SkeletonEcho("分帮扩帮", "沿境界按帮分段,各帮用各自 H/α/W 放坡 + 帮交界过渡带收口"); return; }   // 原版 SkeletonCommand 桩, 照回显
             if (cmd == "最终并段" || cmd == "最终帮并段") { SkeletonEcho("最终帮并段", "选境界 + 从第 N 级并几级 + 并段后坡角 → mergeCount(几何已实现,仅缺入口)"); return; }   // 原版 SkeletonCommand 桩
             if (cmd == "批量扩坑" || cmd.StartsWith("批量扩坑 ")) { await SeamPitCmd(cmd); return; }
