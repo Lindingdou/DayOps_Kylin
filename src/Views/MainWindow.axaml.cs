@@ -8594,12 +8594,13 @@ public partial class MainWindow : Window
         return true;
     }
 
-    // 撤销/重做：改动前记快照
-    private void BeginChange() => _undo.Push(SceneIO.Save(_scene));
+    // 撤销/重做：改动前记快照。走 SceneIO.Snapshot 而不是 Save —— 点云的几百万个点按引用进 _undo.Heavy，
+    // 不逐点序列化(加载了点云后每次编辑都写上百 MB 字符串、两千万点直接 OOM 的根子)；存档仍走 Save/SaveDoc 不变。
+    private void BeginChange() => _undo.Push(SceneIO.Snapshot(_scene, _undo.Heavy));
 
-    private void LoadSceneFrom(string json)
+    private void LoadSceneFrom(UndoManager.Snapshot snap)
     {
-        var loaded = SceneIO.Load(json);
+        var loaded = SceneIO.Restore(snap, _undo.Heavy);
         _scene.Clear();
         foreach (var e in loaded.Entities) _scene.Add(e);
         _selected.Clear();
@@ -8619,16 +8620,16 @@ public partial class MainWindow : Window
 
     private void DoUndo()
     {
-        var s = _undo.Undo(SceneIO.Save(_scene));
+        var s = _undo.Undo(SceneIO.Snapshot(_scene, _undo.Heavy));
         if (s == null) { StatusMsg.Text = "无可撤销"; return; }
-        LoadSceneFrom(s); StatusMsg.Text = "已撤销";
+        LoadSceneFrom(s.Value); StatusMsg.Text = "已撤销";
     }
 
     private void DoRedo()
     {
-        var s = _undo.Redo(SceneIO.Save(_scene));
+        var s = _undo.Redo(SceneIO.Snapshot(_scene, _undo.Heavy));
         if (s == null) { StatusMsg.Text = "无可重做"; return; }
-        LoadSceneFrom(s); StatusMsg.Text = "已重做";
+        LoadSceneFrom(s.Value); StatusMsg.Text = "已重做";
     }
 
     // 新实体归当前图层（名称 + 图层色）

@@ -40,6 +40,9 @@ public static class SceneIO
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public float[]? Pc { get; set; }    // 点云逐点色 r,g,b 扁平(null=全份基色)
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public float[]? Mc { get; set; }    // 三角网逐顶点色(着色结果; 原版「随工程持久化」)
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public float[]? Mr { get; set; }    // 三角网逐顶点真实色(建面时自点云带来)
+        // ── 只出现在撤销快照(Snapshot)里、落盘存档(Save/SaveDoc)永远不写 ──
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public long[]? K { get; set; }       // 点云重数据 key [点, 逐点色, 真实色, 法向](0=无)
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public string? Src { get; set; }     // 点云源文件路径
     }
 
     private sealed class LayerDto
@@ -72,7 +75,8 @@ public static class SceneIO
     private static readonly JsonSerializerOptions Opts = new() { WriteIndented = true };
 
     // ── 实体 ⇄ DTO ────────────────────────────────────────────────
-    private static List<Dto> ToDtos(Scene scene)
+    // heavy != null 是撤销快照模式：点云列表不逐点写进 DTO，只登记到仓里记 key（见 Snapshot）。存档永远传 null。
+    private static List<Dto> ToDtos(Scene scene, SnapshotHeavyStore? heavy = null)
     {
         var list = new List<Dto>();
         foreach (var e in scene.Entities)
@@ -88,7 +92,7 @@ public static class SceneIO
                 TextEntity tx => new Dto { T = "text", N = new[] { tx.X, tx.Y, tx.Height, tx.Rotation }, S = tx.Text },
                 PolylineEntity pl => PolyDto(pl),
                 MeshEntity me => MeshDto(me),
-                PointCloudEntity pc => CloudDto(pc),
+                PointCloudEntity pc => heavy != null ? CloudRefDto(pc, heavy) : CloudDto(pc),
                 _ => null
             };
             if (d == null) continue;
@@ -111,13 +115,14 @@ public static class SceneIO
         return list;
     }
 
-    private static void FromDtos(List<Dto>? list, Scene scene)
+    private static void FromDtos(List<Dto>? list, Scene scene, SnapshotHeavyStore? heavy = null)
     {
         if (list == null) return;
         foreach (var d in list)
         {
             SceneEntity? e = d.T switch
             {
+                "cloud" when d.K != null && heavy != null => BuildCloudRef(d, heavy),   // 撤销快照：列表按 key 取回，不逐点重建
                 "line" when d.N.Length >= 4 => new LineEntity { X0 = d.N[0], Y0 = d.N[1], X1 = d.N[2], Y1 = d.N[3] },
                 "circle" when d.N.Length >= 3 => new CircleEntity { Cx = d.N[0], Cy = d.N[1], Radius = d.N[2] },
                 "rect" when d.N.Length >= 4 => new RectEntity { X0 = d.N[0], Y0 = d.N[1], X1 = d.N[2], Y1 = d.N[3] },
@@ -145,6 +150,30 @@ public static class SceneIO
             }
             scene.Add(e);
         }
+    }
+
+    // ── 撤销快照：实体数组，但点云列表按引用进重数据仓（不落盘） ────────
+    /// <summary>
+    /// 撤销/重做用的场景快照。与 <see cref="Save"/> 同一份 DTO，唯独点云的 点/逐点色/真实色/法向 四个列表
+    /// 不逐点写 JSON，而是按引用登记到 <paramref name="heavy"/> 里、DTO 只记 key（列表创建后从不原地改，引用即内容）。
+    /// 200 万点的点云：Save 是上百 MB 字符串，这里是几百字节。顺带真实色与法向缓存也随撤销保住了
+    /// （旧快照不存它们，撤销一次真实色就丢）。
+    /// </summary>
+    public static UndoManager.Snapshot Snapshot(Scene scene, SnapshotHeavyStore heavy)
+    {
+        var dtos = ToDtos(scene, heavy);
+        var keys = new List<long>();
+        foreach (var d in dtos) if (d.K != null) foreach (var k in d.K) if (k != 0) keys.Add(k);
+        return new UndoManager.Snapshot(JsonSerializer.Serialize(dtos, Opts), keys.ToArray());
+    }
+
+    /// <summary>从撤销快照重建场景（点云列表从 <paramref name="heavy"/> 取回，与快照时是同一批对象）。</summary>
+    public static Scene Restore(UndoManager.Snapshot snapshot, SnapshotHeavyStore heavy)
+    {
+        var scene = new Scene();
+        if (string.IsNullOrWhiteSpace(snapshot.Json)) return scene;
+        FromDtos(JsonSerializer.Deserialize<List<Dto>>(snapshot.Json), scene, heavy);
+        return scene;
     }
 
     // ── 旧格式：实体数组（保持既有 .pmx 兼容） ──────────────────────
@@ -271,6 +300,33 @@ public static class SceneIO
             pc.Colors = new List<(float, float, float)>(pc.Pts.Count);
             for (int i = 0; i < pc.Pts.Count; i++) pc.Colors.Add((d.Pc[i * 3], d.Pc[i * 3 + 1], d.Pc[i * 3 + 2]));
         }
+        if (d.N.Length >= 1) pc.Elevation = d.N[0];
+        if (d.N.Length >= 2 && d.N[1] > 0) pc.PointPixels = (float)d.N[1];
+        return pc;
+    }
+
+    // ── 点云撤销快照 DTO：四个列表只记重数据仓 key(K=[点,逐点色,真实色,法向], 0=无)，名称/标高/点径/源路径照常 ──
+    private static Dto CloudRefDto(PointCloudEntity pc, SnapshotHeavyStore heavy) => new()
+    {
+        T = "cloud", S = pc.Name, Src = pc.Source, N = new[] { pc.Elevation, pc.PointPixels },
+        K = new[]
+        {
+            heavy.Put(pc.Pts),
+            pc.Colors != null ? heavy.Put(pc.Colors) : 0,
+            pc.RgbColors != null ? heavy.Put(pc.RgbColors) : 0,
+            pc.Normals != null ? heavy.Put(pc.Normals) : 0,
+        },
+    };
+
+    /// <summary>按 key 从仓里取回列表拼成点云；点列表已被清扫(不该发生)则退回一份空点云，别让整次撤销炸掉。</summary>
+    private static PointCloudEntity BuildCloudRef(Dto d, SnapshotHeavyStore heavy)
+    {
+        var k = d.K!;
+        var pc = new PointCloudEntity { Name = string.IsNullOrEmpty(d.S) ? "点云" : d.S!, Source = d.Src };
+        if (k.Length >= 1) pc.Pts = heavy.Get<List<(double x, double y, double z)>>(k[0]) ?? new();
+        if (k.Length >= 2 && k[1] != 0) pc.Colors = heavy.Get<List<(float r, float g, float b)>>(k[1]);
+        if (k.Length >= 3 && k[2] != 0) pc.RgbColors = heavy.Get<List<(float r, float g, float b)>>(k[2]);
+        if (k.Length >= 4 && k[3] != 0) pc.Normals = heavy.Get<List<(double x, double y, double z)>>(k[3]);
         if (d.N.Length >= 1) pc.Elevation = d.N[0];
         if (d.N.Length >= 2 && d.N[1] > 0) pc.PointPixels = (float)d.N[1];
         return pc;
