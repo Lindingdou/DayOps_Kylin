@@ -1377,19 +1377,24 @@ public partial class MainWindow : Window
             if (cmd.StartsWith("平盘宽反算") || cmd.StartsWith("反算平盘宽") || cmd.StartsWith("帮坡角反算")) { BermForAngleCmd(cmd); return; }
             if (cmd == "趋势整合台阶" || cmd == "趋势整合" || cmd == "整合台阶" || cmd == "趋势规整台阶" || cmd.StartsWith("趋势整合台阶 ") || cmd.StartsWith("趋势整合 ")) { await TrendIntegrateAsync(cmd); return; }
             if (cmd == "坡向着色" || cmd == "坡向") { await ShadeTinAsync("坡向着色", "按朝向 HSV 配色", TerrainAnalysis.BuildAspectMap); return; }
-            if (cmd == "高程着色" || cmd == "分色显示" || cmd == "高程分带") { await ShadeTinAsync("高程着色", "低绿→中黄→高棕", TerrainAnalysis.BuildElevationMap); return; }
+            if (cmd == "高程着色" || cmd == "高程分带") { await ShadeTinAsync("高程着色", "低绿→中黄→高棕", TerrainAnalysis.BuildElevationMap); return; }
+            if (cmd == "分色显示") { RoadEvolutionDisplayCmd(); return; }   // 道路运输系统·演化 overlay(忠实原 EvolutionDisplayWindow); 高程分色请用「高程着色」
             if (cmd == "体积计算" || cmd == "算量" || cmd == "土方量") { await VolumeAsync(); return; }
             if (cmd == "两期点云算量" || cmd == "两期算量" || cmd == "两期土方") { await TwoEpochVolumeAsync(); return; }
             if (cmd == "圈范围算量" || cmd == "圈量" || cmd.StartsWith("圈范围算量 ")) { await BoundaryVolumeAsync(cmd); return; }
             if (cmd == "提取道路中心线" || cmd == "道路中线" || cmd == "提取道路中线") { ExtractCenterline(); return; }
             if (cmd == "路网连通增强" || cmd == "连通增强" || cmd == "路网桥接" || cmd == "路网连通") { RoadConnectCmd(); return; }
-            if (cmd == "点对点寻径" || cmd == "寻径" || cmd == "点对点寻路") { StartPathfind(); return; }
+            if (cmd == "点对点寻径" || cmd == "寻径" || cmd == "点对点寻路") { await RoadPointToPointAsync(); return; }   // 忠实原 RoadLibPlugin(会话路网 + HaulSolveKernel 往返), 见 MainWindow.RoadTransport.Pathfind.cs
             if (cmd == "备选路径" || cmd == "K最短路" || cmd == "备用路径") { StartKPathfind(); return; }
             if (cmd == "路网校验" || cmd == "连通性诊断" || cmd == "路网体检") { ValidateRoadNetwork(); return; }
-            if (cmd == "基础道路网络构建" || cmd == "路网构建" || cmd == "路网预览" || cmd == "构建路网" || cmd == "路网更新") { BuildRoadNetworkCmd(); return; }
-            if (cmd == "路网存档" || cmd == "路网导出") { await SnapshotEpochAsync(); return; }
-            if (cmd == "演化对比" || cmd == "路网演化" || cmd == "两期路网对比") { await EvolutionCompareAsync(); return; }
-            if (cmd == "时段快照" || cmd == "路网快照" || cmd == "纪元快照") { await SnapshotEpochAsync(); return; }
+            if (cmd == "基础道路网络构建" || cmd == "路网构建" || cmd == "构建路网") { await RoadBuildNetworkAsync(); return; }   // 忠实原 CreateBuildNetworkCommand(参数对话框 + RoadGraphBuilder + 存档)
+            if (cmd == "路网预览") { RoadNetworkPreviewCmd(); return; }
+            if (cmd == "路网更新") { await RoadUpdateNetworkAsync(); return; }
+            if (cmd == "路网存档") { RoadArchiveCmd(); return; }
+            if (cmd == "路网导出") { await SnapshotEpochAsync(); return; }
+            if (cmd == "演化对比" || cmd == "路网演化" || cmd == "两期路网对比") { await RoadEvolutionCompareAsync(); return; }
+            if (cmd == "时段快照" || cmd == "路网快照") { RoadSnapshotCmd(); return; }
+            if (cmd == "纪元快照") { await SnapshotEpochAsync(); return; }
             if (cmd == "排土条带" || cmd == "条带填充" || cmd == "排土条带划分") { DumpStrips(); return; }
             if (cmd == "分帮扩帮" || cmd == "批量台阶扩帮" || cmd == "批量扩坑") { StartBench(); return; }
             if (cmd == "组合工作线" || cmd == "合并多段线" || cmd == "连接台阶线") { await JoinPolylinesCmdAsync(); return; }   // 「连接多段线」= 编辑组 POLYJOIN(带端点容差)
@@ -1486,7 +1491,8 @@ public partial class MainWindow : Window
             if (cmd == "作业面台账" || cmd == "作业面" || cmd == "工作面台账" || cmd == "采场参数") { WorkingFacesCmd(); return; }
             if (cmd == "参数模板库" || cmd == "参数化模板" || cmd == "参数模板" || cmd == "参数定义") { ParamTemplatesCmd(); return; }
             if (cmd == "月度计划" || cmd == "月计划" || cmd == "月度计划查看") { MonthlyPlansCmd(); return; }   // 只读展示(编制/授权工作流走 TaskLib, 受阻)
-            if (cmd == "路况显示" || cmd == "运输道路" || cmd == "道路台账") { HaulRoadsCmd(); return; }
+            if (cmd == "路况显示") { RoadConditionDisplayCmd(); return; }   // 忠实原 RoadConditionSymbology(逐段纵坡分档 + 状态压色 + 白向标)
+            if (cmd == "运输道路" || cmd == "道路台账") { HaulRoadsCmd(); return; }
             if (cmd == "排土场台账" || cmd == "排土场列表" || cmd == "排土场充填" || cmd == "排土场状态") { DumpSitesCmd(); return; }
             if (cmd == "钻孔煤质汇总" || cmd == "孔层煤质汇总" || cmd == "每孔每层煤质" || cmd == "煤质汇总") { CoalSampleSummaryCmd(); return; }
             if (cmd == "边坡设计" || cmd == "边坡参数" || cmd == "帮坡角设计") { SlopeDesignsCmd(); return; }
@@ -1516,7 +1522,8 @@ public partial class MainWindow : Window
             if (cmd == "地面点滤波" || cmd == "地面滤波") { await GroundFilterAsync(); return; }
             if (cmd == "移除障碍物" || cmd == "渐进形态滤波" || cmd == "地面非地面分离" || cmd.StartsWith("移除障碍物 ")) { await PmfAsync(cmd); return; }
             if (cmd == "C2C" || cmd == "点云比对" || cmd == "位移监测 C2C" || cmd == "位移监测") { await CloudCompareAsync(); return; }
-            if (cmd == "画道路中线" || cmd == "手动标定线路" || cmd == "道路中线绘制") { ActivateDrawTool("多段线"); StatusMsg.Text = "画道路中线：绘制折线作道路中线（供路网/寻径/演化对比）"; return; }
+            if (cmd == "手动标定线路") { await RoadMarkRouteAsync(); return; }   // 忠实原 CreateMarkRouteCommand(视口画线 + 交点捕捉 + 铺贴 + 接进中心线层)
+            if (cmd == "画道路中线" || cmd == "道路中线绘制") { ActivateDrawTool("多段线"); StatusMsg.Text = "画道路中线：绘制折线作道路中线（供路网/寻径/演化对比）"; return; }
             if (cmd == "境界圈定" || cmd == "凸包" || cmd == "采场圈定" || cmd == "采场/排土场圈定") { await BoundaryHullAsync(); return; }
             if (cmd == "确定境界" || cmd == "境界优化" || cmd == "最优坑深" || cmd == "经济境界") { PitDepthCmd(); return; }
             if (cmd.StartsWith("生成境界") || cmd.StartsWith("境界线") || cmd.StartsWith("几何圈定") || cmd.StartsWith("境界壳")) { PitEnvelopeCmd(cmd); return; }
@@ -1538,7 +1545,9 @@ public partial class MainWindow : Window
             if (cmd == "面积" || cmd == "面积测量" || cmd == "周长") { MeasureBySelection("面积"); return; }
             if (cmd == "距离" || cmd == "测量距离" || cmd == "测距") { MeasureBySelection("距离"); return; }
             if (cmd == "角度" || cmd == "测量角度" || cmd == "三点测角") { MeasureBySelection("角度"); return; }
-            if (cmd == "等效运距" || cmd == "运输指标" || cmd == "运输指标报表" || cmd == "驱动距离") { await HaulMetricsAsync(); return; }
+            if (cmd == "等效运距") { RoadEquivHaulCmd(); return; }   // 忠实原 EquivHaulWindow(一源多汇比选)
+            if (cmd == "运输指标报表") { RoadTransportIndicatorsCmd(); return; }   // 忠实原 TransportIndicatorsWindow
+            if (cmd == "运输指标" || cmd == "驱动距离") { await HaulMetricsAsync(); return; }
             if (cmd == "批量台阶扩帮" || cmd == "台阶线生成" || cmd == "台阶扩帮"
                 || cmd.StartsWith("批量台阶扩帮 ") || cmd.StartsWith("台阶线生成 ") || cmd.StartsWith("台阶扩帮 "))
             {
@@ -1594,9 +1603,12 @@ public partial class MainWindow : Window
             if (cmd == "导出OBJ" || cmd == "导出网格OBJ" || cmd == "网格导出OBJ") { await ExportMeshAsync("obj"); return; }
             if (cmd == "导出PLY" || cmd == "导出网格PLY" || cmd == "网格导出PLY") { await ExportMeshAsync("ply"); return; }
             if (cmd == "导出STL" || cmd == "导出网格STL" || cmd == "网格导出STL") { await ExportMeshAsync("stl"); return; }
-            if (cmd == "中心线管理" || cmd == "边状态" || cmd == "路网拓扑" || cmd == "中线管理") { RoadNetworkReportCmd(); return; }
+            if (cmd == "中心线管理" || cmd == "中线管理") { RoadCenterlineManagerCmd(); return; }   // 忠实原 CenterlineManagerWindow
+            if (cmd == "边状态") { await RoadEdgeStatusCmdAsync(); return; }
+            if (cmd == "路网拓扑") { RoadNetworkReportCmd(); return; }
             if (cmd == "瓶颈段分析" || cmd == "瓶颈段" || cmd == "关键路段" || cmd == "路段介数" || cmd == "路网瓶颈") { RoadBottleneckCmd(); return; }
-            if (cmd == "结构路面" || cmd == "路面带" || cmd == "结构路面带" || cmd.StartsWith("结构路面 ")) { StructurePavementCmd(cmd); return; }
+            if (cmd == "结构路面") { RoadStructurePavementCmd(); return; }   // 忠实原 CreateStructurePavementDisplayCommand(24m ribbon overlay 开/关)
+            if (cmd == "路面带" || cmd == "结构路面带" || cmd.StartsWith("结构路面 ")) { StructurePavementCmd(cmd); return; }
             if (cmd == "路网运输指标" || cmd == "运输指标路网" || cmd == "路网指标" || cmd == "路网里程指标") { RoadTransportIndicatorsCmd(); return; }
             if (cmd == "中线交点" || cmd == "交点分类" || cmd == "路网交点" || cmd == "中线交点分类" || cmd.StartsWith("中线交点 ") || cmd.StartsWith("交点分类 ")) { CenterlineJunctionsCmd(cmd); return; }
             if (cmd == "路段分类" || cmd == "路网拓扑分类" || cmd == "路段拓扑" || cmd == "干线支线") { RoadTopologyCmd(); return; }
@@ -8899,6 +8911,7 @@ public partial class MainWindow : Window
         _gripHover = -1;
         GizmoRebuild();   // 三轴手柄锚点随选择集重算, 见 MainWindow.Gizmo.cs
         RedrawHighlight();
+        RoadSelectionHook();   // 「中心线管理·批量选择」过滤器(见 MainWindow.RoadTransport.Centerline.cs); 没开时空转
     }
 
     // 只重画高亮 + 夹点方块(夹点选择/悬停变化时用，不动夹点表)
