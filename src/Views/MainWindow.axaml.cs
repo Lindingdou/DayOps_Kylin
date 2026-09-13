@@ -1495,7 +1495,8 @@ public partial class MainWindow : Window
             if (cmd == "现场验收录入" || cmd == "现场验收" || cmd == "参数验收") { AcceptanceStatsCmd(); return; }
             if (cmd.StartsWith("参数验收判定") || cmd.StartsWith("DB参数验收") || cmd.StartsWith("验收判定")) { ParamAcceptanceJudgeCmd(cmd); return; }
             if (cmd.StartsWith("兼容机型") || cmd.StartsWith("可用机型") || cmd.StartsWith("适配机型")) { CompatibleModelsCmd(cmd); return; }
-            if (cmd == "作业面台账" || cmd == "作业面" || cmd == "工作面台账" || cmd == "采场参数") { WorkingFacesCmd(); return; }
+            if (cmd == "作业面台账") { OpenTaskWindow(() => new Views.TaskLib.WorkFaceLedgerWindow()); return; }   // 原 TaskLib WorkFaceLedgerWindow（源—物料—汇 盘子台账），见 MainWindow.TaskLib.cs
+            if (cmd == "作业面" || cmd == "工作面台账" || cmd == "采场参数") { WorkingFacesCmd(); return; }   // 旧切片：working_face 概览状态行（命令行别名保留）
             if (cmd == "参数化模板" || cmd == "开采模板" || cmd == "采场模板") { OpenBenchTemplateEditor(dump: false); return; }   // 剥采排·参数化模板 = 原 MiningTemplateEditorWindow(勿再指到库参数模板统计)
             if (cmd == "参数模板库" || cmd == "参数模板" || cmd == "参数定义") { ParamTemplatesCmd(); return; }
             if (cmd == "月度计划" || cmd == "月计划" || cmd == "月度计划查看") { MonthlyPlansCmd(); return; }   // 只读展示(编制/授权工作流走 TaskLib, 受阻)
