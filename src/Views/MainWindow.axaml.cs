@@ -91,7 +91,8 @@ public partial class MainWindow : Window
         // 自检钩子: PITMINE_SELFTEST=<Ribbon 命令名> 时, 窗口显示后自动派发一次该命令 ——
         // 供渲染核对(截图比对原版)用; 未设该变量时完全不生效。
         if (System.Environment.GetEnvironmentVariable("PITMINE_SELFTEST") is { Length: > 0 } stCmd)
-            Opened += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(() => { try { RunSelftest(stCmd); } catch { } });
+            // 自检脚本里任一步抛异常 ⇒ 整段脚本中止且进程照常活着；不记下来的话无人值守跑完只看到"截图没出来"，查不到是哪一步炸的。
+            Opened += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(() => { try { RunSelftest(stCmd); } catch (System.Exception ex) { PitMine3D.Kylin.CrashLog.Write("自检", "脚本中止：" + ex); } });
 
         // 交互提示同步(同原版 jigPromptText)：任一指针/键盘事件处理完后刷新命令行提示与信息栏历史。
         // handledEventsToo=true —— 视口/按钮把事件标记 Handled 后仍要刷新；排队到事件处理完再算(状态已切换)。
@@ -1516,6 +1517,7 @@ public partial class MainWindow : Window
             if (cmd == "班组派工") { OpenTaskWindow(() => new Views.TaskLib.CrewAssignWindow()); return; }   // 原 TaskLib CrewAssignWindow：花名册 + 自动派工（类别↔持证）+ 持证/出勤真校核 + 车号↔司机配死落盘
             if (cmd == "实绩录入") { OpenTaskWindow(() => new Views.TaskLib.ActualEntryWindow()); return; }   // 原 TaskLib ActualEntryWindow：班末录入 → 回灌任务台账 + 占容方扣库容 + 故障工时汇总 + 原因码 + 派车单对账 + 偏差处置建议
             if (cmd == "编制配置") { OpenTaskWindow(() => new Views.TaskLib.CompileConfigWindow()); return; }   // 原 TaskLib CompileConfigWindow：当日能力预算条 + 三组切分规则锚点 + 链路体检 + 铲—车编组真联动（MF 条）
+            if (cmd == "去向台账") { OpenTaskWindow(() => new Views.TaskLib.SinkLedgerWindow()); return; }   // 原 TaskLib SinkLedgerWindow：排土场/破碎站/煤仓/堆场统一台账（占容方口径）+ 本日入方库容告警 + 盘点修正流水 + 按台账重建排土场 + 可接物料白名单
             if (cmd == "作业面" || cmd == "工作面台账" || cmd == "采场参数") { WorkingFacesCmd(); return; }   // 旧切片：working_face 概览状态行（命令行别名保留）
             if (cmd == "参数化模板" || cmd == "开采模板" || cmd == "采场模板") { OpenBenchTemplateEditor(dump: false); return; }   // 剥采排·参数化模板 = 原 MiningTemplateEditorWindow(勿再指到库参数模板统计)
             if (cmd == "参数模板库" || cmd == "参数模板" || cmd == "参数定义") { ParamTemplatesCmd(); return; }
