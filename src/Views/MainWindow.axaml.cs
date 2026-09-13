@@ -1398,6 +1398,7 @@ public partial class MainWindow : Window
             if (cmd == "排土条带" || cmd == "排土条带划分") { DumpStripCmd(); return; }   // 原 DumpStripDialog: 台阶壳子 × 分割长度 × 条带宽 → 潜在排土位置, 见 MainWindow.DumpStrip.cs
             if (cmd == "条带填充") { DumpStrips(); return; }   // 命令行别名: 闭合范围内平行线填充(早期切片)
             if (cmd == "分帮扩帮") { SkeletonEcho("分帮扩帮", "沿境界按帮分段,各帮用各自 H/α/W 放坡 + 帮交界过渡带收口"); return; }   // 原版 SkeletonCommand 桩, 照回显
+            if (cmd == "处理尖灭" || cmd.StartsWith("处理尖灭 ")) { await HandlePinchDialogCmd(cmd); return; }   // 原 HandlePinchDialog: 手动(尖灭点+坡顶线, 上部联动) / 煤层(锁台阶组+顶板+底板), 见 MainWindow.HandlePinch.cs
             if (cmd == "最终并段" || cmd == "最终帮并段") { SkeletonEcho("最终帮并段", "选境界 + 从第 N 级并几级 + 并段后坡角 → mergeCount(几何已实现,仅缺入口)"); return; }   // 原版 SkeletonCommand 桩
             if (cmd == "批量扩坑" || cmd.StartsWith("批量扩坑 ")) { await SeamPitCmd(cmd); return; }
             if (cmd == "动态调整" || cmd == "动态调整台阶形态") { BenchDesignJigCmd(); return; }   // 剥采排·动态调整 = 原 StartBenchDesignJig(内核实时 jig), 与 TaskLib 的生产任务动态调整不是一回事
