@@ -1783,7 +1783,8 @@ public partial class MainWindow : Window
             if (cmd == "分解") { await ExplodeCmdAsync(); return; }
             if (cmd == "区域求差" || cmd == "可采区域求差" || cmd == "多边形求差") { SubtractRegions(); return; }
             if (cmd == "区域重叠检测" || cmd == "区域重叠" || cmd == "重叠检测") { CheckRegionOverlap(); return; }
-            if (cmd == "平盘宽度识别" || cmd == "现场参数提取" || cmd == "平盘识别" || cmd == "采场参数识别") { await BenchWidthAsync(); return; }
+            if (cmd == "采场参数识别") { OpenShortTermField(); return; }   // 原 CreateOpenShortTermFieldCommand：参数校核 + 按平盘宽度提取区域 窗
+            if (cmd == "平盘宽度识别" || cmd == "现场参数提取" || cmd == "平盘识别") { await BenchWidthAsync(); return; }   // 旧切片：CSV 台阶线(命令行别名保留)
             if (cmd == "确定可采区域" || cmd == "可采区域" || cmd == "可采区域识别") { await MineableAreaAsync(); return; }
             if (cmd == "采场排土场识别" || cmd == "采场识别" || cmd == "排土场识别" || cmd == "地貌分类" || cmd == "采排识别" || cmd.StartsWith("采场排土场识别 ")) { await LandformClassifyAsync(cmd); return; }
             if (cmd == "网格交线" || cmd == "两网交线" || cmd == "面交线" || cmd == "求交线") { await MeshIntersectionAsync(); return; }
@@ -10906,6 +10907,7 @@ public partial class MainWindow : Window
             if (cmd == "@中长远示例") { SelftestLongTermSample(); return; }   // @中长远示例: 自检块体+西缘工作线并选中 → 派生窗拾取+生成多套方案(中长远五窗实机核对用)
             if (cmd == "@采排圈定示例") { _ = SelftestMineableAreaSample(); return; }   // @采排圈定示例: 合成采场/排土场台阶线 + 连库 + 开圈定窗自动识别(实机核对用)
             if (cmd == "@短期示例") { SelftestShortTermSample(); return; }   // @短期示例: 短期派生窗生成并编制 + 月度计划编制一键(实机核对用)
+            if (cmd == "@采场参数示例") { SelftestShortTermFieldSample(); return; }   // @采场参数示例: 合成坡顶/坡底环并选中 → 采场参数识别窗提取校核 + 平盘宽识别(实机核对用)
             if (cmd.StartsWith("@块体示例"))   // @块体示例 [nx ny nz]: 建一个规则块体模型并入场景(截图核对体素显示用)
             {
                 var a = cmd.Length > 5 ? cmd.Substring(5).Split(' ', System.StringSplitOptions.RemoveEmptyEntries) : System.Array.Empty<string>();

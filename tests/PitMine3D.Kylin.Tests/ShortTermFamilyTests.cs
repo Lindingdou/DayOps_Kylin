@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using PitMine3D.Kylin.Cad.Plan;
+using BenchParameterExtractor = PitMine3D.Kylin.Cad.BenchParameterExtractor;
 using Xunit;
 using CalendarScenario = PitMine3D.Kylin.Cad.Plan.CalendarScenario;
 using DispatchStrategy = PitMine3D.Kylin.Cad.Plan.DispatchStrategy;
@@ -257,5 +258,56 @@ public class ShortTermFamilyTests
         var probe = b.NewCandidate(DispatchStrategy.Balanced, CalendarScenario.Standard, "案例");
         ShortTermScheduler.Schedule(probe, MonthlyTargetTable.NoOverride());
         Assert.DoesNotContain(probe.Result!.Warnings, w => w.Contains("产能上限闸没开"));   // 缺省机队够用
+    }
+}
+
+/// <summary>采场参数识别：校核器（规范默认兜底 / 本地判定 / 稳定性下界 / 回写记录无库为空）。</summary>
+public class ParameterVerifierTests
+{
+    private static BenchParameterExtractor.Result Measure(double h, double a, double w)
+    {
+        var lines = new List<BenchParameterExtractor.Line>();
+        double run = h / Math.Tan(a * Math.PI / 180);
+        for (int k = 0; k < 3; k++)
+        {
+            double top = 300 - k * (run + w);
+            var crest = new double[24 * 3]; var toe = new double[24 * 3];
+            for (int i = 0; i < 24; i++)
+            {
+                double t = 2 * Math.PI * i / 24;
+                crest[i * 3] = top * Math.Cos(t); crest[i * 3 + 1] = top * Math.Sin(t); crest[i * 3 + 2] = 100 - k * h;
+                toe[i * 3] = (top - run) * Math.Cos(t); toe[i * 3 + 1] = (top - run) * Math.Sin(t); toe[i * 3 + 2] = 100 - (k + 1) * h;
+            }
+            lines.Add(BenchParameterExtractor.Line.From(crest, true)); lines.Add(BenchParameterExtractor.Line.From(toe, false));
+        }
+        return BenchParameterExtractor.Extract(lines);
+    }
+
+    [Fact]
+    public void 校核_规范默认兜底_本地判定_稳定性下界_回写无库为空()
+    {
+        var m = Measure(12, 70, 4);
+        Assert.True(m.Ok, m.Message);
+        Assert.Equal(12, m.BenchHeight, 0.6);
+        var rep = ParameterVerifier.Verify(m, isDump: false, frictionAngleDeg: 35);
+        Assert.Equal(4, rep.Rows.Count);
+        Assert.Contains("规范默认", rep.DesignProvenance);
+        Assert.Equal("台阶高", rep.Rows[0].Name);
+        Assert.Contains(rep.Rows, r => r.Code == "safety_platform_width");
+        Assert.All(rep.Rows, r => Assert.True(r.Status is "pass" or "warning" or "fail" or "pending"));
+        Assert.NotNull(rep.StabilityF);
+        Assert.Contains(rep.Notes, n => n.Contains("稳定性 F="));
+        Assert.Contains(rep.OverallStatus, new[] { "pass", "warning", "fail" });
+        // 排土场基准不同（提供来源文案）
+        var dump = ParameterVerifier.Verify(m, isDump: true);
+        Assert.Contains("排土场", dump.DesignProvenance);
+        // 无 GeoDataBase：无参数定义 → 回写记录为空、来源标"本地兜底·无规范"
+        Assert.Empty(ParameterVerifier.ToAcceptanceRecords(rep, "现状面", DateTime.Now));
+        Assert.All(rep.Rows, r => Assert.Contains("本地兜底", r.Source));
+        // 偏差 >15% 判偏差；一致判合格
+        var design = ParameterVerifier.ResolveDesign(false, null, null);
+        var exact = Measure(design.H, design.A, design.W);
+        var rep2 = ParameterVerifier.Verify(exact, false);
+        Assert.Equal("pass", rep2.Rows[0].Status);
     }
 }

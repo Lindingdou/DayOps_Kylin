@@ -153,6 +153,20 @@ public partial class MainWindow
         StatusMsg.Text = "月度计划编制：⚡一键编制 / 编制选中 → 逐月计划图 + 九指标 + 逐月配置表(输入)/逐月计划表(结果) → ✔确定月度计划(写 monthly_plan 台账) / 导出报表";
     }
 
+    private ShortTermFieldWindow? _shortTermFieldWin;
+
+    /// <summary>短期「采场参数识别」= 原 CreateOpenShortTermFieldCommand：参数校核 / 按平盘宽度提取区域 窗（单例）。</summary>
+    private void OpenShortTermField()
+    {
+        if (_shortTermFieldWin != null) { _shortTermFieldWin.Activate(); GeoDb.GeoDbWindows.NoteLast(_shortTermFieldWin); StatusMsg.Text = "采场参数识别窗口已在前台"; return; }
+        var w = new ShortTermFieldWindow(PlanHost);
+        _shortTermFieldWin = w;
+        w.Closed += (_, _) => _shortTermFieldWin = null;
+        w.Show(this);
+        GeoDb.GeoDbWindows.NoteLast(w);
+        StatusMsg.Text = "采场参数识别：选中坡顶/坡底台阶线 → 提取并校核(H/α/W/β 对规范/模板) → 回写验收库 / 写进短期计划；按平盘宽度识别达标平盘（列表管理 + overlay）";
+    }
+
     /// <summary>短期「派生计划方案」= 原 CreateOpenShortTermDeriveCommand：作业组织×工作历 联合比选窗（单例）。</summary>
     private void OpenShortTermDerive()
     {
@@ -522,5 +536,37 @@ public partial class MainWindow
         _shortTermDeriveWin!.OnGenerate();
         OpenShortTermSolve("月度计划编制 一键");
         StatusMsg.Text = $"自检：短期示例 —— 派生 {_shortTermDeriveWin.SelftestCount} 套｜{_shortTermDeriveWin.SelftestStatus}";
+    }
+}
+
+public partial class MainWindow
+{
+    /// <summary>@采场参数示例：合成 6 级降深采场的坡顶/坡底环（台阶高 10 m · 坡面角 ≈ 40° · 平盘 ≈ 18 m）入图并全部选中 → 开「采场参数识别」→ 提取并校核 + 按平盘宽度 ≥ 15 m 识别。</summary>
+    private void SelftestShortTermFieldSample()
+    {
+        BeginChange();
+        _layers.EnsureImported("点云_坡顶线", 0.9f, 0.3f, 0.2f); _layers.EnsureImported("点云_坡底线", 0.2f, 0.5f, 0.9f);
+        var made = new List<SceneEntity>();
+        PolylineEntity Ring(double hx, double hy, double z, bool crest)
+        {
+            var pl = new PolylineEntity { LayerName = crest ? "点云_坡顶线" : "点云_坡底线", Closed = true, Elevation = z, Cr = crest ? 0.9f : 0.2f, Cg = crest ? 0.3f : 0.5f, Cb = crest ? 0.2f : 0.9f };
+            for (int i = 0; i < 24; i++) { double t = 2 * Math.PI * i / 24; pl.Points.Add((hx * Math.Cos(t), hy * Math.Sin(t))); }
+            _scene.Add(pl); made.Add(pl); return pl;
+        }
+        // 每级：坡顶环 → 内缩 run=H/tanα≈12 m 的坡底环（低 10 m）→ 再内缩平盘 18 m 是下一级坡顶
+        for (int k = 0; k < 6; k++)
+        {
+            double top = 400 - 30 * k;
+            Ring(top, top - 100, 100 - 10 * k, crest: true);
+            Ring(top - 12, top - 112, 100 - 10 * (k + 1), crest: false);
+        }
+        _selected.Clear(); _selected.AddRange(made);
+        RefreshScene();
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => Viewport.FitBounds(new[] { -450.0, -350.0, 450.0, 350.0 }), Avalonia.Threading.DispatcherPriority.Background);
+        OpenShortTermField();
+        var w = _shortTermFieldWin!;
+        string s1 = w.SelftestExtract();
+        string s2 = w.SelftestIdentify(15);
+        StatusMsg.Text = $"自检：采场参数示例 —— 12 环选中 → 校核 {w.SelftestRowCount} 行｜{s1}｜{s2}";
     }
 }
