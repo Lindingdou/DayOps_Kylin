@@ -38,6 +38,8 @@
     <PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0" />
     <!-- 「输出报告」的 PDF 导出 —— 与 Windows 版 BlockModelLib 同版本; 自带 linux-x64/arm64 原生件, 无 SkiaSharp 依赖冲突 -->
     <PackageReference Include="QuestPDF" Version="2024.7.1" />
+    <!-- 日常生产组织「生产报告」的 Word(.docx) 渲染 —— 与原 TaskLib 同版本(WordReportRenderer 逐行移植) -->
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.1.1" />
 
     <PackageReference Include="Avalonia.Diagnostics" Version="11.2.1">
       <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>

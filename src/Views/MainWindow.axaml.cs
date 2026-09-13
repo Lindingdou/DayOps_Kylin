@@ -1445,14 +1445,16 @@ public partial class MainWindow : Window
             if (cmd == "设备因素分析" || cmd == "主控因素" || cmd == "主控因素分析" || cmd == "因素相关分析") { EquipmentFactorCmd(); return; }
             if (cmd.StartsWith("效能提升模拟") || cmd.StartsWith("提升路径模拟") || cmd.StartsWith("What-if") || cmd.StartsWith("效能whatif")) { EfficiencyWhatIfCmd(cmd); return; }
             if (cmd == "产能分析" || cmd == "设备能力" || cmd == "能力分析" || cmd == "产能") { CapacityRankingCmd(); return; }
-            if (cmd == "故障分析" || cmd == "设备状态·故障报修" || cmd == "故障报修" || cmd == "设备状态") { FaultStatsCmd(); return; }
+            if (cmd == "设备状态·故障报修" || cmd == "故障报修" || cmd == "设备状态") { OpenTaskWindow(() => new Views.TaskLib.EquipStatusWindow()); return; }   // 原 TaskLib EquipStatusWindow：报修/维修/复机真写 FaultEvent + 重排建议
+            if (cmd == "故障分析") { FaultStatsCmd(); return; }   // 旧切片：地质库故障 Pareto 状态行（命令行别名保留）
             if (cmd == "爆破分析" || cmd == "爆破统计" || cmd == "爆破数据" || cmd == "钻爆分析") { BlastStatsCmd(); return; }
             if (cmd == "设备累计工时" || cmd == "累计运行小时" || cmd == "累计工时" || cmd == "设备工时") { CumulativeHoursCmd(); return; }
             if (cmd == "机型KPI" || cmd == "型号KPI" || cmd == "分机型KPI" || cmd == "机型可用率") { KpiByModelCmd(); return; }
             if (cmd == "KPI分析" || cmd == "KPI" || cmd == "设备KPI") { KpiStatsCmd(); return; }
             if (cmd == "设备综合评分" || cmd == "设备评分" || cmd == "综合评分" || cmd == "设备排名评分") { EquipmentScoreCmd(); return; }
             if (cmd == "钻孔管理" || cmd == "钻孔统计" || cmd == "钻孔信息") { BoreholeStatsCmd(); return; }
-            if (cmd == "煤质统计" || cmd == "煤质数据管理" || cmd == "煤质分析" || cmd == "质量·配煤分析" || cmd == "配煤分析") { CoalQualityStatsCmd(); return; }
+            if (cmd == "质量·配煤分析" || cmd == "配煤分析") { OpenTaskWindow(() => new Views.TaskLib.QualityAnalysisWindow()); return; }   // 原 TaskLib QualityAnalysisWindow：各面实测 vs 目标 + 综合配煤入仓
+            if (cmd == "煤质统计" || cmd == "煤质数据管理" || cmd == "煤质分析") { CoalQualityStatsCmd(); return; }   // 地质库煤质统计窗（§四）
             if (cmd == "分煤层煤质" || cmd == "煤质箱线" || cmd == "分层煤质统计" || cmd.StartsWith("分煤层煤质 ") || cmd.StartsWith("煤质箱线 ")) { await CoalStatsBySeamCmd(cmd); return; }
             if (cmd == "煤质数据健康度" || cmd == "数据健康度" || cmd == "煤质健康度" || cmd == "煤质数据体检") { CoalDataHealthCmd(); return; }
             if (cmd == "商品煤符合性" || cmd == "煤质达标" || cmd == "商品煤达标" || cmd.StartsWith("商品煤符合性 ") || cmd.StartsWith("煤质达标 ")) { CoalComplianceCmd(cmd); return; }
@@ -1511,7 +1513,8 @@ public partial class MainWindow : Window
             if (cmd == "层位求交" || cmd == "顶底板求交" || cmd == "煤层高程" || cmd.StartsWith("层位求交 ") || cmd.StartsWith("顶底板求交 ") || cmd.StartsWith("煤层高程 ")) { SeamIntersectCmd(cmd); return; }
             if (cmd == "机群总览" || cmd == "设备总览" || cmd == "机群") { FleetOverviewCmd(); return; }
             if (cmd == "机群驾驶舱" || cmd == "领导驾驶舱" || cmd == "驾驶舱" || cmd == "机群健康度") { FleetCockpitCmd(); return; }
-            if (cmd == "数据看板" || cmd == "看板" || cmd == "调度态势看板" || cmd == "态势看板") { DataBoardCmd(); return; }
+            if (cmd == "调度态势看板" || cmd == "态势看板") { OpenTaskWindow(() => new Views.TaskLib.DispatchBoardWindow()); return; }   // 原 TaskLib DispatchBoardWindow：KPI 条 / 去向预警卡 / 主设备卡 / 告警栏
+            if (cmd == "数据看板" || cmd == "看板") { DataBoardCmd(); return; }   // 地质库数据看板（§四）
             if (cmd == "煤种分类" || cmd == "煤类分类" || cmd == "煤炭分类") { CoalClassificationCmd(); return; }
             if (cmd == "煤层台阶参数" || cmd == "台阶参数" || cmd == "煤层参数") { SeamBenchParamsCmd(); return; }
             if (cmd == "设备约束条件" || cmd == "设备约束" || cmd == "能力约束") { EquipmentConstraintsCmd(); return; }
@@ -1579,7 +1582,9 @@ public partial class MainWindow : Window
             if (cmd == "质量统计" || cmd == "统计分析" || cmd == "煤质CSV统计" || cmd == "样本统计") { await QualityStatsAsync(); return; }   // 用户 CSV 统计(区别于 §四 库煤质统计)
             if (cmd == "坡角估算" || cmd == "工作帮坡角" || cmd == "坡角") { await SlopeEstimateAsync(); return; }
             if (cmd == "台阶参数分析" || cmd == "台阶分析" || cmd == "台阶参数" || cmd == "工艺参数分析") { await BenchAnalyzeAsync(); return; }
-            if (cmd == "达成分析" || cmd == "产量达成" || cmd == "达成率" || cmd == "达成度评价" || cmd == "产量统计") { await AttainmentAsync(); return; }
+            if (cmd == "达成度评价") { OpenTaskWindow(() => new Views.TaskLib.AttainmentWindow()); return; }   // 原 TaskLib AttainmentWindow：量+质双维 + 缺口归因 + 月计划对账/再平衡
+            if (cmd == "产量统计") { OpenTaskWindow(() => new Views.TaskLib.OutputStatsWindow()); return; }   // 原 TaskLib OutputStatsWindow：按设备/工序多维 + 计划剥采比 + 占比图
+            if (cmd == "达成分析" || cmd == "产量达成" || cmd == "达成率") { await AttainmentAsync(); return; }   // 旧切片：生产记录 CSV 达成分析（命令行别名保留）
             if (cmd == "车铲匹配" || cmd == "配车匹配" || cmd == "车铲配比") { await FleetMatchAsync(); return; }
             if (cmd == "点云质量统计" || cmd == "点云统计" || cmd == "点云质量") { await PointCloudStatsAsync(); return; }
             if (cmd == "分割点云" || cmd == "点云分割" || cmd == "欧氏聚类" || cmd == "点云聚类" || cmd.StartsWith("分割点云 ")) { await SegmentCloudAsync(cmd); return; }
@@ -1633,7 +1638,8 @@ public partial class MainWindow : Window
                 || cmd.StartsWith("生产任务编制 ") || cmd.StartsWith("排产 ")) { TaskExplodeCmd(cmd); return; }
             if (cmd == "采剥平衡" || cmd == "采剥平衡分析" || cmd == "剥采平衡" || cmd == "物料平衡") { await StripBalanceAsync(); return; }
             if (cmd == "配煤核算" || cmd == "配煤" || cmd == "煤质混合" || cmd == "配煤计算") { await CoalBlendAsync(); return; }
-            if (cmd == "工序进度跟踪" || cmd == "工序进度" || cmd == "进度跟踪") { await ProcessProgressAsync(); return; }
+            if (cmd == "工序进度跟踪" || cmd == "工序进度") { OpenTaskWindow(() => new Views.TaskLib.ProcessProgressWindow()); return; }   // 原 TaskLib ProcessProgressWindow：区×工序 聚合引擎任务，按班
+            if (cmd == "进度跟踪") { await ProcessProgressAsync(); return; }   // 旧切片：任务 CSV 工序进度（命令行别名保留）
             if (cmd == "环节降效" || cmd == "天气降效" || cmd.StartsWith("环节降效 ") || cmd.StartsWith("天气降效 "))
             {
                 var t = cmd.Split(new[] { ' ' }, System.StringSplitOptions.RemoveEmptyEntries);

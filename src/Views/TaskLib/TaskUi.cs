@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
 using Avalonia.Data;
 using Avalonia.Layout;
@@ -143,6 +144,65 @@ internal static class TaskUi
             });
         }
         return col;
+    }
+
+    /// <summary>原各窗的指标卡（Card 样式：Surface 底 + 1px 边 + 圆角 6 + 12,8 内边距）：小灰标题 + 21px 数值。</summary>
+    public static Border Card(string label, out TextBlock value, IBrush? valueBrush = null, TextBlock? labelBlock = null)
+    {
+        var sp = new StackPanel();
+        var l = labelBlock ?? new TextBlock();
+        l.Text = label; l.FontSize = 12; l.Margin = new Thickness(0, 0, 0, 4);
+        Theme(l, TextBlock.ForegroundProperty, "Theme.Text.Muted");
+        value = new TextBlock { FontSize = 21, FontWeight = FontWeight.Medium, Text = "—" };
+        if (valueBrush != null) value.Foreground = valueBrush; else Theme(value, TextBlock.ForegroundProperty, "Theme.Text.Body");
+        sp.Children.Add(l); sp.Children.Add(value);
+        var b = new Border { BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Padding = new Thickness(12, 8), Margin = new Thickness(3, 0), Child = sp };
+        Theme(b, Border.BackgroundProperty, "Theme.Surface.Background");
+        Theme(b, Border.BorderBrushProperty, "Theme.Surface.Border");
+        return b;
+    }
+
+    /// <summary>一行等宽指标卡（原 UniformGrid Rows=1）。</summary>
+    public static UniformGrid CardRow(params Control[] cards)
+    {
+        var u = new UniformGrid { Rows = 1, Margin = new Thickness(10, 10, 10, 4) };
+        foreach (var c in cards) u.Children.Add(c);
+        return u;
+    }
+
+    /// <summary>GroupBox 等价：标题 + 边框 + 内容。</summary>
+    public static Border GroupBox(string header, Control content, Thickness? margin = null, double padding = 6)
+    {
+        var head = new TextBlock { Text = header, FontWeight = FontWeight.SemiBold, FontSize = 12.5, Margin = new Thickness(0, 0, 0, 4) };
+        Theme(head, TextBlock.ForegroundProperty, "Theme.Text.Body");
+        var dock = new DockPanel();
+        DockPanel.SetDock(head, Avalonia.Controls.Dock.Top);
+        dock.Children.Add(head); dock.Children.Add(content);
+        var b = new Border { BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(padding), Margin = margin ?? new Thickness(0), Child = dock };
+        Theme(b, Border.BorderBrushProperty, "Theme.Surface.Border");
+        return b;
+    }
+
+    // ── Canvas 画图小件（原 WPF Line/Rectangle/TextBlock 摆到 Canvas 上）──
+    public static IBrush Rgb(uint argb) => new SolidColorBrush(Color.FromUInt32(argb));
+    public static IBrush Hex(string hex) => new SolidColorBrush(Color.Parse(hex));
+
+    public static void Line(Canvas c, double x1, double y1, double x2, double y2, IBrush stroke, double thick = 1)
+        => c.Children.Add(new Avalonia.Controls.Shapes.Line { StartPoint = new Point(x1, y1), EndPoint = new Point(x2, y2), Stroke = stroke, StrokeThickness = thick });
+
+    public static Avalonia.Controls.Shapes.Rectangle Rect(Canvas c, double x, double y, double w, double h, IBrush fill, IBrush? stroke = null, double thick = 1)
+    {
+        var r = new Avalonia.Controls.Shapes.Rectangle { Width = Math.Max(0, w), Height = Math.Max(0, h), Fill = fill, Stroke = stroke, StrokeThickness = stroke == null ? 0 : thick };
+        Canvas.SetLeft(r, x); Canvas.SetTop(r, y); c.Children.Add(r);
+        return r;
+    }
+
+    public static TextBlock CanvasText(Canvas c, double x, double y, string t, double size, IBrush? brush = null, bool bold = false)
+    {
+        var tb = new TextBlock { Text = t, FontSize = size, Foreground = brush ?? new SolidColorBrush(Color.FromArgb(0xAA, 0x88, 0x88, 0x88)) };
+        if (bold) tb.FontWeight = FontWeight.SemiBold;
+        Canvas.SetLeft(tb, x); Canvas.SetTop(tb, y); c.Children.Add(tb);
+        return tb;
     }
 
     public static Task Info(Window owner, string title, string text) => CoalMsgBox.ShowAsync(owner, title, text);
