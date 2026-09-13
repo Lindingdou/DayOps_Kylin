@@ -1576,7 +1576,8 @@ public partial class MainWindow : Window
                 GenerateBenchLines(benchD);
                 return;
             }
-            if (cmd == "剥采比均衡" || cmd == "VP曲线" || cmd == "剥采比") { await StrippingBalanceAsync(); return; }
+            if (cmd == "剥采比均衡" || cmd == "VP曲线") { OpenVpCurve(); return; }   // 原 CreateOpenVpCurveCommand: VpCurveWindow(逐期表 + VP 曲线 + 分阶段均衡), 见 MainWindow.Plan.cs
+            if (cmd == "剥采比" || cmd == "剥采比均衡CSV" || cmd == "VP曲线入图") { await StrippingBalanceAsync(); return; }   // 旧切片: CSV → 曲线/折线入图(命令行别名保留)
             if (cmd == "月度剥离均衡" || cmd == "剥离调度" || cmd == "拉紧绳" || cmd.StartsWith("月度剥离均衡 ")) { await StripScheduleAsync(cmd); return; }
             if (cmd == "工作面线拟合" || cmd == "工作面线" || cmd == "拟合工作面线") { await WorkingFaceLineAsync(); return; }
             if (cmd == "质量统计" || cmd == "统计分析" || cmd == "煤质CSV统计" || cmd == "样本统计") { await QualityStatsAsync(); return; }   // 用户 CSV 统计(区别于 §四 库煤质统计)

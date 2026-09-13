@@ -76,6 +76,29 @@ public partial class MainWindow
         StatusMsg.Text = "开采程序确定：一键划分 → 对比矩阵 + 拉沟候选 + 四图表 → ✔确定 落地采区/拉沟/推进箭头";
     }
 
+    private VpCurveWindow? _vpCurveWin;
+
+    /// <summary>优化开采设计⑥「剥采比均衡」= 原 CreateOpenVpCurveCommand：打开 VP 曲线窗口（单例）。「从计划提取」按 短期确定→短期已排→中长远确定→中长远已排 取逐期 P/V。</summary>
+    private void OpenVpCurve()
+    {
+        if (_vpCurveWin != null) { _vpCurveWin.Activate(); StatusMsg.Text = "剥采比均衡窗口已在前台"; return; }
+        var w = new VpCurveWindow(ExtractPlanPeriodsForVp, (s, warn) => EditEcho(s, warn ? EchoLevel.Warn : EchoLevel.Info));
+        _vpCurveWin = w;
+        w.Closed += (_, _) => _vpCurveWin = null;
+        w.Show(this);
+        GeoDb.GeoDbWindows.NoteLast(w);
+        StatusMsg.Text = "剥采比均衡：逐期录入/从计划提取 P·V → 累计 VP 曲线 + 投产/达产 + 分阶段均衡折线 + 校核";
+    }
+
+    /// <summary>「从计划提取」取数（原 LoadFromEntities 的优先级）：① 已确定短期月度方案（逐月按物料流聚合）② 已排产首套 ③ 已确定中长远 ④ 已排产中长远；都没有 → null。</summary>
+    private (string src, List<(string Label, double Coal, double Strip)> rows)? ExtractPlanPeriodsForVp()
+    {
+        var lt = _longTermSchemes.FirstOrDefault(s => s.Periods.Count > 0);
+        if (lt == null) return null;
+        var rows = lt.Periods.Select(pp => (pp.Label, Math.Round(pp.CoalWanT, 1), Math.Round(pp.StripWanM3, 0))).ToList();
+        return ($"中长远进度计划「{lt.Name}」（未确定，取已排产的首套） · {lt.Periods.Count} 期（逐年）", rows);
+    }
+
     /// <summary>
     /// 规划模块对宿主的依赖（原 IEntityCapability / ISelectionCapability / IPitDesignCapability 被 PlanLib 用到的那一截）。
     /// 全部按 <see cref="EntityHandles"/> 的会话 handle 说话。
