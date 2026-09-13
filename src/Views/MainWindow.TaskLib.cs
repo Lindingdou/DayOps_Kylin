@@ -56,12 +56,51 @@ public partial class MainWindow
         return list;
     }
 
+    // ── 宿主能力注入（原 TaskLibPlugin.Initialize 里的 SimHost.Inject(context.Capabilities)）──
+    private KylinViewCapability? _taskViewCap;
+    private void EnsureTaskLibHost()
+    {
+        if (_taskViewCap != null) return;
+        _taskViewCap = new KylinViewCapability(this);
+        PitMine3D.Kylin.TaskLib.Simulation.SimHost.View = _taskViewCap;
+    }
+
+    /// <summary>给能力层用：按功能区命令名派发（DispatchRibbon 是主窗私有）。</summary>
+    internal void RunRibbonCommand(string cmd) => DispatchRibbon(cmd);
+
+    /// <summary>给能力层用：场景重绘。</summary>
+    internal void RequestSceneRefresh() => RefreshScene();
+
+    /// <summary>正射底图贴到场景（原 IViewCapability.SetOrthophoto 在 Kylin 的落点：逐顶点上色）。</summary>
+    internal string ApplyOrthoSampler(Cad.OrthoBasemap.ISampler sampler)
+    {
+        var targets = Cad.OrthoBasemap.TargetsOf(_scene.Entities);
+        if (targets.Count == 0) return "场景里没有三角网或点云 —— 底图是贴在面上的，先加载地表数据（如「加载点云」「2.5D TIN」）再贴。";
+        BeginChange();
+        var r = Cad.OrthoBasemap.Apply(sampler, targets);
+        RefreshScene();
+        StatusMsg.Text = r.Message + (r.Notes.Count > 0 ? "　◆ " + string.Join("；", r.Notes) : "");
+        return StatusMsg.Text;
+    }
+
+    internal string ClearOrthoSampler()
+    {
+        var targets = Cad.OrthoBasemap.TargetsOf(_scene.Entities);
+        if (targets.Count == 0) return "场景里没有贴过底图的对象";
+        BeginChange();
+        int n = Cad.OrthoBasemap.Clear(targets);
+        RefreshScene();
+        StatusMsg.Text = $"已清除影像底图：{n} 个对象恢复原色";
+        return StatusMsg.Text;
+    }
+
     private void OpenTaskWindow<T>(Func<T> factory) where T : Window
     {
         try
         {
             // ★ EnsureGeoDb 首次返回 null（连接还没建好），命令会被重新派发一次；窗只在库就绪后开。
             if (EnsureGeoDb() == null) return;
+            EnsureTaskLibHost();
             if (_taskWindows.TryGetValue(typeof(T), out var existing) && existing.IsVisible)
             {
                 existing.Activate();

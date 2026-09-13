@@ -1498,6 +1498,11 @@ public partial class MainWindow : Window
             if (cmd.StartsWith("参数验收判定") || cmd.StartsWith("DB参数验收") || cmd.StartsWith("验收判定")) { ParamAcceptanceJudgeCmd(cmd); return; }
             if (cmd.StartsWith("兼容机型") || cmd.StartsWith("可用机型") || cmd.StartsWith("适配机型")) { CompatibleModelsCmd(cmd); return; }
             if (cmd == "作业面台账") { OpenTaskWindow(() => new Views.TaskLib.WorkFaceLedgerWindow()); return; }   // 原 TaskLib WorkFaceLedgerWindow（源—物料—汇 盘子台账），见 MainWindow.TaskLib.cs
+            if (cmd == "班次日历" || cmd == "班制日历") { OpenTaskWindow(() => new Views.TaskLib.ShiftCalendarWindow()); return; }   // 原 TaskLib ShiftCalendarWindow：整月视图 / 生成整月 / 有效作业日汇总
+            if (cmd == "检修档期" || cmd == "计划检修") { OpenTaskWindow(() => new Views.TaskLib.MaintenancePlanWindow()); return; }   // 原 TaskLib MaintenancePlanWindow：带类别色块的设备下拉 + 影响班次 + 跨零点拦截
+            if (cmd == "周计划编制") { OpenTaskWindow(() => new Views.TaskLib.WeekPlanWindow()); return; }   // 原 TaskLib WeekPlanWindow：WeekPlanLink 逐日裂解 + 周目标下达/撤销/按月摊算
+            if (cmd == "影像底图") { OpenTaskWindow(() => new Views.TaskLib.BasemapConfigWindow()); return; }   // 原 TaskLib BasemapConfigWindow：工程级 GeoTIFF 配置 + 现读配准 + 覆盖核对 + 贴到视口（经 IViewCapability）
+            if (cmd == "钻爆计划衔接") { OpenTaskWindow(() => new Views.TaskLib.BlastPlanWindow()); return; }   // 原 TaskLib BlastPlanWindow：逐炮排程 + 进装箱时窗 + 穿孔作业计划表（按本期计划生成）
             if (cmd == "作业面" || cmd == "工作面台账" || cmd == "采场参数") { WorkingFacesCmd(); return; }   // 旧切片：working_face 概览状态行（命令行别名保留）
             if (cmd == "参数化模板" || cmd == "开采模板" || cmd == "采场模板") { OpenBenchTemplateEditor(dump: false); return; }   // 剥采排·参数化模板 = 原 MiningTemplateEditorWindow(勿再指到库参数模板统计)
             if (cmd == "参数模板库" || cmd == "参数模板" || cmd == "参数定义") { ParamTemplatesCmd(); return; }
