@@ -1270,23 +1270,36 @@ public partial class MainWindow
         double voxel = Math.Max(v.D("voxel", 3), 0), gap = Math.Max(v.D("gap", 0), 0);
         long maxPts = (long)Math.Max(v.D("maxpts", 0), 0);
         bool adaptive = v.B("adaptive", true);
-        const bool shade = true;   // 原版建完即按高程分带上色(ApplyDefaultTinShading), 不给开关
 
         StatusMsg.Text = "2.5D TIN：剖分中…";
-        var src = PcPts(pc);
-        var (verts, tris) = await Task.Run(() =>
+        var src = PcPts(pc);   // 快照副本：剖分在后台线程跑，期间点云可能被别的命令改
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        // 抽稀一律返回**源点索引**(srcIdx[i] = 顶点 i 对应的点云点号)，真实色按它带到顶点上 ——
+        // 原版内核 TIN 顶点写的就是「该顶点对应点云采样点的本色」，不是只有全密度才有色。
+        var (verts, tris, srcIdx, flatCells, steepCells, msThin, msTri) = await Task.Run(() =>
         {
-            var raw = src;
+            int[]? strideMap = null;
+            IReadOnlyList<(double x, double y, double z)> raw = src;
             if (maxPts > 0 && raw.Count > maxPts)   // 「最大输入点数」：等间隔下采样(同原版语义)
             {
                 int stride = (int)Math.Ceiling(raw.Count / (double)maxPts);
                 var cut = new List<(double x, double y, double z)>((int)maxPts + 1);
-                for (int i = 0; i < raw.Count; i += stride) cut.Add(raw[i]);
-                raw = cut;
+                var map = new List<int>((int)maxPts + 1);
+                for (int i = 0; i < raw.Count; i += stride) { cut.Add(raw[i]); map.Add(i); }
+                raw = cut; strideMap = map.ToArray();
             }
-            // 自适应：平地稀疏 / 坡面加密（原版的 FineVoxelRatio=0.25、FlatZRange=1m 是内部经验常量，不给用户调）
-            var input = voxel <= 0 ? raw : (adaptive ? PointThin.ThinAdaptive(raw, voxel) : PointThin.Thin(raw, voxel));
-            var xy = input.Select(p => (p.x, p.y)).ToList();
+            // 抽稀忠实原 LasLib build_tin_2d5：XY 格网每格留最低点(压掉树冠/设备留地面)；
+            // 自适应 = 平地粗格只留 1 点 / 坡面粗格再按 0.25 倍细格分（FineVoxelRatio=0.25、FlatZRange=1m 是原版内部经验常量）。
+            // 旧 ThinAdaptive(曲率贪心排斥, 每点查 (2span+1)³ 三维格)在百万点上是分钟级 —— 2.5D 建面「剖分慢」的真凶。
+            long flat = 0, steepN = 0;
+            var idx = voxel <= 0 ? PointThin.ThinXyMinZ(raw, 0)
+                    : adaptive ? PointThin.ThinAdaptiveXyMinZ(raw, voxel, out flat, out steepN)
+                               : PointThin.ThinXyMinZ(raw, voxel);
+            long tThin = sw.ElapsedMilliseconds;
+            var input = new List<(double x, double y, double z)>(idx.Count);
+            var xy = new List<(double x, double y)>(idx.Count);
+            foreach (int i in idx) { var p = raw[i]; input.Add(p); xy.Add((p.x, p.y)); }
+            if (strideMap != null) for (int i = 0; i < idx.Count; i++) idx[i] = strideMap[idx[i]];
             var t = Delaunay.Triangulate(xy);
             if (gap > 0)   // 剔长边：不把水面/暗煤/陡壁遮挡这类数据空洞桥接成假地面
             {
@@ -1298,30 +1311,41 @@ public partial class MainWindow
                 }
                 t = t.Where(f => !Long(f.a, f.b) && !Long(f.b, f.c) && !Long(f.c, f.a)).ToList();
             }
-            return (input, t);
+            return (input, t, idx, flat, steepN, tThin, sw.ElapsedMilliseconds - tThin);
         });
         if (tris.Count == 0) { EditEcho("2.5D TIN：剖分为空（点太少/共线，或空洞桥接上限过小）", EchoLevel.Error); return true; }
 
         BeginChange();
         var mesh = new MeshEntity(pc.Name + "·TIN", verts, tris);
         AssignLayer(mesh);
-        // 源点云带真实色、且这次没抽稀(顶点与源点一一对应)时，把真实色带到三角网顶点上 ——
-        // 「三角网着色 · 点云真实色」那一档要的就是它。显示色仍按高程分带(下面 shade)。
-        if (pc.HasRgb && verts.Count == src.Count && voxel <= 0 && maxPts <= 0)
-            mesh.RgbColors = new List<(float r, float g, float b)>(pc.RgbColors!);
-        if (shade)
+        // 顶点真实色 = 对应点云点的本色（抽稀后也一一对应，靠 srcIdx）。
+        // 默认显示忠实原版 ApplyDefaultTinShading：建完即按「点云真实色」(mode 15) 显示 —— 用户要的就是
+        // 三角网长得跟点云一个颜色；没真实色的点云才退回高程分带，好看出台阶起伏。
+        // RgbColors 那份一直留着，「三角网着色 → 点云真实色」随时可恢复。
+        bool trueColor = pc.HasRgb;
+        if (trueColor)
+        {
+            var rgb = pc.RgbColors!;
+            var cols = new List<(float r, float g, float b)>(srcIdx.Count);
+            foreach (int i in srcIdx) cols.Add(rgb[i]);
+            mesh.RgbColors = cols;
+            mesh.VertColors = new List<(float r, float g, float b)>(cols);
+        }
+        else
         {
             var bb = mesh.Bounds; double zr = bb.maxZ - bb.minZ;
             mesh.VertColors = verts.Select(p => MeshEntity.TerrainRamp(zr > 1e-9 ? (p.z - bb.minZ) / zr : 0.5)).ToList();
-            mesh.Invalidate();
         }
+        mesh.Invalidate();
         _scene.Add(mesh);
         _selected.Clear(); _selected.Add(mesh); HighlightSelection();
         RefreshScene();
         EditEcho($"2.5D TIN「{mesh.Name}」：{verts.Count:N0} 顶点 / {tris.Count:N0} 三角"
-                       + (voxel > 0 ? $"（采样精度 {voxel.ToString("0.##", Inv)}m{(adaptive ? "·保坡面细节" : "")}，源 {src.Count:N0} 点）" : $"（全密度 {src.Count:N0} 点）")
+                       + (voxel > 0 ? $"（采样精度 {voxel.ToString("0.##", Inv)}m{(adaptive ? $"·保坡面细节 平地格 {flatCells:N0}/坡面格 {steepCells:N0}" : "")}，源 {src.Count:N0} 点）" : $"（全密度 {src.Count:N0} 点）")
                        + (gap > 0 ? $" · 空洞桥接 {gap.ToString("0.##", Inv)}m" : " · 凸包全填充")
-                       + (maxPts > 0 ? $" · 限输入 {maxPts:N0} 点" : "") + " · 已选中", EchoLevel.Success);
+                       + (maxPts > 0 ? $" · 限输入 {maxPts:N0} 点" : "")
+                       + (trueColor ? " · 按点云真实色显示" : " · 按高程分带显示(点云无真实色)")
+                       + $" · 抽稀 {msThin / 1000.0:0.0}s/剖分 {msTri / 1000.0:0.0}s · 已选中", EchoLevel.Success);
         return true;
     }
 
@@ -1852,6 +1876,9 @@ public partial class MainWindow
     {
         var rnd = new Random(20260909);
         var pts = new List<(double x, double y, double z)>(cols * rows + 400);
+        // 合成"真实色"(像带 RGB 的航测 LAS)：平盘赭黄 / 坡面深褐 / 第 2 级平盘一条黑煤带 / 矿卡黄。
+        // 有它才能核对「2.5D TIN 建完按点云真实色显示」—— 三角网该长得跟点云一个颜色。
+        var rgb = new List<(float r, float g, float b)>(cols * rows + 400);
         const double baseZ = 1200, benchH = 15, benchW = 40, slopeW = 15;
         for (int i = 0; i < cols; i++)
             for (int j = 0; j < rows; j++)
@@ -1860,19 +1887,27 @@ public partial class MainWindow
                 double period = benchW + slopeW;
                 double t = x % period;
                 int level = (int)(x / period);
-                double z = baseZ - level * benchH - (t > benchW ? (t - benchW) / slopeW * benchH : 0);
+                bool slope = t > benchW;
+                double z = baseZ - level * benchH - (slope ? (t - benchW) / slopeW * benchH : 0);
                 pts.Add((x, y, z + dz + (rnd.NextDouble() - 0.5) * 0.25));   // ±12.5cm 测量噪声
+                float n = (float)(rnd.NextDouble() - 0.5) * 0.08f;            // 一点色噪, 免得像填色块
+                if (slope) rgb.Add((0.42f + n, 0.30f + n, 0.20f + n));
+                else if (level == 1 && y > 40 && y < 80) rgb.Add((0.12f + n, 0.12f + n, 0.13f + n));
+                else rgb.Add((0.76f + n, 0.64f + n, 0.42f + n));
             }
         for (int k = 0; k < 400; k++)   // 平盘上的一台矿卡(离地 3~6m)
+        {
             pts.Add((20 + rnd.NextDouble() * 10, 50 + rnd.NextDouble() * 6, baseZ + dz + 3 + rnd.NextDouble() * 3));
+            rgb.Add((0.95f, 0.80f, 0.10f));
+        }
 
         BeginChange();
-        var pc = PcCommit(null, name ?? (dz == 0 ? "自检点云" : $"自检点云+{dz:0.#}m"), pts);
-        pc.SetSolidColor(0.75f, 0.78f, 0.82f);
+        var pc = PcCommit(null, name ?? (dz == 0 ? "自检点云" : $"自检点云+{dz:0.#}m"), pts, rgb);
+        pc.RgbColors = rgb;
         RefreshScene();
         PcZoomTo(pc);
         Title += $" [自检 点云 {pc.PointCount} 点]";
-        EditEcho($"自检点云「{pc.Name}」：{pc.PointCount:N0} 点（4 级台阶 + 噪声 + 矿卡）已入场景并设为当前点云", EchoLevel.Success);
+        EditEcho($"自检点云「{pc.Name}」：{pc.PointCount:N0} 点（4 级台阶 + 噪声 + 矿卡，含真实色）已入场景并设为当前点云", EchoLevel.Success);
     }
 
     /// <summary>
