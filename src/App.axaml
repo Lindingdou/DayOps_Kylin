@@ -16,6 +16,7 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceInclude Source="avares://PitMine3D.Kylin/Styles/Icons.axaml" />
+                <ResourceInclude Source="avares://PitMine3D.Kylin/Styles/TreeListBox.axaml" />
                 <ResourceInclude Source="avares://PitMine3D.Kylin/Styles/IconDict.axaml" />
                 <ResourceInclude Source="avares://PitMine3D.Kylin/Styles/IconDict.GeoDataBase.axaml" />
                 <ResourceInclude Source="avares://PitMine3D.Kylin/Styles/IconDict.MeshEditLib.axaml" />

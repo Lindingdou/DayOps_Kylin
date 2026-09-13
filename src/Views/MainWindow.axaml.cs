@@ -68,7 +68,7 @@ public partial class MainWindow : Window
         _docs.Add(_active);
         BuildDock();               // 代码建 MVVM 停靠布局 + 内容模板(返回暂存面板控件)
         PopulateDrawingLayers();   // 启动即显示绘制图层("0")，可管理
-        SetDocPath(null);          // 初始标题=未命名
+        SetDocPath(null);          // 初始标题=视图1(同原版 CreateLayoutDocument($"视图{_viewCounter++}"))
         RenderAssistant(_assistant.Current());   // 智能助手：启动显示欢迎 + 主菜单
         GlyphFontHost.Install();   // 视口文字用系统真字形(含中文), 取不到则退回笔画字体
         Opened += (_, _) => ReportGraphicsDowngrade();   // 图形被自动降级时在信息栏说明
@@ -999,7 +999,7 @@ public partial class MainWindow : Window
     private DocState NewDocState()
     {
         _docSeq++;
-        var st = new DocState { Id = $"Doc{_docSeq}", Title = $"未命名 {_docSeq}" };
+        var st = new DocState { Id = $"Doc{_docSeq}", Title = $"视图{_docSeq}" };   // 同原版：标签名 视图1/视图2…, 绑定文件后改成文件名
         st.Vm = new DMC.Document { Id = st.Id, Title = st.Title, CanClose = _docSeq > 1, CanFloat = false };
         return st;
     }
@@ -1972,7 +1972,7 @@ public partial class MainWindow : Window
     private void SetDocPath(string? path)
     {
         _currentPath = path;
-        _active.Title = path != null ? Path.GetFileName(path) : $"未命名 {_active.Id.Substring(3)}";   // Id 形如 Doc3
+        _active.Title = path != null ? Path.GetFileName(path) : $"视图{_active.Id.Substring(3)}";   // Id 形如 Doc3；同原版 BindActiveDocFile / 视图{N}
         _active.Vm.Title = _active.Title;
         SyncWindowTitle();
     }

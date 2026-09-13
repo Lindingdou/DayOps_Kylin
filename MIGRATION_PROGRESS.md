@@ -4008,3 +4008,13 @@ commit `79108dd` / `cf3294c` / `3efa126`; 测试 2188 → 2200 全绿(新增 12:
 
 **验证**：原 `Tests/Tests.RoadLib` 里不依赖真实数据文件/DB 服务的 13 个测试文件（CenterlineInventory / Junction / LayerDiff / Pick / SetCodec / HaulCaliperKernel / PathSolver / PointToPointRouting / RoadConditionSymbology / RoadNetwork / RoadTopology / StructurePavement / TransportIndicators）原样拷进 [tests/Road/](tests/PitMine3D.Kylin.Tests/Road/)，**311/311 通过**（核心逐行等价的直接证据）；全套 4081 通过。实机 `@导入 1.dxf → 提取道路中心线 → 基础道路网络构建 → 路况显示 → 结构路面 → 运输指标报表 → 中心线管理 → 时段快照 → 增量增删边 → 路网预览` 一路无异常：4929 条中线 → 路网 3406 节点 / 3440 边 / 连通片 61 → 路况最大纵坡 30.3% → 3440 条路面带 → 平均等效运距 859m → 路网预览「路段 1596（干线 845 / 支线 742 / 孤立段 9）· 路口 802 · 悬挂端点 760 · 接缝 1844」。截图核对这次没做成：用户正在前台用 Word/浏览器，SetForegroundWindow 拉不到前面，两次都截到别的窗口，不再打扰。
 - **记录**：`增量增删边`/`破碎站位置设置`/`延拓触发设置` 三条分派与 `CrusherStationWindow.Saved` 挂钩只在工作树里（HEAD 里这三条分派本就不存在，是另一会话未提交的部分），随对方提交带上；旧的 `RoadEditCmd`/`BuildRoadNetworkCmd`/`SnapshotEpochAsync` 等切片代码留在 MainWindow.axaml.cs 里未删（共享脏文件，不动大块）。
+
+## §三九二 对象管理器「分类方式和 PitMine3D 不同」：树的数据早已同源, 差在容器观感 + 文档名 —— 行容器照原版 TreeListBox 重做 (2026-09-13)
+
+- **核对（直接读原版源码, 未再开原程序）**：原版 `FileTreeViewModel` = 三根 `CAD 对象 → [文件名|视图N] → 图层`(线类只到图层级) / `面模型 → 图层 → Mesh` / `块体模型 → 模型`，Kylin `ObjectTreeViewModel` 逐段等价、右键/双击/☑ 也同路。差的是**呈现**：
+  1. 面板内多了一行「对象管理器」标题（原版 `LayoutAnchorable` 里就是一棵 `pt:TreeListBox` 顶到边，页签即标题）；
+  2. 行容器用的 Fluent 默认 `TreeViewItem`：32px 行高、16px/级缩进、12px 人字钮 + 左右各 12px 留白 → 整棵树松散、层级看着比原版深；原版 `TreeListBox` 是 10px/级 + 16px 小三角(叶子隐藏但留位) + ≈22px 行；
+  3. 未保存文档名 Kylin 叫「未命名 N」、原版叫「视图N」(`CreateLayoutDocument($"视图{_viewCounter++}")`)，文件节点跟着显示不一样。
+- **做法**：新增 [Styles/TreeListBox.axaml](src/Styles/TreeListBox.axaml) —— `PitTreeListBoxItem` ControlTheme(BasedOn Fluent 的 TreeViewItem, 只换模板：`MarginMultiplierConverter Indent=10`、固定 16px 钮位 Panel + `PitTreeListBoxToggle`(WPF Aero 的 ▷/◢ 小三角)、MinHeight 22、Padding 2,1；部件名与 Fluent 一致, 选中/悬停/`:empty` 隐藏三角等基础样式经 BasedOn 继承, 代码里 `HeaderPresenter` 照常)；[MainWindow.axaml](src/Views/MainWindow.axaml) 文件管理器/对象管理器两棵树都改用它、去掉面板内标题；[MainWindow.axaml.cs](src/Views/MainWindow.axaml.cs) 文档标签「未命名 N」→「视图N」(绑定文件后仍改成文件名)。
+- **验证**：`ObjectTreeViewModelTests`/`FileSystem*` 16 通过；实机自检 `@对象管理器;@稍后 1500 @控件截图 ObjectContent` 空文档 = `◢ ☑ 🏗 CAD 对象 / ◢ 📘 视图1 / ☑ 🎨 图层: 0`，`@露头示例;@线示例;@块体示例 3 3 2;@对象管理器` = 三根 CAD 对象→视图1→图层: 自检剖面线 / 面模型→图层: 0→现状面·2煤顶板… / 块体模型，与原版截图同构同观感。
+- **未动**：三角网叶子仍显示名字(原版显示 `Mesh #handle`，Kylin 实体无 handle, 名字才认得出建模/剖面窗口里的哪一张)；勾选框 0.7 缩放、emoji 10px 是用户此前拍板的观感，保留。

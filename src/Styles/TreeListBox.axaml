@@ -1,0 +1,76 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:conv="using:Avalonia.Controls.Converters">
+    <!-- ================= 左面板树(文件管理器 / 对象管理器)的行外观 =================
+         原版两棵树都是 PropertyTools 的 TreeListBox：一行 = [层级缩进 10px/级][16px 小三角展开钮][行内容]，
+         行高 ≈ 22px、叶子节点三角隐藏但**留位**(同级对齐)。Fluent 默认 TreeViewItem 是 32px 行高 + 16px/级 + 12px 大人字钮外加
+         左右各 12px 留白，整棵树松散、层级看着比原版深一截 —— 这里照原版重做容器模板，勾选框/图标/文字仍由各树自己的
+         ItemTemplate 排。模板部件名(PART_LayoutRoot / PART_Header / PART_HeaderPresenter / PART_ExpandCollapseChevron /
+         PART_ItemsPresenter)与 Fluent 一致：选中/悬停底色、叶子隐藏三角 等基础样式经 BasedOn 继承, 代码里 HeaderPresenter 也照常可用。 -->
+    <conv:MarginMultiplierConverter x:Key="PitTreeListBoxIndent" Indent="10" Left="True" />
+
+    <!-- 展开钮：WPF Aero 树的小三角(原版 TreeListBox 用的就是系统 ToggleButton 样式) —— 折叠 = 空心右指 ▷(描边灰)，展开 = 实心右下角 ◢ -->
+    <ControlTheme x:Key="PitTreeListBoxToggle" TargetType="ToggleButton">
+        <Setter Property="Width" Value="16" />
+        <Setter Property="Height" Value="16" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Background="Transparent" Width="16" Height="16">
+                    <Panel Width="8" Height="8" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Path Name="PART_Collapsed" Data="M 2,0 L 6,4 L 2,8 Z" Stretch="None"
+                              Stroke="{DynamicResource Theme.Text.Muted}" StrokeThickness="1" Fill="Transparent" />
+                        <Path Name="PART_Expanded" Data="M 8,0 L 8,8 L 0,8 Z" Stretch="None" IsVisible="False"
+                              Fill="{DynamicResource Theme.Text.Body}" />
+                    </Panel>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:checked /template/ Path#PART_Collapsed">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="^:checked /template/ Path#PART_Expanded">
+            <Setter Property="IsVisible" Value="True" />
+        </Style>
+        <Style Selector="^:pointerover /template/ Path#PART_Collapsed">
+            <Setter Property="Stroke" Value="{DynamicResource Theme.Accent}" />
+        </Style>
+        <Style Selector="^:pointerover /template/ Path#PART_Expanded">
+            <Setter Property="Fill" Value="{DynamicResource Theme.Accent}" />
+        </Style>
+    </ControlTheme>
+
+    <ControlTheme x:Key="PitTreeListBoxItem" TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
+        <Setter Property="MinHeight" Value="22" />
+        <Setter Property="Padding" Value="2,1" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <StackPanel>
+                    <Border Name="PART_LayoutRoot" Classes="TreeViewItemLayoutRoot" Focusable="True"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            MinHeight="{TemplateBinding MinHeight}"
+                            TemplatedControl.IsTemplateFocusTarget="True">
+                        <Grid Name="PART_Header" ColumnDefinitions="Auto,*"
+                              Margin="{TemplateBinding Level, Mode=OneWay, Converter={StaticResource PitTreeListBoxIndent}}">
+                            <!-- 固定 16px 的钮位：叶子节点的钮被基础样式隐藏(:empty)但这个 Panel 仍占位，同级行内容对齐(同原版 Visibility=Hidden) -->
+                            <Panel Name="PART_ExpandCollapseChevronContainer" Width="16" Margin="2,0,2,0" VerticalAlignment="Center">
+                                <ToggleButton Name="PART_ExpandCollapseChevron" Theme="{StaticResource PitTreeListBoxToggle}"
+                                              Focusable="False" IsChecked="{TemplateBinding IsExpanded, Mode=TwoWay}" />
+                            </Panel>
+                            <ContentPresenter Name="PART_HeaderPresenter" Grid.Column="1" Focusable="False" Background="Transparent"
+                                              Content="{TemplateBinding Header}"
+                                              ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                              VerticalContentAlignment="Center"
+                                              Padding="{TemplateBinding Padding}" />
+                        </Grid>
+                    </Border>
+                    <ItemsPresenter Name="PART_ItemsPresenter" IsVisible="{TemplateBinding IsExpanded}"
+                                    ItemsPanel="{TemplateBinding ItemsPanel}" />
+                </StackPanel>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+</ResourceDictionary>
