@@ -77,10 +77,6 @@ public class DeadOptionSweepTests
     {
         // ⚠ 下面这一批的**共同理由**：`DumpStripPlanner.cs` 正在用户手上改（git 里是 M）。
         //    去改它的注释会撞车，比留一条可见的豁免更糟。**这些是待办，不是结论** ——
-        // ⚠ Kylin 过渡豁免：这三项由「采掘单元清单」窗口（MiningUnitPlanWindow）填，那一 tick 移植完就删掉这三行
-        ["UnitPlanEngine.UnitPlanInput.FallbackDetour"] = "待采掘单元清单移植（原由 MiningUnitPlanWindow 赋值）",
-        ["UnitPlanEngine.UnitPlanInput.FaceQuotas"] = "待采掘单元清单移植（原由 MiningUnitPlanWindow 赋值）",
-        ["UnitPlanEngine.UnitPlanInput.FaceSegments"] = "待采掘单元清单移植（原由 MiningUnitPlanWindow 赋值）",
         //    等那边的工作落定，逐条问口径：是接上界面，还是写「刻意无入口」。
         ["DumpStripPlanner.Options.SplitProbeSteps"] = "只有判据在用（DumpStripPlannerTests）；文件在用户手上改",
         ["DumpStripPlanner.Options.SplitBadSegLimit"] = "文件在用户手上改",

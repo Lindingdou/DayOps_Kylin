@@ -845,3 +845,73 @@ public partial class MainWindow
         };
     }
 }
+
+public partial class MainWindow
+{
+    // ───────────── 短期组「采掘单元清单」：采掘单元台账（基表/期次）+ 按目标排产 + 设备指派 + 本期一览（原 CreateOpenMiningUnitPlanCommand → MiningUnitPlanWindow）─────────────
+    private Views.Plan.MiningUnitPlanWindow? _miningUnitPlanWin;
+
+    /// <summary>短期「采掘单元清单」= 原 <c>PlanLib.Views.MiningUnitPlanWindow</c>：采矿模型（煤+岩）与排土模型合表管理、按期次存取、按月煤量目标排产（UnitPlanEngine）→ 写回表 → 设备指派（EquipmentAssigner）→ 落盘期次 + 推进月度计划台账 → 本期一览。非模态单例。此前该钮无处理器。</summary>
+    private void OpenMiningUnitPlan()
+    {
+        if (_miningUnitPlanWin != null) { _miningUnitPlanWin.Activate(); GeoDb.GeoDbWindows.NoteLast(_miningUnitPlanWin); StatusMsg.Text = "采掘单元清单窗口已在前台"; return; }
+        if (EnsureGeoDb() == null) return;   // 出矿点台账 / 设备维 / 月度计划台账都在库里
+        var w = new Views.Plan.MiningUnitPlanWindow(PlanHost);
+        _miningUnitPlanWin = w;
+        w.Closed += (_, _) => _miningUnitPlanWin = null;
+        w.Show(this);
+        GeoDb.GeoDbWindows.NoteLast(w);
+        StatusMsg.Text = "采掘单元清单：① 取模型数据/载入基表/保存基表 · 选期次 ② 目标（逐月配置表只读回显）+ 轴（排弃顺序/作业面/走向推进/配对策略/标段）→ 一键排本月（取数→排产→落盘→本期一览）/ 分步▾ ③ 设备指派（排产后自动）· 表格右键批量改状态/期次";
+    }
+
+    /// <summary>@采掘单元清单示例：开窗 → 灌一批合成台账（两层煤 3 带 × 4 幅 + 覆盖岩 + 内/外排 2 场 × 3 级 × 4 位）→ 只排产·不落盘（自检目录别写用户台账）→ 展开设备指派 → 本期一览。</summary>
+    private void SelftestMiningUnitPlanSample()
+    {
+        try { _geoDb ??= Data.GeoDatabase.OpenSeeded(); } catch (Exception ex) { StatusMsg.Text = "自检：连库失败 " + ex.Message; return; }
+        OpenMiningUnitPlan();
+        var w = _miningUnitPlanWin!;
+        w.SelftestMerge(SelftestLedgerRows());
+        w.SelftestSetPeriod(Cad.Plan.PlanCase.PlanYear, 8);
+        w.SelftestRunSchedule();
+        w.SelftestExpandEquip();
+        w.SelftestShowOverview();
+        var ov = w.SelftestOverview;
+        StatusMsg.Text = $"自检：采掘单元清单示例 —— 表 {w.SelftestRowCount} 行 · {w.SelftestLanded}｜指派：{w.SelftestEquip.SelftestHead} · 逐笔 {w.SelftestEquip.SelftestRows} · 覆盖 {w.SelftestEquip.SelftestCovRows}｜一览：{(ov == null ? "未开" : $"{ov.SelftestFaces} 面 / {ov.SelftestSlots} 位")}｜{w.SelftestStatus.Replace('\n', ' ')}";
+    }
+
+    /// <summary>合成一份采掘单元台账：煤 2 层 × 3 带 × 4 幅（1140–1176 m）、岩 3 带 × 4 幅（1176–1212 m）、内排/外排各 3 级 × 4 位置。</summary>
+    private static List<UnitLedger.MiningUnitLedger.Row> SelftestLedgerRows()
+    {
+        var rows = new List<UnitLedger.MiningUnitLedger.Row>();
+        const double LEN = 200, WID = 40;
+        void Mine(string seam, bool coal, int band, int panel, double zLo, double zHi, double x0, double y0)
+        {
+            double th = zHi - zLo, m3 = LEN * WID * th;
+            rows.Add(new UnitLedger.MiningUnitLedger.Row
+            {
+                UnitId = $"{seam}-B{band}-P{panel}", Kind = coal ? UnitLedger.LedgerKind.Coal : UnitLedger.LedgerKind.Rock, Region = "采场", Seam = seam,
+                Band = band, Panel = panel, PanelCount = 4, Cx = x0 + (panel - 1) * LEN + LEN / 2, Cy = y0 + (band - 1) * WID + WID / 2, Cz = (zLo + zHi) / 2,
+                ZLo = zLo, ZHi = zHi, LengthM = LEN, WidthM = WID, ThickM = th, AzimuthDeg = 90,
+                CoalM3 = coal ? m3 : null, CoalT = coal ? m3 * 1.35 : null, GrossM3 = coal ? null : m3, NetRockM3 = coal ? null : m3,
+            });
+        }
+        for (int b = 1; b <= 3; b++) for (int p = 1; p <= 4; p++)
+        {
+            Mine("岩1200", false, b, p, 1176, 1212, 0, 0);
+            Mine("煤A", true, b, p, 1158, 1176, 0, 0);
+            Mine("煤B", true, b, p, 1140, 1158, 0, 0);
+        }
+        void Dump(string name, int lv, int panel, double x, double y, double z, double cap)
+            => rows.Add(new UnitLedger.MiningUnitLedger.Row
+            {
+                UnitId = $"{name}-L{lv}-{UnitLedger.DumpSlotCode.OrderOf(1, panel)}", Kind = UnitLedger.LedgerKind.Dump, Region = name, Seam = $"L{lv}",
+                Band = 1, Panel = panel, PanelCount = 4, Cx = x, Cy = y, Cz = z, ZLo = z - 10, ZHi = z + 10, LengthM = 150, WidthM = 40, ThickM = 20, DumpCapM3 = cap,
+            });
+        for (int lv = 1; lv <= 3; lv++) for (int p = 1; p <= 4; p++)
+        {
+            Dump("内排土场", lv, p, -300 + p * 60, 60, 1150 + lv * 20, 6e4);
+            Dump("外排土场", lv, p, -900 + p * 60, 1400, 1180 + lv * 20, 12e4);
+        }
+        return rows;
+    }
+}

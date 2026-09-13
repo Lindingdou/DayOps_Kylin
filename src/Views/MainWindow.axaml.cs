@@ -1815,6 +1815,7 @@ public partial class MainWindow : Window
             if (cmd == "确定开采程序") { OpenShortTermSequence(); return; }   // 短期组: 原 ShortTermSequenceWindow(作业面/设备类型/工艺流程); 「开采程序确定」(中长远)走 OpenMiningProgramSolve
             if (cmd == "采排配对") { OpenDumpPairingPlan(); return; }   // 短期组: 原 PlanLib.ShortTerm.DumpPairingWindow(方案×期次 源—汇矩阵/库容条/汇总)
             if (cmd == "量驱动采剥接续") { OpenMonthlyStrip(); return; }   // 短期组: 原 PlanLib.ShortTerm.MonthlyStripWindow(剖面→排产→配对→外循环→契约→月度方案); 此前无处理器
+            if (cmd == "采掘单元清单") { OpenMiningUnitPlan(); return; }   // 短期组: 原 PlanLib.Views.MiningUnitPlanWindow(采掘单元台账/按目标排产/设备指派/本期一览); 此前无处理器
             if (cmd == "平行推进" || cmd == "工作线推进") { AdvanceCmd(AdvanceMode.Parallel, "平行推进"); return; }
             if (cmd == "定点回转" || cmd == "定点回转推进") { AdvanceCmd(AdvanceMode.FixedPivot, "定点回转"); return; }
             if (cmd == "动点回转" || cmd == "动点回转推进") { AdvanceCmd(AdvanceMode.MovingPivot, "动点回转"); return; }
@@ -10924,6 +10925,8 @@ public partial class MainWindow : Window
             if (cmd == "@确定开采程序确认") { SelftestShortTermSequenceConfirm(); return; }   // @确定开采程序确认: 工艺对话框确定 + 保存开采程序
             if (cmd == "@采排配对示例") { SelftestDumpPairingSample(); return; }   // @采排配对示例: 开采排配对 + 整行改投(实机核对用)
             if (cmd == "@量驱动采剥接续示例") { SelftestMonthlyStripSample(); return; }   // @量驱动采剥接续示例: 合成剖面+排土位置跑整条链 + 派生比选(实机核对用)
+            if (cmd == "@采掘单元清单示例") { SelftestMiningUnitPlanSample(); return; }   // @采掘单元清单示例: 合成台账 → 只排产 → 设备指派 → 本期一览(实机核对用)
+            if (cmd == "@采掘单元清单主窗") { if (_miningUnitPlanWin != null) { _miningUnitPlanWin.Activate(); GeoDb.GeoDbWindows.NoteLast(_miningUnitPlanWin); } return; }   // @采掘单元清单主窗: 把截图目标切回主窗
             if (cmd.StartsWith("@块体示例"))   // @块体示例 [nx ny nz]: 建一个规则块体模型并入场景(截图核对体素显示用)
             {
                 var a = cmd.Length > 5 ? cmd.Substring(5).Split(' ', System.StringSplitOptions.RemoveEmptyEntries) : System.Array.Empty<string>();
