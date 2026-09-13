@@ -556,7 +556,7 @@ public static class SimBuilder
         var list = new List<PeriodRow>();
         try
         {
-            var t = Type.GetType("PlanLib.ShortTerm.ShortTermSchemeStore, PlanLib");
+            var t = Type.GetType("PitMine3D.Kylin.Cad.Plan.ShortTermSchemeStore, PitMine3D.Kylin");   // Kylin：确定簿在 Cad.Plan（同程序集）；原字符串 "PlanLib.ShortTerm…, PlanLib" 在这里永远解不到 → 推演静默退回外推
             object? plan = t?.GetProperty("Confirmed", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
             if (plan == null) return list;
             string name = S(plan, "Name");

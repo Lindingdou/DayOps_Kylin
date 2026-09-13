@@ -777,3 +777,71 @@ public partial class MainWindow
         StatusMsg.Text = $"自检：采排配对示例 —— {w.SelftestRowCount} 行 × {w.SelftestColCount} 去向 · 库容条 {w.SelftestBarCount}｜{w.SelftestSummary}｜{w.SelftestStatus.Replace('\n', ' ')}";
     }
 }
+
+public partial class MainWindow
+{
+    // ───────────── 短期组「量驱动采剥接续」：剖面 → 排产 → 采排配对 → 外循环 → 契约 → 填月度方案（原 CreateOpenMonthlyStripCommand → MonthlyStripWindow）─────────────
+    private Views.Plan.MonthlyStripWindow? _monthlyStripWin;
+
+    /// <summary>短期「量驱动采剥接续」= 原 <c>PlanLib.ShortTerm.MonthlyStripWindow</c>：整条链唯一入口（备料：岩量剖面文件 + 排土条带位置；规则：逐月配置表只读回显 + N/剥离节奏/配对策略/期初姿态 → 排产 / 派生比选 / 按实绩重排 / 报表 / 契约 JSON / 确定为月度方案）。非模态单例。此前该钮无处理器。</summary>
+    private void OpenMonthlyStrip()
+    {
+        if (_monthlyStripWin != null) { _monthlyStripWin.Activate(); GeoDb.GeoDbWindows.NoteLast(_monthlyStripWin); StatusMsg.Text = "量驱动采剥接续窗口已在前台"; return; }
+        var w = new Views.Plan.MonthlyStripWindow();
+        _monthlyStripWin = w;
+        w.Closed += (_, _) => _monthlyStripWin = null;
+        w.Show(this);
+        GeoDb.GeoDbWindows.NoteLast(w);
+        StatusMsg.Text = "量驱动采剥接续：① 备料（岩量剖面 .case/.mprof + 排土条带位置）② 规则（逐月配置表 + N/剥离节奏/配对策略/期初姿态）→ 排产 → 逐月计划/过程与结论/派生比选/实绩与重排/物料流 → 导出报表/契约 JSON → 确定为月度方案";
+    }
+
+    /// <summary>@量驱动采剥接续示例：开窗 → 装回一份合成契约 JSON（MinePlanExport 样例）看逐月表/物料流铺得出来；有真剖面与排土条带时再点排产。</summary>
+    private void SelftestMonthlyStripSample()
+    {
+        OpenMonthlyStrip();
+        var w = _monthlyStripWin!;
+        var inp = SelftestMonthlyStripInput(out string err);
+        if (inp == null) { StatusMsg.Text = "自检：量驱动采剥接续示例 —— 合成剖面失败：" + err; return; }
+        w.SelftestRunWith(inp);
+        string s1 = w.SelftestStatus;
+        w.SelftestDeriveWith(inp);
+        StatusMsg.Text = $"自检：量驱动采剥接续示例 —— 排产「{s1}」｜比选 {w.SelftestSchemeRows} 套「{w.SelftestStatus}」｜逐月 {w.SelftestMonthRows} 行 · 日志 {w.SelftestLogLines} 条";
+    }
+
+    /// <summary>合成一份两层煤的岩量剖面（同 S 组判据夹具：60×5×20 块 · 10 m · A 煤 120–140 · B 煤 60–80 · α 20° · 台阶 20 m）+ 内/外排土位置，装成会话输入。</summary>
+    private static Cad.Plan.MonthlyStripSessionInput? SelftestMonthlyStripInput(out string err)
+    {
+        err = "";
+        const int NX = 60, NY = 5, NZ = 20; const double CELL = 10, ROCK_H = 20, DENS = 1.35, ALPHA = 20, ZDATUM = 100;
+        const double A_ROOF = 140, A_FLOOR = 120, B_ROOF = 80, B_FLOOR = 60;
+        static TinSampler Plane(double z) => TinSampler.TryBuild(new[] { -5000.0, -5000.0, z, 5000.0, -5000.0, z, 5000.0, 5000.0, z, -5000.0, 5000.0, z }, new[] { 0, 1, 2, 0, 2, 3 })!;
+        var blocks = new List<BlockModel.Block>(); var cA = new List<double>(); var cB = new List<double>();
+        for (int k = 0; k < NZ; k++)
+        {
+            double cz = k * CELL + CELL * 0.5; bool a = cz >= A_FLOOR && cz <= A_ROOF, b = cz >= B_FLOOR && cz <= B_ROOF;
+            for (int j = 0; j < NY; j++) for (int i = 0; i < NX; i++)
+            { blocks.Add(new BlockModel.Block { X = i * CELL + CELL / 2, Y = j * CELL + CELL / 2, Z = cz, Size = CELL }); cA.Add(a ? 1 : 0); cB.Add(b ? 1 : 0); }
+        }
+        var src = new InclineBlockSource { Name = "自检合成块体", Blocks = blocks, Attrs = new Dictionary<string, double[]> { ["cA"] = cA.ToArray(), ["cB"] = cB.ToArray() } };
+        var wl = new WorkLineSamples { Success = true }; wl.Baseline.Add((-2000, -100, ZDATUM)); wl.Baseline.Add((-2000, 200, ZDATUM)); wl.Samples.Add((-2000, 50, ZDATUM, 1, 0));
+        var seams = new List<SeamSurfaces>
+        {
+            new() { Name = "A煤", Attribute = "cA", Density = DENS, Roof = Plane(A_ROOF), Floor = Plane(A_FLOOR) },
+            new() { Name = "B煤", Attribute = "cB", Density = DENS, Roof = Plane(B_ROOF), Floor = Plane(B_FLOOR) },
+        };
+        var p = InclineVolumeEngine.BuildProfile(src, new[] { wl }, Plane(1000), seams, ALPHA, 1, 0.5, ROCK_H);
+        if (!p.Success || p.Rock == null) { err = p.Error ?? "无岩剖面"; return null; }
+        var slots = new List<Cad.Units.DumpSlot>();
+        for (int lv = 0; lv < 6; lv++) for (int b = 0; b < 5; b++)
+        {
+            slots.Add(new Cad.Units.DumpSlot { DumpName = "内排土场", Level = lv, Order = b, CapacityM3 = 10e4, IsInternal = true, AvailableFromMonth = 4, HaulKm = 1.2, Cx = -170 + b * 60, Cy = 100, Cz = 20 + lv * 20 });
+            slots.Add(new Cad.Units.DumpSlot { DumpName = "外排土场", Level = lv, Order = b, CapacityM3 = 20e4, IsInternal = false, AvailableFromMonth = 1, HaulKm = 3.8, Cx = -900 + b * 60, Cy = 1400, Cz = 60 + lv * 20 });
+        }
+        var q = new double[12]; for (int i = 0; i < 12; i++) q[i] = 8;
+        return new Cad.Plan.MonthlyStripSessionInput
+        {
+            Rock = p.Rock, CoalTargetWt = q, ZDatum = ZDATUM, Slots = slots, WorkLines = new[] { wl },
+            LookaheadMonths = 3, RecoveryTotalWt = 24, StartInSteadyState = true, PlanName = "自检合成算例",
+        };
+    }
+}
