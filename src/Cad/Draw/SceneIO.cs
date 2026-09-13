@@ -308,7 +308,7 @@ public static class SceneIO
     // ── 点云撤销快照 DTO：四个列表只记重数据仓 key(K=[点,逐点色,真实色,法向], 0=无)，名称/标高/点径/源路径照常 ──
     private static Dto CloudRefDto(PointCloudEntity pc, SnapshotHeavyStore heavy) => new()
     {
-        T = "cloud", S = pc.Name, Src = pc.Source, N = new[] { pc.Elevation, pc.PointPixels },
+        T = "cloud", S = pc.Name, Src = pc.Source, N = new[] { pc.Elevation, pc.PointPixels, (double)pc.SourceTotalPoints },
         K = new[]
         {
             heavy.Put(pc.Pts),
@@ -329,6 +329,7 @@ public static class SceneIO
         if (k.Length >= 4 && k[3] != 0) pc.Normals = heavy.Get<List<(double x, double y, double z)>>(k[3]);
         if (d.N.Length >= 1) pc.Elevation = d.N[0];
         if (d.N.Length >= 2 && d.N[1] > 0) pc.PointPixels = (float)d.N[1];
+        if (d.N.Length >= 3) pc.SourceTotalPoints = (long)d.N[2];   // 抽样封顶时的源文件全量点数(撤销回来仍能回源文件全量算)
         return pc;
     }
 

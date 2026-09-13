@@ -16,7 +16,7 @@ public class UndoSnapshotTests
         var pts = new List<(double x, double y, double z)>(n);
         var rgb = new List<(float r, float g, float b)>(n);
         for (int i = 0; i < n; i++) { pts.Add((4_500_000 + i * 0.1, 38_600_000 + (i % 97), 1200 + i % 13)); rgb.Add((i % 3 / 2f, 0.5f, 0.25f)); }
-        var pc = new PointCloudEntity("航测", pts) { Source = @"C:\x\a.las", RgbColors = rgb, Colors = new List<(float, float, float)>(rgb), Elevation = 2.5, PointPixels = 3 };
+        var pc = new PointCloudEntity("航测", pts) { Source = @"C:\x\a.las", SourceTotalPoints = 3_979_969, RgbColors = rgb, Colors = new List<(float, float, float)>(rgb), Elevation = 2.5, PointPixels = 3 };
         pc.Normals = pts.Select(_ => (0.0, 0.0, 1.0)).ToList();
         pc.LayerName = "点云";
         return pc;
@@ -47,6 +47,7 @@ public class UndoSnapshotTests
         Assert.Same(pc.Normals, got.Normals);
         Assert.Equal("航测", got.Name);
         Assert.Equal(@"C:\x\a.las", got.Source);
+        Assert.Equal(3_979_969, got.SourceTotalPoints);   // 抽样封顶信息随撤销保住 → 撤销后仍能回源文件全量算
         Assert.Equal("点云", got.LayerName);
         Assert.Equal(2.5, got.Elevation, 9);
         Assert.Equal(3f, got.PointPixels, 3);

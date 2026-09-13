@@ -37,6 +37,12 @@ public sealed class PointCloudEntity : SceneEntity
     /// <summary>源文件路径（导入的点云有；算子产物为 null）。</summary>
     public string? Source;
 
+    /// <summary>
+    /// 源文件里的总点数（LAS 头声明；0 = 未知/未抽稀）。加载点云为了显示封顶 200 万均匀抽样，
+    /// 场景里这份不是全量；要"按原版在全量点云上算"的算子（坡顶底线提取）靠它判断该不该回源文件重读全量。
+    /// </summary>
+    public long SourceTotalPoints;
+
     /// <summary>屏幕像素点径（原版点云渲染的 point size）。</summary>
     public float PointPixels = 2f;
 
@@ -189,7 +195,7 @@ public sealed class PointCloudEntity : SceneEntity
     /// <summary>深拷贝（几何 + 逐点色 + 法向缓存 + 样式）。</summary>
     public PointCloudEntity Clone()
     {
-        var pc = new PointCloudEntity(Name, Pts) { Source = Source, PointPixels = PointPixels };
+        var pc = new PointCloudEntity(Name, Pts) { Source = Source, SourceTotalPoints = SourceTotalPoints, PointPixels = PointPixels };
         if (Colors != null) pc.Colors = new List<(float, float, float)>(Colors);
         if (RgbColors != null) pc.RgbColors = new List<(float, float, float)>(RgbColors);
         if (Normals != null) pc.Normals = new List<(double, double, double)>(Normals);

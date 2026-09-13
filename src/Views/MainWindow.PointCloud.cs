@@ -321,6 +321,7 @@ public partial class MainWindow
         List<(double x, double y, double z)> pts;
         List<(float r, float g, float b)>? rgb = null;
         string extra = "";
+        long sourceTotal = 0;
         if (path.EndsWith(".las", StringComparison.OrdinalIgnoreCase))
         {
             // 大文件读盘 + 解码放后台，UI 不假死（原版把 LAS→缓存构建挪到后台也是这个理由）
@@ -328,6 +329,7 @@ public partial class MainWindow
             if (!r.Success) { EditEcho($"加载点云：LAS 读取失败 {r.Error}", EchoLevel.Error); return; }
             if (r.Points.Count == 0) { EditEcho("加载点云：LAS 头有效但无点", EchoLevel.Success); return; }
             pts = r.Points;
+            sourceTotal = r.PointCount;
             if (r.Colors != null && r.Colors.Count == pts.Count) rgb = r.Colors;
             extra = $" · LAS {r.VersionMajor}.{r.VersionMinor} 格式{r.PointFormat}"
                   + (r.PointCount > pts.Count ? $"（头声明 {r.PointCount:N0} 点，读入 {pts.Count:N0}）" : "")
@@ -345,6 +347,7 @@ public partial class MainWindow
         var pc = PcCommit(null, name, pts, rgb);
         pc.RgbColors = rgb;
         pc.Source = path;
+        pc.SourceTotalPoints = sourceTotal;   // 抽样封顶时记下全量点数：坡顶底线提取等"按原版全量算"的算子据此回源文件重读
         RefreshScene();
         PcZoomTo(pc);
         EditEcho($"加载点云「{pc.Name}」：{pc.PointCount:N0} 点已入场景{extra} · 已设为当前点云", EchoLevel.Success);
@@ -1178,7 +1181,9 @@ public partial class MainWindow
             form.Small("未定义作业区域（去『采场/排土场圈定』圈定后可限制在区域内/外）；本次全图生成。");
         form.Rows(
                 PcSourceRow(all, cur, 120),
-                PcRow.Num("cell", "DEM 网格尺寸", PcAutoCell(cur, 1).ToString("0.##", Inv), "m", "（越大越快越粗，整场建议 1~2；默认按点密度取）", null, 120, 70),
+                // 默认 1.0 同原版：算法里的平滑核(DEM σ4 格 / 坡度 σ3.5 格)和覆盖闭运算(2m)全按"格=米"标定，
+                // 按点密度放大到 7~8m 会把 10 来米宽的台阶整个抹平，出来的线又粗又偏。全量点云的稀疏由 JFA 填空兜着。
+                PcRow.Num("cell", "DEM 网格尺寸", "1.0", "m", "（越大越快越粗，整场建议 1~2）", null, 120, 70),
                 PcRow.Num("slope", "陡坡阈值", "18", "°", "（≥此值判为坡面：坡度等值线的平/陡分界）", null, 120, 70),
                 PcRow.Num("minlen", "最短线长", "30", "m", "（过滤短孤线）", null, 120, 70))
             .Small("说明：原版对话框里的「挡墙最小高 / 最小台阶高」在其现行等值线算法中已不起作用，此处不摆。");
@@ -1208,8 +1213,14 @@ public partial class MainWindow
         if (clipMode != 0 && rings.Count == 0) clipMode = 0;
         string scopeText = clipMode == 1 ? "仅区域内" : clipMode == 2 ? "仅区域外" : "全图";
 
-        EditEcho($"坡顶底线提取：计算中（后台线程，范围：{scopeText}，Esc 取消）…", EchoLevel.Info);
-        var pts = PcPts(pc);
+        // 数据源：原版是在全量点云(native mmap)上算的；Kylin 场景里的点云为了显示封顶 200 万均匀抽样，
+        // 直接拿它算，1m 格网下点距 ~4m 的覆盖掩膜到处是洞、线全被切碎(实测同一份 LAS：抽样 296 条/11km vs 全量 1188 条/274km)。
+        // 所以源文件是 LAS 且被抽过样时，回源文件重读全量点再算（只读点，不进场景）。
+        bool fullFromFile = pc.Source != null && pc.SourceTotalPoints > pc.PointCount
+                            && pc.Source.EndsWith(".las", StringComparison.OrdinalIgnoreCase) && System.IO.File.Exists(pc.Source);
+        string srcText = fullFromFile ? $"源文件全量 {pc.SourceTotalPoints:N0} 点（场景中为 {pc.PointCount:N0} 点抽样）" : $"{pc.PointCount:N0} 点";
+        EditEcho($"坡顶底线提取：计算中（后台线程，范围：{scopeText}，{srcText}，Esc 取消）…", EchoLevel.Info);
+        var scenePts = PcPts(pc);
         var stats = new SlopeLineExtractor.Stats();
         var cts = _pcBgCts = new System.Threading.CancellationTokenSource();
         ShowLoadProgress(0, $"坡顶底线提取（{scopeText}）中…");
@@ -1218,6 +1229,14 @@ public partial class MainWindow
         {
             var res = await Task.Run(() =>
             {
+                var pts = scenePts;
+                if (fullFromFile)
+                {
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (ReferenceEquals(_pcBgCts, cts)) ShowLoadProgress(0.02, "坡顶底线提取 · 读取源文件全量点…"); });
+                    var full = LasImportService.Load(pc.Source!, int.MaxValue);
+                    if (full.Success && full.Points.Count > pts.Count) pts = full.Points;   // 读失败就退回场景里的抽样点
+                    cts.Token.ThrowIfCancellationRequested();
+                }
                 bool ok = SlopeLineExtractor.Extract(pts, opt, out var c, out var t, stats, out string e,
                     (f, what) => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                     { if (ReferenceEquals(_pcBgCts, cts)) ShowLoadProgress(0.05 + 0.9 * f, $"坡顶底线提取（{scopeText}）· {what}…"); }),
@@ -1245,7 +1264,7 @@ public partial class MainWindow
         PopulateDrawingLayers();
         RefreshScene();
         EditEcho($"点云提坡顶/坡底线完成「{pc.Name}」：坡顶 {nc} 条({stats.CrestLenM:0} m)、坡底 {nt} 条({stats.ToeLenM:0} m)，"
-               + $"范围 {scopeText}，DEM {stats.DemW}×{stats.DemH}@{opt.CellSize.ToString("0.##", Inv)}m，"
+               + $"范围 {scopeText}，输入 {stats.InputPoints:N0} 点，DEM {stats.DemW}×{stats.DemH}@{opt.CellSize.ToString("0.##", Inv)}m，"
                + $"精修点 {stats.RefinedCrestVertices}/{stats.RefinedToeVertices}，用时 {stats.MsTotal:0} ms，已入库", EchoLevel.Success);
         return true;
     }
