@@ -847,6 +847,7 @@ public partial class MainWindow : Window
                 return;
             }
             if (e.Key == Key.Escape && CancelParamAsk()) { e.Handled = true; return; }   // 参数问答中 Esc = 放弃该命令
+            if (e.Key == Key.Escape && CancelPcBackground()) { e.Handled = true; return; }   // 后台点云长计算(坡顶底线提取)中 Esc = 取消
             if ((e.Key == Key.Enter || e.Key == Key.Return) && ConfirmOneShotPick()) { e.Handled = true; return; }
             if ((e.Key == Key.Enter || e.Key == Key.Return) && FinishSelectObjects(true)) { e.Handled = true; return; }
             if ((e.Key == Key.Enter || e.Key == Key.Return) && !(CommandInput?.IsFocused ?? false) && TextToolAcceptDefault()) { e.Handled = true; return; }

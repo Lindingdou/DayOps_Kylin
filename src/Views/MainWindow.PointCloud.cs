@@ -1142,73 +1142,137 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// 坡顶底线提取：在点云上栅格化 DEM → 断棱线检测 → 坡顶线/坡底线连成多段线入图层。
-    /// 短孤线按最短线长过滤（原版同款：不然一地碎线没法用）。
+    /// 坡顶底线提取（点云·挡墙法，忠实原 PointCloudLib CreateSlopeLineCommand + SlopeLineDialog）：
+    /// 弹参数对话框(生成范围可关联「采场/排土场圈定」的作业区域) → 后台线程跑 <see cref="SlopeLineExtractor"/>
+    /// (原 native laslib::bench::extract_bench_lines 的托管移植：DEM → 坡度等值线 → 坡顶/坡底标签 → 原始点云精修)
+    /// → 回 UI 线程入库为三维多段线（图层 点云_坡顶线(红) / 点云_坡底线(蓝)），一步 Undo。
+    /// 整场 DEM 可达十几秒：全程后台跑、状态栏走进度条、Esc 可取消。
+    /// （旧实现是"栅格点 → 整场 Delaunay → 平陡三角公共边"，百万级栅格点上剖分跑不完、软件假死，已弃。）
     /// </summary>
     private async Task<bool> PcSlopeLinesAsync()
     {
         var need = await PcNeedCloudAsync("坡顶底线提取");   // 无点云 → 弹提醒并可当场加载
         if (need == null) return true;
         var (cur, all) = need.Value;
-        // 窗体组织忠实原 SlopeLine/SlopeLineDialog：说明 → DEM 网格 / 挡墙最小高 / 最小台阶高 / 陡坡阈值 / 最短线长
+        if (_pcBgCts != null) { EditEcho("坡顶底线提取：上一次计算还在进行中（Esc 可取消）", EchoLevel.Error); return true; }
+
+        // 读项目级作业区域（「采场/排土场圈定」），供"仅区域内/外生成"。数据库未就绪 → 只能全图（同原版 try/catch 回落）。
+        var regions = new List<Data.RegionRecord>();
+        try { if (_geoDb != null) foreach (var r in Data.MineableRegions.List(_geoDb.Connection)) if (r.RingUsable) regions.Add(r); }
+        catch { /* GeoDataBase 未就绪 → 全图 */ }
+
+        // 窗体组织忠实原 SlopeLineDialog：说明 → 生成范围(全图/区域内/区域外 + 区域勾选清单) → DEM 网格 / 陡坡阈值 / 最短线长
+        string[] scopes = { "全图生成（不限制区域）", "仅在所选作业区域内生成", "仅在所选作业区域外生成" };
         var form = new PcForm
         {
-            Title = "坡顶/坡底线提取（点云·挡墙法）", OkText = "确定", Width = 500,
+            Title = "坡顶/坡底线提取（点云·挡墙法）", OkText = "确定", Width = 520,
             CliDescription = "在点云上栅格化 DEM，自动提取坡顶/坡底断棱线为多段线（图层 点云_坡顶线 / 点云_坡底线）。",
         };
-        form.Text("直接在已加载点云上栅格化 DEM：按台阶边的坡度突变提坡顶线 / 坡面下沿提坡底线，并按最短线长过滤短孤线，"
-                + "入库为多段线（图层 点云_坡顶线 / 点云_坡底线）。")
-            .Small("说明：本实现按 DEM 断棱线检测，未提供原版挡墙法的「挡墙最小高 / 最小台阶高」两个旋钮 —— 界面上不摆不起作用的参数。")
-            .Rows(
+        form.Text("直接在已加载点云上栅格化 DEM：取坡度场的平/陡分界等值线，按两侧高程判坡顶线(平台在上)/坡底线(平台在下)，"
+                + "再用原始点云局部断面精修，并过滤短孤线，入库为多段线（图层 点云_坡顶线 / 点云_坡底线）。");
+        var scopeRows = new List<PcRow> { PcRow.Radios("scope", "生成范围", scopes, scopes[0]) };
+        for (int i = 0; i < regions.Count; i++)
+            scopeRows.Add(PcRow.Check($"rg{i}", $"{regions[i].Name}（{Data.MineableRegions.CategoryZh(regions[i].Category)}）", true, "仅「区域内/外」时生效"));
+        form.Group("生成范围（可关联作业区域：只取区域内 / 区域外，或全图）", scopeRows.ToArray());
+        if (regions.Count == 0)
+            form.Small("未定义作业区域（去『采场/排土场圈定』圈定后可限制在区域内/外）；本次全图生成。");
+        form.Rows(
                 PcSourceRow(all, cur, 120),
                 PcRow.Num("cell", "DEM 网格尺寸", PcAutoCell(cur, 1).ToString("0.##", Inv), "m", "（越大越快越粗，整场建议 1~2；默认按点密度取）", null, 120, 70),
-                PcRow.Num("slope", "陡坡阈值", "24", "°", "（≥此值判为坡面，用于坡底）", null, 120, 70),
-                PcRow.Num("minlen", "最短线长", "60", "m", "（主要过滤短孤线）", null, 120, 70));
+                PcRow.Num("slope", "陡坡阈值", "18", "°", "（≥此值判为坡面：坡度等值线的平/陡分界）", null, 120, 70),
+                PcRow.Num("minlen", "最短线长", "30", "m", "（过滤短孤线）", null, 120, 70))
+            .Small("说明：原版对话框里的「挡墙最小高 / 最小台阶高」在其现行等值线算法中已不起作用，此处不摆。");
         var v = await form.AskAsync(this);
         if (v == null) { EditEcho("坡顶底线提取：已取消", EchoLevel.Info); return true; }
         var pc = PcResolve(all, v.S("src")) ?? cur;
-        double cell = Math.Max(v.D("cell", 1), 1e-3), thr = v.D("slope", 24), minLen = Math.Max(v.D("minlen", 60), 0);
-
-        EditEcho("坡顶底线提取：栅格化 DEM + 断棱线检测…", EchoLevel.Success);
-        var pts = PcPts(pc);
-        var (crest, toe, gridPts) = await Task.Run(() =>
+        var opt = new SlopeLineExtractor.Options
         {
-            var r = PointCloudOps.Rasterize(pts, cell, 0);           // 取每格最低点 = 地面
-            var gp = PointCloudOps.RasterPoints(r);
-            var xy = gp.Select(p => (p.x, p.y)).ToList();
-            var tris = Delaunay.Triangulate(xy);
-            if (tris.Count == 0) return (new List<CrestToe.Edge>(), new List<CrestToe.Edge>(), gp);
-            var (c, t) = CrestToe.Extract(gp, tris, thr);
-            return (c, t, gp);
-        });
-        if (gridPts.Count < 3) { EditEcho("坡顶底线提取：栅格点太少（把 DEM 格网调小）", EchoLevel.Success); return true; }
-        if (crest.Count == 0 && toe.Count == 0) { EditEcho($"坡顶底线提取：未检出断棱线（陡坡阈值 {thr.ToString("0.#", Inv)}° 可能偏大）", EchoLevel.Success); return true; }
+            CellSize = Math.Max(v.D("cell", 1), 1e-3),
+            MinLineLen = Math.Max(v.D("minlen", 30), 0),
+        };
+        double slope = v.D("slope", 18);
+        if (slope > 0 && slope < 90) opt.SlopeFlatDeg = slope;
 
+        // 所选区域环 → 扁平 XY；选了区域内/外但没勾任何区域 → 退回全图（避免误把全部裁空）。
+        string scope = v.S("scope");
+        int clipMode = scope == scopes[1] ? 1 : scope == scopes[2] ? 2 : 0;
+        var rings = new List<double[]>();
+        if (clipMode != 0)
+            for (int i = 0; i < regions.Count; i++)
+            {
+                if (!v.B($"rg{i}", true)) continue;
+                var pts3 = regions[i].Points; var xy = new double[pts3.Count / 3 * 2];
+                for (int k = 0; k < xy.Length / 2; k++) { xy[2 * k] = pts3[3 * k]; xy[2 * k + 1] = pts3[3 * k + 1]; }
+                if (xy.Length >= 6) rings.Add(xy);
+            }
+        if (clipMode != 0 && rings.Count == 0) clipMode = 0;
+        string scopeText = clipMode == 1 ? "仅区域内" : clipMode == 2 ? "仅区域外" : "全图";
+
+        EditEcho($"坡顶底线提取：计算中（后台线程，范围：{scopeText}，Esc 取消）…", EchoLevel.Info);
+        var pts = PcPts(pc);
+        var stats = new SlopeLineExtractor.Stats();
+        var cts = _pcBgCts = new System.Threading.CancellationTokenSource();
+        ShowLoadProgress(0, $"坡顶底线提取（{scopeText}）中…");
+        List<SlopeLineExtractor.Polyline3> crest, toe;
+        try
+        {
+            var res = await Task.Run(() =>
+            {
+                bool ok = SlopeLineExtractor.Extract(pts, opt, out var c, out var t, stats, out string e,
+                    (f, what) => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    { if (ReferenceEquals(_pcBgCts, cts)) ShowLoadProgress(0.05 + 0.9 * f, $"坡顶底线提取（{scopeText}）· {what}…"); }),
+                    cts.Token);
+                if (ok && clipMode != 0)
+                {
+                    double minKeep = Math.Max(5.0, 2.0 * opt.CellSize);
+                    SlopeLineExtractor.ClipToRegions(c, rings, clipMode == 1, minKeep);
+                    SlopeLineExtractor.ClipToRegions(t, rings, clipMode == 1, minKeep);
+                }
+                return (ok, c, t, e);
+            }, cts.Token);
+            if (!res.ok) { EditEcho($"坡顶底线提取失败：{res.e}", EchoLevel.Error); return true; }
+            crest = res.c; toe = res.t;
+        }
+        catch (OperationCanceledException) { EditEcho("坡顶底线提取：已取消。", EchoLevel.Info); return true; }
+        finally { if (ReferenceEquals(_pcBgCts, cts)) _pcBgCts = null; cts.Dispose(); HideLoadProgress(); }
+        if (crest.Count == 0 && toe.Count == 0)
+        { EditEcho($"坡顶底线提取「{pc.Name}」：未检出台阶线（DEM {stats.DemW}×{stats.DemH}，可把陡坡阈值调小或 DEM 网格调大）", EchoLevel.Success); return true; }
+
+        // UI 线程入库：三维多段线，图层同原版 "点云_坡顶线"(红=1) / "点云_坡底线"(蓝=5)，一步 Undo。
         BeginChange();
-        int nc = PcAddEdgeLines(crest, minLen, "点云_坡顶线", 0.95f, 0.55f, 0.2f);
-        int nt = PcAddEdgeLines(toe, minLen, "点云_坡底线", 0.2f, 0.7f, 0.9f);
+        int nc = PcAddPolylines3(crest, "点云_坡顶线", 1);
+        int nt = PcAddPolylines3(toe, "点云_坡底线", 5);
+        PopulateDrawingLayers();
         RefreshScene();
-        EditEcho($"坡顶底线提取「{pc.Name}」：坡顶线 {nc} 条(橙) / 坡底线 {nt} 条(青)"
-                       + $" · DEM 网格 {cell.ToString("0.##", Inv)}m · 陡坡阈值 {thr.ToString("0.#", Inv)}°"
-                       + $" · 最短线长 {minLen.ToString("0.#", Inv)}m", EchoLevel.Success);
+        EditEcho($"点云提坡顶/坡底线完成「{pc.Name}」：坡顶 {nc} 条({stats.CrestLenM:0} m)、坡底 {nt} 条({stats.ToeLenM:0} m)，"
+               + $"范围 {scopeText}，DEM {stats.DemW}×{stats.DemH}@{opt.CellSize.ToString("0.##", Inv)}m，"
+               + $"精修点 {stats.RefinedCrestVertices}/{stats.RefinedToeVertices}，用时 {stats.MsTotal:0} ms，已入库", EchoLevel.Success);
         return true;
     }
 
-    /// <summary>断棱线段 → 连成多段线 → 按最短线长过滤 → 入图层。返回入库条数。</summary>
-    private int PcAddEdgeLines(IReadOnlyList<CrestToe.Edge> edges, double minLen, string layer, float cr, float cg, float cb)
+    /// <summary>正在后台跑的点云长计算（坡顶底线提取）；Esc 取消。</summary>
+    private System.Threading.CancellationTokenSource? _pcBgCts;
+
+    /// <summary>Esc：取消后台点云计算。返回 true = 有任务被取消。</summary>
+    private bool CancelPcBackground()
     {
-        if (edges.Count == 0) return 0;
-        var segs = edges.Select(e => (IReadOnlyList<(double x, double y)>)new[] { (e.X0, e.Y0), (e.X1, e.Y1) }).ToList();
-        var chains = PolylineJoin.Join(segs, 1e-6);
+        var c = _pcBgCts;
+        if (c == null) return false;
+        try { c.Cancel(); } catch { }
+        return true;
+    }
+
+    /// <summary>三维折线批量入图层（ACI 索引色同原版 EnsureLayer）。返回入库条数。</summary>
+    private int PcAddPolylines3(IReadOnlyList<SlopeLineExtractor.Polyline3> lines, string layer, int aci)
+    {
+        var (r, g, b) = DxfImportService.AciToRgb(aci);
+        _layers.EnsureImported(layer, r, g, b);
         int n = 0;
-        foreach (var ch in chains)
+        foreach (var l in lines)
         {
-            double len = 0;
-            for (int i = 0; i + 1 < ch.Count; i++)
-                len += Math.Sqrt(Math.Pow(ch[i + 1].x - ch[i].x, 2) + Math.Pow(ch[i + 1].y - ch[i].y, 2));
-            if (len < minLen || ch.Count < 2) continue;
-            var pl = new PolylineEntity { Cr = cr, Cg = cg, Cb = cb, LayerName = layer };
-            pl.Points.AddRange(ch);
+            if (l.Count < 2) continue;
+            var pl = new PolylineEntity { Cr = r, Cg = g, Cb = b, LayerName = layer, Zs = new List<double>(l.Count) };
+            for (int i = 0; i < l.Count; i++) { pl.Points.Add((l.Xs[i], l.Ys[i])); pl.Zs!.Add(l.Zs[i]); }
             _scene.Add(pl);
             n++;
         }
