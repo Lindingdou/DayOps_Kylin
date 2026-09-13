@@ -1503,6 +1503,9 @@ public partial class MainWindow : Window
             if (cmd == "周计划编制") { OpenTaskWindow(() => new Views.TaskLib.WeekPlanWindow()); return; }   // 原 TaskLib WeekPlanWindow：WeekPlanLink 逐日裂解 + 周目标下达/撤销/按月摊算
             if (cmd == "影像底图") { OpenTaskWindow(() => new Views.TaskLib.BasemapConfigWindow()); return; }   // 原 TaskLib BasemapConfigWindow：工程级 GeoTIFF 配置 + 现读配准 + 覆盖核对 + 贴到视口（经 IViewCapability）
             if (cmd == "钻爆计划衔接") { OpenTaskWindow(() => new Views.TaskLib.BlastPlanWindow()); return; }   // 原 TaskLib BlastPlanWindow：逐炮排程 + 进装箱时窗 + 穿孔作业计划表（按本期计划生成）
+            if (cmd == "任务下达") { OpenTaskWindow(() => new Views.TaskLib.TaskDispatchWindow()); return; }   // 原 TaskLib TaskDispatchWindow：校验 → 任务实例 + 回执落盘 → 可撤回；单据流水面板
+            if (cmd == "生产任务书") { OpenTaskWindow(() => new Views.TaskLib.TaskOrderWindow()); return; }   // 原 TaskLib TaskOrderWindow：白纸单据 + 十二列 + 缺卸点标红 + 横向 PDF 导出
+            if (cmd == "派车单") { OpenTaskWindow(() => new Views.TaskLib.DispatchOrderWindow()); return; }   // 原 TaskLib DispatchOrderWindow：三规则展开 + 按车分组 + KPI 抬头 + 实绩回填落盘 + 交叉核对
             if (cmd == "作业面" || cmd == "工作面台账" || cmd == "采场参数") { WorkingFacesCmd(); return; }   // 旧切片：working_face 概览状态行（命令行别名保留）
             if (cmd == "参数化模板" || cmd == "开采模板" || cmd == "采场模板") { OpenBenchTemplateEditor(dump: false); return; }   // 剥采排·参数化模板 = 原 MiningTemplateEditorWindow(勿再指到库参数模板统计)
             if (cmd == "参数模板库" || cmd == "参数模板" || cmd == "参数定义") { ParamTemplatesCmd(); return; }
