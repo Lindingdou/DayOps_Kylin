@@ -661,6 +661,7 @@ public partial class MainWindow : Window
             // Gizmo 拖拽中：沿轴求光标射线最近点, 幽灵 + 手柄一起挪；空闲态则做轴悬停(压上变黄)。见 MainWindow.Gizmo.cs
             if (_gizmoDrag != null) { GizmoDragMove(p); _lastPointer = p; return; }
             if (_nav == NavMode.None && _tool == null && _editMode == EditMode.None && !_gripDrag.Active) GizmoHover(p);
+            if (_nav == NavMode.None) DimJigOnPointerMoved();   // 标注橡皮筋随光标重画, 见 MainWindow.DimJig.cs
 
             // 夹点拖拽：按当前模式(拉伸/移动/旋转/缩放)实时预览变换后的实体 + 光标旁模式提示
             if (_gripDrag.Active)
@@ -687,7 +688,7 @@ public partial class MainWindow : Window
                     string prompt = CurrentPrompt();
                     string? dims = _tool != null ? _tool.DragHint(shown.Value.x, shown.Value.y)
                                  : (_editMode != EditMode.None && !_editAwaitSelect) ? EditDragHint(shown.Value)
-                                 : null;
+                                 : DimJigHint(shown.Value);   // 标注取点中的实时读数(距离/半径/角度/坐标), 见 MainWindow.DimJig.cs
                     if (prompt.Length > 0) dh = dims != null ? $"{prompt}  {dims}" : prompt;
                 }
                 if (dh != null)
@@ -1304,7 +1305,7 @@ public partial class MainWindow : Window
     private (double x, double y)? _lastDimOffsetPt;     // 上一条标注的尺寸线偏移点(连续标注沿用同尺寸线级)
     private bool _dimContinue;                          // 连续标注模式(2 点: 续点, 尺寸线级沿用)
     private bool _dimAligned;                           // true=对齐标注(尺寸线平行测线,真距); false=线性标注(轴对齐,量 X/Y 分量)
-    private readonly Cad.Draw.DimStyle _dimStyle = new();   // 标注样式(DIM 变量：字高/小数位/箭头比/延伸线)，影响新建标注
+    private readonly Cad.Draw.DimStyle _dimStyle = DimStyleStore.LoadOrDefault();   // 标注样式(DIM 变量：字高/小数位/箭头比/延伸线)，影响新建标注; 上次设置记在用户目录 dimstyle.json(设置面板见 DimStyleWindow.cs)
     private bool _selBoxActive;                     // 窗口框选拖拽中
     private Avalonia.Point _selBoxStart;            // 框选起点(屏幕)
     private bool _selectMode;                        // 选择模式(3D)：左键只框选/点选, 不旋转视图(右键菜单切换, 同原版)
@@ -6509,15 +6510,12 @@ public partial class MainWindow : Window
     private void DimStyleCmd(string cmd)
     {
         var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
-        if (tk.Length <= 1)
-        {
-            StatusMsg.Text = $"标注样式：文字高 {(_dimStyle.TextHeight > 0 ? _dimStyle.TextHeight.ToString("0.##") : "自动")} · 小数位 {_dimStyle.DecimalPlaces} · 箭头比 {_dimStyle.ArrowRatio:0.##}（设置：标注样式 <文字高> [小数位] [箭头比]，文字高 0=自动）";
-            return;
-        }
+        if (tk.Length <= 1) { _ = OpenDimStyleWindowAsync(); return; }   // 无参 = 打开设置面板(见 MainWindow.DimJig.cs / DimStyleWindow.cs); 带参仍可命令行直设
         var inv = System.Globalization.CultureInfo.InvariantCulture; var fl = System.Globalization.NumberStyles.Float;
         if (double.TryParse(tk[1], fl, inv, out double h) && h >= 0) _dimStyle.TextHeight = h;
         if (tk.Length >= 3 && int.TryParse(tk[2], out int dec) && dec >= 0 && dec <= 8) _dimStyle.DecimalPlaces = dec;
         if (tk.Length >= 4 && double.TryParse(tk[3], fl, inv, out double ar) && ar > 0 && ar < 5) _dimStyle.ArrowRatio = ar;
+        DimStyleStore.Save(_dimStyle);
         StatusMsg.Text = $"标注样式已设：文字高 {(_dimStyle.TextHeight > 0 ? _dimStyle.TextHeight.ToString("0.##") : "自动")} · 小数位 {_dimStyle.DecimalPlaces} · 箭头比 {_dimStyle.ArrowRatio:0.##}（影响新建标注）";
     }
 
@@ -8830,6 +8828,7 @@ public partial class MainWindow : Window
     private void AppendScenePreview(List<float> list)
     {
         _tool?.AppendPreview(list, _cursorWorld);
+        AppendDimPreview(list);   // 标注橡皮筋(线性/对齐/连续/半径/直径/角度/坐标标注取点中整条随光标), 见 MainWindow.DimJig.cs
         if (_slideDragging && _slidePts.Count > 1)     // 滑动多段线拖动预览
         {
             var pv = new PolylineEntity { Points = _slidePts, Cr = 0.55f, Cg = 0.62f, Cb = 0.70f };
