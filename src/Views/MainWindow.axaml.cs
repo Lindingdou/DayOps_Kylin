@@ -1532,8 +1532,10 @@ public partial class MainWindow : Window
             if (cmd == "C2C" || cmd == "点云比对" || cmd == "位移监测 C2C" || cmd == "位移监测") { await CloudCompareAsync(); return; }
             if (cmd == "手动标定线路") { await RoadMarkRouteAsync(); return; }   // 忠实原 CreateMarkRouteCommand(视口画线 + 交点捕捉 + 铺贴 + 接进中心线层)
             if (cmd == "画道路中线" || cmd == "道路中线绘制") { await DrawRoadCenterlineCmd(); return; }   // 原 CreateDrawRoadCenterlineCommand(RS13–RS25): 拾点吸面 → 道路参数 → 统一落地管线 → 登记路网, 见 MainWindow.DrawRoadCenterline.cs
-            if (cmd == "境界圈定" || cmd == "凸包" || cmd == "采场圈定" || cmd == "采场/排土场圈定") { await BoundaryHullAsync(); return; }
-            if (cmd == "确定境界" || cmd == "境界优化" || cmd == "最优坑深" || cmd == "经济境界") { PitDepthCmd(); return; }
+            if (cmd == "境界圈定" || cmd == "境界圈定设置" || cmd == "境界方案") { OpenPitSchemeConfig(); return; }   // 原 CreateOpenPitConfigCommand: PitSchemeConfigWindow(方案配置窗), 见 MainWindow.Plan.cs
+            if (cmd == "确定境界" || cmd == "境界优化" || cmd == "方案比选·确定境界" || cmd.StartsWith("确定境界 ")) { OpenPitOptimize(cmd); return; }   // 原 CreateOpenPitOptimizeCommand: PitOptimizeWindow(求解·对比·确定最终境界); 「确定境界 一键」直通一键圈定
+            if (cmd == "凸包" || cmd == "采场圈定" || cmd == "采场/排土场圈定" || cmd == "点凸包") { await BoundaryHullAsync(); return; }   // 旧切片: 点集凸包(命令行别名保留)
+            if (cmd == "最优坑深" || cmd == "经济境界" || cmd == "经济坑深") { PitDepthCmd(); return; }   // 旧切片: 最近块体一键经济坑深(命令行别名保留)
             if (cmd.StartsWith("生成境界") || cmd.StartsWith("境界线") || cmd.StartsWith("几何圈定") || cmd.StartsWith("境界壳")) { PitEnvelopeCmd(cmd); return; }
             if (cmd.StartsWith("境界建模") || cmd.StartsWith("境界落地") || cmd.StartsWith("生成台阶面") || cmd.StartsWith("三维境界")) { await BenchModelAsync(cmd); return; }
             if (cmd.StartsWith("境界内资源") || cmd.StartsWith("圈入资源") || cmd.StartsWith("坑内资源") || cmd.StartsWith("圈入量")) { EnclosedResourceCmd(cmd); return; }
@@ -10853,6 +10855,13 @@ public partial class MainWindow : Window
     {
         {
             if (cmd == "@Ribbon末端") { ScrollRibbonToEnd(); return; }
+            if (cmd.StartsWith("@等待 "))   // @等待 <毫秒>: 让后台求解(Task.Run 后回 UI 线程回填)的续体跑完再截图 —— 自检脚本是同步循环, 不等就拍到旧值
+            {
+                int ms = int.TryParse(cmd.Substring(3).Trim(), out int v) ? v : 1000;
+                var end = System.DateTime.Now.AddMilliseconds(ms);
+                while (System.DateTime.Now < end) { Avalonia.Threading.Dispatcher.UIThread.RunJobs(); System.Threading.Thread.Sleep(15); }
+                return;
+            }
             if (cmd.StartsWith("@块体示例"))   // @块体示例 [nx ny nz]: 建一个规则块体模型并入场景(截图核对体素显示用)
             {
                 var a = cmd.Length > 5 ? cmd.Substring(5).Split(' ', System.StringSplitOptions.RemoveEmptyEntries) : System.Array.Empty<string>();
@@ -11291,6 +11300,15 @@ public partial class MainWindow : Window
     {
         var m = Cad.BlockModelMeta.CreateRegular("自检块体", 0, 0, 0, 20, 20, 10, nx, ny, nz);
         m.ActiveColormapAttribute = Cad.BlockModelMeta.ZElevationSentinel;   // 按高程配色, 核对「显示颜色是否起作用」
+        // 顺带给一列「矿岩类型」(底 30% 层=煤)：境界圈定/确定境界 自检要能猜到煤属性并算出量
+        if (m.Blocks.Count > 0)
+        {
+            m.PropertySchema.Add(new Cad.BlockPropertyColumn { Name = "矿岩类型", IsCategorical = true, CategoryLabels = new System.Collections.Generic.List<string> { "岩石", "煤" } });
+            double zCoal = nz * 10 * 0.3;
+            var codes = new double[m.Blocks.Count];
+            for (int i = 0; i < codes.Length; i++) codes[i] = m.Blocks[i].Z < zCoal ? 1 : 0;
+            m.Attrs["矿岩类型"] = codes;
+        }
         var err = Modeling.BlockModelStore.Create(MdlCtx(), m);
         if (err != null) { StatusMsg.Text = "自检块体：" + err; return; }
         Modeling.BlockModelStore.RefreshDisplay(MdlCtx(), m, fit: true);

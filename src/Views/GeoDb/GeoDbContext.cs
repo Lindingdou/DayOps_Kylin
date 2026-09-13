@@ -65,6 +65,8 @@ public static class GeoDbWindows
     public static int OpenCount => Open.Count;
     /// <summary>最近一次 Show 的页面(自检/测试用)。</summary>
     public static Window? Last { get; private set; }
+    /// <summary>非数据库页面(规划窗等)也登记为"最近打开"，让 @页面截图 自检能拍到。</summary>
+    public static void NoteLast(Window w) { Last = w; w.Closed += (_, _) => { if (ReferenceEquals(Last, w)) Last = null; }; }
 
     public static void CloseAll()
     {

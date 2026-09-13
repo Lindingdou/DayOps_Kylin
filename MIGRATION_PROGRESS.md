@@ -4089,3 +4089,50 @@ commit `79108dd` / `cf3294c` / `3efa126`; 测试 2188 → 2200 全绿(新增 12:
 ### 提交方式
 工作树里另一会话有 ~1.4 万行未提交改动（含 226 个未跟踪文件），本轮全部走「HEAD 副本 + 临时索引只交自己 hunk」；依赖另一会话代码的派发行
 （刀量切割 label / 处理尖灭 / 平盘联络道参数框）随其提交落 HEAD。旧切片一律留命令行别名（条带填充 / 两期容量校核 / 坑线连通自检 / 运输布局方案 带参 / 螺旋中线 / 折返中线）。
+
+## §三九六 「生产计划编制」页签逐钮忠实性复核 + 优化开采设计①②「境界圈定 / 确定境界」按原 PlanLib 整窗重做 (2026-09-13)
+
+**起因**：用户要求「生产进度计划编制部分的功能与 PitMine3D 完全相同」。逐钮对照原 `PlanLibPlugin.cs`（3 组：优化开采设计 6 钮 / 中长远进度计划编制 7 钮 /
+短期生产计划编制 4 大 + 6 中 + 标注台阶标高 SplitButton 3 子项）后的现状（Kylin `MainWindow.axaml.cs` 的 `cmd ==` 命中）：
+
+| 钮 | 原版 | Kylin 此前 | 判定 |
+|---|---|---|---|
+| 境界圈定 | `PitSchemeConfigWindow`（方案配置六区） | `BoundaryHullAsync` 选 CSV 点集算凸包 | **接线错** → 本节重做 |
+| 确定境界 | `PitOptimizeWindow`（求解·对比矩阵·确定落地） | `PitDepthCmd` 状态栏一行经济坑深 | **浅切片** → 本节重做 |
+| 采区划分 / 开采程序确定 | `MiningProgramConfigWindow` / `MiningProgramSolveWindow` | `PanelSplitCmd` 矩形入图 / `AdvanceCmd(Parallel)` 平行推进 | 浅切片 / **接线错** |
+| 刀量切割 / 剥采比均衡 | `DriveTemplateRunner` / `VpCurveWindow` | §三七〇 已做 / `StrippingBalanceAsync` | ✓ / 待核 VpCurveWindow |
+| 中长远进度计划编制 / 规划计算 | `LongTermConfigWindow` / `LongTermSolveWindow` | `LongTermPlanCmd` 命令行参数 / `ProgramEvaluateCmd` 开采程序评价 | 浅切片 / **接线错** |
+| 采场/排土场圈定 | `ShortTermMineableAreaWindow` | 同「境界圈定」凸包 | **接线错** |
+| 派生计划方案（中长远 / 短期同名两钮） | `LongTermDeriveWindow` / `ShortTermDeriveWindow` | 同一 `DerivePlansCmd` | 两钮串一 |
+| 方案综合对比 / 进度计划方案出图 / 两个动态模拟 | `LongTermCompareWindow` / `LongTermChartWindow` / Sim 窗 | `ProgramCompareAsync` / §三四五 / §三四七·三四八 | 待核 / ✓ / ✓ |
+| 短期生产计划编制 / 月度计划编制 | `ShortTermConfigWindow` / `ShortTermSolveWindow` | 同一 `ShortTermPlanCmd` | 两钮串一、浅切片 |
+| 量驱动采剥接续 / 采掘单元清单 | `MonthlyStripWindow` / `MiningUnitPlanWindow` | **无处理器（死按钮）** | 缺失 |
+| 采场参数识别 / 标注台阶标高 / 确定开采程序 / 采排配对 | `ShortTermFieldWindow` / `BenchElevationWindow`+3 子项 / `ShortTermSequenceWindow` / `DumpPairingWindow` | `BenchWidthAsync` / `BenchElevationAnnotateAsync`(无 SplitButton) / `AdvanceCmd` 平行推进 / §三六一 | 浅 / 缺子项 / **接线错** / ✓ |
+
+原 PlanLib 共 ~30k 行 C# + 6k 行 XAML（BoundaryOptimization 30 文件 / LongTerm 20 / ShortTerm 70 / Views 7），按钮逐个整族移植；本节先落优化开采设计①②。
+
+### 本节落地（境界圈定 / 确定境界，原 BoundaryOptimization 的 pit 半边逐文件移植）
+`src/Cad/Plan/`（命名空间 `Cad.Plan`）：`ProductionCostBook`（原 MineAssLib 生产成本口径 MU14，EconParams 缺省全取自此）· `PitScheme`（DepositType/StripRatioPrinciple/
+DelineationMethod/EconRatioMethod 四枚举 · EconParams 四式 · WallAngle · PitGeometryRefs/SegmentBeta/SeamSurfaceRef · PitResult · PitScheme.Clone/CreateSamples ·
+`BoundarySchemeStore` 会话方案集）· `BlockModelCoal`（原 DepositAutoDetector.TryGuessCoal/TryGetClassifier/DetectAuto 在 `BlockModelMeta` 上的实现：分类列标签含"煤/coal"→码，
+列名含 coal/煤→==1；`ResourceProfile` + `PlanSectionSampler.SampleLayers` 逐 Z 层聚合 + 逐层裁剪环 + 灰分体积加权；`PitSectionSolver.SolveDepth` 净值最大定坑底 + 逐层曲线）·
+`PitEnvelope`（`PitSchemeEnvelope`：顶口=地表界多段线优先/块体足迹兜底，边 β 段绑定优先/方位映射，收缩=整体+逐段；纯几何复用既有 `Cad.PitEnvelope`）·
+`PitSolveRunner`（三段式编排：猜煤→n经校核→几何限深(各帮最紧)→逐 Z 层 β 截锥裁剪→后台采样求解→`PitEvaluator` 全维 PitResult；`PitMaterializer` 自顶向下 crest/toe 环 →
+放样三角化台阶面 + 每环一条闭合三维多段线，按方案图层幂等先删后建）· `ComparisonBuilder`（19 指标 × 方向感知 min-max 归一 × 权重 → 综合评分/排名/推荐）· `PlanDb`（slope_design 现行设计）·
+`IPlanEntityHost`（原 IEntityCapability/ISelectionCapability 被 PlanLib 用到的那一截：按 handle 取多段线/三角网/AABB、枚举、按层删、落地、视口拾取、高亮、激活块体、库连接）。
+`src/Cad/Draw/EntityHandles.cs`：会话内实体 handle（ConditionalWeakTable，方案只按 handle 引用图纸实体，同原 AcDb handle 语义）。
+
+`src/Views/Plan/`：`PitSchemeConfigWindow`（原 XAML 六区照搬：①矿床/原则 + 块体 PCA 自动识别 ②四式实时公式(下标 Run) ③分帮角表 + 从 SlopeDesign 载入/按方位绑定/按境界线段分帮…
+④面与界线 handle 引用 + 选面/选线对话框 ⑤底宽按设备/工作面宽/整体收缩/台阶 H·α ⑥走向检测/间距推荐/预览剖面线入图；全部自动重填/保存/新建/克隆/删除）·
+`PitOptimizeWindow`（一键圈定/求解选中/求解全部 + 方案列表勾选比选 + 指标×方案矩阵(分组标题行代替 WPF GroupStyle, ▲=最优) + 详情六格 + 两块占位(照原) + ✔确定最终境界落地并标记
+已确定）· `SurfaceSelectionDialog`（①视口拾取 ②清单双击/确定）· `WallSegmentDialog`（逐段 方位/长度/帮别/β/额外收缩）· `PlanUi`（teal 标题栏/GroupBox/信息框/标签行工厂）。
+`MainWindow.Plan.cs`：`OpenPitSchemeConfig` / `OpenPitOptimize(cmd)`（单例；「确定境界 一键」直通一键圈定）+ `PlanEntityHost` 实现。Ribbon：`境界圈定`→配置窗，`确定境界`→优化窗；
+旧切片保留命令行别名 `凸包/采场圈定/点凸包`、`最优坑深/经济境界/经济坑深`。自检加 `@等待 <ms>`（后台求解续体跑完再截图）、`@块体示例` 顺带给「矿岩类型」煤列。
+
+**验证**：`PitSchemeFamilyTests` 16 条（四式 · 成本口径 · 克隆深拷 · 猜煤 · PCA 判型 · 逐层采样体积守恒/灰分加权/逐层裁剪 · 净值最大与几何限深 · 评价泰勒/NPV/单位成本 ·
+编排三段失败路径与限深消息 · 顶口解析 · 段绑定/方位/收缩 · 落地环与放样网顶点/三角计数 · 对比矩阵最优/推荐/排名 · 剖面线/间距/底宽推荐）全过。
+实机 `PITMINE_SELFTEST=@块体示例 20 6 8;确定境界 一键;@等待 4000;@页面截图;境界圈定;@页面截图`：两窗按原版布局出图，一键圈定对自检块体三方案求解完成（默认帮角 + 60 m 底宽对
+120 m 宽足迹几何限深 10 m、煤 0，与原版同口径），对比矩阵/详情回填。
+**登记差异**：本机另一会话正在工作树里移植 `src/TaskLib/`（108 个未跟踪文件，尚编不过），本节全部构建/测试在 scratchpad 的镜像副本（排除 TaskLib）里跑；
+原窗「导出报表」原版即 TODO，照回显；「境界平面/横剖面预览」「境界剥采比–深度曲线」原版为占位，照保留（结果里已带逐层曲线数据备用）。
+**下一步**：③采区划分 / ④开采程序确定（MiningProgramPlan + Config/Solve 两窗 + PanelSplitter/PanelDelineator/ProgramMaterializer/MiningProgramCharts）→ ⑥剥采比均衡 VpCurveWindow 核对 → 中长远组 → 短期组。
