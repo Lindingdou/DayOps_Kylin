@@ -1396,7 +1396,10 @@ public partial class MainWindow : Window
             if (cmd == "时段快照" || cmd == "路网快照") { RoadSnapshotCmd(); return; }
             if (cmd == "纪元快照") { await SnapshotEpochAsync(); return; }
             if (cmd == "排土条带" || cmd == "条带填充" || cmd == "排土条带划分") { DumpStrips(); return; }
-            if (cmd == "分帮扩帮" || cmd == "批量台阶扩帮" || cmd == "批量扩坑") { StartBench(); return; }
+            if (cmd == "分帮扩帮") { SkeletonEcho("分帮扩帮", "沿境界按帮分段,各帮用各自 H/α/W 放坡 + 帮交界过渡带收口"); return; }   // 原版 SkeletonCommand 桩, 照回显
+            if (cmd == "最终并段" || cmd == "最终帮并段") { SkeletonEcho("最终帮并段", "选境界 + 从第 N 级并几级 + 并段后坡角 → mergeCount(几何已实现,仅缺入口)"); return; }   // 原版 SkeletonCommand 桩
+            if (cmd == "批量扩坑" || cmd.StartsWith("批量扩坑 ")) { await SeamPitCmd(cmd); return; }
+            if (cmd == "动态调整" || cmd == "动态调整台阶形态") { BenchDesignJigCmd(); return; }   // 剥采排·动态调整 = 原 StartBenchDesignJig(内核实时 jig), 与 TaskLib 的生产任务动态调整不是一回事
             if (cmd == "组合工作线" || cmd == "合并多段线" || cmd == "连接台阶线") { await JoinPolylinesCmdAsync(); return; }   // 「连接多段线」= 编辑组 POLYJOIN(带端点容差)
             if (cmd == "块体模型" || cmd == "导入块体" || cmd == "地质体建模") { await ImportBlockModelAsync(); return; }
             if (cmd == "导入PMB" || cmd == "加载PMB" || cmd == "PMB导入" || cmd == "导入块体模型文件" || cmd.StartsWith("导入PMB ")) { await LoadPmbAsync(cmd); return; }
@@ -1489,7 +1492,8 @@ public partial class MainWindow : Window
             if (cmd.StartsWith("参数验收判定") || cmd.StartsWith("DB参数验收") || cmd.StartsWith("验收判定")) { ParamAcceptanceJudgeCmd(cmd); return; }
             if (cmd.StartsWith("兼容机型") || cmd.StartsWith("可用机型") || cmd.StartsWith("适配机型")) { CompatibleModelsCmd(cmd); return; }
             if (cmd == "作业面台账" || cmd == "作业面" || cmd == "工作面台账" || cmd == "采场参数") { WorkingFacesCmd(); return; }
-            if (cmd == "参数模板库" || cmd == "参数化模板" || cmd == "参数模板" || cmd == "参数定义") { ParamTemplatesCmd(); return; }
+            if (cmd == "参数化模板" || cmd == "开采模板" || cmd == "采场模板") { OpenBenchTemplateEditor(dump: false); return; }   // 剥采排·参数化模板 = 原 MiningTemplateEditorWindow(勿再指到库参数模板统计)
+            if (cmd == "参数模板库" || cmd == "参数模板" || cmd == "参数定义") { ParamTemplatesCmd(); return; }
             if (cmd == "月度计划" || cmd == "月计划" || cmd == "月度计划查看") { MonthlyPlansCmd(); return; }   // 只读展示(编制/授权工作流走 TaskLib, 受阻)
             if (cmd == "路况显示") { RoadConditionDisplayCmd(); return; }   // 忠实原 RoadConditionSymbology(逐段纵坡分档 + 状态压色 + 白向标)
             if (cmd == "运输道路" || cmd == "道路台账") { HaulRoadsCmd(); return; }
@@ -1547,7 +1551,8 @@ public partial class MainWindow : Window
             if (cmd == "角度" || cmd == "测量角度" || cmd == "三点测角") { MeasureBySelection("角度"); return; }
             if (cmd == "等效运距") { RoadEquivHaulCmd(); return; }   // 忠实原 EquivHaulWindow(一源多汇比选)
             if (cmd == "运输指标报表") { RoadTransportIndicatorsCmd(); return; }   // 忠实原 TransportIndicatorsWindow
-            if (cmd == "运输指标" || cmd == "驱动距离") { await HaulMetricsAsync(); return; }
+            if (cmd == "运输指标") { await HaulMetricsAsync(); return; }
+            if (cmd == "驱动距离" || cmd.StartsWith("驱动距离 ")) { await CuttingCmd(cmd, "驱动距离"); return; }   // 同一引擎 DriveTemplateRunner(distanceOnly, labelOverride:"驱动距离"), 原版两钮共用
             if (cmd == "批量台阶扩帮" || cmd == "台阶线生成" || cmd == "台阶扩帮"
                 || cmd.StartsWith("批量台阶扩帮 ") || cmd.StartsWith("台阶线生成 ") || cmd.StartsWith("台阶扩帮 "))
             {
@@ -7482,6 +7487,36 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"组合工作线：{polys.Count} 条 → {merged.Count} 条";
     }
 
+    // ═══════════════════ 原版 SkeletonCommand 桩（分帮扩帮 / 最终帮并段）═══════════════════
+    // 原版这两钮本身就是空壳: 命令行回显「[骨架] 名:设计意图（待实现）」。移植只照回显, 不替原版把功能"补"出来。
+    private void SkeletonEcho(string feature, string intent)
+    {
+        EditEcho($"[骨架] {feature}：{intent}（待实现）");
+        StatusMsg.Text = $"[骨架] {feature}：待实现（原版即占位，此处同）";
+    }
+
+    // 动态调整（台阶交互设计 jig）：原版 = 选 1 条闭合境界 → 内核 StartBenchDesignJig, 鼠标调深度/层数实时预览坡面, 点击/回车确认。
+    // 内核回路在 xllAcEd(无源); Kylin 侧先按原版做同样的选集校验并如实说明, 交互 jig 由托管等价接(见 BenchJig)。
+    private void BenchDesignJigCmd()
+    {
+        var sel = _selected.FindAll(e => e is PolylineEntity pl && pl.Points.Count >= 2);
+        if (sel.Count != 1) { StatusMsg.Text = "动态调整台阶形态：请先在场景里选 1 条 polyline 作为境界线"; EditEcho("动态调整台阶形态:请先在场景里选 1 条 polyline 作为境界线", EchoLevel.Warn); return; }
+        var line = (PolylineEntity)sel[0];
+        if (line.Points.Count < 2) { StatusMsg.Text = "动态调整台阶形态：境界线点数不足(至少 2 点)"; return; }
+        _ = StartBenchJigAsync(line);
+    }
+
+    // 批量扩坑（按煤层层位分层放坡）：原版 = 选 1 条闭合境界 → 非模态 SeamPitDialog(顶/底板面) → 内核 BuildSeamPitMultiSeam。
+    private async System.Threading.Tasks.Task SeamPitCmd(string cmd)
+    {
+        var sel = _selected.FindAll(e => e is PolylineEntity pl && pl.Points.Count >= 3);
+        if (sel.Count < 1) { StatusMsg.Text = "批量扩坑：请先在场景里选 1 条【闭合】多段线作为境界线"; EditEcho("批量扩坑:请先在场景里选 1 条【闭合】多段线作为境界线", EchoLevel.Warn); return; }
+        var line = (PolylineEntity)sel[0];
+        bool closed = line.Closed || Dist2(line.Points[0], line.Points[^1]) < 1e-12;
+        EditEcho($"> 批量扩坑:锁定境界线（{(closed ? "闭合" : "非闭合")}，{line.Points.Count} 点），打开参数面板…");
+        await SeamPitRunAsync(line, cmd);
+    }
+
     // 分帮扩帮：选中台阶线/多段线，点方向 → 批量平行偏移
     private void StartBench()
     {
@@ -8841,6 +8876,7 @@ public partial class MainWindow : Window
     {
         _tool?.AppendPreview(list, _cursorWorld);
         RoadAppendJigPreview(list);   // 「手动标定线路」画线 jig(交点标记 + 已定走向 + 橡皮筋), 见 MainWindow.RoadTransport.Centerline.cs; 没在画时空转
+        BenchJigAppendPreview(list);   // 「动态调整」台阶交互设计 jig(逐级坡脚环随光标深度变), 见 MainWindow.BenchJig.cs; 没在调时空转
         AppendDimPreview(list);   // 标注橡皮筋(线性/对齐/连续/半径/直径/角度/坐标标注取点中整条随光标), 见 MainWindow.DimJig.cs
         if (_slideDragging && _slidePts.Count > 1)     // 滑动多段线拖动预览
         {

@@ -980,12 +980,6 @@
                                             <Button Classes="ribbon-btn small" Tag="折返坑线" Click="OnRibbonCommand" ToolTip.Tip="折返坑线">
                                                 <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mineass_road_switchback}" /><TextBlock Text="折返坑线" /></StackPanel>
                                             </Button>
-                                            <Button Classes="ribbon-btn small" Tag="竖曲线平滑" Click="OnRibbonCommand" ToolTip.Tip="竖曲线平滑：3D 中线 CSV → 变坡点插抛物线竖曲线(GBJ22-87)，出原/平滑纵断面 + 半径校核">
-                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mineass_vertical_curve}" /><TextBlock Text="竖曲线平滑" /></StackPanel>
-                                            </Button>
-                                            <Button Classes="ribbon-btn small" Tag="线形处理" Click="OnRibbonCommand" ToolTip.Tip="线形处理：3D 中线 CSV → GBJ22-87 线形后处理(转角圆弧化+分段限坡+竖曲线)，出圆弧化平面线形 + 平曲线半径/纵坡/合成坡度校核">
-                                                <StackPanel Orientation="Horizontal"><Image Source="{StaticResource mineass_line_form}" /><TextBlock Text="线形处理" /></StackPanel>
-                                            </Button>
                                         </WrapPanel>
                                     </StackPanel>
                                 </DockPanel>
