@@ -74,7 +74,7 @@ public sealed class ShiftProcessWindow : Window
 
     // ── 控件（与原 XAML x:Name 一一对应）──
     private readonly TextBlock titleText;
-    private readonly DatePicker dpDay = new() { Width = 210, Margin = new Thickness(0, 0, 4, 0) };   // Avalonia DatePicker 三栏（月/日/年）比 WPF 的宽，150 只剩「九月」
+    private readonly DatePicker dpDay = new() { Width = 270, Margin = new Thickness(0, 0, 4, 0) };   // Avalonia DatePicker 三栏（月/日/年）比 WPF 的宽，150 只剩「九月」
     private readonly StackPanel shiftTabs = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
     private readonly Button btnPlay;
     private readonly ComboBox cbSpeed = new() { Width = 72 };

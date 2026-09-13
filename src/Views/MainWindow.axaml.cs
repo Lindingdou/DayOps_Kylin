@@ -1524,6 +1524,7 @@ public partial class MainWindow : Window
             if (cmd == "去向台账") { OpenTaskWindow(() => new Views.TaskLib.SinkLedgerWindow()); return; }   // 原 TaskLib SinkLedgerWindow：排土场/破碎站/煤仓/堆场统一台账（占容方口径）+ 本日入方库容告警 + 盘点修正流水 + 按台账重建排土场 + 可接物料白名单
             if (cmd == "生产任务动态调整") { OpenTaskWindow(() => new Views.TaskLib.DynamicAdjustWindow()); return; }   // 原 TaskLib DynamicAdjustWindow：跨天「区域×工序」甘特 + 窗内三维推进演示（SimPanelHost 轴测相机·正射底图）+ 原因码路由 + 日内重排 + 跨天顺延
             if (cmd == "班内工艺·工序推演") { OpenTaskWindow(() => new Views.TaskLib.ShiftProcessWindow()); return; }   // 原 TaskLib ShiftProcessWindow：班内时钟 + 正射影像/作业区域/工艺线/工序标记/铭牌/瓶颈六层面板 + 工序链条带 + 系统状态与工序内部细衔接
+            if (cmd == "生产报告") { OpenTaskWindow(() => new Views.TaskLib.ReportHubWindow()); return; }   // 原 TaskLib ReportHubWindow：报表中心（一键生成·纸张预览·PDF/Word·归档）/ 报表模板设计 / 指标·计算规则库 / 存档回溯·两期对比 四页签
             if (cmd == "作业面" || cmd == "工作面台账" || cmd == "采场参数") { WorkingFacesCmd(); return; }   // 旧切片：working_face 概览状态行（命令行别名保留）
             if (cmd == "参数化模板" || cmd == "开采模板" || cmd == "采场模板") { OpenBenchTemplateEditor(dump: false); return; }   // 剥采排·参数化模板 = 原 MiningTemplateEditorWindow(勿再指到库参数模板统计)
             if (cmd == "参数模板库" || cmd == "参数模板" || cmd == "参数定义") { ParamTemplatesCmd(); return; }
