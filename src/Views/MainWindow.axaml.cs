@@ -1620,7 +1620,8 @@ public partial class MainWindow : Window
             if (cmd == "路网运输指标" || cmd == "运输指标路网" || cmd == "路网指标" || cmd == "路网里程指标") { RoadTransportIndicatorsCmd(); return; }
             if (cmd == "中线交点" || cmd == "交点分类" || cmd == "路网交点" || cmd == "中线交点分类" || cmd.StartsWith("中线交点 ") || cmd.StartsWith("交点分类 ")) { CenterlineJunctionsCmd(cmd); return; }
             if (cmd == "路段分类" || cmd == "路网拓扑分类" || cmd == "路段拓扑" || cmd == "干线支线") { RoadTopologyCmd(); return; }
-            if (cmd == "排土场容量校核" || cmd == "容量校核" || cmd == "排土容量") { await DumpCapacityAsync(); return; }
+            if (cmd == "排土场容量校核" || cmd == "容量校核" || cmd == "排土容量") { await DumpCapacityCheckCmd(cmd); return; }   // 原 DumpCapacityDialog: 图上选面 → 填方容积 → 与 dump_site 台账对账/写回, 见 MainWindow.DumpAdvance.cs
+            if (cmd == "两期容量校核") { await DumpCapacityAsync(); return; }   // 命令行别名: 两份高程点 CSV 的两期算量(早期切片)
             if (cmd == "生产量核算" || cmd == "任务量汇总" || cmd == "分账合计" || cmd == "生产任务量") { await ProductionQuantityAsync(); return; }
             if (cmd == "生产任务编制" || cmd == "排产" || cmd == "任务裂解" || cmd == "裂解装箱" || cmd == "班次排产"
                 || cmd.StartsWith("生产任务编制 ") || cmd.StartsWith("排产 ")) { TaskExplodeCmd(cmd); return; }
@@ -1650,7 +1651,8 @@ public partial class MainWindow : Window
                 FleetCycleCmd(bm, pl, rho, ks, km, nt);
                 return;
             }
-            if (cmd == "排土场按量推进" || cmd == "排土按量推进" || cmd.StartsWith("排土场按量推进 ") || cmd.StartsWith("排土按量推进 "))
+            if (cmd == "排土场按量推进" || cmd == "排土按量推进") { DumpAdvanceCmd(); return; }   // 原 DumpAdvanceDialog: 沿排土条带带序吃量 → 推到第几级第几带 + 形态, 见 MainWindow.DumpAdvance.cs
+            if (cmd.StartsWith("排土场按量推进 ") || cmd.StartsWith("排土按量推进 "))
             {
                 var tok = cmd.Split(new[] { ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
                 double vol = 60000, wl = 300, bh = 20;

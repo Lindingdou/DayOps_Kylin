@@ -37,3 +37,37 @@ public class DumpStripShellTests
         Assert.False(DumpStripShell.Build(new double[] { 0, 0, 0, 1, 0, 0 }, new double[] { 0, 1, 0, 1, 1, 0 }, 0).Ok);
     }
 }
+
+/// <summary>排土场容量校核算量核：填方 = 坡面高出现状面的柱体；穿地部分记挖方不静默；只算两面都采到的格。</summary>
+public class DumpCapacityCalcTests
+{
+    private sealed class Plane : PitMine3D.Kylin.Cad.IRoadZSampler
+    {
+        private readonly Func<double, double, double?> _f;
+        public Plane(Func<double, double, double?> f) => _f = f;
+        public bool TrySample(double x, double y, out double z) { var v = _f(x, y); z = v ?? 0; return v.HasValue; }
+    }
+
+    [Fact]
+    public void FlatDump_FillEqualsAreaTimesHeight()
+    {
+        var terrain = new Plane((_, _) => 100);
+        var face = new Plane((_, _) => 110);
+        var r = DumpCapacityCalc.Compute(terrain, face, 0, 0, 100, 50, 2, 0.05);
+        Assert.True(r.Ok);
+        Assert.Equal(100 * 50 * 10, r.FillM3, 0);
+        Assert.Equal(0, r.CutM3, 6);
+        Assert.Equal(5000, r.AreaFillM2, 0);
+    }
+
+    [Fact]
+    public void FaceBelowTerrain_CountsAsCut_AndUnsampledCellsSkipped()
+    {
+        var terrain = new Plane((x, _) => x < 50 ? 100 : null);   // 东半边没有现状面
+        var face = new Plane((_, _) => 95);
+        var r = DumpCapacityCalc.Compute(terrain, face, 0, 0, 100, 50, 2, 0.05);
+        Assert.Equal(50 * 50 * 5, r.CutM3, 0);
+        Assert.Equal(0, r.FillM3, 6);
+        Assert.Equal(r.Cells / 2, r.Sampled);
+    }
+}
