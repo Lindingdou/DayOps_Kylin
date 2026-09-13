@@ -3927,3 +3927,17 @@ commit `79108dd` / `cf3294c` / `3efa126`; 测试 2188 → 2200 全绿(新增 12:
 - 接线（MainWindow.axaml.cs 4 处按下/移动/松开/Esc + 2 处高亮出口）；命令 `Gizmo/GIZMO` = 手柄开关（视图·Gizmo 键、AI 菜单标签改「Gizmo 手柄」），`夹点开关/夹点` = `ToggleGrips`；选项·显示 分成「启用夹点显示」与「显示 Gizmo（三轴变换手柄）」两项（`Options.Selection.GripsVisible` / `Options.Display.GizmoVisible`）。
 
 **验证**：+7 单测 [GizmoGlyphTests](tests/PitMine3D.Kylin.Tests/GizmoGlyphTests.cs)（正交/透视尺度、2D 无 Z 且箭头共面、悬停变黄、轴命中与死区、轴参数含异面射线、真相机 ScreenRay 往返回到轴上同一点、包围盒 12 棱）。实机 `@线示例;范围缩放;@鼠标 按下 150 60;移动 180 61;松开` → 状态栏「Gizmo：沿 X 轴拖动 → 沿 X 轴移动 29.802 → （1 个实体）」，截图线整体右移、X 红 Y 黄(悬停)；3D 同链沿 X 移 15.13 落地，三轴锥箭头随视角；`Gizmo;夹点开关;GIZMO` 三步后手柄在、夹点方块无。
+
+### §三八六 2.5D TIN：剖分慢（自适应抽稀分钟级→秒级）+ 三角网不按点云真实色显示（2026-09-13, commit 574f3ae）
+
+**现象**（用户）：「2.5D 现在剖分慢，同时不按照点云的颜色进行着色」。
+
+**根因**：
+1. **慢**在抽稀不在剖分：`PcBuildTinAsync` 的「保留坡面细节」走的是点云抽稀命令那套 `PointThin.ThinAdaptive`（按曲率贪心排斥，每点查 (2·span+1)³ 个三维格、span 最大 4 → 729 次字典查找/点），30 万点 2.5s、200 万点分钟级；且 maxThin=4 把平地压到 12m 一点。Delaunay 早已是 delaunator（511d86c），不是瓶颈。
+2. **色**：只有「全密度 + 不限点数」才把 `pc.RgbColors` 整份拷到 `mesh.RgbColors`，抽稀后顶点与源点对不上就干脆不带色；显示又恒按高程分带。原版 `AcGeConstrainedDelaunay.cpp` 注释明写 `alpha=0 → override_rgb 关闭，每个 TIN 顶点写【点云采样点的真实 RGB】`，`ApplyDefaultTinShading` 建完即 mode 15「点云真实色」。
+
+**做法**：
+- [PointThin.cs](src/Cad/PointThin.cs) 新 `ThinXyMinZ`（忠实原 LasLib `recon.cpp voxel_downsample_xy_minz`：XY 平面分格、每格留 Z 最低点——压掉树冠/设备留地面）与 `ThinAdaptiveXyMinZ`（忠实 `adaptive_voxel_downsample_minz` 两遍粗先法：粗格 Z 落差 <1m 平地只留 1 点，≥1m 坡面再按 0.25 倍细格各留最低点；FineVoxelRatio=0.25/FlatZRange=1m 原版内部常量）。两者都返回**源点索引**；键 `(ix<<32)|iy` 配 `PackedKeyComparer`。旧 `Thin/ThinAdaptive` 留给点云抽稀命令，不动。
+- [MainWindow.PointCloud.cs](src/Views/MainWindow.PointCloud.cs) `PcBuildTinAsync`：抽稀换新法；「最大输入点数」等间隔切也记索引映射；`pc.HasRgb` 时 `mesh.RgbColors = srcIdx→pc.RgbColors`，**默认 `VertColors` = 真实色**（无 RGB 才退回高程分带）；回显补 平地格/坡面格 数 + 抽稀/剖分 耗时 + 「按点云真实色显示」。自检 `@点云示例` 给合成真实色（平盘赭黄/坡面深褐/煤带黑/矿卡黄），不然核不了这条。
+
+**验证**：+6 单测 [PointThinXyMinZTests](tests/PitMine3D.Kylin.Tests/PointThinXyMinZTests.cs)（最低点/零格恒等/负坐标格号不撞/平坡格分流/全平等价体素法/200 万点 <10s 护栏，实测 0.25s），全套 3856 通过。同源对拍 30 万点：旧 ThinAdaptive 2547ms→7,681 点，新 27ms→72,878 点。实机 `@点云示例 60 40;2.5D TIN;取消选择;东北等轴测` 截图：三角网平盘赭黄/坡面深褐/黑煤带与点云一色，矿卡被最低点法剔掉只剩黄点悬空；真实 LAS `DLT20251222.las`（200 万点 → 184 万顶点/369 万三角）：抽稀 0.5s/剖分 2.1s，含入场景整链 ≤7s，`@取景 622600 4380900 500` 放大后台阶纹理即正射影像效果。
