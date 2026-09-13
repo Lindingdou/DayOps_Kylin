@@ -1765,7 +1765,8 @@ public partial class MainWindow : Window
             if (cmd == "动点回转" || cmd == "动点回转推进") { AdvanceCmd(AdvanceMode.MovingPivot, "动点回转"); return; }
             if (cmd == "螺旋坑线" || cmd == "螺旋斜坡道" || cmd.StartsWith("螺旋坑线 ")) { await SpiralRampInsertCmd(cmd); return; }   // 原 InsertRampSpiralDialog → 中线+边线+路面一次落地, 见 MainWindow.RampInsert.cs
             if (cmd == "螺旋中线") { SpiralRampCmd(); return; }   // 命令行快速预览(固定参数, 只出 2D 中线)
-            if (cmd == "直线坑线" || cmd == "坑线自动布线" || cmd == "坑线连通自检" || cmd == "直线坑线自动布线" || cmd.StartsWith("直线坑线 ") || cmd.StartsWith("坑线自动布线 ")) { StraightRampRouteCmd(cmd); return; }
+            if (cmd == "直线坑线" || cmd == "坑线自动布线" || cmd == "直线坑线自动布线") { await StraightRampRouteDialogCmd(); return; }   // 原 StraightRouteParamsDialog + 原 StraightRampAutoRouter(折返/螺旋兜底 + 线形后处理), 见 MainWindow.StraightRoute.cs
+            if (cmd == "坑线连通自检" || cmd.StartsWith("直线坑线 ") || cmd.StartsWith("坑线自动布线 ")) { StraightRampRouteCmd(cmd); return; }   // 命令行带参形式(早期切片: 场景环 + 限坡/台阶高/路宽)
             if (cmd == "直线斜坡道" || cmd == "直线中线" || cmd.StartsWith("直线斜坡道 ")) { StraightRampCmd(cmd); return; }
             if (cmd == "折返坑线" || cmd == "折返斜坡道" || cmd.StartsWith("折返坑线 ")) { await SwitchbackRampInsertCmd(cmd); return; }   // 原 InsertRampSwitchbackDialog(起点点取/甩向自动) → 一次落地
             if (cmd == "折返中线") { SwitchbackRampCmd(); return; }   // 命令行快速预览(固定参数, 只出 2D 中线)
