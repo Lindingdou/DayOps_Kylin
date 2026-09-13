@@ -3915,3 +3915,15 @@ commit `79108dd` / `cf3294c` / `3efa126`; 测试 2188 → 2200 全绿(新增 12:
 
 **验证**：同脚本截图 —— 修前切回黑屏, 修后网格 + 黄线都在。
 **教训**：GL 上下文重建时, 所有缓存的 GL 名字(程序/VAO/VBO/纹理)都必须归零, 不止 `_has*` 标志；"删旧再建"的写法在新上下文里会删掉刚建的同名对象。
+
+## §三八五 GIZMO 改成真正的三轴变换手柄：选中对象上 X/Y/Z 箭头、拖轴沿轴移动；夹点开关独立保留 (2026-09-13)
+
+**起因**：用户反馈「gizmo 变为夹点开关了，这个不对」。查原版：内核 `Editor.h:102-105` 的 GIZMO 就是 `m_showGizmo` 夹点显示开关（`BuildViewState` 只用它门控 `vs.Grips`，左上三轴 HUD 无条件画），ribbon 提示/选项对话框/功能说明 H-42 也都写「夹点（Gizmo）显示开关」——Kylin 之前的 `夹点开关`(79e2d57) 是忠实照抄的。用户明确选择**有意偏离原版**：做成 AutoCAD 3DMOVE 那种三轴手柄，夹点显示另留开关。commit 6185449。
+
+**做法**：
+- 新 [GizmoGlyph](src/Cad/Draw/GizmoGlyph.cs)（纯几何）：手柄锚在选择集三维包围盒中心，+X 红 / +Y 绿 / +Z 蓝三根轴屏幕恒定 90px（轴杆 5 条平行线加粗，3D 线框锥箭头、2D 平面三角箭头），悬停/拖拽轴金黄，拖拽中另画贯穿约束线；`HitAxis`（屏幕空间到轴投影线段 ≤7px，中心 8px 死区让给夹点/点选）；`AxisParam`（光标射线与轴线最近点参数，对着轴看无解）；`WorldPerPixel` 用世界→屏幕投影雅可比的**最小奇异值**（针孔透视恰 = 焦距/深度，最大奇异值会混进离轴点沿深度动的那份而偏大），不依赖工作树里未提交的 `WorldPerPixelAt`。几何一律输出成带 Zs 的 `PolylineEntity` 再 `Tessellate`，渲染原点口径由实体统一处理。
+- 新 [MainWindow.Gizmo.cs](src/Views/MainWindow.Gizmo.cs)：`_gizmoOn` 状态、`GizmoRebuild`(HighlightSelection 重算锚点)、`AppendGizmo`(RedrawHighlight 出口画到高亮通道最上层，并存一份"实体线+夹点"缓冲，之后悬停变色/缩放旋转只换手柄不重镶嵌选择集)、`GizmoHover`(视图戳变了也重画)、`GizmoTryBeginDrag/DragMove/DragEnd/Cancel`（幽灵 = 起拖时线框整体平移，大网/点云只画包围盒棱；松开 `ApplyEditTransform(Translate(dx,dy), dz)` 一步 Undo；图层锁定拒绝）。
+- `Camera.ScreenRay` + 视口包装（近/远裁面反投影两点连线，2D 为竖直向下）。
+- 接线（MainWindow.axaml.cs 4 处按下/移动/松开/Esc + 2 处高亮出口）；命令 `Gizmo/GIZMO` = 手柄开关（视图·Gizmo 键、AI 菜单标签改「Gizmo 手柄」），`夹点开关/夹点` = `ToggleGrips`；选项·显示 分成「启用夹点显示」与「显示 Gizmo（三轴变换手柄）」两项（`Options.Selection.GripsVisible` / `Options.Display.GizmoVisible`）。
+
+**验证**：+7 单测 [GizmoGlyphTests](tests/PitMine3D.Kylin.Tests/GizmoGlyphTests.cs)（正交/透视尺度、2D 无 Z 且箭头共面、悬停变黄、轴命中与死区、轴参数含异面射线、真相机 ScreenRay 往返回到轴上同一点、包围盒 12 棱）。实机 `@线示例;范围缩放;@鼠标 按下 150 60;移动 180 61;松开` → 状态栏「Gizmo：沿 X 轴拖动 → 沿 X 轴移动 29.802 → （1 个实体）」，截图线整体右移、X 红 Y 黄(悬停)；3D 同链沿 X 移 15.13 落地，三轴锥箭头随视角；`Gizmo;夹点开关;GIZMO` 三步后手柄在、夹点方块无。
