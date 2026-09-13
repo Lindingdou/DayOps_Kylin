@@ -98,6 +98,9 @@ public static class AcadCommands
         new("EXPLODE",    null,         "分解",           "修改"),
         new("X",          "EXPLODE",    "分解",           "修改"),
         new("JOIN",       "连接多段线",  "连接多段线",     "修改"),
+        new("TEXTEDIT",   "编辑文字",    "编辑文字",       "修改"),
+        new("DDEDIT",     "编辑文字",    "编辑文字",       "修改"),
+        new("ED",         "编辑文字",    "编辑文字",       "修改"),
         new("J",          "连接多段线",  "连接多段线",     "修改"),
         new("OVERKILL",   "删除重复线",  "删除重复线",     "修改"),
 

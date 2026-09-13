@@ -785,7 +785,7 @@ public partial class MainWindow : Window
             var p = e.GetPosition(ViewportHost);
             Viewport.ZoomAt(p.X, p.Y, e.Delta.Y > 0 ? 0.9 : 1.1);        // 朝光标缩放
         };
-        _onHostDoubleTapped = (_, _) =>
+        _onHostDoubleTapped = (_, te) =>
         {
             if (_tool != null && _tool.IsMultiPoint)                      // 双击结束多段线
             {
@@ -794,6 +794,7 @@ public partial class MainWindow : Window
                 RefreshScene();
                 StatusMsg.Text = $"多段线完成（已画 {_scene.Count}）";
             }
+            else if (TryBeginTextEditAt(te.GetPosition(ViewportHost))) { }   // 双击文字 = 在位改内容(AutoCAD TEXTEDIT)
             else Viewport.ZoomExtents();                                  // 否则 = 范围缩放
         };
         _onHostExited = (_, _) =>                                          // 光标离开视口 → 收起十字与浮标, 状态栏坐标清空(同原版)
@@ -1126,6 +1127,7 @@ public partial class MainWindow : Window
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top,
             Opacity = 0,   // 用透明度显隐(始终在布局中); 每次改动后 _onHostMoved 会 RefreshScene 驱动重合成
+            IsHitTestVisible = false,   // 文字在位编辑期间叠层会临时打开命中, 浮标自己仍须透传
             Child = new TextBlock { Foreground = Avalonia.Media.Brushes.White, FontSize = 12, FontWeight = Avalonia.Media.FontWeight.SemiBold },
         };
         overlay.Children.Add(tip);
@@ -1140,6 +1142,7 @@ public partial class MainWindow : Window
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top,
             Opacity = 0,
+            IsHitTestVisible = false,
             Child = new TextBlock { Foreground = Avalonia.Media.Brushes.White, FontSize = 12, FontWeight = Avalonia.Media.FontWeight.SemiBold },
         };
         overlay.Children.Add(surfTip);
@@ -1639,6 +1642,7 @@ public partial class MainWindow : Window
             if (cmd == "方案综合对比" || cmd == "方案比选" || cmd == "方案对比") { await ProgramCompareAsync(); return; }
             if (cmd == "高程查询" || cmd == "虚拟钻孔" || cmd == "查询高程") { await StartSpotQueryAsync(); return; }
             if (cmd == "文字" || cmd == "单行文字") { ArmText(false); return; }
+            if (cmd == "编辑文字" || cmd == "文字编辑" || cmd == "修改文字") { _ = TextEditCommandAsync(); return; }   // TEXTEDIT/DDEDIT/ED: 在位改内容(双击文字同此)
             if (cmd == "多行文字" || cmd == "多行文本") { ArmText(true); return; }
             if (cmd == "对齐标注") { StartDim(true); return; }                                        // 对齐: 平行测线,真距
             if (cmd == "标注" || cmd == "线性标注" || cmd == "尺寸标注" || cmd == "标注台阶标高") { StartDim(false); return; }   // 线性: 轴对齐,量 X/Y
@@ -10885,7 +10889,14 @@ public partial class MainWindow : Window
                 _ = ImportPath(cmd.Substring(4).Trim().Trim('"'));
                 return;
             }
-            if (cmd.StartsWith("@鼠标 "))   // @鼠标 <按下|移动|松开> <x> <y> [右]: 世界坐标→屏幕后向视口宿主投一次真实指针事件(走 _onHostPressed/Moved/Released 全链)
+            if (cmd == "@文字清单")   // 场景里全部文字的 位置/字高/内容(核对在位编辑/拖放结果)
+            {
+                var sbT = new System.Text.StringBuilder("文字清单：");
+                foreach (var te in _scene.Entities.OfType<TextEntity>()) sbT.Append($"[({te.X:0.##},{te.Y:0.##}) h{te.Height:0.##} 「{te.Text.Replace('\n', '|')}」] ");
+                StatusMsg.Text = sbT.ToString();
+                return;
+            }
+            if (cmd.StartsWith("@鼠标 "))   // @鼠标 <按下|移动|松开|滚轮|双击> <x> <y> [右|格数]: 世界坐标→屏幕后向视口宿主投一次真实指针事件(走 _onHostPressed/Moved/Released 全链)
             {
                 var a = cmd.Substring(4).Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
                 if (a.Length >= 3 && double.TryParse(a[1], out double mx) && double.TryParse(a[2], out double my)
@@ -10916,9 +10927,24 @@ public partial class MainWindow : Window
                             _onHostReleased?.Invoke(ViewportHost, new PointerReleasedEventArgs(ViewportHost, _selftestPointer, ViewportHost, pos, ts, pp, KeyModifiers.None, right ? MouseButton.Right : MouseButton.Left));
                             break;
                         }
-                        default: StatusMsg.Text = "自检鼠标：动作须为 按下/移动/松开"; return;
+                        case "滚轮":   // @鼠标 滚轮 <x> <y> [格数]: 正=向上滚(放大), 负=向下滚(缩小), 朝该世界点缩放(同真实滚轮)
+                        {
+                            int n = a.Length >= 4 && int.TryParse(a[3], out int nn) ? nn : 1;
+                            var pp = new PointerPointProperties(RawInputModifiers.None, PointerUpdateKind.Other);
+                            for (int i = 0; i < System.Math.Abs(n); i++)
+                                _onHostWheel?.Invoke(ViewportHost, new PointerWheelEventArgs(ViewportHost, _selftestPointer, ViewportHost, pos, ts, pp, KeyModifiers.None, new Vector(0, n > 0 ? 1 : -1)));
+                            break;
+                        }
+                        case "双击":   // @鼠标 双击 <x> <y>: 投 DoubleTapped(文字在位编辑/多段线收笔/范围缩放走的那条)
+                        {
+                            var pp = new PointerPointProperties(RawInputModifiers.None, PointerUpdateKind.Other);
+                            var pea = new PointerEventArgs(InputElement.PointerMovedEvent, ViewportHost, _selftestPointer, ViewportHost, pos, ts, pp, KeyModifiers.None);
+                            _onHostDoubleTapped?.Invoke(ViewportHost, new TappedEventArgs(Gestures.DoubleTappedEvent, pea));
+                            break;
+                        }
+                        default: StatusMsg.Text = "自检鼠标：动作须为 按下/移动/松开/滚轮/双击"; return;
                     }
-                    StatusMsg.Text += $"  [自检鼠标 {a[0]} ({mx:0.#},{my:0.#}) 屏幕({pos.X:0},{pos.Y:0}) 拖拽={_gripDrag.Active} 框选={_selBoxActive} 选集: {string.Join(",", _selected.Select(EntityTypeName.Of))}]";
+                    StatusMsg.Text += $"  [自检鼠标 {a[0]} ({mx:0.#},{my:0.#}) 屏幕({pos.X:0},{pos.Y:0}) 拖拽={_gripDrag.Active} 框选={_selBoxActive} 编辑框={(TextEditing ? $"开 字号{_textEditor!.FontSize:0} 位置({_textEditor.Margin.Left:0},{_textEditor.Margin.Top:0})" : "无")} 选集: {string.Join(",", _selected.Select(EntityTypeName.Of))}]";
                 }
                 else StatusMsg.Text = "自检鼠标：参数须为 <按下|移动|松开> <x> <y> [右] 且点在视口内";
                 return;
@@ -12979,7 +13005,7 @@ public partial class MainWindow : Window
     {
         // 文件/绘制/修改
         "新建","打开","保存","另存为","导入","导入PMX","导出PMX","选项","命令别名","帮助",
-        "点","直线","多段线","滑动多段线","圆","矩形","正多边形","文字","多行文字","圆弧","图案填充","填充十字",
+        "点","直线","多段线","滑动多段线","圆","矩形","正多边形","文字","多行文字","编辑文字","圆弧","图案填充","填充十字",
         "复制","移动","旋转","偏移","修剪","延伸","打断","分解","删除","撤销","重做",
         // 对象捕捉
         "对象捕捉","交点捕捉","最近捕捉","垂足捕捉","捕捉全模式",

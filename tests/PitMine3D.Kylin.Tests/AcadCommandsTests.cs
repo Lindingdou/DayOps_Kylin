@@ -24,6 +24,9 @@ public class AcadCommandsTests
     [InlineData("DAL", "DIMALIGNED")]
     [InlineData("DRA", "DIMRADIUS")]
     [InlineData("MT", "多行文字")]
+    [InlineData("ED", "编辑文字")]         // TEXTEDIT/DDEDIT/ED: 双击文字同此(在位改内容)
+    [InlineData("DDEDIT", "编辑文字")]
+    [InlineData("TEXTEDIT", "编辑文字")]
     [InlineData("TOP", "俯视")]
     [InlineData("SWISO", "西南等轴测")]
     [InlineData("UNI", "布尔-并集")]
