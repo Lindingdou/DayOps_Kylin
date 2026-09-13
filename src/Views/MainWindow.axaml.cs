@@ -5508,62 +5508,6 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"体积（基准=最低 z {zmin:0.##}）：上方 {above:0.##} · 下方 {below:0.##} · 净 {net:0.##}（{tris.Count} 三角）";
     }
 
-    // 提取道路中心线：选两条路边多段线 → 中点连成中心线
-    private void ExtractCenterline()
-    {
-        var sel = _selected.FindAll(e => e is PolylineEntity);
-
-        // 恰好选中 2 条 → 手选双线中点(忠实原手动路径, 用户明确指定即不设闸门)。
-        if (sel.Count == 2)
-        {
-            var a = (PolylineEntity)sel[0]; var b = (PolylineEntity)sel[1];
-            var mid = RoadTools.Centerline(a.Points, b.Points);
-            if (mid.Count < 2) { StatusMsg.Text = "提取道路中心线：路边点数不足"; return; }
-            var cl = new PolylineEntity { Cr = 0.95f, Cg = 0.85f, Cb = 0.30f };   // 黄色中心线
-            foreach (var p in mid) cl.Points.Add(p);
-            AssignLayer(cl); cl.Cr = 0.95f; cl.Cg = 0.85f; cl.Cb = 0.30f;         // 保中心线色
-            BeginChange();
-            _scene.Add(cl);
-            RefreshScene();
-            StatusMsg.Text = $"已提取道路中心线（手选双线，{mid.Count} 点）";
-            return;
-        }
-
-        // 否则 → 自动提取(忠实原 RoadCenterlineExtractor: 台阶线同高配对 + 路宽闸门[W_min,W_max] +
-        // 碎段拼接 + 收窄断段 + 去重 + 坡道焊接)。源=选中折线(≥2)否则全场景折线。
-        // 注: Kylin 场景为 2D(折线无 Z), 各点 Z=0 → 高程闸门空转(2D 已记录), 路宽/法向/收窄/拼接逻辑照常。
-        var srcPolys = sel.Count >= 2 ? sel : new System.Collections.Generic.List<SceneEntity>();
-        if (srcPolys.Count == 0)
-            foreach (var e in _scene.Entities)
-                if (e is PolylineEntity pl && pl.Points.Count >= 2) srcPolys.Add(pl);
-        if (srcPolys.Count < 2)
-        { StatusMsg.Text = "提取道路中心线：请选≥2 条路边多段线，或先在场景中绘制/导入台阶线"; return; }
-
-        var lines = new System.Collections.Generic.List<double[]>();
-        foreach (var e in srcPolys)
-        {
-            if (e is not PolylineEntity pl || pl.Points.Count < 2) continue;
-            var flat = new double[pl.Points.Count * 3];
-            for (int i = 0; i < pl.Points.Count; i++)
-            { flat[3 * i] = pl.Points[i].x; flat[3 * i + 1] = pl.Points[i].y; flat[3 * i + 2] = 0.0; }
-            lines.Add(flat);
-        }
-        var res = Cad.RoadCenterlineExtractor.Extract(lines, new Cad.RoadCenterlineOptions());
-        if (res.Centerlines.Count == 0)
-        { StatusMsg.Text = "提取道路中心线：" + (res.Summary.Length > 0 ? res.Summary : "未配出中线（间距不在[W_min,W_max]/非近平行？）"); return; }
-
-        BeginChange();
-        foreach (var cl in res.Centerlines)
-        {
-            var poly = new PolylineEntity { Cr = 0.95f, Cg = 0.85f, Cb = 0.30f };
-            for (int i = 0; i < cl.Length / 3; i++) poly.Points.Add((cl[3 * i], cl[3 * i + 1]));
-            AssignLayer(poly); poly.Cr = 0.95f; poly.Cg = 0.85f; poly.Cb = 0.30f;
-            _scene.Add(poly);
-        }
-        RefreshScene();
-        StatusMsg.Text = "自动" + res.Summary;
-    }
-
     // 路网连通增强(忠实原 RoadNetworkConnector): 场景中线(多段线) → 焊接近失端点 + 桥接悬空断头(落线段中部则打断成T)
     // → 用连通后的折线集替换原线。源=选中折线(≥2)否则全场景折线。2D 场景 Z=0(高程闸门/焊接退化为平面判距)。
     private void RoadConnectCmd()

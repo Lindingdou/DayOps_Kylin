@@ -116,6 +116,8 @@ internal sealed class PcRow
     public string? Note;          // 右侧灰字
     public string? Tip;           // ToolTip
     public bool Radio;
+    /// <summary>false = 灰掉不可改（原版对话框里"运行前没选中多段线"时把「补充线路」勾选框禁掉那种）。</summary>
+    public bool Enabled = true;
     public double LabelWidth = 110;
     public double BoxWidth = 80;
 
@@ -284,7 +286,7 @@ internal sealed class PcFormWindow : Window
         var f = r.Field;
         if (f.Bool)
         {
-            var chk = new CheckBox { Content = f.Label, IsChecked = f.Default is "是" or "true" or "True" or "1", Margin = new Thickness(0, 2) };
+            var chk = new CheckBox { Content = f.Label, IsChecked = f.Default is "是" or "true" or "True" or "1", Margin = new Thickness(0, 2), IsEnabled = r.Enabled };
             if (r.Tip != null) ToolTip.SetTip(chk, r.Tip);
             chk.IsCheckedChanged += (_, _) => Changed(f.Key);
             _inputs[f.Key] = chk;
