@@ -1,4 +1,4 @@
-<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+﻿<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="PitMine3D.Kylin.Views.Modeling.VoxelVolumeWindow" x:CompileBindings="False"
         Classes="geodb" Title="体素格网体积" Width="640" Height="760" WindowStartupLocation="CenterOwner">
   <Grid Margin="14" RowDefinitions="*,Auto">
@@ -8,7 +8,7 @@
           <StackPanel>
             <DockPanel LastChildFill="False">
               <TextBlock Classes="panel-title" Text="选中对象（封闭三角网体）" DockPanel.Dock="Left"/>
-              <Button x:Name="btnReselect" Content="重新选择对象" DockPanel.Dock="Right" Padding="10,3" Click="OnReselect"/>
+              <Button x:Name="btnReselect" Content="重新选择对象" DockPanel.Dock="Right" Padding="10,3" HorizontalContentAlignment="Center" Click="OnReselect"/>
             </DockPanel>
             <TextBlock x:Name="selInfoLabel" TextWrapping="Wrap" Margin="0,6,0,0" Classes="muted" Text="尚未选择对象。"/>
           </StackPanel>
@@ -30,7 +30,7 @@
             <Grid Margin="0,8,0,0" ColumnDefinitions="Auto,Auto,Auto,*">
               <CheckBox x:Name="chkAdaptive" Grid.Column="0" Content="次级退化（边界细分子块）" IsChecked="True" VerticalAlignment="Center"/>
               <TextBlock Grid.Column="1" Text="深度" VerticalAlignment="Center" Margin="16,0,4,0"/>
-              <ComboBox x:Name="cmbDepth" Grid.Column="2" Width="60" SelectedIndex="1">
+              <ComboBox x:Name="cmbDepth" Grid.Column="2" Width="72" SelectedIndex="1">
                 <ComboBoxItem Content="1"/><ComboBoxItem Content="2"/><ComboBoxItem Content="3"/>
               </ComboBox>
               <TextBlock Grid.Column="3" VerticalAlignment="Center" Margin="10,0,0,0" Classes="muted" Text="最细子块 = 体素 / 2ᵈ；体积报量计入子块"/>
@@ -65,11 +65,11 @@
     </ScrollViewer>
 
     <DockPanel Grid.Row="1" LastChildFill="False" Margin="0,10,0,0">
-      <Button x:Name="btnCompute" Content="计算" DockPanel.Dock="Left" MinWidth="90" Padding="0,5" Margin="0,0,8,0" Click="OnCompute" FontWeight="SemiBold" Classes="primary"/>
-      <Button x:Name="btnGenerate" Content="生成块体模型" DockPanel.Dock="Left" MinWidth="110" Padding="0,5" Margin="0,0,8,0" Click="OnGenerate" IsEnabled="False"/>
-      <Button x:Name="btnClose" Content="关闭" DockPanel.Dock="Right" MinWidth="80" Padding="0,5" Click="OnClose"/>
-      <Button x:Name="btnExportHtml" Content="导出 HTML" DockPanel.Dock="Right" MinWidth="90" Padding="0,5" Margin="0,0,8,0" Click="OnExportHtml" IsEnabled="False"/>
-      <Button x:Name="btnExportCsv" Content="导出 CSV" DockPanel.Dock="Right" MinWidth="90" Padding="0,5" Margin="0,0,8,0" Click="OnExportCsv" IsEnabled="False"/>
+      <Button x:Name="btnCompute" Content="计算" DockPanel.Dock="Left" MinWidth="90" Padding="14,6" HorizontalContentAlignment="Center" Margin="0,0,8,0" Click="OnCompute" FontWeight="SemiBold" Classes="primary"/>
+      <Button x:Name="btnGenerate" Content="生成块体模型" DockPanel.Dock="Left" MinWidth="110" Padding="14,6" HorizontalContentAlignment="Center" Margin="0,0,8,0" Click="OnGenerate" IsEnabled="False"/>
+      <Button x:Name="btnClose" Content="关闭" DockPanel.Dock="Right" MinWidth="80" Padding="14,6" HorizontalContentAlignment="Center" Click="OnClose"/>
+      <Button x:Name="btnExportHtml" Content="导出 HTML" DockPanel.Dock="Right" MinWidth="90" Padding="14,6" HorizontalContentAlignment="Center" Margin="0,0,8,0" Click="OnExportHtml" IsEnabled="False"/>
+      <Button x:Name="btnExportCsv" Content="导出 CSV" DockPanel.Dock="Right" MinWidth="90" Padding="14,6" HorizontalContentAlignment="Center" Margin="0,0,8,0" Click="OnExportCsv" IsEnabled="False"/>
     </DockPanel>
   </Grid>
 </Window>

@@ -10,9 +10,10 @@ namespace PitMine3D.Kylin.Cad;
 /// <summary>
 /// 体素格网体积构建（忠实原 VoxelVolumeBuilder + ElevationBinner + VolumeByLevelReport）：
 /// 若干封闭三角网在公共紧贴 AABB 上体素化，逐 cell 中心「在任一 mesh 内」(OR) 判定 → 保留位图 + 整体体积；
-/// 开启次级退化时边界母块用 <see cref="AdaptiveVoxel.RefineCell"/> 递归细分为百分比子块；再按标高边界分桶报量；
-/// 可转成 <see cref="BlockModelMeta"/>。内外判定统一用广义缠绕数 <see cref="WindingNumberTester"/>
-/// （Kylin 无奇偶射线测试器；水密体两者等价，破洞/自交体 GWN 更稳）。纯逻辑、可单测。
+/// 开启次级退化时边界母块用 <see cref="AdaptiveVoxel.RefineCell"/> 递归细分为百分比子块（只进体积报表）；再按标高边界分桶报量。
+/// 生成块体模型走原版"八叉树原生"路径：均匀占位位图 → <see cref="OctreeLeafBuilder"/> 叶块 → <see cref="ToBlockModel(Result, IReadOnlyList{OctreeLeaf}, string)"/>
+/// （百分比子块那版 <see cref="ToBlockModel(Result, string)"/> 留给单测/报表对拍：薄体在母块间"两头中心都在外"时整列被丢，体积偏少两成）。
+/// 内外判定默认奇偶射线 <see cref="MeshContainmentTester"/>，「高容错」且非闭合才换 <see cref="WindingNumberTester"/>。纯逻辑、可单测。
 /// </summary>
 public static class BlockVoxelBuilder
 {
@@ -131,13 +132,18 @@ public static class BlockVoxelBuilder
         var centerIn = new bool[cells];
         double CX(int i) => bb.minX + (i + 0.5) * vx; double CY(int j) => bb.minY + (j + 0.5) * vy; double CZ(int k) => bb.minZ + (k + 0.5) * vz;
         long nxy = (long)nx * ny;
-        for (int k = 0; k < nz; k++)
+        // ① 母块中心内外：按 Z 层并行（同原版 Parallel.For；各层写各自 cell 无竞争，测试器只读、线程安全）
+        System.Threading.Tasks.Parallel.For(0, nz, new System.Threading.Tasks.ParallelOptions { CancellationToken = ct }, k =>
         {
-            ct.ThrowIfCancellationRequested();
+            double cz = CZ(k);
             for (int j = 0; j < ny; j++)
+            {
+                double cy = CY(j);
+                long jBase = j * (long)nx + k * nxy;
                 for (int i = 0; i < nx; i++)
-                    if (InsideAny(CX(i), CY(j), CZ(k))) centerIn[i + j * (long)nx + k * nxy] = true;
-        }
+                    if (InsideAny(CX(i), cy, cz)) centerIn[jBase + i] = true;
+            }
+        });
         bool NIn(int i, int j, int k) => (uint)i < (uint)nx && (uint)j < (uint)ny && (uint)k < (uint)nz && centerIn[i + j * (long)nx + k * nxy];
         long keepCount = 0; double subVol = 0;
         int maxDepth = Math.Max(0, depth); sampleN = Math.Max(1, sampleN);
@@ -262,6 +268,45 @@ public static class BlockVoxelBuilder
             m.Attrs["percent"] = percent.ToArray();
             m.PropertySchema.Add(new BlockPropertyColumn { Name = "percent", DefaultValue = 1, Description = "体内占比(百分比块)" });
         }
+        return m;
+    }
+
+    /// <summary>
+    /// 均匀占位位图 → 八叉树叶块（忠实原 EntityToBlocksDialog / VoxelVolumeDialog「生成块体」：
+    /// <c>OctreeLeafBuilder.BuildFromOccupancy</c>，实心内部并大块、边界细到最细格）。
+    /// 调用方须以 depth=0（均匀中心判定）的 <see cref="Build"/> 结果为料；自适应百分比子块只进体积报表，不进块体模型。
+    /// </summary>
+    public static List<OctreeLeaf> ToLeaves(Result r) => OctreeLeafBuilder.BuildFromOccupancy(r.Nx, r.Ny, r.Nz, r.Keep);
+
+    /// <summary>
+    /// 八叉树叶块 → 块体模型：每叶一块，中心 = 原点 + (细格原点 + 边长/2)·细格尺寸，<see cref="BlockModel.Block.Size"/> = 边长·Sx；
+    /// 叶块尺寸 = k·(Sx,Sy,Sz)（k = Size/Sx，与 .blk 导入同约定），粗叶块数记入 <see cref="BlockModelMeta.SubCellCount"/>。
+    /// 只存实际块（原"八叉树原生"语义），IsRegular=false、Sparse。
+    /// </summary>
+    public static BlockModelMeta ToBlockModel(Result r, IReadOnlyList<OctreeLeaf> leaves, string name)
+    {
+        var blocks = new List<BlockModel.Block>(leaves.Count);
+        int coarse = 0;
+        byte maxShift = 0;
+        foreach (var lf in leaves)
+        {
+            int s = lf.Size;
+            if (lf.Shift > 0) coarse++;
+            if (lf.Shift > maxShift) maxShift = lf.Shift;
+            blocks.Add(new BlockModel.Block
+            {
+                X = r.Ox + (lf.X + s * 0.5) * r.Vx, Y = r.Oy + (lf.Y + s * 0.5) * r.Vy, Z = r.Oz + (lf.Z + s * 0.5) * r.Vz,
+                Size = s * r.Vx, Grade = 0,
+            });
+        }
+        var m = new BlockModelMeta
+        {
+            Name = name, Description = "八叉树叶块（实心内部并大块、边界细到最细格）", IsRegular = false, Blocks = blocks,
+            Ox = r.Ox, Oy = r.Oy, Oz = r.Oz, Sx = r.Vx, Sy = r.Vy, Sz = r.Vz, Nx = r.Nx, Ny = r.Ny, Nz = r.Nz,
+            StorageMode = BlockStorageMode.Sparse, SubCellCount = coarse,
+        };
+        if (maxShift > 0) m.SubBlockDepthMax = maxShift;
+        m.SubMinX = r.Vx; m.SubMinY = r.Vy; m.SubMinZ = r.Vz;   // 最细格 = 体素尺寸（同 .blk 导入）
         return m;
     }
 

@@ -1,13 +1,18 @@
-<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+﻿<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="PitMine3D.Kylin.Views.Modeling.EntityToBlocksWindow" x:CompileBindings="False"
-        Classes="geodb" Title="实体转块体" Width="560" Height="450" WindowStartupLocation="CenterOwner">
-  <Grid Margin="14" RowDefinitions="*,Auto">
-    <StackPanel Grid.Row="0" Spacing="8">
+        Classes="geodb" Title="实体转块体" Width="560" SizeToContent="Height" WindowStartupLocation="CenterOwner">
+  <!-- 高度随内容（原版定高 430 在 Avalonia 行高/缩放下要么留一大截空白、要么把页脚顶出屏）；页脚 Dock 到底，内容在上 -->
+  <DockPanel Margin="14">
+    <DockPanel DockPanel.Dock="Bottom" LastChildFill="False" Margin="0,12,0,0">
+      <Button x:Name="btnGenerate" Content="生成块体" DockPanel.Dock="Left" MinWidth="100" Padding="16,6" HorizontalContentAlignment="Center" Click="OnGenerate" FontWeight="SemiBold" Classes="primary" IsEnabled="False"/>
+      <Button x:Name="btnClose" Content="关闭" DockPanel.Dock="Right" MinWidth="80" Padding="16,6" HorizontalContentAlignment="Center" Click="OnClose"/>
+    </DockPanel>
+    <StackPanel Spacing="8">
       <Border Classes="panel" Padding="12">
         <StackPanel>
           <DockPanel LastChildFill="False">
             <TextBlock Classes="panel-title" Text="选中对象（封闭三角网体）" DockPanel.Dock="Left"/>
-            <Button x:Name="btnReselect" Content="重新选择对象" DockPanel.Dock="Right" Padding="10,3" Click="OnReselect"/>
+            <Button x:Name="btnReselect" Content="重新选择对象" DockPanel.Dock="Right" Padding="10,3" HorizontalContentAlignment="Center" Click="OnReselect"/>
           </DockPanel>
           <TextBlock x:Name="selInfoLabel" TextWrapping="Wrap" Margin="0,6,0,0" Classes="muted" Text="尚未选择对象。"/>
         </StackPanel>
@@ -30,7 +35,7 @@
           <Grid Margin="0,8,0,0" ColumnDefinitions="Auto,Auto,Auto,*">
             <CheckBox x:Name="chkAdaptive" Grid.Column="0" Content="次级退化（边界细分子块）" IsChecked="True" VerticalAlignment="Center"/>
             <TextBlock Grid.Column="1" Text="深度" VerticalAlignment="Center" Margin="16,0,4,0"/>
-            <ComboBox x:Name="cmbDepth" Grid.Column="2" Width="60" SelectedIndex="1">
+            <ComboBox x:Name="cmbDepth" Grid.Column="2" Width="72" SelectedIndex="1">
               <ComboBoxItem Content="1"/><ComboBoxItem Content="2"/><ComboBoxItem Content="3"/>
             </ComboBox>
             <TextBlock Grid.Column="3" VerticalAlignment="Center" Margin="10,0,0,0" Classes="muted" Text="最细子块 = 块尺寸 / 2ᵈ"/>
@@ -40,9 +45,5 @@
         </StackPanel>
       </Border>
     </StackPanel>
-    <DockPanel Grid.Row="1" LastChildFill="False" Margin="0,10,0,0">
-      <Button x:Name="btnGenerate" Content="生成块体" DockPanel.Dock="Left" MinWidth="100" Padding="0,5" Click="OnGenerate" FontWeight="SemiBold" Classes="primary" IsEnabled="False"/>
-      <Button x:Name="btnClose" Content="关闭" DockPanel.Dock="Right" MinWidth="80" Padding="0,5" Click="OnClose"/>
-    </DockPanel>
-  </Grid>
+  </DockPanel>
 </Window>

@@ -4018,3 +4018,34 @@ commit `79108dd` / `cf3294c` / `3efa126`; 测试 2188 → 2200 全绿(新增 12:
 - **做法**：新增 [Styles/TreeListBox.axaml](src/Styles/TreeListBox.axaml) —— `PitTreeListBoxItem` ControlTheme(BasedOn Fluent 的 TreeViewItem, 只换模板：`MarginMultiplierConverter Indent=10`、固定 16px 钮位 Panel + `PitTreeListBoxToggle`(WPF Aero 的 ▷/◢ 小三角)、MinHeight 22、Padding 2,1；部件名与 Fluent 一致, 选中/悬停/`:empty` 隐藏三角等基础样式经 BasedOn 继承, 代码里 `HeaderPresenter` 照常)；[MainWindow.axaml](src/Views/MainWindow.axaml) 文件管理器/对象管理器两棵树都改用它、去掉面板内标题；[MainWindow.axaml.cs](src/Views/MainWindow.axaml.cs) 文档标签「未命名 N」→「视图N」(绑定文件后仍改成文件名)。
 - **验证**：`ObjectTreeViewModelTests`/`FileSystem*` 16 通过；实机自检 `@对象管理器;@稍后 1500 @控件截图 ObjectContent` 空文档 = `◢ ☑ 🏗 CAD 对象 / ◢ 📘 视图1 / ☑ 🎨 图层: 0`，`@露头示例;@线示例;@块体示例 3 3 2;@对象管理器` = 三根 CAD 对象→视图1→图层: 自检剖面线 / 面模型→图层: 0→现状面·2煤顶板… / 块体模型，与原版截图同构同观感。
 - **未动**：三角网叶子仍显示名字(原版显示 `Mesh #handle`，Kylin 实体无 handle, 名字才认得出建模/剖面窗口里的哪一张)；勾选框 0.7 缩放、emoji 10px 是用户此前拍板的观感，保留。
+
+## §三九三 「实体转块体」转换结果不正确 —— 块体生成改回原版八叉树叶块路径 + 默认块尺寸回 5 + 窗体布局 (2026-09-13)
+
+用户报「实体转块体的功能现在存在问题，转换结果不正确」。用合成的倾斜煤层闭合体(顶/底板放样成体, 15 m 厚, 平朔量级坐标)
+实机复现：转出来的是一摞断断续续的"台阶碎块", 整列整列地缺, 体积比散度定理精确值少 **23%**。逐项对照原
+`EntityToBlocksDialog` / `VoxelVolumeDialog` 找到三处失真：
+
+1. **块体生成走错了路**。原版两个对话框的「生成块体」都是 **均匀占位（逐 cell 中心在体内）→ `OctreeLeafBuilder.BuildFromOccupancy`
+   压成八叉树叶块**（"实心内部并大块、边界细到最细格"），`adaptive: null`；XAML 里的「次级退化 / 深度」在这条路上根本没接。
+   Kylin 把它接成了 `VoxelVolumeBuilder` 的自适应百分比子块并默认开着(深度 2)。自适应那套按「母块中心与 6 邻居异号」判边界，
+   煤层这种**比块还薄**的体在母块之间"两头中心都在外"时整列被判成非边界直接丢掉 —— 这是原版体积报表路径本身的特性
+   (报表那边只关心算量, 原版也没把它用于出块)。补移植 `Cad/OctreeLeafBuilder.cs`(逐字: pow2 根递归八分, 全实心上交并块,
+   混合节点就地发射, 占据 AABB 剪枝) + `BlockVoxelBuilder.ToLeaves / ToBlockModel(Result, leaves, name)`，两窗「生成」改为
+   `Build(depth:0)` → 叶块 → 块体模型(Size = 边长·Sx, 粗叶块计入 SubCellCount, 与 .blk 导入同约定)。体素格网体积的报表仍用自适应结果。
+2. **默认块尺寸**。原版固定默认 5；Kylin 按并集包围盒对角线/40 自动填(800×600 的煤层填成 25 m, 比层厚还大), 均匀路径也会一半的列
+   罩不住中心。去掉自动填, 回到 5。
+3. **转完源网格"藏而不消"**。隐藏源网格后它还在选择集里, 高亮层不认可见性, 整张网仍以青色高亮面盖在块体外头 —— 两个立方体的
+   自检里看到的就是一坨青色。隐藏时顺手清选择集(`ctx.Select(空)`)。
+
+**窗体布局**(用户第二条)：定高 450 在 Avalonia 行高下留一大截空白, 改 `SizeToContent="Height"` + 页脚 DockPanel 到底；
+「生成块体 / 关闭 / 重新选择对象」补 `HorizontalContentAlignment="Center"`(本工程按钮默认左对齐)；
+「深度」下拉框 Width=60 **小于 Fluent ComboBox 模板里 Border 的 MinWidth 64**, 模板被居中裁掉左右各 2 px → 只剩上下两道横线, 改 72。
+体素格网体积窗同步(页脚按钮居中、深度下拉 72)。`ImportBlockModelWindow.axaml` 的 csvSep 也是 60, 该文件另一会话在改, 未动。
+
+**并行会话依赖**：粗叶块(Size > Sx)的六面体尺寸/体积/包围盒靠工作树里 `BlockModelMeta.CellScale`(.blk 导入那条线的未提交改动)
+按三轴细格缩放；HEAD 版 `IsSubCell` 只认"比 Sx 小"的子块。本节提交只含本次触及的 7 个文件, 不碰 BlockModelMeta。
+
+验证：`OctreeLeafBuilderTests` 8 条(pow2 全实心→单根叶 / 空 / 非 pow2 域铺满不出域且并块 / 棋盘全最细 / 两立方并集铺满 /
+盒→单叶块 Size=边长·格 / 薄煤层叶块体积=占位 cell 数且 ±3% 内、每叶中心 GWN 复核在体内 / 自适应 25 m 少两成 vs 均匀无洞)，
+全套 4089 全绿。实机：`@导入 seam.off;实体转块体` 默认 5 m → 58,513 cell → 26,278 叶块, 体积 7,314,125 vs 精确 7,308,467 (+0.08%)，
+截图为连续完整的倾斜层；`@示例两体` → 并集, 内部并成 8 格大块、边界最细格, 同原版观感。

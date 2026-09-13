@@ -14,6 +14,8 @@ namespace PitMine3D.Kylin.Views.Modeling;
 /// <summary>
 /// 体素格网体积面板（忠实原 VoxelVolumeDialog，非模态）：选封闭三角网体 → 体素尺寸（按标高建议 Z）+ 次级退化 + 标高列表 →
 /// 「计算」整体 + 分标高报量（并列散度定理精确体积对比）→ 导出 CSV/HTML、生成块体模型。
+/// 次级退化（百分比子块）只进体积报表；「生成块体」与原版一样另跑一遍均匀占位 → 八叉树叶块（<see cref="OctreeLeafBuilder"/>），
+/// 不把百分比子块灌进块体模型（薄体在母块间会整列丢失，见 EntityToBlocksWindow）。
 /// </summary>
 public partial class VoxelVolumeWindow : Window
 {
@@ -57,12 +59,7 @@ public partial class VoxelVolumeWindow : Window
             if (open > 0) { warn = $"  ⚠ {open} 个非封闭/非流形 → 已自动勾选「高容错算量」(GWN)"; chkHighTolerance.IsChecked = true; }
             string skipped = skip > 0 ? $"（跳过非网格 {skip} 个）" : "";
             selInfoLabel.Text = $"封闭三角网体 {_meshes.Count} 个{skipped}{aabb}{warn}";
-            if (b != null)
-            {
-                double diag = Math.Sqrt(Math.Pow(b.Value.maxX - b.Value.minX, 2) + Math.Pow(b.Value.maxY - b.Value.minY, 2) + Math.Pow(b.Value.maxZ - b.Value.minZ, 2));
-                double v = diag > 0 ? Math.Round(diag / 40, 3) : 5;
-                if (v > 0 && (txtVx.Text ?? "5") == "5") { _ready = false; txtVx.Text = txtVy.Text = txtVz.Text = v.ToString("0.###", CultureInfo.InvariantCulture); _ready = true; }
-            }
+            // 体素尺寸不按包围盒自动填（原版固定默认 5；Z 另有「按标高建议」）：对角线/40 对十几米厚的煤层太粗。
         }
         ResetResults();
         UpdateEstimate();
@@ -143,27 +140,42 @@ public partial class VoxelVolumeWindow : Window
     private async void OnGenerate(object? sender, RoutedEventArgs e)
     {
         if (_busy || _result == null) return;
-        long n = _result.KeepCount + _result.SubCells.Count;
-        if (n == 0) { await Warn("体内无 cell，无法生成块体。"); return; }
-        if (n > BlockVoxelBuilder.MaxRenderBlocks)
-        {
-            bool go = await BlockMsgBox.ConfirmAsync(this, "块数较多", $"将生成 {n:N0} 块，超过视口逐块渲染建议上限 {BlockVoxelBuilder.MaxRenderBlocks:N0}，可能卡顿。仍要生成？");
-            if (!go) return;
-        }
+        // 不按 _result.KeepCount 预判"体内无 cell"：自适应结果里边界母块都细分走了、KeepCount 可为 0，而均匀占位照样有 cell；以下面那次均匀体素化为准。
+        var result = _result;
+        var inputs = _meshes.Select(m => m.input).ToList();
+        bool highTol = chkHighTolerance.IsChecked == true;
         SetBusy(true);
+        _ctx.Status("体素格网体积 — 生成八叉树块体…");
         try
         {
-            var meta = BlockVoxelBuilder.ToBlockModel(_result, BlockModelStore.UniqueName(DefaultModelName));
+            // 八叉树原生（同原版）：取满占位（逐 cell 中心在体内，均匀）→ 压八叉树，与「实体转块体」同路径。
+            // 分层方量报表仍用 _result（含自适应百分比块）独立计算，不受影响。
+            string err = "";
+            var (res, leaves) = await Task.Run(() =>
+            {
+                var r = BlockVoxelBuilder.Build(inputs, result.Vx, result.Vy, result.Vz, out err, 0, highTolerance: highTol);
+                return (r, r == null ? null : BlockVoxelBuilder.ToLeaves(r));
+            });
+            if (res == null || leaves == null || leaves.Count == 0) { SetBusy(false); await Warn(string.IsNullOrEmpty(err) ? "体内无 cell，无法生成块体。" : err); return; }
+            if (leaves.Count > BlockVoxelBuilder.MaxRenderBlocks)
+            {
+                bool go = await BlockMsgBox.ConfirmAsync(this, "块数较多", $"将生成 {leaves.Count:N0} 块，超过视口逐块渲染建议上限 {BlockVoxelBuilder.MaxRenderBlocks:N0}，可能卡顿。仍要生成？");
+                if (!go) { SetBusy(false); return; }
+            }
+            var meta = BlockVoxelBuilder.ToBlockModel(res, leaves, BlockModelStore.UniqueName(DefaultModelName));
             meta.DisplayStyle.FillColor = BlockDefaultPalette.Next(BlockModelStore.Models.Count);
             meta.ActiveColormapAttribute = BlockModelMeta.ZElevationSentinel;
-            var err = BlockModelStore.Create(_ctx, meta);
-            if (err != null) { SetBusy(false); await Warn($"创建块体失败：{err}"); return; }
+            var cerr = BlockModelStore.Create(_ctx, meta);
+            if (cerr != null) { SetBusy(false); await Warn($"创建块体失败：{cerr}"); return; }
+            // 隐藏源网格并清选择集（高亮层不认可见性，留着会把块体盖住，见 EntityToBlocksWindow）
             int hidden = 0;
             foreach (var (me, _) in _meshes) { me.Visible = false; hidden++; }
+            _ctx.Select(Array.Empty<SceneEntity>());
             _ctx.RefreshScene();
             SetBusy(false);
+            _ctx.Status($"体素格网体积「{meta.Name}」：八叉树叶块 {leaves.Count:N0} 个 · 体内 cell {res.KeepCount:N0}");
             await BlockMsgBox.InfoAsync(this, "已生成块体模型",
-                $"模型「{meta.Name}」\n  块：{n:N0} 个（实心母块 {_result.KeepCount:N0} + 边界子块 {_result.SubCells.Count:N0}）\n  体内 cell：{_result.KeepCount:N0}\n  整体体积：{_result.TotalVolume:N1} m³\n  已隐藏 {hidden} 个源网格（块体在体内，隐藏源面才看得见）\n\n注意：块体模型不进 Undo 栈，撤销请用「删除块体」对话框；源网格可在属性面板改回可见。");
+                $"模型「{meta.Name}」\n  八叉树叶块：{leaves.Count:N0} 个（实心内部并大块、边界细到最细格）\n  体内 cell：{res.KeepCount:N0}\n  整体体积：{result.TotalVolume:N1} m³\n  已隐藏 {hidden} 个源网格（块体在体内，隐藏源面才看得见）\n\n注意：块体模型不进 Undo 栈，撤销请用「删除块体」对话框；源网格可在属性面板改回可见。");
         }
         catch (Exception ex) { SetBusy(false); await Warn(ex.Message); }
     }
