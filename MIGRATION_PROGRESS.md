@@ -4266,3 +4266,46 @@ DelineationMethod/EconRatioMethod 四枚举 · EconParams 四式 · WallAngle ·
 **验证**：原 `Tests.MineAssLib` 的 DumpAllocation/DumpSlotAdapter/UnitGraphOverburdenGeometry/UnitPlanCriteriaMutation/UnitPlanEngine/UnitPlanFaceAdvance/UnitPlanRealLedger/UnitPlanStripTarget 共 **114 条**逐条通过（DumpAllocationTests 的合成块体从 BlockModelLib.BlockModel 改建 InclineBlockSource，同几何同属性）；原 `UnitPairingBridgeTests` P1–P6 6 条通过（P1 源码判据改读 Kylin 窗口文件）；实机 `@采排配对示例`：均衡型 2026-01 → 8 行（2 面 × 表土/风化岩/硬岩/煤）× 4 合成去向 → 不合规格淡红、表土整行改投表土堆场 11.4 万m³ → 库容条 内排土场 100% 排满标红 / 外排 28.1% / 表土堆场 50.9% / 破碎站 不限容，汇总 采出 120 万t · 剥离 381 · 占容 434 · 剥采比 3.18 · 内排率 64.6% · 运输功 2,343 万t·km · 2.3 km，警示"内排土场期末填充率 100%"。
 
 **下一步**：量驱动采剥接续（MonthlyStripSession 1322 + Window 467 + MonthlyProcessSummary + MinePlanImporter + QueryTin）/ 采掘单元清单（MiningUnitPlanWindow 2243 + UnitVolumeBinner + EquipmentAssigner 2111 + FaceUnitResolver + EquipmentAssignPanel 等；内核 UnitPlanEngine 已就位）。
+
+## §四〇六 日常生产组织页签 24 钮逐钮忠实性复核总账 —— 原 TaskLib 整族移植收官 (2026-09-14)
+
+**范围**：原 `Modules/TaskLib`（TaskLibPlugin 6 组 24 钮）。此前 Kylin 这一页签除「作业面台账」外全部命中 `Views.GeoDb` 下的本地切片（各自另起一套模型、口径与原版不一致、无原单测）。本轮按「原版纯 C# 家族整文件搬 + 原单测照跑 + WPF 窗体逐行改写成 Avalonia 代码布局 + 实机截图核对」把 24 钮全部对齐到原版，旧切片一律降级为命令行别名保留。
+
+**地基**（5887928）：`Data/Sql`（原 SqlLib：Dapper 仓储/Upsert/Bulk）+ `Data/Entities` 54 表 + `Data/Services` 74 文件 + `GeoDataContext`/`EquipmentDataContext` 静态门面；`TaskLib/{Domain,Engine,Zoning,Scheduling,Adjust,ShiftOps,Simulation,Reporting,Gantt}` 纯 C# 逐文件整搬（约 120 文件）；`UnitLedger`（原 BlockModelLib 台账族）、`Platform`+`Capabilities`（IViewCapability 等 16 接口）、`Shading`（GeoTiffInfo/OrthophotoConfig/OrthophotoLoader）；原 `Tests.TaskLib` 63 文件照搬（5 条依赖原桌面真库当时状态的标 Skip）。⚠ 该提交被并发会话预暂存的 `db/dm/install-dm8-kylin.sh`（新增）与 `src/Cad/CadFileBrowser.cs`/`FileBrowserTests.cs`（删除）扫入，未改历史，此处记账。
+
+**逐钮台账**（钮 → Kylin 窗 → 提交 → 实机核对）：
+
+| # | 组 | 钮 | Kylin 窗（`Views/TaskLib/`） | 提交 | 核对 |
+|---|---|---|---|---|---|
+| 1 | 计划编制 | 作业面台账 | `WorkFaceLedgerWindow` 26 列盘子台账 | 17ff1c2 | 截图 26 表头 |
+| 2 | 计划编制 | 生产任务编制 | `DailyGanttWindow` + `GanttRenderer` | 097413f | 甘特样例截图 |
+| 3 | 计划编制 | 生产任务书 | `TaskOrderWindow` + `TaskOrderPdf` | 7d9b6d3 | 截图 |
+| 4 | 计划编制 | 编制配置 | `CompileConfigWindow`（能力预算条/锚点/链路体检/MF 条） | c6fdf96 | 截图 |
+| 5 | 计划编制 | 周计划编制 | `WeekPlanWindow` | 2a41fc0 | 截图 |
+| 6 | 任务下达 | 任务下达 | `TaskDispatchWindow`（校验→实例+回执→撤回） | 7d9b6d3 | 截图 |
+| 7 | 任务下达 | 派车单 | `DispatchOrderWindow` + `DispatchOrderPdf`（按车分组 DataGridCollectionView） | 7d9b6d3 | 截图 |
+| 8 | 任务下达 | 班组派工 | `CrewAssignWindow` | c6fdf96 | 截图 |
+| 9 | 任务下达 | 调度态势看板 | `DispatchBoardWindow` | d00c376 | 截图 |
+| 10 | 执行跟踪 | 实绩录入 | `ActualEntryWindow` | c6fdf96 | 截图 |
+| 11 | 执行跟踪 | 工序进度跟踪 | `ProcessProgressWindow` | d00c376 | 截图 |
+| 12 | 执行跟踪 | 设备状态·故障报修 | `EquipStatusWindow` | d00c376 | 截图 |
+| 13 | 执行跟踪 | 生产任务动态调整 | `DynamicAdjustWindow` + `StageGanttRenderer` + `Simulation/SimPanelOverlay`(自绘轴测面板) + `SimBasemapRaster` | a6d29ce | 面板样例截图（栅格/明暗/遮挡/铭牌） |
+| 14 | 执行跟踪 | 班内工艺·工序推演 | `ShiftProcessWindow` + `ShiftChainStrip` | d43c9d7 | 截图 |
+| 15 | 基础数据 | 去向台账 | `SinkLedgerWindow`（+ 盘点/可接物料小窗） | 98b7863 | 截图 |
+| 16 | 基础数据 | 班次日历 | `ShiftCalendarWindow` | 2a41fc0 | 截图 |
+| 17 | 基础数据 | 检修档期 | `MaintenancePlanWindow` | 2a41fc0 | 截图 |
+| 18 | 基础数据 | 影像底图 | `BasemapConfigWindow`（经 IViewCapability 贴视口） | 2a41fc0 | 截图 |
+| 19 | 基础数据 | 钻爆计划衔接 | `BlastPlanWindow` | 2a41fc0 | 截图 |
+| 20 | 基础数据 | 作业区划分 | `WorkZoneLayoutWindow` + `Zoning/ZoneBasemap` | 07b17a4 | 截图（dlt05.tif + 台账一块） |
+| 21 | 统计分析 | 产量统计 | `OutputStatsWindow` | d00c376 | 截图 |
+| 22 | 统计分析 | 质量·配煤分析 | `QualityAnalysisWindow` | d00c376 | 截图 |
+| 23 | 统计分析 | 达成度评价 | `AttainmentWindow` | d00c376 | 截图 |
+| 24 | 统计分析 | 生产报告 | `ReportHubWindow` 四页签 + `ReportViewBuilder` | b50b507 | 截图 |
+
+**接线**：全部经 `MainWindow.TaskLib.cs` 的 `OpenTaskWindow<T>`（EnsureGeoDb → EnsureTaskLibHost → 非模态单例 → `GeoDbWindows.NoteLast` 供 `@页面截图`）；`KylinViewCapability` 实现 `IViewCapability`（SetOrthophoto → 内存 BGRA 采样器 → `Cad.OrthoBasemap.Apply` 顶点着色；RunRibbonCommand/RequestSceneRefresh）注入 `SimHost.View`。自检钩子：`甘特样例`（合成 ExploderConfig 喂甘特）、`面板样例`（合成栅格/台阶体/推进环/设备点/铭牌喂 SimPanelOverlay）。
+
+**Avalonia 差异（都只是宿主层）**：WPF PrintDialog → QuestPDF 横向 A4 PDF（任务书/派车单/报表）；MessageBox → CoalMsgBox；DropShadowEffect → 无（Border.BoxShadow 会把子树按 DPI 再放大渲染，见 `memory/avalonia-boxshadow-child-scaled`）；报表纸张外层横向滚动 Disabled（Auto 时居中内容溢出）；DataGrid 分组 → DataGridCollectionView；行样式 DataTrigger → LoadingRow/行属性绑定；AutoCompleteBox 换源清 Text → 延后一拍补写；DatePicker 三栏需 270 宽。名字冲突（Data.WorkCalendar/ShiftWindow/ProductionPlanContext/SinkRegistryLoader、Engine.ChainStage）用命名空间内 using 别名消歧。
+
+**验证**：全套 5256 条中 5238 通过、5 跳过；13 条失败全在并发会话未提交的 `MonthlyStripSessionTests`/`MinePlanImporterTests`（短期组在建，与本页签无关）。TaskLib 原单测（含 SimPanelCameraTests 12 条）全部通过。自检脚本改进：`RunSelftest` 的 catch 由吞掉改为记 crash.log「脚本中止」（此前截图路径写成 `/c/…` 时脚本静默中止只看到没图）。
+
+**下一步**：本页签移植完成；剩余为其它页签（短期组等）由并发会话推进。
