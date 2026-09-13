@@ -1527,7 +1527,7 @@ public partial class MainWindow : Window
             if (cmd == "移除障碍物" || cmd == "渐进形态滤波" || cmd == "地面非地面分离" || cmd.StartsWith("移除障碍物 ")) { await PmfAsync(cmd); return; }
             if (cmd == "C2C" || cmd == "点云比对" || cmd == "位移监测 C2C" || cmd == "位移监测") { await CloudCompareAsync(); return; }
             if (cmd == "手动标定线路") { await RoadMarkRouteAsync(); return; }   // 忠实原 CreateMarkRouteCommand(视口画线 + 交点捕捉 + 铺贴 + 接进中心线层)
-            if (cmd == "画道路中线" || cmd == "道路中线绘制") { ActivateDrawTool("多段线"); StatusMsg.Text = "画道路中线：绘制折线作道路中线（供路网/寻径/演化对比）"; return; }
+            if (cmd == "画道路中线" || cmd == "道路中线绘制") { await DrawRoadCenterlineCmd(); return; }   // 原 CreateDrawRoadCenterlineCommand(RS13–RS25): 拾点吸面 → 道路参数 → 统一落地管线 → 登记路网, 见 MainWindow.DrawRoadCenterline.cs
             if (cmd == "境界圈定" || cmd == "凸包" || cmd == "采场圈定" || cmd == "采场/排土场圈定") { await BoundaryHullAsync(); return; }
             if (cmd == "确定境界" || cmd == "境界优化" || cmd == "最优坑深" || cmd == "经济境界") { PitDepthCmd(); return; }
             if (cmd.StartsWith("生成境界") || cmd.StartsWith("境界线") || cmd.StartsWith("几何圈定") || cmd.StartsWith("境界壳")) { PitEnvelopeCmd(cmd); return; }
@@ -1553,8 +1553,8 @@ public partial class MainWindow : Window
             if (cmd == "运输指标报表") { RoadTransportIndicatorsCmd(); return; }   // 忠实原 TransportIndicatorsWindow
             if (cmd == "运输指标") { await HaulMetricsAsync(); return; }
             if (cmd == "驱动距离" || cmd.StartsWith("驱动距离 ")) { await CuttingCmd(cmd, "驱动距离"); return; }   // 同一引擎 DriveTemplateRunner(distanceOnly, labelOverride:"驱动距离"), 原版两钮共用
-            if (cmd == "批量台阶扩帮" || cmd == "台阶线生成" || cmd == "台阶扩帮"
-                || cmd.StartsWith("批量台阶扩帮 ") || cmd.StartsWith("台阶线生成 ") || cmd.StartsWith("台阶扩帮 "))
+            if (cmd == "批量台阶扩帮" || cmd.StartsWith("批量台阶扩帮 ")) { await ExpandBenchBatchCmd(cmd); return; }   // 原 ExpandBenchBatchDialog + PMEP → BenchBuilder(坡面+平盘+坡脚线), 见 MainWindow.ExpandBench.cs
+            if (cmd == "台阶线生成" || cmd == "台阶扩帮" || cmd.StartsWith("台阶线生成 ") || cmd.StartsWith("台阶扩帮 "))
             {
                 // 可选 "台阶扩帮 <帮宽W> <台阶高H> <坡面角α>" → 真实台阶距 W+H/tanα；缺省用境界短边/10
                 double? benchD = null;
@@ -1757,10 +1757,12 @@ public partial class MainWindow : Window
             if (cmd == "平行推进" || cmd == "开采程序确定" || cmd == "确定开采程序" || cmd == "工作线推进") { AdvanceCmd(AdvanceMode.Parallel, "平行推进"); return; }
             if (cmd == "定点回转" || cmd == "定点回转推进") { AdvanceCmd(AdvanceMode.FixedPivot, "定点回转"); return; }
             if (cmd == "动点回转" || cmd == "动点回转推进") { AdvanceCmd(AdvanceMode.MovingPivot, "动点回转"); return; }
-            if (cmd == "螺旋斜坡道" || cmd == "螺旋坑线" || cmd == "螺旋中线") { SpiralRampCmd(); return; }
+            if (cmd == "螺旋坑线" || cmd == "螺旋斜坡道" || cmd.StartsWith("螺旋坑线 ")) { await SpiralRampInsertCmd(cmd); return; }   // 原 InsertRampSpiralDialog → 中线+边线+路面一次落地, 见 MainWindow.RampInsert.cs
+            if (cmd == "螺旋中线") { SpiralRampCmd(); return; }   // 命令行快速预览(固定参数, 只出 2D 中线)
             if (cmd == "直线坑线" || cmd == "坑线自动布线" || cmd == "坑线连通自检" || cmd == "直线坑线自动布线" || cmd.StartsWith("直线坑线 ") || cmd.StartsWith("坑线自动布线 ")) { StraightRampRouteCmd(cmd); return; }
             if (cmd == "直线斜坡道" || cmd == "直线中线" || cmd.StartsWith("直线斜坡道 ")) { StraightRampCmd(cmd); return; }
-            if (cmd == "折返斜坡道" || cmd == "折返坑线" || cmd == "折返中线") { SwitchbackRampCmd(); return; }
+            if (cmd == "折返坑线" || cmd == "折返斜坡道" || cmd.StartsWith("折返坑线 ")) { await SwitchbackRampInsertCmd(cmd); return; }   // 原 InsertRampSwitchbackDialog(起点点取/甩向自动) → 一次落地
+            if (cmd == "折返中线") { SwitchbackRampCmd(); return; }   // 命令行快速预览(固定参数, 只出 2D 中线)
             if (cmd == "运距指标" || cmd == "循环时间" || cmd == "运距统计") { await HaulRecordMetricsAsync(); return; }
             if (cmd == "OD运距矩阵" || cmd == "OD矩阵" || cmd == "运距矩阵") { await OdMatrixAsync(); return; }
             if (cmd.StartsWith("约束寻径") || cmd.StartsWith("运输寻径") || cmd.StartsWith("限坡寻径")) { await RoadConstraintPathAsync(cmd); return; }

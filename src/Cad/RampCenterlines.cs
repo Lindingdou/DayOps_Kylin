@@ -101,4 +101,29 @@ public static class RampCenterlines
         }
         return pts;
     }
+
+    /// <summary>
+    /// 折返甩向自动判定（忠实原 ParametricCenterlines.AutoTurnSide）：在起点四周探 ∇z，第一腿走向 = 下坡方向转 +90°，
+    /// 马步朝下坡的那一侧。平地 / 采不到面 ⇒ false（不许猜）。
+    /// </summary>
+    public static bool AutoTurnSide(IRoadZSampler? sampler, double x, double y, double probeM,
+                                    out double azimuthDeg, out int turnSide)
+    {
+        azimuthDeg = 0; turnSide = +1;
+        if (sampler == null) return false;
+        double h = Math.Max(1.0, probeM);
+        if (!sampler.TrySample(x + h, y, out double zpx) || !sampler.TrySample(x - h, y, out double znx)
+         || !sampler.TrySample(x, y + h, out double zpy) || !sampler.TrySample(x, y - h, out double zny))
+            return false;
+        double gx = (zpx - znx) / (2.0 * h), gy = (zpy - zny) / (2.0 * h);
+        double dnx = -gx, dny = -gy;
+        double dl = Math.Sqrt(dnx * dnx + dny * dny);
+        if (dl < 1e-9) return false;
+        dnx /= dl; dny /= dl;
+        double hx = -dny, hy = dnx;
+        azimuthDeg = Math.Atan2(hy, hx) * 180.0 / Math.PI;
+        double lnx = -hy, lny = hx;
+        turnSide = (lnx * dnx + lny * dny >= 0.0) ? +1 : -1;
+        return true;
+    }
 }
