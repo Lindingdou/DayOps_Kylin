@@ -4213,3 +4213,16 @@ DelineationMethod/EconRatioMethod 四枚举 · EconParams 四式 · WallAngle ·
 **验证**：`MineableAreaFamilyTests` 5 条（重叠：成片算/共边不算/薄条 <2% 不算 · 求差：切东半 ≈5000 m²、完全覆盖为空、切槽只留大块、Z 沿主体平面 · 笔刷：移出减面/Alt 并入(须连通)增面/竖切留西块/擦空 · 表增改删查 + 颜色去井号 + 无连接不抛 · 类别语义豁免对）+ 规划家族 63 条全过。实机 `@采排圈定示例;@页面截图`：识别到「采场1」（35 顶点）入库，列表色块/类别/顶点/显示齐，选中后名称/类别/色板同步，状态栏「识别到 采场 1 块…已入库 1 块」。合成数据两坨并放时趋势面互相牵扯（只识出主采场或只识出排土场），是分类器对合成几何的既有行为，与窗口无关。
 
 **下一步**：短期生产计划编制组 10 钮 + 标注台阶标高 3 子项。
+
+## §四〇一 短期生产计划编制组 ①「短期生产计划编制」②「月度计划编制」+「派生计划方案」按原 PlanLib.ShortTerm 整族重做 (2026-09-14)
+
+**症状**：短期组这三钮此前全是旧切片：「短期生产计划编制」/「月度计划编制」都命中命令行 `ShortTermPlanCmd`（默认参数一次排产，形状函数摊分、无物料流/去向/库容、无逐月配置表），短期「派生计划方案」与中长远同名 Tag、命中的是中长远的 `DerivePlansCmd`。原版是：单一基础约束（落盘）+ 逐月配置表（人工覆盖、落盘、三个消费方共用同一张表）+ 排产器（工作历×设备×组织形态摊月 → 削峰 → **拆物料流 + 配去向 + 按 Kr 扣库容** → 指标/三量三态）+ 派生笛卡尔积 + 联合评分 + 确定入库（写 `monthly_plan` 台账 + 下游就绪自检）。
+
+**做法**（原 `Modules/PlanLib/ShortTerm` 核心逐文件对齐，纯 C# 部分机械移植、零改算法）：
+- 引擎/模型 `src/Cad/Plan/`：`PlanMaterial.cs`（物料规格/密度/Ks/Kr/去向兼容/混采构成解析）、`PlanFlow.cs`（O-D 物料流，三口径换算）、`PlanDestination.cs`（去向台账：读 `EquipmentDataContext.DumpSites/LoadUnloadPoints`，读不到空清单不补样例；`PlanDumpLedger` 逐月按占容方扣）、`PlanFlowAllocator.cs`（按面份额拆供给 → 运输功最小贪心配去向 → 排不下硬警示）、`FaceProcessChain.cs`（穿爆采运排工艺参数与月工序量）、`PlanCase.cs`（主体案例缺省，设备台数按盘子反推）、`ShortTermPlan.cs`（WorkingFace/FieldParams/MineableArea/MonthPeriod(标量由 Flows 派生)/ShortTermResult(PrepCheckState 三态)/ShortTermPlan/ShortTermBase）、`ShortTermScheduler.cs`（排产 + Generate/GenerateVariants）、`MonthlyTargetTable.cs`（逐月配置表：派生/覆盖标记按列/重置/对账不缩放/CSV 往返/两条链对 0 的口径转换 + `MonthlyTargetStore` 落盘）、`ShortTermBaseStore.cs`（基础约束落盘 UTF-8 严格）、`ShortTermSchemeStore.cs`、`ShortTermComparer.cs`、`ShortTermConfirmService.cs`（确定入库唯一实现 + `PlanPeriodKeys.TrySplitYearMonth`）、`AppDataRoot.cs`（软件目录 Data\… 写不进退用户目录 + 桌面老目录迁移）。
+- 窗口 `src/Views/Plan/`：`ShortTermConfigWindow.cs`（①来源继承中长远 ②时间骨架 ③现场参数 ③b 逐月配置表(派生/重置选中/全部重置/保存/读回/对账/引擎决定清单) ④均衡权重 ⑤约束 ⑥比选权重 + 试算 + 保存约束落盘）、`MonthlyTargetGrid.cs`（共用逐月配置表控件，Edited 事件）、`ShortTermSolveWindow.cs`（⚡一键编制/编制选中 + 逐月计划图 + 九指标 + ①配置表/②计划表(量来源列) + ✔确定月度计划 + 导出报表 `BuildReport`）、`ShortTermDeriveWindow.cs`（作业组织轴×工作历轴 → 生成并编制(只替换本窗上一次派生的那批) → 对比矩阵 + 逐月产量对比 + 雷达 → 确定/导出）、`ShortTermCharts.cs`（六图 Canvas 手绘）。
+- 接线：`短期生产计划编制`→`OpenShortTermConfig`（来源候选 = LongTermSchemeStore.Schemes）、`月度计划编制`(+「一键」)→`OpenShortTermSolve`、Ribbon 短期组「派生计划方案」Tag 改为 `短期派生计划方案`→`OpenShortTermDerive`（与中长远同名钮分开）；旧命令行 `短期生产计划/月度计划 [args]` 留别名。「剥采比均衡」从计划提取改为先读 ShortTermSchemeStore（已确定→已排产）再读中长远。自检 `@短期示例`。
+
+**验证**：`ShortTermFamilyTests` 10 条（物料口径/混采解析 · 供给拆分吨量与实方守恒 + 贪心配去向内排先满转外排 + 无兼容去向量不丢 · 12 月守恒/检修月/峰值/完成率/三量三态 · 产能闸关着只报不改、开了削减不回摊、集中强采峰值更高 · 派生 3×3 命名 + 评分 · 逐月表派生/覆盖保住/重派跟新目标/对账/CSV 往返/重置/0 的口径提示 · 排产吃逐月表覆盖不回摊 · 确定入库无库只写确定簿/阻断拒绝/下游就绪 · 期次换算 · 主体案例自洽）+ 规划家族 98 条全过。实机 `@短期示例` 三窗截图：基础约束窗（主体案例 2026 年 2000/6500，设备 29 台，逐月配置表 12 行派生）；派生窗 3×1=3 套生成并编制 + 对比矩阵 + 雷达 + 推荐「多面展开」；月度计划编制一键编制 5 套 → 逐月计划图（灰检修月）+ 指标（完成率 72%：缺省月上限 120 万t 卡住，原版同）+ 逐月计划表（量来源=流派生）。
+
+**下一步**：短期组其余 7 钮（量驱动采剥接续 / 采场参数识别 / 标注台阶标高 3 子项 / 确定开采程序 / 采排配对复核 / 采掘单元清单）。

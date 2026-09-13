@@ -160,6 +160,14 @@ internal static class PlanUi
         return dg;
     }
 
+    /// <summary>只读文本列（支持嵌套路径如 "Result.CompletionRatePct" 与格式串如 "{0:F1}"；原 XAML 的 StringFormat 绑定）。</summary>
+    public static DataGridTextColumn FmtCol(string header, string path, double width, string? fmt = null)
+    {
+        var b = new Avalonia.Data.Binding(path) { Mode = Avalonia.Data.BindingMode.OneWay };
+        if (fmt != null) b.StringFormat = fmt;
+        return new DataGridTextColumn { Header = header, Binding = b, IsReadOnly = true, Width = width <= 0 ? new DataGridLength(1, DataGridLengthUnitType.Star) : new DataGridLength(width) };
+    }
+
     /// <summary>只读表格（同 <see cref="RoadUi.Table"/>）+ 表头撑宽。</summary>
     public static DataGrid Table(IReadOnlyList<(string Header, string Path, double Width)> cols, bool multi = true) => FitHeaders(RoadUi.Table(cols, multi));
 

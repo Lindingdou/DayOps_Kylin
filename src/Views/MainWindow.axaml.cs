@@ -1577,7 +1577,10 @@ public partial class MainWindow : Window
             if (cmd == "派生方案" || cmd == "多方案派生") { DerivePlansCmd(); return; }   // 旧切片（命令行别名保留）
             if (cmd == "中长远进度计划编制") { OpenLongTermConfig(); return; }   // 原 CreateOpenLongTermConfigCommand：中长远基础约束窗
             if (cmd == "中长远进度计划" || cmd == "中长远规划" || cmd == "中长期计划" || cmd.StartsWith("中长远进度计划 ") || cmd.StartsWith("中长远规划 ")) { await LongTermPlanCmd(cmd); return; }   // 旧切片：命令行一次排产（别名保留）
-            if (cmd == "短期生产计划" || cmd == "短期生产计划编制" || cmd == "月度计划编制" || cmd == "月度计划" || cmd.StartsWith("短期生产计划 ") || cmd.StartsWith("月度计划 ")) { await ShortTermPlanCmd(cmd); return; }
+            if (cmd == "短期生产计划编制") { OpenShortTermConfig(); return; }   // 原 CreateOpenShortTermConfigCommand：短期基础约束(月度)窗
+            if (cmd == "月度计划编制" || cmd.StartsWith("月度计划编制 ")) { OpenShortTermSolve(cmd); return; }   // 原 CreateOpenShortTermSolveCommand：月度计划编制·排产窗（「月度计划编制 一键」直通）
+            if (cmd == "短期派生计划方案") { OpenShortTermDerive(); return; }   // 原 CreateOpenShortTermDeriveCommand：短期作业组织×工作历联合比选窗（Ribbon 短期组「派生计划方案」的 Tag）
+            if (cmd == "短期生产计划" || cmd == "月度计划" || cmd.StartsWith("短期生产计划 ") || cmd.StartsWith("月度计划 ")) { await ShortTermPlanCmd(cmd); return; }   // 旧切片：命令行一次排产（别名保留）
             if (cmd == "剖面分析" || cmd == "剖面" || cmd == "点云剖面") { await SectionProfileAsync(); return; }
             if (cmd == "粗糙度" || cmd == "地表粗糙度") { await RoughnessAsync(); return; }
             if (cmd == "曲率" || cmd == "地表曲率") { await CurvatureAsync(); return; }
@@ -10902,6 +10905,7 @@ public partial class MainWindow : Window
             }
             if (cmd == "@中长远示例") { SelftestLongTermSample(); return; }   // @中长远示例: 自检块体+西缘工作线并选中 → 派生窗拾取+生成多套方案(中长远五窗实机核对用)
             if (cmd == "@采排圈定示例") { _ = SelftestMineableAreaSample(); return; }   // @采排圈定示例: 合成采场/排土场台阶线 + 连库 + 开圈定窗自动识别(实机核对用)
+            if (cmd == "@短期示例") { SelftestShortTermSample(); return; }   // @短期示例: 短期派生窗生成并编制 + 月度计划编制一键(实机核对用)
             if (cmd.StartsWith("@块体示例"))   // @块体示例 [nx ny nz]: 建一个规则块体模型并入场景(截图核对体素显示用)
             {
                 var a = cmd.Length > 5 ? cmd.Substring(5).Split(' ', System.StringSplitOptions.RemoveEmptyEntries) : System.Array.Empty<string>();

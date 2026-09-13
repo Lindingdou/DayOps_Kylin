@@ -1198,7 +1198,7 @@
                                             <Button Classes="ribbon-btn small" Tag="采掘单元清单" Click="OnRibbonCommand" ToolTip.Tip="采掘单元清单">
                                                 <StackPanel Orientation="Horizontal"><Image Source="{StaticResource plan_st_unit_ledger}" /><TextBlock Text="采掘单元清单" /></StackPanel>
                                             </Button>
-                                            <Button Classes="ribbon-btn small" Tag="派生计划方案" Click="OnRibbonCommand" ToolTip.Tip="派生计划方案">
+                                            <Button Classes="ribbon-btn small" Tag="短期派生计划方案" Click="OnRibbonCommand" ToolTip.Tip="派生计划方案（作业组织×工作历 联合比选）">
                                                 <StackPanel Orientation="Horizontal"><Image Source="{StaticResource plan_st_derive}" /><TextBlock Text="派生计划方案" /></StackPanel>
                                             </Button>
                                         </WrapPanel>

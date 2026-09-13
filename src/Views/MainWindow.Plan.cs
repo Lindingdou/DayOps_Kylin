@@ -93,6 +93,14 @@ public partial class MainWindow
     /// <summary>「从计划提取」取数（原 LoadFromEntities 的优先级）：① 已确定短期月度方案（逐月按物料流聚合）② 已排产首套 ③ 已确定中长远 ④ 已排产中长远；都没有 → null。</summary>
     private (string src, List<(string Label, double Coal, double Strip)> rows)? ExtractPlanPeriodsForVp()
     {
+        // ①② 短期（ShortTermSchemeStore：已确定 → 已排产首套），逐月 P/V（采出万t / 剥离万m³，Flows 非空时按流聚合）
+        var stConf = ShortTermSchemeStore.Confirmed;
+        var st = stConf is { Months.Count: > 0 } ? stConf : ShortTermSchemeStore.Schemes.FirstOrDefault(s => s.Result != null && s.Months.Count > 0);
+        if (st != null)
+        {
+            var sr = st.Months.Select(m => (m.Label, Math.Round(m.CoalWanT, 1), Math.Round(m.StripWanM3, 0))).ToList();
+            return ($"短期月度计划「{st.Name}」（{(st == stConf ? "已确定" : "未确定，取已排产的首套")}） · {st.Months.Count} 期（逐月）", sr);
+        }
         // ③④ 中长远（新库：派生/规划计算/出图共用的 LongTermSchemeStore）
         var conf = LongTermSchemeStore.Confirmed;
         var cur = conf is { Result: not null } ? conf : LongTermSchemeStore.Schemes.FirstOrDefault(s => s.Result != null && s.Periods.Count > 0);
@@ -113,6 +121,49 @@ public partial class MainWindow
     private LongTermDeriveWindow? _longTermDeriveWin;
     private LongTermSolveWindow? _longTermSolveWin;
     private LongTermCompareWindow? _longTermCompareWin;
+
+    // ───────────── 短期生产计划编制组（原 CreateOpenShortTermConfig/Solve/DeriveCommand）─────────────
+    private ShortTermConfigWindow? _shortTermConfigWin;
+    private ShortTermSolveWindow? _shortTermSolveWin;
+    private ShortTermDeriveWindow? _shortTermDeriveWin;
+
+    /// <summary>短期①「短期生产计划编制」= 原 CreateOpenShortTermConfigCommand：基础约束（月度）窗（单例）；来源候选 = 中长远方案库。</summary>
+    private void OpenShortTermConfig()
+    {
+        if (_shortTermConfigWin != null) { _shortTermConfigWin.Activate(); GeoDb.GeoDbWindows.NoteLast(_shortTermConfigWin); StatusMsg.Text = "短期生产计划编制窗口已在前台"; return; }
+        var w = new ShortTermConfigWindow(LongTermSchemeStore.Schemes);
+        _shortTermConfigWin = w;
+        w.Closed += (_, _) => _shortTermConfigWin = null;
+        w.Show(this);
+        GeoDb.GeoDbWindows.NoteLast(w);
+        StatusMsg.Text = "短期生产计划编制：继承中长远年度 → 时间骨架/现场参数/逐月配置表/均衡·约束·比选权重 → 试算 → 保存约束（落盘）；候选方案在「派生计划方案」按作业组织×工作历生成";
+    }
+
+    /// <summary>短期②「月度计划编制」= 原 CreateOpenShortTermSolveCommand：排产窗（单例）。「月度计划编制 一键」直通一键编制。</summary>
+    private void OpenShortTermSolve(string cmd = "月度计划编制")
+    {
+        bool oneClick = cmd.Contains("一键");
+        if (_shortTermSolveWin != null) { _shortTermSolveWin.Activate(); if (oneClick) _shortTermSolveWin.OneClickSchedule(); StatusMsg.Text = "月度计划编制窗口已在前台"; return; }
+        var w = new ShortTermSolveWindow(ShortTermSchemeStore.Schemes);
+        _shortTermSolveWin = w;
+        w.Closed += (_, _) => _shortTermSolveWin = null;
+        w.Show(this);
+        GeoDb.GeoDbWindows.NoteLast(w);
+        if (oneClick) w.OneClickSchedule();
+        StatusMsg.Text = "月度计划编制：⚡一键编制 / 编制选中 → 逐月计划图 + 九指标 + 逐月配置表(输入)/逐月计划表(结果) → ✔确定月度计划(写 monthly_plan 台账) / 导出报表";
+    }
+
+    /// <summary>短期「派生计划方案」= 原 CreateOpenShortTermDeriveCommand：作业组织×工作历 联合比选窗（单例）。</summary>
+    private void OpenShortTermDerive()
+    {
+        if (_shortTermDeriveWin != null) { _shortTermDeriveWin.Activate(); GeoDb.GeoDbWindows.NoteLast(_shortTermDeriveWin); StatusMsg.Text = "短期派生计划方案窗口已在前台"; return; }
+        var w = new ShortTermDeriveWindow(ShortTermSchemeStore.Schemes);
+        _shortTermDeriveWin = w;
+        w.Closed += (_, _) => _shortTermDeriveWin = null;
+        w.Show(this);
+        GeoDb.GeoDbWindows.NoteLast(w);
+        StatusMsg.Text = "派生计划方案（短期）：勾作业组织轴 × 工作历轴 → ⚡生成并编制 → 对比矩阵 + 逐月产量对比 + 雷达 → 确定选中为主方案 / 导出";
+    }
 
     /// <summary>「加载块体模型」小窗（LT7 配套入口）：列出/激活/导入块体。「导入块体…」直通建模页签的导入块体对话框。</summary>
     private void OpenLongTermBlockPicker(Avalonia.Controls.Window owner)
@@ -459,5 +510,17 @@ public partial class MainWindow
         await w.SelftestAutoIdentifyAsync();
         w.SelftestSelect(0);
         StatusMsg.Text = $"自检：采排圈定示例 —— 台阶线 20 环入图 → 识别 {w.SelftestRowCount} 块｜{w.SelftestStatus}";
+    }
+}
+
+public partial class MainWindow
+{
+    /// <summary>@短期示例：打开「派生计划方案」(短期) → ⚡生成并编制（默认勾选 3 组织 × 标准工作历）→ 打开「月度计划编制」一键编制（实机核对用）。</summary>
+    private void SelftestShortTermSample()
+    {
+        OpenShortTermDerive();
+        _shortTermDeriveWin!.OnGenerate();
+        OpenShortTermSolve("月度计划编制 一键");
+        StatusMsg.Text = $"自检：短期示例 —— 派生 {_shortTermDeriveWin.SelftestCount} 套｜{_shortTermDeriveWin.SelftestStatus}";
     }
 }
