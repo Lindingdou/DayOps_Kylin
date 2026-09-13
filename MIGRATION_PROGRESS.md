@@ -3983,3 +3983,11 @@ commit `79108dd` / `cf3294c` / `3efa126`; 测试 2188 → 2200 全绿(新增 12:
 **验证**：+4 单测 [DimStyleStoreTests](tests/PitMine3D.Kylin.Tests/DimStyleStoreTests.cs)（克隆/复制全字段、校验写入与越界拒绝、JSON 往返与坏值兜底、描述）。实机自检（合成指针）：`对齐标注` 点 (20,60) 后 `@光标 70 100` 预览 5 段（虚线）→ 点 (120,60) 后整条标注随光标 815 段（含数字轮廓，截图见界线从测点起、随光标 y 走）；`角度标注` 顶点+第一边后 1135 段；`坐标标注` 981 段；Esc 后均 0 段。`标注样式` 面板截图：两组八格 + 预览样例 + 三键齐全。
 
 **注意**：HEAD 自 574f3ae(11:42)/2a734e1(11:55) 起本身编不过（PointThin.cs 引用 PackedKeyComparer、MainWindow.PointCloud.cs/RoadCenterline.cs 引用 MineableRegions/RegionRecord/Layer.LineWeight/DxfImportService.AciToRgb 等工作树里未提交的类型，共 30 处），不是本节改动引起：HEAD 工作树 build 不含/含本节文件均为同样 30 错，本节文件 0 错。待相关会话把那几份补提交。
+
+### §三九〇 坡顶底线提取「效果还是不一样」：算法对拍无差，差在喂的数据 —— 回源文件全量 + 1m 格网（2026-09-13, commit fca4517）
+
+- **对拍方法**：原版 `测试实验/build_fullsite.bat`(VS2022 cl 直接编 LasLib 源) 重编 `test_fullsite.exe`，在 `dlt_test.las`(=DLT20251222.las, 398 万点) 上跑 native 默认参数 → crest 1164 条/270km、toe 1076 条/241km，写 dump_crest/dump_toe.txt。scratch 里只链 `SlopeLineExtractor.cs + LasImportService.cs` 的控制台跑托管版（主工程当时被别的会话 Road 重构半途编不过）：全量@1m → 1188/274km、1112/246km，**顶点到 native 折线距离 p50 0.4~0.6m、92~94% <3m** → 移植正确。
+- **真正的差异**：① 场景点云是加载时封顶 200 万的均匀抽样，1m 格网下点距 ~4m、覆盖掩膜全是洞 → 只剩 296 条/11km；② 默认格网 `PcAutoCell`=7.6m，平滑核(DEM σ4 格/坡度 σ3.5 格)和覆盖闭运算(2m)全按"格=米"标定，台阶被抹平 → 145 条且 1% 顶点贴近 native。
+- **修法**：`PointCloudEntity.SourceTotalPoints`(LAS 头点数，加载写、Clone/撤销快照带)；提取时源是 LAS 且被抽样 → 后台 `LasImportService.Load(path, int.MaxValue)` 全量算(只读点不进场景)，信息栏写「源文件全量 N 点（场景中为 M 点抽样）」；DEM 网格默认 1.0 同原版。
+- **实机**：200 万点场景 → 输入 3,979,969 点，DEM 6415×4516@1m，坡顶 1188/坡底 1112 条，3.6s；截图线沿台阶密排、与 native 一致。
+- **教训**：算子"跟原版不一样"先做同输入 A/B（原版 测试实验/ 里多半有 cpp 测试程序 + dump），再查命令端喂的数据与默认参数；Kylin 点云是抽样，所有按密度标定的算子都得单独处理。
