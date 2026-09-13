@@ -1,3 +1,5 @@
+// 忠实移植自原 PitMine3D Modules/GeoDataBase/Public/Entities/DumpStrip.cs（逐行对应；仅命名空间适配）
+using PitMine3D.Kylin.Data.Sql;
 
 namespace PitMine3D.Kylin.Data.Entities;
 
@@ -12,81 +14,107 @@ namespace PitMine3D.Kylin.Data.Entities;
 /// （Kr = 残余膨胀系数，随物料走）。表里只存几何量，换算留给读的人 ——
 /// 把物料口径焊进几何表，换个物料就得改表。
 /// </summary>
+[Table("dump_strip")]
+[ColumnDescription("潜在排土位置(排土条带网格)")]
 public class DumpStrip
 {
-    // column: id
+    [Column("id"), PrimaryKey, AutoIncrement]
     public long Id { get; set; }
 
-    // column: region_id
+    [Column("region_id")]
+    [ColumnDescription("所属排土场 → mineable_region.id")]
     public long RegionId { get; set; }
 
-    // column: region_name
+    [Column("region_name")]
+    [ColumnDescription("排土场名称(冗余,清单直接可读)")]
     public string RegionName { get; set; } = "";
 
-    // column: category
+    [Column("category")]
+    [ColumnDescription("external_dump 外排 / internal_dump 内排")]
     public string Category { get; set; } = "external_dump";
 
-    // column: code
+    [Column("code")]
+    [ColumnDescription("位置编号 外排1-L3-P02-S05")]
     public string Code { get; set; } = "";
 
-    // column: level_index
+    [Column("level_index")]
+    [ColumnDescription("台阶级序(1 = 最上一级)")]
     public long LevelIndex { get; set; }
 
-    // column: panel_index
+    [Column("panel_index")]
+    [ColumnDescription("沿走向第几幅(1 起)")]
     public long PanelIndex { get; set; }
 
-    // column: panel_count
+    [Column("panel_count")]
+    [ColumnDescription("本级共几幅")]
     public long PanelCount { get; set; } = 1;
 
-    // column: step_index
+    [Column("step_index")]
+    [ColumnDescription("沿推进方向第几带(1 = 当前排土线那一带)")]
     public long StepIndex { get; set; }
 
-    // column: sub_index
+    [Column("sub_index")]
+    [ColumnDescription("带内子号(1 起;0 = 该带没切)")]
     public long SubIndex { get; set; }
 
-    // column: sub_count
+    [Column("sub_count")]
+    [ColumnDescription("本带共切成几个位置")]
     public long SubCount { get; set; } = 1;
 
-    // column: crest_z
+    [Column("crest_z")]
+    [ColumnDescription("坡顶标高(m)")]
     public double CrestZ { get; set; }
 
-    // column: toe_z
+    [Column("toe_z")]
+    [ColumnDescription("坡底标高(m)")]
     public double ToeZ { get; set; }
 
-    // column: bench_height_m
+    [Column("bench_height_m")]
+    [ColumnDescription("台阶高(m)")]
     public double BenchHeightM { get; set; }
 
-    // column: strike_len_m
+    [Column("strike_len_m")]
+    [ColumnDescription("走向长(m,水平)")]
     public double StrikeLenM { get; set; }
 
-    // column: strip_width_m
+    [Column("strip_width_m")]
+    [ColumnDescription("排土条带宽度 W(m,推进方向)")]
     public double StripWidthM { get; set; }
 
-    // column: capacity_m3
+    [Column("capacity_m3")]
+    [ColumnDescription("库容(m³,占容方)= 走向长 × W × 台阶高")]
     public double CapacityM3 { get; set; }
 
-    // column: centroid_x
+    [Column("centroid_x")]
+    [ColumnDescription("质心 X(寻径算运距用)")]
     public double CentroidX { get; set; }
 
-    // column: centroid_y
+    [Column("centroid_y")]
+    [ColumnDescription("质心 Y")]
     public double CentroidY { get; set; }
 
-    // column: centroid_z
+    [Column("centroid_z")]
+    [ColumnDescription("质心 Z")]
     public double CentroidZ { get; set; }
 
-    // column: crest_json
+    [Column("crest_json")]
+    [ColumnDescription("前脸坡顶轨(扁平 xyz JSON)")]
     public string CrestJson { get; set; } = "[]";
 
-    // column: toe_json
+    [Column("toe_json")]
+    [ColumnDescription("前脸坡底轨(扁平 xyz JSON)")]
     public string ToeJson { get; set; } = "[]";
 
-    // column: entity_handle
+    [Column("entity_handle")]
+    [ColumnDescription("图上壳子体 handle(0 = 还没建体)")]
     public long EntityHandle { get; set; }
 
-    // column: design_version
+    [Column("design_version")]
+    [ColumnDescription("方案版本(多方案比选)")]
     public string? DesignVersion { get; set; }
 
-    // column: notes
+    [Column("notes")]
+    [ColumnDescription("备注")]
     public string? Notes { get; set; }
 
     // created_at / updated_at 不映射:交给 DB 的 DEFAULT + AFTER UPDATE 触发器,

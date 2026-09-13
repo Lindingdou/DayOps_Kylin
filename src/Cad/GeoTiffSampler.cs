@@ -108,6 +108,13 @@ public sealed class GeoTiffSampler : IDisposable
         if (!Success) return null;
         var (colF, rowF) = _geo.WorldToPixel(x, y);
         int col = (int)Math.Floor(colF), row = (int)Math.Floor(rowF);
+        return ReadPixel(col, row);
+    }
+
+    /// <summary>按像素 (col,row) 取 RGB（供整幅解码/降采样成纹理用，如正射底图 OrthophotoLoader）；越界返回 null。</summary>
+    public (byte r, byte g, byte b)? ReadPixel(int col, int row)
+    {
+        if (!Success) return null;
         if (col < 0 || row < 0 || col >= Width || row >= Height) return null;
         int strip = row / _rowsPerStrip;
         if (strip >= _stripOffsets.Length) return null;

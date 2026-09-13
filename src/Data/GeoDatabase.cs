@@ -25,7 +25,15 @@ public sealed class GeoDatabase : IDisposable
     {
         _conn = conn;
         _dialect = dialect;
+        // 原 GeoDataBasePlugin.Initialize 的两件事：造 IGeoDataContext（各表的仓储服务）并交给静态门面
+        // EquipmentDataContext —— TaskLib 引擎族（作业面台账 / 去向台账 / 装配盘子 …）全靠这个门面取数。
+        // 与原版一样"最后打开的库说了算"（桌面单进程只开一个库）。
+        Services = new GeoDataContext(new Sql.SqlService(conn));
+        EquipmentDataContext.Initialize(Services);
     }
+
+    /// <summary>各表的仓储服务门面（移植原 GeoDataBase 的 IGeoDataContext；同一条连接）。</summary>
+    public Services.IGeoDataContext Services { get; }
 
     /// <summary>
     /// 默认库文件路径：用户数据目录 (Linux: ~/.local/share/PitMine3D.Kylin/geo.db, Windows: %LocalAppData%\PitMine3D.Kylin\geo.db)。
