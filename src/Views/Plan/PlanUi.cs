@@ -46,7 +46,7 @@ internal static class PlanUi
     /// <summary>GroupBox 等价：标题 + 边框 + 内容。</summary>
     public static Border Group(string header, Control content, Thickness? margin = null, double padding = 10)
     {
-        var head = new TextBlock { Text = header, FontWeight = FontWeight.SemiBold, FontSize = 13, Margin = new Thickness(0, 0, 0, 6) };
+        var head = new TextBlock { Text = header, FontWeight = FontWeight.SemiBold, FontSize = 13, Margin = new Thickness(0, 0, 0, 6), TextWrapping = TextWrapping.Wrap };   // 长标题在窄栏里换行，别截字
         RoadUi.Theme(head, TextBlock.ForegroundProperty, "Theme.Text.Primary");
         var dock = new DockPanel();
         DockPanel.SetDock(head, Avalonia.Controls.Dock.Top);

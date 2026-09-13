@@ -739,3 +739,41 @@ public partial class MainWindow
         StatusMsg.Text = $"自检：确定开采程序确认 —— {w.SelftestStatus.Replace('\n', ' ')}｜{w.SelftestTreeStatus.Replace('\n', ' ')}";
     }
 }
+
+public partial class MainWindow
+{
+    // ───────────── 短期组「采排配对」：源—汇流向矩阵 + 去向库容条 + 本月汇总（原 CreateOpenDumpPairingCommand → PlanLib.ShortTerm.DumpPairingWindow）─────────────
+    private Views.Plan.DumpPairingWindow? _dumpPairingPlanWin;
+
+    /// <summary>短期「采排配对」= 原 <c>PlanLib.ShortTerm.DumpPairingWindow</c>：月度方案 × 期次 → 行=作业面·物料 / 列=去向 的矩阵（流只取单元链对位 UnitPlanStore，不自建），库容按占容方逐月累扣。非模态单例。此前命中的是 Views.GeoDb 下按 Cad.Tasks 台账做的切片。</summary>
+    private void OpenDumpPairingPlan()
+    {
+        if (_dumpPairingPlanWin != null) { _dumpPairingPlanWin.Activate(); GeoDb.GeoDbWindows.NoteLast(_dumpPairingPlanWin); StatusMsg.Text = "采排配对窗口已在前台"; return; }
+        if (EnsureGeoDb() == null) return;   // 去向台账（dump_site / load_unload_point）在库里
+        var w = new Views.Plan.DumpPairingWindow(Cad.Plan.ShortTermSchemeStore.Schemes);
+        _dumpPairingPlanWin = w;
+        w.Closed += (_, _) => _dumpPairingPlanWin = null;
+        w.Show(this);
+        GeoDb.GeoDbWindows.NoteLast(w);
+        StatusMsg.Text = "采排配对：选方案/期次 → 源—汇流向矩阵（格可改、整行改投）+ 各去向库容条（占容方 Kr 口径，逐月累扣）+ 本月汇总；⇩ 取单元链的对位结果 / 重读去向台账 / 导出";
+    }
+
+    /// <summary>@采排配对示例：先跑一套短期方案（无则一键编制）→ 开采排配对 → 选第 1 行整行改投第 1 个合规去向。</summary>
+    private void SelftestDumpPairingSample()
+    {
+        try { _geoDb ??= Data.GeoDatabase.OpenSeeded(); } catch (Exception ex) { StatusMsg.Text = "自检：连库失败 " + ex.Message; return; }
+        if (Cad.Plan.PlanDestinationCatalog.Current.Count == 0)   // 空库：用合成去向核对矩阵列/库容条/改投（台账有货时照台账）
+            Cad.Plan.PlanDestinationCatalog.SelftestOverride(new System.Collections.Generic.List<Cad.Plan.PlanDestination>
+            {
+                new() { Id = "D-IN", Name = "内排土场", Kind = Cad.Plan.PlanSinkKind.InternalDump, DesignCapacityWanM3 = 320, FilledWanM3 = 40, FallbackHaulKm = 1.6 },
+                new() { Id = "D-OUT", Name = "外排土场", Kind = Cad.Plan.PlanSinkKind.ExternalDump, DesignCapacityWanM3 = 900, FilledWanM3 = 120, FallbackHaulKm = 3.4 },
+                new() { Id = "D-TOP", Name = "表土堆场", Kind = Cad.Plan.PlanSinkKind.TopsoilYard, DesignCapacityWanM3 = 60, FilledWanM3 = 10, FallbackHaulKm = 2.2 },
+                new() { Id = "S-CR", Name = "1号破碎站", Kind = Cad.Plan.PlanSinkKind.Crusher, FallbackHaulKm = 2.6 },
+            }, "自检合成去向 4 个（库里一个去向都没有）");
+        OpenDumpPairingPlan();
+        var w = _dumpPairingPlanWin!;
+        w.SelftestSelectRow(0);
+        w.SelftestApplyRowDest(0);
+        StatusMsg.Text = $"自检：采排配对示例 —— {w.SelftestRowCount} 行 × {w.SelftestColCount} 去向 · 库容条 {w.SelftestBarCount}｜{w.SelftestSummary}｜{w.SelftestStatus.Replace('\n', ' ')}";
+    }
+}

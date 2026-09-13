@@ -1812,6 +1812,7 @@ public partial class MainWindow : Window
             if (cmd == "煤层露头线" || cmd == "露头线" || cmd == "煤层露头" || cmd == "露头线提取" || cmd.StartsWith("煤层露头线 ")) { await SeamOutcropCmd(cmd); return; }
             if (cmd == "更新煤层面" || cmd == "更新现状面" || cmd == "煤层面更新" || cmd.StartsWith("更新煤层面 ")) { await SurfaceUpdateCmd(cmd); return; }
             if (cmd == "确定开采程序") { OpenShortTermSequence(); return; }   // 短期组: 原 ShortTermSequenceWindow(作业面/设备类型/工艺流程); 「开采程序确定」(中长远)走 OpenMiningProgramSolve
+            if (cmd == "采排配对") { OpenDumpPairingPlan(); return; }   // 短期组: 原 PlanLib.ShortTerm.DumpPairingWindow(方案×期次 源—汇矩阵/库容条/汇总)
             if (cmd == "平行推进" || cmd == "工作线推进") { AdvanceCmd(AdvanceMode.Parallel, "平行推进"); return; }
             if (cmd == "定点回转" || cmd == "定点回转推进") { AdvanceCmd(AdvanceMode.FixedPivot, "定点回转"); return; }
             if (cmd == "动点回转" || cmd == "动点回转推进") { AdvanceCmd(AdvanceMode.MovingPivot, "动点回转"); return; }
@@ -10919,6 +10920,7 @@ public partial class MainWindow : Window
             if (cmd == "@标注台阶标高示例") { SelftestBenchElevationSample(); return; }   // @标注台阶标高示例: 合成台阶环 → 一键标注 + 平盘标高清单统计(实机核对用)
             if (cmd == "@确定开采程序示例") { SelftestShortTermSequenceSample(); return; }   // @确定开采程序示例: 开窗 + 增面/归一/校核 + 开工艺对话框(实机核对用)
             if (cmd == "@确定开采程序确认") { SelftestShortTermSequenceConfirm(); return; }   // @确定开采程序确认: 工艺对话框确定 + 保存开采程序
+            if (cmd == "@采排配对示例") { SelftestDumpPairingSample(); return; }   // @采排配对示例: 开采排配对 + 整行改投(实机核对用)
             if (cmd.StartsWith("@块体示例"))   // @块体示例 [nx ny nz]: 建一个规则块体模型并入场景(截图核对体素显示用)
             {
                 var a = cmd.Length > 5 ? cmd.Substring(5).Split(' ', System.StringSplitOptions.RemoveEmptyEntries) : System.Array.Empty<string>();

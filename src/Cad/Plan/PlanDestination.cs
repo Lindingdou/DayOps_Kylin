@@ -109,6 +109,9 @@ public static class PlanDestinationCatalog
     /// <summary>强制重读台账（面板上「重新读取去向台账」按钮用）。</summary>
     public static IReadOnlyList<PlanDestination> Reload() { _cache = Load(); return _cache; }
 
+    /// <summary>自检直通：用一批合成去向顶替台账（只在 PITMINE_SELFTEST 脚本里用，让空库上也能核对矩阵列/库容条/改投；下次 <see cref="Reload"/> 即恢复台账）。</summary>
+    internal static void SelftestOverride(List<PlanDestination> list, string sourceText) { _cache = list; SourceText = sourceText; }
+
     public static PlanDestination? Find(string? id)
         => string.IsNullOrWhiteSpace(id) ? null
          : Current.FirstOrDefault(d => string.Equals(d.Id, id, StringComparison.OrdinalIgnoreCase))
