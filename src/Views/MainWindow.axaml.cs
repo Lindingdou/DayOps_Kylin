@@ -8840,6 +8840,7 @@ public partial class MainWindow : Window
     private void AppendScenePreview(List<float> list)
     {
         _tool?.AppendPreview(list, _cursorWorld);
+        RoadAppendJigPreview(list);   // 「手动标定线路」画线 jig(交点标记 + 已定走向 + 橡皮筋), 见 MainWindow.RoadTransport.Centerline.cs; 没在画时空转
         AppendDimPreview(list);   // 标注橡皮筋(线性/对齐/连续/半径/直径/角度/坐标标注取点中整条随光标), 见 MainWindow.DimJig.cs
         if (_slideDragging && _slidePts.Count > 1)     // 滑动多段线拖动预览
         {

@@ -89,6 +89,11 @@ public partial class MainWindow
 
         var pts = new List<double>();
         int snapped = 0;
+        // jig：hover 回调每动一下鼠标就把光标吸一次（同点击时的判据），预览里画 已定走向(琥珀) + 橡皮筋(上一点→吸后光标) + 命中交点亮环，
+        // 浮标里写「第 N 点 · 长/角 · 捕捉：xx」—— 点下去之前就看得见会落在哪。
+        _roadJig = new RoadRouteJig { Pts = pts, Junctions = junc };
+        _pickHover = RoadJigHover;
+        RefreshScenePreview();
         try
         {
             while (true)
@@ -107,7 +112,7 @@ public partial class MainWindow
                 }
                 pts.Add(sx); pts.Add(sy); pts.Add(sz);
                 int n = pts.Count / 3;
-                RoadShowSnappedPath(junc, pts);
+                RefreshScenePreview();
                 string tail = hit == null ? "" :
                     $" ←已捕捉{hit.KindLabel}（离点击 {dist:F1}m" + (hit.GapM > 0.05 ? $"·两线缝宽 {hit.GapM:F1}m" : "")
                     + (hit.IsRealJunction ? $"·{hit.LineCount} 条中线在此碰头" : "·不是路口，是两条中线的接头")
@@ -118,7 +123,10 @@ public partial class MainWindow
         }
         finally
         {
-            Viewport.SetPreviewGeometry(null);
+            _pickHover = null; _pickHoverInfo = null;
+            _roadJig = null;
+            HideDragTip();
+            RefreshScenePreview();
         }
         if (pts.Count < 6) { EditEcho($"手动标定线路：已退出（只点了 {pts.Count / 3} 点，画不成线）"); return null; }
         if (snapped > 0) EditEcho($"就近捕捉交点：本条线 {pts.Count / 3} 点里有 {snapped} 点吸到了交点上（接入用的就是吸过的坐标）。");
@@ -163,26 +171,79 @@ public partial class MainWindow
         return 12.0;
     }
 
-    private CenterlineJunctionSet? _roadJunctionMarkers;
+    /// <summary>「手动标定线路」画线中的 jig 状态：已定点列 + 可捕捉交点 + 光标（吸过的）+ 当前命中的交点。</summary>
+    private sealed class RoadRouteJig
+    {
+        public List<double> Pts = new();
+        public CenterlineJunctionSet? Junctions;
+        /// <summary>光标落点（已按交点吸附；null=光标不在视口里）。</summary>
+        public Point3d? Cursor;
+        public CenterlineJunction? Hit;
+        public double HitDistM;
+    }
+    private RoadRouteJig? _roadJig;
 
-    /// <summary>把可捕捉交点整组标进视口（预览几何）：X形白 / T形绿 / 半腰焊蓝 / 接缝灰小方 / 立交橙叉。</summary>
+    /// <summary>进场把交点标记挂进 jig（预览由 <see cref="RoadAppendJigPreview"/> 合成，随每次 RefreshScenePreview 重画）。</summary>
     private void RoadShowJunctionMarkers(CenterlineJunctionSet set)
     {
-        _roadJunctionMarkers = set;
-        RoadShowSnappedPath(set, null);
+        if (_roadJig != null) _roadJig.Junctions = set;
+        else _roadJig = new RoadRouteJig { Junctions = set };
+        RefreshScenePreview();
     }
 
-    /// <summary>预览几何 = 交点标记 + 吸过之后真正会落地的那条走向（琥珀）。</summary>
-    private void RoadShowSnappedPath(CenterlineJunctionSet? set, List<double>? pts)
+    /// <summary>
+    /// 画线 jig 的悬停回调（指针每动一下调一次）：把光标按点击时同一套判据吸到交点上，写浮标读数，重画预览。
+    /// 与原版的差别：原版宿主橡皮筋跟的是光标原位、吸完才另画琥珀线；这里橡皮筋直接指到会落地的那个点，点下去之前就看得见。
+    /// </summary>
+    private void RoadJigHover(Avalonia.Point screen, (double x, double y)? world)
     {
-        var o = new List<float>();
+        var jig = _roadJig;
+        if (jig == null) return;
+        if (world == null) { jig.Cursor = null; jig.Hit = null; _pickHoverInfo = null; RefreshScenePreview(); return; }
+        double x = world.Value.x, y = world.Value.y, z = RoadSurfaceZAt(x, y);
+        CenterlineJunction? hit = null;
+        double dist = 0;
+        if (jig.Junctions != null) hit = jig.Junctions.Nearest(x, y, RoadJunctionSnapRadiusM(x, y, z), out dist);
+        jig.Hit = hit; jig.HitDistM = dist;
+        jig.Cursor = hit != null ? new Point3d(hit.X, hit.Y, hit.ZAt(z)) : new Point3d(x, y, z);
+        int n = jig.Pts.Count / 3;
+        string dims = "";
+        if (n > 0)
+        {
+            double lx = jig.Pts[^3], ly = jig.Pts[^2];
+            double dx = jig.Cursor.Value.X - lx, dy = jig.Cursor.Value.Y - ly;
+            double ang = Math.Atan2(dy, dx) * 180.0 / Math.PI; if (ang < 0) ang += 360.0;
+            dims = $"  长 {Math.Sqrt(dx * dx + dy * dy):0.##}  角 {ang:0.#}°";
+        }
+        string snap = hit == null ? "" : $"  捕捉：{hit.KindLabel}（{dist:F1}m）" + (hit.GradeSeparated ? " ⚠立交" : "");
+        _pickHoverInfo = $"手动标定线路：第 {n + 1} 点{dims}{snap}";
+        RefreshScenePreview();
+    }
+
+    /// <summary>
+    /// 画线 jig 的预览几何（挂在 AppendScenePreview 里，与工具橡皮筋同一条通道）：
+    /// 交点标记（X形白 / T形绿 / 半腰焊蓝 / 接缝灰小方 / 立交橙叉）+ 已定走向（琥珀，真正会落地的坐标）+ 橡皮筋（上一点→吸后光标，灰蓝）+ 命中交点亮环。
+    /// </summary>
+    private void RoadAppendJigPreview(List<float> o)
+    {
+        var jig = _roadJig;
+        if (jig == null) return;
         double ox = RenderOrigin.X, oy = RenderOrigin.Y;
         void Seg(double x0, double y0, double z0, double x1, double y1, double z1, float r, float g, float b)
         {
             o.Add((float)(x0 - ox)); o.Add((float)(y0 - oy)); o.Add((float)z0); o.Add(r); o.Add(g); o.Add(b);
             o.Add((float)(x1 - ox)); o.Add((float)(y1 - oy)); o.Add((float)z1); o.Add(r); o.Add(g); o.Add(b);
         }
-        set ??= _roadJunctionMarkers;
+        void Ring(double cx, double cy, double cz, double rad, float r, float g, float b)
+        {
+            const int n = 12;
+            for (int k = 0; k < n; k++)
+            {
+                double a0 = 2 * Math.PI * k / n, a1 = 2 * Math.PI * (k + 1) / n;
+                Seg(cx + rad * Math.Cos(a0), cy + rad * Math.Sin(a0), cz, cx + rad * Math.Cos(a1), cy + rad * Math.Sin(a1), cz, r, g, b);
+            }
+        }
+        var set = jig.Junctions;
         if (set != null)
         {
             double s = 0;
@@ -211,22 +272,24 @@ public partial class MainWindow
                     Seg(j.X - rad, j.Y - rad, z, j.X + rad, j.Y - rad, z, r, g, b); Seg(j.X + rad, j.Y - rad, z, j.X + rad, j.Y + rad, z, r, g, b);
                     Seg(j.X + rad, j.Y + rad, z, j.X - rad, j.Y + rad, z, r, g, b); Seg(j.X - rad, j.Y + rad, z, j.X - rad, j.Y - rad, z, r, g, b);
                 }
-                else
-                {
-                    const int n = 12;
-                    for (int k = 0; k < n; k++)
-                    {
-                        double a0 = 2 * Math.PI * k / n, a1 = 2 * Math.PI * (k + 1) / n;
-                        Seg(j.X + rad * Math.Cos(a0), j.Y + rad * Math.Sin(a0), z, j.X + rad * Math.Cos(a1), j.Y + rad * Math.Sin(a1), z, r, g, b);
-                    }
-                }
+                else Ring(j.X, j.Y, z, rad, r, g, b);
             }
         }
-        if (pts != null)
-            for (int k = 0; k + 5 < pts.Count; k += 3)
-                Seg(pts[k], pts[k + 1], pts[k + 2], pts[k + 3], pts[k + 4], pts[k + 5], 0.95f, 0.65f, 0.09f);   // 琥珀，与中心线实体同色
-        Viewport.SetPreviewGeometry(o.Count > 0 ? o.ToArray() : null);
-        if (pts == null && set == null) _roadJunctionMarkers = null;
+        var pts = jig.Pts;
+        for (int k = 0; k + 5 < pts.Count; k += 3)
+            Seg(pts[k], pts[k + 1], pts[k + 2], pts[k + 3], pts[k + 4], pts[k + 5], 0.95f, 0.65f, 0.09f);   // 琥珀，与中心线实体同色
+        if (jig.Cursor is { } c)
+        {
+            if (pts.Count >= 3)   // 橡皮筋：上一点 → 吸后光标（灰蓝，同多段线工具）
+                Seg(pts[^3], pts[^2], pts[^1], c.X, c.Y, c.Z, 0.55f, 0.62f, 0.70f);
+            if (jig.Hit != null)  // 命中的交点套一个亮环（比标记大一圈），一眼看出要吸到哪
+            {
+                double s = 0;
+                try { s = Viewport.WorldPerPixelAt(c.X, c.Y, c.Z) * 13; } catch { }
+                if (s <= 0) s = 9;
+                Ring(c.X, c.Y, c.Z, s, 1f, 0.95f, 0.4f);
+            }
+        }
     }
 
     /// <summary>
@@ -235,8 +298,8 @@ public partial class MainWindow
     /// </summary>
     private void RoadMergeManualRoutes(List<double[]> drawn, string origin)
     {
-        _roadJunctionMarkers = null;
-        Viewport.SetPreviewGeometry(null);
+        _roadJig = null;
+        RefreshScenePreview();
         var pool = ReadCenterlinePool();
         var before = new List<(ulong Handle, double[] Xyz)>(pool.Count);
         var byHandle = new List<PolylineEntity>(pool.Count);
@@ -304,7 +367,11 @@ public partial class MainWindow
     private void RoadCenterlineManagerCmd()
     {
         var rs = RS;
-        if (rs.CenterlineWin is { IsVisible: true }) { rs.CenterlineWin.Activate(); rs.CenterlineWin.Reload(); return; }
+        // 存档页要工程库：同其它数据库命令走 EnsureGeoDb —— 没连上时它会拉起连接并在连上后自动重跑本命令（窗口已开则只刷新存档页）。
+        // 不能只看 _geoDb（那样窗口永远报「工程库未连接」，存不了，用户看到的就是"中心线管理不能存储"）。
+        bool dbReady = EnsureGeoDb() != null;
+        if (rs.CenterlineWin is { IsVisible: true }) { rs.CenterlineWin.Activate(); rs.CenterlineWin.Reload(); rs.CenterlineWin.ReloadArchives(); return; }
+        if (!dbReady) EditEcho("中心线管理：工程库尚未连接，正在连接 —— 连上后自动重开；「当前中心线」页不受影响，「存档」页要等库连上。", EchoLevel.Warn);
         var win = new CenterlineManagerWindow(new RoadCenterlineHost(this));
         rs.CenterlineWin = win;
         win.Closed += (_, _) => { if (ReferenceEquals(RS.CenterlineWin, win)) RS.CenterlineWin = null; };

@@ -343,7 +343,7 @@ internal sealed class CenterlineManagerWindow : Window
         return dg;
     }
 
-    private void ReloadArchives()
+    public void ReloadArchives()
     {
         _archives.Clear();
         if (!_host.ArchiveAvailable)
