@@ -4049,3 +4049,43 @@ commit `79108dd` / `cf3294c` / `3efa126`; 测试 2188 → 2200 全绿(新增 12:
 盒→单叶块 Size=边长·格 / 薄煤层叶块体积=占位 cell 数且 ±3% 内、每叶中心 GWN 复核在体内 / 自适应 25 m 少两成 vs 均匀无洞)，
 全套 4089 全绿。实机：`@导入 seam.off;实体转块体` 默认 5 m → 58,513 cell → 26,278 叶块, 体积 7,314,125 vs 精确 7,308,467 (+0.08%)，
 截图为连续完整的倾斜层；`@示例两体` → 并集, 内部并成 8 格大块、边界最细格, 同原版观感。
+
+## §三九五 「剥采排工程辅助设计」页签 30 钮逐钮忠实性复核 + 22 处按原版重做 (2026-09-13)
+
+**起因**：用户要求统计该页签功能并逐个评价是否按原 PitMine3D 移植。逐钮对照原 `MineAssLibPlugin.cs`（3 组 30 钮）后发现进度文档的"未接线"统计
+数不到一类问题——**`cmd ==` 命中了但跑的是别的功能**（7 钮），另有 7 钮是浅切片（有名无实）、2 钮原版没有（超出）。10 钮忠实、5 钮托管等价。
+随后 `/loop` 9 轮把剩余项逐个补齐（commit f0206c4 → fb7d24f，共 11 笔；全套 4194 测试通过；实机启动 GL 初始化正常）。
+
+### 接线错（按钮点下去跑的是别的功能）→ 各回原版语义
+| 钮 | 此前 | 现在 |
+|---|---|---|
+| 参数化模板 | 库 param_template 统计一行 | `OpenBenchTemplateEditor`（原 MiningTemplateEditorWindow） |
+| 驱动距离 | 等效运距 CSV | `CuttingCmd(cmd, "驱动距离")`（同原版共用 DriveTemplateRunner，加 label 参数） |
+| 动态调整 | TaskLib 生产任务动态调整窗 | `MainWindow.BenchJig.cs`：选境界 → D/U → 光标离线距离折级数、逐级坡脚环实时预览 → 点击/回车 BenchBuilder 落地（托管等价原内核 jig） |
+| 分帮扩帮 / 最终并段 | 批量平行偏移 / 兜底"未移植子系统" | 原版即 `SkeletonCommand` 桩，照回显「[骨架] …（待实现）」 |
+| 批量扩坑 | 批量平行偏移 | `Cad/SeamPitBuilder.cs`：顶板以上岩台阶 / 顶底板间煤台阶 / 底板以下不出，倾斜顶板同级切岩段+煤段并落尖灭点（托管等价内核 BuildSeamPitMultiSeam）+4 测 |
+| 组合工作线 / 连接台阶线 | 都走通用 POLYJOIN | `Cad/WorkLineGroup.cs`：组语义（最近端点串链、缺口软连接段虚线+箭头、成员不合并）；`BenchLineJoin` + 原 JoinBenchLineDialog 四项、继承图层/颜色/标高 +4 测 |
+
+### 浅切片 → 按原版对话框 + 管线重做
+| 钮 | 现在 |
+|---|---|
+| 批量台阶扩帮 | `MainWindow.ExpandBench.cs`：原 ExpandBenchBatchDialog 分区（采场/排土场·Toe/Crest·上/下·侧向·H/α/W 套模板·工作帮/最终帮平盘·止点 段数/标高/地表）→ BenchBuilder；产物缓存供直线坑线 |
+| 画道路中线 | `MainWindow.DrawRoadCenterline.cs`：快照选中面 → 拾点吸面 → 「道路参数」①②区 → 统一落地管线 → 登记路网 → 可撤 |
+| 螺旋坑线 / 折返坑线 / 平盘联络道 | `MainWindow.RampInsert.cs`：原 InsertRamp*Dialog 参数框 + 一次落地；折返起点坡面点取、甩向自动（移植 `AutoTurnSide`，判不出不许猜） |
+| 运量驱动布线 | 原 `RoadLayout` 家族逐文件移植（`Cad/RoadLayout/`：选线器 764/求解器 529/规划器/自动布线器 824，原 27 测通过）+ `RoadSchemeCompareWindow` 比选 + `MainWindow.RoadLayoutDriven.cs` 采用出真中线 → 落地缓存 |
+| 直线坑线 | `MainWindow.StraightRoute.cs`：原 StraightRouteParamsDialog 各项 + 改用原布线器（折返/螺旋兜底、线形/纵断面/横断面后处理逐级回显） |
+| 排土条带 | 原 `DumpStripPlanner`(2426)/`StandardLevelModel`(795)/`WorkSlopeRange`/竖直断面轨 逐文件移植（原 52+13 测通过）；`DumpStripWindow` 识别台阶/生成位置/导出；壳子体托管放样 `DumpStripShell`（散度定理实测体积）；`DumpStripRepo` 落库 dump_strip 先清后写 |
+| 排土场按量推进 | 原 `DumpAdvanceByVolume` 移植 + `DumpAdvanceWindow`（实方/占容方·Kr·并肩/逐级·起始已填）+ 图上形态 |
+| 排土场容量校核 | 图上选面 → `DumpCapacityCalc` 同口径填挖方 → 与 dump_site 台账对账/写回 +2 测 |
+| 处理尖灭 | `MainWindow.HandlePinch.cs`：手动（尖灭点+坡顶线，上部联动）/ 煤层（锁台阶组+顶板+底板），组内坡面重算 |
+
+### 超出原版 → 撤
+「竖曲线平滑」「线形处理」两钮从 Ribbon 撤掉（原版只是落地管线内部阶段①③），命令行别名保留。
+
+### 登记的差异（未做/待接）
+排土条带的两种走现状面的取线来源与「套设计台账」归级（`StandardLevelSource.FromDatabase` 依赖原库服务）；直线坑线第三档「现状面自动提坡面」；
+批量台阶扩帮的逐级剖面表/留运输平台/随线起伏/到煤层底板；组合工作线的组是会话内记录（原版持久实体）；编辑台阶仍是离线重算（原版内核实时夹点联动）。
+
+### 提交方式
+工作树里另一会话有 ~1.4 万行未提交改动（含 226 个未跟踪文件），本轮全部走「HEAD 副本 + 临时索引只交自己 hunk」；依赖另一会话代码的派发行
+（刀量切割 label / 处理尖灭 / 平盘联络道参数框）随其提交落 HEAD。旧切片一律留命令行别名（条带填充 / 两期容量校核 / 坑线连通自检 / 运输布局方案 带参 / 螺旋中线 / 折返中线）。
