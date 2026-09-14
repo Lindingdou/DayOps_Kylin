@@ -31,7 +31,7 @@
           <TextBlock Classes="panel-title" Text="预览（文本摘要）" DockPanel.Dock="Left"/>
           <Button DockPanel.Dock="Right" Content="刷新预览" Click="OnRefresh" Padding="10,3"/>
         </DockPanel>
-        <Border Grid.Row="1" Background="#FFF7F8FA" BorderBrush="#FFDCDFE4" BorderThickness="1" CornerRadius="2" Margin="0,8,0,0">
+        <Border Grid.Row="1" Background="{DynamicResource Theme.Panel.Background}" BorderBrush="{DynamicResource Theme.Panel.Border}" BorderThickness="1" CornerRadius="2" Margin="0,8,0,0">
           <TextBox x:Name="previewText" Background="Transparent" BorderThickness="0" IsReadOnly="True" FontFamily="Consolas,Microsoft YaHei,monospace" FontSize="12" TextWrapping="NoWrap" AcceptsReturn="True" Padding="14"
                    Text="选择来源块体并点 『刷新预览』 生成报告内容..."/>
         </Border>

@@ -3,3 +3,8 @@ obj/
 dist/
 *.user
 build/deps/
+
+# 实机核对截图(自检/截图比对的临时产物, 只在根目录出现; docs/ 下的说明书插图不受影响)
+/chk_*
+/*.png
+/unwired_audit.txt

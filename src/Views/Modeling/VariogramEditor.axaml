@@ -1,7 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
              x:Class="PitMine3D.Kylin.Views.Modeling.VariogramEditor" x:CompileBindings="False">
-  <Border Background="White" BorderBrush="#DCDFE4" BorderThickness="1" CornerRadius="4" Padding="12">
+  <Border Background="White" BorderBrush="{DynamicResource Theme.Panel.Border}" BorderThickness="1" CornerRadius="4" Padding="12">
     <StackPanel>
       <Grid ColumnDefinitions="*,Auto">
         <TextBlock Text="变异函数模型" FontWeight="Bold" FontSize="13" VerticalAlignment="Center"/>
@@ -21,7 +21,7 @@
       </Grid>
 
       <!-- 理论曲线预览 -->
-      <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="1" CornerRadius="2" Margin="0,6" Padding="6">
+      <Border Background="{DynamicResource Theme.Panel.Background}" BorderBrush="{DynamicResource Theme.Panel.Border}" BorderThickness="1" CornerRadius="2" Margin="0,6" Padding="6">
         <StackPanel>
           <TextBlock Text="理论曲线预览" FontSize="11" Classes="muted" Margin="0,0,0,4"/>
           <ch:ChartView x:Name="VariogramChart" Height="120" FontSize="10"/>

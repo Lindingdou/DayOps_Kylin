@@ -23,11 +23,11 @@ namespace PitMine3D.Kylin.Cad;
 public static class ImportCache
 {
     private const string Magic = "PMCACHE";
-    /// <summary>格式版本。实体字段增减必须 +1，否则旧缓存会被当成新格式读出乱数据。</summary>
-    private const int Version = 1;
+    /// <summary>格式版本。实体字段增减必须 +1，否则旧缓存会被当成新格式读出乱数据。v2: 三维面合并成的三角网。</summary>
+    private const int Version = 2;
 
-    // 实体类型标签。DXF/DWG 导入只产出这 6 种（见 DxfImportService 的 Finalize 调用处）。
-    private const byte TLine = 1, TPolyline = 2, TPoint = 3, TCircle = 4, TArc = 5, TText = 6;
+    // 实体类型标签。DXF/DWG 导入只产出这 7 种（见 DxfImportService 的 Finalize / FinalizeMesh 调用处）。
+    private const byte TLine = 1, TPolyline = 2, TPoint = 3, TCircle = 4, TArc = 5, TText = 6, TMesh = 7;
 
     /// <summary>缓存目录（用户数据目录下，可随时整个删掉）。</summary>
     public static string Dir
@@ -219,6 +219,14 @@ public static class ImportCache
                 w.Write(t.X); w.Write(t.Y); w.Write(t.Height); w.Write(t.Rotation);
                 w.Write(t.HAlign); w.Write(t.VAlign); w.Write(t.WidthFactor); w.Write(t.ObliqueAngle);
                 w.Write(t.ScreenFacing); w.Write(t.Text ?? ""); return true;
+            case MeshEntity m:                                   // 三维面/网格合并网: 名 + 顶点 xyz + 三角索引
+                w.Write(TMesh); WriteCommon(w, m, layers);
+                w.Write(m.Name ?? "");
+                w.Write(m.Verts.Count);
+                foreach (var (x, y, z) in m.Verts) { w.Write(x); w.Write(y); w.Write(z); }
+                w.Write(m.Tris.Count);
+                foreach (var (a, b, c) in m.Tris) { w.Write(a); w.Write(b); w.Write(c); }
+                return true;
             default:
                 return false;                                    // 不认识 → 整份缓存作废
         }
@@ -267,6 +275,25 @@ public static class ImportCache
                 t.X = r.ReadDouble(); t.Y = r.ReadDouble(); t.Height = r.ReadDouble(); t.Rotation = r.ReadDouble();
                 t.HAlign = r.ReadInt32(); t.VAlign = r.ReadInt32(); t.WidthFactor = r.ReadDouble(); t.ObliqueAngle = r.ReadDouble();
                 t.ScreenFacing = r.ReadBoolean(); t.Text = r.ReadString(); return t;
+            }
+            case TMesh:
+            {
+                var m = new MeshEntity(); ReadCommon(r, m, layers);
+                m.Name = r.ReadString();
+                int vn = r.ReadInt32();
+                if (vn < 0) return null;
+                m.Verts.Capacity = vn;
+                for (int i = 0; i < vn; i++) m.Verts.Add((r.ReadDouble(), r.ReadDouble(), r.ReadDouble()));
+                int tn = r.ReadInt32();
+                if (tn < 0) return null;
+                m.Tris.Capacity = tn;
+                for (int i = 0; i < tn; i++)
+                {
+                    int a = r.ReadInt32(), b = r.ReadInt32(), c = r.ReadInt32();
+                    if (a < 0 || b < 0 || c < 0 || a >= vn || b >= vn || c >= vn) return null;   // 索引越界 = 缓存坏了
+                    m.Tris.Add((a, b, c));
+                }
+                return m;
             }
             default:
                 return null;

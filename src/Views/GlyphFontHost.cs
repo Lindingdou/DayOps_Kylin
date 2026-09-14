@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Media;
@@ -50,6 +50,22 @@ public static class GlyphFontHost
         foreach (var name in Candidates)
             if (TryUse(new Typeface(new FontFamily(name)), name, requireCjk: false)) return;
         TryUse(Typeface.Default, "(默认字体)", requireCjk: false);
+    }
+
+    /// <summary>
+    /// 换视口文字字体（「渲染配置 → 文字字体」用，对应原版 <c>PitMine_SetTextFont</c>）。
+    /// family 为空 = 回到自动探测(<see cref="Install"/> 的候选顺序)。装不上返回 false 并保持原字体不变 ——
+    /// 麒麟上常没有宋体/楷体，装不上要如实说，不能悄悄换成别的字体让用户以为设上了。
+    /// </summary>
+    public static bool TryUseFamily(string? family)
+    {
+        var keep = (ActiveFamily, GlyphFont.Provider);
+        if (string.IsNullOrWhiteSpace(family)) { Install(); return true; }
+        if (TryUse(new Typeface(new FontFamily(family)), family, requireCjk: false)) return true;
+        // 失败时 TryUse 已把 Provider 清空, 这里把原字体原样放回去。
+        (ActiveFamily, GlyphFont.Provider) = keep;
+        GlyphFont.Reset();
+        return false;
     }
 
     private static bool TryUse(Typeface tf, string label, bool requireCjk)

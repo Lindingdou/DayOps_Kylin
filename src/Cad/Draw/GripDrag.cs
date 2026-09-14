@@ -3,8 +3,11 @@ using System.Collections.Generic;
 
 namespace PitMine3D.Kylin.Cad.Draw;
 
-/// <summary>夹点拖拽模式(原版 GripMode)：悬停/拖动夹点时按空格循环 Stretch → Move → Rotate → Scale。</summary>
-public enum GripMode { Stretch, Move, Rotate, Scale }
+/// <summary>
+/// 夹点拖拽模式。按空格循环，顺序同 AutoCAD 的夹点模式环：
+/// 拉伸 → 移动 → 旋转 → 比例缩放 → 镜像 → 回到拉伸。
+/// </summary>
+public enum GripMode { Stretch, Move, Rotate, Scale, Mirror }
 
 /// <summary>
 /// 夹点拖拽状态 —— 忠实移植原 PitMine3D 内核 GripEditor 的 DragState + ApplyDrag。
@@ -62,11 +65,24 @@ public sealed class GripDrag
 
     public void Cancel() { Active = false; _grips.Clear(); AnchorOwner = null; AnchorIndex = -1; }
 
+    /// <summary>
+    /// 改基点（AutoCAD 夹点提示下的「基点(B)」）：后续的位移/旋转/缩放/镜像都以新基点为准。
+    /// 起始鼠标点一并挪过去，否则旋转/缩放会按"旧起始角/旧起始距"算出一跳。
+    /// </summary>
+    public void SetBase(double x, double y)
+    {
+        if (!Active) return;
+        Base = (x, y);
+        StartMouse = (x, y);
+    }
+
+    /// <summary>模式环：拉伸 → 移动 → 旋转 → 比例缩放 → 镜像 → 拉伸（同 AutoCAD 的夹点模式环）。</summary>
     public static GripMode NextMode(GripMode m) => m switch
     {
         GripMode.Stretch => GripMode.Move,
         GripMode.Move => GripMode.Rotate,
         GripMode.Rotate => GripMode.Scale,
+        GripMode.Scale => GripMode.Mirror,
         _ => GripMode.Stretch,
     };
 
@@ -75,19 +91,26 @@ public sealed class GripDrag
     /// <summary>命令行模式提示(原版 ModePrompt)。</summary>
     public static string ModePrompt(GripMode m) => m switch
     {
-        GripMode.Stretch => "** STRETCH **",
-        GripMode.Move => "** MOVE **",
-        GripMode.Rotate => "** ROTATE **",
-        _ => "** SCALE **",
+        GripMode.Stretch => "** 拉伸 **",
+        GripMode.Move => "** 移动 **",
+        GripMode.Rotate => "** 旋转 **",
+        GripMode.Scale => "** 比例缩放 **",
+        _ => "** 镜像 **",
     };
+
+    /// <summary>各模式可在命令行键入的选项（同 AutoCAD：旋转/缩放多一项 参照(R)）。</summary>
+    public static string OptionHint(GripMode m) => m is GripMode.Rotate or GripMode.Scale
+        ? "[基点(B)/复制(C)/放弃(U)/参照(R)/退出(X)]"
+        : "[基点(B)/复制(C)/放弃(U)/退出(X)]";
 
     /// <summary>拖动中的命令行提示(原版 "&lt;mode&gt; Specify point or [...]:")。</summary>
     public string Prompt => Mode switch
     {
-        GripMode.Stretch => $"{ModePrompt(Mode)} 指定拉伸点:",
-        GripMode.Move => $"{ModePrompt(Mode)} 指定移动点:",
-        GripMode.Rotate => $"{ModePrompt(Mode)} 指定旋转角度:",
-        _ => $"{ModePrompt(Mode)} 指定比例因子:",
+        GripMode.Stretch => $"{ModePrompt(Mode)} 指定拉伸点 或 {OptionHint(Mode)}",
+        GripMode.Move => $"{ModePrompt(Mode)} 指定移动点 或 {OptionHint(Mode)}",
+        GripMode.Rotate => $"{ModePrompt(Mode)} 指定旋转角度 或 {OptionHint(Mode)}",
+        GripMode.Scale => $"{ModePrompt(Mode)} 指定比例因子 或 {OptionHint(Mode)}",
+        _ => $"{ModePrompt(Mode)} 指定镜像线的第二点 或 {OptionHint(Mode)}",
     };
 
     /// <summary>当前模式下光标处的"量"：Rotate=角度(弧度) / Scale=比例 / 其余=锚点位移长度。</summary>
@@ -106,6 +129,11 @@ public sealed class GripDrag
                 double d0 = Math.Max(Dist(StartMouse.x, StartMouse.y, Base.x, Base.y), 1e-6);
                 double d1 = Dist(wx, wy, Base.x, Base.y);
                 return Math.Max(d1 / d0, 1e-6);
+            }
+            case GripMode.Mirror:
+            {
+                // 镜像的"量"= 镜像线方向角(弧度)。浮标上显示这个角, 便于配合正交拉出水平/垂直镜像线。
+                return Math.Atan2(wy - Base.y, wx - Base.x);
             }
             default:
                 return Dist(wx, wy, Base.x, Base.y);
@@ -151,6 +179,8 @@ public sealed class GripDrag
         {
             case GripMode.Move: t = Affine2.Translate(wx - Base.x, wy - Base.y); break;
             case GripMode.Rotate: t = Affine2.Rotate(ValueAt(wx, wy), Base.x, Base.y); break;
+            // 镜像: 热夹点 = 镜像线第一点, 光标 = 第二点(同 AutoCAD)
+            case GripMode.Mirror: t = Affine2.MirrorLine(Base.x, Base.y, wx, wy); break;
             default: t = Affine2.Scale(ValueAt(wx, wy), Base.x, Base.y); break;
         }
         // Move/Rotate/Scale 作用于被拖夹点所属的实体(单夹点时即锚点实体，与原版一致)。

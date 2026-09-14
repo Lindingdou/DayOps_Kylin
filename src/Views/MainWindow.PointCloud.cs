@@ -951,15 +951,81 @@ public partial class MainWindow
         {
             bool go = await BlockMsgBox.ConfirmAsync(this, "已有法向缓存",
                 $"点云「{pc.Name}」已缓存过法向，重算会覆盖旧结果。\n\n继续吗？");
-            if (!go) { EditEcho("法向估计：已取消", EchoLevel.Info); return true; }
+            // 不重算 → 沿用已有缓存, 直接进显示选择(否则想再看一眼法向只能被迫重算一遍)
+            if (!go) { EditEcho($"法向估计：沿用「{pc.Name}」已有的法向缓存", EchoLevel.Info); await PcNormalsDisplayAsync(pc); return true; }
         }
         StatusMsg.Text = "法向估计：逐点 kNN PCA 计算中…";
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         var attribs = await PcAttribsAsync(pc, kNormals);
+        sw.Stop();
         if (attribs.Count != pc.PointCount) { EditEcho("法向估计：点太少（需 ≥3 点）", EchoLevel.Success); return true; }
-        double sum = 0; foreach (var a in attribs) sum += a.SlopeDeg;
-        EditEcho($"法向估计「{pc.Name}」：{attribs.Count:N0} 个法向已缓存（平均坡度 {(sum / attribs.Count).ToString("0.#", Inv)}°）"
-                       + " · 坡度/坡向/曲率分析可直接复用", EchoLevel.Success);
+        // 原版同样无任何视觉产物（只写点云旁 normals.bin sidecar, 不产生新数据集）, 结果就是这一行:
+        // 「法向估计完成：N 点，成功 M / 退化 K，k=16，耗时 Xs。已缓存…」—— 想看效果走「逐点坡度/坡向」着色
+        int degenerate = 0; foreach (var a in attribs) if (a.Degenerate) degenerate++;
+        EditEcho($"法向估计完成：{attribs.Count:N0} 点，成功 {attribs.Count - degenerate:N0} / 退化 {degenerate:N0}，k={kNormals}，"
+                       + $"耗时 {(sw.Elapsed.TotalSeconds).ToString("0.0", Inv)}s。已缓存到点云「{pc.Name}」，"
+                       + "后续坡度/坡向/曲率分析直接复用不再重算", EchoLevel.Success);
+        await PcNormalsDisplayAsync(pc);
         return true;
+    }
+
+    /// <summary>
+    /// 法向估计后的显示选择 —— Kylin 补充(2026-09-13 用户拍板), 原版此处无任何视觉产物;
+    /// 默认「不显示」即原版行为。短线预览落独立图层不动点云; RGB 着色只改显示色, 真彩留在 RgbColors 可还原。
+    /// </summary>
+    private async Task PcNormalsDisplayAsync(PointCloudEntity pc)
+    {
+        if (!pc.HasNormals) return;
+        string[] shows = { "不显示（只缓存法向，供坡度/坡向/曲率复用）", "法向短线预览（抽样画在独立图层）", "法向 RGB 着色（点云显示色改为法向映射色）" };
+        const string layer = "点云_法向预览";
+        var form = new PcForm
+        {
+            Title = "法向估计 · 显示", OkText = "应用", Width = 540,
+            CliDescription = "法向估计完成后是否可视化：不显示 / 法向短线预览 / 法向 RGB 着色。",
+        };
+        form.Text($"点云「{pc.Name}」的法向已缓存。可按需把法向画出来看一眼（也可不显示，只留作后续分析的缓存）。")
+            .Info($"短线预览：在点云上按 XY 网格均匀抽样画法向短线，落在图层「{layer}」，不改点云本身；再画一次会先清掉旧预览。\n"
+                + "RGB 着色：显示色 = (n+1)/2，平地偏蓝、东西向坡偏红/青、南北向坡偏绿/紫；「点云着色 → 恢复真实颜色」可还原。")
+            .Rows(PcRow.Radios("show", "显示方式", shows, shows[0]))
+            .Rows(PcRow.Num("count", "短线上限", "10000", "根", "网格均匀抽样的根数上限（「短线预览」档用）", null, 110, 80),
+                  PcRow.Num("len", "短线长度", "0", "m", "0 = 自动（平均点距 × 2）", null, 110, 80));
+        var v = await form.AskAsync(this);
+        if (v == null) return;   // 取消 = 不显示(原版行为)
+        string show = v.S("show");
+        if (show == shows[0]) return;
+
+        BeginChange();
+        if (show == shows[1])
+        {
+            int cap = Math.Clamp((int)v.D("count", 10000), 1, 200_000);
+            double len = v.D("len", 0);
+            var segs = PointNormals.SampleNormalSegments(pc.Pts, pc.Normals!, cap, len);
+            int removed = 0;
+            foreach (var old in _scene.Entities.Where(e => e.LayerName == layer).ToList()) { _scene.Remove(old); _selected.Remove(old); removed++; }
+            const float cr = 0.3f, cg = 0.9f, cb = 0.6f;
+            _layers.EnsureImported(layer, cr, cg, cb);
+            foreach (var (a, b) in segs)
+            {
+                var pl = new PolylineEntity { Cr = cr, Cg = cg, Cb = cb, LayerName = layer };
+                pl.Points.Add((a.x, a.y)); pl.Points.Add((b.x, b.y));
+                pl.Zs = new List<double> { a.z, b.z };   // 三维短线：起点在点上, 终点沿法向抬起
+                _scene.Add(pl);
+            }
+            RefreshScene();
+            double usedLen = segs.Count > 0
+                ? Math.Sqrt(Math.Pow(segs[0].b.x - segs[0].a.x, 2) + Math.Pow(segs[0].b.y - segs[0].a.y, 2) + Math.Pow(segs[0].b.z - segs[0].a.z, 2))
+                : len;
+            EditEcho($"法向预览「{pc.Name}」：已画 {segs.Count:N0} 根法向短线（长 {usedLen.ToString("0.##", Inv)} m，图层 {layer}）"
+                           + (removed > 0 ? $" · 已清掉旧预览 {removed:N0} 根" : "") + " · 转到三维视角看更直观；删图层即清", EchoLevel.Success);
+        }
+        else
+        {
+            var cols = new List<(float, float, float)>(pc.PointCount);
+            foreach (var m in pc.Normals!) cols.Add(((float)((m.x + 1) * 0.5), (float)((m.y + 1) * 0.5), (float)((m.z + 1) * 0.5)));
+            pc.Colors = cols; pc.Invalidate(); RefreshScene();
+            EditEcho($"法向着色「{pc.Name}」：显示色已改为法向映射 (n+1)/2 · 「点云着色 → 恢复真实颜色」可还原"
+                           + (pc.HasRgb ? "" : "（该点云无真实色，可改用单色/高程色带）"), EchoLevel.Success);
+        }
     }
 
     /// <summary>

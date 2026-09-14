@@ -224,6 +224,42 @@ public class DxfImportTests
         Assert.Contains(r.Entities, e => e is ArcEntity);
     }
 
+    // 三维多段线(道路中线/断面线)要逐点保 Z: 只留一个平均标高的话, 转到三维就是压平的一条线。
+    [Fact]
+    public void MapDocument_保住三维多段线的逐点高程()
+    {
+        var doc = new CadDocument();
+        var p3 = new Polyline3D();
+        p3.Vertices.Add(new Vertex3D { Location = new XYZ(0, 0, 100) });
+        p3.Vertices.Add(new Vertex3D { Location = new XYZ(10, 0, 130) });
+        p3.Vertices.Add(new Vertex3D { Location = new XYZ(20, 0, 70) });
+        doc.Entities.Add(p3);
+
+        var r = DxfImportService.MapDocument(doc);
+        var pl = Assert.IsType<PolylineEntity>(Assert.Single(r.Entities));
+        Assert.True(pl.Has3D, "逐点变高的三维多段线应保住 Zs");
+        Assert.Equal(100, pl.ZAt(0), 4);
+        Assert.Equal(130, pl.ZAt(1), 4);
+        Assert.Equal(70, pl.ZAt(2), 4);
+    }
+
+    // 等高的三维多段线不必占一份 Zs, 一个标高就够(等高线的常态)。
+    [Fact]
+    public void MapDocument_等高的三维多段线只留标高()
+    {
+        var doc = new CadDocument();
+        var p3 = new Polyline3D();
+        p3.Vertices.Add(new Vertex3D { Location = new XYZ(0, 0, 1330) });
+        p3.Vertices.Add(new Vertex3D { Location = new XYZ(10, 0, 1330) });
+        doc.Entities.Add(p3);
+
+        var r = DxfImportService.MapDocument(doc);
+        var pl = Assert.IsType<PolylineEntity>(Assert.Single(r.Entities));
+        Assert.False(pl.Has3D);
+        Assert.Equal(1330, pl.Elevation, 4);
+        Assert.Equal(1330, pl.ZAt(0), 4);
+    }
+
     [Fact]
     public void MapDocument_expands_insert_to_world_position()
     {
@@ -528,7 +564,7 @@ public class DxfImportTests
     }
 
     [Fact]
-    public void Loads_polyface_mesh_faces_as_wireframe_polylines()
+    public void Loads_polyface_mesh_as_merged_triangle_mesh()
     {
         string path = Path.Combine(Path.GetTempPath(), "pm_dxf_pfm_test.dxf");
         var doc = new CadDocument();
@@ -543,15 +579,16 @@ public class DxfImportTests
 
         var er = DxfImportService.LoadEntities(path);
         Assert.True(er.Success, er.Error);
-        var pl = Assert.IsType<PolylineEntity>(Assert.Single(er.Entities));
-        Assert.True(pl.Closed);
-        Assert.Equal(4, pl.Points.Count);                                   // 四边形面 → 4 点闭合折线
-        Assert.Contains(pl.Points, p => System.Math.Abs(p.x - 10) < 1e-6 && System.Math.Abs(p.y - 10) < 1e-6);
+        var me = Assert.IsType<MeshEntity>(Assert.Single(er.Entities));   // 多面网格 → 一张三角网(不再是散碎的平面轮廓)
+        Assert.Equal(4, me.Verts.Count);
+        Assert.Equal(2, me.Tris.Count);                                     // 四边形面扇形剖分成 2 三角
+        Assert.Contains(me.Verts, v => System.Math.Abs(v.x - 10) < 1e-6 && System.Math.Abs(v.y - 10) < 1e-6);
+        Assert.Equal(1, er.TypeCounts["三角网"]);
         try { File.Delete(path); } catch { /* 清理失败无碍 */ }
     }
 
     [Fact]
-    public void Loads_mesh_faces_as_wireframe_polylines()
+    public void Loads_mesh_as_merged_triangle_mesh()
     {
         string path = Path.Combine(Path.GetTempPath(), "pm_dxf_mesh_test.dxf");
         var doc = new CadDocument();
@@ -566,11 +603,194 @@ public class DxfImportTests
 
         var er = DxfImportService.LoadEntities(path);
         Assert.True(er.Success, er.Error);
-        var pl = Assert.IsType<PolylineEntity>(Assert.Single(er.Entities));
-        Assert.True(pl.Closed);
-        Assert.Equal(4, pl.Points.Count);
-        Assert.Contains(pl.Points, p => System.Math.Abs(p.x - 10) < 1e-6 && System.Math.Abs(p.y - 10) < 1e-6);
+        var me = Assert.IsType<MeshEntity>(Assert.Single(er.Entities));
+        Assert.Equal(4, me.Verts.Count);
+        Assert.Equal(2, me.Tris.Count);
+        Assert.Contains(me.Verts, v => System.Math.Abs(v.x - 10) < 1e-6 && System.Math.Abs(v.y - 10) < 1e-6);
         try { File.Delete(path); } catch { /* 清理失败无碍 */ }
+    }
+
+    // ── 三维面(3DFACE)按图层合网 —— 12煤.dxf 这类煤层底板面 1.5 万个 3DFACE 须合成一张可建模的三角网 ──
+
+    private static Face3D Tri(double x0, double y0, double z0, double x1, double y1, double z1, double x2, double y2, double z2, string layer, CadDocument doc)
+    {
+        if (!doc.Layers.Contains(layer)) doc.Layers.Add(new ACadSharp.Tables.Layer(layer));
+        var p2 = new XYZ(x2, y2, z2);
+        return new Face3D { FirstCorner = new XYZ(x0, y0, z0), SecondCorner = new XYZ(x1, y1, z1), ThirdCorner = p2, FourthCorner = p2, Layer = doc.Layers[layer] };
+    }
+
+    [Fact]
+    public void Face3D_merges_per_layer_into_one_welded_mesh()
+    {
+        var doc = new CadDocument();
+        // 煤层 A: 两个共边三角形(共享 (10,0,5)-(0,10,6) 边); 煤层 B: 一个独立三角形
+        doc.Entities.Add(Tri(0, 0, 5, 10, 0, 5, 0, 10, 6, "12煤", doc));
+        doc.Entities.Add(Tri(10, 0, 5, 10, 10, 7, 0, 10, 6, "12煤", doc));
+        doc.Entities.Add(Tri(100, 100, 1, 110, 100, 1, 100, 110, 1, "22煤", doc));
+
+        var er = DxfImportService.MapDocument(doc);
+        Assert.True(er.Success, er.Error);
+        var meshes = System.Linq.Enumerable.ToList(System.Linq.Enumerable.OfType<MeshEntity>(er.Entities));
+        Assert.Equal(2, meshes.Count);                                       // 每图层一张网, 不是每面一个实体
+        Assert.Equal(2, er.Entities.Count);
+        var a = meshes.Find(m => m.LayerName == "12煤")!;
+        Assert.NotNull(a);
+        Assert.Equal(4, a.Verts.Count);                                       // 共享顶点焊接: 6 角点 → 4 顶点
+        Assert.Equal(2, a.Tris.Count);
+        Assert.Equal("12煤", a.Name);                                         // 网名 = 图层名(对象树按名找网)
+        Assert.Contains(a.Verts, v => System.Math.Abs(v.z - 7) < 1e-9);       // 三维面的 Z 逐点保住(不再压平成一个平均标高)
+        Assert.Equal(0, a.Elevation, 9);                                      // 顶点已是绝对坐标, 标高不再叠加
+        Assert.Equal(2, er.TypeCounts["三角网"]);                             // 对象树按产出类型计数
+        Assert.True(er.Bounds[2] >= 110 - 1e-9 && er.Bounds[0] <= 1e-9, $"bounds={string.Join(",", er.Bounds)}");   // 包围盒含两张网
+    }
+
+    [Fact]
+    public void Face3D_quad_fans_into_two_triangles()
+    {
+        var doc = new CadDocument();
+        doc.Entities.Add(new Face3D { FirstCorner = new XYZ(0, 0, 0), SecondCorner = new XYZ(10, 0, 0), ThirdCorner = new XYZ(10, 10, 0), FourthCorner = new XYZ(0, 10, 0) });
+        var er = DxfImportService.MapDocument(doc);
+        var me = Assert.IsType<MeshEntity>(Assert.Single(er.Entities));
+        Assert.Equal(4, me.Verts.Count);
+        Assert.Equal(2, me.Tris.Count);
+    }
+
+    [Fact]
+    public void Face3D_inside_block_is_placed_by_insert_transform()
+    {
+        var doc = new CadDocument();
+        var blk = new ACadSharp.Tables.BlockRecord("TIN");
+        blk.Entities.Add(new Face3D { FirstCorner = new XYZ(0, 0, 3), SecondCorner = new XYZ(1, 0, 3), ThirdCorner = new XYZ(0, 1, 3), FourthCorner = new XYZ(0, 1, 3) });
+        doc.BlockRecords.Add(blk);
+        doc.Entities.Add(new Insert(blk) { InsertPoint = new XYZ(100, 200, 0) });
+        var er = DxfImportService.MapDocument(doc);
+        var me = Assert.IsType<MeshEntity>(Assert.Single(er.Entities));
+        Assert.Contains(me.Verts, v => System.Math.Abs(v.x - 101) < 1e-9 && System.Math.Abs(v.y - 200) < 1e-9 && System.Math.Abs(v.z - 3) < 1e-9);
+    }
+
+    [Fact]
+    public void Mesh_exports_as_3dface_and_reimports_as_mesh()
+    {
+        var scene = new Scene();
+        var me = new MeshEntity("底板", new[] { (0.0, 0.0, 5.0), (10.0, 0.0, 5.0), (0.0, 10.0, 6.0), (10.0, 10.0, 7.0) }, new[] { (0, 1, 2), (1, 3, 2) }) { LayerName = "12煤" };
+        scene.Add(me);
+        var doc = SceneExportService.BuildDocument(scene);
+        Assert.Equal(2, System.Linq.Enumerable.Count(System.Linq.Enumerable.OfType<Face3D>(doc.Entities)));   // 逐三角 3DFACE
+        var back = Assert.IsType<MeshEntity>(Assert.Single(DxfImportService.MapDocument(doc).Entities));
+        Assert.Equal(4, back.Verts.Count);
+        Assert.Equal(2, back.Tris.Count);
+        Assert.Equal("12煤", back.LayerName);
+        Assert.Contains(back.Verts, v => System.Math.Abs(v.z - 7) < 1e-9);
+    }
+
+    // ── 文字高度归一化接入导入(原版在导入里自动做; 类本身的单测见 TextHeightNormalizerTests): kdf_export_v2.dxf 里 9139m 高的 MText 盖住半张图 ──
+
+    [Fact]
+    public void Import_normalizes_abnormally_tall_text_against_geometry_extent()
+    {
+        var doc = new CadDocument();
+        var lp = new LwPolyline();                                 // 图幅 1000×1000
+        lp.Vertices.Add(new LwPolyline.Vertex(new XY(0, 0)));
+        lp.Vertices.Add(new LwPolyline.Vertex(new XY(1000, 1000)));
+        doc.Entities.Add(lp);
+        doc.Entities.Add(new ACadSharp.Entities.TextEntity { InsertPoint = new XYZ(1, 1, 0), Height = 5, Value = "正常" });
+        doc.Entities.Add(new ACadSharp.Entities.TextEntity { InsertPoint = new XYZ(2, 2, 0), Height = 5, Value = "正常2" });
+        doc.Entities.Add(new MText { InsertPoint = new XYZ(3, 3, 0), Height = 9139.2, Value = "巨型" });
+
+        var er = DxfImportService.MapDocument(doc);
+        Assert.True(er.Success, er.Error);
+        var texts = System.Linq.Enumerable.ToList(System.Linq.Enumerable.OfType<PitMine3D.Kylin.Cad.Draw.TextEntity>(er.Entities));
+        Assert.Equal(3, texts.Count);
+        Assert.All(texts, t => Assert.Equal(5.0, t.Height, 6));    // 巨型文字被拉回典型高度, 正常文字不动
+        Assert.Contains(er.Warnings, w => w.StartsWith("文字高度归一化:1 条"));
+        Assert.Equal(3, er.TypeCounts["文字"]);                    // 文字也计入对象树(以前只数源类型, 漏掉 TEXT/MTEXT)
+    }
+
+    [Fact]
+    public void MText_attachment_point_maps_to_anchor_alignment()
+    {
+        Assert.Equal((0, 2), DxfImportService.MTextAlign("TopLeft"));
+        Assert.Equal((1, 1), DxfImportService.MTextAlign("MiddleCenter"));
+        Assert.Equal((2, 0), DxfImportService.MTextAlign("BottomRight"));
+        var doc = new CadDocument();
+        doc.Entities.Add(new MText { InsertPoint = new XYZ(0, 0, 0), Height = 2, Value = "A", AttachmentPoint = AttachmentPointType.MiddleCenter });
+        doc.Entities.Add(new MText { InsertPoint = new XYZ(0, 0, 0), Height = 2, Value = "B" });   // 默认左上
+        var er = DxfImportService.MapDocument(doc);
+        var texts = System.Linq.Enumerable.ToList(System.Linq.Enumerable.OfType<PitMine3D.Kylin.Cad.Draw.TextEntity>(er.Entities));
+        var a = texts.Find(t => t.Text == "A")!; var b = texts.Find(t => t.Text == "B")!;
+        Assert.Equal((1, 1), (a.HAlign, a.VAlign));
+        Assert.Equal((0, 2), (b.HAlign, b.VAlign));                 // 插入点是文字框左上角 → 顶对齐, 不再整块上浮一行
+    }
+
+    [Fact]
+    public void MText_alignment_and_rotation_survive_export_import_roundtrip()
+    {
+        var scene = new Scene();
+        scene.Add(new PitMine3D.Kylin.Cad.Draw.TextEntity { X = 1, Y = 2, Height = 2, Rotation = 0.5, HAlign = 1, VAlign = 1, Text = "第一行" + "\n" + "第二行" });
+        var back = Assert.IsType<PitMine3D.Kylin.Cad.Draw.TextEntity>(Assert.Single(DxfImportService.MapDocument(SceneExportService.BuildDocument(scene)).Entities));
+        Assert.Equal((1, 1), (back.HAlign, back.VAlign));
+        Assert.Equal(0.5, back.Rotation, 6);
+        Assert.Equal(1.0, back.X, 9); Assert.Equal(2.0, back.Y, 9);
+    }
+
+    // ── 高程往返: 导入的等高线/三维线存回 DXF 再打开不能变成一张平图 ──
+
+    [Fact]
+    public void Elevation_and_per_vertex_z_survive_export_import_roundtrip()
+    {
+        var scene = new Scene();
+        scene.Add(new LineEntity { X0 = 0, Y0 = 0, X1 = 5, Y1 = 5, Elevation = 30 });
+        scene.Add(new CircleEntity { Cx = 2, Cy = 2, Radius = 3, Elevation = 20 });
+        scene.Add(new PolylineEntity { Points = { (0, 0), (10, 0), (10, 10) }, Elevation = 50 });                       // 等高线
+        scene.Add(new PolylineEntity { Points = { (0, 0), (10, 0), (10, 10) }, Elevation = 100, Zs = new System.Collections.Generic.List<double> { -1, 0, 1 } });   // 三维线 99/100/101
+        var doc = SceneExportService.BuildDocument(scene);
+        Assert.Single(System.Linq.Enumerable.OfType<Polyline3D>(doc.Entities));                                       // 逐点 Z → POLYLINE(3D)
+        var back = DxfImportService.MapDocument(doc);
+        Assert.True(back.Success, back.Error);
+        Assert.Contains(back.Entities, e => e is LineEntity && System.Math.Abs(e.Elevation - 30) < 1e-6);
+        Assert.Contains(back.Entities, e => e is CircleEntity && System.Math.Abs(e.Elevation - 20) < 1e-6);
+        Assert.Contains(back.Entities, e => e is PolylineEntity p && !p.Has3D && System.Math.Abs(p.Elevation - 50) < 1e-6);
+        var p3 = System.Linq.Enumerable.Single(System.Linq.Enumerable.OfType<PolylineEntity>(back.Entities), p => p.Has3D);
+        Assert.Equal(99.0, p3.ZAt(0), 6); Assert.Equal(100.0, p3.ZAt(1), 6); Assert.Equal(101.0, p3.ZAt(2), 6);
+    }
+
+    [Fact]
+    public void SummarizeWarnings_groups_skipped_types_and_keeps_others()
+    {
+        var w = new[] { "跳过未支持实体：Ole2Frame", "跳过未支持实体：Ole2Frame", "跳过未支持实体：Wipeout", "文字高度归一化:2 条异常高度已拉回 ~5.0m(图幅对角 1414m)", "文字高度归一化:2 条异常高度已拉回 ~5.0m(图幅对角 1414m)" };
+        Assert.Equal("跳过 3 个未支持实体(Ole2Frame×2/Wipeout×1)；文字高度归一化:2 条异常高度已拉回 ~5.0m(图幅对角 1414m)", DxfImportService.SummarizeWarnings(w));
+        Assert.Equal("", DxfImportService.SummarizeWarnings(new string[0]));
+    }
+
+    [Fact]
+    public void ImportCache_roundtrips_mesh_entities()
+    {
+        string src = Path.Combine(Path.GetTempPath(), "pm_cache_mesh_src.dxf");
+        File.WriteAllText(src, "stub");                            // 缓存只看源文件大小/修改时间, 内容无所谓
+        var res = new DxfImportService.EntityImportResult();
+        res.LayerOrder.Add("12煤"); res.LayerColors["12煤"] = (0.1f, 0.2f, 0.3f);
+        var me = new MeshEntity("12煤", new[] { (0.0, 0.0, 5.0), (10.0, 0.0, 5.0), (0.0, 10.0, 6.0) }, new[] { (0, 1, 2) }) { LayerName = "12煤", Cr = 0.1f, Cg = 0.2f, Cb = 0.3f };
+        res.Entities.Add(me);
+        res.Entities.Add(new LineEntity { X0 = 0, Y0 = 0, X1 = 1, Y1 = 1, LayerName = "12煤" });
+        res.TypeCounts["三角网"] = 1; res.TypeCounts["直线"] = 1;
+        res.Bounds = new[] { 0.0, 0.0, 10.0, 10.0 };
+        try
+        {
+            ImportCache.Save(src, res);
+            Assert.True(File.Exists(ImportCache.PathFor(src)), "缓存文件应写出(三角网现已是可缓存类型)");
+            Assert.True(ImportCache.TryLoad(src, out var back));
+            Assert.Equal(2, back.Entities.Count);
+            var bm = Assert.IsType<MeshEntity>(back.Entities[0]);
+            Assert.Equal("12煤", bm.Name); Assert.Equal("12煤", bm.LayerName);
+            Assert.Equal(3, bm.Verts.Count); Assert.Single(bm.Tris);
+            Assert.Equal(6.0, bm.Verts[2].z, 9);
+            Assert.Equal(0.2f, bm.Cg, 5);
+            Assert.Equal(1, back.TypeCounts["三角网"]);
+        }
+        finally
+        {
+            try { File.Delete(ImportCache.PathFor(src)); File.Delete(src); } catch { /* 清理失败无碍 */ }
+        }
     }
 
     [Fact]

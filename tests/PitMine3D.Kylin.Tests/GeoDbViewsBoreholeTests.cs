@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using PitMine3D.Kylin.Cad;
@@ -117,6 +117,32 @@ public class GeoDbViewsBoreholeTests
         var (none, m2) = GeoDbViews.BoreholePreviewImport(db.Connection, GeoDbViews.BoreholeReadCsvRecords("孔号,经距X\nA,1"));
         Assert.Empty(none);
         Assert.StartsWith("缺少必要列", m2);
+    }
+
+    [Fact]
+    public void Sample_csv_in_docs_imports_every_row_as_new()
+    {
+        // docs/samples/钻孔数据导入样表.csv 是交付给用户的导入样表: 16 行全部有效、孔号不与种子库冲突、坐标落在种子孔范围内
+        string? dir = AppContext.BaseDirectory;
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir, "docs", "samples", "钻孔数据导入样表.csv"))) dir = System.IO.Path.GetDirectoryName(dir);
+        if (dir == null) return;   // 环境无 docs 目录: 跳过
+        string text = System.IO.File.ReadAllText(System.IO.Path.Combine(dir, "docs", "samples", "钻孔数据导入样表.csv"));
+
+        using var db = TestDb.Open();
+        var records = GeoDbViews.BoreholeReadCsvRecords(text);
+        Assert.Equal(GeoDbViews.BoreholeImportHeaders, records[0].Select(h => h.Trim('﻿')).ToArray());
+        var (rows, msg) = GeoDbViews.BoreholePreviewImport(db.Connection, records);
+        Assert.Equal(16, rows.Count);
+        Assert.All(rows, r => Assert.Equal("＋ 将新增", r.Status));
+        Assert.Equal("解析 16 行，可导入 16 行；点「导入入库」执行", msg);
+        Assert.All(rows, r => { Assert.InRange(r.X!.Value, 4_369_000, 4_379_000); Assert.InRange(r.Y!.Value, 37_613_000, 37_623_000); });
+        Assert.Equal("孔口有积水,坐标已复测", rows.Single(r => r.HoleId == "ZK2507").Remark);   // 带引号字段
+        Assert.Null(rows.Single(r => r.HoleId == "ZK2512").ZCollar);                              // 仅必填三列
+
+        int before = GeoDbViews.LoadBoreholes(db.Connection).Count;
+        var o = GeoDbViews.BoreholeApplyImport(db.Connection, rows, overwrite: false);
+        Assert.Equal((16, 0, 0, 0), (o.Inserted, o.Updated, o.Skipped, o.Failed));
+        Assert.Equal(before + 16, GeoDbViews.LoadBoreholes(db.Connection).Count);
     }
 
     [Fact]
@@ -244,9 +270,10 @@ public class GeoDbViewsBoreholeTests
         var rock = meshes["钻孔柱-岩层"]; var coal = meshes["钻孔柱-4煤"];
         Assert.Equal(0x3C / 255f, coal.Cr, 3);   // 煤色
         Assert.Equal(0x5F / 255f, rock.Cr, 3);   // 岩色
-        // 28 棱: 每段 56 顶点/56 三角; 岩=2 段 + 底盖 + 顶盖(各 +1 顶点/28 三角), 煤=中间段不封盖
+        // 28 棱: 每段 56 顶点/56 三角; 岩=2 段 + 底盖 + 顶盖(端面各另起一圈 28 + 圆心 1 顶点/28 三角), 煤=中间段不封盖
+        // 端面不与侧面共用顶点 —— 共用的话柱面(径向法线)与端面(轴向法线)只能共一个法线, 转折会被抹圆。
         Assert.Equal(56, coal.VertexCount); Assert.Equal(56, coal.TriangleCount);
-        Assert.Equal(114, rock.VertexCount); Assert.Equal(168, rock.TriangleCount);
+        Assert.Equal(170, rock.VertexCount); Assert.Equal(168, rock.TriangleCount);
         var cb = coal.Bounds; var rb = rock.Bounds;
         Assert.Equal(450, cb.minZ, 6); Assert.Equal(455, cb.maxZ, 6);            // 煤层段落在真实高程
         Assert.Equal(400, rb.minZ, 6); Assert.Equal(500, rb.maxZ, 6);            // 孔底 → 孔口
@@ -256,12 +283,38 @@ public class GeoDbViewsBoreholeTests
         Assert.True(seamTxt.ScreenFacing); Assert.Equal(452.5, seamTxt.Elevation, 6);
         var holeTxt = Assert.Single(r.Entities.OfType<TextEntity>().Where(t => t.Text == "H1"));
         Assert.True(holeTxt.ScreenFacing); Assert.Equal(1, holeTxt.HAlign);
+        Assert.Equal(0, holeTxt.VAlign);   // 底对齐(原版 vAlign=1「底」): 孔号整体在柱顶之上, 不压住柱头
         Assert.Equal(500 + 34 * 0.6, holeTxt.Elevation, 6);
         // 引线: 柱面 → 标注锚点, 三维虚线
         var leader = Assert.Single(r.Entities.OfType<PolylineEntity>().Where(p => p.Dash != null));
         Assert.True(leader.Has3D);
         Assert.Equal(1000 + 7, leader.Points[0].x, 6);
         Assert.Equal(452.5, leader.Zs![0], 6);
+    }
+
+    [Fact]
+    public void Borehole_column_carries_true_surface_normals()
+    {
+        // 柱面按面法线打光, 放大后就是一条条竖直棱条(看着是棱柱不是圆柱)。
+        // 故建网时同步给出曲面真法线: 侧面径向、端面轴向, 且与顶点一一对应。
+        var hole = new GeoDbViews.BoreholeRow { Id = 1, HoleId = "H1", X = 1000, Y = 2000, ZCollar = 500, DepthTotal = 100 };
+        var r = GeoDbViews.BuildBoreholeColumns(new[] { hole }, new Dictionary<long, List<GeoDbViews.BoreholeSeamRow>>());
+        var rock = Assert.Single(r.Entities.OfType<MeshEntity>());
+        Assert.NotNull(rock.VertNormals);
+        Assert.Equal(rock.VertexCount, rock.VertNormals!.Count);
+        Assert.All(rock.VertNormals, n => Assert.Equal(1.0, Math.Sqrt(n.x * n.x + n.y * n.y + n.z * n.z), 6));   // 单位长
+
+        // 无煤孔 = 整柱一段(封底 + 封顶): 前 56 个是侧面(径向, z=0), 之后两圈端面(轴向)
+        for (int i = 0; i < 56; i++)
+        {
+            var n = rock.VertNormals[i];
+            Assert.Equal(0.0, n.z, 9);
+            var v = rock.Verts[i];
+            Assert.Equal((v.x - 1000) / 7.0, n.x, 6);   // 径向: 由轴心指向该顶点
+            Assert.Equal((v.y - 2000) / 7.0, n.y, 6);
+        }
+        Assert.All(rock.VertNormals.Skip(56).Take(29), n => Assert.Equal(-1.0, n.z, 9));   // 底盖朝下
+        Assert.All(rock.VertNormals.Skip(85).Take(29), n => Assert.Equal(1.0, n.z, 9));    // 顶盖朝上
     }
 
     // ─────────────────────────── 原始钻孔柱状图 ───────────────────────────

@@ -6,15 +6,15 @@
 
     <!-- ===== 停靠面板标题栏(ToolChromeControl)：干净浅底 + 深色标题 ===== -->
     <Style Selector="dc|ToolChromeControl">
-        <Setter Property="Background" Value="#E9EEF4" />
+        <Setter Property="Background" Value="{DynamicResource Theme.Dock.Chrome}" />
     </Style>
     <Style Selector="dc|ToolChromeControl /template/ Border#PART_Border">
-        <Setter Property="Background" Value="#E9EEF4" />
-        <Setter Property="BorderBrush" Value="#DCDFE4" />
+        <Setter Property="Background" Value="{DynamicResource Theme.Dock.Chrome}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Theme.Panel.Border}" />
         <Setter Property="BorderThickness" Value="0,0,0,1" />
     </Style>
     <Style Selector="dc|ToolChromeControl /template/ TextBlock#PART_Title">
-        <Setter Property="Foreground" Value="#2A3441" />
+        <Setter Property="Foreground" Value="{DynamicResource Theme.Dock.Title}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="FontSize" Value="12.5" />
     </Style>
@@ -22,12 +22,12 @@
     <!-- ===== 左面板标签：文件管理器 / 图层 ===== -->
     <Style Selector="TabControl.dock-tabs">
         <Setter Property="Padding" Value="0" />
-        <Setter Property="Background" Value="#F7F8FA" />
+        <Setter Property="Background" Value="{DynamicResource Theme.Panel.Background}" />
     </Style>
     <Style Selector="TabControl.dock-tabs > TabItem">
         <Setter Property="FontSize" Value="12.5" />
         <Setter Property="FontWeight" Value="Normal" />
-        <Setter Property="Foreground" Value="#5A6472" />
+        <Setter Property="Foreground" Value="{DynamicResource Theme.Dock.TabText}" />
         <Setter Property="Padding" Value="16,9" />
         <Setter Property="MinHeight" Value="0" />
         <Setter Property="Margin" Value="0" />
@@ -35,16 +35,16 @@
     </Style>
     <!-- 悬停 -->
     <Style Selector="TabControl.dock-tabs > TabItem:pointerover /template/ Border#PART_LayoutRoot">
-        <Setter Property="Background" Value="#E1E7EF" />
+        <Setter Property="Background" Value="{DynamicResource Theme.Dock.TabHover}" />
     </Style>
     <!-- 选中：白底 + 主色文字 + 加粗 + 顶部主色指示条 -->
     <Style Selector="TabControl.dock-tabs > TabItem:selected">
-        <Setter Property="Foreground" Value="#0A5AD4" />
+        <Setter Property="Foreground" Value="{DynamicResource Theme.Accent}" />
         <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
     <Style Selector="TabControl.dock-tabs > TabItem:selected /template/ Border#PART_LayoutRoot">
-        <Setter Property="Background" Value="#F7F8FA" />
-        <Setter Property="BorderBrush" Value="#0A5AD4" />
+        <Setter Property="Background" Value="{DynamicResource Theme.Panel.Background}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Theme.Accent}" />
         <Setter Property="BorderThickness" Value="0,2,0,0" />
     </Style>
     <!-- 隐藏 Fluent 默认的选中下划线(SelectedPipe)，改用上边指示条 -->

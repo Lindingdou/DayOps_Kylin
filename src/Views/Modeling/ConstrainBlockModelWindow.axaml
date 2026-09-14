@@ -68,7 +68,7 @@
             <Grid Margin="0,0,0,8" ColumnDefinitions="80,*,Auto">
               <TextBlock Text="参考 mesh" VerticalAlignment="Center"/>
               <Border Grid.Column="1" Background="White" BorderBrush="#FFCED4DA" BorderThickness="1" Padding="8,4" CornerRadius="2">
-                <TextBlock x:Name="meshInfoLabel" Text="（尚未选择）" Foreground="#FF6B7280" FontSize="11" TextTrimming="CharacterEllipsis"/>
+                <TextBlock x:Name="meshInfoLabel" Text="（尚未选择）" Foreground="{DynamicResource Theme.Text.Muted}" FontSize="11" TextTrimming="CharacterEllipsis"/>
               </Border>
               <Button Grid.Column="2" Content="拾取选中 mesh" Margin="6,0,0,0" Click="OnPickMesh" Padding="10,3"/>
             </Grid>

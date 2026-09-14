@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -34,51 +34,15 @@ public partial class MainWindow
             foreach (short lw in LineWeightUtil.Choices)
                 LineWeightBox.Items.Add(new ComboBoxItem { Content = LineWeightUtil.Display(lw), Tag = lw });
             LineWeightBox.SelectedIndex = 0;                 // 随层
+            if (EntityColorPick != null) EntityColorPick.ColorCommitted += (_, rgb) => ApplyEntityColor(rgb);
             ShowRibbonColor(null);
         }
         finally { _suppressPropRibbon = false; }
     }
 
     // ── 颜色 ────────────────────────────────────────────────────────────────
-    // 原版是 EntityColorPicker（ByLayer/ByBlock + ACI 索引色板 + 自定义 RGB）。
-    // Kylin 实体只存 RGB 浮点、无「随块」概念，故给 随层 + ACI 标准色板 + 自定义。
-
-    private void OnEntityColorFlyoutOpening(object? sender, EventArgs e)
-    {
-        if (sender is not MenuFlyout fl) return;
-        var items = new List<MenuItem>
-        {
-            NewColorItem("随层", null, null),
-        };
-        foreach (var (aci, name, r, g, b) in AciPalette.Entries)
-            items.Add(NewColorItem($"{name}（{aci}）", (r / 255f, g / 255f, b / 255f), Color.FromRgb(r, g, b)));
-        var custom = new MenuItem { Header = "自定义…" };
-        custom.Click += (_, _) =>
-        {
-            CommandInput.Text = "颜色 ";
-            CommandInput.CaretIndex = CommandInput.Text.Length;
-            CommandInput.Focus();
-            StatusMsg.Text = "自定义颜色：在命令行输入「颜色 #RRGGBB」或「颜色 R,G,B」（有选中即写入选中实体）";
-        };
-        items.Add(custom);
-        fl.ItemsSource = items;
-    }
-
-    private MenuItem NewColorItem(string header, (float r, float g, float b)? rgb, Color? swatch)
-    {
-        var mi = new MenuItem { Header = header };
-        if (swatch is { } c)
-            mi.Icon = new Border
-            {
-                Width = 13,
-                Height = 13,
-                Background = new SolidColorBrush(c),
-                BorderThickness = new Avalonia.Thickness(1),
-                BorderBrush = Brush.Parse("#8A8F97"),
-            };
-        mi.Click += (_, _) => ApplyEntityColor(rgb);
-        return mi;
-    }
+    // 取色器本体见 Views/Controls/EntityColorPicker.cs（照原版 EntityColorPicker：
+    // 随层 + ACI 索引色板 + 更多颜色…）。这里只管"选了色之后写到哪儿"。
 
     /// <summary>把颜色写入选中实体；无选中则记为新建默认色。rgb=null 表示「随层」。</summary>
     private void ApplyEntityColor((float r, float g, float b)? rgb)
@@ -169,27 +133,14 @@ public partial class MainWindow
             }
         }
         finally { _suppressPropRibbon = false; }
+        SyncHatchRibbonFromSelection();   // 选中填充时, 注释组的 图案/比例/角度/颜色 回填成它的参数
     }
 
-    /// <summary>颜色按钮的色块与文字；null = 随层。</summary>
+    /// <summary>回填取色器的显示（色块 + 文字）；null = 随层。不触发写入。</summary>
     private void ShowRibbonColor((float r, float g, float b)? rgb)
     {
-        if (EntityColorSwatch == null || EntityColorText == null) return;
-        if (rgb is { } c)
-        {
-            EntityColorSwatch.Background = new SolidColorBrush(Color.FromRgb(
-                (byte)Math.Round(Math.Clamp(c.r, 0, 1) * 255),
-                (byte)Math.Round(Math.Clamp(c.g, 0, 1) * 255),
-                (byte)Math.Round(Math.Clamp(c.b, 0, 1) * 255)));
-            EntityColorText.Text = AciPalette.DisplayName(c.r, c.g, c.b);
-        }
-        else
-        {
-            var l = _layers.Current;
-            EntityColorSwatch.Background = new SolidColorBrush(Color.FromRgb(
-                (byte)Math.Round(l.Cr * 255), (byte)Math.Round(l.Cg * 255), (byte)Math.Round(l.Cb * 255)));
-            EntityColorText.Text = "随层";
-        }
+        var l = _layers.Current;
+        EntityColorPick?.SetValue(rgb, (l.Cr, l.Cg, l.Cb));
     }
 
     private void SelectLineWeight(short lw)

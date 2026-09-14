@@ -17,13 +17,13 @@
                 <Button Content="− 删除" Click="OnDeleteClick" Padding="12,4"/>
                 <Button Content="💾 保存" Click="OnSaveClick" Classes="warn" Padding="12,4"/>
                 <Button Content="🔄 重新加载" Click="OnReloadClick" Padding="12,4"/>
-                <Border Width="1" Background="#FFDCDFE4" Margin="8,0"/>
+                <Border Width="1" Background="{DynamicResource Theme.Panel.Border}" Margin="8,0"/>
                 <TextBlock Text="📦 批量导入/导出请用「设备管理 → 数据导入导出」" VerticalAlignment="Center" Classes="muted" FontSize="11.5"/>
             </StackPanel>
         </Border>
 
         <!-- 筛选条 -->
-        <Border Grid.Row="2" Background="#FFF7F8FA" Padding="12,6">
+        <Border Grid.Row="2" Background="{DynamicResource Theme.Panel.Background}" Padding="12,6">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="筛选:" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,8,0"/>
                 <TextBlock Text="设备:" VerticalAlignment="Center" Margin="0,0,4,0"/>

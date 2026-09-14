@@ -61,7 +61,7 @@
                         <TextBlock x:Name="kpiFaultCount" Text="0 次" FontSize="10" Classes="muted"/>
                     </StackPanel>
                 </Border>
-                <Border Grid.Column="5" Background="#FFF3F4F6" CornerRadius="4" Padding="12,10">
+                <Border Grid.Column="5" Background="{DynamicResource Theme.Window.Background}" CornerRadius="4" Padding="12,10">
                     <StackPanel>
                         <TextBlock Text="MTBF" FontSize="11" Classes="muted"/>
                         <TextBlock x:Name="kpiMtbf" Text="—" FontSize="24" FontWeight="Bold" Classes="muted"/>
@@ -74,7 +74,7 @@
         <!-- ═══ 班次效率时间轴 ═══ -->
         <Border Grid.Row="3" Classes="panel" Margin="8,8,8,0" Height="300">
             <Grid ColumnDefinitions="120,*">
-                <Border Grid.Column="0" Background="#FFF7F8FA" BorderBrush="#FFDCDFE4" BorderThickness="0,0,1,0" Padding="8,12">
+                <Border Grid.Column="0" Background="{DynamicResource Theme.Panel.Background}" BorderBrush="{DynamicResource Theme.Panel.Border}" BorderThickness="0,0,1,0" Padding="8,12">
                     <StackPanel HorizontalAlignment="Center">
                         <TextBlock x:Name="shiftDeviceIcon" Text="⛏" FontSize="36" HorizontalAlignment="Center" Foreground="#FFF57C00"/>
                         <TextBlock x:Name="shiftDeviceLabel" Text="—" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center" Margin="0,4,0,0"/>
@@ -86,7 +86,7 @@
                     </StackPanel>
                 </Border>
                 <Grid Grid.Column="1" RowDefinitions="Auto,*,40,22,Auto">
-                    <Border Grid.Row="0" Background="#FFF7F8FA" Padding="8,6" BorderBrush="#FFDCDFE4" BorderThickness="0,0,0,1">
+                    <Border Grid.Row="0" Background="{DynamicResource Theme.Panel.Background}" Padding="8,6" BorderBrush="{DynamicResource Theme.Panel.Border}" BorderThickness="0,0,0,1">
                         <UniformGrid Rows="1" Columns="6">
                             <StackPanel Margin="6,0">
                                 <TextBlock Text="车数" FontSize="10" Classes="muted"/>

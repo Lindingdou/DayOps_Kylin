@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
@@ -33,6 +33,12 @@ public partial class BoreholeImportWindow : Window
     {
         var path = await _ctx.OpenFileAsync("选择钻孔数据文件", new[] { "*.csv" });
         if (path == null) return;
+        LoadFile(path);
+    }
+
+    /// <summary>读一份 CSV 进预览表(选文件与自检 @钻孔导入 共用这一条路)。</summary>
+    public void LoadFile(string path)
+    {
         try { LoadRecords(File.ReadAllText(path)); }
         catch (Exception ex) { statusText.Text = $"解析失败：{ex.Message}"; }
     }

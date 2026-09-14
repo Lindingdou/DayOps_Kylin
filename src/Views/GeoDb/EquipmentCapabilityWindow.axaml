@@ -120,7 +120,7 @@
                             <Border Grid.Column="0" Classes="panel">
                                 <DockPanel>
                                     <TextBlock DockPanel.Dock="Top" Text="📊 同类各型号 · 台年产能（谁更能干）" FontWeight="Bold" FontSize="12" Margin="10,8,10,2"/>
-                                    <Border DockPanel.Dock="Bottom" Background="#FFF7F8FA" Padding="10,6" Margin="6,0,6,6" CornerRadius="4">
+                                    <Border DockPanel.Dock="Bottom" Background="{DynamicResource Theme.Panel.Background}" Padding="10,6" Margin="6,0,6,6" CornerRadius="4">
                                         <TextBlock x:Name="peerRankCaption" Text="选择设备后,对比同类各型号的台年产能(绿色=本机型号)。" FontSize="12" TextWrapping="Wrap"/>
                                     </Border>
                                     <ch:ChartView x:Name="boxplotChart" Margin="6" Legend="Top" YTitle="台年产能 (万 m³)" YMin="0"/>
@@ -129,7 +129,7 @@
                             <Border Grid.Column="2" Classes="panel">
                                 <DockPanel>
                                     <TextBlock DockPanel.Dock="Top" Text="📈 同类各型号 · 可用率（谁更可靠）" FontWeight="Bold" FontSize="12" Margin="10,8,10,2"/>
-                                    <Border DockPanel.Dock="Bottom" Background="#FFF7F8FA" Padding="10,6" Margin="6,0,6,6" CornerRadius="4">
+                                    <Border DockPanel.Dock="Bottom" Background="{DynamicResource Theme.Panel.Background}" Padding="10,6" Margin="6,0,6,6" CornerRadius="4">
                                         <TextBlock x:Name="peerAgingCaption" Text="与左图同序:对比同类各型号的可用率(绿色=本机型号)。" FontSize="12" TextWrapping="Wrap"/>
                                     </Border>
                                     <ch:ChartView x:Name="bubbleChart" Margin="6" Legend="Top" YTitle="可用率 (%)" YMin="0" YMax="100"/>

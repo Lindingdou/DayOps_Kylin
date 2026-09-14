@@ -137,9 +137,15 @@ public static class TaskRescheduler
         foreach (var sh in cfg.Shifts)
         {
             double ws = Math.Max(sh.Start, cfg.FromHour), we = sh.End;
-            if (cfg.BlastStart < sh.End && cfg.BlastEnd > sh.Start) we = Math.Min(we, cfg.BlastStart);
             if (sh.Start > 0) ws += cfg.HandoverRampH;
-            total += Math.Max(0, we - ws) * cap;
+            // 与装箱同一口径：爆破切段后只算最长的那一段（原式 we = min(we, BlastStart) 只认最早一炮）
+            if (we > ws)
+            {
+                var segs = PitMine3D.Kylin.Data.BlastWindow.Subtract(ws, we, cfg.BlastWindows());
+                double longest = 0;
+                foreach (var sg in segs) longest = Math.Max(longest, sg.End - sg.Start);
+                total += (segs.Count == 0 ? 0 : longest) * cap;
+            }
         }
         return total;
     }
@@ -148,20 +154,35 @@ public static class TaskRescheduler
     {
         DateLabel = s.DateLabel, IdPrefix = s.IdPrefix, NowHour = s.NowHour, FromHour = s.FromHour,
         BlastStart = s.BlastStart, BlastEnd = s.BlastEnd, HandoverRampH = s.HandoverRampH,
+        // 降效/备采下限/有效工时是人工锚点：不克隆的话重排出来的盘子会**悄悄回到缺省**，
+        // 而它算得出来、也不报错 —— 只是和原始计划不是一套口径
+        WeatherDeratePct = s.WeatherDeratePct, LoadDeratePct = s.LoadDeratePct,
+        HaulDeratePct = s.HaulDeratePct, DumpDeratePct = s.DumpDeratePct,
+        MinPreparedDays = s.MinPreparedDays, EffHoursPerDay = s.EffHoursPerDay,
+        // 停产时窗要跟着克隆：只带兼容视图那一对，重排出来的盘子会把第二炮起当作不存在
+        Blasts = s.Blasts.Select(x => new PitMine3D.Kylin.Data.BlastWindow(x.Start, x.End, x.Label)).ToList(),
         Shifts = s.Shifts.Select(x => new ShiftWindow(x.Name, x.Start, x.End)).ToList(),
         // 忠实原 CloneConfig: 不克隆 Blend(重排不再套配煤——配煤已在原始计划中平衡)
         Faces = s.Faces.Select(f => new FaceInput
         {
             Zone = f.Zone, BenchElevationM = f.BenchElevationM, EngineeringPositionId = f.EngineeringPositionId,
             Material = f.Material, DayTargetM3 = f.DayTargetM3, Quality = f.Quality, Process = f.Process,
+            AvailableReserveM3 = f.AvailableReserveM3,
             Group = new EquipmentGroup
             {
                 MainEquipment = f.Group.MainEquipment, Trucks = new List<string>(f.Group.Trucks),
                 Aux = new List<string>(f.Group.Aux), RecommendedTrucks = f.Group.RecommendedTrucks,
                 GroupCapacityM3PerH = f.Group.GroupCapacityM3PerH,
+                // 周期分解不带过来，分环节降效就退回全盘值 —— 重排出来的能力会和原始计划对不上
+                LoadTaktMin = f.Group.LoadTaktMin, CycleTimeMin = f.Group.CycleTimeMin,
+                MatchFactor = f.Group.MatchFactor, TruckPayloadT = f.Group.TruckPayloadT,
             },
         }).ToList(),
-        Drills = s.Drills.Select(x => new DrillInput { EquipId = x.EquipId, Zone = x.Zone, BenchElevationM = x.BenchElevationM, Start = x.Start, End = x.End }).ToList(),
+        Drills = s.Drills.Select(x => new DrillInput
+        {
+            EquipId = x.EquipId, Zone = x.Zone, BenchElevationM = x.BenchElevationM, Start = x.Start, End = x.End,
+            HoleCount = x.HoleCount, HoleLengthM = x.HoleLengthM,
+        }).ToList(),
         Maintenance = s.Maintenance.Select(x => new MaintenanceWindow { EquipId = x.EquipId, Start = x.Start, End = x.End, Label = x.Label }).ToList(),
     };
 }

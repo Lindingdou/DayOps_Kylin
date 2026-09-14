@@ -7,7 +7,7 @@
     <Grid Background="White" RowDefinitions="Auto,Auto,Auto,Auto">
 
       <!-- 统计摘要 -->
-      <Border Grid.Row="0" Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="1" CornerRadius="4" Padding="10" Margin="8">
+      <Border Grid.Row="0" Background="{DynamicResource Theme.Panel.Background}" BorderBrush="{DynamicResource Theme.Panel.Border}" BorderThickness="1" CornerRadius="4" Padding="10" Margin="8">
         <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,*,*">
           <TextBlock x:Name="CountTextBlock" Grid.Row="0" Grid.Column="0" FontSize="12" Margin="0,2"/>
           <TextBlock x:Name="MeanTextBlock" Grid.Row="0" Grid.Column="1" FontSize="12" Margin="0,2"/>
@@ -19,7 +19,7 @@
       </Border>
 
       <!-- 直方图 -->
-      <Border Grid.Row="1" BorderBrush="#DCDFE4" BorderThickness="1" CornerRadius="4" Margin="8,4,8,4" MinHeight="130">
+      <Border Grid.Row="1" BorderBrush="{DynamicResource Theme.Panel.Border}" BorderThickness="1" CornerRadius="4" Margin="8,4,8,4" MinHeight="130">
         <Grid RowDefinitions="Auto,*">
           <TextBlock Grid.Row="0" Text="样品直方图" FontWeight="SemiBold" FontSize="12" Margin="8,4,0,4"/>
           <ch:ChartView x:Name="HistogramChart" Grid.Row="1" MinHeight="100" Height="140" Margin="4,0,4,4" FontSize="10"/>
@@ -27,7 +27,7 @@
       </Border>
 
       <!-- 累积分布 -->
-      <Border Grid.Row="2" BorderBrush="#DCDFE4" BorderThickness="1" CornerRadius="4" Margin="8,4,8,4" MinHeight="130">
+      <Border Grid.Row="2" BorderBrush="{DynamicResource Theme.Panel.Border}" BorderThickness="1" CornerRadius="4" Margin="8,4,8,4" MinHeight="130">
         <Grid RowDefinitions="Auto,*">
           <TextBlock Grid.Row="0" Text="累积频率分布" FontWeight="SemiBold" FontSize="12" Margin="8,4,0,4"/>
           <ch:ChartView x:Name="CdfChart" Grid.Row="1" MinHeight="100" Height="140" Margin="4,0,4,4" FontSize="10"/>
@@ -35,7 +35,7 @@
       </Border>
 
       <!-- 煤层平面等值线预览 -->
-      <Border Grid.Row="3" BorderBrush="#DCDFE4" BorderThickness="1" CornerRadius="4" Margin="8,4,8,8" MinHeight="180">
+      <Border Grid.Row="3" BorderBrush="{DynamicResource Theme.Panel.Border}" BorderThickness="1" CornerRadius="4" Margin="8,4,8,8" MinHeight="180">
         <Grid RowDefinitions="Auto,*">
           <TextBlock Grid.Row="0" Text="煤层平面等值线预览（XY投影）" FontWeight="SemiBold" FontSize="12" Margin="8,4,0,4"/>
           <Canvas x:Name="ContourCanvas" Grid.Row="1" Background="White" MinHeight="150" Height="180" ClipToBounds="True" SizeChanged="OnCanvasSizeChanged"/>

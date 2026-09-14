@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
 using PitMine3D.Kylin.Cad;
 using PitMine3D.Kylin.Cad.Draw;
 
@@ -10,7 +11,7 @@ namespace PitMine3D.Kylin.Views.Modeling;
 /// <summary>
 /// 块体模型会话仓（原 BlockModelService 的托管等价）：多模型列表 + 活动模型 + 全局切面剖切态；
 /// 渲染桥接 = 把可见模型按显示样式配色成 RectEntity 入场景图层「块体模型」，并把活动模型（未删块 + 属性）推给
-/// <see cref="ModelingContext.SetBlocks"/>，使主窗口自身的块体命令（导出 PMB/资源量/切换属性）看到同一份数据。
+/// <see cref="ModelingContext.SetBlockDisplay"/>，使主窗口自身的块体命令（导出 PMB/资源量/切换属性）看到同一份数据。
 /// 主窗口自己导入的块体（BLK/PMB/CSV 命令）由 <see cref="Adopt"/> 收编为一个模型。
 /// </summary>
 public static class BlockModelStore
@@ -69,13 +70,30 @@ public static class BlockModelStore
     /// <summary>加入模型（名字去重校验由调用方做）并设为活动、渲染。返回错误文本或 null。</summary>
     public static string? Create(ModelingContext ctx, BlockModelMeta m)
     {
+        var err = Admit(m);
+        if (err != null) return err;
+        RefreshDisplay(ctx, m, fit: true);
+        return null;
+    }
+
+    /// <summary>同 <see cref="Create"/>，但建网放后台线程（导入几百万块的模型走这条，别冻住窗口）。</summary>
+    public static async Task<string?> CreateAsync(ModelingContext ctx, BlockModelMeta m)
+    {
+        var err = Admit(m);
+        if (err != null) return err;
+        await RefreshDisplayAsync(ctx, m, fit: true);
+        return null;
+    }
+
+    /// <summary>校验 + 入列 + 设为活动（不渲染）。返回错误文本或 null。</summary>
+    private static string? Admit(BlockModelMeta m)
+    {
         var err = m.ValidateBasic();
         if (err != null) return err;
         if (Models.Any(x => string.Equals(x.Name, m.Name, StringComparison.Ordinal))) return $"已存在同名模型: {m.Name}";
         m.IsVisible = true;
         Models.Add(m);
         Active = m;
-        RefreshDisplay(ctx, m, fit: true);
         return null;
     }
 
@@ -127,11 +145,14 @@ public static class BlockModelStore
         return b => nx * b.X + ny * b.Y + nz * b.Z + d <= 0;
     }
 
-    /// <summary>
-    /// 重渲：清图层 → 每个可见模型的可见块（非删除∩筛选∩剖切）配色入场景；活动模型未删块推给主窗口。
-    /// m 为触发变化的模型（可 null）。fit=true 缩放到活动模型范围。
-    /// </summary>
-    public static void RefreshDisplay(ModelingContext ctx, BlockModelMeta? m, bool fit = false)
+    /// <summary>重渲要备的料：建好的块体网 + 活动模型未删块快照 + 缩放范围。纯计算，可在后台线程算。</summary>
+    private sealed record Display(
+        List<SceneEntity> Cells,
+        List<BlockModel.Block>? Blocks,
+        Dictionary<string, double[]>? Attrs,
+        double[]? Bounds);
+
+    private static Display Prepare(bool fit)
     {
         var clip = ClipPredicate();
         var cells = new List<SceneEntity>();
@@ -141,28 +162,33 @@ public static class BlockModelStore
             cells.AddRange(model.BuildCells(clip));
         }
         var act = Active;
-        if (act != null)
-        {
-            var (blocks, attrs) = act.LiveSnapshot();
-            _lastPushed = blocks;
-            ctx.SetBlocks(blocks, attrs.Count > 0 ? attrs : null);
-            ctx.ShowBlocks(Array.Empty<BlockModel.Block>());   // 主窗口默认品位方块让位给本仓的样式化渲染
-        }
-        else
-        {
-            _lastPushed = null;
-            ctx.SetBlocks(null, null);
-        }
-        ctx.RemoveLayerEntities(LayerName);
-        if (cells.Count > 0)
-        {
-            double[]? bounds = null;
-            if (fit && act != null) { var b = act.Bounds; bounds = new[] { b.minX, b.minY, b.maxX, b.maxY }; }
-            ctx.AddEntities(cells, LayerName, bounds);
-        }
-        else ctx.RefreshScene();
+        if (act == null) return new Display(cells, null, null, null);
+        var (blocks, attrs) = act.LiveSnapshot();
+        double[]? bounds = null;
+        if (fit && cells.Count > 0) { var b = act.Bounds; bounds = new[] { b.minX, b.minY, b.maxX, b.maxY }; }
+        return new Display(cells, blocks, attrs.Count > 0 ? attrs : null, bounds);
+    }
+
+    private static void Apply(ModelingContext ctx, Display d)
+    {
+        _lastPushed = d.Blocks;
+        ctx.SetBlockDisplay(d.Blocks, d.Attrs, d.Cells, LayerName, d.Bounds);
         DisplayChanged?.Invoke(null, EventArgs.Empty);
     }
+
+    /// <summary>
+    /// 重渲：清图层 → 每个可见模型的可见块（非删除∩筛选∩剖切）配色入场景；活动模型未删块推给主窗口。
+    /// m 为触发变化的模型（可 null）。fit=true 缩放到活动模型范围。
+    /// </summary>
+    public static void RefreshDisplay(ModelingContext ctx, BlockModelMeta? m, bool fit = false)
+        => Apply(ctx, Prepare(fit));
+
+    /// <summary>
+    /// 同 <see cref="RefreshDisplay"/>，但建网/取快照放后台线程 —— 三百万块的模型建一次网就近一秒，
+    /// 占着 UI 线程窗口便是「(未响应)」。只有真在 UI 线程上调才有意义（await 后回到 UI 线程改场景）。
+    /// </summary>
+    public static async Task RefreshDisplayAsync(ModelingContext ctx, BlockModelMeta? m, bool fit = false)
+        => Apply(ctx, await Task.Run(() => Prepare(fit)));
 
     /// <summary>浏览器/对话框统一的活动模型兜底：无活动取第一个。</summary>
     public static BlockModelMeta? PickDefault() => Active ?? Models.FirstOrDefault();

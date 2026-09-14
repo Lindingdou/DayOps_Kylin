@@ -194,6 +194,7 @@ public class GlyphFontTests : IDisposable
         Assert.Empty(bb[1].Fills);                        // 回退简笔画 → 仍是线
         Assert.NotEmpty(bb[1].Strokes);
     }
+
     /// <summary>
     /// 真字体下字形走面通道、Tessellate 什么都不出 —— 拾取/框选/高亮若仍走 Tessellate 就"文字点不中"。
     /// 现在这三路都走 TessellatePick(轮廓)。方框字形 'A' 在 100.5..104.5 × 200..207 (0.05..0.45 × 0..0.7 × 字高 10)。
@@ -226,6 +227,7 @@ public class GlyphFontTests : IDisposable
         Assert.NotEmpty(bbPick);                             // 公告板文字同样可拾取(按未旋转排版)
         Assert.InRange(bb.DistanceTo(100.5, 203), 0, 1e-6);
     }
+
     /// <summary>
     /// 实心字形内部也算命中(同 AutoCAD 的 TrueType 填充字)：大字放大后笔画比拾取框宽, 只量轮廓会点在字上却选不中。
     /// 方框字形 'A' 在 100.5..104.5 × 200..207：中心 (102.5, 203.5) 离最近边 2, 但落在实心内 → 0。
@@ -247,5 +249,3 @@ public class GlyphFontTests : IDisposable
         Assert.True(((TextEntity)sf.Apply(Affine2.Translate(3, 4))).ScreenFacing);
     }
 }
-
-

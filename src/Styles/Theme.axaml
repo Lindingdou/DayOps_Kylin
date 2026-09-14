@@ -1,0 +1,92 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--
+      界面语义画刷（对应原版 Themes/Theme.Light.xaml / Theme.Dark.xaml 的 Theme.* 键）。
+      各处一律 {DynamicResource Theme.xxx} 引用；「选项 · 显示 · 界面主题」改 Application.RequestedThemeVariant
+      即整体切换（FluentTheme 的标准控件跟着变，这里是我们自己写死过的那部分配色）。
+      深色档照原版 Theme.Dark.xaml 的海军蓝(用户指定"深色用这个蓝")：底色分三级(窗/面板/输入框)拉开层次，强调色提亮一档。
+    -->
+    <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+            <SolidColorBrush x:Key="Theme.Window.Background" Color="#F3F4F6" />
+            <SolidColorBrush x:Key="Theme.Panel.Background" Color="#F7F8FA" />
+            <SolidColorBrush x:Key="Theme.Panel.Background2" Color="#F2F4F7" />
+            <SolidColorBrush x:Key="Theme.Panel.Border" Color="#DCDFE4" />
+            <SolidColorBrush x:Key="Theme.Input.Background" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="Theme.Input.Border" Color="#D3D7DE" />
+            <SolidColorBrush x:Key="Theme.Text.Primary" Color="#1E1F22" />
+            <SolidColorBrush x:Key="Theme.Text.Body" Color="#3A3F46" />
+            <SolidColorBrush x:Key="Theme.Text.Muted" Color="#8A929C" />
+            <SolidColorBrush x:Key="Theme.Accent" Color="#0A5AD4" />
+            <SolidColorBrush x:Key="Theme.Accent.Soft" Color="#E3E7EE" />
+            <SolidColorBrush x:Key="Theme.Hint.Suggest" Color="#8A6D2B" />
+
+            <SolidColorBrush x:Key="Theme.Ribbon.Background" Color="#EEF1F5" />
+            <SolidColorBrush x:Key="Theme.Ribbon.Caption" Color="#8A9099" />
+            <SolidColorBrush x:Key="Theme.Ribbon.Hover" Color="#1A0A5AD4" />
+            <SolidColorBrush x:Key="Theme.Ribbon.Pressed" Color="#330A5AD4" />
+            <SolidColorBrush x:Key="Theme.Toggle.HoverBg" Color="#14000000" />
+            <SolidColorBrush x:Key="Theme.Toggle.HoverBorder" Color="#33000000" />
+            <SolidColorBrush x:Key="Theme.Toggle.CheckedBg" Color="#260A5AD4" />
+            <SolidColorBrush x:Key="Theme.Toggle.CheckedBorder" Color="#990A5AD4" />
+            <SolidColorBrush x:Key="Theme.Toggle.CheckedHoverBg" Color="#3D0A5AD4" />
+            <SolidColorBrush x:Key="Theme.Toggle.CheckedHoverBorder" Color="#CC0A5AD4" />
+            <SolidColorBrush x:Key="Theme.Toggle.PressedBg" Color="#520A5AD4" />
+
+            <SolidColorBrush x:Key="Theme.Dock.Chrome" Color="#E9EEF4" />
+            <SolidColorBrush x:Key="Theme.Dock.Title" Color="#2A3441" />
+            <SolidColorBrush x:Key="Theme.Dock.TabText" Color="#5A6472" />
+            <SolidColorBrush x:Key="Theme.Dock.TabHover" Color="#E1E7EF" />
+
+            <SolidColorBrush x:Key="Theme.Log.Time" Color="#9CA3AF" />
+            <SolidColorBrush x:Key="Theme.Log.Cmd" Color="#2F5FA8" />
+            <SolidColorBrush x:Key="Theme.Log.Prompt" Color="#6B7280" />
+            <SolidColorBrush x:Key="Theme.Log.Success" Color="#1E7A46" />
+            <SolidColorBrush x:Key="Theme.Log.Warn" Color="#9A6510" />
+            <SolidColorBrush x:Key="Theme.Log.Error" Color="#B3261E" />
+            <SolidColorBrush x:Key="Theme.Log.Body" Color="#374151" />
+        </ResourceDictionary>
+
+        <!-- 深色 = 原版 Themes/Theme.Dark.xaml 的海军蓝基调：窗底 #0E1A2C · 表面 #16273E · 边 #2A415C · 输入 #0A1525 ·
+             文字白 / 次要 #AEBED6 / 更淡 #8FA4C0 · 强调色 中煤蓝提亮 #29A3E0 · 次按钮 #1B3458(悬停 #234260) -->
+        <ResourceDictionary x:Key="Dark">
+            <SolidColorBrush x:Key="Theme.Window.Background" Color="#0E1A2C" />
+            <SolidColorBrush x:Key="Theme.Panel.Background" Color="#16273E" />
+            <SolidColorBrush x:Key="Theme.Panel.Background2" Color="#13223A" />
+            <SolidColorBrush x:Key="Theme.Panel.Border" Color="#2A415C" />
+            <SolidColorBrush x:Key="Theme.Input.Background" Color="#0A1525" />
+            <SolidColorBrush x:Key="Theme.Input.Border" Color="#2E4868" />
+            <SolidColorBrush x:Key="Theme.Text.Primary" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="Theme.Text.Body" Color="#E3EAF4" />
+            <SolidColorBrush x:Key="Theme.Text.Muted" Color="#8FA4C0" />
+            <SolidColorBrush x:Key="Theme.Accent" Color="#29A3E0" />
+            <SolidColorBrush x:Key="Theme.Accent.Soft" Color="#1B3458" />
+            <SolidColorBrush x:Key="Theme.Hint.Suggest" Color="#F0A828" />
+
+            <SolidColorBrush x:Key="Theme.Ribbon.Background" Color="#13223A" />
+            <SolidColorBrush x:Key="Theme.Ribbon.Caption" Color="#8FA4C0" />
+            <SolidColorBrush x:Key="Theme.Ribbon.Hover" Color="#3329A3E0" />
+            <SolidColorBrush x:Key="Theme.Ribbon.Pressed" Color="#5529A3E0" />
+            <SolidColorBrush x:Key="Theme.Toggle.HoverBg" Color="#1FFFFFFF" />
+            <SolidColorBrush x:Key="Theme.Toggle.HoverBorder" Color="#40FFFFFF" />
+            <SolidColorBrush x:Key="Theme.Toggle.CheckedBg" Color="#4029A3E0" />
+            <SolidColorBrush x:Key="Theme.Toggle.CheckedBorder" Color="#B329A3E0" />
+            <SolidColorBrush x:Key="Theme.Toggle.CheckedHoverBg" Color="#5929A3E0" />
+            <SolidColorBrush x:Key="Theme.Toggle.CheckedHoverBorder" Color="#E629A3E0" />
+            <SolidColorBrush x:Key="Theme.Toggle.PressedBg" Color="#7329A3E0" />
+
+            <SolidColorBrush x:Key="Theme.Dock.Chrome" Color="#1B3458" />
+            <SolidColorBrush x:Key="Theme.Dock.Title" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="Theme.Dock.TabText" Color="#AEBED6" />
+            <SolidColorBrush x:Key="Theme.Dock.TabHover" Color="#234260" />
+
+            <SolidColorBrush x:Key="Theme.Log.Time" Color="#8FA4C0" />
+            <SolidColorBrush x:Key="Theme.Log.Cmd" Color="#6CC4F5" />
+            <SolidColorBrush x:Key="Theme.Log.Prompt" Color="#AEBED6" />
+            <SolidColorBrush x:Key="Theme.Log.Success" Color="#4CC76A" />
+            <SolidColorBrush x:Key="Theme.Log.Warn" Color="#F0A828" />
+            <SolidColorBrush x:Key="Theme.Log.Error" Color="#FF6B6B" />
+            <SolidColorBrush x:Key="Theme.Log.Body" Color="#FFFFFF" />
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+</ResourceDictionary>

@@ -20,7 +20,7 @@ public static partial class MeshRepair
         IReadOnlyList<(double x, double y, double z)> verts, IReadOnlyList<(int a, int b, int c)> tris)
     {
         int vBefore = verts?.Count ?? 0;
-        int bBefore = MeshDiagnose.Analyze(verts, tris).BoundaryEdges;
+        int bBefore = MeshDiagnose.Analyze(verts, tris, selfIntersect: false).BoundaryEdges;   // 只要开放边数
         if (verts == null || tris == null || verts.Count < 3 || tris.Count < 1)
             return new Result(new List<(double, double, double)>(verts ?? new List<(double, double, double)>()),
                 new List<(int, int, int)>(tris ?? new List<(int, int, int)>()), vBefore, vBefore, 0, bBefore, bBefore);
@@ -35,10 +35,11 @@ public static partial class MeshRepair
         // ② 朝向一致(焊后)
         var oriented = MeshOrient.MakeConsistent(w.Verts, w.Tris);
 
-        // ③ 补边界洞(焊后拓扑)
-        var (fv, ft, holes) = MeshHoleFill.Fill(w.Verts, oriented);
+        // ③ 补边界洞(焊后拓扑)：只补 XY 投影面积 ≤ 1e6 的洞(原版 maxHoleArea 默认)——地形外轮廓那种大"洞"不封,
+        //    否则几千个横贯整张图的扇面巨三角把后续检测/显示全拖死(见 MeshRepairOptions 类注释)
+        var (fv, ft, holes) = MeshHoleFill.Fill(w.Verts, oriented, 1e6);
 
-        int bAfter = MeshDiagnose.Analyze(fv, ft).BoundaryEdges;
+        int bAfter = MeshDiagnose.Analyze(fv, ft, selfIntersect: false).BoundaryEdges;
         return new Result(fv, ft, vBefore, fv.Count, holes, bBefore, bAfter);
     }
 }

@@ -10,9 +10,12 @@ namespace PitMine3D.Kylin.Cad;
 /// "5 开关用 native 默认值"）；这里按面板语义逐项真正执行，回显也逐项给出，
 /// 与原版命令行 "去退化面 / 焊接顶点 / 填充孔洞 / 删除孤立顶点 / 翻转面 / 拆分非流形边" 一一对应。
 ///
-/// 步序不可换：去退化 → 焊接 → 拆非流形 → 定向 → 补洞 → 去孤立点。
+/// 步序不可换：去退化 → 焊接 → 拆非流形 → (定向) → 补洞 → 去孤立点。
 /// 焊接必须早于定向/补洞（重合但未共享的顶点会让朝向传播和边界环提取都失效），
 /// 去孤立点必须最后（前面每一步都可能让顶点失去引用）。
+/// 补洞只补 XY 投影面积 ≤ <see cref="Options.MaxHoleArea"/> 的洞（忠实原版 RepairOptions.maxHoleArea = 1e6）——
+/// 地形面的外轮廓本身就是一个大"洞"，早前不设上限把它也用扇面封了：几千个横贯整张图的巨三角，
+/// 之后的自交检测逐个落格直接卡死，这就是用户报的「修复拓扑很慢、执行后卡死」。
 /// </summary>
 public static partial class MeshRepair
 {
@@ -26,6 +29,7 @@ public static partial class MeshRepair
         public bool RemoveIsolated = true;          // 删除孤立顶点
         public bool SplitNonManifold = true;        // 拆分非流形边
         public bool FlipInverted;                   // 翻转方向不一致面（原版默认关）
+        public double MaxHoleArea = 1e6;            // 只补 XY 投影面积 ≤ 此值的洞（原版 maxHoleArea 默认 1e6）
     }
 
     /// <summary>逐项修复量（供命令行像原版那样逐条回显）。</summary>
@@ -48,7 +52,7 @@ public static partial class MeshRepair
         var r = new DetailResult();
         var v = new List<(double x, double y, double z)>(verts ?? new List<(double x, double y, double z)>());
         var t = new List<(int a, int b, int c)>(tris ?? new List<(int a, int b, int c)>());
-        r.BoundaryBefore = MeshDiagnose.Analyze(v, t).BoundaryEdges;
+        r.BoundaryBefore = MeshDiagnose.Analyze(v, t, selfIntersect: false).BoundaryEdges;   // 只要开放边数, 不做自交检测
         if (v.Count < 3 || t.Count < 1) { r.Verts = v; r.Tris = t; r.BoundaryAfter = r.BoundaryBefore; return r; }
 
         var mm = MeshMetrics.Compute(v, t);
@@ -92,24 +96,32 @@ public static partial class MeshRepair
             r.SplitNonManifoldEdges = splitEdges;
         }
 
-        // ④ 定向：补洞需要一致绕向；开关关且不补洞时不动
+        // ④ 定向：补洞的边界环提取需要一致绕向。开关开着才把翻转结果写回；关着(原版默认)时只拿一致化副本找洞,
+        //    用户的面绕向原样不动 —— 早前不管开关都写回, 回显里凭空多出"翻转面 N"。
+        List<(int a, int b, int c)>? oriented = null;
         if (opt.FlipInverted || opt.FillHoles)
         {
-            var oriented = MeshOrient.MakeConsistent(v, t);
-            int flipped = 0;
-            for (int i = 0; i < t.Count && i < oriented.Count; i++)
-                if (oriented[i].a != t[i].a || oriented[i].b != t[i].b || oriented[i].c != t[i].c) flipped++;
-            r.FlippedFaces = flipped;
-            t = oriented;
+            oriented = MeshOrient.MakeConsistent(v, t);
+            if (opt.FlipInverted)
+            {
+                int flipped = 0;
+                for (int i = 0; i < t.Count && i < oriented.Count; i++)
+                    if (oriented[i].a != t[i].a || oriented[i].b != t[i].b || oriented[i].c != t[i].c) flipped++;
+                r.FlippedFaces = flipped;
+                t = oriented;
+            }
         }
 
-        // ⑤ 补洞
-        if (opt.FillHoles)
+        // ⑤ 补洞：只补小洞(面积上限见类注释)；新面绕向取自一致化副本的边界, 追加到当前三角表之后
+        if (opt.FillHoles && oriented != null)
         {
-            int before = t.Count;
-            var (fv, ft, holes) = MeshHoleFill.Fill(v, t);
-            r.FilledHoles = holes; r.FilledFaces = Math.Max(0, ft.Count - before);
-            v = fv; t = ft;
+            var (fv, ft, holes) = MeshHoleFill.Fill(v, oriented, opt.MaxHoleArea);
+            r.FilledHoles = holes; r.FilledFaces = Math.Max(0, ft.Count - oriented.Count);
+            if (r.FilledFaces > 0)
+            {
+                v = fv;
+                for (int i = oriented.Count; i < ft.Count; i++) t.Add(ft[i]);
+            }
         }
 
         // ⑥ 删除孤立顶点（未被任何三角引用）
@@ -141,7 +153,7 @@ public static partial class MeshRepair
         }
 
         r.Verts = v; r.Tris = t;
-        r.BoundaryAfter = MeshDiagnose.Analyze(v, t).BoundaryEdges;
+        r.BoundaryAfter = MeshDiagnose.Analyze(v, t, selfIntersect: false).BoundaryEdges;
         return r;
     }
 

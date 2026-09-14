@@ -44,9 +44,11 @@ public class EntityToBlocksTests
         var wn = new WindingNumberTester(v, t);
         var blocks = Voxelize(wn, 5.0);   // 2³ = 8
         var cells = BlockModel.BuildCells(blocks, 0, 0);
-        // 2×2×2 体素全是壳层块(没有块被六面包围) → 8 块都画, 每块 6 面 × 4 顶点
+        // 2×2×2 体素全是壳层块(没有块被六面包围) → 8 块都画；
+        // 但块与块之间贴合的面互相挡住、不发，最后发的正是外表面 6×2×2 = 24 张
         var mesh = Assert.IsType<MeshEntity>(Assert.Single(cells));
-        Assert.Equal(blocks.Count * 24, mesh.Verts.Count);
+        Assert.Equal(8, blocks.Count);
+        Assert.Equal(6 * 2 * 2 * 4, mesh.Verts.Count);
     }
 
     [Fact]

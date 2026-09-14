@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using PitMine3D.Kylin.Data;
@@ -248,8 +248,9 @@ public static class BlockCoalQualityLink
         {
             if (m.DeletedIds.Contains(idx)) continue;
             var b = m.Blocks[idx];
-            double hx = b.Size * 0.5, hz = m.Sz * 0.5;
-            if (Math.Abs(x - b.X) <= hx && Math.Abs(y - b.Y) <= hx && Math.Abs(z - b.Z) <= hz) return idx < arr.Length ? arr[idx] : null;
+            double k = m.CellScale(b);
+            double hx = k * m.Sx * 0.5, hy = k * m.Sy * 0.5, hz = k * m.Sz * 0.5;
+            if (Math.Abs(x - b.X) <= hx && Math.Abs(y - b.Y) <= hy && Math.Abs(z - b.Z) <= hz) return idx < arr.Length ? arr[idx] : null;
         }
         return null;
     }

@@ -4,7 +4,7 @@
     <!-- ============ 顶部 Ribbon 标签控件 ============ -->
     <Style Selector="TabControl.ribbon">
         <Setter Property="Padding" Value="0" />
-        <Setter Property="Background" Value="#EEF1F5" />
+        <Setter Property="Background" Value="{DynamicResource Theme.Ribbon.Background}" />
     </Style>
     <Style Selector="TabControl.ribbon > TabItem">
         <Setter Property="FontSize" Value="13" />
@@ -13,7 +13,7 @@
         <Setter Property="Margin" Value="0" />
     </Style>
     <Style Selector="TabControl.ribbon > TabItem:selected">
-        <Setter Property="Foreground" Value="#0A5AD4" />
+        <Setter Property="Foreground" Value="{DynamicResource Theme.Accent}" />
         <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
 
@@ -21,12 +21,12 @@
     <Style Selector="Border.ribbon-group">
         <Setter Property="Padding" Value="3,2,3,1" />
         <Setter Property="Margin" Value="0,2" />
-        <Setter Property="BorderBrush" Value="#DCDFE4" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Theme.Panel.Border}" />
         <Setter Property="BorderThickness" Value="0,0,1,0" />
     </Style>
     <Style Selector="TextBlock.ribbon-caption">
         <Setter Property="FontSize" Value="11" />
-        <Setter Property="Foreground" Value="#8A9099" />
+        <Setter Property="Foreground" Value="{DynamicResource Theme.Ribbon.Caption}" />
         <Setter Property="HorizontalAlignment" Value="Center" />
         <Setter Property="Margin" Value="0,2,0,0" />
     </Style>
@@ -40,10 +40,10 @@
         <Setter Property="Cursor" Value="Hand" />
     </Style>
     <Style Selector="Button.ribbon-btn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-        <Setter Property="Background" Value="#1A0A5AD4" />
+        <Setter Property="Background" Value="{DynamicResource Theme.Ribbon.Hover}" />
     </Style>
     <Style Selector="Button.ribbon-btn:pressed /template/ ContentPresenter#PART_ContentPresenter">
-        <Setter Property="Background" Value="#330A5AD4" />
+        <Setter Property="Background" Value="{DynamicResource Theme.Ribbon.Pressed}" />
     </Style>
     <Style Selector="Button.ribbon-btn Image">
         <Setter Property="Stretch" Value="Uniform" />
@@ -97,10 +97,10 @@
         <Setter Property="Cursor" Value="Hand" />
     </Style>
     <Style Selector="ToggleButton.ribbon-btn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-        <Setter Property="Background" Value="#1A0A5AD4" />
+        <Setter Property="Background" Value="{DynamicResource Theme.Ribbon.Hover}" />
     </Style>
     <Style Selector="ToggleButton.ribbon-btn:checked /template/ ContentPresenter#PART_ContentPresenter">
-        <Setter Property="Background" Value="#330A5AD4" />
+        <Setter Property="Background" Value="{DynamicResource Theme.Ribbon.Pressed}" />
     </Style>
     <!-- 状态栏小开关(正交/捕捉/栅格/栅格捕捉)：默认透明, 选中=淡蓝底 + 蓝描边(不再是整块实心蓝, 图标看得清) -->
     <Style Selector="ToggleButton.status-toggle">
@@ -118,19 +118,19 @@
         <Setter Property="CornerRadius" Value="4" />
     </Style>
     <Style Selector="ToggleButton.status-toggle:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-        <Setter Property="Background" Value="#14000000" />
-        <Setter Property="BorderBrush" Value="#33000000" />
+        <Setter Property="Background" Value="{DynamicResource Theme.Toggle.HoverBg}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Theme.Toggle.HoverBorder}" />
     </Style>
     <Style Selector="ToggleButton.status-toggle:checked /template/ ContentPresenter#PART_ContentPresenter">
-        <Setter Property="Background" Value="#260A5AD4" />
-        <Setter Property="BorderBrush" Value="#990A5AD4" />
+        <Setter Property="Background" Value="{DynamicResource Theme.Toggle.CheckedBg}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Theme.Toggle.CheckedBorder}" />
     </Style>
     <Style Selector="ToggleButton.status-toggle:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-        <Setter Property="Background" Value="#3D0A5AD4" />
-        <Setter Property="BorderBrush" Value="#CC0A5AD4" />
+        <Setter Property="Background" Value="{DynamicResource Theme.Toggle.CheckedHoverBg}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Theme.Toggle.CheckedHoverBorder}" />
     </Style>
     <Style Selector="ToggleButton.status-toggle:pressed /template/ ContentPresenter#PART_ContentPresenter">
-        <Setter Property="Background" Value="#520A5AD4" />
+        <Setter Property="Background" Value="{DynamicResource Theme.Toggle.PressedBg}" />
     </Style>
 
     <Style Selector="ToggleButton.large">

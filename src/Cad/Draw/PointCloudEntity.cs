@@ -49,7 +49,7 @@ public sealed class PointCloudEntity : SceneEntity
     private double _minX, _minY, _maxX, _maxY, _minZ, _maxZ;
     private bool _boundsOk;
     private float[]? _cache;
-    private (float r, float g, float b, double elev, int n) _cacheKey;
+    private (float r, float g, float b, double elev, int n, double ox, double oy) _cacheKey;
 
     public PointCloudEntity() { Cr = 0.75f; Cg = 0.78f; Cb = 0.82f; }
 
@@ -93,10 +93,29 @@ public sealed class PointCloudEntity : SceneEntity
     /// <summary>点云不进线段通道（点走 <see cref="TessellatePoints"/> 的 GL_POINTS 专用通道）。</summary>
     public override void Tessellate(List<float> o) { }
 
+    /// <summary>预览代价 = 点数(O(1))：几十万点的数据集拖起来必须走替身。</summary>
+    public override int PreviewCost() => Pts.Count;
+
+    /// <summary>
+    /// 拖拽幽灵画包围盒线框 —— 点云的 <see cref="Tessellate"/> 是空的(点走 GL_POINTS 通道，
+    /// 那条通道拖拽期不重传)，不覆盖这里就等于"拖着一份点云走，屏幕上什么都没有"。
+    /// 同原版 AcDbEntity::buildPreviewProxy 的默认替身：交代得清"东西在哪、多大"。
+    /// </summary>
+    public override void TessellatePreview(List<float> o) => TessellateBoundsBox(o);
+
+    public override (double minX, double minY, double minZ, double maxX, double maxY, double maxZ)? PreviewAabb()
+    {
+        if (Pts.Count == 0) return null;
+        var b = Bounds;
+        return (b.minX, b.minY, b.minZ + Elevation, b.maxX, b.maxY, b.maxZ + Elevation);
+    }
+
     /// <summary>逐点 P3_C3 顶点（GL_POINTS）。按 (基色,标高,点数) 缓存，大点云不必每帧重建。</summary>
     public void TessellatePoints(List<float> o)
     {
-        var key = (Cr, Cg, Cb, Elevation, Pts.Count);
+        // 缓存键带上渲染局部原点：原点变了(换文档/首次定原点)这份缓存就作废，否则点云会整体错位
+        double ox = RenderOrigin.X, oy = RenderOrigin.Y;
+        var key = (Cr, Cg, Cb, Elevation, Pts.Count, ox, oy);
         if (_cache == null || _cacheKey != key)
         {
             var t = new float[Pts.Count * 6];
@@ -107,7 +126,7 @@ public sealed class PointCloudEntity : SceneEntity
                 float r = Cr, g = Cg, b = Cb;
                 if (per) (r, g, b) = Colors![i];
                 int k = i * 6;
-                t[k] = (float)p.x; t[k + 1] = (float)p.y; t[k + 2] = (float)(p.z + Elevation);
+                t[k] = (float)(p.x - ox); t[k + 1] = (float)(p.y - oy); t[k + 2] = (float)(p.z + Elevation);
                 t[k + 3] = r; t[k + 4] = g; t[k + 5] = b;
             }
             _cache = t; _cacheKey = key;

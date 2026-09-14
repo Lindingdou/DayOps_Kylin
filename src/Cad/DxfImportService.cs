@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using ACadSharp;
@@ -384,7 +384,13 @@ public static class DxfImportService
                 : throw new NotSupportedException($"不支持的 CAD 格式：{ext}");
             progress?.Invoke(0.70, "正在转换图元…");
         }
-        catch (Exception ex) { result.Error = $"读取失败：{ex.Message}"; return result; }
+        catch (Exception ex)
+        {
+            long len = 0; try { len = new FileInfo(filePath).Length; } catch { }
+            // 256 字节全零的"现状.dwg"这类空壳文件, 解析器只会说"版本不认识"; 把大小带上, 用户一眼知道是文件本身空了
+            result.Error = len < 1024 ? $"读取失败：文件仅 {len} 字节, 疑似空文件或已损坏（{ex.Message}）" : $"读取失败：{ex.Message}";
+            return result;
+        }
         var r = MapDocument(doc, result, progress);
         progress?.Invoke(1.0, "读取完成");
         return r;
@@ -416,6 +422,24 @@ public static class DxfImportService
         bool emitVisible = true;     // 当前实体可见性(同上; DXF IsInvisible 取反, round-trip 隐藏状态)
         short emitTransp = -1;       // 当前实体透明度(-1=随层; DXF Transparency round-trip)
         double emitElev = 0;         // 当前实体标高 Z(Emit 顶置, Finalize 读)——DWG/DXF 有高程的实体按此抬升显示三维, 否则平面 0
+        TextHeightNormalizer? textNorm = null;   // 文字高度归一化(主循环前按几何图幅建好; 见原版 pre-pass)
+        // 三维面/网格/多面网格 按图层合并成一张三角网(忠实原 MergedTriangleMesh):
+        // 12煤.dxf 这类煤层底板面是 1.5 万个 3DFACE, 合成一张网才是可建模的面; 逐面拆成闭合折线只是一堆压平的碎片。
+        var meshByLayer = new Dictionary<string, MeshAcc>();
+        var meshOrder = new List<string>();
+        MeshAcc MeshFor(string layer, (float r, float g, float b) col)
+        {
+            if (!meshByLayer.TryGetValue(layer, out var acc))
+            {
+                // 首个源实体的颜色/线型等作整张网的(原版亦取首个 entity 的 common): 地层数据每图层一色, 合并后正好
+                acc = new MeshAcc { Color = col, Dash = emitDash, LineWeight = emitLW, Visible = emitVisible, Transparency = emitTransp };
+                meshByLayer[layer] = acc;
+                meshOrder.Add(layer);
+            }
+            acc.Sources++;
+            return acc;
+        }
+        void Count(SceneEntity se) { string tn = EntityTypeName.Of(se); result.TypeCounts[tn] = result.TypeCounts.GetValueOrDefault(tn) + 1; }
 
         void Finalize(SceneEntity se, Affine2? xf, (float r, float g, float b) col, string layer)
         {
@@ -424,7 +448,9 @@ public static class DxfImportService
             if (xf != null) se = se.Apply(xf.Value);   // 变换保留颜色(Colored)，但不拷层名
             se.LayerName = layer;
             result.Entities.Add(se);
-            var o = new List<float>(); se.Tessellate(o);
+            Count(se);
+            List<float> o;
+            using (RenderOrigin.Suspend()) { o = new List<float>(); se.Tessellate(o); }   // 世界包围盒
             double eMinX = double.MaxValue, eMinY = double.MaxValue, eMaxX = double.MinValue, eMaxY = double.MinValue;
             for (int i = 0; i + 1 < o.Count; i += 6)
             {
@@ -434,6 +460,23 @@ public static class DxfImportService
             }
             // 本图元的中心：导入后据此判断"绝大多数图元挤在哪"，好把视图定到那儿而不是被远处孤立图元拽走
             if (eMaxX >= eMinX) result.Centers.Add(((eMinX + eMaxX) * 0.5, (eMinY + eMaxY) * 0.5));
+        }
+
+        // 合并完的三角网入结果: 顶点已是绝对坐标(含 Z), 标高留 0; 包围盒/中心直接取网的
+        void FinalizeMesh(string layer, MeshAcc acc)
+        {
+            if (acc.V.Count < 3 || acc.T.Count < 1) return;
+            var me = new MeshEntity(layer, acc.V, acc.T)
+            {
+                Cr = acc.Color.r, Cg = acc.Color.g, Cb = acc.Color.b,
+                Dash = acc.Dash, LineWeight = acc.LineWeight, Visible = acc.Visible, Transparency = acc.Transparency,
+                LayerName = layer,
+            };
+            result.Entities.Add(me);
+            Count(me);
+            var b = me.Bounds;
+            if (b.minX < minX) minX = b.minX; if (b.minY < minY) minY = b.minY; if (b.maxX > maxX) maxX = b.maxX; if (b.maxY > maxY) maxY = b.maxY;
+            result.Centers.Add(((b.minX + b.maxX) * 0.5, (b.minY + b.maxY) * 0.5));
         }
 
         // 取实体代表标高 Z(世界单位): 均匀高程(等高线/水平图元)忠实原(原亦按 Elevation 统一给 Z);
@@ -558,7 +601,21 @@ public static class DxfImportService
                 case Polyline3D p3:
                 {
                     var pl = new PolylineEntity { Closed = p3.IsClosed };
-                    foreach (var v in p3.Vertices) pl.Points.Add((v.Location.X, v.Location.Y));
+                    var zs = new List<double>();
+                    foreach (var v in p3.Vertices) { pl.Points.Add((v.Location.X, v.Location.Y)); zs.Add(v.Location.Z); }
+                    // 三维多段线(道路中线/断面线/三维等高线)逐点保 Z: Zs 以实体标高(= 平均 Z, 见 EntityZ)为基,
+                    // ZAt = Zs[i] + Elevation 还原绝对高程。只留一个平均标高的话, 转到三维就是一条压平的线。
+                    double baseZ = emitElev;
+                    if (zs.Count == pl.Points.Count && zs.Count > 0)
+                    {
+                        double zmin = zs[0], zmax = zs[0];
+                        foreach (var z in zs) { if (z < zmin) zmin = z; if (z > zmax) zmax = z; }
+                        if (zmax - zmin > 1e-9)
+                        {
+                            for (int i = 0; i < zs.Count; i++) zs[i] -= baseZ;
+                            pl.Zs = zs;
+                        }
+                    }
                     if (pl.Points.Count >= 2) Finalize(pl, xf, col, layer);
                     break;
                 }
@@ -613,16 +670,17 @@ public static class DxfImportService
                     var ap = te.AlignmentPoint;
                     bool useAlign = (ha != 0 || va != 0) && (ap.X != 0 || ap.Y != 0);
                     double tx = useAlign ? ap.X : te.InsertPoint.X, ty = useAlign ? ap.Y : te.InsertPoint.Y;
-                    Finalize(new DrawText { X = tx, Y = ty, Height = te.Height > 0 ? te.Height : 1, Rotation = te.Rotation, HAlign = ha, VAlign = va, WidthFactor = te.WidthFactor > 0 ? te.WidthFactor : 1, ObliqueAngle = te.ObliqueAngle * System.Math.PI / 180.0, Text = te.Value ?? "" }, xf, col, layer);
+                    Finalize(new DrawText { X = tx, Y = ty, Height = TextHeight(te.Height, depth), Rotation = te.Rotation, HAlign = ha, VAlign = va, WidthFactor = te.WidthFactor > 0 ? te.WidthFactor : 1, ObliqueAngle = te.ObliqueAngle * System.Math.PI / 180.0, Text = te.Value ?? "" }, xf, col, layer);
                     break;
                 }
                 case MText mt:
                 {
                     var lines = MTextLines(mt.Value ?? "");
-                    double mh = mt.Height > 0 ? mt.Height : 1;
                     string joined = string.Join("\n", lines);   // 多行合成一个多行 TextEntity(Tessellate 逐行下落, 单一可选实体)
+                    // 附着点(默认左上)→ 锚点对齐: MTEXT 的插入点是文字框角点, 按基线-左摆会整块上浮一行
+                    var (mha, mva) = MTextAlign(mt.AttachmentPoint.ToString());
                     if (joined.Trim().Length > 0)
-                        Finalize(new DrawText { X = mt.InsertPoint.X, Y = mt.InsertPoint.Y, Height = mh, Rotation = mt.Rotation, Text = joined }, xf, col, layer);
+                        Finalize(new DrawText { X = mt.InsertPoint.X, Y = mt.InsertPoint.Y, Height = TextHeight(mt.Height, depth), Rotation = mt.Rotation, HAlign = mha, VAlign = mva, Text = joined }, xf, col, layer);
                     break;
                 }
                 case Solid so:
@@ -635,21 +693,14 @@ public static class DxfImportService
                     Finalize(pl, xf, col, layer);
                     break;
                 }
-                case Face3D f3:
-                {
-                    var pl = new PolylineEntity { Closed = true };
-                    pl.Points.Add((f3.FirstCorner.X, f3.FirstCorner.Y));
-                    pl.Points.Add((f3.SecondCorner.X, f3.SecondCorner.Y));
-                    pl.Points.Add((f3.ThirdCorner.X, f3.ThirdCorner.Y));
-                    pl.Points.Add((f3.FourthCorner.X, f3.FourthCorner.Y));
-                    Finalize(pl, xf, col, layer);
+                case Face3D f3:   // 三维面 → 按图层合并进三角网(主循环后 FinalizeMesh 一次入场景)
+                    MeshFor(layer, col).AddFace3D(f3, xf);
                     break;
-                }
                 case Dimension dim:   // 标注(对齐/线性/半径/角度…)：爆炸其渲染块还原尺寸线/箭头/文字
                 {
                     if (depth >= 8 || dim.Block == null) break;
                     foreach (var be in dim.Block.Entities)
-                        Emit(be, xf, ColorOf(be), layer, depth + 1);
+                        Emit(be, xf, ColorOf(be, col), layer, depth + 1);
                     break;
                 }
                 case AcHatch ha:   // 填充：取边界环为闭合多段线轮廓(不填充=Skia)；边界含 Line/Arc/Polyline 边
@@ -670,7 +721,7 @@ public static class DxfImportService
                     var insM = new Affine2(sx * c, sx * s, -sy * s, sy * c, ins.InsertPoint.X, ins.InsertPoint.Y);
                     var childXf = xf == null ? insM : Affine2.Multiply(xf.Value, insM);
                     foreach (var be in ins.Block.Entities)
-                        Emit(be, childXf, ColorOf(be), layer, depth + 1);   // 块内实体归插入所在层
+                        Emit(be, childXf, ColorOf(be, col), layer, depth + 1);   // 块内实体归插入所在层; ByBlock 色随插入
                     break;
                 }
                 case Leader ld:   // 引线：顶点折线（箭头/注释块另随文档实体, 此还原引线本体）
@@ -698,44 +749,23 @@ public static class DxfImportService
                         }
                     break;
                 }
-                case Mesh mesh:   // 网格：逐面还原为闭合折线线框(与 Face3D 一致的 2D 投影)
-                {
-                    var mv = mesh.Vertices;
-                    foreach (var face in mesh.Faces)
-                    {
-                        if (face == null || face.Length < 3) continue;
-                        int start = (face.Length >= 4 && face[0] == face.Length - 1) ? 1 : 0;   // 首元素为顶点数 → 跳过
-                        var pl = new PolylineEntity { Closed = true };
-                        for (int i = start; i < face.Length; i++)
-                        {
-                            int idx = face[i];
-                            if (idx >= 0 && idx < mv.Count) pl.Points.Add((mv[idx].X, mv[idx].Y));
-                        }
-                        if (pl.Points.Count >= 3) Finalize(pl, xf, col, layer);
-                    }
+                case Mesh mesh:   // 网格 → 合并进本层三角网(多边形面扇形剖分)
+                    MeshFor(layer, col).AddMesh(mesh, xf);
                     break;
-                }
-                case PolyfaceMesh pfm:   // 多面网格：面记录 1-based(负=隐藏边取绝对值, 0=缺=三角)
-                {
-                    var pv = pfm.Vertices;
-                    foreach (var face in pfm.Faces)
-                    {
-                        short[] idxs = { face.Index1, face.Index2, face.Index3, face.Index4 };
-                        var pl = new PolylineEntity { Closed = true };
-                        foreach (short raw in idxs)
-                        {
-                            if (raw == 0) continue;
-                            int idx = Math.Abs(raw) - 1;
-                            if (idx >= 0 && idx < pv.Count) pl.Points.Add((pv[idx].Location.X, pv[idx].Location.Y));
-                        }
-                        if (pl.Points.Count >= 3) Finalize(pl, xf, col, layer);
-                    }
+                case PolyfaceMesh pfm:   // 多面网格 → 合并进本层三角网(面记录 1-based, 负=隐藏边取绝对值, 0=缺)
+                    MeshFor(layer, col).AddPolyfaceMesh(pfm, xf);
                     break;
-                }
                 default:
                     result.Warnings.Add($"跳过未支持实体：{ent.GetType().Name}");
                     break;
             }
+        }
+
+        // 文字高度: 顶层文字走归一化(异常巨大/缺失 → 典型高度); 块内文字是块坐标系的量, 原样(≤0 兜底 1)
+        double TextHeight(double h, int depth)
+        {
+            if (depth == 0 && textNorm != null) return textNorm.Correct(h);
+            return h > 0 ? h : 1;
         }
 
         try
@@ -743,16 +773,18 @@ public static class DxfImportService
             var model = doc.BlockRecords["*Model_Space"];
             int total = 0; foreach (var _ in model.Entities) total++;      // 先数一遍, 好给进度条一个分母
             int done = 0, tick = System.Math.Max(1, total / 50);           // 每 2% 报一次, 别把回调本身变成开销
+            textNorm = BuildTextNormalizer(model.Entities);                // pre-pass: 几何图幅 + 文字高度 → 离群文字修正
             foreach (var e in model.Entities)
             {
                 string layer = SafeLayerName(e);
                 if (!result.LayerColors.ContainsKey(layer)) { result.LayerColors[layer] = ColorOf(e); result.LayerOrder.Add(layer); }
-                var cn = CnTypeName(e);
-                if (cn != null) result.TypeCounts[cn] = result.TypeCounts.GetValueOrDefault(cn) + 1;
                 Emit(e, null, ColorOf(e), layer, 0);
                 if (progress != null && ++done % tick == 0)
                     progress(0.70 + 0.28 * done / System.Math.Max(1, total), $"正在转换图元 {done:N0}/{total:N0}…");
             }
+            foreach (var ly in meshOrder) FinalizeMesh(ly, meshByLayer[ly]);   // 每图层一张三角网
+            if (textNorm.IsActive && textNorm.CorrectedCount > 0)
+                result.Warnings.Add($"文字高度归一化:{textNorm.CorrectedCount} 条异常高度已拉回 ~{textNorm.TypicalHeight:F1}m(图幅对角 {textNorm.Diagonal:F0}m)");
             foreach (var ly in doc.Layers)   // 图层表状态(开/冻结/锁定) → round-trip 保真
             {
                 bool frozen = (ly.Flags & ACadSharp.Tables.LayerFlags.Frozen) != 0;
@@ -764,6 +796,154 @@ public static class DxfImportService
 
         result.Bounds = result.Entities.Count == 0 ? new double[] { 0, 0, 0, 0 } : new[] { minX, minY, maxX, maxY };
         return result;
+    }
+
+    /// <summary>
+    /// 文字高度归一化的 pre-pass(忠实原版): 只用真实几何(线/多段线/点/圆弧/圆)算图幅, 收集顶层 TEXT/MTEXT 高度。
+    /// 文字自身不参与图幅 —— 异常巨大的文字正是要被图幅识破的那一个。
+    /// </summary>
+    internal static TextHeightNormalizer BuildTextNormalizer(IEnumerable<Entity> entities)
+    {
+        double minX = double.PositiveInfinity, minY = double.PositiveInfinity, maxX = double.NegativeInfinity, maxY = double.NegativeInfinity;
+        var heights = new List<double>(256);
+        void Ex(double x, double y) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
+        foreach (var e in entities)
+        {
+            switch (e)
+            {
+                case Line ln: Ex(ln.StartPoint.X, ln.StartPoint.Y); Ex(ln.EndPoint.X, ln.EndPoint.Y); break;
+                case LwPolyline lp: foreach (var v in lp.Vertices) Ex(v.Location.X, v.Location.Y); break;
+                case Polyline2D p2: foreach (var v in p2.Vertices) Ex(v.Location.X, v.Location.Y); break;
+                case Polyline3D p3: foreach (var v in p3.Vertices) Ex(v.Location.X, v.Location.Y); break;
+                case Point pt: Ex(pt.Location.X, pt.Location.Y); break;
+                case Arc ar: Ex(ar.Center.X - ar.Radius, ar.Center.Y - ar.Radius); Ex(ar.Center.X + ar.Radius, ar.Center.Y + ar.Radius); break;   // Arc : Circle, 须在前
+                case Circle ci: Ex(ci.Center.X - ci.Radius, ci.Center.Y - ci.Radius); Ex(ci.Center.X + ci.Radius, ci.Center.Y + ci.Radius); break;
+                case ACadSharp.Entities.TextEntity te: if (te.Height > 0) heights.Add(te.Height); break;
+                case MText mt: if (mt.Height > 0) heights.Add(mt.Height); break;
+            }
+        }
+        double w = minX < maxX ? maxX - minX : 0, h = minY < maxY ? maxY - minY : 0;
+        return new TextHeightNormalizer(w, h, heights);
+    }
+
+    /// <summary>MTEXT 附着点(TopLeft…BottomRight) → (HAlign 0左/1中/2右, VAlign 0底/1中/2顶); 认不出按默认左上。</summary>
+    internal static (int ha, int va) MTextAlign(string attachment)
+    {
+        int va = attachment.StartsWith("Middle") ? 1 : attachment.StartsWith("Bottom") ? 0 : 2;
+        int ha = attachment.EndsWith("Center") ? 1 : attachment.EndsWith("Right") ? 2 : 0;
+        return (ha, va);
+    }
+
+    /// <summary>
+    /// 按图层合并三维面/网格/多面网格的累加器(忠实原 MergedTriangleMesh: 四边形扇形剖分、
+    /// PolyfaceMesh 1-based 负索引取绝对值、Mesh 面记录首元素为顶点数时跳过)。
+    /// 顶点按坐标焊接 —— 原版只是把各面顶点原样堆进一块内存; 这里三角网要进建模算法(闭合性/求交/算量),
+    /// 相邻面共享顶点不焊上就是一堆互不相连的三角形汤。
+    /// </summary>
+    private sealed class MeshAcc
+    {
+        public readonly List<(double x, double y, double z)> V = new();
+        public readonly List<(int a, int b, int c)> T = new();
+        private readonly Dictionary<(double, double, double), int> _weld = new();
+        public (float r, float g, float b) Color;
+        public double[]? Dash; public short LineWeight = -1; public bool Visible = true; public short Transparency = -1;
+        public int Sources;
+
+        private int Add(CSMath.XYZ p, Affine2? xf)
+        {
+            var (x, y) = xf.HasValue ? xf.Value.Map(p.X, p.Y) : (p.X, p.Y);   // 块内面按插入变换摆到世界(Z 不动)
+            var key = (x, y, p.Z);
+            if (_weld.TryGetValue(key, out int idx)) return idx;
+            V.Add((x, y, p.Z)); idx = V.Count - 1; _weld[key] = idx;
+            return idx;
+        }
+
+        private void Fan(List<int> ring)
+        {
+            for (int i = 1; i + 1 < ring.Count; i++)
+                if (ring[0] != ring[i] && ring[i] != ring[i + 1] && ring[0] != ring[i + 1])
+                    T.Add((ring[0], ring[i], ring[i + 1]));
+        }
+
+        private static bool Same(CSMath.XYZ a, CSMath.XYZ b) =>
+            Math.Abs(a.X - b.X) < 1e-3 && Math.Abs(a.Y - b.Y) < 1e-3 && Math.Abs(a.Z - b.Z) < 1e-3;
+
+        public void AddFace3D(Face3D f, Affine2? xf)
+        {
+            var ring = new List<int>(4) { Add(f.FirstCorner, xf), Add(f.SecondCorner, xf), Add(f.ThirdCorner, xf) };
+            bool tri = Same(f.FourthCorner, f.FirstCorner) || Same(f.FourthCorner, f.SecondCorner) || Same(f.FourthCorner, f.ThirdCorner);
+            if (!tri) ring.Add(Add(f.FourthCorner, xf));
+            Fan(ring);
+        }
+
+        public void AddMesh(Mesh m, Affine2? xf)
+        {
+            var mv = m.Vertices; int n = mv.Count;
+            if (n == 0 || m.Faces.Count == 0) return;
+            var map = new int[n];
+            for (int i = 0; i < n; i++) map[i] = Add(mv[i], xf);
+            bool firstIsCount = true;   // 面记录首元素是否全为"顶点数"(原版全局判定)
+            foreach (var face in m.Faces) if (face.Length < 2 || face[0] != face.Length - 1) { firstIsCount = false; break; }
+            foreach (var face in m.Faces)
+            {
+                if (face.Length < 3) continue;
+                int start = firstIsCount ? 1 : 0;
+                var ring = new List<int>(face.Length);
+                for (int i = start; i < face.Length; i++) if (face[i] >= 0 && face[i] < n) ring.Add(map[face[i]]);
+                Fan(ring);
+            }
+        }
+
+        public void AddPolyfaceMesh(PolyfaceMesh p, Affine2? xf)
+        {
+            var pv = p.Vertices; int n = pv.Count;
+            if (n == 0 || p.Faces.Count == 0) return;
+            var map = new int[n];
+            for (int i = 0; i < n; i++) map[i] = Add(pv[i].Location, xf);
+            foreach (var face in p.Faces)
+            {
+                short[] idxs = { face.Index1, face.Index2, face.Index3, face.Index4 };
+                var ring = new List<int>(4);
+                foreach (short raw in idxs)
+                {
+                    if (raw == 0) continue;
+                    int idx = Math.Abs(raw) - 1;
+                    if (idx >= 0 && idx < n) ring.Add(map[idx]);
+                }
+                Fan(ring);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 导入告警压缩成一句(状态栏用): "跳过未支持实体：X" 按类型聚合成一条计数, 其余(文字高度归一化等)原样各一条。
+    /// 几千个 Ole2Frame 不能变成几千条告警, 也不能把"归一化了 3 条文字"数成"跳过 1 类未支持"。
+    /// </summary>
+    internal static string SummarizeWarnings(IReadOnlyList<string> warnings)
+    {
+        if (warnings.Count == 0) return "";
+        const string skip = "跳过未支持实体：";
+        var skipped = new Dictionary<string, int>(); var order = new List<string>(); var others = new List<string>();
+        foreach (var w in warnings)
+        {
+            if (w.StartsWith(skip))
+            {
+                string t = w.Substring(skip.Length);
+                if (!skipped.ContainsKey(t)) { skipped[t] = 0; order.Add(t); }
+                skipped[t]++;
+            }
+            else if (!others.Contains(w)) others.Add(w);
+        }
+        var parts = new List<string>();
+        if (order.Count > 0)
+        {
+            int n = 0; foreach (var kv in skipped) n += kv.Value;
+            var types = new List<string>();
+            foreach (var t in order) types.Add($"{t}×{skipped[t]}");
+            parts.Add($"跳过 {n} 个未支持实体({string.Join("/", types)})");
+        }
+        parts.AddRange(others);
+        return string.Join("；", parts);
     }
 
     // Hatch 边界环 → 闭合点环列表（移植自原 DwgDxfImportService.ExtractHatchBoundaries：
@@ -871,14 +1051,16 @@ public static class DxfImportService
         return res;
     }
 
-    /// <summary>实体颜色：ByLayer 取图层色；真彩色直接用 RGB；否则按 ACI 索引映射。失败回落统一色。</summary>
-    private static (float r, float g, float b) ColorOf(Entity e)
+    /// <summary>实体颜色：ByLayer 取图层色；ByBlock 取所在块引用的色(byBlock, 顶层无则回落统一色)；真彩色直接用 RGB；否则按 ACI 索引映射。失败回落统一色。</summary>
+    private static (float r, float g, float b) ColorOf(Entity e, (float r, float g, float b)? byBlock = null)
     {
         try
         {
             var color = e.Color;
             if (color.IsByLayer && e.Layer != null)
                 color = e.Layer.Color;
+            else if (color.IsByBlock && byBlock != null)
+                return byBlock.Value;
             if (color.IsTrueColor)
                 return (color.R / 255f, color.G / 255f, color.B / 255f);
             return AciToRgb(color.Index);
@@ -889,8 +1071,12 @@ public static class DxfImportService
         }
     }
 
-    /// <summary>AutoCAD 颜色索引(ACI) → RGB。1-9 标准色（深底上做了适配），其余回落浅蓝灰。</summary>
-    private static (float r, float g, float b) AciToRgb(int index) => index switch
+    /// <summary>
+    /// AutoCAD 颜色索引(ACI) → RGB。1-9 标准色（深底上做了适配），其余回落浅蓝灰。
+    /// 原版 .pmx 工程的索引色也走这张表(<see cref="PmxImportService"/>) —— 同一张图无论按 DXF 导入
+    /// 还是按原版工程打开, 颜色要一样, 两处各留一张表迟早对不上。
+    /// </summary>
+    internal static (float r, float g, float b) AciToRgb(int index) => index switch
     {
         1 => (0.90f, 0.32f, 0.32f),   // 红
         2 => (0.90f, 0.85f, 0.35f),   // 黄

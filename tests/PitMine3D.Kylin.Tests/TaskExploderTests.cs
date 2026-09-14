@@ -44,6 +44,79 @@ public class TaskExploderTests
         Assert.Contains(r.Violations, v => v.Code == "当日欠产");
     }
 
+    // ─── 爆破从"一炮"改成"逐炮"（§三五二 补齐原版 2026-08-11 的那个修）───
+    //  Kylin 侧此前是 we = min(we, cfg.BlastStart)：只认最早一炮，一天三炮时后两炮
+    //  在装箱里根本不存在 —— 界面上排得整整齐齐，计划里那几个时段仍在满负荷作业。
+
+    [Fact]
+    public void 爆破_第二炮起也从班里扣掉()
+    {
+        var cfg = OneFace(9999, 100);                     // 目标够大，装满整班
+        cfg.SetBlasts(new[] { new PitMine3D.Kylin.Data.BlastWindow(2, 2.67),
+                              new PitMine3D.Kylin.Data.BlastWindow(5, 5.67) });
+        var load = Assert.Single(TaskExploder.Explode(cfg).Tasks.Where(t => t.Process == ProcessType.Load));
+        // 早班 0–8 被两炮切成 0–2 / 2.67–5 / 5.67–8：最长的一段是 2.67–5（2.33 h）
+        Assert.Equal(2.67, load.StartHour, 2);
+        Assert.Equal(5.0, load.EndHour, 2);
+    }
+
+    [Fact]
+    public void 爆破_兼容视图那一对标量仍然管用()
+    {
+        var cfg = OneFace(9999, 100);
+        cfg.BlastStart = 6; cfg.BlastEnd = 6.67;          // 没写列表，只给了老那一对
+        var load = Assert.Single(TaskExploder.Explode(cfg).Tasks.Where(t => t.Process == ProcessType.Load));
+        Assert.Equal(0.0, load.StartHour, 2);
+        Assert.Equal(6.0, load.EndHour, 2);
+    }
+
+    [Fact]
+    public void 爆破_盖住班首时取得回后面那一段而不是整班压成零()
+    {
+        // ★ 原式 we = min(we, BlastStart) 会把 we 压到 0 → 整班停产；实际是"清场解除后开工"
+        var cfg = OneFace(9999, 100);
+        cfg.SetBlasts(new[] { new PitMine3D.Kylin.Data.BlastWindow(0, 1) });
+        var load = Assert.Single(TaskExploder.Explode(cfg).Tasks.Where(t => t.Process == ProcessType.Load));
+        Assert.Equal(1.0, load.StartHour, 2);
+        Assert.Equal(8.0, load.EndHour, 2);
+    }
+
+    [Fact]
+    public void 爆破_写入时兼容视图同步成最早那一段()
+    {
+        var cfg = new ExploderConfig();
+        cfg.SetBlasts(new[] { new PitMine3D.Kylin.Data.BlastWindow(5, 5.67),
+                              new PitMine3D.Kylin.Data.BlastWindow(2, 2.67) });
+        Assert.Equal(2, cfg.BlastStart, 6);
+        Assert.Equal(2.67, cfg.BlastEnd, 6);
+        Assert.Equal(2, cfg.BlastWindows().Count);
+    }
+
+    [Fact]
+    public void 爆破_切成几段时放弃掉的工时要如实报出来()
+    {
+        // 只取最长一段是结构约束（一条 面×班 只出一条任务）；放弃的小时数不许闷声吞掉
+        var cfg = OneFace(9999, 100);
+        cfg.SetBlasts(new[] { new PitMine3D.Kylin.Data.BlastWindow(4, 4.67) });
+        var r = TaskExploder.Explode(cfg);
+        var v = Assert.Single(r.Violations.Where(x => x.Code == "爆破清场"));
+        Assert.Contains("切成 2 段", v.Message);
+        Assert.Contains("放弃", v.Message);
+    }
+
+    [Fact]
+    public void 爆破_整班落在清场内时说本班排不出作业()
+    {
+        var cfg = OneFace(9999, 100);
+        cfg.SetBlasts(new[] { new PitMine3D.Kylin.Data.BlastWindow(0, 8) });
+        var r = TaskExploder.Explode(cfg);
+        Assert.Contains(r.Violations, v => v.Code == "爆破清场" && v.Message.Contains("整班落在爆破清场内"));
+    }
+
+    [Fact]
+    public void 爆破_没有停产时窗时一条都不报()
+        => Assert.DoesNotContain(TaskExploder.Explode(OneFace(1000, 200)).Violations, v => v.Code == "爆破清场");
+
     [Fact]
     public void Truck_shortage_flags_when_below_recommended()
     {

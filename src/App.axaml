@@ -1,4 +1,4 @@
-<Application xmlns="https://github.com/avaloniaui"
+﻿<Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="PitMine3D.Kylin.App"
              RequestedThemeVariant="Light">
@@ -9,12 +9,15 @@
         <StyleInclude Source="avares://PitMine3D.Kylin/Styles/Ribbon.axaml" />
         <StyleInclude Source="avares://PitMine3D.Kylin/Styles/Dock.axaml" />
         <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />
+        <!-- 取色对话框(「更多颜色…（自定义 RGB）」)用的 ColorView：主题不在 FluentTheme 里, 不显式引就画不出控件(实测空白) -->
+        <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml" />
         <StyleInclude Source="avares://PitMine3D.Kylin/Styles/GeoDb.axaml" />
     </Application.Styles>
 
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
+                <ResourceInclude Source="avares://PitMine3D.Kylin/Styles/Theme.axaml" />
                 <ResourceInclude Source="avares://PitMine3D.Kylin/Styles/Icons.axaml" />
                 <ResourceInclude Source="avares://PitMine3D.Kylin/Styles/TreeListBox.axaml" />
                 <ResourceInclude Source="avares://PitMine3D.Kylin/Styles/IconDict.axaml" />

@@ -12,13 +12,13 @@
                 <Button Content="新建批次" Click="OnNewBatch" Padding="8,2"/>
                 <Button Content="数据管理" Click="OnManageData" Padding="8,2"
                         ToolTip.Tip="打开写实数据管理：按批次(时间标签)删除 / 改名"/>
-                <Border Width="1" Background="#D0D4DA" Margin="2,2"/>
+                <Border Width="1" Background="{DynamicResource Theme.Panel.Border}" Margin="2,2"/>
                 <Button Content="下载模板…" Click="OnDownloadTemplate" Padding="8,2" ToolTip.Tip="CSV 模板：列随当前煤层结构生成"/>
                 <Button Content="导入 CSV…" Click="OnImportCsv" Padding="8,2" ToolTip.Tip="导入写实数据(CSV，同模板列头)；孔号已存在则整孔覆盖并归入导入批次"/>
                 <Button Content="导出 CSV" Click="OnExportCsv" Padding="8,2" ToolTip.Tip="把当前批次全部补勘孔及层位导出为 CSV(同模板列头)"/>
-                <Border Width="1" Background="#D0D4DA" Margin="2,2"/>
+                <Border Width="1" Background="{DynamicResource Theme.Panel.Border}" Margin="2,2"/>
                 <Button Content="煤层结构…" Click="OnEditStructure" Padding="8,2"/>
-                <Border Width="1" Background="#D0D4DA" Margin="2,2"/>
+                <Border Width="1" Background="{DynamicResource Theme.Panel.Border}" Margin="2,2"/>
                 <Button Content="保存" Click="OnSave" Padding="8,2" Classes="primary"/>
                 <Button Content="展绘" Click="OnDraw" Padding="8,2"
                         ToolTip.Tip="把当前批次补勘孔展绘到视口：孔位点 + 孔号 + 各层顶/底板点(按煤层色) + 孔柱，图层「补勘钻孔写实」"/>
@@ -46,7 +46,7 @@
             <!-- 中:交互柱状图 -->
             <Grid Grid.Column="1" Margin="0,0,8,0" RowDefinitions="Auto,*">
                 <TextBlock x:Name="headerText" Grid.Row="0" FontSize="14" FontWeight="Bold" Margin="4,0,0,6" Text="（选择或新增左侧补勘钻孔）"/>
-                <Border Grid.Row="1" Background="White" BorderBrush="#D0D4DA" BorderThickness="1" CornerRadius="3">
+                <Border Grid.Row="1" Background="White" BorderBrush="{DynamicResource Theme.Panel.Border}" BorderThickness="1" CornerRadius="3">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
                         <Canvas x:Name="columnCanvas" Background="Transparent"/>
                     </ScrollViewer>

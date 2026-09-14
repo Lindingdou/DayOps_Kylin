@@ -126,11 +126,16 @@ public static class FleetOptimizer
         return res;
     }
 
-    private readonly record struct Cap(FleetDispatchRule Rule, double CycleMin, double DailyM3, double MatchFactor,
+    /// <summary>
+    /// 一条编组规则算出来的产能与周期分解。<b>公开是为了让当日盘子装配（<see cref="ProductionPlanContext"/>）
+    /// 走同一份物理口径</b> —— 各写一份的话，「编组优化」说得出的班产与任务编制排出来的量会是两个数，
+    /// 而两边各自都自洽。
+    /// </summary>
+    public readonly record struct Cap(FleetDispatchRule Rule, double CycleMin, double DailyM3, double MatchFactor,
         double LoadMin, double ShovelUtil, double TruckUtil, double WaitProb, string Bottleneck);
 
     /// <summary>§3.3 物理产能子模型 + M/M/c 排队论内生匹配系数（替代 MF≡1）。</summary>
-    private static Cap Capacity(FleetDispatchRule r, FleetOptInput inp)
+    public static Cap Capacity(FleetDispatchRule r, FleetOptInput inp)
     {
         double cycle = r.CycleTimeMin;
         if (inp.HaulDistanceKm > 0 && inp.AvgSpeedKmh > 0)

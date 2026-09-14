@@ -1,7 +1,7 @@
-<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+﻿<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ch="using:PitMine3D.Kylin.Controls.Charts"
         x:Class="PitMine3D.Kylin.Views.GeoDb.BoreholeImportWindow" x:CompileBindings="False"
-        Classes="geodb" Title="导入钻孔数据 (CSV)" Width="860" Height="560" WindowStartupLocation="CenterOwner">
+        Classes="geodb" Title="导入钻孔数据 (CSV)" Width="1120" Height="600" WindowStartupLocation="CenterOwner">
     <Grid Margin="12" RowDefinitions="Auto,Auto,Auto,*,Auto">
         <TextBlock Grid.Row="0" Classes="page-title" Text="导入钻孔数据 (CSV)" Margin="0,0,0,4"/>
         <TextBlock Grid.Row="1" Classes="muted" TextWrapping="Wrap" Margin="0,0,0,8"
@@ -11,27 +11,34 @@
             <StackPanel Orientation="Horizontal" Spacing="6">
                 <Button Content="下载导入模板…" Click="OnDownloadTemplateClick" Padding="8,2"
                         ToolTip.Tip="生成带表头与示例行的 CSV 模板，填好后再回来导入"/>
-                <Border Width="1" Background="#D0D4DA" Margin="2,2"/>
+                <Border Width="1" Background="{DynamicResource Theme.Panel.Border}" Margin="2,2"/>
                 <Button Content="选择文件 (CSV)…" Click="OnPickFileClick" Padding="8,2"/>
-                <Border Width="1" Background="#D0D4DA" Margin="2,2"/>
+                <Border Width="1" Background="{DynamicResource Theme.Panel.Border}" Margin="2,2"/>
                 <Button Content="导入入库" Click="OnImportClick" Padding="8,2" Classes="primary"/>
-                <Border Width="1" Background="#D0D4DA" Margin="2,2"/>
+                <Border Width="1" Background="{DynamicResource Theme.Panel.Border}" Margin="2,2"/>
                 <CheckBox x:Name="overwriteBox" Content="覆盖已存在孔号" IsChecked="True" VerticalAlignment="Center"/>
             </StackPanel>
         </Border>
 
-        <DataGrid x:Name="previewGrid" Grid.Row="3" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single">
+        <!-- 预览表格: 全部列 Width=Auto —— 表头与数据哪个宽算哪个, 表比窗口宽就横向滚动。
+             【别给任何一列 *】: 只要有 * 列, DataGrid 就会"把表塞进视口": 先压 * 列到 MinWidth, 再把其余 Auto 列
+             一路压到各自 MinWidth, 于是"Auto"形同虚设, 实测 ZK2501 → "ZK250", 4372815.462 → "4372815.46", 日期只剩 "2025-03-1"。
+             写死 Width 更糟(表头都截: "孔口高/总孔/终孔层")。MinWidth 只兜表头, 正文按内容自己撑。 -->
+        <DataGrid x:Name="previewGrid" Grid.Row="3" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
+                  HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                  CanUserResizeColumns="True" ColumnWidth="Auto">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="120"/>
-                <DataGridTextColumn Header="孔号" Binding="{Binding HoleId}" Width="80"/>
-                <DataGridTextColumn Header="经距X" Binding="{Binding X}" Width="100"/>
-                <DataGridTextColumn Header="纬距Y" Binding="{Binding Y}" Width="100"/>
-                <DataGridTextColumn Header="孔口高程" Binding="{Binding ZCollar}" Width="80"/>
-                <DataGridTextColumn Header="总孔深" Binding="{Binding DepthTotal}" Width="70"/>
-                <DataGridTextColumn Header="终孔层位" Binding="{Binding TerminateHorizon}" Width="80"/>
-                <DataGridTextColumn Header="施工时间" Binding="{Binding DrillDate}" Width="100"/>
-                <DataGridTextColumn Header="类别" Binding="{Binding Category}" Width="90"/>
-                <DataGridTextColumn Header="备注" Binding="{Binding Remark}" Width="*"/>
+                <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="Auto" MinWidth="128"/>
+                <DataGridTextColumn Header="孔号" Binding="{Binding HoleId}" Width="Auto" MinWidth="76"/>
+                <DataGridTextColumn Header="经距X" Binding="{Binding X}" Width="Auto" MinWidth="104"/>
+                <DataGridTextColumn Header="纬距Y" Binding="{Binding Y}" Width="Auto" MinWidth="112"/>
+                <DataGridTextColumn Header="孔口高程" Binding="{Binding ZCollar}" Width="Auto" MinWidth="92"/>
+                <DataGridTextColumn Header="总孔深" Binding="{Binding DepthTotal}" Width="Auto" MinWidth="84"/>
+                <DataGridTextColumn Header="终孔层位" Binding="{Binding TerminateHorizon}" Width="Auto" MinWidth="92"/>
+                <DataGridTextColumn Header="施工时间" Binding="{Binding DrillDate}" Width="Auto" MinWidth="104"/>
+                <DataGridTextColumn Header="施工单位" Binding="{Binding DrillUnit}" Width="Auto" MinWidth="104"/>
+                <DataGridTextColumn Header="类别" Binding="{Binding Category}" Width="Auto" MinWidth="84"/>
+                <DataGridTextColumn Header="备注" Binding="{Binding Remark}" Width="Auto" MinWidth="120"/>
             </DataGrid.Columns>
         </DataGrid>
 

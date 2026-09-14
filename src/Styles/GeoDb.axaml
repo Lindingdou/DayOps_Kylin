@@ -14,7 +14,7 @@
         Button.primary / success / danger / warn   实心按钮
     -->
     <Style Selector="Window.geodb">
-        <Setter Property="Background" Value="#F7F8FA" />
+        <Setter Property="Background" Value="{DynamicResource Theme.Panel.Background}" />
         <Setter Property="FontSize" Value="12.5" />
     </Style>
 
@@ -83,7 +83,7 @@
         <Setter Property="FontWeight" Value="Bold" />
     </Style>
     <Style Selector="TextBlock.muted">
-        <Setter Property="Foreground" Value="#FF6B7280" />
+        <Setter Property="Foreground" Value="{DynamicResource Theme.Text.Muted}" />
     </Style>
     <Style Selector="TextBlock.small">
         <Setter Property="FontSize" Value="11" />
@@ -91,7 +91,7 @@
 
     <Style Selector="Border.panel">
         <Setter Property="Background" Value="White" />
-        <Setter Property="BorderBrush" Value="#FFDCDFE4" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Theme.Panel.Border}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="4" />
     </Style>
@@ -107,7 +107,7 @@
         <Setter Property="Background" Value="#FFE8F5E9" />
     </Style>
     <Style Selector="Border.panel-hdr.panel-hdr-plain">
-        <Setter Property="Background" Value="#FFF3F4F6" />
+        <Setter Property="Background" Value="{DynamicResource Theme.Window.Background}" />
     </Style>
     <Style Selector="TextBlock.panel-title">
         <Setter Property="FontWeight" Value="Bold" />
@@ -122,12 +122,12 @@
         <Setter Property="Foreground" Value="#FF2E7D32" />
     </Style>
     <Style Selector="TextBlock.panel-title.plain">
-        <Setter Property="Foreground" Value="#FF1F2937" />
+        <Setter Property="Foreground" Value="{DynamicResource Theme.Text.Primary}" />
     </Style>
 
     <Style Selector="Border.card">
         <Setter Property="Background" Value="White" />
-        <Setter Property="BorderBrush" Value="#FFDCDFE4" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Theme.Panel.Border}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="6" />
         <Setter Property="Padding" Value="14,10" />
@@ -135,7 +135,7 @@
     </Style>
     <Style Selector="TextBlock.kpi-title">
         <Setter Property="FontSize" Value="12" />
-        <Setter Property="Foreground" Value="#FF6B7280" />
+        <Setter Property="Foreground" Value="{DynamicResource Theme.Text.Muted}" />
     </Style>
     <Style Selector="TextBlock.kpi-value">
         <Setter Property="FontSize" Value="22" />
@@ -144,7 +144,7 @@
     </Style>
     <Style Selector="TextBlock.kpi-sub">
         <Setter Property="FontSize" Value="11" />
-        <Setter Property="Foreground" Value="#FF6B7280" />
+        <Setter Property="Foreground" Value="{DynamicResource Theme.Text.Muted}" />
         <Setter Property="Margin" Value="0,2,0,0" />
     </Style>
 
@@ -172,19 +172,19 @@
 
     <Style Selector="Border.toolbar">
         <Setter Property="Background" Value="White" />
-        <Setter Property="BorderBrush" Value="#FFDCDFE4" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Theme.Panel.Border}" />
         <Setter Property="BorderThickness" Value="0,0,0,1" />
         <Setter Property="Padding" Value="12,8" />
     </Style>
     <Style Selector="Border.statusbar">
-        <Setter Property="Background" Value="#FFF3F4F6" />
-        <Setter Property="BorderBrush" Value="#FFDCDFE4" />
+        <Setter Property="Background" Value="{DynamicResource Theme.Window.Background}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Theme.Panel.Border}" />
         <Setter Property="BorderThickness" Value="0,1,0,0" />
         <Setter Property="Padding" Value="10,4" />
     </Style>
     <Style Selector="Border.statusbar TextBlock">
         <Setter Property="FontSize" Value="11.5" />
-        <Setter Property="Foreground" Value="#FF4B5563" />
+        <Setter Property="Foreground" Value="{DynamicResource Theme.Text.Body}" />
     </Style>
 
     <Style Selector="Button.primary">
@@ -251,7 +251,7 @@
         <Setter Property="Background" Value="White" />
     </Style>
     <Style Selector="Window.geodb DataGridColumnHeader">
-        <Setter Property="Background" Value="#FFF3F4F6" />
+        <Setter Property="Background" Value="{DynamicResource Theme.Window.Background}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Padding" Value="6,4" />
         <Setter Property="MinHeight" Value="26" />

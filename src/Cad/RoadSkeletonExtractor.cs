@@ -550,7 +550,7 @@ public static class RoadSkeletonExtractor
 
         int gc = Math.Max(1, (int)Math.Ceiling(bridgeCells));
         long CellKey(int cgx, int cgy) => ((long)cgx << 32) | (uint)cgy;
-        var grid = new Dictionary<long, List<int>>();
+        var grid = new Dictionary<long, List<int>>(PackedKeyComparer.Instance);
         foreach (int id in eps) { long k = CellKey((id % w) / gc, (id / w) / gc); if (!grid.TryGetValue(k, out var l)) { l = new List<int>(); grid[k] = l; } l.Add(id); }
 
         var used = new HashSet<int>();

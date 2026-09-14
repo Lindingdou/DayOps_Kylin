@@ -13,6 +13,19 @@ public partial class MainWindow
     private GeoDbContext? _geoCtx;
     private Action<double, double>? _oneShotPick;   // 视口一次性拾取回调(NaN,NaN = 取消; +∞,+∞ = 确认结束)
     private bool _pickConfirmable;                  // 本次拾取是否允许"右键/回车 = 确认结束"(如 删除三角面 逐面点选)
+    // 本次拾取该用哪种光标(忠实原版按步骤给形态): 取点=十字 / 选线=白方框 / 选三角网面=黄框+十字。
+    private Controls.CadGlViewport.CursorMode _pickCursor = Controls.CadGlViewport.CursorMode.CrosshairOnly;
+    // 本次拾取的步骤提示(原版 ViewState.JigPrompt): 进命令行提示标签, 也随光标显示在浮标里(取点/选线/选面各命令共用)。
+    private string _pickPrompt = "";
+    // 拾取期间的悬停回调(指针每动一下调一次: 屏幕点 + Z=0 反投影世界点): 逐面点选类命令用它做"光标压到哪个面就亮哪个面",
+    // 并把 _pickHoverInfo 填成实时说明(面号/面积/点击将选中还是取消), 浮标里接在步骤提示后面显示。命令结束须自己清空。
+    private Action<Avalonia.Point, (double x, double y)?>? _pickHover;
+    private string? _pickHoverInfo;
+    // 拾取期间的拖框回调(起点屏幕点, 终点屏幕点, 右→左交叉?, 按着 Shift = 从已选中移除?)：逐面点选类命令用它一次框进多个面。
+    // 挂上它以后左键按下不再立刻算点选, 松开时按有没有拖动分流(没拖 = 点选, 拖了 = 框选)。命令结束须自己清空。
+    private Action<Avalonia.Point, Avalonia.Point, bool, bool>? _pickBox;
+    private bool _pickDragging;                  // 拾取期间左键按着在拖框
+    private Avalonia.Point _pickDragStart;       // 拖框起点(屏幕)
 
     /// <summary>构建(或复用)页面上下文; 数据库打开失败返回 null(状态栏已报)。</summary>
     private GeoDbContext? GeoCtx()
@@ -48,7 +61,9 @@ public partial class MainWindow
             {
                 var tcs = new TaskCompletionSource<(double x, double y)?>();
                 _oneShotPick = (x, y) => tcs.TrySetResult(double.IsNaN(x) ? null : (x, y));
-                StatusMsg.Text = string.IsNullOrEmpty(prompt) ? "在视口中点击拾取位置（Esc 取消）" : prompt;
+                _pickCursor = Controls.CadGlViewport.CursorMode.CrosshairOnly;   // 拾取位置 = 取点, 十字光标
+                _pickPrompt = string.IsNullOrEmpty(prompt) ? "在视口中点击拾取位置（Esc 取消）" : prompt;
+                StatusMsg.Text = _pickPrompt;
                 Activate();
                 return tcs.Task;
             },
@@ -151,7 +166,9 @@ public partial class MainWindow
     private bool ConsumeOneShotPick(double sx, double sy)
     {
         if (_oneShotPick == null) return false;
-        var cb = _oneShotPick; _oneShotPick = null;
+        var cb = _oneShotPick; _oneShotPick = null; _pickPrompt = "";
+        HideDragTip();   // 这一步的提示浮标随拾取结束收起(下一步若弹对话框, 不能留着它挂在视口里)
+        _lastPickScreen = (sx, sy);   // 3D 里选实体要按屏幕点做深度拾取, Z=0 反投影的世界点不代表实体位置
         var wp = Viewport.ScreenToWorld(sx, sy);
         if (wp == null) cb(double.NaN, double.NaN);
         else { cb(wp.Value.x, wp.Value.y); StatusMsg.Text = $"已拾取 ({wp.Value.x:0.##}, {wp.Value.y:0.##})"; }
@@ -162,7 +179,8 @@ public partial class MainWindow
     private bool CancelOneShotPick()
     {
         if (_oneShotPick == null) return false;
-        var cb = _oneShotPick; _oneShotPick = null; _pickConfirmable = false;
+        var cb = _oneShotPick; _oneShotPick = null; _pickConfirmable = false; _pickPrompt = "";
+        HideDragTip();
         cb(double.NaN, double.NaN);
         StatusMsg.Text = "已取消拾取";
         return true;
@@ -175,7 +193,8 @@ public partial class MainWindow
     private bool ConfirmOneShotPick()
     {
         if (_oneShotPick == null || !_pickConfirmable) return false;
-        var cb = _oneShotPick; _oneShotPick = null; _pickConfirmable = false;
+        var cb = _oneShotPick; _oneShotPick = null; _pickConfirmable = false; _pickPrompt = "";
+        HideDragTip();
         cb(double.PositiveInfinity, double.PositiveInfinity);
         return true;
     }

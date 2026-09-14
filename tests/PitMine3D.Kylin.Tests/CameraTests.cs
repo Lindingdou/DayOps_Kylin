@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using PitMine3D.Kylin.Controls;
 using Xunit;
 
@@ -136,6 +136,35 @@ public class CameraTests
         Assert.Equal(before!.Value.y, after!.Value.y, 1);
     }
 
+    /// <summary>
+    /// 空图纸画第一个图元时才落定渲染局部原点(局部 = 世界 − 原点)。
+    /// CadGlViewport.ApplyOrigin 会把注视点同量反向平移, 视图才不会当场挪一下
+    /// ——"刚画的圆/矩形不在落笔的位置"就是漏了这一步。
+    /// </summary>
+    [Fact]
+    public void ShiftTarget_compensates_render_origin_change()
+    {
+        double vw = 800, vh = 600, ox = 3, oy = 2;   // 第一个圆的圆心 → 新原点
+
+        var cam = new Camera();
+        cam.SetMode(true);
+        var before = cam.WorldToScreen(ox, oy, 0, vw, vh);       // 原点未定: 世界 == 局部
+
+        cam.ShiftTarget(-ox, -oy);                               // ApplyOrigin 的补偿
+        var after = cam.WorldToScreen(0, 0, 0, vw, vh);          // 同一世界点的新局部坐标
+
+        Assert.NotNull(before); Assert.NotNull(after);
+        Assert.Equal(before!.Value.sx, after!.Value.sx, 6);      // 屏幕位置纹丝不动
+        Assert.Equal(before!.Value.sy, after!.Value.sy, 6);
+
+        // 反证: 不补偿的话同一世界点在屏幕上真的挪了(且挪的量不小), 免得上面成了恒真断言
+        var uncompensated = new Camera();
+        uncompensated.SetMode(true);
+        var moved = uncompensated.WorldToScreen(0, 0, 0, vw, vh);
+        Assert.NotNull(moved);
+        Assert.True(Math.Abs(moved!.Value.sx - before!.Value.sx) > 10, "未补偿时屏幕位置应明显偏移");
+    }
+
     [Fact]
     public void PanScreen_moves_target()
     {
@@ -145,5 +174,37 @@ public class CameraTests
         float tx0 = cam.Target[0];
         cam.PanScreen(400, 300, 500, 300, 800, 600);   // 向右拖 100px
         Assert.NotEqual(tx0, cam.Target[0]);
+    }
+
+    // ── 十字光标尺寸(选项·显示) ──────────────────────────────────────────────
+    [Fact]
+    public void CursorArm_full_size_spans_view_from_any_corner()
+    {
+        // 100% = 满屏十字: 臂长(NDC)≥2 才保证光标贴到任一角时, 横竖两线仍拉满整个视图
+        var (ax, ay) = CadGlViewport.CursorArmNdc(100, 1600, 900);
+        Assert.True(ax >= 2f); Assert.True(ay >= 2f);
+    }
+
+    [Fact]
+    public void CursorArm_scales_with_percent()
+    {
+        var (ax, ay) = CadGlViewport.CursorArmNdc(50, 1000, 1000);   // 方视口 50% → 臂长半屏(NDC 1.0)
+        Assert.Equal(1.0, ax, 3); Assert.Equal(1.0, ay, 3);
+    }
+
+    [Fact]
+    public void CursorArm_is_square_in_pixels_on_wide_viewport()
+    {
+        // 宽视口上横竖两臂的【像素】长度要一样, 否则小尺寸时十字被宽高比拉扁
+        double w = 1600, h = 800;
+        var (ax, ay) = CadGlViewport.CursorArmNdc(10, w, h);
+        Assert.Equal(ax * w / 2, ay * h / 2, 3);
+    }
+
+    [Fact]
+    public void CursorArm_clamps_out_of_range_percent()
+    {
+        Assert.Equal(CadGlViewport.CursorArmNdc(2, 1000, 1000).ax, CadGlViewport.CursorArmNdc(-5, 1000, 1000).ax, 6);
+        Assert.Equal(CadGlViewport.CursorArmNdc(100, 1000, 1000).ax, CadGlViewport.CursorArmNdc(999, 1000, 1000).ax, 6);
     }
 }

@@ -149,7 +149,7 @@
           </TabItem>
           <TabItem Header="商品煤符合性">
             <DockPanel>
-              <Border DockPanel.Dock="Top" Background="#F7F8FA" Padding="6,4">
+              <Border DockPanel.Dock="Top" Background="{DynamicResource Theme.Panel.Background}" Padding="6,4">
                 <WrapPanel>
                   <CheckBox x:Name="cmpAdOn" Content="Ad≤" IsChecked="True" VerticalAlignment="Center"/>
                   <TextBox x:Name="cmpAdMax" Text="16" Width="46" Margin="3,0,12,0"/>

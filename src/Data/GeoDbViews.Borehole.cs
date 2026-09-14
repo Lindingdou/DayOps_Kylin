@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
@@ -544,11 +544,11 @@ public static partial class GeoDbViews
         void Bound(double x, double y) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
 
         // 按颜色/煤层编码分桶合并(原版同款: 岩色一桶, 每个煤层编码一桶)
-        var buckets = new Dictionary<string, (List<(double x, double y, double z)> v, List<(int a, int b, int c)> t, (byte r, byte g, byte b) col)>();
-        (List<(double x, double y, double z)> v, List<(int a, int b, int c)> t, (byte r, byte g, byte b) col) Bucket(string key, (byte r, byte g, byte b) col)
+        var buckets = new Dictionary<string, (List<(double x, double y, double z)> v, List<(int a, int b, int c)> t, List<(double x, double y, double z)> n, (byte r, byte g, byte b) col)>();
+        (List<(double x, double y, double z)> v, List<(int a, int b, int c)> t, List<(double x, double y, double z)> n, (byte r, byte g, byte b) col) Bucket(string key, (byte r, byte g, byte b) col)
         {
             if (!buckets.TryGetValue(key, out var bkt))
-                buckets[key] = bkt = (new List<(double, double, double)>(), new List<(int, int, int)>(), col);
+                buckets[key] = bkt = (new List<(double, double, double)>(), new List<(int, int, int)>(), new List<(double, double, double)>(), col);
             return bkt;
         }
 
@@ -610,13 +610,16 @@ public static partial class GeoDbViews
                 var (key, col, zb, zt) = segs[i];
                 var bkt = Bucket(key, col);
                 AppendCylinder(bkt.v, bkt.t, baseX, baseY, zt, zb, BcRadius,
-                               capBottom: i == 0, capTop: i == segs.Count - 1);
+                               capBottom: i == 0, capTop: i == segs.Count - 1, nrm: bkt.n);
             }
 
             result.Entities.Add(new TextEntity   // 孔号(柱顶正上方, 居中, 朝屏幕)
             {
+                // VAlign=0(底) 才是原版口径: 原 PmbiWriter 的 vAlign 编号是 0=基线 1=底 2=中 3=顶,
+                // 原版孔号写的是 1(底)。Kylin 的编号是 0=底 1=中 2=顶, 照抄数字 1 就成了"中",
+                // 孔号整体下沉半个字高, 贴着柱顶。
                 X = baseX, Y = baseY, Elevation = zTop + BcHoleLabelHeight * 0.6, Height = BcHoleLabelHeight,
-                HAlign = 1, VAlign = 1, Text = h.HoleId, ScreenFacing = true,
+                HAlign = 1, VAlign = 0, Text = h.HoleId, ScreenFacing = true,
                 Cr = 1f, Cg = 0xE0 / 255f, Cb = 0f,
             });
             Bound(baseX - BcRadius, baseY - BcRadius);
@@ -630,6 +633,7 @@ public static partial class GeoDbViews
             var me = new MeshEntity(key == "rock" ? "钻孔柱-岩层" : $"钻孔柱-{key}煤", bkt.v, bkt.t)
             {
                 Cr = bkt.col.r / 255f, Cg = bkt.col.g / 255f, Cb = bkt.col.b / 255f,
+                VertNormals = bkt.n,   // 柱面真法线(径向)/端面(轴向): 放大后侧面是圆滑的柱, 不是一条条棱
             };
             result.Entities.Add(me);
             result.MeshGroups++;
@@ -649,13 +653,17 @@ public static partial class GeoDbViews
     /// <summary>
     /// 一段圆柱累加进 (verts, tris)：底环 + 顶环 + 外向侧面；capBottom/capTop 控制是否封端面。
     /// 忠实原版 AppendCylinder(相邻段同半径衔接 → 整柱侧面连续平滑; 中间接缝不封盖)。
+    ///
+    /// <paramref name="nrm"/> 非空时同步写逐顶点法线：侧面用**径向真法线**(不是三角面法线), 柱面才平滑;
+    /// 端面另起一圈顶点、法线取轴向 —— 与侧面共用一圈的话, 柱面与端面的转折会被抹平成一圈糊边。
     /// </summary>
     public static void AppendCylinder(List<(double x, double y, double z)> v, List<(int a, int b, int c)> idx,
-        double holeX, double holeY, double zTop, double zBot, double radius, bool capBottom, bool capTop)
+        double holeX, double holeY, double zTop, double zBot, double radius, bool capBottom, bool capTop,
+        List<(double x, double y, double z)>? nrm = null)
     {
         int seg = BcSegments, baseIndex = v.Count;
-        for (int i = 0; i < seg; i++) v.Add((holeX + radius * BcCos[i], holeY + radius * BcSin[i], zBot));
-        for (int i = 0; i < seg; i++) v.Add((holeX + radius * BcCos[i], holeY + radius * BcSin[i], zTop));
+        for (int i = 0; i < seg; i++) { v.Add((holeX + radius * BcCos[i], holeY + radius * BcSin[i], zBot)); nrm?.Add((BcCos[i], BcSin[i], 0)); }
+        for (int i = 0; i < seg; i++) { v.Add((holeX + radius * BcCos[i], holeY + radius * BcSin[i], zTop)); nrm?.Add((BcCos[i], BcSin[i], 0)); }
         for (int i = 0; i < seg; i++)
         {
             int j = (i + 1) % seg;
@@ -665,13 +673,17 @@ public static partial class GeoDbViews
         }
         if (capBottom)
         {
-            int botC = v.Count; v.Add((holeX, holeY, zBot));
-            for (int i = 0; i < seg; i++) { int j = (i + 1) % seg; idx.Add((botC, baseIndex + j, baseIndex + i)); }
+            int rim = v.Count;
+            for (int i = 0; i < seg; i++) { v.Add((holeX + radius * BcCos[i], holeY + radius * BcSin[i], zBot)); nrm?.Add((0, 0, -1)); }
+            int botC = v.Count; v.Add((holeX, holeY, zBot)); nrm?.Add((0, 0, -1));
+            for (int i = 0; i < seg; i++) { int j = (i + 1) % seg; idx.Add((botC, rim + j, rim + i)); }
         }
         if (capTop)
         {
-            int topC = v.Count; v.Add((holeX, holeY, zTop));
-            for (int i = 0; i < seg; i++) { int j = (i + 1) % seg; idx.Add((topC, baseIndex + seg + i, baseIndex + seg + j)); }
+            int rim = v.Count;
+            for (int i = 0; i < seg; i++) { v.Add((holeX + radius * BcCos[i], holeY + radius * BcSin[i], zTop)); nrm?.Add((0, 0, 1)); }
+            int topC = v.Count; v.Add((holeX, holeY, zTop)); nrm?.Add((0, 0, 1));
+            for (int i = 0; i < seg; i++) { int j = (i + 1) % seg; idx.Add((topC, rim + i, rim + j)); }
         }
     }
 

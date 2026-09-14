@@ -102,7 +102,7 @@ public static class RoadCenterlineExtractor
         var tgtPts = new List<P3>();
         for (int li = 0; li < tgtL.Count; li++)
             ResampleByArc(tgtL[li], step, tgtPts, li);
-        var grid = new Dictionary<long, List<int>>(tgtPts.Count);
+        var grid = new Dictionary<long, List<int>>(tgtPts.Count, PackedKeyComparer.Instance);
         for (int i = 0; i < tgtPts.Count; i++)
         {
             long key = CellKey(tgtPts[i].X, tgtPts[i].Y, cell);

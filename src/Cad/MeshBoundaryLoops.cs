@@ -37,8 +37,8 @@ public static class MeshBoundaryLoops
         }
 
         // 2. 无向边计数 + 记一条有向实例(按三角绕向)
-        var undir = new Dictionary<long, int>(tris.Count * 3);
-        var dir = new Dictionary<long, (int u, int w)>(tris.Count * 3);
+        var undir = new Dictionary<long, int>(tris.Count * 3, PackedKeyComparer.Instance);
+        var dir = new Dictionary<long, (int u, int w)>(tris.Count * 3, PackedKeyComparer.Instance);
         void AddE(int u, int w)
         {
             if (u == w) return;
@@ -67,7 +67,7 @@ public static class MeshBoundaryLoops
 
         // 4. 顺着有向边串环:每条开放有向边只用一次
         long DKey(int u, int w) => ((long)u << 32) | (uint)w;
-        var used = new HashSet<long>();
+        var used = new HashSet<long>(PackedKeyComparer.Instance);
 
         // 汇聚顶点(≥2 开放出边)处取相对入边最靠顺时针的出边, 把汇聚点拆成两条独立简单环;
         // 单出边常规点走 O(1) 快路径。

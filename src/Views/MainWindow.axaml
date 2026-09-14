@@ -2,10 +2,11 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="using:PitMine3D.Kylin.Controls"
         xmlns:dc="using:Dock.Avalonia.Controls"
+        xmlns:cad="using:PitMine3D.Kylin.Cad"
         x:Class="PitMine3D.Kylin.Views.MainWindow"
         Width="1280" Height="800"
         MinWidth="900" MinHeight="600"
-        Background="#F3F4F6"
+        Background="{DynamicResource Theme.Window.Background}"
         Title="中煤平朔露天煤矿生产计划决策支撑系统 · DayOps">
 
     <Grid RowDefinitions="Auto,*,Auto">   <!-- Ribbon / DockingManager(含信息栏 Tab) / StatusBar —— 同原版 mainGrid -->
@@ -19,7 +20,7 @@
 
             <!-- ===== 开始 ===== -->
             <TabItem Header="开始">
-                <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,0,1">
+                <Border Background="{DynamicResource Theme.Panel.Background}" BorderBrush="{DynamicResource Theme.Panel.Border}" BorderThickness="0,0,0,1">
                     <ScrollViewer x:Name="HomeRibbonScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                         <!-- HorizontalAlignment=Left: 不加会被拉伸到视口宽, 于是超出的组(特性/帮助)被静默裁掉且滚不到(实测踩到) -->
                         <StackPanel Orientation="Horizontal" Height="94" HorizontalAlignment="Left">
@@ -151,11 +152,9 @@
                                             <StackPanel Orientation="Horizontal">
                                                 <Image Source="{StaticResource icon_layer}" Width="16" Height="16" VerticalAlignment="Center" />
                                                 <TextBlock Text="当前图层" FontSize="12" VerticalAlignment="Center" Margin="4,0,6,0" />
-                                                <ComboBox SelectedIndex="0" Width="160" MinHeight="22" Height="22" Padding="6,0" FontSize="12">
-                                                    <ComboBoxItem>0 · 默认层</ComboBoxItem>
-                                                    <ComboBoxItem>台阶线</ComboBoxItem>
-                                                    <ComboBoxItem>坡顶线</ComboBoxItem>
-                                                </ComboBox>
+                                                <!-- 同原版 comboCurrentLayer：列图层表全部图层, 选中即设为当前层(填充见 RefreshRibbonLayerCombo) -->
+                                                <ComboBox x:Name="LayerCombo" Width="160" MinHeight="22" Height="22" Padding="6,0" FontSize="12"
+                                                          SelectionChanged="OnRibbonLayerChanged" ToolTip.Tip="当前图层：新画的实体落在这一层" />
                                             </StackPanel>
                                             <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
                                                 <Button Classes="ribbon-btn small" Tag="全开" Click="OnRibbonCommand"><StackPanel Orientation="Horizontal"><Image Source="{StaticResource icon_show_all}" /><TextBlock Text="全开" /></StackPanel></Button>
@@ -222,6 +221,7 @@
                                             <Button.Flyout>
                                                 <MenuFlyout>
                                                     <MenuItem Header="图案填充" Click="OnHatchFillClick"><MenuItem.Icon><Image Source="{StaticResource icon_hatch}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="编辑填充" Tag="编辑填充" Click="OnRibbonCommand" ToolTip.Tip="打开「编辑填充」对话框：改选中填充的 图案/颜色/角度/比例(带预览)；双击填充同此"><MenuItem.Icon><Image Source="{StaticResource icon_hatch}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
                                                     <Separator />
                                                     <MenuItem Header="十字交叉(开/关)" Tag="填充十字" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_hatch}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
                                                 </MenuFlyout>
@@ -232,16 +232,32 @@
                                         <Grid Width="176" Margin="4,0" VerticalAlignment="Center" ColumnDefinitions="Auto,Auto,*" RowDefinitions="24,24,24">
                                             <Image Grid.Row="0" Grid.Column="0" Source="{StaticResource icon_hatch}" Width="15" Height="15" Margin="0,0,5,0" VerticalAlignment="Center" />
                                             <TextBlock Grid.Row="0" Grid.Column="1" Text="图案" Width="34" VerticalAlignment="Center" FontSize="12" />
-                                            <ComboBox Grid.Row="0" Grid.Column="2" x:Name="HatchPatternBox" SelectedIndex="0" MinHeight="22" Height="22" Padding="6,0" FontSize="12" SelectionChanged="OnHatchPatternChanged">
-                                                <ComboBoxItem>ANSI31 斜线</ComboBoxItem>
-                                                <ComboBoxItem>ANSI37 十字</ComboBoxItem>
-                                            </ComboBox>
+                                            <!-- 图案项由代码填(HatchPatternLibrary.All: SOLID/用户定义/ANSI31…/砖墙/蜂窝/土壤…), 见 MainWindow.HatchFont.cs -->
+                                            <ComboBox Grid.Row="0" Grid.Column="2" x:Name="HatchPatternBox" MinHeight="22" Height="22" Padding="6,0" FontSize="12"
+                                                      SelectionChanged="OnHatchPatternChanged"
+                                                      ToolTip.Tip="下一次填充用的图案。SOLID = 实心；用户定义 = 按右侧角度/间距画平行剖面线。" />
                                             <Image Grid.Row="1" Grid.Column="0" Source="{StaticResource icon_hatch_scale}" Width="15" Height="15" Margin="0,0,5,0" VerticalAlignment="Center" />
                                             <TextBlock Grid.Row="1" Grid.Column="1" Text="比例" Width="34" VerticalAlignment="Center" FontSize="12" />
-                                            <TextBox Grid.Row="1" Grid.Column="2" x:Name="HatchScaleBox" Text="" Watermark="自动" MinHeight="22" Height="22" Padding="4,0" FontSize="12" ToolTip.Tip="剖面线间距(世界单位)；空 = 自动" />
+                                            <TextBox Grid.Row="1" Grid.Column="2" x:Name="HatchScaleBox" Text="" Watermark="自动" MinHeight="22" Height="22" Padding="4,0" FontSize="12"
+                                                     LostFocus="OnHatchScaleCommitted" KeyDown="OnHatchParamKeyDown"
+                                                     ToolTip.Tip="命名图案: 缩放倍数(越大越疏)；用户定义: 剖面线间距(世界单位)。空 = 自动按边界大小取" />
                                             <Image Grid.Row="2" Grid.Column="0" Source="{StaticResource icon_hatch_angle}" Width="15" Height="15" Margin="0,0,5,0" VerticalAlignment="Center" />
                                             <TextBlock Grid.Row="2" Grid.Column="1" Text="角度" Width="34" VerticalAlignment="Center" FontSize="12" />
-                                            <TextBox Grid.Row="2" Grid.Column="2" x:Name="HatchAngleBox" Text="45" MinHeight="22" Height="22" Padding="4,0" FontSize="12" />
+                                            <TextBox Grid.Row="2" Grid.Column="2" x:Name="HatchAngleBox" Text="45" MinHeight="22" Height="22" Padding="4,0" FontSize="12"
+                                                     LostFocus="OnHatchAngleCommitted" KeyDown="OnHatchParamKeyDown"
+                                                     ToolTip.Tip="图案整体旋转角(度)，叠加在图案自带角度上；选中填充时改完即生效" />
+                                        </Grid>
+                                        <!-- 颜色 + 字体(同原版填充组右侧一栏: 颜色在上) -->
+                                        <Grid Width="196" Margin="4,0" VerticalAlignment="Center" ColumnDefinitions="Auto,Auto,*" RowDefinitions="24,24">
+                                            <Image Grid.Row="0" Grid.Column="0" Source="{StaticResource icon_color}" Width="15" Height="15" Margin="0,0,5,0" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="颜色" Width="34" VerticalAlignment="Center" FontSize="12" />
+                                            <controls:EntityColorPicker Grid.Row="0" Grid.Column="2" x:Name="HatchColorPick" VerticalAlignment="Center"
+                                                    ToolTip.Tip="下一次填充用的颜色：随层 / ACI 索引色板 / 更多颜色（自定义 RGB）" />
+                                            <Image Grid.Row="1" Grid.Column="0" Source="{StaticResource icon_text}" Width="15" Height="15" Margin="0,0,5,0" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="字体" Width="34" VerticalAlignment="Center" FontSize="12" />
+                                            <ComboBox Grid.Row="1" Grid.Column="2" x:Name="TextFontBox" MinHeight="22" Height="22" Padding="6,0" FontSize="12"
+                                                      DropDownOpened="OnTextFontDropDownOpened" SelectionChanged="OnTextFontChanged"
+                                                      ToolTip.Tip="切换全部文字的显示字体(全局覆盖, 立即生效)。常用中文字体已置顶；选「原始 (按图纸)」回到自动探测。" />
                                         </Grid>
                                     </StackPanel>
                                 </DockPanel>
@@ -282,17 +298,8 @@
                                             <DockPanel Height="22" Margin="0,0,0,4">
                                                 <Image Source="{StaticResource icon_color}" Width="15" Height="15" Margin="0,0,5,0" VerticalAlignment="Center" />
                                                 <TextBlock Text="颜色" Width="34" VerticalAlignment="Center" FontSize="12" />
-                                                <Button x:Name="EntityColorButton" MinHeight="22" Height="22" Padding="4,0" FontSize="12"
-                                                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                                                        ToolTip.Tip="实体颜色：随层 / 标准色板 / 自定义 RGB（有选中即写入选中实体）">
-                                                    <Button.Flyout>
-                                                        <MenuFlyout Opening="OnEntityColorFlyoutOpening" />
-                                                    </Button.Flyout>
-                                                    <StackPanel Orientation="Horizontal" Spacing="5">
-                                                        <Border x:Name="EntityColorSwatch" Width="13" Height="13" BorderThickness="1" BorderBrush="#8A8F97" VerticalAlignment="Center" />
-                                                        <TextBlock x:Name="EntityColorText" Text="随层" VerticalAlignment="Center" FontSize="12" />
-                                                    </StackPanel>
-                                                </Button>
+                                                <controls:EntityColorPicker x:Name="EntityColorPick" VerticalAlignment="Center"
+                                                        ToolTip.Tip="实体颜色：随层 / ACI 索引色板 / 更多颜色（自定义 RGB）（有选中即写入选中实体）" />
                                             </DockPanel>
                                             <DockPanel Height="22" Margin="0,0,0,4">
                                                 <Image Source="{StaticResource icon_lineweight}" Width="15" Height="15" Margin="0,0,5,0" VerticalAlignment="Center" />
@@ -358,7 +365,7 @@
 
             <!-- ===== 模块页（由 build/gen_module_tabs.py 生成，勿手改） ===== -->
             <TabItem Header="地质与工程信息数据库">
-                <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,0,1">
+                <Border Background="{DynamicResource Theme.Panel.Background}" BorderBrush="{DynamicResource Theme.Panel.Border}" BorderThickness="0,0,0,1">
                     <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                         <StackPanel Orientation="Horizontal" Height="94">
                             <Border Classes="ribbon-group">
@@ -493,7 +500,7 @@
                 </Border>
             </TabItem>
             <TabItem Header="三维地质建模">
-                <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,0,1">
+                <Border Background="{DynamicResource Theme.Panel.Background}" BorderBrush="{DynamicResource Theme.Panel.Border}" BorderThickness="0,0,0,1">
                     <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                         <StackPanel Orientation="Horizontal" Height="94">
                             <!-- 组序/组成照原 MeshEditLibPlugin + BlockModelLibPlugin：建模 · 倾斜摄影 · 编辑(点/线/面/体/工具) · 地质统计学分析 · 更新地质模型 · 块体模型 · 采矿模型 -->
@@ -599,7 +606,6 @@
                                                     <MenuItem Header="沿线分割三角网" Tag="沿线分割三角网" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource te_split_along}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
                                                     <MenuItem Header="合并三角网" Tag="合并三角网" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource te_merge_mesh}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
                                                     <MenuItem Header="面交线" Tag="面交线" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource te_face_intersect}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
-                                                    <MenuItem Header="裁剪面" Tag="裁剪面" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource te_clip_face}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
                                                     <MenuItem Header="修复拓扑关系" Tag="修复拓扑关系" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource te_repair_topo}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
                                                     <MenuItem Header="删除三角面" Tag="删除三角面" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource te_delete_tri}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
                                                     <MenuItem Header="格网质量检测" Tag="格网质量检测" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource te_quality}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
@@ -734,7 +740,7 @@
                 </Border>
             </TabItem>
             <TabItem Header="点云处理">
-                <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,0,1">
+                <Border Background="{DynamicResource Theme.Panel.Background}" BorderBrush="{DynamicResource Theme.Panel.Border}" BorderThickness="0,0,0,1">
                     <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                         <StackPanel Orientation="Horizontal" Height="94">
                             <Border Classes="ribbon-group">
@@ -892,7 +898,7 @@
                 </Border>
             </TabItem>
             <TabItem Header="剥采排工程辅助设计">
-                <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,0,1">
+                <Border Background="{DynamicResource Theme.Panel.Background}" BorderBrush="{DynamicResource Theme.Panel.Border}" BorderThickness="0,0,0,1">
                     <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                         <StackPanel Orientation="Horizontal" Height="94">
                             <Border Classes="ribbon-group">
@@ -1015,7 +1021,7 @@
                 </Border>
             </TabItem>
             <TabItem Header="道路运输系统">
-                <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,0,1">
+                <Border Background="{DynamicResource Theme.Panel.Background}" BorderBrush="{DynamicResource Theme.Panel.Border}" BorderThickness="0,0,0,1">
                     <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                         <StackPanel Orientation="Horizontal" Height="94">
                             <Border Classes="ribbon-group">
@@ -1110,7 +1116,7 @@
                 </Border>
             </TabItem>
             <TabItem Header="生产计划编制">
-                <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,0,1">
+                <Border Background="{DynamicResource Theme.Panel.Background}" BorderBrush="{DynamicResource Theme.Panel.Border}" BorderThickness="0,0,0,1">
                     <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                         <StackPanel Orientation="Horizontal" Height="94">
                             <Border Classes="ribbon-group">
@@ -1223,7 +1229,7 @@
                 </Border>
             </TabItem>
             <TabItem Header="日常生产组织">
-                <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,0,0,1">
+                <Border Background="{DynamicResource Theme.Panel.Background}" BorderBrush="{DynamicResource Theme.Panel.Border}" BorderThickness="0,0,0,1">
                     <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                         <StackPanel Orientation="Horizontal" Height="94">
                             <Border Classes="ribbon-group">
@@ -1360,45 +1366,93 @@
         <!-- ============================ 3D 视口 ============================ -->
         <!-- 隐藏暂存：面板内容在 Window namescope 构建(x:Name/事件正常回填)，加载后移入 Dock 工具 -->
         <Panel Grid.Row="1" x:Name="ContentStash" IsVisible="False">
-        <!-- 左面板：文件管理器 / 图层 两个可见标签(TabControl) -->
-        <!-- 左面板：文件管理器 / 图层 —— 两个独立 Dock 工具, 由 ToolDock 呈现底部标签(与右面板同款, 见 BuildDock) -->
-        <Grid x:Name="FileContent" RowDefinitions="Auto,Auto,Auto,*" Background="#F7F8FA">
-            <TextBlock Grid.Row="0" Text="文件管理器" FontWeight="SemiBold" FontSize="13"
-                       Margin="10,8,10,4" Foreground="#3A3F46" />
-            <Button Grid.Row="1" Content="打开文件夹…" Click="OnOpenFolder"
-                    Margin="8,0,8,4" HorizontalAlignment="Stretch" />
-            <TextBlock Grid.Row="2" x:Name="FileFolderLabel" Text="未选择文件夹"
-                       Margin="10,0,10,4" FontSize="10" Foreground="#8A929C" TextTrimming="CharacterEllipsis" />
-            <ListBox Grid.Row="3" x:Name="FileList" Background="Transparent" BorderThickness="0"
-                     Margin="4,0" DoubleTapped="OnFileListDoubleTapped" />
+        <!-- 左面板：文件管理器 / 对象管理器 —— 两个独立 Dock 工具(同原版 panelLeft 两个 LayoutAnchorable), 由 ToolDock 呈现底部标签(与右面板同款, 见 BuildDock) -->
+        <!-- 文件管理器：同原版 fileSystemTree —— 「📂 工作目录」+「🖥 我的电脑」两个根,
+             目录懒加载, 文件按格式分组(「dxf文件 (3)」), 右键 刷新/添加根目录/加入·移出工作目录/在资源管理器中打开,
+             双击 目录=展开 · 文件=打开或导入。工作目录随配置持久化(关闭即落盘)。 -->
+        <!-- 面板内不再另起「文件管理器」标题：原版 LayoutAnchorable 里就是一棵 TreeListBox 顶到边, 页签即标题 -->
+        <Grid x:Name="FileContent" Background="{DynamicResource Theme.Panel.Background}">
+            <!-- 字号 12(默认 14 在侧栏里显得粗大, 长路径一行装不下); 横向"滚到可见"在代码里截掉了, 见 OnFileTreeBringIntoView -->
+            <TreeView x:Name="FileTree" Background="Transparent" BorderThickness="0" FontSize="12"
+                      Margin="2" DoubleTapped="OnFileTreeDoubleTapped" KeyDown="OnFileTreeKeyDown">
+                <TreeView.ItemContainerTheme>
+                    <!-- 行容器 = 原版 TreeListBox 观感(10px/级缩进 + 小三角 + 22px 行, 见 Styles/TreeListBox.axaml);
+                         展开态双向绑到节点(懒加载靠 IsExpanded 触发读盘, 刷新后要能把展开层级恢复回来) -->
+                    <ControlTheme TargetType="TreeViewItem" x:DataType="cad:FileSystemNode" BasedOn="{StaticResource PitTreeListBoxItem}">
+                        <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                    </ControlTheme>
+                </TreeView.ItemContainerTheme>
+                <TreeView.ContextMenu>
+                    <ContextMenu x:Name="FileTreeMenu" Opening="OnFileTreeMenuOpening">
+                        <MenuItem x:Name="MiFsRefresh" Header="🔄 刷新" InputGesture="F5" Click="OnFsRefreshClick" />
+                        <Separator x:Name="MiFsSepAfterRefresh" />
+                        <MenuItem x:Name="MiFsAddRoot" Header="添加根目录…" Click="OnFsAddRootClick" />
+                        <MenuItem x:Name="MiFsAddToWork" Header="添加到工作目录" Click="OnFsAddToWorkClick" />
+                        <MenuItem x:Name="MiFsRemoveFromWork" Header="从工作目录移除" Click="OnFsRemoveFromWorkClick" />
+                        <Separator x:Name="MiFsSepBeforeExplorer" />
+                        <MenuItem x:Name="MiFsOpenInExplorer" Header="在资源管理器中打开" Click="OnFsOpenInExplorerClick" />
+                    </ContextMenu>
+                </TreeView.ContextMenu>
+                <TreeView.ItemTemplate>
+                    <TreeDataTemplate x:DataType="cad:FileSystemNode" ItemsSource="{Binding Children}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding Icon}" Margin="0,0,4,0" FontSize="12" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </TreeDataTemplate>
+                </TreeView.ItemTemplate>
+            </TreeView>
         </Grid>
-        <Grid x:Name="LayerContent" RowDefinitions="Auto,*" Background="#F7F8FA">
-            <TextBlock Grid.Row="0" Text="图层" FontWeight="SemiBold" FontSize="13"
-                       Margin="10,8,10,4" Foreground="#3A3F46" />
-            <ListBox Grid.Row="1" x:Name="LayerList" Background="Transparent" BorderThickness="0" Margin="4,4" />
-        </Grid>
-        <!-- 对象管理器: 用户"没必要维护对象" → 不设标签; 控件留在暂存区(隐藏)以保代码引用不断 -->
-        <Grid x:Name="ObjectContent" RowDefinitions="Auto,Auto,*" Background="#F7F8FA">
-            <TextBlock Grid.Row="0" Text="对象管理器" FontWeight="SemiBold" FontSize="13"
-                       Margin="10,8,10,4" Foreground="#3A3F46" />
-            <TextBlock Grid.Row="1" x:Name="ObjectTreeHint" Text="导入图纸后显示实体"
-                       Margin="10,0,10,6" FontSize="11" Foreground="#8A929C" />
-            <TreeView Grid.Row="2" x:Name="ObjectTree" Background="Transparent" BorderThickness="0" Margin="4,0" />
+        <!-- 对象管理器：同原版 objectBrowserTree(面板内无标题, 页签即标题) —— 三根 🏗️ CAD 对象(→📘 文件→🎨 图层, 线类只到图层级) /
+             ⛰️ 面模型(→🎨 图层→🔷 三角网, 面到对象级) / 🧱 块体模型(→🎲 模型)；图层·块体·顶层组行首 ☑ 为可见性开关(顶层组=总开关),
+             双击 三角网=视口选中 · 块体=设为活动并缩放至, 右键 删除图层/删除模型。数据逻辑见 ObjectTreeViewModel, 接线见 MainWindow.ObjectManager.cs -->
+        <Grid x:Name="ObjectContent" Background="{DynamicResource Theme.Panel.Background}">
+            <TreeView x:Name="ObjectTree" Background="Transparent" BorderThickness="0" FontSize="12"
+                      Margin="2" DoubleTapped="OnObjectTreeDoubleTapped">
+                <TreeView.ItemContainerTheme>
+                    <!-- 行容器 = 原版 TreeListBox 观感(见 Styles/TreeListBox.axaml)；
+                         展开态双向绑到节点：差量刷新只增删变化的节点, 用户折叠过的组刷新后仍是折叠的 -->
+                    <ControlTheme TargetType="TreeViewItem" x:DataType="cad:ObjectTreeNode" BasedOn="{StaticResource PitTreeListBoxItem}">
+                        <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                    </ControlTheme>
+                </TreeView.ItemContainerTheme>
+                <TreeView.ContextMenu>
+                    <ContextMenu x:Name="ObjectTreeMenu" Opening="OnObjectTreeMenuOpening">
+                        <MenuItem x:Name="MiObjDeleteLayer" Header="🗑 删除图层" Click="OnObjTreeDeleteLayerClick" />
+                        <MenuItem x:Name="MiObjDeleteEntity" Header="🗑 删除模型" Click="OnObjTreeDeleteEntityClick" />
+                    </ContextMenu>
+                </TreeView.ContextMenu>
+                <TreeView.ItemTemplate>
+                    <TreeDataTemplate x:DataType="cad:ObjectTreeNode" ItemsSource="{Binding Children}">
+                        <StackPanel Orientation="Horizontal">
+                            <!-- 可见性 CheckBox（图层 + 块体模型 + 顶层组 显示在最前；文件/实体叶子隐藏）。
+                                 Fluent 的勾选框固定 20px, 在 12px 字号的树行里显得粗大 —— 用 LayoutTransform 整体缩到 0.7(连同布局尺寸, 不留空档) -->
+                            <LayoutTransformControl IsVisible="{Binding ShowVisibilityCheckbox}" Margin="0,0,3,0" VerticalAlignment="Center">
+                                <LayoutTransformControl.LayoutTransform><ScaleTransform ScaleX="0.7" ScaleY="0.7" /></LayoutTransformControl.LayoutTransform>
+                                <CheckBox IsChecked="{Binding IsContentVisible, Mode=TwoWay}" ToolTip.Tip="切换可见性" MinWidth="0" MinHeight="0" Padding="0" />
+                            </LayoutTransformControl>
+                            <!-- 彩色 emoji 按字号出的位图比同字号汉字高一截, 字号压到 10 才与 12px 的文字齐平 -->
+                            <TextBlock Text="{Binding Icon}" Margin="0,0,4,0" FontSize="10" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </TreeDataTemplate>
+                </TreeView.ItemTemplate>
+            </TreeView>
         </Grid>
         <!-- 视口宿主(CadGlViewport + 提示叠层 + 右键菜单)现按「每文档独立视口」在代码里懒建, 见 MainWindow.axaml.cs 的 EnsureHost/BuildViewportContextMenu。 -->
         <!-- 右面板：特性 / 智能助手 —— 两个独立 Dock 工具, 由 ToolDock 呈现底部标签(见 BuildDock) -->
-        <Grid x:Name="PropsContent" RowDefinitions="Auto,Auto,*" Background="#F7F8FA">
+        <Grid x:Name="PropsContent" RowDefinitions="Auto,Auto,*" Background="{DynamicResource Theme.Panel.Background}">
             <TextBlock Grid.Row="0" Text="特性" FontWeight="SemiBold" FontSize="13"
-                       Margin="10,8,10,4" Foreground="#3A3F46" />
+                       Margin="10,8,10,4" Foreground="{DynamicResource Theme.Text.Body}" />
             <TextBlock Grid.Row="1" x:Name="PropertyHint" Text="选中单个实体查看特性"
-                       Margin="10,0,10,6" FontSize="11" Foreground="#8A929C" />
+                       Margin="10,0,10,6" FontSize="11" Foreground="{DynamicResource Theme.Text.Muted}" />
             <ScrollViewer Grid.Row="2" Margin="4,0,4,8">
                 <StackPanel x:Name="PropertyPanel" />
             </ScrollViewer>
         </Grid>
-        <Grid x:Name="AssistantContent" RowDefinitions="Auto,*,Auto" Background="#F2F4F7">
+        <Grid x:Name="AssistantContent" RowDefinitions="Auto,*,Auto" Background="{DynamicResource Theme.Panel.Background2}">
             <TextBlock Grid.Row="0" Text="智能助手 🤖" FontWeight="SemiBold" FontSize="13"
-                       Margin="10,8,10,4" Foreground="#3A3F46" />
+                       Margin="10,8,10,4" Foreground="{DynamicResource Theme.Text.Body}" />
             <ScrollViewer Grid.Row="1" Margin="6,0,6,4">
                 <StackPanel x:Name="AssistantPanel" />
             </ScrollViewer>
@@ -1409,25 +1463,25 @@
             </Grid>
         </Grid>
         <!-- 信息栏(原版底部 LayoutAnchorable「信息栏」: 命令历史填满上方 + 底部一行 图标·命令:·输入框), 由 BuildDock 停靠为底部面板 -->
-        <Border x:Name="CmdContent" Background="#F7F8FA" Padding="4,2">
+        <Border x:Name="CmdContent" Background="{DynamicResource Theme.Panel.Background}" Padding="4,2">
             <DockPanel LastChildFill="True">
                 <!-- 命令输入行(底部, 高 24, 同原版) -->
                 <Grid DockPanel.Dock="Bottom" Height="24" ColumnDefinitions="Auto,Auto,Auto,*">
                     <Image Grid.Column="0" Source="{StaticResource icon_option}" Width="16" Height="16" VerticalAlignment="Center" Margin="2,0,0,0" />
-                    <TextBlock Grid.Column="1" Text="命令:" Foreground="#3A3F46" VerticalAlignment="Center" Margin="6,0,6,0" FontFamily="Consolas,monospace" />
+                    <TextBlock Grid.Column="1" Text="命令:" Foreground="{DynamicResource Theme.Text.Body}" VerticalAlignment="Center" Margin="6,0,6,0" FontFamily="Consolas,monospace" />
                     <!-- 交互提示(同原版 jigPromptText / AutoCAD 命令行提示)：绘制/编辑/夹点/测量等进行中显示当前步骤, 空闲时空 -->
-                    <TextBlock Grid.Column="2" x:Name="CmdPrompt" Text="" Foreground="#0A5AD4" VerticalAlignment="Center" Margin="0,0,6,0" FontFamily="Consolas,monospace" />
+                    <TextBlock Grid.Column="2" x:Name="CmdPrompt" Text="" Foreground="{DynamicResource Theme.Accent}" VerticalAlignment="Center" Margin="0,0,6,0" FontFamily="Consolas,monospace" />
                     <TextBox Grid.Column="3" x:Name="CommandInput" Height="20" MinHeight="20" Padding="4,0" VerticalContentAlignment="Center"
-                             Background="#FFFFFF" BorderBrush="#D3D7DE" BorderThickness="1" Foreground="#1E1F22"
+                             Background="{DynamicResource Theme.Input.Background}" BorderBrush="{DynamicResource Theme.Input.Border}" BorderThickness="1" Foreground="{DynamicResource Theme.Text.Primary}"
                              FontFamily="Consolas,monospace" HorizontalContentAlignment="Left"
                              Watermark="请输入中文命令（如 直线 / 多段线 / 距离 / 俯视）：空格或回车执行，↑↓ 历史，Tab 补全，输入 帮助 看全部命令"
                              KeyDown="OnCommandKeyDown" TextChanged="OnCommandInputChanged" />
                 </Grid>
                 <!-- 命令自动补全候选：固定占一行(Opacity 显隐, 不用 IsVisible)——显隐不改变面板布局 -->
-                <TextBlock x:Name="CmdSuggest" DockPanel.Dock="Bottom" Foreground="#8A6D2B" FontSize="11" Height="16"
+                <TextBlock x:Name="CmdSuggest" DockPanel.Dock="Bottom" Foreground="{DynamicResource Theme.Hint.Suggest}" FontSize="11" Height="16"
                            FontFamily="Consolas,monospace" Margin="30,0,0,2" Text="" Opacity="0" />
                 <!-- 命令历史/输出回显：填满面板其余高度(面板高度由停靠比例决定, 日志增长不影响视口) -->
-                <ScrollViewer x:Name="CmdLogScroll" Margin="0,0,0,3" Background="#FFFFFF"
+                <ScrollViewer x:Name="CmdLogScroll" Margin="0,0,0,3" Background="{DynamicResource Theme.Input.Background}"
                               HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
                     <StackPanel x:Name="CmdLog" Margin="4,2" />
                 </ScrollViewer>
@@ -1439,23 +1493,23 @@
         <dc:DockControl Grid.Row="1" x:Name="Dock" />
 
         <!-- ============================ 状态栏(同原版 Fluent:StatusBar 项序) ============================ -->
-        <Border Grid.Row="2" Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="0,1,0,0" Height="26">
+        <Border Grid.Row="2" x:Name="StatusBarHost" Background="{DynamicResource Theme.Panel.Background}" BorderBrush="{DynamicResource Theme.Panel.Border}" BorderThickness="0,1,0,0" Height="26">
             <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto">
                 <!-- Coordinate: 鼠标进入视口才显示世界坐标, 离开清空(同原版 txtCoordinate) -->
                 <TextBlock Grid.Column="0" x:Name="CoordText" Text="" MinWidth="280"
-                           Foreground="#1E1F22" VerticalAlignment="Center" Margin="10,0" FontSize="13" FontFamily="Consolas,monospace" />
-                <Border Grid.Column="1" Width="1" Background="#DCDFE4" Margin="0,4" />
+                           Foreground="{DynamicResource Theme.Text.Primary}" VerticalAlignment="Center" Margin="10,0" FontSize="13" FontFamily="Consolas,monospace" />
+                <Border Grid.Column="1" Width="1" Background="{DynamicResource Theme.Panel.Border}" Margin="0,4" />
                 <!-- Performance: 帧时间采样(同原版 txtFrameProfilerStatus) -->
                 <TextBlock Grid.Column="2" x:Name="FpsText" Text="FPS — | — ms" MinWidth="180"
-                           Foreground="#8A929C" VerticalAlignment="Center" Margin="10,0" FontSize="12" FontFamily="Consolas,monospace"
+                           Foreground="{DynamicResource Theme.Text.Muted}" VerticalAlignment="Center" Margin="10,0" FontSize="12" FontFamily="Consolas,monospace"
                            ToolTip.Tip="帧时间采样 — 启动后约 1 秒开始显示数据" />
-                <Border Grid.Column="3" Width="1" Background="#DCDFE4" Margin="0,4" />
+                <Border Grid.Column="3" Width="1" Background="{DynamicResource Theme.Panel.Border}" Margin="0,4" />
                 <!-- 状态文案 + 大数据加载进度条(只在后台加载时显出, 平时占位为 0 宽) -->
                 <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock x:Name="StatusMsg" Text="就绪" Foreground="#3A3F46" VerticalAlignment="Center" Margin="12,0" FontSize="12" TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="StatusMsg" Text="就绪" Foreground="{DynamicResource Theme.Text.Body}" VerticalAlignment="Center" Margin="12,0" FontSize="12" TextTrimming="CharacterEllipsis" />
                     <ProgressBar x:Name="LoadBar" Width="180" Height="8" Minimum="0" Maximum="1" Value="0"
                                  IsVisible="False" VerticalAlignment="Center" Margin="4,0,8,0"
-                                 Foreground="#0A5AD4" Background="#E3E7EE" />
+                                 Foreground="{DynamicResource Theme.Accent}" Background="{DynamicResource Theme.Accent.Soft}" />
                 </StackPanel>
                 <!-- extend(右侧): 正交 · 捕捉(左键开关, 右键捕捉模式) · 栅格 · 栅格捕捉 · 选项 —— 20x20 图标按钮同原版 -->
                 <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
@@ -1463,7 +1517,7 @@
                                   IsCheckedChanged="OnOrthoToggle" ToolTip.Tip="正交 (F8)">
                         <Image Source="{StaticResource icon_ortho}" Width="16" Height="16" />
                     </ToggleButton>
-                    <Border Width="1" Background="#DCDFE4" Margin="4,2" />
+                    <Border Width="1" Background="{DynamicResource Theme.Panel.Border}" Margin="4,2" />
                     <ToggleButton x:Name="SnapToggle" Classes="status-toggle" Width="22" Height="22" Padding="0"
                                   ToolTip.Tip="对象捕捉 (左键开关, 右键设置捕捉模式)">
                         <Image Source="{StaticResource icon_snap}" Width="16" Height="16" />
@@ -1481,17 +1535,24 @@
                             </ContextMenu>
                         </ToggleButton.ContextMenu>
                     </ToggleButton>
-                    <Border Width="1" Background="#DCDFE4" Margin="4,2" />
+                    <Border Width="1" Background="{DynamicResource Theme.Panel.Border}" Margin="4,2" />
                     <ToggleButton x:Name="GridToggle" Classes="status-toggle" Width="22" Height="22" Padding="0"
                                   IsChecked="True" IsCheckedChanged="OnGridToggle" ToolTip.Tip="栅格开关">
                         <Image Source="{StaticResource icon_grid}" Width="16" Height="16" />
                     </ToggleButton>
-                    <Border Width="1" Background="#DCDFE4" Margin="4,2" />
+                    <Border Width="1" Background="{DynamicResource Theme.Panel.Border}" Margin="4,2" />
                     <ToggleButton x:Name="GridSnapToggle" Classes="status-toggle" Width="22" Height="22" Padding="0"
                                   IsCheckedChanged="OnGridSnapToggle" ToolTip.Tip="栅格捕捉 (F9)">
                         <Image Source="{StaticResource icon_point}" Width="16" Height="16" />
                     </ToggleButton>
-                    <Border Width="1" Background="#DCDFE4" Margin="4,2" />
+                    <Border Width="1" Background="{DynamicResource Theme.Panel.Border}" Margin="4,2" />
+                    <!-- 线宽显示开关(原版 btnStatusLineWeight / 命令 LWDISPLAY): 默认开; 与原版一样先记状态、回显, thick-line 渲染待渲染管线升级 -->
+                    <ToggleButton x:Name="LineWeightToggle" Classes="status-toggle" Width="22" Height="22" Padding="0"
+                                  IsChecked="True" IsCheckedChanged="OnLineWeightToggle"
+                                  ToolTip.Tip="线宽显示开关 (LWDISPLAY)&#x0a;关闭: 所有实体按 1px 渲染&#x0a;打开: 按实体线宽渲染 (thick-line GPU 待后续渲染管线升级)">
+                        <Image Source="{StaticResource icon_lineweight}" Width="16" Height="16" />
+                    </ToggleButton>
+                    <Border Width="1" Background="{DynamicResource Theme.Panel.Border}" Margin="4,2" />
                     <Button Width="20" Height="20" Padding="0" Background="Transparent" BorderThickness="0"
                             Click="OnStatusOptionsClick" ToolTip.Tip="选项 (显示 / 选择集 / 打开和保存)">
                         <Image Source="{StaticResource icon_settings}" Width="16" Height="16" />

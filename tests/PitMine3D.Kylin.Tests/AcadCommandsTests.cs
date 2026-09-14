@@ -96,6 +96,7 @@ public class AcadCommandsTests
     public void Every_entry_is_reported_as_known()
     {
         foreach (var en in AcadCommands.Table) Assert.True(AcadCommands.IsAcadCommand(en.Acad), en.Acad);
+        Assert.True(AcadCommands.IsAcadCommand("lwdisplay"));   // 线宽显示开关(原内核命令表同名, 状态栏「线宽」按钮同一开关)
         Assert.False(AcadCommands.IsAcadCommand("ARRAY"));      // 系统里没有的 AutoCAD 命令不该进表
         Assert.False(AcadCommands.IsAcadCommand("FILLET"));
         Assert.False(AcadCommands.IsAcadCommand(""));

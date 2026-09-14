@@ -75,6 +75,8 @@ public sealed class RoadEdge
     public string? Pavement { get; set; }
     public RoadEdgeStatus Status { get; set; } = RoadEdgeStatus.Open;
     public bool IsTemporary { get; set; }
+    /// <summary>人工改判的线路类型（干线/支线/孤立段）；null = 走 <see cref="RoadTopology"/> 的自动判据（忠实原 RoadEdge.RoadClass）。</summary>
+    public RoadSegmentClass? RoadClass { get; set; }
 
     public RoadEdge(string id, string fromId, string toId, IReadOnlyList<Point3d>? centerline = null)
     {
@@ -333,7 +335,7 @@ public sealed class RoadGraph
             SpeedLimitKph = src.SpeedLimitKph,
             Pavement = src.Pavement,
             Status = src.Status,
-            IsTemporary = src.IsTemporary,
+            IsTemporary = src.IsTemporary, RoadClass = src.RoadClass,
         };
 
     /// <summary>离给定点最近的边(按中线/端点的平面距)。忠实原 RoadGraph.NearestEdge。</summary>
@@ -391,7 +393,7 @@ public sealed class RoadGraph
                 SpeedLimitKph = e.SpeedLimitKph,
                 Pavement = e.Pavement,
                 Status = e.Status,
-                IsTemporary = e.IsTemporary,
+                IsTemporary = e.IsTemporary, RoadClass = e.RoadClass,
             });
         return g;
     }

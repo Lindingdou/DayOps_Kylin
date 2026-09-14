@@ -75,7 +75,7 @@
               <TextBlock x:Name="zNote" IsVisible="False" FontSize="11" Margin="0,0,0,8" TextWrapping="Wrap" Classes="muted"
                          Text="按 cell 高程（Z）自动归一化着色，无需任何属性数据 —— 适合实体转块体 / 体素体积等无属性块体。"/>
               <TextBlock Text="图例" Margin="0,0,0,4"/>
-              <Border BorderBrush="#FFDCDFE4" BorderThickness="1" CornerRadius="2">
+              <Border BorderBrush="{DynamicResource Theme.Panel.Border}" BorderThickness="1" CornerRadius="2">
                 <Border x:Name="gradientRect" Height="20"/>
               </Border>
               <Grid Margin="0,3,0,0">

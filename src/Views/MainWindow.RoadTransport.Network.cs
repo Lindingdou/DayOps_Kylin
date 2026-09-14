@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -466,6 +466,7 @@ public partial class MainWindow
     {
         var win = new SnapshotManagerWindow(RS.Snapshots, RoadSnapshotCurrent, RoadLoadSnapshotAsCurrent);
         win.Show(this);
+        StatusMsg.Text = $"时段快照：已有 {RS.Snapshots.Count} 期（存当前 / 改名 / 转为当前路网 / 对比两期 / 删除）";
     }
 
     /// <summary>把当前会话路网图深拷贝存为一期命名快照，返回新快照（无图返 null）。</summary>
@@ -496,7 +497,7 @@ public partial class MainWindow
     private void RoadArchiveCmd()
     {
         var db = EnsureGeoDb();
-        if (db == null) { EditEcho("路网存档：工程库未连接（连上后自动重跑本命令）。", EchoLevel.Warn); return; }
+        if (db == null) { EditEcho("路网存档：工程库未连接（连上后自动重跑本命令）。", EchoLevel.Warn); StatusMsg.Text = "路网存档：工程库未连接，连上后自动重开"; return; }
         var win = new RoadNetworkArchiveWindow(() => _geoDb?.Connection, entity =>
         {
             var graph = RoadGraphSerializer.FromJson(entity.GraphJson);
@@ -510,6 +511,7 @@ public partial class MainWindow
             else { RoadClearNetworkPreview(); RefreshScene(); }
         });
         win.Show(this);
+        StatusMsg.Text = "路网存档：列出随工程持久化的各期路网（载入为当前图 / 改名 / 删除）";
     }
 
     // ═══════════════════════ 演化对比 / 分色显示 ═══════════════════════

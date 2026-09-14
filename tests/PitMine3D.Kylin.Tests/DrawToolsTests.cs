@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using PitMine3D.Kylin.Cad.Draw;
 using Xunit;
 
@@ -447,6 +447,73 @@ public class DrawToolsTests
     }
 
     [Fact]
+    public void PolylineEntity_offset_prunes_self_intersection()
+    {
+        // 带下凹缺口的开口线，往缺口【里侧】偏 5（大于缺口深 3）→ 两臂偏过头会交叉成小环。
+        // 照原版 FilterFoldedOpenOffset 的口径把折回点筛掉，结果不得再自交。
+        var pl = new PolylineEntity();
+        pl.Points.Add((0, 0)); pl.Points.Add((10, 0)); pl.Points.Add((12, -3));
+        pl.Points.Add((14, 0)); pl.Points.Add((24, 0));
+        // 未清理的原始 miter 结果长这样：跑到 x=12.67 又折回 x=11.33，压在自己身上成一个尖刺
+        var raw = new System.Collections.Generic.List<(double x, double y)>
+        { (0, 5), (12.67, 5), (12, 6.01), (11.33, 5), (24, 5) };
+        Assert.True(OffsetTools.HasSelfIntersection(raw, false));         // 不清理就是自交的
+
+        var off = (PolylineEntity)pl.Offset(5, 5)!;                       // 点击上方 5 = 凹侧
+        Assert.False(OffsetTools.HasSelfIntersection(off.Points, false)); // 清理后不再自交
+        Assert.True(off.Points.Count < pl.Points.Count);                  // 折回的那几个点确实被丢了
+    }
+
+    [Fact]
+    public void OffsetTools_detects_folded_spike_not_just_crossings()
+    {
+        // 折叠出来的尖刺是"共线压在来路上"，不产生内部交点 —— 判据必须认得它，否则清理有没有生效都看不出来
+        var spike = new System.Collections.Generic.List<(double x, double y)>
+        { (0, 0), (10, 0), (9, 1), (8, 0), (20, 0) };
+        Assert.True(OffsetTools.HasSelfIntersection(spike, false));
+        var plain = new System.Collections.Generic.List<(double x, double y)>
+        { (0, 0), (10, 0), (10, 5), (20, 5) };
+        Assert.False(OffsetTools.HasSelfIntersection(plain, false));
+    }
+
+    [Fact]
+    public void PolylineEntity_offset_keeps_normal_shape()
+    {
+        // 偏移量小于缺口深度：没折叠，点数照旧、位置就是各段法向平移后的 miter 交点
+        var pl = new PolylineEntity();
+        pl.Points.Add((0, 0)); pl.Points.Add((10, 0)); pl.Points.Add((12, -3));
+        pl.Points.Add((14, 0)); pl.Points.Add((24, 0));
+        var off = (PolylineEntity)pl.Offset(5, 1)!;                       // 上方 1
+        Assert.Equal(pl.Points.Count, off.Points.Count);
+        Assert.False(OffsetTools.HasSelfIntersection(off.Points, false));
+        Assert.Equal(0, off.Points[0].x, 4); Assert.Equal(1, off.Points[0].y, 4);
+    }
+
+    [Fact]
+    public void PolylineEntity_offset_closed_refuses_when_collapsed()
+    {
+        // 10×10 闭合方框往里偏 4 → 只剩 2×2（面积 4%），按原版判据算尖灭 → 拒绝
+        var sq = new PolylineEntity { Closed = true };
+        sq.Points.Add((0, 0)); sq.Points.Add((10, 0)); sq.Points.Add((10, 10)); sq.Points.Add((0, 10));
+        Assert.Null(sq.Offset(5, 4));
+        var ok = (PolylineEntity)sq.Offset(5, 2)!;                        // 往里 2 → 6×6, 正常
+        Assert.Equal(4, ok.Points.Count);
+        Assert.Equal(2, ok.Points[0].x, 4); Assert.Equal(2, ok.Points[0].y, 4);
+    }
+
+    [Fact]
+    public void PolylineEntity_offset_keeps_vertex_elevations()
+    {
+        // 三维多段线(等高线/台阶线)偏移后仍是三维线，逐点高程按源线插值 —— 不该掉成平面线
+        var pl = new PolylineEntity { Zs = new System.Collections.Generic.List<double> { 0, 10, 20 } };
+        pl.Points.Add((0, 0)); pl.Points.Add((10, 0)); pl.Points.Add((20, 0));
+        var off = (PolylineEntity)pl.Offset(5, 2)!;
+        Assert.True(off.Has3D);
+        Assert.Equal(pl.Points.Count, off.Zs!.Count);
+        Assert.Equal(0, off.Zs[0], 4); Assert.Equal(10, off.Zs[1], 4); Assert.Equal(20, off.Zs[2], 4);
+    }
+
+    [Fact]
     public void PolylineEntity_break_splits_into_two()
     {
         var pl = new PolylineEntity();
@@ -715,39 +782,102 @@ public class DrawToolsTests
         Assert.Null(ArcMath.FromStartEndRadius(0, 0, 10, 0, 1));   // 弦长10 > 2r → 无解
     }
 
+    // ── 修剪(TRIM) / 延伸(EXTEND)：两条命令各做各的，互不代劳 ──────────────────
+    private static System.Collections.Generic.List<SceneEntity> Bnd(params SceneEntity[] es) => new(es);
+
+    [Fact]
+    public void TrimTools_extend_lengthens_line_to_boundary()
+    {
+        // 直线 (0,0)-(5,0)，边界竖线 x=8；点击靠近末端 → 末端拉长到 (8,0)
+        var l = new LineEntity { X0 = 0, Y0 = 0, X1 = 5, Y1 = 0 };
+        var b = new LineEntity { X0 = 8, Y0 = -5, X1 = 8, Y1 = 5 };
+        var r = (LineEntity)TrimTools.Extend(l, Bnd(b), 5, 0)!;
+        Assert.Equal(8, r.X1, 4); Assert.Equal(0, r.Y1, 4);
+        Assert.Equal(0, r.X0, 4);                                    // 另一端不动
+    }
+
+    [Fact]
+    public void TrimTools_extend_never_shortens()
+    {
+        // 边界横穿在直线【之内】(x=6)：那是修剪的活儿 —— 延伸必须拒绝，不能把线缩到 6
+        var l = new LineEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 0 };
+        var b = new LineEntity { X0 = 6, Y0 = -5, X1 = 6, Y1 = 5 };
+        Assert.Null(TrimTools.Extend(l, Bnd(b), 10, 0));
+    }
+
     [Fact]
     public void TrimTools_extends_polyline_end_to_boundary()
     {
-        // 多段线 (0,0)-(5,0)，边界竖线 x=8；点击靠近末端 → 末端延伸到 (8,0)
         var pl = new PolylineEntity();
         pl.Points.Add((0, 0)); pl.Points.Add((5, 0));
-        var boundary = new LineEntity { X0 = 8, Y0 = -5, X1 = 8, Y1 = 5 };
-        var r = TrimTools.TrimExtendPolylineEnd(pl, boundary, 5, 0)!;
+        var b = new LineEntity { X0 = 8, Y0 = -5, X1 = 8, Y1 = 5 };
+        var r = (PolylineEntity)TrimTools.Extend(pl, Bnd(b), 5, 0)!;
         Assert.Equal(8, r.Points[^1].x, 4); Assert.Equal(0, r.Points[^1].y, 4);
         Assert.Equal(0, r.Points[0].x, 4);   // 起点不动
     }
 
     [Fact]
-    public void TrimTools_trims_polyline_end_at_boundary()
+    public void TrimTools_trim_shortens_clicked_end()
     {
-        // 多段线 (0,0)-(10,0)，边界竖线 x=6；点击靠近末端 → 末端缩到 (6,0)
-        var pl = new PolylineEntity();
-        pl.Points.Add((0, 0)); pl.Points.Add((10, 0));
-        var boundary = new LineEntity { X0 = 6, Y0 = -5, X1 = 6, Y1 = 5 };
-        var r = TrimTools.TrimExtendPolylineEnd(pl, boundary, 10, 0)!;
-        Assert.Equal(6, r.Points[^1].x, 4);
+        // 直线 (0,0)-(10,0)，剪切边 x=6；点在 (8,0) → 去掉 [6,10]，剩 [0,6]
+        var l = new LineEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 0 };
+        var b = new LineEntity { X0 = 6, Y0 = -5, X1 = 6, Y1 = 5 };
+        var rest = TrimTools.Trim(l, Bnd(b), 8, 0)!;
+        var kept = Assert.IsType<LineEntity>(Assert.Single(rest));
+        Assert.Equal(0, kept.X0, 4);
+        Assert.Equal(6, kept.X1, 4);
     }
 
     [Fact]
-    public void TrimTools_trims_arc_end_to_boundary()
+    public void TrimTools_trim_removes_only_the_clicked_span()
+    {
+        // 两条剪切边 x=4 / x=7；点在中间 (5.5,0) → 中段被剪掉，断成 [0,4] 与 [7,10] 两条
+        var l = new LineEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 0 };
+        var b1 = new LineEntity { X0 = 4, Y0 = -5, X1 = 4, Y1 = 5 };
+        var b2 = new LineEntity { X0 = 7, Y0 = -5, X1 = 7, Y1 = 5 };
+        var rest = TrimTools.Trim(l, Bnd(b1, b2), 5.5, 0)!;
+        Assert.Equal(2, rest.Count);
+        var a = (LineEntity)rest[0]; var c = (LineEntity)rest[1];
+        Assert.Equal(0, a.X0, 4); Assert.Equal(4, a.X1, 4);
+        Assert.Equal(7, c.X0, 4); Assert.Equal(10, c.X1, 4);
+    }
+
+    [Fact]
+    public void TrimTools_trim_never_lengthens()
+    {
+        // 边界在直线【之外】(x=20)：整条与剪切边无交点 —— 照原版整条删除，绝不去够那条边界
+        var l = new LineEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 0 };
+        var b = new LineEntity { X0 = 20, Y0 = -5, X1 = 20, Y1 = 5 };
+        var rest = TrimTools.Trim(l, Bnd(b), 9, 0)!;
+        Assert.Empty(rest);                                          // 空表 = 整条删除
+    }
+
+    [Fact]
+    public void TrimTools_trims_arc_at_boundary()
     {
         double s = System.Math.Cos(System.Math.PI / 4);
         var arc = new ArcEntity { X1 = 1, Y1 = 0, X2 = s, Y2 = s, X3 = 0, Y3 = 1 };   // 上象限单位弧
-        var boundary = new LineEntity { X0 = -2, Y0 = 0.5, X1 = 2, Y1 = 0.5 };         // 水平线 y=0.5
-        var r = TrimTools.TrimExtendArc(arc, boundary, 1, 0)!;                          // 点击近起点
-        Assert.Equal(0.866, r.X1, 2); Assert.Equal(0.5, r.Y1, 2);                       // 起点移到 (0.866,0.5)
+        var b = new LineEntity { X0 = -2, Y0 = 0.5, X1 = 2, Y1 = 0.5 };                // 水平线 y=0.5
+        var rest = TrimTools.Trim(arc, Bnd(b), 1, 0)!;                                  // 点击近起点 → 剪掉起点那段
+        var r = Assert.IsType<ArcEntity>(Assert.Single(rest));
+        Assert.Equal(0.866, r.X1, 2); Assert.Equal(0.5, r.Y1, 2);                       // 起点收到 (0.866,0.5)
         Assert.Equal(1, r.X1 * r.X1 + r.Y1 * r.Y1, 2);                                  // 仍在单位圆
         Assert.Equal(0, r.X3, 4); Assert.Equal(1, r.Y3, 4);                             // 端点不动
+    }
+
+    [Fact]
+    public void TrimTools_trims_closed_rect_into_open_polyline()
+    {
+        // 矩形 (0,0)-(10,6)，两条剪切边切穿底边 x=3 / x=7；点在底边中间 → 底边中段没了，剩一条开口多段线
+        var rect = new RectEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 6 };
+        var b1 = new LineEntity { X0 = 3, Y0 = -2, X1 = 3, Y1 = 2 };
+        var b2 = new LineEntity { X0 = 7, Y0 = -2, X1 = 7, Y1 = 2 };
+        var rest = TrimTools.Trim(rect, Bnd(b1, b2), 5, 0)!;
+        var pl = Assert.IsType<PolylineEntity>(Assert.Single(rest));
+        Assert.False(pl.Closed);
+        Assert.Equal(7, pl.Points[0].x, 4); Assert.Equal(0, pl.Points[0].y, 4);   // 从右切点起
+        Assert.Equal(3, pl.Points[^1].x, 4); Assert.Equal(0, pl.Points[^1].y, 4); // 绕一圈回到左切点
+        foreach (var q in pl.Points) Assert.False(q.x > 3.001 && q.x < 6.999 && q.y < 0.001);   // 中段确实没了
     }
 
     [Fact]
@@ -861,6 +991,7 @@ public class DrawToolsTests
         t.AddPoint(10, 0);                             // 最近顶点 (10,0)
         Assert.Equal("长 5  角 90°", t.DragHint(10, 5));   // 从 (10,0) 向上 5
     }
+
     // ── 文字：忠实原版 TextJigAdapter 四步(起点 → 字高<2.5> → 旋转角<0> → 内容) ──────────
 
     [Fact]
@@ -947,4 +1078,3 @@ public class DrawToolsTests
         Assert.Equal(4, te.Height);
     }
 }
-

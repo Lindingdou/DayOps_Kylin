@@ -188,9 +188,9 @@ public partial class ExportBlockModelWindow : Window
                 foreach (var i in idx)
                 {
                     var b = m.Blocks[i];
-                    bool sub = m.SubCellCount > 0 && b.Size < m.Sx - 1e-9;
+                    double k = m.CellScale(b);
                     sb.Append(b.X.ToString("R", ci)).Append(',').Append(b.Y.ToString("R", ci)).Append(',').Append(b.Z.ToString("R", ci)).Append(',')
-                      .Append((sub ? b.Size : m.Sx).ToString("R", ci)).Append(',').Append((sub ? b.Size : m.Sy).ToString("R", ci)).Append(',').Append((sub ? b.Size : m.Sz).ToString("R", ci));
+                      .Append((k * m.Sx).ToString("R", ci)).Append(',').Append((k * m.Sy).ToString("R", ci)).Append(',').Append((k * m.Sz).ToString("R", ci));
                     foreach (var a in attrs) sb.Append(',').Append(m.GetValue(a, i).ToString("R", ci));
                     sb.AppendLine();
                 }

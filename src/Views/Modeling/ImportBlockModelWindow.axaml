@@ -43,9 +43,9 @@
         <Border Classes="panel" Padding="12">
           <StackPanel>
             <TextBlock Classes="panel-title" Text="字段映射 / 数据预览" Margin="0,0,0,8"/>
-            <Border Background="#FFF7F8FA" Padding="12" CornerRadius="2">
+            <Border Background="{DynamicResource Theme.Panel.Background}" Padding="12" CornerRadius="2">
               <StackPanel>
-                <TextBlock x:Name="previewHint" Foreground="#FF6B7280" FontSize="11" TextWrapping="Wrap"
+                <TextBlock x:Name="previewHint" Foreground="{DynamicResource Theme.Text.Muted}" FontSize="11" TextWrapping="Wrap"
                            Text="选择文件后，将自动检测网格规则性并展示前 10 行预览。&#x0a;字段映射 / 网格规则性检测结果将在 v2 阶段接入。"/>
                 <TextBox x:Name="previewBox" IsReadOnly="True" FontFamily="Consolas,monospace" FontSize="11" AcceptsReturn="True" MinHeight="120" MaxHeight="160" IsVisible="False" Margin="0,6,0,0" TextWrapping="NoWrap"/>
               </StackPanel>

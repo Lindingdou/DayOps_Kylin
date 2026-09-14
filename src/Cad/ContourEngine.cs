@@ -117,9 +117,9 @@ public static class ContourEngine
     // ── marching-triangles：一张网一个高程 → 若干条链 ──
     private static List<(List<double> pts, bool closed)> MarchLevel(double[] verts, int[] tris, double[] d, double level)
     {
-        var edgePt = new Dictionary<long, (double x, double y)>();
+        var edgePt = new Dictionary<long, (double x, double y)>(PackedKeyComparer.Instance);
         var segs = new List<(long e0, long e1)>();
-        var atEdge = new Dictionary<long, (int s0, int s1)>();
+        var atEdge = new Dictionary<long, (int s0, int s1)>(PackedKeyComparer.Instance);
 
         for (int t = 0; t + 2 < tris.Length; t += 3)
         {

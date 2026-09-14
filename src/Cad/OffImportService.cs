@@ -65,7 +65,7 @@ public static class OffImportService
 
         // 面 → 去重的多边形边
         var verts = new List<float>(nF * 6);
-        var seen = new HashSet<long>();
+        var seen = new HashSet<long>(PackedKeyComparer.Instance);
         int edgeCount = 0;
         float cr = MeshColor.r, cg = MeshColor.g, cb = MeshColor.b;
         for (int f = 0; f < nF; f++)

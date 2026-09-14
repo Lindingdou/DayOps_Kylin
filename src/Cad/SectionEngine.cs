@@ -86,9 +86,9 @@ public static class SectionEngine
 
     private static List<List<(double x, double y, double z, double s)>> CutMesh(double[] verts, int[] tris, double[] d, double[] s)
     {
-        var edgePt = new Dictionary<long, (double x, double y, double z, double s)>();
+        var edgePt = new Dictionary<long, (double x, double y, double z, double s)>(PackedKeyComparer.Instance);
         var segList = new List<(long e0, long e1)>();
-        var atEdge = new Dictionary<long, (int s0, int s1)>();
+        var atEdge = new Dictionary<long, (int s0, int s1)>(PackedKeyComparer.Instance);
 
         for (int t = 0; t + 2 < tris.Length; t += 3)
         {

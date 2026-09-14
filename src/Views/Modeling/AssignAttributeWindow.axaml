@@ -16,7 +16,7 @@
             <TextBlock Classes="panel-title" Text="目标范围" Margin="0,0,0,8"/>
             <RadioButton x:Name="rangeAll" GroupName="Range" Content="全部块" IsChecked="True" Margin="0,0,0,4"/>
             <RadioButton x:Name="rangeFiltered" GroupName="Range" Content="仅当前筛选 / 可见的块" Margin="0,0,0,2"/>
-            <TextBlock x:Name="filteredHint" FontSize="10" Margin="20,0,0,6" TextWrapping="Wrap" Foreground="#FF6B7280"
+            <TextBlock x:Name="filteredHint" FontSize="10" Margin="20,0,0,6" TextWrapping="Wrap" Foreground="{DynamicResource Theme.Text.Muted}"
                        Text="（先用「筛选」对话框筛出要改的块；这里只写入视图中可见的那批，替换其原值）"/>
             <RadioButton GroupName="Range" Content="当前选择集（v2）" IsEnabled="False" Margin="0,0,0,4"/>
             <RadioButton GroupName="Range" Content="视口拾取（v2）" IsEnabled="False" Margin="0,0,0,4"/>
@@ -30,7 +30,7 @@
             <StackPanel Orientation="Horizontal">
               <ComboBox x:Name="attrCombo" Width="280" SelectionChanged="OnAttrChanged"/>
               <Button Content="+ 新建..." Margin="8,0,0,0" Click="OnNewAttr" Padding="10,3"/>
-              <TextBlock x:Name="attrUnitLabel" VerticalAlignment="Center" Margin="16,0,0,0" Foreground="#FF6B7280"/>
+              <TextBlock x:Name="attrUnitLabel" VerticalAlignment="Center" Margin="16,0,0,0" Foreground="{DynamicResource Theme.Text.Muted}"/>
             </StackPanel>
           </StackPanel>
         </Border>
@@ -47,13 +47,13 @@
               <TextBox x:Name="formulaBox" Width="320" Text="x * 0.001 + z * 0.01"/>
               <Button Content="校验" Margin="6,0,0,0" Click="OnValidateFormula" Padding="10,3"/>
             </StackPanel>
-            <TextBlock FontSize="10" Foreground="#FF6B7280" Margin="112,2,0,8" TextWrapping="Wrap"
+            <TextBlock FontSize="10" Foreground="{DynamicResource Theme.Text.Muted}" Margin="112,2,0,8" TextWrapping="Wrap"
                        Text="可用变量: i, j, k (cell 索引), x, y, z (世界坐标), nx, ny, nz, sx, sy, sz, 已有属性名&#x0a;可用函数: min, max, abs, sqrt, sin, cos, exp, log, floor, ceil, round, clamp(v,lo,hi), if(cond,a,b)"/>
             <StackPanel Orientation="Horizontal" Margin="0,0,0,2" Spacing="8">
               <Button Content="从钻孔煤质估值…" Click="OnCoalEstimate" Padding="10,3"/>
               <Button Content="煤质×块体交会…" Click="OnCoalCrossPlot" Padding="10,3"/>
             </StackPanel>
-            <TextBlock Margin="0,4,0,6" Foreground="#FF6B7280" FontSize="10" TextWrapping="Wrap"
+            <TextBlock Margin="0,4,0,6" Foreground="{DynamicResource Theme.Text.Muted}" FontSize="10" TextWrapping="Wrap"
                        Text="煤质联动：按煤层把 Ad/St/Qnet/… 估到块体煤块并写成属性列；交会=在钻孔点采样块体属性做 煤质×块体 散点/相关（估计 vs 实测校验）。均为独立窗，不影响本对话框的常规赋值。"/>
             <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
               <RadioButton x:Name="modeAnother" GroupName="Mode" Content="来自另一模型" VerticalAlignment="Center" Width="100" Margin="0,0,12,0"/>
@@ -63,11 +63,11 @@
             </StackPanel>
             <StackPanel Orientation="Horizontal" Margin="112,2,0,8">
               <TextBlock Text="变换" VerticalAlignment="Center" Margin="0,0,4,0"/>
-              <TextBlock Text="y = " VerticalAlignment="Center" FontFamily="Consolas,monospace" Foreground="#FF6B7280"/>
+              <TextBlock Text="y = " VerticalAlignment="Center" FontFamily="Consolas,monospace" Foreground="{DynamicResource Theme.Text.Muted}"/>
               <TextBox x:Name="scaleBox" Width="60" Text="1.0"/>
-              <TextBlock Text=" · x + " VerticalAlignment="Center" FontFamily="Consolas,monospace" Foreground="#FF6B7280"/>
+              <TextBlock Text=" · x + " VerticalAlignment="Center" FontFamily="Consolas,monospace" Foreground="{DynamicResource Theme.Text.Muted}"/>
               <TextBox x:Name="offsetBox" Width="60" Text="0.0"/>
-              <TextBlock Text="(x = 源属性值)" VerticalAlignment="Center" Margin="8,0,0,0" Foreground="#FF6B7280" FontSize="10"/>
+              <TextBlock Text="(x = 源属性值)" VerticalAlignment="Center" Margin="8,0,0,0" Foreground="{DynamicResource Theme.Text.Muted}" FontSize="10"/>
             </StackPanel>
           </StackPanel>
         </Border>

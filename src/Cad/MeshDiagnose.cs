@@ -16,7 +16,9 @@ public readonly record struct MeshDiagnoseResult(
 /// </summary>
 public static class MeshDiagnose
 {
-    public static MeshDiagnoseResult Analyze(IReadOnlyList<(double x, double y, double z)> verts, IReadOnlyList<(int a, int b, int c)> tris)
+    /// <param name="selfIntersect">是否做自交检测（网格 broad-phase + 逐对精测, 6 万三角以内才做, 仍是整条流水线里最贵的一步）。
+    /// 只要开放边/非流形数的调用方(修复拓扑前后对比等)传 false。</param>
+    public static MeshDiagnoseResult Analyze(IReadOnlyList<(double x, double y, double z)> verts, IReadOnlyList<(int a, int b, int c)> tris, bool selfIntersect = true)
     {
         if (tris == null) return new MeshDiagnoseResult(0, 0, 0, 0, 0, 0, true);
         var inc = new Dictionary<(int, int), int>();     // 无向边 → 关联三角数
@@ -82,7 +84,7 @@ public static class MeshDiagnose
         }
 
         // 自交三角: 横切另一【非相邻(不共顶点)】三角。网格 broad-phase(AABB 落格) 后逐候选对精测。
-        int selfInt = CountSelfIntersect(verts, valid);
+        int selfInt = selfIntersect ? CountSelfIntersect(verts, valid) : -1;
 
         bool closed = boundary == 0 && nonMani == 0 && nt > 0;
         return new MeshDiagnoseResult(nt, inc.Count, boundary, nonMani, degen, loops, closed, isolated, duplicate, selfInt);
@@ -113,11 +115,16 @@ public static class MeshDiagnose
         int grid = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(m)));
         double sx = Math.Max((gx1 - gx0) / grid, 1e-9), sy = Math.Max((gy1 - gy0) / grid, 1e-9), sz = Math.Max((gz1 - gz0) / grid, 1e-9);
         var cells = new Dictionary<(int, int, int), List<int>>();
+        // 跨格太多的"巨三角"(补洞扇面 / 长条 sliver 等, 一个就能盖住几百万格)不落格, 单独与全表按 AABB 粗筛后精测:
+        // 落格的话光登记就是几千 × 几百万次, 修复拓扑后的「格网质量检测」就是在这儿卡死的。
+        const int MaxCellsPerTri = 4096;
+        var oversized = new List<int>();
         for (int i = 0; i < m; i++)
         {
             int cx0 = (int)Math.Floor((box[i].x0 - gx0) / sx), cx1 = (int)Math.Floor((box[i].x1 - gx0) / sx);
             int cy0 = (int)Math.Floor((box[i].y0 - gy0) / sy), cy1 = (int)Math.Floor((box[i].y1 - gy0) / sy);
             int cz0 = (int)Math.Floor((box[i].z0 - gz0) / sz), cz1 = (int)Math.Floor((box[i].z1 - gz0) / sz);
+            if ((long)(cx1 - cx0 + 1) * (cy1 - cy0 + 1) * (cz1 - cz0 + 1) > MaxCellsPerTri) { oversized.Add(i); continue; }
             for (int X = cx0; X <= cx1; X++) for (int Y = cy0; Y <= cy1; Y++) for (int Z = cz0; Z <= cz1; Z++)
             {
                 var key = (X, Y, Z);
@@ -127,6 +134,22 @@ public static class MeshDiagnose
         }
         var tested = new HashSet<(int, int)>();
         var hit = new HashSet<int>();
+        foreach (int i0 in oversized)
+        {
+            var ba = box[i0]; var (a0, a1, a2) = tris[i0];
+            for (int j0 = 0; j0 < m; j0++)
+            {
+                if (j0 == i0) continue;
+                int i = i0, j = j0; if (i > j) (i, j) = (j, i);
+                if (!tested.Add((i, j))) continue;
+                var (b0, b1, b2) = tris[j0];
+                if (Shares(a0, a1, a2, b0, b1, b2)) continue;
+                var bb = box[j0];
+                if (ba.x1 < bb.x0 || bb.x1 < ba.x0 || ba.y1 < bb.y0 || bb.y1 < ba.y0 || ba.z1 < bb.z0 || bb.z1 < ba.z0) continue;
+                if (MeshIntersect.TrianglesIntersect(verts[a0], verts[a1], verts[a2], verts[b0], verts[b1], verts[b2]))
+                { hit.Add(i0); hit.Add(j0); }
+            }
+        }
         foreach (var bucket in cells.Values)
         {
             for (int u = 0; u < bucket.Count; u++)

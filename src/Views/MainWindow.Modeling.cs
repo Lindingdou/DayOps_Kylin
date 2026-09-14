@@ -199,6 +199,7 @@ public partial class MainWindow
     {
         var tcs = new TaskCompletionSource<(double x, double y)?>();
         _oneShotPick = (x, y) => tcs.TrySetResult(double.IsNaN(x) ? null : (x, y));
+        _pickCursor = Controls.CadGlViewport.CursorMode.CrosshairOnly;   // 拾取位置 = 取点, 十字光标
         StatusMsg.Text = string.IsNullOrEmpty(prompt) ? "在视口中点击拾取位置（Esc 取消）" : prompt;
         Activate();
         return tcs.Task;
@@ -277,7 +278,7 @@ public partial class MainWindow
     {
         Owner = this,
         Status = s => StatusMsg.Text = s,
-        Conn = () => EnsureGeoDb()?.Connection,
+        Conn = () => EnsureGeoDb(resume: false)?.Connection,   // 建模窗口里现取现用: 能重跑的只有「打开该窗口」那条命令, 无意义
         Meshes = () => AllMeshes(),
         SelectedMeshes = () => SelectedMeshes(),
         Points = () => _scene.Entities.OfType<PointEntity>().Where(p => p.Visible).ToList(),
@@ -316,6 +317,32 @@ public partial class MainWindow
             RenderBlocks(blocks); RefreshScene();
         },
         ShowBlocks = sub => { RenderBlocks(sub); RefreshScene(); },
+        SetBlockDisplay = (blocks, attrs, cells, layer, bounds) =>
+        {
+            // 一次到位(见 ModelingContext.SetBlockDisplay)：不建主窗口那份品位方块、不压撤销快照、只刷一次。
+            _lastBlocks = blocks; _blockAttrs = attrs;
+            if (blocks != null && blocks.Count > 0)
+            {
+                double lo = double.MaxValue, hi = double.MinValue;
+                foreach (var b in blocks) { if (b.Grade < lo) lo = b.Grade; if (b.Grade > hi) hi = b.Grade; }
+                _blockGmin = lo; _blockGmax = hi > lo ? hi : lo + 1;
+            }
+            foreach (var e in _blockCellEntities) _scene.Remove(e);   // 主窗口默认品位方块让位给块体仓的样式化渲染
+            _blockCellEntities.Clear();
+            _scene.Entities.RemoveAll(e => e.LayerName == layer);
+            _selected.RemoveAll(e => e.LayerName == layer);
+            if (cells.Count > 0)
+            {
+                var l = _layers.Get(layer) ?? _layers.EnsureImported(layer, 0.3f, 0.75f, 0.95f);
+                // 块体模型不参与视口选择/高亮：它是块体仓按显示样式渲出来的产物，不是可编辑图元。
+                // 原版里块体也不走 CAD 选择集（增删改都在块体浏览器/各对话框里做），点中整块模型
+                // 刷成高亮色既没用又把配色盖没了。锁定图层 = 显示但不可选(见 LayerTable.Layer.Locked)。
+                l.Locked = true;
+                foreach (var e in cells) { e.LayerName = l.Name; _scene.Add(e); }
+            }
+            RefreshScene();
+            if (bounds != null && bounds.Length == 4 && bounds[2] > bounds[0] && bounds[3] > bounds[1]) Viewport.FitBounds(bounds);
+        },
         SaveTextAsync = async (title, name, content) =>
         {
             string ext = System.IO.Path.GetExtension(name).TrimStart('.'); if (string.IsNullOrEmpty(ext)) ext = "csv";
@@ -371,7 +398,8 @@ public partial class MainWindow
             case "展点": await MdlShowPointsAsync(); return true;
             case "立方体": case "球体": case "圆柱": await MdlPrimitiveAsync(cmd); return true;
             case "导入三角网": case "导入OFF": case "导入网格": await ImportOffAsMeshesAsync("导入三角网(OFF)", true); return true;
-            case "导出三角网": case "导出OFF": case "导出网格": await MdlExportOffAsync(); return true;
+            case "格网导出": case "网格导出": OpenMeshExportDialog(); return true;   // 原版 MeshExportView(格式+三个选项+选中/全部)
+            case "导出三角网": case "导出OFF": case "导出网格": await MdlExportOffAsync(); return true;   // 一步出 OFF 的快捷路(保留)
             // 倾斜摄影
             case "加载倾斜摄影": StatusMsg.Text = "加载倾斜摄影：OSGB 倾斜摄影模型解析/纹理需原生渲染内核，本机记录为受阻；可先用「展点」/「导入三角网」加载点或三角网"; return true;
             // 点编辑
@@ -390,7 +418,7 @@ public partial class MainWindow
             case "创建剖面": case "网格剖面": await MdlSectionAsync(); return true;
             case "实时曲面坐标": MdlToggleSurfaceCoord(); return true;
             // 渲染配置(开始页 视图组)：三角网显示模式 线框/着色面/着色面+线框, 高程着色
-            case "渲染配置": case "显示模式": await MdlRenderConfigAsync(); return true;
+            case "渲染配置": case "显示模式": MdlOpenRenderConfig(); return true;
             case "线框显示": case "线框模式": SetMeshDisplay(MeshEntity.DisplayMode.Wireframe, null); return true;
             case "着色显示": case "面模型": case "实体显示": SetMeshDisplay(MeshEntity.DisplayMode.Shaded, null); return true;
             case "面加线框": case "着色加线框": SetMeshDisplay(MeshEntity.DisplayMode.ShadedWireframe, null); return true;
@@ -531,15 +559,65 @@ public partial class MainWindow
         var meshes = await PickMeshesAsync("闭合线裁剪面", 1, 1);
         if (meshes.Count == 0) return;
         if (loops.Count == 0) { StatusMsg.Text = "闭合线裁剪面：请同时选中一条闭合多段线作裁剪边界"; return; }
-        var dlg = await PromptDialog.AskAsync(this, "闭合线裁剪面", new[] { new PromptDialog.Field("side", "保留", "内侧", null, null, false, new[] { "内侧", "外侧" }) }, "按闭合线裁剪选中三角网(按三角质心判内外)");
+        var dlg = await PromptDialog.AskAsync(this, "闭合线裁剪面", new[] { new PromptDialog.Field("side", "保留", "内侧", null, null, false, new[] { "内侧", "外侧" }) }, "按闭合线精确裁剪选中三角网(跨界三角沿裁刀边切开)");
         if (dlg == null) return;
         bool inside = dlg.S("side") == "内侧";
         var m = meshes[0];
-        var (pin, pout) = MeshBoundarySplit.ByPolygon(m.Verts, m.Tris, loops[0].Points);
-        var keep = inside ? pin : pout;
-        if (keep.Tris.Count == 0) { StatusMsg.Text = "闭合线裁剪面：保留侧无三角"; return; }
-        ReplaceMesh(m, new MeshEntity(m.Name, keep.Verts, keep.Tris));
-        StatusMsg.Text = $"闭合线裁剪面「{m.Name}」：保留{(inside ? "内" : "外")}侧 {keep.Tris.Count} 三角，去除 {(inside ? pout : pin).Tris.Count}";
+        // 精确裁剪(原内核 clip_tin_by_polygon)：跨界三角沿裁刀边切开, 不再按质心整块取舍(那样边界锯齿、尖刺伸出裁刀)。
+        if (!MeshPolygonClip.IsSingleValuedSurface(m.Verts, m.Tris))
+        { StatusMsg.Text = "闭合线裁剪面：检测到封闭实体或悬挑面（法向有上有下），仅支持单值高程面，已中止"; return; }
+        var res = MeshPolygonClip.Clip(m.Verts, m.Tris, loops[0].Points, inside);
+        if (res == null) { StatusMsg.Text = "闭合线裁剪面：裁刀多边形退化（顶点 <3 或自交/共线），无法剖分"; return; }
+        if (res.Value.Tris.Count == 0) { StatusMsg.Text = "闭合线裁剪面：保留侧无三角"; return; }
+        int before = m.Tris.Count;
+        ReplaceMesh(m, new MeshEntity(m.Name, res.Value.Verts, res.Value.Tris));
+        StatusMsg.Text = $"闭合线裁剪面「{m.Name}」：保留{(inside ? "内" : "外")}侧，三角 {before} → {res.Value.Tris.Count}（沿裁刀边精确切开）";
+    }
+
+    /// <summary>
+    /// 自检(@裁剪示例 [外] [质心])：合成一张起伏三角网 + 一条边不沿网格线的闭合裁刀，走与「闭合线裁剪面」同一条
+    /// 裁剪路径后取景到裁刀 —— 截图核对边界是否严格贴着裁刀线(无尖刺/锯齿)。「质心」参数走旧的整块取舍法，供对比。
+    /// </summary>
+    private void SelftestSampleClip(bool keepInside, bool centroidOnly)
+    {
+        const int nx = 40, ny = 24; const double w = 200, h = 120;
+        var v = new List<(double x, double y, double z)>((nx + 1) * (ny + 1));
+        for (int j = 0; j <= ny; j++)
+            for (int i = 0; i <= nx; i++)
+            {
+                double x = i * w / nx, y = j * h / ny;
+                double z = 1200 + 12 * Math.Sin(x / 23.0) * Math.Cos(y / 17.0) + 0.04 * x;   // 起伏地形
+                v.Add((x, y, z));
+            }
+        var t = new List<(int a, int b, int c)>(nx * ny * 2);
+        for (int j = 0; j < ny; j++)
+            for (int i = 0; i < nx; i++)
+            {
+                int a = j * (nx + 1) + i, b = a + 1, c = a + nx + 1, d = c + 1;
+                t.Add((a, b, d)); t.Add((a, d, c));
+            }
+        var loop = new PolylineEntity { Closed = true, Cr = 0.95f, Cg = 0.9f, Cb = 0.3f, LayerName = "自检边界" };
+        loop.Points.AddRange(new[] { (37.3, 21.7), (96.1, 12.4), (161.8, 33.9), (178.6, 71.2), (139.4, 108.3), (72.9, 101.6), (28.7, 66.5) });
+
+        BeginChange();
+        var me = new MeshEntity(NewMeshName("自检三角网"), v, t) { Cr = 0.1f, Cg = 0.45f, Cb = 0.9f };
+        AssignLayer(me); _scene.Add(me); _scene.Add(loop);
+        int before = t.Count; string how;
+        if (centroidOnly)
+        {
+            var (pin, pout) = MeshBoundarySplit.ByPolygon(me.Verts, me.Tris, loop.Points);
+            var keep = keepInside ? pin : pout;
+            ReplaceMesh(me, me = new MeshEntity(me.Name, keep.Verts, keep.Tris)); how = "质心整块取舍(旧法)";
+        }
+        else
+        {
+            var res = MeshPolygonClip.Clip(me.Verts, me.Tris, loop.Points, keepInside);
+            if (res == null) { StatusMsg.Text = "自检裁剪：裁刀退化"; return; }
+            ReplaceMesh(me, me = new MeshEntity(me.Name, res.Value.Verts, res.Value.Tris)); how = "沿裁刀边精确切开";
+        }
+        SelectEntities(new SceneEntity[] { loop });
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => Viewport.FitBounds(new[] { 15.0, 5.0, 190.0, 115.0 }), Avalonia.Threading.DispatcherPriority.Background);
+        StatusMsg.Text = $"自检裁剪「{me.Name}」：保留{(keepInside ? "圈内" : "圈外")} · 三角 {before} → {me.Tris.Count} · {how}";
     }
 
     /// <summary>
@@ -678,6 +756,55 @@ public partial class MainWindow
         var me = AddMesh(new MeshEntity(NewMeshName(kind), g.v, g.t) { Cr = 0.6f, Cg = 0.8f, Cb = 0.6f }, false);
         SelectEntities(new SceneEntity[] { me });
         StatusMsg.Text = $"{kind}「{me.Name}」：{g.v.Count} 顶点 / {g.t.Count} 三角 · 体积 {MeshMetrics.RobustVolume(g.v, g.t):0.##}";
+    }
+
+    // 「格网导出」对话框(忠实原 MeshExportView): 直接吃场景里的网, 不再先选一个 .off 当源。
+    // 非模态单例, 同图层特性管理器/快速选择。
+    private Views.Mesh.MeshExportWindow? _meshExportWin;
+    private void OpenMeshExportDialog()
+    {
+        if (_meshExportWin != null) { _meshExportWin.Activate(); StatusMsg.Text = "格网导出已在前台"; return; }
+        var w = new Views.Mesh.MeshExportWindow(req =>
+        {
+            var meshes = req.SelectedOnly ? SelectedMeshes() : AllMeshes();
+            if (meshes.Count == 0)
+                return req.SelectedOnly
+                    ? "没有选中的三角网 —— 先在视口里选中要导出的网，或改点「导出所有网格」。"
+                    : "场景里没有三角网。";
+            var (v, t) = meshes.Count == 1
+                ? ((IReadOnlyList<(double x, double y, double z)>)meshes[0].Verts, (IReadOnlyList<(int a, int b, int c)>)meshes[0].Tris)
+                : MeshWeld.Concat(meshes.Select(m => ((IReadOnlyList<(double x, double y, double z)>)m.Verts, (IReadOnlyList<(int a, int b, int c)>)m.Tris)).ToList());
+            string text = MeshExport.ByExtension(req.Ext, v, t, req.Options);
+            string baseName = meshes.Count == 1 ? meshes[0].Name : "meshes";
+            // 保存对话框是异步的; 结果落状态栏(窗体状态行先报"已生成", 免得看起来没反应)
+            _ = SaveMeshExportAsync(baseName + "." + req.Ext, text, meshes.Count, t.Count, req);
+            return $"已生成 {req.Ext.ToUpperInvariant()}：{meshes.Count} 网 · {v.Count} 顶点 · {t.Count} 三角，请在保存对话框里选位置。";
+        });
+        _meshExportWin = w;
+        w.Closed += (_, _) => _meshExportWin = null;
+        w.Show(this);
+        StatusMsg.Text = $"格网导出：场景 {AllMeshes().Count} 个三角网（选中 {SelectedMeshes().Count} 个）";
+    }
+
+    private async Task SaveMeshExportAsync(string suggested, string text, int meshCount, int triCount, Views.Mesh.MeshExportWindow.Request req)
+    {
+        string? name;
+        // 这条是从同步 lambda 里 fire-and-forget 起来的; 不自己兜住异常就会被静静吞掉,
+        // 表现为"状态栏说已生成, 但文件哪儿都没有"。
+        try { name = await SaveCsvAsync("格网导出 " + req.Ext.ToUpperInvariant(), suggested, text, req.Ext); }
+        catch (System.Exception ex)
+        {
+            PitMine3D.Kylin.CrashLog.Write("格网导出", ex.ToString());
+            StatusMsg.Text = $"格网导出：写出失败 {ex.Message}";
+            return;
+        }
+        if (name == null) { StatusMsg.Text = "格网导出：已取消"; return; }
+        var opts = new List<string>();
+        if (req.Options.Normals) opts.Add("含法线");
+        if (req.Options.FlipYZ) opts.Add("翻转 Y/Z");
+        if (System.Math.Abs(req.Options.Scale - 1) > 1e-12) opts.Add($"缩放 ×{req.Options.Scale:0.###}");
+        string tail = opts.Count > 0 ? " · " + string.Join(" · ", opts) : "";
+        StatusMsg.Text = $"格网导出：{meshCount} 网 {triCount} 三角 → {name}{tail}";
     }
 
     private async Task MdlExportOffAsync()
@@ -1007,19 +1134,165 @@ public partial class MainWindow
 
 public partial class MainWindow
 {
-    /// <summary>渲染配置：三角网显示模式 + 高程着色（原「渲染配置」实体/线框着色管线的托管等价）。</summary>
-    private async Task MdlRenderConfigAsync()
+    private Views.Render.RenderConfigWindow? _renderConfig;
+
+    /// <summary>
+    /// 渲染配置：开原版那扇「改即生效」的窗（着色档 / 等高距 / 属性分级区间 / 色带 / 文字字体）。
+    /// 早前这里是个两问的 PromptDialog（线框-着色面 + 高程色带），把原版一整页参数压成了两行，
+    /// 坡度/坡向/等高线/属性分级 与「选中即逐对象」全都没有入口 —— 见 RenderConfigWindow 头注。
+    /// </summary>
+    private void MdlOpenRenderConfig()
     {
-        string cur = MeshEntity.RenderMode switch { MeshEntity.DisplayMode.Wireframe => "线框", MeshEntity.DisplayMode.Shaded => "着色面", _ => "着色面+线框" };
-        var dlg = await PromptDialog.AskAsync(this, "渲染配置", new[]
+        if (_renderConfig != null)
         {
-            new PromptDialog.Field("mode", "三角网显示", cur, null, "线框=只画边线; 着色面=平行光着色的面模型; 着色面+线框=面上叠压暗边线", false, new[] { "线框", "着色面", "着色面+线框" }),
-            new PromptDialog.Field("elev", "面着色依据", MeshEntity.ColorByElevation ? "高程色带" : "实体颜色", null, "高程色带: 低绿→黄→棕→高白", false, new[] { "实体颜色", "高程色带" }),
-        }, "作用于场景中全部三角网(含地质体/块体外的面模型)，改完即时重绘");
-        if (dlg == null) return;
-        var mode = dlg.S("mode") switch { "线框" => MeshEntity.DisplayMode.Wireframe, "着色面" => MeshEntity.DisplayMode.Shaded, _ => MeshEntity.DisplayMode.ShadedWireframe };
-        SetMeshDisplay(mode, dlg.S("elev") == "高程色带");
+            try { _renderConfig.Activate(); return; }
+            catch { _renderConfig = null; }
+        }
+        _renderConfig = new Views.Render.RenderConfigWindow(
+            SelectedMeshes, AllMeshes, RefreshScene, msg => EditEcho(msg, EchoLevel.Success),
+            SetViewportTexture,
+            // 改实体前：开撤销组 + 收起选中面的青色高亮 —— 不收起, 套完材质满眼青色, 看不见改了什么
+            // (同 §三一七 那次"生成后被高亮盖成青色"的教训)。选中的线高亮还在, 仍看得出选了谁。
+            () => { BeginChange(); Viewport.SetHighlightFaces(null); },
+            PickMeshesForRenderConfigAsync);
+        _renderConfig.Closed += (_, _) => _renderConfig = null;
+        _renderConfig.Show(this);   // 非模态: 自检脚本也照开(不阻塞), 截图才核对得到窗体本身
+        EditEcho($"渲染配置：{AllMeshes().Count} 张三角网（选中对象后改档即只套到该对象）", EchoLevel.Success);
     }
+
+    /// <summary>
+    /// 「渲染配置 → 选操作面」：走与各编辑命令同一条「选择对象」流程（动词-名词：先激活、再选、右键确定）。
+    /// 选完把青色面高亮收起来 —— 不收起, 套上去的材质/贴图全被高亮盖住, 等于白调。
+    /// </summary>
+    private async Task<int> PickMeshesForRenderConfigAsync()
+    {
+        var meshes = await SelectObjectsAsync<MeshEntity>("渲染配置", "要套效果的面(三角网)");
+        Viewport.SetHighlightFaces(null);
+        RefreshScene();
+        if (meshes.Count > 0) EditEcho($"渲染配置：已选 {meshes.Count} 张面，回窗体点「应用效果」", EchoLevel.Success);
+        return meshes.Count;
+    }
+
+    /// <summary>自检：开「渲染配置」并切到指定页（0 着色 / 1 材质 / 2 贴图 / 3 透明度）。</summary>
+    private void SelftestOpenRenderConfig(string page)
+    {
+        MdlOpenRenderConfig();
+        int i = page switch { "材质" => 1, "贴图" => 2, "透明度" or "透明" => 3, _ => 0 };
+        _renderConfig?.SelectTab(i);
+        StatusMsg.Text = $"自检：渲染配置 → {(i == 0 ? "着色" : page)} 页";
+    }
+
+    /// <summary>
+    /// 换视口贴图（「渲染配置 → 贴图」）：路径 → RGBA8 像素 → GL 纹理；null = 清除。
+    /// 返回 null 表示成功，非 null 是要显示给用户的失败原因 —— 解不开的图要如实说，不能悄悄不换。
+    /// </summary>
+    private string? SetViewportTexture(string? path)
+    {
+        if (path == null) { Viewport.SetTexturePixels(null, 0, 0); return null; }
+        if (!Viewport.MaterialReady)
+            return "本机 GL 没有材质通道" + (string.IsNullOrEmpty(Viewport.MaterialFailReason) ? "" : "：" + Viewport.MaterialFailReason);
+        var img = Views.Render.TextureLoader.Load(path);
+        if (img == null) return "这张图读不出来（支持 PNG / JPG / BMP）";
+        Viewport.SetTexturePixels(img.Value.Rgba, img.Value.W, img.Value.H);
+        return null;
+    }
+
+    /// <summary>
+    /// 自检：直设「渲染配置」的着色状态 —— <c>@着色 &lt;档&gt; [等高距] [色带]</c>。
+    /// 窗体是非模态的，自检脚本点不了里面的下拉/滑杆，所以按 <see cref="MeshEntity"/> 的静态量直设再重绘，
+    /// 走的是与窗体完全相同的那条渲染路径（同 @夹点态 的做法）。
+    /// </summary>
+    private void SelftestSetShading(string[] a)
+    {
+        string tag = a.Length > 0 ? a[0] : "平面";
+        switch (tag)
+        {
+            case "线框": MeshEntity.RenderMode = MeshEntity.DisplayMode.Wireframe; break;
+            case "隐藏": case "隐藏填充":
+                MeshEntity.RenderMode = MeshEntity.DisplayMode.ShadedWireframe;
+                MeshEntity.ShadeMode = MeshEntity.FaceShade.Entity; break;
+            default:
+                if (MeshEntity.RenderMode == MeshEntity.DisplayMode.Wireframe)
+                    MeshEntity.RenderMode = MeshEntity.DisplayMode.Shaded;
+                MeshEntity.ShadeMode = tag switch
+                {
+                    "等高线" => MeshEntity.FaceShade.Contour,
+                    "坡度" => MeshEntity.FaceShade.Slope,
+                    "坡向" => MeshEntity.FaceShade.Aspect,
+                    "高程" => MeshEntity.FaceShade.Elevation,
+                    "属性" or "属性分级" => MeshEntity.FaceShade.Attribute,
+                    "贴图" => MeshEntity.FaceShade.Textured,
+                    "PBR" or "pbr" or "材质" => MeshEntity.FaceShade.Pbr,
+                    _ => MeshEntity.FaceShade.Entity,
+                };
+                MeshEntity.SmoothShading = tag != "平面";
+                break;
+        }
+        if (a.Length > 1 && double.TryParse(a[1], out double spacing) && spacing > 0) MeshEntity.ContourSpacing = spacing;
+        if (a.Length > 2) MeshEntity.AttrColormap = Cad.Colormap.ByName(a[2]);
+        if (MeshEntity.ShadeMode == MeshEntity.FaceShade.Attribute && MeshEntity.AttrAutoRange)
+        {
+            // 属性分级的自动区间是逐网算的, 这里只把全局区间也铺到全场景, 好让手填档的截图也有个准头。
+            var ms = AllMeshes();
+            if (ms.Count > 0)
+            {
+                MeshEntity.AttrMin = ms.Min(m => m.Bounds.minZ + m.Elevation);
+                MeshEntity.AttrMax = ms.Max(m => m.Bounds.maxZ + m.Elevation);
+            }
+        }
+        MeshEntity.BumpShade();
+        RefreshScene();
+        StatusMsg.Text = $"自检着色：{tag} · 等高距 {MeshEntity.ContourSpacing:0.#} m · {AllMeshes().Count} 张三角网"
+                         + (Viewport.MaterialReady ? "" : " · 材质通道不可用: " + Viewport.MaterialFailReason);
+    }
+
+    /// <summary>
+    /// 自检：直设材质/贴图/透明度 —— <c>@材质 &lt;金属度&gt; &lt;粗糙度&gt;</c> ·
+    /// <c>@贴图 &lt;内置名或路径&gt; [平铺尺度]</c> · <c>@透明 &lt;百分比&gt;</c>。
+    /// 与窗体走同一条下发路径(静态量/实体特性 + RefreshScene)，只是不经控件。
+    /// </summary>
+    private void SelftestSetMaterial(string kind, string[] a)
+    {
+        var targets = SelectedMeshes(); if (targets.Count == 0) targets = AllMeshes();
+        switch (kind)
+        {
+            case "材质":
+                if (a.Length > 0 && double.TryParse(a[0], out double met)) MeshEntity.PbrMetallic = met;
+                if (a.Length > 1 && double.TryParse(a[1], out double rou)) MeshEntity.PbrRoughness = rou;
+                MeshEntity.ShadeMode = MeshEntity.FaceShade.Pbr;
+                StatusMsg.Text = $"自检材质：PBR 金属度 {MeshEntity.PbrMetallic:0.00} · 粗糙度 {MeshEntity.PbrRoughness:0.00}";
+                break;
+            case "贴图":
+            {
+                string name = a.Length > 0 ? a[0] : "granite";
+                string path = System.IO.Path.IsPathRooted(name)
+                    ? name
+                    : System.IO.Path.Combine(Views.Render.TextureLoader.BuiltinDir,
+                                             name.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ? name : name + ".png");
+                if (a.Length > 1 && double.TryParse(a[1], out double sc) && sc > 0) MeshEntity.TexScale = sc;
+                string? err = SetViewportTexture(path);
+                MeshEntity.ShadeMode = MeshEntity.FaceShade.Textured;
+                StatusMsg.Text = err == null
+                    ? $"自检贴图：{System.IO.Path.GetFileName(path)} · 平铺 {MeshEntity.TexScale:0} m"
+                    : "自检贴图失败：" + err;
+                break;
+            }
+            case "透明":
+            {
+                short t = a.Length > 0 && short.TryParse(a[0], out short v) ? v : (short)50;
+                foreach (var m in targets) m.Transparency = t;
+                StatusMsg.Text = $"自检透明：{t}% × {targets.Count} 张网";
+                break;
+            }
+        }
+        if (MeshEntity.RenderMode == MeshEntity.DisplayMode.Wireframe) MeshEntity.RenderMode = MeshEntity.DisplayMode.Shaded;
+        MeshEntity.BumpShade();
+        Viewport.SetHighlightFaces(null);   // 别让青色高亮盖住要核对的材质
+        RefreshScene();
+        if (!Viewport.MaterialReady) StatusMsg.Text += " · 材质通道不可用: " + Viewport.MaterialFailReason;
+    }
+
+
 
     private void SetMeshDisplay(MeshEntity.DisplayMode? mode, bool? byElevation)
     {

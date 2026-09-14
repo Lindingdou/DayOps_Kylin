@@ -16,7 +16,8 @@ public static class PointNormals
     /// 与原版「曲率 (表面变异度)」同口径; 它不需要建面, 垂直壁与反坡同样算得出。
     /// </summary>
     public readonly record struct PointAttrib(
-        (double x, double y, double z) Normal, double SlopeDeg, double AspectDeg, double Curvature);
+        (double x, double y, double z) Normal, double SlopeDeg, double AspectDeg, double Curvature,
+        bool Degenerate = false);   // 退化：邻点不足 / PCA 拿不到法向, 退回竖直 (原版结果行里的「退化 N」)
 
     /// <summary>逐点 (法向, 坡度°, 坡向°)。k=近邻数。点不足返回空。</summary>
     public static List<((double x, double y, double z) n, double slope, double aspect)> Compute(
@@ -96,11 +97,54 @@ public static class PointNormals
             // 曲率 = 表面变异度 λmin / (λ0+λ1+λ2)：平面 ≈0, 折棱/尖点抬起(0 ~ 1/3)
             double lsum = Math.Abs(eval[0]) + Math.Abs(eval[1]) + Math.Abs(eval[2]);
             double curv = lsum < 1e-18 ? 0 : Math.Abs(eval[s]) / lsum;
-            if (nn < 1e-12) { res.Add(new PointAttrib((0, 0, 1), 0, 0, curv)); continue; }
+            if (nn < 1e-12 || take < 3) { res.Add(new PointAttrib((0, 0, 1), 0, 0, curv, Degenerate: true)); continue; }
             if (nz < 0) { nx = -nx; ny = -ny; nz = -nz; }   // 法向朝上
             double slope = Math.Acos(Math.Min(1.0, Math.Abs(nz) / nn)) * 180.0 / Math.PI;
             double az = Math.Atan2(nx, -ny) * 180.0 / Math.PI; az %= 360.0; if (az < 0) az += 360.0;
             res.Add(new PointAttrib((nx / nn, ny / nn, nz / nn), slope, az, curv));
+        }
+        return res;
+    }
+
+    /// <summary>
+    /// 法向短线预览的抽样：XY 网格每格取一点(≤ maxCount 根, 空间均匀而非按文件顺序——LAS 按块落盘, 顺序抽样会偏一角),
+    /// 每根线段 = 点 → 点 + n·len。len ≤ 0 时自动取 平均点距 × 2(×3 实测看着像长毛, 遮住点本身)。
+    /// Kylin 补充的可视化(原版法向估计只写缓存无视觉产物), 纯几何、可单测。
+    /// </summary>
+    public static List<((double x, double y, double z) a, (double x, double y, double z) b)> SampleNormalSegments(
+        IReadOnlyList<(double x, double y, double z)> pts, IReadOnlyList<(double x, double y, double z)> normals,
+        int maxCount, double len)
+    {
+        var res = new List<((double x, double y, double z) a, (double x, double y, double z) b)>();
+        int n = pts?.Count ?? 0;
+        if (n == 0 || normals == null || normals.Count != n || maxCount <= 0) return res;
+
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        foreach (var p in pts!) { if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y; if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y; }
+        double area = Math.Max((maxX - minX) * (maxY - minY), 1e-9);
+        if (len <= 0) len = Math.Max(Math.Sqrt(area / n) * 2, 1e-6);
+
+        var picked = new List<int>();
+        if (n <= maxCount) { for (int i = 0; i < n; i++) picked.Add(i); }
+        else
+        {
+            double cell = Math.Max(Math.Sqrt(area / maxCount), 1e-9);
+            var seen = new HashSet<(long, long)>();
+            for (int i = 0; i < n; i++)
+                if (seen.Add(((long)Math.Floor((pts[i].x - minX) / cell), (long)Math.Floor((pts[i].y - minY) / cell))))
+                    picked.Add(i);
+            // 格数受边界取整影响可略超上限 → 等步长再抽一遍(仍空间均匀)
+            if (picked.Count > maxCount)
+            {
+                var thin = new List<int>(maxCount);
+                for (int k = 0; k < maxCount; k++) thin.Add(picked[(int)((long)k * picked.Count / maxCount)]);
+                picked = thin;
+            }
+        }
+        foreach (int i in picked)
+        {
+            var p = pts[i]; var m = normals[i];
+            res.Add((p, (p.x + m.x * len, p.y + m.y * len, p.z + m.z * len)));
         }
         return res;
     }

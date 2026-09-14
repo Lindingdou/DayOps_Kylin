@@ -21,6 +21,14 @@ public static class CrashLog
             if (_path != null) return _path;
             try
             {
+                // PITMINE_DATA_DIR：整个用户数据目录(crash.log / config.json / dock-layout.json)改到指定处 ——
+                // 另开一个实例做自检时不去碰用户自己的配置; 便携部署也可用它把数据放到程序旁边。
+                string? over = Environment.GetEnvironmentVariable("PITMINE_DATA_DIR");
+                if (!string.IsNullOrWhiteSpace(over))
+                {
+                    Directory.CreateDirectory(over);
+                    return _path = System.IO.Path.Combine(over, "crash.log");
+                }
                 string baseDir = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
                 if (!string.IsNullOrEmpty(baseDir))
                 {

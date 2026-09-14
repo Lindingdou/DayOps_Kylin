@@ -169,7 +169,7 @@
                             </Border>
                             <StackPanel Grid.Row="1" Margin="14,10" x:Name="analysisDetails"/>
                         </Grid>
-                        <Grid Grid.Column="1" Background="#FFF7F8FA" RowDefinitions="Auto,*">
+                        <Grid Grid.Column="1" Background="{DynamicResource Theme.Panel.Background}" RowDefinitions="Auto,*">
                             <Border Grid.Row="0" Background="#FFE8F5E9" Padding="12,8">
                                 <StackPanel Orientation="Horizontal"><TextBlock Text="🤝" FontSize="13" Margin="0,0,6,0"/><TextBlock Text="编组建议(供智能编组系统参考)" FontWeight="Bold" FontSize="13" Foreground="#FF2E7D32"/></StackPanel>
                             </Border>

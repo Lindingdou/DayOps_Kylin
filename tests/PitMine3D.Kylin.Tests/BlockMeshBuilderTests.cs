@@ -11,6 +11,7 @@ namespace PitMine3D.Kylin.Tests;
 /// 块体 → 六面体网格（体素）。此前每块只出一张平面矩形足印，三维里是一摞平板；
 /// 这里验真立方体 + 整块剔除（口径照原版 SurfaceInstanceBuilder：剔块不剔面）。
 /// </summary>
+[Collection("MeshRenderMode")]
 public class BlockMeshBuilderTests
 {
     private const int VertsPerCell = 24;   // 6 面 × 4 顶点
@@ -61,17 +62,34 @@ public class BlockMeshBuilderTests
         var res = BlockMeshBuilder.Build(cells);
         Assert.Equal(26, res.DrawnCells);
         Assert.Equal(1, res.CulledCells);
-        Assert.Equal(26 * VertsPerCell, res.Verts.Count);
+        // 发出的正好是立方体的外表面：6 个方向 × 3×3 = 54 张面（被邻居挡住的面不发，见类注释）
+        Assert.Equal(54, res.FaceCount);
+        Assert.Equal(54 * 4, res.Verts.Count);
     }
 
+    /// <summary>
+    /// 贴面的两块：公共面两边都被挡住 → 都不发；剩下 10 张面照发。
+    /// 托管端两面受光且不做背面剔除，若把这对严丝合缝的重合面都发出去，深度完全相等、谁先画谁赢，
+    /// 逐块次序一变侧面就糊成白噪（模型侧壁一摞 0.5 m 薄片时尤其明显）。挡住的面本就看不见。
+    /// </summary>
     [Fact]
-    public void ShellCells_stillGetAllSixFaces()
+    public void CoveredFacesBetweenTouchingCells_areNotEmitted()
     {
-        // 原版特意不按面剔（只留外表面会成空壳、进到内部会穿模）：暴露块仍画完整六面
         var res = BlockMeshBuilder.Build(new[] { Cube(0, 0, 0), Cube(1, 0, 0) });
         Assert.Equal(2, res.DrawnCells);
-        Assert.Equal(0, res.CulledCells);                      // 谁都没被六面包围
-        Assert.Equal(2 * TrisPerCell, res.Tris.Count);         // 两块各 12 三角，公共面并未省掉
+        Assert.Equal(0, res.CulledCells);                      // 谁都没被六面包围，两块都要画
+        Assert.Equal(10, res.FaceCount);                       // 12 张面减掉重合的那一对
+        Assert.Equal(10 * 2, res.Tris.Count);
+    }
+
+    /// <summary>孤立块没有邻居 → 六面全发（一个完整立方体）。</summary>
+    [Fact]
+    public void IsolatedCell_getsAllSixFaces()
+    {
+        var res = BlockMeshBuilder.Build(new[] { Cube(0, 0, 0) });
+        Assert.Equal(6, res.FaceCount);
+        Assert.Equal(VertsPerCell, res.Verts.Count);
+        Assert.Equal(TrisPerCell, res.Tris.Count);
     }
 
     [Fact]
@@ -86,6 +104,7 @@ public class BlockMeshBuilderTests
         var res = BlockMeshBuilder.Build(cells);
         Assert.Equal(1000 - 8 * 8 * 8, res.DrawnCells);
         Assert.Equal(8 * 8 * 8, res.CulledCells);
+        Assert.Equal(6 * 10 * 10, res.FaceCount);   // 只剩外表面 600 张，内部贴合面全省掉
     }
 
     [Fact]
@@ -97,6 +116,41 @@ public class BlockMeshBuilderTests
         var res = BlockMeshBuilder.Build(new[] { parent, small });
         Assert.Equal(2, res.DrawnCells);
         Assert.Equal(0, res.CulledCells);
+    }
+
+    /// <summary>
+    /// 变尺寸块(八叉树粗块)夹在实心里也要剔掉。
+    ///
+    /// 面表配对那套只认「同尺寸且正对」的邻居，粗块的面配不上 8 个小邻居的面 → 一块都剔不掉；
+    /// .blk 的 311 万叶块因此全数超预算、只能抽稀画 30 万块，模型满屏窟窿。改按细格占用判后
+    /// 同样的数据剔到 7.1 万块壳层。这里用 4×4×4 实心里嵌一个 2×2×2 粗块做最小复现。
+    /// </summary>
+    [Fact]
+    public void OversizedInteriorCell_isCulled_byOccupancy()
+    {
+        var cells = new List<C>();
+        for (int i = 0; i < 4; i++)
+            for (int j = 0; j < 4; j++)
+                for (int k = 0; k < 4; k++)
+                {
+                    bool inner = i is 1 or 2 && j is 1 or 2 && k is 1 or 2;
+                    if (!inner) cells.Add(Cube(i, j, k));      // 外壳 64-8 = 56 个单位块
+                }
+        cells.Add(new C(1.5, 1.5, 1.5, 1, 1, 1, 0, 1, 0));     // 中间那个 2×2×2 的粗块
+        var res = BlockMeshBuilder.Build(cells);
+        Assert.Equal(1, res.CulledCells);                       // 粗块六面全被壳层占住 → 剔掉
+        Assert.Equal(56, res.DrawnCells);
+    }
+
+    /// <summary>非立方体单元：三轴半尺寸各自独立（.blk 的细格是 25×25×0.5 m 这种扁盒子）。</summary>
+    [Fact]
+    public void AnisotropicCell_keepsItsOwnThreeHalfExtents()
+    {
+        var res = BlockMeshBuilder.Build(new[] { new C(0, 0, 0, 12.5, 12.5, 0.25, 1, 1, 1) });
+        Assert.Equal(1, res.DrawnCells);
+        Assert.Equal(-12.5, res.Verts.Min(v => v.x), 9); Assert.Equal(12.5, res.Verts.Max(v => v.x), 9);
+        Assert.Equal(-12.5, res.Verts.Min(v => v.y), 9); Assert.Equal(12.5, res.Verts.Max(v => v.y), 9);
+        Assert.Equal(-0.25, res.Verts.Min(v => v.z), 9); Assert.Equal(0.25, res.Verts.Max(v => v.z), 9);
     }
 
     [Fact]
@@ -116,7 +170,7 @@ public class BlockMeshBuilderTests
         var res = BlockMeshBuilder.Build(cells, maxCells: 10);
         Assert.Equal(10, res.DrawnCells);
         Assert.Equal(40, res.TruncatedCells);
-        Assert.Equal(10 * VertsPerCell, res.Verts.Count);
+        Assert.Equal(10 * VertsPerCell, res.Verts.Count);   // 互不相邻 → 每块六面全发
     }
 
     [Fact]

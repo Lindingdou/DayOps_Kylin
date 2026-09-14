@@ -93,7 +93,7 @@
         </StackPanel>
 
         <!-- 预览色阶图例 + 分级直方(评估后显示) -->
-        <Border x:Name="legendBorder" DockPanel.Dock="Bottom" IsVisible="False" BorderBrush="#D0D4DA" BorderThickness="1"
+        <Border x:Name="legendBorder" DockPanel.Dock="Bottom" IsVisible="False" BorderBrush="{DynamicResource Theme.Panel.Border}" BorderThickness="1"
                 CornerRadius="4" Padding="8,5" Margin="0,6,0,0">
             <Grid ColumnDefinitions="Auto,*,Auto,260">
                 <TextBlock Grid.Column="0" Text="色阶" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,10,0"/>

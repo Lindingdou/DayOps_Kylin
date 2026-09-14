@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace PitMine3D.Kylin.Cad;
 
@@ -28,6 +28,23 @@ public static class Colormap
     /// <summary>Plasma（感知均匀, 蓝→紫→橙→黄）。</summary>
     public static readonly (byte r, byte g, byte b)[] Plasma =
         { (13, 8, 135), (126, 3, 168), (204, 71, 120), (248, 149, 64), (240, 249, 33) };
+    /// <summary>RdYlBu（矿业惯用发散色带: 蓝=低 → 米黄=中 → 红=高）。</summary>
+    public static readonly (byte r, byte g, byte b)[] RdYlBu =
+        { (49, 54, 149), (116, 173, 209), (255, 255, 191), (244, 109, 67), (165, 0, 38) };
+
+    /// <summary>
+    /// 「渲染配置」色带下拉的预设表 —— 名称与顺序照原 RenderConfigDialog 的 s_colormaps。
+    /// </summary>
+    public static readonly (string Name, (byte r, byte g, byte b)[] Stops)[] Presets =
+    {
+        ("Viridis", Viridis),
+        ("Magma", Magma),
+        ("Jet", Jet),
+        ("Turbo", Turbo),
+        ("RdYlBu 矿业", RdYlBu),
+        ("Terrain 地形", Terrain),
+        ("Grayscale", Grayscale),
+    };
 
     /// <summary>按名取色带（不区分大小写）；未知返回 Terrain。</summary>
     public static (byte r, byte g, byte b)[] ByName(string name) => (name ?? "").Trim().ToLowerInvariant() switch
@@ -38,6 +55,7 @@ public static class Colormap
         "turbo" => Turbo,
         "magma" => Magma,
         "plasma" => Plasma,
+        "rdylbu" or "rdylbu 矿业" => RdYlBu,
         _ => Terrain,
     };
 

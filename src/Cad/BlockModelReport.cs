@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -51,7 +51,7 @@ public static class BlockModelReport
         {
             if (m.DeletedIds.Contains(i)) continue;
             var b = m.Blocks[i];
-            if (m.SubCellCount > 0 && b.Size < m.Sx - 1e-9) { sub++; subVol += b.Size * b.Size * b.Size; }
+            if (m.IsVarCell(b)) { double k = m.CellScale(b); sub++; subVol += k * k * k * m.CellVolume; }
         }
         long visible = total - deleted - sub;
 
@@ -134,7 +134,7 @@ public static class BlockModelReport
             foreach (var blk in live)
             {
                 int idx = Math.Max(0, (int)((blk.Z - minZ) / bh));
-                double v = (m.SubCellCount > 0 && blk.Size < m.Sx - 1e-9) ? blk.Size * blk.Size * blk.Size : m.CellVolume;
+                double k = m.CellScale(blk); double v = k * k * k * m.CellVolume;
                 cells[idx] = cells.TryGetValue(idx, out var c) ? (c.n + 1, c.vol + v) : (1, v);
             }
             foreach (var b in bench)

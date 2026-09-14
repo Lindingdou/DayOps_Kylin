@@ -62,20 +62,29 @@ public partial class MainWindow : Window
             Width = ws.w; Height = ws.h;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
         }
-        else WindowState = WindowState.Maximized;
+        else if (!RestoreWindowGeometry())   // 上次退出时不是最大化 → 按记下的尺寸开窗(见 MainWindow.Settings.cs)
+            WindowState = WindowState.Maximized;
         _splash?.Report(0.15, "正在初始化图形引擎…");
         _active = NewDocState();   // 首个文档(场景/图层), 供 _scene/_layers 与停靠布局
         _docs.Add(_active);
         BuildDock();               // 代码建 MVVM 停靠布局 + 内容模板(返回暂存面板控件)
-        PopulateDrawingLayers();   // 启动即显示绘制图层("0")，可管理
+        InitObjectManager();       // 对象管理器(同原版 objectBrowserTree): CAD 对象/面模型/块体模型 三根, 见 MainWindow.ObjectManager.cs
+        PopulateDrawingLayers();   // 启动即显示 CAD 对象 → 文件 → 图层"0" 骨架 + 功能区当前图层下拉
         SetDocPath(null);          // 初始标题=视图1(同原版 CreateLayoutDocument($"视图{_viewCounter++}"))
         RenderAssistant(_assistant.Current());   // 智能助手：启动显示欢迎 + 主菜单
         GlyphFontHost.Install();   // 视口文字用系统真字形(含中文), 取不到则退回笔画字体
+        InstallStatusEcho();       // 状态栏结果 → 信息栏留痕(带时间戳), 见该方法说明
         Opened += (_, _) => ReportGraphicsDowngrade();   // 图形被自动降级时在信息栏说明
         Opened += (_, _) => InstallRibbonAutoFit();      // 功能区按窗口宽度自适应缩放(1080p 上一屏放得下)
+        Opened += (_, _) => LoadCursorSizeSetting();     // 十字光标尺寸(选项·显示)按上次设定恢复
+        Opened += (_, _) => LoadDisplaySettings();       // 视口背景/光标色/夹点样式/Gizmo(选项·显示/选择集)按上次设定恢复, 见 MainWindow.Options.cs
         InitPropertyRibbon();      // Ribbon「特性」组 颜色/线宽/线型 三栏(填下拉 + 复位显示)
+        InitHatchFontRibbon();     // Ribbon「注释」组 填充图案/填充颜色/文字字体(见 MainWindow.HatchFont.cs)
         InstallParamAsker();       // 命令行发起的命令：参数改在命令行里逐项问(AutoCAD 式), 见 MainWindow.CmdParams.cs
         Startup.BrandLogo.Apply(this);   // 标题栏/任务栏用中煤标志(与启动画面同一份矢量)
+        InitFileTree();            // 文件管理器: 工作目录 + 我的电脑 树(同原版), 工作目录自配置恢复
+        LoadUserSettings();        // 上次退出记下的配置(选项/状态栏开关/窗口尺寸), 见 MainWindow.Settings.cs
+        Closing += (_, _) => SaveUserSettings();   // 关闭即整份落盘(同原版 OnWindowClosing → FlushPersistence)
         RegisterModuleWindows();   // 各功能模块的独立窗口登记(带启动页进度)
 
 
@@ -86,6 +95,21 @@ public partial class MainWindow : Window
             _splash?.Report(1.0, "就绪");
             _splash?.Close();
             _splash = null;
+        };
+
+        // 授权闸(§三二九, 忠实原 LicenseGate): 主窗显示后查一次 —— 已到期就模态弹注册窗,
+        // 办不成即退出; 临近到期只在状态栏提醒一句, 不拦。授权模块自身出错一律放行。
+        // 放在 Opened 而不是构造里: Avalonia 的模态得挂在一扇已显示的窗上。
+        Opened += async (_, _) =>
+        {
+            bool ok = await Licensing.LicenseGate.CheckAtStartupAsync(this, msg => StatusMsg.Text = msg);
+            if (!ok)
+            {
+                if (Avalonia.Application.Current?.ApplicationLifetime
+                    is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime life) life.Shutdown();
+                return;
+            }
+            Licensing.LicenseGate.StartHeartbeat(() => this);   // 一直开着不关的实例也要能到期
         };
 
         // 自检钩子: PITMINE_SELFTEST=<Ribbon 命令名> 时, 窗口显示后自动派发一次该命令 ——
@@ -139,6 +163,13 @@ public partial class MainWindow : Window
             if (_oneShotPick != null && props.IsLeftButtonPressed)
             {
                 _nav = NavMode.None;
+                if (_pickBox != null)   // 逐面点选支持拖框选: 按下先记起点, 松开时再分"点选 / 框选"(见 _onHostReleased)
+                {
+                    _pickDragging = true; _pickDragStart = _lastPointer;
+                    e.Pointer.Capture(ViewportHost);
+                    e.Handled = true;
+                    return;
+                }
                 ConsumeOneShotPick(_lastPointer.X, _lastPointer.Y);
                 e.Handled = true;
                 return;
@@ -162,37 +193,21 @@ public partial class MainWindow : Window
                 return;
             }
 
-            // 修剪/延伸：点目标线 → 其近端点移到与边界(任意实体)的最近交点
+            // 修剪 / 延伸：循环点选目标(右键/回车结束)。Shift = 本次反向(同 AutoCAD/原版: TRIM 里 Shift 延伸、EXTEND 里 Shift 修剪)
+            if (_trimActive && props.IsRightButtonPressed)
+            {
+                _nav = NavMode.None;
+                EndTrim();
+                e.Handled = true;
+                return;
+            }
             if (_trimActive && props.IsLeftButtonPressed)
             {
                 _nav = NavMode.None;
                 var wp = PickWorld();
-                if (wp != null && _selected.Count == 1)
-                {
-                    var boundary = _selected[0];
-                    var hit = _scene.Pick(wp.Value.x, wp.Value.y, SnapTolWorld(_lastPointer) * 3, _layers.IsSelectable);
-                    if (hit is LineEntity target && !ReferenceEquals(target, boundary))
-                    {
-                        var nl = TrimExtend(target, boundary, (wp.Value.x, wp.Value.y));
-                        if (nl != null) { BeginChange(); _scene.Replace(target, nl); StatusMsg.Text = "已修剪/延伸"; }
-                        else StatusMsg.Text = "与边界无交点，无法修剪/延伸";
-                    }
-                    else if (hit is PolylineEntity ptarget && !ReferenceEquals(ptarget, boundary))
-                    {
-                        var np = TrimTools.TrimExtendPolylineEnd(ptarget, boundary, wp.Value.x, wp.Value.y);
-                        if (np != null) { BeginChange(); _scene.Replace(ptarget, np); StatusMsg.Text = "已修剪/延伸多段线端"; }
-                        else StatusMsg.Text = "与边界无交点，无法修剪/延伸";
-                    }
-                    else if (hit is ArcEntity atarget && !ReferenceEquals(atarget, boundary))
-                    {
-                        var na = TrimTools.TrimExtendArc(atarget, boundary, wp.Value.x, wp.Value.y);
-                        if (na != null) { BeginChange(); _scene.Replace(atarget, na); StatusMsg.Text = "已修剪/延伸圆弧端"; }
-                        else StatusMsg.Text = "与边界无交点，无法修剪/延伸";
-                    }
-                    else StatusMsg.Text = "未点中目标（目标须为直线/多段线/圆弧）";
-                    RefreshScene();
-                }
-                _trimActive = false;
+                if (wp != null)
+                    ApplyTrimAt(wp.Value.x, wp.Value.y,
+                                _trimExtend ^ e.KeyModifiers.HasFlag(KeyModifiers.Shift));
                 return;
             }
 
@@ -240,11 +255,26 @@ public partial class MainWindow : Window
                         double x1, y1, x2, y2, ox, oy;
                         if (_dimContinue) { x1 = _dimP1.Value.x; y1 = _dimP1.Value.y; x2 = wp.Value.x; y2 = wp.Value.y; ox = _lastDimOffsetPt?.x ?? wp.Value.x; oy = _lastDimOffsetPt?.y ?? wp.Value.y; }
                         else { x1 = _dimP1.Value.x; y1 = _dimP1.Value.y; x2 = _dimP2!.Value.x; y2 = _dimP2.Value.y; ox = wp.Value.x; oy = wp.Value.y; }
-                        var dim = _dimAligned
-                            ? DimTools.BuildLinear(x1, y1, x2, y2, ox, oy, h, _dimStyle)          // 对齐: 平行真距
-                            : DimTools.BuildLinearAxis(x1, y1, x2, y2, ox, oy, h, _dimStyle);      // 线性: 轴对齐 X/Y
                         BeginChange();
-                        foreach (var de in dim) { de.LayerName = _layers.Current.Name; _scene.Add(de); }
+                        if (_dimAligned)
+                        {
+                            // 对齐标注(平行真距)是**一等对象**(§三二七): 存定义点、几何现推, 于是挪一下测点
+                            // 尺寸数字跟着变, 也才有原版那扇「逐条标注特性」窗可改。
+                            var de = new DimensionEntity
+                            {
+                                Kind = DimensionEntity.DimKind.Aligned,
+                                X1 = x1, Y1 = y1, X2 = x2, Y2 = y2, OffX = ox, OffY = oy,
+                                BaseHeight = h, LayerName = _layers.Current.Name,
+                                Cr = 0.95f, Cg = 0.85f, Cb = 0.30f,   // 同 DimTools 的标注色
+                            };
+                            _scene.Add(de);
+                        }
+                        else
+                        {
+                            // 线性(轴对齐 X/Y)原版没有对应的标注对象类型, 仍出散实体, 见 §三二七 登记
+                            foreach (var de in DimTools.BuildLinearAxis(x1, y1, x2, y2, ox, oy, h, _dimStyle))
+                            { de.LayerName = _layers.Current.Name; _scene.Add(de); }
+                        }
                         RefreshScene();
                         StatusMsg.Text = "已标注";
                         _lastDimP2 = (x2, y2); _lastDimOffsetPt = (ox, oy);   // 供连续标注接续(同尺寸线级)
@@ -263,11 +293,24 @@ public partial class MainWindow : Window
                 {
                     var c = _dimRadCircle.Value;
                     double h = System.Math.Max(SnapTolWorld(_lastPointer) * 2.5, 1e-3);
-                    var dim = _dimDiameter
-                        ? DimTools.BuildDiameter(c.cx, c.cy, c.r, wp.Value.x - c.cx, wp.Value.y - c.cy, h, _dimStyle)
-                        : DimTools.BuildRadial(c.cx, c.cy, c.r, wp.Value.x - c.cx, wp.Value.y - c.cy, h, _dimStyle);
                     BeginChange();
-                    foreach (var de in dim) { de.LayerName = _layers.Current.Name; _scene.Add(de); }
+                    if (_dimDiameter)
+                    {
+                        // 直径标注原版没有对应的标注对象类型, 仍出散实体(见 §三二七 登记)
+                        foreach (var de in DimTools.BuildDiameter(c.cx, c.cy, c.r, wp.Value.x - c.cx, wp.Value.y - c.cy, h, _dimStyle))
+                        { de.LayerName = _layers.Current.Name; _scene.Add(de); }
+                    }
+                    else
+                    {
+                        _scene.Add(new DimensionEntity
+                        {
+                            Kind = DimensionEntity.DimKind.Radial,
+                            Cx = c.cx, Cy = c.cy, Radius = c.r,
+                            DirX = wp.Value.x - c.cx, DirY = wp.Value.y - c.cy,
+                            BaseHeight = h, LayerName = _layers.Current.Name,
+                            Cr = 0.95f, Cg = 0.85f, Cb = 0.30f,
+                        });
+                    }
                     RefreshScene();
                     StatusMsg.Text = _dimDiameter ? $"已标注 Ø{2 * c.r:0.##}" : $"已标注 R{c.r:0.##}";
                     _dimRadActive = false; _dimRadCircle = null; _dimDiameter = false;
@@ -379,14 +422,7 @@ public partial class MainWindow : Window
             {
                 _nav = NavMode.None;
                 var wp = PickWorld();
-                if (wp != null && _selected.Count == 1)
-                {
-                    var off = _selected[0].Offset(wp.Value.x, wp.Value.y);
-                    if (off != null) { BeginChange(); _scene.Add(off); StatusMsg.Text = "已偏移"; }
-                    else StatusMsg.Text = "该实体不支持偏移（如点/退化几何）";
-                    RefreshScene();
-                }
-                _offsetActive = false;
+                if (wp != null) ApplyOffsetAt(wp.Value.x, wp.Value.y);
                 return;
             }
 
@@ -534,8 +570,22 @@ public partial class MainWindow : Window
         {
             var p = e.GetPosition(ViewportHost);
             Viewport.SetCursorScreen(p.X, p.Y);   // CAD 十字光标随动
+            SyncCursorMode();                     // 形态随状态(拖框选期间收方框); 没变则空操作
             SyncPrompt();                          // 异步命令(对话框后)切换的状态在此兜底刷新提示
             var w = Viewport.ScreenToWorld(p.X, p.Y);
+
+            // 拾取期间拖框(逐面点选的多选)：拖出 4px 才算框, 画选框 + 浮标说明; 松开在 _onHostReleased 里结算
+            if (_pickDragging)
+            {
+                if (System.Math.Abs(p.X - _pickDragStart.X) >= 4 || System.Math.Abs(p.Y - _pickDragStart.Y) >= 4)
+                {
+                    bool crossing = p.X < _pickDragStart.X;
+                    Viewport.SetSnapMarker(BoxRect(_pickDragStart, p, crossing)); _snapShown = true;
+                    ShowTipAt(p, $"框选三角面 · {(crossing ? "交叉(右→左, 碰到即选)" : "窗口(左→右, 全含才选)")} · 松开完成 · 按住 Shift = 从已选中移除");
+                }
+                _lastPointer = p;
+                return;
+            }
 
             if (RegionBrushOnMoved(p)) return;   // 区域选区笔刷：圆圈跟随 + 按住左键涂改, 见 MainWindow.RegionBrush.cs
 
@@ -547,6 +597,7 @@ public partial class MainWindow : Window
                 _textDragPending = false; _textDragging = true;
                 _editMode = EditMode.Move; _editName = "移动"; _editAwaitSelect = false; _editDisplacement = false;
                 _editPts.Clear(); _editPts.Add(_textDragBase);
+                _editPreview = null; _editPreviewPts = -1; _editHasDragStart = false;
                 SyncPrompt();
             }
 
@@ -554,6 +605,7 @@ public partial class MainWindow : Window
             if (_selBoxActive)
             {
                 bool crossing = p.X < _selBoxStart.X;
+                LogDragDiag(p);   // 偏移排查: 拖框期间每 200ms 落一条「光标→视平面→再投影」, 现场复现后直接查日志
                 Viewport.SetSnapMarker(BoxRect(_selBoxStart, p, crossing));
                 _snapShown = true;
                 // 拖框期间引导不消失：编辑命令的"选择对象"操作说明 + 当前框选模式
@@ -617,6 +669,8 @@ public partial class MainWindow : Window
             _cursorWorld = shown;
             // 「实时曲面坐标」：状态栏保持投影平面坐标(同原版), 真实三维坐标走光标旁的浮动气泡
             UpdateSurfaceCoordTip(p, shown);
+            // 逐面点选类拾取的悬停: 光标压到哪个三角面就亮哪个面(用未捕捉的原始落点, 与点击时 ConsumeOneShotPick 同源)
+            if (_pickHover != null && _nav == NavMode.None) _pickHover(p, w);
 
             // Gizmo 拖拽中：沿轴求光标射线最近点, 幽灵 + 手柄一起挪；空闲态则做轴悬停(压上变黄)。见 MainWindow.Gizmo.cs
             if (_gizmoDrag != null) { GizmoDragMove(p); _lastPointer = p; return; }
@@ -651,7 +705,9 @@ public partial class MainWindow : Window
                                  : (_editMode != EditMode.None && !_editAwaitSelect) ? EditDragHint(shown.Value)
                                  : DimJigHint(shown.Value)    // 标注取点中的实时读数(距离/半径/角度/坐标), 见 MainWindow.DimJig.cs
                                    ?? MeasureJigHint(shown.Value);   // 测距/测角取点中的实时读数, 见 MainWindow.MeasureJig.cs
-                    if (prompt.Length > 0) dh = dims != null ? $"{prompt}  {dims}" : prompt;
+                    // 逐面点选的悬停说明(面号/面积/点击效果/已选数)自成一条, 不再接在整句步骤提示后面 —— 那句已在命令行标签里, 浮标拼上去太长, 光标靠右就被视口切掉
+                    if (_pickHover != null && !string.IsNullOrEmpty(_pickHoverInfo)) dh = _pickHoverInfo;
+                    else if (prompt.Length > 0) dh = dims != null ? $"{prompt}  {dims}" : prompt;
                 }
                 if (dh != null)
                 {
@@ -663,12 +719,17 @@ public partial class MainWindow : Window
                 else if (dragTip.Opacity != 0) { dragTip.Opacity = 0; (dragTip.Parent as Control)?.InvalidateVisual(); }
             }
 
-            if ((_tool != null || _editMode != EditMode.None) && _nav == NavMode.None) RefreshScenePreview();   // 橡皮筋/编辑拖拽预览随光标刷新
+            // 橡皮筋/编辑拖拽预览随光标刷新。第三个条件是兜底: 命令已结束但预览通道里还挂着东西
+            // (某条收尾路径没重刷), 下一次光标移动就把它擦掉 —— 不然那条拖拽虚线会一直留在屏幕上。
+            if ((_tool != null || _editMode != EditMode.None || Viewport.PreviewSegments > 0) && _nav == NavMode.None) RefreshScenePreview();
 
             if (_nav == NavMode.Pan)
                 Viewport.Pan(_lastPointer.X, _lastPointer.Y, p.X, p.Y);
             else if (_nav == NavMode.Orbit)
+            {
                 Viewport.Orbit((p.X - _lastPointer.X) * 0.01, (p.Y - _lastPointer.Y) * 0.01);
+                if (!Viewport.Is2DView) RefreshGripsForView(force: false);   // 透视下夹点方块的世界尺寸随各自深度变, 转着看要跟着重算(限频)
+            }
             _lastPointer = p;
         };
         _onHostReleased = (_, e) =>
@@ -683,9 +744,23 @@ public partial class MainWindow : Window
                 {
                     _nav = NavMode.None;
                     e.Pointer.Capture(null);
-                    PickAt(rel);
+                    PickAt(rel, SelModifier(e.KeyModifiers));
                     return;
                 }
+            }
+
+            // 拾取期间拖框(逐面点选的多选)：松开 → 拖出框则交给命令的框选回调, 没拖动就是普通点选
+            if (_pickDragging)
+            {
+                _pickDragging = false;
+                e.Pointer.Capture(null);
+                Viewport.SetSnapMarker(null); _snapShown = false;
+                if (System.Math.Abs(rel.X - _pickDragStart.X) < 4 && System.Math.Abs(rel.Y - _pickDragStart.Y) < 4)
+                    ConsumeOneShotPick(_pickDragStart.X, _pickDragStart.Y);
+                else if (_pickBox != null)
+                    _pickBox(_pickDragStart, rel, rel.X < _pickDragStart.X, e.KeyModifiers.HasFlag(KeyModifiers.Shift));
+                else HideDragTip();
+                return;
             }
 
             // 拖放移动文字：松开 → 没拖过阈值就是一次点选; 拖了就当「移动」的第二点落地(一步 Undo)
@@ -694,7 +769,7 @@ public partial class MainWindow : Window
                 bool dragged = _textDragging;
                 _textDragPending = false; _textDragging = false;
                 e.Pointer.Capture(null);
-                if (!dragged) { PickAt(rel); return; }
+                if (!dragged) { PickAt(rel, SelModifier(e.KeyModifiers)); return; }
                 var wp = _snapWorld ?? Viewport.ScreenToWorld(rel.X, rel.Y);
                 if (wp != null && _editMode == EditMode.Move)
                 {
@@ -716,9 +791,9 @@ public partial class MainWindow : Window
                 Viewport.SetSnapMarker(null); _snapShown = false;
                 HideDragTip();   // 收起"框选中…"浮标(否则单击一下也会留着框选提示)
                 if (System.Math.Abs(rel.X - _selBoxStart.X) < 4 && System.Math.Abs(rel.Y - _selBoxStart.Y) < 4)
-                    PickAt(rel);                    // 无拖动 → 点选
+                    PickAt(rel, SelModifier(e.KeyModifiers));                    // 无拖动 → 点选
                 else
-                    BoxSelect(_selBoxStart, rel);   // 拖动成框 → 框选
+                    BoxSelect(_selBoxStart, rel, SelModifier(e.KeyModifiers));   // 拖动成框 → 框选
                 return;
             }
 
@@ -758,9 +833,10 @@ public partial class MainWindow : Window
             // 无拖动 + 非绘制/测距 → 视为点选
             bool wasClick = _nav != NavMode.None && _tool == null && _measure == null
                 && System.Math.Abs(rel.X - _pressPos.X) < 4 && System.Math.Abs(rel.Y - _pressPos.Y) < 4;
+            if (_nav == NavMode.Orbit && !wasClick && !Viewport.Is2DView) RefreshGripsForView(force: true);   // 旋转收尾: 按最终视角把夹点尺寸算准(拖拽中是限频的)
             _nav = NavMode.None;
             e.Pointer.Capture(null);
-            if (wasClick) PickAt(rel);
+            if (wasClick) PickAt(rel, SelModifier(e.KeyModifiers));
         };
         _onHostWheel = (_, e) =>
         {
@@ -780,6 +856,12 @@ public partial class MainWindow : Window
             else if (TryBeginHatchEditAt(te.GetPosition(ViewportHost))) { }  // 双击填充 = 开「编辑填充」对话框(AutoCAD HATCHEDIT)
             else Viewport.ZoomExtents();                                  // 否则 = 范围缩放
         };
+        _onHostEntered = (_, e) =>                                         // 进绘图区即出十字(不必先动一下鼠标, 否则那一瞬间"什么光标都没有")
+        {
+            var p = e.GetPosition(ViewportHost);
+            _lastPointer = p;
+            Viewport.SetCursorScreen(p.X, p.Y);
+        };
         _onHostExited = (_, _) =>                                          // 光标离开视口 → 收起十字与浮标, 状态栏坐标清空(同原版)
         {
             Viewport.HideCursor();
@@ -787,8 +869,11 @@ public partial class MainWindow : Window
             if (_active.DragTip != null) { _active.DragTip.Opacity = 0; (_active.DragTip.Parent as Control)?.InvalidateVisual(); }
         };
 
-        // 对象树选类型 → 视口高亮该类型几何
-        ObjectTree.SelectionChanged += OnObjectTreeSelect;
+        // 视图比例一变就重画夹点：方块的世界尺寸是按"当前多少世界单位 = 一个像素"折算的，
+        // 不重画的话缩放后方块会跟着放大缩小（放大后还会露出填充扫描线）。只在有夹点时才做。
+        // 存成委托由 WireHost 挂到每个视口 —— 早先只挂在第一份视口上, 第二个标签里缩放后夹点一直是旧尺寸。
+        _onScaleChanged = () => RefreshGripsForView(force: true);
+        if (_active.Vp != null) _active.Vp.ScaleChanged += _onScaleChanged;   // 视口若已建好就直接挂; 之后建的由 WireHost 挂
 
         // 命令行「常驻聆听」(AutoCAD 行为)：焦点不在任何输入框时敲字符, 直接进命令框 ——
         // 原先必须先用鼠标点一下底部命令框才能打命令, 是"命令系统没激活"最直接的表现。
@@ -796,6 +881,12 @@ public partial class MainWindow : Window
         AddHandler(TextInputEvent, OnWindowTextInput, RoutingStrategies.Tunnel);
         // Ctrl+X / Ctrl+C / Ctrl+V / Ctrl+Shift+V(实体剪贴板)也走窗口级隧道, 抢在命令框 TextBox 把它们当文字剪贴之前(见 OnWindowClipboardKey)。
         AddHandler(KeyDownEvent, OnWindowClipboardKey, RoutingStrategies.Tunnel);
+
+        // Delete(删除选中对象)也得在窗口这一层用隧道先接。
+        // 起因: 命令行常驻聆听之后, 焦点多半停在命令框上; TextBox 把 Delete 当"向后删字符"处理并标 Handled,
+        // 下面那条冒泡 KeyDown 就再也收不到 —— 现象正是"明明选中了东西, 按 Delete 没反应"。
+        // 隧道从根往下走, 比 TextBox 自己的处理更早, 所以能抢在它前面。
+        AddHandler(KeyDownEvent, OnWindowDeleteKey, RoutingStrategies.Tunnel);
 
         // ESC：退出当前绘制/测量
         KeyDown += (_, e) =>
@@ -840,6 +931,7 @@ public partial class MainWindow : Window
                 _textDragPending = false; _textDragging = false;
                 FinishSelectObjects(false);
                 _editPts.Clear();
+                _editPreview = null; _editPreviewPts = -1;   // 拖拽备料随命令一起丢(大网的替身能有几 MB)
                 _offsetActive = false;
                 _trimActive = false;
                 _breakActive = false; _breakPts.Clear();
@@ -888,48 +980,60 @@ public partial class MainWindow : Window
         if (Dock == null) return;
         var f = new Dock.Model.Mvvm.Factory();
 
-        // 左/右面板：各由两个独立 Dock 工具组成, ToolDock 呈现底部标签(左=文件管理器/图层, 右=特性/智能助手)。
+        // 左/右面板：各由两个独立 Dock 工具组成, ToolDock 呈现底部标签(左=文件管理器/对象管理器, 右=特性/智能助手)。
         // CanFloat=false：拖拽只在停靠区重排; 吸附不到新位就回到原处(不浮出独立窗口/不消失), 仅关闭键移除。
         // 布局忠实原版 MainWindow.xaml LayoutRoot：
         //   垂直 [ 水平 [ 左(文件管理器/…, 最小宽 240) | 中央文档区 | 右(属性对话框/AI 助手, 宽 270) ] | 底部 信息栏(高 120, 最小 80) ]
         // Dock.Avalonia 只有比例没有像素：按原版 1920x1080 换算 左 240/1920≈0.125、右 270/1920≈0.14、信息栏 120/(1080-Ribbon-状态栏)≈0.14。
         var fileTool = new DMC.Tool { Id = "File", Title = "文件管理器", CanClose = true, CanFloat = false };
-        var layerTool = new DMC.Tool { Id = "Layer", Title = "图层", CanClose = true, CanFloat = false };
+        var layerTool = new DMC.Tool { Id = "Objects", Title = "对象管理器", CanClose = true, CanFloat = false };   // 原版 objectBrowserPanel
         var props = new DMC.Tool { Id = "Props", Title = "属性对话框", CanClose = false, CanFloat = false };   // 原版 CanHide=False
         var assistant = new DMC.Tool { Id = "Assistant", Title = "AI 助手", CanClose = false, CanFloat = false }; // 原版 CanClose=False
         var info = new DMC.Tool { Id = "Info", Title = "信息栏", CanClose = false, CanFloat = false };          // 原版 CanHide/CanClose=False
-        var leftDock = new DMC.ToolDock { Alignment = DCore.Alignment.Left, Proportion = 0.14,
-            ActiveDockable = fileTool, VisibleDockables = f.CreateList<DCore.IDockable>(fileTool, layerTool) };
         var docDock = new DMC.DocumentDock { Proportion = 0.70, CanCreateDocument = false,
             ActiveDockable = _active.Vm, VisibleDockables = f.CreateList<DCore.IDockable>(_active.Vm) };
         _dockFactory = f; _docDock = docDock;
-        // 右侧工具停靠：属性对话框(默认选中) + AI 助手 两页(底部标签)。
-        var rightDock = new DMC.ToolDock { Alignment = DCore.Alignment.Right, Proportion = 0.16,
-            ActiveDockable = props, VisibleDockables = f.CreateList<DCore.IDockable>(props, assistant) };
         _propsTool = props; _assistantTool = assistant;   // Ribbon「AI 助手」切换钮用
+        _objectsTool = layerTool;                          // 自检切到对象管理器页用
 
-        var mainDock = new DMC.ProportionalDock { Orientation = DCore.Orientation.Horizontal, Proportion = 0.84,
-            VisibleDockables = f.CreateList<DCore.IDockable>(
-                leftDock, new DMC.ProportionalDockSplitter(), docDock, new DMC.ProportionalDockSplitter(), rightDock) };
-        // 底部：信息栏(命令历史 + 命令输入)——原版为 DockingManager 内的 LayoutAnchorable, 可拖动/可隐藏。
-        var bottomDock = new DMC.ToolDock { Alignment = DCore.Alignment.Bottom, Proportion = 0.16,
-            ActiveDockable = info, VisibleDockables = f.CreateList<DCore.IDockable>(info) };
-        var vertDock = new DMC.ProportionalDock { Orientation = DCore.Orientation.Vertical,
-            VisibleDockables = f.CreateList<DCore.IDockable>(mainDock, new DMC.ProportionalDockSplitter(), bottomDock) };
-        var root = new DMC.RootDock { Id = "Root", ActiveDockable = vertDock, DefaultDockable = vertDock,
-            VisibleDockables = f.CreateList<DCore.IDockable>(vertDock) };
+        // 页面布置：上次退出记下的排布(dock-layout.json)优先; 没有/读坏 → 下面的默认布局(见 MainWindow.DockLayout.cs)
+        var toolsById = new Dictionary<string, DMC.Tool>
+        {
+            ["File"] = fileTool, ["Objects"] = layerTool, ["Props"] = props, ["Assistant"] = assistant, ["Info"] = info,
+        };
+        DCore.IDock? top = TryRestoreDockLayout(f, toolsById, docDock, out var pinned);
+        if (top == null)
+        {
+            var leftDock = new DMC.ToolDock { Alignment = DCore.Alignment.Left, Proportion = 0.14,
+                ActiveDockable = fileTool, VisibleDockables = f.CreateList<DCore.IDockable>(fileTool, layerTool) };
+            // 右侧工具停靠：属性对话框(默认选中) + AI 助手 两页(底部标签)。
+            var rightDock = new DMC.ToolDock { Alignment = DCore.Alignment.Right, Proportion = 0.16,
+                ActiveDockable = props, VisibleDockables = f.CreateList<DCore.IDockable>(props, assistant) };
+            var mainDock = new DMC.ProportionalDock { Orientation = DCore.Orientation.Horizontal, Proportion = 0.84,
+                VisibleDockables = f.CreateList<DCore.IDockable>(
+                    leftDock, new DMC.ProportionalDockSplitter(), docDock, new DMC.ProportionalDockSplitter(), rightDock) };
+            // 底部：信息栏(命令历史 + 命令输入)——原版为 DockingManager 内的 LayoutAnchorable, 可拖动/可隐藏。
+            var bottomDock = new DMC.ToolDock { Alignment = DCore.Alignment.Bottom, Proportion = 0.16,
+                ActiveDockable = info, VisibleDockables = f.CreateList<DCore.IDockable>(info) };
+            top = new DMC.ProportionalDock { Orientation = DCore.Orientation.Vertical,
+                VisibleDockables = f.CreateList<DCore.IDockable>(mainDock, new DMC.ProportionalDockSplitter(), bottomDock) };
+        }
+        var root = new DMC.RootDock { Id = "Root", ActiveDockable = top, DefaultDockable = top,
+            VisibleDockables = f.CreateList<DCore.IDockable>(top) };
 
         f.InitLayout(root);
         Dock.Factory = f;
         Dock.Layout = root;
+        ApplyPinned(f, toolsById, pinned);                                       // 记录里钉住(自动隐藏)的面板重新钉上
         f.ActiveDockableChanged += (_, e) => OnActiveDocChanged(e.Dockable);   // 标签切换 → 切当前文档
         f.DockableClosed += (_, e) => OnDockableClosed(e.Dockable);            // 标签关闭 → 摘掉该文档
+        HookDockLayoutPersistence(f);                                          // 面板拖动/关闭/钉住 → 1s 后记一次页面布置
 
         // 内容模板：匹配我的叶子面板(按 Id)或任一文档(Doc*), 返回暂存控件; 框架容器仍用内建主题渲染。
         // 关键：注册到 Application 级(而非 Dock 级)——浮动时面板进入独立宿主窗口(另一个 DockControl),
         // 只有 App 级模板会被其继承, 否则浮动面板因无模板而"消失"。
         var tpl = new FuncDataTemplate<DCore.IDockable>(
-            d => d?.Id is "File" or "Layer" or "Props" or "Assistant" or "Info" || (d?.Id?.StartsWith("Doc") == true),
+            d => d?.Id is "File" or "Objects" or "Props" or "Assistant" or "Info" || (d?.Id?.StartsWith("Doc") == true),
             (d, _) => ContentFor(d?.Id));
         var appTpls = Avalonia.Application.Current!.DataTemplates;
         if (!appTpls.Contains(tpl)) appTpls.Add(tpl);
@@ -951,7 +1055,7 @@ public partial class MainWindow : Window
         Control? c = id switch
         {
             "File" => FileContent,
-            "Layer" => LayerContent,
+            "Objects" => ObjectContent,
             "Props" => PropsContent,
             "Assistant" => AssistantContent,
             "Info" => CmdContent,
@@ -995,6 +1099,8 @@ public partial class MainWindow : Window
         _tool = null; _measure = null; _angle = null; _selected.Clear(); _prevSelected = new();
         _grips.Clear(); _gripHover = -1; _snapShown = false;
         _editMode = EditMode.None; _editAwaitSelect = false; FinishSelectObjects(false); _lastImport = null;
+        // 图层特性管理器绑的是打开它时那个文档的图层表, 跨文档留着会改错表 —— 关掉, 需要再开就是当前文档的。
+        _layerMgrWin?.Close();
         // 访问 Viewport 即懒建当前文档的独立视口(EnsureHost); 各标签各有其宿主, 切换不再空白。
         // 不清导入几何——每文档视口自留其线框(切换会重建 GL 上下文, CadGlViewport 会据保留源重传)。
         PopulateDrawingLayers();
@@ -1052,6 +1158,13 @@ public partial class MainWindow : Window
         public Scene Scene = new();
         public LayerTable Layers = new();
         public DMC.Document Vm = null!;
+        public DocState()
+        {
+            // 「随层」透明度的解析器：实体透明度为 -1 时取所在图层那一列（图层特性管理器里改的就是它）。
+            // 挂在文档上而不是全局 —— 每个标签一套场景+图层表，跨文档共用会串味。
+            Scene.LayerTranspOf = n => Layers.Get(n)?.Transparency ?? 0;
+        }
+
         // 撤销栈与文件路径也归文档：此前两者是窗口级单例 —— 在文档 2 按撤销会弹出文档 1 的快照灌进文档 2 的场景,
         // 在文档 2 按保存会把文档 2 的内容写进文档 1 打开的那个 .pmx(实测"两个文档互相干扰"的根子)。
         public UndoManager Undo = new();
@@ -1076,6 +1189,35 @@ public partial class MainWindow : Window
     private System.EventHandler<Avalonia.Input.PointerWheelEventArgs>? _onHostWheel;
     private System.EventHandler<Avalonia.Input.TappedEventArgs>? _onHostDoubleTapped;
     private System.EventHandler<Avalonia.Input.PointerEventArgs>? _onHostExited;
+    private System.EventHandler<Avalonia.Input.PointerEventArgs>? _onHostEntered;
+    private System.Action? _onScaleChanged;
+
+    /// <summary>
+    /// 绘图空间用的"隐形光标"：一张 32×32 全透明位图。
+    /// 不用 StandardCursorType.None —— 个别后端并不认它(表现就是十字之外还叠着个系统箭头)；
+    /// 透明位图 Win32/X11 都认，系统箭头彻底不出现，绘图区只剩 CAD 十字。建不出来才退回 None。
+    /// </summary>
+    private static Avalonia.Input.Cursor? _invisibleCursor;
+    private static bool _invisibleIsBitmap;   // true=用上了透明位图; false=退回了 StandardCursorType.None
+    private static Avalonia.Input.Cursor InvisibleCursor => _invisibleCursor ??= MakeInvisibleCursor();
+
+    private static Avalonia.Input.Cursor MakeInvisibleCursor()
+    {
+        try
+        {
+            var wb = new Avalonia.Media.Imaging.WriteableBitmap(
+                new Avalonia.PixelSize(32, 32), new Avalonia.Vector(96, 96),
+                Avalonia.Platform.PixelFormat.Bgra8888, Avalonia.Platform.AlphaFormat.Premul);
+            using (var fb = wb.Lock())
+            {
+                int bytes = fb.RowBytes * fb.Size.Height;
+                System.Runtime.InteropServices.Marshal.Copy(new byte[bytes], 0, fb.Address, bytes);
+            }
+            _invisibleIsBitmap = true;
+            return new Avalonia.Input.Cursor(wb, new Avalonia.PixelPoint(0, 0));
+        }
+        catch { return new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.None); }
+    }
 
     private Scene _scene => _active.Scene;        // 当前文档的托管绘制场景
     private LayerTable _layers => _active.Layers;  // 当前文档的图层表
@@ -1087,16 +1229,21 @@ public partial class MainWindow : Window
     private void EnsureHost(DocState st)
     {
         if (st.Host != null) return;
-        var vp = new PitMine3D.Kylin.Controls.CadGlViewport { GridVisible = _gridOn };   // 新标签继承网格开关(窗口级状态, 视口各一份)
+        var vp = new PitMine3D.Kylin.Controls.CadGlViewport   // 新标签继承「十字光标尺寸」/网格开关/视口配色(窗口级状态, 视口各一份)
+        {
+            CursorSizePercent = _cursorSizePct, GridVisible = _gridOn,
+            Background2D = _bg2D, Background3D = _bg3D, CursorColor = _cursorRgb,
+        };
         var host = new Panel { Background = Avalonia.Media.Brushes.Transparent, ContextMenu = BuildViewportContextMenu() };
-        var cursorNone = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.None);
         var cursorArrow = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Arrow);
-        host.Cursor = cursorNone;   // 隐藏系统箭头 → 只见 CAD 十字光标
-        // 右键菜单弹出期间要能看见系统箭头(菜单弹层沿用宿主的 None 光标就"没鼠标"了)：
-        // 打开 → 宿主换回箭头并收起 CAD 十字；关闭 → 恢复 None，十字随下次 PointerMoved 重现。
+        // 绘图空间里系统箭头一律不出现 —— 那儿的光标就是 CAD 十字(同 AutoCAD)。
+        // 宿主与 GL 控件都设一份: 指针实际落在哪个元素上由命中测试定, 只设一个就可能漏。
+        host.Cursor = InvisibleCursor;
+        vp.Cursor = InvisibleCursor;
+        // 右键菜单弹层自己用箭头(菜单上得看得见鼠标)；宿主不再来回翻光标 ——
+        // 早先"打开翻箭头、关闭翻回来"的做法，只要 Closed 没走到就会留下"十字+箭头"两个光标。
         host.ContextMenu!.Cursor = cursorArrow;
-        host.ContextMenu.Opened += (_, _) => { host.Cursor = cursorArrow; vp.HideCursor(); };
-        host.ContextMenu.Closed += (_, _) => { host.Cursor = cursorNone; };
+        host.ContextMenu.Opened += (_, _) => vp.HideCursor();
         host.Children.Add(vp);
         // 叠层统一装进一个容器(命中透传): OpenGlControl 的直接兄弟里只有第一个 Border 会合成上屏,
         // 多个叠层须收进单一容器, 容器内的多个子级再正常渲染(否则浮标等第二个叠层不显示)。
@@ -1195,6 +1342,8 @@ public partial class MainWindow : Window
         if (_onHostWheel != null) host.PointerWheelChanged += _onHostWheel;
         if (_onHostDoubleTapped != null) host.DoubleTapped += _onHostDoubleTapped;
         if (_onHostExited != null) host.PointerExited += _onHostExited;
+        if (_onHostEntered != null) host.PointerEntered += _onHostEntered;
+        if (_onScaleChanged != null) vp.ScaleChanged += _onScaleChanged;
     }
     private UndoManager _undo => _active.Undo;    // 撤销/重做(当前文档自己的栈, 见 DocState)
     private DrawTool? _tool;                      // 当前激活的绘制工具
@@ -1227,11 +1376,21 @@ public partial class MainWindow : Window
     private bool _textDragPending, _textDragging;
     private Avalonia.Point _textDragStart;
     private (double x, double y) _textDragBase;
+    // 拖拽幽灵的备料(定基点时一次性建, 见 Cad.Draw.DragPreview): 重实体在此降级成抽稀替身,
+    // 否则一张百万三角的网每动一下鼠标都要重镶嵌一遍, 拖起来是幻灯片。
+    private Cad.Draw.DragPreview? _editPreview;
+    private int _editPreviewPts = -1;          // 备料时的已取点数: 取点一变就重新备料
+    // 旋转拖拽【相对角】(同夹点旋转 GripEditor 的约定, 消除落基点瞬间的跳变):
+    // 落基点后第一次有效移动锁定"起始角"作 0°基准, 之后旋转量 = 当前角 − 起始角。键入数值仍取绝对量。
+    private bool _editHasDragStart;
+    private double _editDragStartAngle;
     private bool _editAwaitSelect;                                  // 编辑命令的"选择对象"阶段(右键确定后转取点)
     private string _editName = "";                                  // 当前编辑命令名(用于提示)
     private readonly List<(double x, double y)> _editPts = new();   // 编辑取的点（基点/目标点/参照…）
     private bool _offsetActive;                    // 偏移：等待点击一侧
-    private bool _trimActive;                       // 修剪/延伸：等待点目标线
+    private bool _trimActive;                       // 修剪 / 延伸：循环点选目标中
+    private bool _trimExtend;                       // 本条命令是「延伸」还是「修剪」—— 两条命令各做各的, 不再合并
+    private List<SceneEntity> _trimBoundaries = new();   // 剪切边 / 边界的边(空选确认 = 全部实体, 同原版 <全部选择>)
     private bool _breakActive;                      // 打断：等待取两点
     private readonly List<(double x, double y)> _breakPts = new();   // 打断的两点
     private readonly GripTable _grips = new();        // 夹点表：多实体出夹点 + Ctrl/Shift 多夹点选择(原版 GripManager)
@@ -1292,6 +1451,7 @@ public partial class MainWindow : Window
         {
             // 命令来源：界面按钮/菜单 → 参数照旧走对话框(忠实原版鼠标交互)；命令行转派 → 参数留在命令行问。
             bool fromCmdLine = _dispatchFromCmdLine; _dispatchFromCmdLine = false;
+            _cmdInFlight = cmd;   // 供 EnsureGeoDb: 首次用数据库要先连库, 连上后照这条把命令重跑一遍(见那里)
             if (!fromCmdLine) _cmdLineDriven = false;
             // 命令词后面跟的位置参数(`图案填充 45 2` 的 45、2)：不论哪条路都先攒着, 供参数问答/取默认时按位消费。
             int argsAt = cmd.IndexOfAny(new[] { ' ', '\t' });
@@ -1370,14 +1530,13 @@ public partial class MainWindow : Window
             if (cmd == "排土条带" || cmd == "排土条带划分") { DumpStripCmd(); return; }   // 原 DumpStripDialog: 台阶壳子 × 分割长度 × 条带宽 → 潜在排土位置, 见 MainWindow.DumpStrip.cs
             if (cmd == "条带填充") { DumpStrips(); return; }   // 命令行别名: 闭合范围内平行线填充(早期切片)
             if (cmd == "分帮扩帮") { SkeletonEcho("分帮扩帮", "沿境界按帮分段,各帮用各自 H/α/W 放坡 + 帮交界过渡带收口"); return; }   // 原版 SkeletonCommand 桩, 照回显
-            if (cmd == "处理尖灭" || cmd.StartsWith("处理尖灭 ")) { await HandlePinchDialogCmd(cmd); return; }   // 原 HandlePinchDialog: 手动(尖灭点+坡顶线, 上部联动) / 煤层(锁台阶组+顶板+底板), 见 MainWindow.HandlePinch.cs
             if (cmd == "最终并段" || cmd == "最终帮并段") { SkeletonEcho("最终帮并段", "选境界 + 从第 N 级并几级 + 并段后坡角 → mergeCount(几何已实现,仅缺入口)"); return; }   // 原版 SkeletonCommand 桩
             if (cmd == "批量扩坑" || cmd.StartsWith("批量扩坑 ")) { await SeamPitCmd(cmd); return; }
-            if (cmd == "动态调整" || cmd == "动态调整台阶形态") { BenchDesignJigCmd(); return; }   // 剥采排·动态调整 = 原 StartBenchDesignJig(内核实时 jig), 与 TaskLib 的生产任务动态调整不是一回事
             if (cmd == "组合工作线") { WorkLineGroupCmd(); return; }   // 原 CreateWorkLineGroupFromSelection: 组(软连接段), 不合并几何, 见 MainWindow.WorkLineGroup.cs
             if (cmd == "连接台阶线" || cmd.StartsWith("连接台阶线 ")) { await JoinBenchLinesCmd(cmd); return; }   // 原 JoinBenchLineDialog + JoinBenchLines: 保台阶语义(图层/颜色/标高)
             if (cmd == "合并多段线") { await JoinPolylinesCmdAsync(); return; }   // 「连接多段线」= 编辑组 POLYJOIN(带端点容差)
             if (cmd == "块体模型" || cmd == "导入块体" || cmd == "地质体建模") { await ImportBlockModelAsync(); return; }
+            if (cmd == "采剥演示" || cmd == "开采模拟" || cmd == "采剥过程演示" || cmd == "开采过程演示") { OpenMiningSim(); return; }
             if (cmd == "导入PMB" || cmd == "加载PMB" || cmd == "PMB导入" || cmd == "导入块体模型文件" || cmd.StartsWith("导入PMB ")) { await LoadPmbAsync(cmd); return; }
             if (cmd == "导入BLK" || cmd == "加载BLK" || cmd == "BLK导入" || cmd == "导入八叉树块体" || cmd.StartsWith("导入BLK ")) { await LoadBlkAsync(cmd); return; }
             if (cmd == "资源量估算" || cmd == "剥采比" || cmd == "资源量") { ResourceReport(null); return; }
@@ -1458,6 +1617,62 @@ public partial class MainWindow : Window
             if (cmd == "分煤层煤质" || cmd == "煤层煤质" || cmd == "分层煤质") { CoalQualityBySeamCmd(); return; }
             if (cmd == "年度产量" || cmd == "产量趋势" || cmd == "年度产量趋势" || cmd == "年产量") { AnnualOutputCmd(); return; }
             if (cmd == "设备故障排名" || cmd == "故障排名" || cmd == "检修排名") { FaultRankCmd(); return; }
+            if (cmd == "班次日历" || cmd == "班制日历") { OpenTaskWindow(() => new Views.TaskLib.ShiftCalendarWindow()); return; }   // 原 TaskLib ShiftCalendarWindow：整月视图 / 生成整月 / 有效作业日汇总
+            if (cmd == "排班") { OpenShiftCalendar(); return; }   // 旧切片（命令行别名保留）
+            if (cmd == "检修档期" || cmd == "计划检修") { OpenTaskWindow(() => new Views.TaskLib.MaintenancePlanWindow()); return; }   // 原 TaskLib MaintenancePlanWindow：带类别色块的设备下拉 + 影响班次 + 跨零点拦截
+            if (cmd == "检修计划") { OpenMaintenancePlan(); return; }   // 旧切片（命令行别名保留）
+            if (cmd == "周计划编制") { OpenTaskWindow(() => new Views.TaskLib.WeekPlanWindow()); return; }   // 原 TaskLib WeekPlanWindow：WeekPlanLink 逐日裂解 + 周目标下达/撤销/按月摊算
+            if (cmd == "周计划") { OpenWeekPlan(); return; }   // 旧切片（命令行别名保留）
+            if (cmd == "去向台账") { OpenTaskWindow(() => new Views.TaskLib.SinkLedgerWindow()); return; }   // 原 TaskLib SinkLedgerWindow：排土场/破碎站/煤仓/堆场统一台账（占容方口径）+ 本日入方库容告警 + 盘点修正流水 + 按台账重建排土场 + 可接物料白名单
+            if (cmd == "去向清单") { OpenSinkLedger(); return; }   // 旧切片（命令行别名保留）
+            if (cmd == "破碎站位置设置") { OpenCrusherStations(); return; }
+            if (cmd == "约束条件设置") { OpenTransportConstraints(); return; }
+            if (cmd == "延拓触发设置") { OpenExtendParams(); return; }
+            if (cmd == "煤层露头着色") { OpenSeamOutcrop(); return; }
+            if (cmd == "排土模板") { OpenBenchTemplateEditor(dump: true); return; }
+            if (cmd == "进度计划方案出图" || cmd == "方案出图" || cmd == "进度计划出图") { OpenLongTermChart(); return; }
+            if (cmd == "中长远规划动态模拟" || cmd == "中长远动态模拟") { OpenLongTermSim(); return; }
+            if (cmd == "短期进度计划动态模拟" || cmd == "短期动态模拟" || cmd == "月度动态模拟") { OpenShortTermSim(); return; }
+            if (cmd == "实绩录入") { OpenTaskWindow(() => new Views.TaskLib.ActualEntryWindow()); return; }   // 原 TaskLib ActualEntryWindow：班末录入 → 回灌任务台账 + 占容方扣库容 + 故障工时汇总 + 原因码 + 派车单对账 + 偏差处置建议
+            if (cmd == "日实绩录入") { OpenActualEntry(); return; }   // 旧切片（命令行别名保留）
+            if (cmd == "生产报告") { OpenTaskWindow(() => new Views.TaskLib.ReportHubWindow()); return; }   // 原 TaskLib ReportHubWindow：报表中心（一键生成·纸张预览·PDF/Word·归档）/ 报表模板设计 / 指标·计算规则库 / 存档回溯·两期对比 四页签
+            if (cmd == "生产报表") { OpenProductionReport(); return; }   // 旧切片（命令行别名保留）
+            if (cmd == "作业区划分") { OpenTaskWindow(() => new Views.TaskLib.WorkZoneLayoutWindow()); return; }   // 原 TaskLib WorkZoneLayoutWindow：正射影像画布 + 手工圈画（矩形/多边形·Z 出处）+ 按月计划生成候选 + 工序作业区 + 改顶点/等距/重画/撤销 + 推演关联诊断
+            if (cmd == "作业区域") { OpenWorkZone(); return; }   // 旧切片（命令行别名保留）
+            if (cmd == "钻爆计划衔接") { OpenTaskWindow(() => new Views.TaskLib.BlastPlanWindow()); return; }   // 原 TaskLib BlastPlanWindow：逐炮排程 + 进装箱时窗 + 穿孔作业计划表（按本期计划生成）
+            if (cmd == "钻爆计划") { OpenBlastPlan(); return; }   // 旧切片（命令行别名保留）
+            if (cmd == "编制配置") { OpenTaskWindow(() => new Views.TaskLib.CompileConfigWindow()); return; }   // 原 TaskLib CompileConfigWindow：当日能力预算条 + 三组切分规则锚点 + 链路体检 + 铲—车编组真联动（MF 条）
+            if (cmd == "编制参数") { OpenCompileConfig(); return; }   // 旧切片（命令行别名保留）
+            if (cmd == "任务下达") { OpenTaskWindow(() => new Views.TaskLib.TaskDispatchWindow()); return; }   // 原 TaskLib TaskDispatchWindow：校验 → 任务实例 + 回执落盘 → 可撤回；单据流水面板
+            if (cmd == "下达") { OpenTaskDispatch(); return; }   // 旧切片（命令行别名保留）
+            if (cmd == "生产任务书") { OpenTaskWindow(() => new Views.TaskLib.TaskOrderWindow()); return; }   // 原 TaskLib TaskOrderWindow：白纸单据 + 十二列 + 缺卸点标红 + 横向 PDF 导出
+            if (cmd == "任务书") { OpenTaskOrder(); return; }   // 旧切片（命令行别名保留）
+            if (cmd == "班组派工") { OpenTaskWindow(() => new Views.TaskLib.CrewAssignWindow()); return; }   // 原 TaskLib CrewAssignWindow：花名册 + 自动派工（类别↔持证）+ 持证/出勤真校核 + 车号↔司机配死落盘
+            if (cmd == "派工") { OpenCrewAssign(); return; }   // 旧切片（命令行别名保留）
+            if (cmd == "派车单") { OpenTaskWindow(() => new Views.TaskLib.DispatchOrderWindow()); return; }   // 原 TaskLib DispatchOrderWindow：三规则展开 + 按车分组 + KPI 抬头 + 实绩回填落盘 + 交叉核对
+            if (cmd == "派车") { OpenDispatchOrder(); return; }   // 旧切片（命令行别名保留）
+            if (cmd == "生产任务动态调整") { OpenTaskWindow(() => new Views.TaskLib.DynamicAdjustWindow()); return; }   // 原 TaskLib DynamicAdjustWindow：跨天「区域×工序」甘特 + 窗内三维推进演示（SimPanelHost 轴测相机·正射底图）+ 原因码路由 + 日内重排 + 跨天顺延
+            if (cmd == "任务动态调整") { OpenDynamicAdjust(); return; }   // 旧切片（命令行别名保留）
+            if (cmd == "动态调整" || cmd == "动态调整台阶形态") { BenchDesignJigCmd(); return; }   // 剥采排·动态调整 = 原 StartBenchDesignJig(内核实时 jig), 与 TaskLib 的生产任务动态调整不是一回事
+            if (cmd == "班内工艺·工序推演") { OpenTaskWindow(() => new Views.TaskLib.ShiftProcessWindow()); return; }   // 原 TaskLib ShiftProcessWindow：班内时钟 + 正射影像/作业区域/工艺线/工序标记/铭牌/瓶颈六层面板 + 工序链条带 + 系统状态与工序内部细衔接
+            if (cmd == "工序推演") { OpenShiftProcess(); return; }   // 旧切片（命令行别名保留）
+            if (cmd == "采排配对") { OpenDumpPairingPlan(); return; }   // 短期组: 原 PlanLib.ShortTerm.DumpPairingWindow(方案×期次 源—汇矩阵/库容条/汇总); 旧 Views.GeoDb 切片仍在 OpenDumpPairing 但不再命中
+            if (cmd == "量驱动采剥接续") { OpenMonthlyStrip(); return; }   // 短期组: 原 PlanLib.ShortTerm.MonthlyStripWindow(剖面→排产→配对→外循环→契约→月度方案); 此前无处理器
+            if (cmd == "采掘单元清单") { OpenMiningUnitPlan(); return; }   // 短期组: 原 PlanLib.Views.MiningUnitPlanWindow(采掘单元台账/按目标排产/设备指派/本期一览); 此前无处理器
+            if (cmd == "坑线落地" || cmd.StartsWith("坑线落地 ")) { await LandRampRouteCmd(cmd); return; }
+            if (cmd == "撤销坑线") { UndoRampCmd(); return; }
+            if (cmd == "平盘联络道" || cmd.StartsWith("平盘联络道 ")) { await BenchConnectorRampCmd(cmd); return; }
+            if (cmd == "局部台阶" || cmd.StartsWith("局部台阶 ")) { await LocalBenchCmd(cmd); return; }
+            if (cmd == "排土场放坡") { await OuterDumpSlopeCmd(); return; }
+            if (cmd == "编辑台阶" || cmd.StartsWith("编辑台阶 ")) { await EditBenchFaceCmd(cmd); return; }
+            if (cmd == "处理尖灭" || cmd.StartsWith("处理尖灭 ")) { await HandlePinchDialogCmd(cmd); return; }   // 原 HandlePinchDialog: 手动(尖灭点+坡顶线, 上部联动) / 煤层(锁台阶组+顶板+底板), 见 MainWindow.HandlePinch.cs
+            if (cmd == "创建工作线" || cmd.StartsWith("创建工作线 ")) { await CreateWorkLineCmd(cmd); return; }
+            if (cmd == "创建工程位置") { OpenEngineeringPositionCmd(); return; }
+            if (cmd == "驱动量" || cmd == "量驱动斜面模板") { InclineTemplateCmd(); return; }
+            if (cmd == "增量增删边" || cmd == "路网编辑") { RoadEditEdgeCmd(); return; }
+            if (cmd == "刀量切割" || cmd.StartsWith("刀量切割 ")) { await CuttingCmd(cmd); return; }
+            if (cmd == "驱动距离" || cmd.StartsWith("驱动距离 ")) { await CuttingCmd(cmd, "驱动距离"); return; }   // 同一引擎 DriveTemplateRunner(distanceOnly, labelOverride:"驱动距离"), 原版两钮共用
+            if (cmd == "参数化模板" || cmd == "开采模板" || cmd == "采场模板") { OpenBenchTemplateEditor(dump: false); return; }   // 剥采排·参数化模板 = 原 MiningTemplateEditorWindow(勿再指到库参数模板统计)
             if (cmd == "班次产量对比" || cmd == "班次产量" || cmd == "班产对比") { ShiftOutputCmd(); return; }
             if (cmd == "KPI趋势" || cmd == "设备KPI趋势" || cmd == "kpi趋势") { KpiTrendCmd(); return; }
             if (cmd == "产能分类对比" || cmd == "产能分类" || cmd == "分类产能") { CapacityByCategoryCmd(); return; }
@@ -1470,24 +1685,7 @@ public partial class MainWindow : Window
             if (cmd.StartsWith("参数验收判定") || cmd.StartsWith("DB参数验收") || cmd.StartsWith("验收判定")) { ParamAcceptanceJudgeCmd(cmd); return; }
             if (cmd.StartsWith("兼容机型") || cmd.StartsWith("可用机型") || cmd.StartsWith("适配机型")) { CompatibleModelsCmd(cmd); return; }
             if (cmd == "作业面台账") { OpenTaskWindow(() => new Views.TaskLib.WorkFaceLedgerWindow()); return; }   // 原 TaskLib WorkFaceLedgerWindow（源—物料—汇 盘子台账），见 MainWindow.TaskLib.cs
-            if (cmd == "班次日历" || cmd == "班制日历") { OpenTaskWindow(() => new Views.TaskLib.ShiftCalendarWindow()); return; }   // 原 TaskLib ShiftCalendarWindow：整月视图 / 生成整月 / 有效作业日汇总
-            if (cmd == "检修档期" || cmd == "计划检修") { OpenTaskWindow(() => new Views.TaskLib.MaintenancePlanWindow()); return; }   // 原 TaskLib MaintenancePlanWindow：带类别色块的设备下拉 + 影响班次 + 跨零点拦截
-            if (cmd == "周计划编制") { OpenTaskWindow(() => new Views.TaskLib.WeekPlanWindow()); return; }   // 原 TaskLib WeekPlanWindow：WeekPlanLink 逐日裂解 + 周目标下达/撤销/按月摊算
-            if (cmd == "影像底图") { OpenTaskWindow(() => new Views.TaskLib.BasemapConfigWindow()); return; }   // 原 TaskLib BasemapConfigWindow：工程级 GeoTIFF 配置 + 现读配准 + 覆盖核对 + 贴到视口（经 IViewCapability）
-            if (cmd == "钻爆计划衔接") { OpenTaskWindow(() => new Views.TaskLib.BlastPlanWindow()); return; }   // 原 TaskLib BlastPlanWindow：逐炮排程 + 进装箱时窗 + 穿孔作业计划表（按本期计划生成）
-            if (cmd == "任务下达") { OpenTaskWindow(() => new Views.TaskLib.TaskDispatchWindow()); return; }   // 原 TaskLib TaskDispatchWindow：校验 → 任务实例 + 回执落盘 → 可撤回；单据流水面板
-            if (cmd == "生产任务书") { OpenTaskWindow(() => new Views.TaskLib.TaskOrderWindow()); return; }   // 原 TaskLib TaskOrderWindow：白纸单据 + 十二列 + 缺卸点标红 + 横向 PDF 导出
-            if (cmd == "派车单") { OpenTaskWindow(() => new Views.TaskLib.DispatchOrderWindow()); return; }   // 原 TaskLib DispatchOrderWindow：三规则展开 + 按车分组 + KPI 抬头 + 实绩回填落盘 + 交叉核对
-            if (cmd == "班组派工") { OpenTaskWindow(() => new Views.TaskLib.CrewAssignWindow()); return; }   // 原 TaskLib CrewAssignWindow：花名册 + 自动派工（类别↔持证）+ 持证/出勤真校核 + 车号↔司机配死落盘
-            if (cmd == "实绩录入") { OpenTaskWindow(() => new Views.TaskLib.ActualEntryWindow()); return; }   // 原 TaskLib ActualEntryWindow：班末录入 → 回灌任务台账 + 占容方扣库容 + 故障工时汇总 + 原因码 + 派车单对账 + 偏差处置建议
-            if (cmd == "编制配置") { OpenTaskWindow(() => new Views.TaskLib.CompileConfigWindow()); return; }   // 原 TaskLib CompileConfigWindow：当日能力预算条 + 三组切分规则锚点 + 链路体检 + 铲—车编组真联动（MF 条）
-            if (cmd == "去向台账") { OpenTaskWindow(() => new Views.TaskLib.SinkLedgerWindow()); return; }   // 原 TaskLib SinkLedgerWindow：排土场/破碎站/煤仓/堆场统一台账（占容方口径）+ 本日入方库容告警 + 盘点修正流水 + 按台账重建排土场 + 可接物料白名单
-            if (cmd == "生产任务动态调整") { OpenTaskWindow(() => new Views.TaskLib.DynamicAdjustWindow()); return; }   // 原 TaskLib DynamicAdjustWindow：跨天「区域×工序」甘特 + 窗内三维推进演示（SimPanelHost 轴测相机·正射底图）+ 原因码路由 + 日内重排 + 跨天顺延
-            if (cmd == "班内工艺·工序推演") { OpenTaskWindow(() => new Views.TaskLib.ShiftProcessWindow()); return; }   // 原 TaskLib ShiftProcessWindow：班内时钟 + 正射影像/作业区域/工艺线/工序标记/铭牌/瓶颈六层面板 + 工序链条带 + 系统状态与工序内部细衔接
-            if (cmd == "生产报告") { OpenTaskWindow(() => new Views.TaskLib.ReportHubWindow()); return; }   // 原 TaskLib ReportHubWindow：报表中心（一键生成·纸张预览·PDF/Word·归档）/ 报表模板设计 / 指标·计算规则库 / 存档回溯·两期对比 四页签
-            if (cmd == "作业区划分") { OpenTaskWindow(() => new Views.TaskLib.WorkZoneLayoutWindow()); return; }   // 原 TaskLib WorkZoneLayoutWindow：正射影像画布 + 手工圈画（矩形/多边形·Z 出处）+ 按月计划生成候选 + 工序作业区 + 改顶点/等距/重画/撤销 + 推演关联诊断
             if (cmd == "作业面" || cmd == "工作面台账" || cmd == "采场参数") { WorkingFacesCmd(); return; }   // 旧切片：working_face 概览状态行（命令行别名保留）
-            if (cmd == "参数化模板" || cmd == "开采模板" || cmd == "采场模板") { OpenBenchTemplateEditor(dump: false); return; }   // 剥采排·参数化模板 = 原 MiningTemplateEditorWindow(勿再指到库参数模板统计)
             if (cmd == "参数模板库" || cmd == "参数模板" || cmd == "参数定义") { ParamTemplatesCmd(); return; }
             if (cmd == "月度计划" || cmd == "月计划" || cmd == "月度计划查看") { MonthlyPlansCmd(); return; }   // 只读展示(编制/授权工作流走 TaskLib, 受阻)
             if (cmd == "路况显示") { RoadConditionDisplayCmd(); return; }   // 忠实原 RoadConditionSymbology(逐段纵坡分档 + 状态压色 + 白向标)
@@ -1513,6 +1711,7 @@ public partial class MainWindow : Window
             if (cmd == "产量预测" || cmd == "产量趋势预测" || cmd == "时序预测") { OutputForecastCmd(false); return; }
             if (cmd == "Holt预测" || cmd == "产量预测Holt") { OutputForecastCmd(true); return; }
             if (cmd == "数据导入导出" || cmd == "数据导出" || cmd == "导出数据库" || cmd == "地质数据导出") { await ExportGeoDataAsync(); return; }
+            if (cmd == "数据库浏览" || cmd == "SQL浏览" || cmd == "SQL控制台" || cmd == "数据库浏览器") { OpenSqlBrowser(); return; }
             if (cmd == "数据字典" || cmd == "导出数据字典" || cmd == "表结构" || cmd == "库结构") { await ExportDataDictionaryAsync(); return; }
             if (cmd.StartsWith("SQL查询 ") || cmd.StartsWith("运行SQL ") || cmd.StartsWith("执行SQL ") || cmd.StartsWith("SQL ")) { await RunSqlQueryAsync(cmd); return; }
             if (cmd == "点云抽稀" || cmd == "抽稀" || cmd == "点云精简" || cmd.StartsWith("点云抽稀 ") || cmd.StartsWith("抽稀 ")) { await ThinPointsAsync("voxel", cmd); return; }     // 抽稀 [格距]
@@ -1557,9 +1756,8 @@ public partial class MainWindow : Window
             if (cmd == "距离" || cmd == "测量距离" || cmd == "测距") { MeasureBySelection("距离"); return; }
             if (cmd == "角度" || cmd == "测量角度" || cmd == "三点测角") { MeasureBySelection("角度"); return; }
             if (cmd == "等效运距") { RoadEquivHaulCmd(); return; }   // 忠实原 EquivHaulWindow(一源多汇比选)
-            if (cmd == "运输指标报表") { RoadTransportIndicatorsCmd(); return; }   // 忠实原 TransportIndicatorsWindow
+            if (cmd == "运输指标报表") { RoadIndicatorsReportCmd(); return; }   // 忠实原 TransportIndicatorsWindow
             if (cmd == "运输指标") { await HaulMetricsAsync(); return; }
-            if (cmd == "驱动距离" || cmd.StartsWith("驱动距离 ")) { await CuttingCmd(cmd, "驱动距离"); return; }   // 同一引擎 DriveTemplateRunner(distanceOnly, labelOverride:"驱动距离"), 原版两钮共用
             if (cmd == "批量台阶扩帮" || cmd.StartsWith("批量台阶扩帮 ")) { await ExpandBenchBatchCmd(cmd); return; }   // 原 ExpandBenchBatchDialog + PMEP → BenchBuilder(坡面+平盘+坡脚线), 见 MainWindow.ExpandBench.cs
             if (cmd == "台阶线生成" || cmd == "台阶扩帮" || cmd.StartsWith("台阶线生成 ") || cmd.StartsWith("台阶扩帮 "))
             {
@@ -1599,6 +1797,8 @@ public partial class MainWindow : Window
             if (cmd == "LAS剔除植被建筑" || cmd == "点云剔除非地面" || cmd == "剔除植被建筑" || cmd == "LAS保留地面") { await LoadLasAsync("LAS剔除植被"); return; }
             if (cmd == "LAS分类统计" || cmd == "点云分类统计" || cmd == "LAS质量报告" || cmd == "LAS强度分类") { await LasQualityAsync(); return; }
             if (cmd == "正射着色" || cmd == "真实色" || cmd == "影像着色" || cmd == "正射影像着色") { await OrthoColorAsync(); return; }
+            if (cmd == "影像底图") { OpenTaskWindow(() => new Views.TaskLib.BasemapConfigWindow()); return; }   // 原 TaskLib BasemapConfigWindow：工程级 GeoTIFF 配置 + 现读配准 + 覆盖核对 + 贴到视口（经 IViewCapability）
+            if (cmd == "底图" || cmd == "正射底图" || cmd == "清除底图") { await OrthoBasemapAsync(cmd == "清除底图"); return; }   // 旧切片：直接给场景三角网/点云采色（命令行别名保留）
             if (cmd == "逐点坡度/坡向" || cmd == "逐点坡度坡向" || cmd == "法向估计" || cmd == "点云法向") { await PointNormalsAsync(); return; }
             if (cmd == "高程截断" || cmd == "高程裁剪" || cmd == "Z截断") { await ElevationClipAsync(); return; }
             if (cmd == "点云裁剪" || cmd == "边界裁剪点云" || cmd == "裁剪点云" || cmd == "点云裁剪内" || cmd == "圈内裁剪") { await CropCloudByBoundaryAsync("点云裁剪"); return; }
@@ -1691,7 +1891,6 @@ public partial class MainWindow : Window
             if (cmd == "ROR去噪" || cmd == "半径去噪" || cmd == "ROR" || cmd.StartsWith("ROR去噪 ") || cmd.StartsWith("ROR ")) { await DenoiseAsync(true, cmd); return; }     // ROR [半径 下限]
             if (cmd == "矿床识别" || cmd == "自动识别" || cmd == "矿床类型识别") { await DepositDetectAsync(); return; }
             if (cmd == "方案综合对比") { OpenLongTermCompare(); return; }   // 原 CreateOpenLongTermCompareCommand：多套进度计划联合对比窗
-            if (cmd == "进度计划方案出图" || cmd == "方案出图" || cmd == "进度计划出图") { OpenLongTermChart(); return; }   // 原 CreateOpenLongTermChartCommand：单方案逐年进度图窗
             if (cmd == "方案比选" || cmd == "方案对比") { await ProgramCompareAsync(); return; }   // 旧切片（命令行别名保留）
             if (cmd == "高程查询" || cmd == "虚拟钻孔" || cmd == "查询高程") { await StartSpotQueryAsync(); return; }
             if (cmd == "文字" || cmd == "单行文字") { ArmText(false); return; }
@@ -1735,10 +1934,11 @@ public partial class MainWindow : Window
             if (cmd == "隐藏对象" || cmd == "隐藏") { HideSelectedObjects(); return; }
             if (cmd == "隐藏同一图层对象" || cmd == "隐藏图层" || cmd == "隐藏同层") { HideSelectedLayers(); return; }
             if (cmd == "结束隐藏" || cmd == "取消隐藏" || cmd == "显示全部" || cmd == "全部显示") { EndHide(); return; }
+            if (cmd == "指针诊断" || cmd == "偏移诊断" || cmd == "视口诊断") { PointerRoundTripDiag(); return; }   // 光标与画出来的几何对不上时: 现场敲一下, 状态栏/日志给出往返误差与口径
             if (cmd == "帮助文档" || cmd == "帮助" || cmd == "命令列表") { ShowHelp(); return; }   // 命令行水印里让人打「帮助」, 得认这两个字
             if (cmd == "选项") { ShowOptions(); return; }
             if (cmd == "数据库连接" || cmd == "连接数据库" || cmd == "数据库设置") { ShowDbConnectionSettings(); return; }
-            if (cmd == "注册") { StatusMsg.Text = "注册/授权：需接入国产数据库授权系统（记录待做）"; return; }
+            if (cmd == "注册" || cmd == "授权" || cmd == "注册授权" || cmd == "激活") { OpenRegisterWindow(); return; }
             if (cmd == "删除") { await DeleteCmdAsync(); return; }
             if (cmd == "全部选择") { SelectAll(); return; }
             if (cmd == "选择类似" || cmd == "选类似" || cmd == "同类选择") { SelectSimilar(); return; }
@@ -1773,9 +1973,6 @@ public partial class MainWindow : Window
             if (cmd == "煤层露头线" || cmd == "露头线" || cmd == "煤层露头" || cmd == "露头线提取" || cmd.StartsWith("煤层露头线 ")) { await SeamOutcropCmd(cmd); return; }
             if (cmd == "更新煤层面" || cmd == "更新现状面" || cmd == "煤层面更新" || cmd.StartsWith("更新煤层面 ")) { await SurfaceUpdateCmd(cmd); return; }
             if (cmd == "确定开采程序") { OpenShortTermSequence(); return; }   // 短期组: 原 ShortTermSequenceWindow(作业面/设备类型/工艺流程); 「开采程序确定」(中长远)走 OpenMiningProgramSolve
-            if (cmd == "采排配对") { OpenDumpPairingPlan(); return; }   // 短期组: 原 PlanLib.ShortTerm.DumpPairingWindow(方案×期次 源—汇矩阵/库容条/汇总)
-            if (cmd == "量驱动采剥接续") { OpenMonthlyStrip(); return; }   // 短期组: 原 PlanLib.ShortTerm.MonthlyStripWindow(剖面→排产→配对→外循环→契约→月度方案); 此前无处理器
-            if (cmd == "采掘单元清单") { OpenMiningUnitPlan(); return; }   // 短期组: 原 PlanLib.Views.MiningUnitPlanWindow(采掘单元台账/按目标排产/设备指派/本期一览); 此前无处理器
             if (cmd == "平行推进" || cmd == "工作线推进") { AdvanceCmd(AdvanceMode.Parallel, "平行推进"); return; }
             if (cmd == "定点回转" || cmd == "定点回转推进") { AdvanceCmd(AdvanceMode.FixedPivot, "定点回转"); return; }
             if (cmd == "动点回转" || cmd == "动点回转推进") { AdvanceCmd(AdvanceMode.MovingPivot, "动点回转"); return; }
@@ -1797,7 +1994,7 @@ public partial class MainWindow : Window
             if (cmd.StartsWith("合并图层 ") || cmd.StartsWith("图层合并 ")) { MergeLayerIntoCurrent(cmd.Substring(cmd.IndexOf(' ') + 1)); return; }
             if (cmd == "图层隔离" || cmd == "隔离图层") { IsolateLayer(); return; }
             if (cmd == "取消隔离" || cmd == "结束隔离" || cmd == "取消图层隔离") { _layers.AllOn(); PopulateDrawingLayers(); AfterLayerStateChange(); StatusMsg.Text = "已取消图层隔离（全部打开）"; return; }
-            if (cmd == "图层特性管理器") { var l = _layers.CycleCurrent(); StatusMsg.Text = $"当前图层「{l.Name}」 显示{( l.Shown?"开":"关")}/{(l.Locked?"锁":"解锁")}（再点循环切换）"; return; }
+            if (cmd == "图层特性管理器" || cmd == "LAYER" || cmd == "图层管理器") { OpenLayerManager(); return; }
             if (cmd == "全开" || cmd == "全部打开" || cmd == "图层全开") { _layers.AllOn(); PopulateDrawingLayers(); AfterLayerStateChange(); StatusMsg.Text = "已打开全部图层"; return; }
             if (cmd == "全关" || cmd == "全部关闭" || cmd == "图层全关") { _layers.AllOff(); PopulateDrawingLayers(); AfterLayerStateChange(); StatusMsg.Text = "已关闭全部图层"; return; }
             if (cmd == "冻结") { FreezeCurrentLayer(true); return; }
@@ -1822,7 +2019,8 @@ public partial class MainWindow : Window
             if (cmd == "特性" || cmd == "属性" || cmd.StartsWith("特性 ") || cmd.StartsWith("属性 ")) { PropertiesCmd(cmd); return; }
             if (cmd == "字高归一化" || cmd == "字高归一" || cmd == "文字高度归一化" || cmd == "修正字高") { TextHeightNormalizeCmd(); return; }
             if (cmd == "清理标记" || cmd == "清除标记") { ClrMark(); return; }
-            if (cmd == "修剪" || cmd == "延伸") { await TrimCmdAsync(); return; }
+            if (cmd == "修剪") { await TrimCmdAsync(extend: false); return; }
+            if (cmd == "延伸") { await TrimCmdAsync(extend: true); return; }
             if (cmd == "圆TTR" || cmd == "圆(切切半径)") { StartTTR(); return; }
             if (cmd == "圆弧SER" || cmd == "圆弧(起点端点半径)") { StartArcSer(); return; }
             if (cmd == "打断") { await BreakCmdAsync(); return; }
@@ -1839,7 +2037,11 @@ public partial class MainWindow : Window
             if (cmd == "捕捉全模式" || cmd == "全部对象捕捉") { _snapExtraMask = ObjectSnap.MaskOf(ObjectSnap.Mode.Intersection, ObjectSnap.Mode.Nearest, ObjectSnap.Mode.Perpendicular); SnapToggle.IsChecked = true; StatusMsg.Text = "对象捕捉: 交点+最近+垂足 全开(端点/中点/圆心/象限恒开)"; return; }
             if (cmd == "滑动多段线") { StartSlide(); return; }
             if (cmd == "平移" || cmd == "PAN") { StatusMsg.Text = "平移：按住鼠标中键拖拽视图（滚轮朝光标缩放）"; return; }
+            if (cmd == "编辑填充" || cmd == "HATCHEDIT") { _ = HatchEditCommandAsync(); return; }   // 开对话框(双击填充同此), 见 MainWindow.HatchEdit.cs
             if (cmd == "填充十字" || cmd == "交叉填充" || cmd == "十字填充") { _hatchCross = !_hatchCross; StatusMsg.Text = $"图案填充: 十字交叉 {(_hatchCross ? "开" : "关")}（再执行 图案填充）"; return; }
+            if (cmd == "填充颜色" || cmd.StartsWith("填充颜色 ")) { HatchColorCmd(cmd.Length > 4 ? cmd.Substring(4) : ""); return; }
+            if (cmd == "字体" || cmd.StartsWith("字体 ") || cmd == "文字字体" || cmd.StartsWith("文字字体 "))
+            { int sp0 = cmd.IndexOf(' '); TextFontCmd(sp0 > 0 ? cmd.Substring(sp0 + 1) : ""); return; }
             if (cmd == "颜色" || cmd.StartsWith("颜色 ")) { ColorCmd(cmd.Length > 2 ? cmd.Substring(2) : ""); return; }
             if (cmd == "线型" || cmd == "实线" || cmd == "虚线" || cmd == "点划线" || cmd == "点线" || cmd == "双点划线" || cmd == "破折线" || cmd.StartsWith("线型 ")) { SetLinetypeCmd(cmd); return; }
             if (cmd == "图案填充" || cmd == "填充" || cmd == "HATCH" || cmd == "剖面线"
@@ -1987,8 +2189,6 @@ public partial class MainWindow : Window
         Viewport.ClearImported();
         Viewport.SetHighlight(null); Viewport.SetHighlightFaces(null);
         Viewport.SetSnapMarker(null); _snapShown = false;
-        ObjectTree.ItemsSource = null;
-        ObjectTreeHint.IsVisible = true;
 
         _layers.Reset();
         PopulateDrawingLayers();
@@ -2044,9 +2244,20 @@ public partial class MainWindow : Window
             FileTypeFilter = new[] { new FilePickerFileType("PitMine 图形") { Patterns = new[] { "*.pmx" } } }
         });
         if (files.Count == 0) return;
+        OpenScenePath(files[0].Path.LocalPath);
+    }
+
+    /// <summary>
+    /// 打开一份 .pmx(不弹对话框) —— 「打开」对话框与 文件管理器双击 共用这条路。
+    /// .pmx 有两种同后缀的格式: Kylin 自己存的是文本, 原版 PitMine3D 的是二进制(头 'PMX1');
+    /// 先探头再分派, 否则拿文本解析器去读原版工程只会得到一句"打开失败"。
+    /// </summary>
+    private void OpenScenePath(string path)
+    {
+        if (Cad.PmxImportService.IsOriginalPmx(path)) { LoadOriginalPmx(path, replace: true); return; }
         try
         {
-            var doc = SceneIO.LoadDoc(File.ReadAllText(files[0].Path.LocalPath));
+            var doc = SceneIO.LoadDoc(File.ReadAllText(path));
             _scene.Clear();
             foreach (var e in doc.Scene.Entities) _scene.Add(e);
             _layers.Reset();
@@ -2059,8 +2270,8 @@ public partial class MainWindow : Window
             _selected.Clear();
             Viewport.SetHighlight(null); Viewport.SetHighlightFaces(null);
             RefreshScene();
-            SetDocPath(files[0].Path.LocalPath);
-            StatusMsg.Text = $"已打开 {Path.GetFileName(files[0].Path.LocalPath)} · {_scene.Count} 实体 · {_layers.Layers.Count} 图层";
+            SetDocPath(path);
+            StatusMsg.Text = $"已打开 {Path.GetFileName(path)} · {_scene.Count} 实体 · {_layers.Layers.Count} 图层";
         }
         catch (System.Exception ex) { StatusMsg.Text = $"打开失败：{ex.Message}"; }
     }
@@ -2082,8 +2293,7 @@ public partial class MainWindow : Window
         if (!r.Success) { StatusMsg.Text = $"导入失败：{r.Error}"; return; }
         _lastImport = r;
         Viewport.ShowImportedLayers(r.LayerGeometry, r.Bounds);
-        PopulateObjectTree(r, Path.GetFileName(path));
-        PopulateLayers(r);
+        PopulateDrawingLayers();   // 显示态线框不在场景/图层表里, 对象管理器(同原版)不列它; 只把树刷到当前状态
         StatusMsg.Text = $"已导入 {Path.GetFileName(path)} · {r.EntityCount} 实体 · {r.SegmentCount} 线段 · {r.LayerOrder.Count} 图层";
     }
 
@@ -2132,7 +2342,9 @@ public partial class MainWindow : Window
 
         PitMine3D.Kylin.CrashLog.Write("导入", $"[{sw.ElapsedMilliseconds}ms] 解析完成(后台线程) success={er.Success} 实体={er.Entities.Count} 图层={er.LayerOrder.Count}");
         if (!er.Success) { StatusMsg.Text = $"导入失败：{er.Error}"; PitMine3D.Kylin.CrashLog.Write("导入", $"失败：{er.Error}"); return; }
-        string warn = er.Warnings.Count > 0 ? $" · 跳过 {er.Warnings.Count} 类未支持" : "";
+        // 告警按类聚合成一句(跳过的实体按类型计数; 文字高度归一化等各一条), 别把几千条逐实体告警数成"几千类"
+        string warn = er.Warnings.Count > 0 ? " · " + DxfImportService.SummarizeWarnings(er.Warnings) : "";
+        if (warn.Length > 0) PitMine3D.Kylin.CrashLog.Write("导入", warn.Substring(3));
         ApplyEntityImport(er, name, warn);
         PitMine3D.Kylin.CrashLog.Write("导入", $"[{sw.ElapsedMilliseconds}ms] 全部完成");
     }
@@ -2216,8 +2428,13 @@ public partial class MainWindow : Window
             }
         }
         var swA = System.Diagnostics.Stopwatch.StartNew();
-        foreach (var en in er.Entities) _scene.Add(en);
-        PitMine3D.Kylin.CrashLog.Write("导入", $"[{swA.ElapsedMilliseconds}ms] 入场景 {er.Entities.Count} 实体");
+        int meshes = 0;
+        foreach (var en in er.Entities)
+        {
+            if (en is MeshEntity me) { me.Name = NewMeshName(me.Name); meshes++; }   // 三维面合并网按图层命名, 与场景里已有的网撞名就加序号(对象树按名找网)
+            _scene.Add(en);
+        }
+        PitMine3D.Kylin.CrashLog.Write("导入", $"[{swA.ElapsedMilliseconds}ms] 入场景 {er.Entities.Count} 实体" + (meshes > 0 ? $"(含 {meshes} 张三角网)" : ""));
         _lastImport = null;                    // 捕捉改用场景几何
         Viewport.ClearImported();               // 不再用显示态网格
         RefreshScene();
@@ -2233,10 +2450,13 @@ public partial class MainWindow : Window
             PitMine3D.Kylin.CrashLog.Write("导入",
                 $"真实范围 {RobustExtent.Describe(er.Bounds)} 远大于密集区 {RobustExtent.Describe(ext.Bounds)}，离群图元 {ext.Outliers} 个 —— 已按密集区定位视图");
         }
-        PopulateObjectTreeCounts(er.TypeCounts, fileName, er.Entities.Count);
-        PopulateDrawingLayers();
+        PopulateDrawingLayers();   // 对象管理器差量刷新: 新图层/三角网入树
         PitMine3D.Kylin.CrashLog.Write("导入", $"[{swA.ElapsedMilliseconds}ms] 面板刷新完成");
-        StatusMsg.Text = $"已导入 {fileName} · {er.Entities.Count} 可编辑实体 · {er.LayerOrder.Count} 图层（可选中/编辑/删除）{warn}{far}";
+        string meshNote = meshes > 0 ? $" · 三维面/网格已按图层合成 {meshes} 张三角网" : "";
+        // 源图纸里关着/冻结的图层照原样导入(round-trip 保真) —— 但得说一声, 不然"导进来少了一半"会被当成丢数据
+        int offLayers = 0; foreach (var st in er.LayerStates.Values) if (!st.on || st.frozen) offLayers++;
+        if (offLayers > 0) meshNote += $" · 源图纸 {offLayers} 个图层关闭/冻结, 其上图元暂隐(图层管理器可开)";
+        StatusMsg.Text = $"已导入 {fileName} · {er.Entities.Count} 可编辑实体 · {er.LayerOrder.Count} 图层（可选中/编辑/删除）{meshNote}{warn}{far}";
     }
 
     // 导入 PitMine 工程(.pmx 原版私有二进制)：读核心实体(线/点/多段线/文字/网格棱线/圆/弧)入可编辑场景 + 建图层。
@@ -2250,17 +2470,41 @@ public partial class MainWindow : Window
             FileTypeFilter = new[] { new FilePickerFileType("PitMine 工程 (PMX)") { Patterns = new[] { "*.pmx" } } }
         });
         if (files.Count == 0) return;
-        var r = Cad.PmxImportService.Load(files[0].Path.LocalPath);
-        if (!r.Success) { StatusMsg.Text = $"导入 PitMine 工程：{r.Error}"; return; }
+        LoadOriginalPmx(files[0].Path.LocalPath, replace: false);   // 「导入」= 并入当前图形
+    }
+
+    /// <summary>
+    /// 读原版二进制 .pmx 工程入可编辑场景。两个入口共用:
+    ///   replace=true 「打开」/ 文件管理器双击 —— 先清空当前图形(同打开一份新图), 可撤销;
+    ///   replace=false「导入PMX」 —— 并入当前图形。
+    /// 二进制 .pmx 不是 Kylin 的保存格式(「保存」写的是文本), 故打开后不接管回写路径, 存盘走「另存为」。
+    /// </summary>
+    private void LoadOriginalPmx(string path, bool replace)
+    {
+        var r = Cad.PmxImportService.Load(path);
+        string fn = System.IO.Path.GetFileName(path);
+        if (!r.Success) { StatusMsg.Text = $"{(replace ? "打开" : "导入")} PitMine 工程 {fn}：{r.Error}"; return; }
         BeginChange();
+        if (replace)
+        {
+            _scene.Clear();
+            _layers.Reset();
+            _selected.Clear();
+            Viewport.SetHighlight(null); Viewport.SetHighlightFaces(null);
+            SetDocPath(null);   // 原版二进制工程不接管「保存」的回写目标(格式不同), 标题回 视图N
+        }
         foreach (var e in r.Entities) { _layers.EnsureImported(e.LayerName, e.Cr, e.Cg, e.Cb); _scene.Add(e); }
         _lastImport = null;
         Viewport.ClearImported();
         RefreshScene();
-        Viewport.ZoomExtents();
+        // 取景排到队尾：几何是下一帧才上传的，当场 ZoomExtents 框的还是上一帧的包围盒 ——
+        // 表现就是"打开了但图缩在角落一小块"(同 @取景 自检步骤里的同一个坑)。
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => Viewport.ZoomExtents(),
+                                                    Avalonia.Threading.DispatcherPriority.Background);
         PopulateDrawingLayers();
-        string fn = System.IO.Path.GetFileName(files[0].Path.LocalPath);
-        StatusMsg.Text = $"导入 PitMine 工程 {fn}：{r.Entities.Count} 可编辑实体（{r.Summary}）· {r.LayerNames.Count} 图层";
+        StatusMsg.Text = replace
+            ? $"已打开 {fn}（原版 PitMine 工程）· {r.Entities.Count} 可编辑实体（{r.Summary}）· {r.LayerNames.Count} 图层；原版二进制格式不回写，存盘请用「另存为」"
+            : $"导入 PitMine 工程 {fn}：{r.Entities.Count} 可编辑实体（{r.Summary}）· {r.LayerNames.Count} 图层";
     }
 
     // 导出 PitMine 工程(.pmx 原版二进制)：场景实体 → 原版可打开的 .pmx(反向互操作)。核心: 线/点/多段线/文字/圆/矩形。
@@ -2665,21 +2909,22 @@ public partial class MainWindow : Window
             else if (double.TryParse(t, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double v) && v > 0 && v < 60) phi = v;
         }
 
-        // 采场基准优先取 DB 真实设计参数(parameter_definition 标准默认, 忠实原 PickTemplate→BenchTemplateReader 路径);
-        // DB 无/排土场 → 兜底规范默认。V026 初设说明书真值替硬编码规范默认。
+        // 设计基准走 Data/BenchTemplateResolver 的完整优先级链: 匹配模板 → 规范默认 → 硬兜底。
+        // 【原先这里有原版踩过的同一个坑】只在 !isDump 时读库 ⇒ **排土场永不读模板**,
+        // 「排土模板」里配好的 H/α/W 存进模板库却永远取不到, 放坡恒用硬编码的规范默认 ——
+        // 改了没反应, 而且不报错。现在两侧都读, 由解析器按模板描述里的标记挑对应类型的模板。
         (double H, double A, double W)? designOverride = null;
         string dbBaseNote = "";
-        if (!isDump)
         {
-            var gdb = EnsureGeoDb();
+            var gdb = EnsureGeoDb(resume: false);   // 设计基准取不到就用规范默认, 命令照跑 → 不能重跑
             if (gdb != null)
             {
-                var bd = Data.GeoDataQueries.GetBenchDesignBaseline(gdb.Connection);
-                if (bd.FromDb)
-                {
-                    designOverride = (bd.BenchHeightM!.Value, bd.SlopeAngleDeg!.Value, bd.SafetyPlatformWidthM!.Value);
-                    dbBaseNote = $" · DB设计基准 H={bd.BenchHeightM:0.#}/α={bd.SlopeAngleDeg:0.#}/W={bd.SafetyPlatformWidthM:0.#}";
-                }
+                var rp = Data.BenchTemplateResolver.Resolve(gdb.Connection, isDump, material: null, hardness: hardness);
+                designOverride = (rp.BenchHeight, rp.FaceAngleDeg, rp.BermWidth);
+                dbBaseNote = $" · 依据{rp.Provenance} H={rp.BenchHeight:0.#}/α={rp.FaceAngleDeg:0.#}/W={rp.BermWidth:0.#}"
+                           + $"(整体帮坡角 β≈{rp.OverallSlopeAngleDeg:0.#}°)";
+                // 越界告警一条都不吞 —— 参数本身超规范, 校核结论再"合格"也没有意义
+                if (rp.Warnings.Count > 0) dbBaseNote += " · ⚠ " + string.Join("；", rp.Warnings);
             }
         }
         var rep = BenchParameterVerifier.Verify(ext, isDump, hardness, phi, designOverride);
@@ -3336,11 +3581,19 @@ public partial class MainWindow : Window
         StatusMsg.Text = "生产量核算（分账，不合总）：" + Cad.Tasks.TaskQuantity.Sum(tasks).Caption;
     }
 
-    // 生产任务编制(裂解装箱, 忠实原 TaskExploder): 代表性算例(三班×两采装面+穿孔+配煤) → 按班次时窗×编组班产装箱
-    // → 逐班任务 + 校核(运力/双占/接续/配煤/欠产)。可选「生产任务编制 <月采出万t> <月剥离万m³> [作业日]」按月计划
-    // 分配日目标(忠实原 ShortTermLink); 无参用样例日目标。真数据需接台账/钻孔计划。
+    // 生产任务编制(裂解装箱, 忠实原 TaskExploder): 按班次时窗×编组班产装箱 → 逐班任务
+    // + 校核(运力/双占/接续/配煤/欠产/备采保有/爆破切段)。
+    //
+    // §三五四 起**默认走当日盘子装配层**(ProductionPlanContext): 班次日历/爆破台账/穿孔计划/检修档期/
+    // 作业面台账/编组规则/去向台账/编制锚点。装不出面就如实说"排不出来"并给补法 —— **不回落样例**,
+    // 编一份看着正常的假盘子比空着更危险(人分不出看的是这个矿还是示例矿)。
+    // 「生产任务编制 示例」仍可跑那份代表性算例(讲解/回归用, 状态栏明写"示例")。
+    // 可选「生产任务编制 <月采出万t> <月剥离万m³> [作业日]」按月计划分配日目标(忠实原 ShortTermLink)。
     private void TaskExplodeCmd(string cmd)
     {
+        bool wantSample = cmd.Contains("示例");
+        if (!wantSample) { TaskExplodeFromLedger(cmd); return; }
+
         var cfg = new Cad.Tasks.Scheduling.ExploderConfig
         {
             DateLabel = "示例", IdPrefix = "D", BlastStart = 12, BlastEnd = 12.5,
@@ -3376,7 +3629,41 @@ public partial class MainWindow : Window
         int errs = r.Violations.Count(v => v.Severity == Cad.Tasks.Scheduling.ViolationSeverity.Error);
         int warns = r.Violations.Count(v => v.Severity == Cad.Tasks.Scheduling.ViolationSeverity.Warn);
         string vio = string.Join(" · ", r.Violations.Take(4).Select(v => $"{v.Code}"));
-        StatusMsg.Text = $"生产任务编制(示例排产)：{r.Tasks.Count} 任务(采装{loads}/穿孔{r.Tasks.Count(t => t.Process == Cad.Tasks.ProcessType.Drill)}/空闲{idles}) · 校核 {errs}错/{warns}警[{vio}]{linkNote}（代表算例; 真数据接台账/钻孔计划）";
+        StatusMsg.Text = $"生产任务编制(示例排产)：{r.Tasks.Count} 任务(采装{loads}/穿孔{r.Tasks.Count(t => t.Process == Cad.Tasks.ProcessType.Drill)}/空闲{idles}) · 校核 {errs}错/{warns}警[{vio}]{linkNote}（代表算例, 不是本矿数据; 去掉「示例」二字走台账）";
+    }
+
+    /// <summary>
+    /// 按当日台账装一份盘子再装箱。装不出面就如实说排不出来并给补法, <b>不回落样例</b>。
+    /// </summary>
+    private void TaskExplodeFromLedger(string cmd)
+    {
+        // ★ EnsureGeoDb 首次必返回 null（连接还没建好），命令会被重新派发一次 ——
+        //   不按这个约定直接往下走，第一次点就会拿着空连接装出一盘"什么台账都没有"。
+        var db = EnsureGeoDb(); if (db == null) return;
+        var date = System.DateTime.Today;
+        var tk = cmd.Split(new[] { ' ', ',', '，', '/', '	' }, System.StringSplitOptions.RemoveEmptyEntries);
+        foreach (var t in tk)
+            if (System.DateTime.TryParse(t, System.Globalization.CultureInfo.InvariantCulture,
+                                         System.Globalization.DateTimeStyles.None, out var d)) { date = d.Date; break; }
+
+        var asm = Data.ProductionPlanContext.Assemble(db?.Connection, date, System.DateTime.Now.TimeOfDay.TotalHours);
+        if (!asm.Usable)
+        {
+            StatusMsg.Text = $"生产任务编制（{date:MM-dd}）：排不出来 —— " + string.Join(" ", asm.Notes)
+                           + "　|　" + asm.SourceLabel;
+            return;
+        }
+
+        var r = Cad.Tasks.Scheduling.TaskExploder.Explode(asm.Config);
+        int loads = r.Tasks.Count(t => t.Process == Cad.Tasks.ProcessType.Load);
+        int drills = r.Tasks.Count(t => t.Process == Cad.Tasks.ProcessType.Drill);
+        int idles = r.Tasks.Count(t => t.Process == Cad.Tasks.ProcessType.Idle);
+        int errs = r.Violations.Count(v => v.Severity == Cad.Tasks.Scheduling.ViolationSeverity.Error);
+        int warns = r.Violations.Count(v => v.Severity == Cad.Tasks.Scheduling.ViolationSeverity.Warn);
+        string vio = string.Join(" · ", r.Violations.Take(4).Select(v => v.Code));
+        StatusMsg.Text = $"生产任务编制（{date:MM-dd} 台账）：{r.Tasks.Count} 任务(采装{loads}/穿孔{drills}/空闲{idles})"
+                       + $" · 校核 {errs}错/{warns}警{(vio.Length > 0 ? "[" + vio + "]" : "")}　|　{asm.SourceLabel}"
+                       + (asm.Notes.Count > 0 ? "　|　" + asm.Notes[0] : "");
     }
 
     private static Cad.Tasks.ProcessType? ParseProcess(string s) => s switch
@@ -3668,13 +3955,18 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"连续多层建模：{surfaces.Count} 层位面 → {made} 夹层体（{watertightN} 水密）→ layer1..{made}.off";
     }
 
-    // 分割三角网：选中折线定切割线(首→末点所在竖直面) + 选 OFF → 三角形-平面裁剪切两片 → 落 .left/.right.off。
+    // 分割三角网：选中折线作切线 + 选 OFF → 严格沿折线 XY 投影逐段切两片(原内核 splitByPolylineVertical) → 落 .left/.right.off。
     private async Task MeshSplitAsync()
     {
-        (double x, double y)? p0 = null, p1 = null;
+        List<(double x, double y)>? cut = null;
         foreach (var e in _selected)
-            if (e is PolylineEntity pl && pl.Points.Count >= 2) { p0 = pl.Points[0]; p1 = pl.Points[pl.Points.Count - 1]; break; }
-        if (p0 == null || p1 == null) { StatusMsg.Text = "分割三角网：请先选中一条折线作切割线（用其首→末点定竖直切面）"; return; }
+            if (e is PolylineEntity pl && pl.Points.Count >= 2)
+            {
+                cut = new List<(double x, double y)>(pl.Points);
+                if (pl.Closed && cut.Count >= 3 && (cut[0].x != cut[^1].x || cut[0].y != cut[^1].y)) cut.Add(cut[0]);
+                break;
+            }
+        if (cut == null) { StatusMsg.Text = "分割三角网：请先选中一条折线作切割线（按其 XY 投影逐段切分）"; return; }
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = "分割三角网：选 OFF 网格",
@@ -3687,21 +3979,23 @@ public partial class MainWindow : Window
         catch (System.Exception ex) { StatusMsg.Text = $"分割三角网：读取失败 {ex.Message}"; return; }
         var (verts, tris) = MeshMetrics.ParseOff(text);
         if (tris.Count == 0) { StatusMsg.Text = "分割三角网：未解析到三角网格"; return; }
-        var (l, r) = MeshPlaneSplit.Split(verts, tris, p0.Value.x, p0.Value.y, p1.Value.x, p1.Value.y);
-        if (l.t.Count == 0 || r.t.Count == 0) { StatusMsg.Text = "分割三角网：切面未穿过网格（一侧为空），未切分"; return; }
+        var res = MeshPolylineSplit.Split(verts, tris, cut, 1e-6);
+        if (!res.Success) { StatusMsg.Text = $"分割三角网：{res.Error}"; return; }
+        if (!res.HasLeft || !res.HasRight) { StatusMsg.Text = "分割三角网：切线未穿过网格（一侧为空），未切分"; return; }
         string dir = System.IO.Path.GetDirectoryName(files[0].Path.LocalPath) ?? ".";
         string lp = System.IO.Path.Combine(dir, "split_left.off"), rp = System.IO.Path.Combine(dir, "split_right.off");
         try
         {
-            System.IO.File.WriteAllText(lp, MeshWeld.ToOff(l.v, l.t));
-            System.IO.File.WriteAllText(rp, MeshWeld.ToOff(r.v, r.t));
+            System.IO.File.WriteAllText(lp, MeshWeld.ToOff(res.LeftVerts, res.LeftTris));
+            System.IO.File.WriteAllText(rp, MeshWeld.ToOff(res.RightVerts, res.RightTris));
         }
         catch (System.Exception ex) { StatusMsg.Text = $"分割三角网：写出失败 {ex.Message}"; return; }
-        StatusMsg.Text = $"分割三角网：切两片 · 左 {l.t.Count} 三角 / 右 {r.t.Count} 三角 → split_left/right.off（切线取折线首末点弦，曲折线为弦近似）";
+        StatusMsg.Text = $"分割三角网：沿折线切两片 · 左 {res.LeftTris.Count} 三角 / 右 {res.RightTris.Count} 三角（切开 {res.CutFaces} 三角）→ split_left/right.off";
     }
 
-    // 按闭合边界分割三角网(原 pc_tin_split「沿多段线切分为内/外两片」)：选中闭合折线作边界 + 选 OFF
-    // → 三角质心判内/外(与 裁剪三角网 同质心约定)分两片, 各写 OFF。区别于 分割三角网(单线左右, 逐边精确)。
+    // 按闭合边界分割三角网(原 pc_tin_split「沿多段线切分为内/外两片」—— 原版最终也是调 splitByPolyline 精确切,
+    // inner=左片/outer=右片)：选中闭合折线作边界 + 选 OFF → 边界摆成逆时针后沿线精确切开, 左手侧即圈内, 各写 OFF。
+    // 早前按三角质心整块取舍, 边界锯齿、跨界三角整个跑到另一侧 —— 即用户报的"没按多段线边界分"。
     private async Task MeshBoundarySplitAsync()
     {
         IReadOnlyList<(double x, double y)>? boundary = null;
@@ -3719,17 +4013,23 @@ public partial class MainWindow : Window
         catch (System.Exception ex) { StatusMsg.Text = $"边界分割三角网：读取失败 {ex.Message}"; return; }
         var (verts, tris) = MeshMetrics.ParseOff(text);
         if (tris.Count == 0) { StatusMsg.Text = "边界分割三角网：未解析到三角网格"; return; }
-        var (inside, outside) = MeshBoundarySplit.ByPolygon(verts, tris, boundary);
-        if (inside.Tris.Count == 0 || outside.Tris.Count == 0) { StatusMsg.Text = $"边界分割三角网：一侧为空(内 {inside.Tris.Count}/外 {outside.Tris.Count})，边界可能未覆盖或全含网格，未分片"; return; }
+        var ring = new List<(double x, double y)>(boundary);
+        if (System.Math.Abs(ring[0].x - ring[^1].x) > 1e-9 || System.Math.Abs(ring[0].y - ring[^1].y) > 1e-9) ring.Add(ring[0]);   // 补闭合段
+        double sa = 0;
+        for (int i = 0; i + 1 < ring.Count; i++) sa += ring[i].x * ring[i + 1].y - ring[i + 1].x * ring[i].y;
+        if (sa < 0) ring.Reverse();   // 逆时针 → 左手侧 = 圈内
+        var res = MeshPolylineSplit.Split(verts, tris, ring, 1e-6);
+        if (!res.Success) { StatusMsg.Text = $"边界分割三角网：{res.Error}"; return; }
+        if (!res.HasLeft || !res.HasRight) { StatusMsg.Text = $"边界分割三角网：一侧为空(内 {res.LeftTris.Count}/外 {res.RightTris.Count})，边界可能未覆盖或全含网格，未分片"; return; }
         string dir = System.IO.Path.GetDirectoryName(files[0].Path.LocalPath) ?? ".";
         string ip = System.IO.Path.Combine(dir, "split_inside.off"), op = System.IO.Path.Combine(dir, "split_outside.off");
         try
         {
-            System.IO.File.WriteAllText(ip, MeshWeld.ToOff(inside.Verts, inside.Tris));
-            System.IO.File.WriteAllText(op, MeshWeld.ToOff(outside.Verts, outside.Tris));
+            System.IO.File.WriteAllText(ip, MeshWeld.ToOff(res.LeftVerts, res.LeftTris));
+            System.IO.File.WriteAllText(op, MeshWeld.ToOff(res.RightVerts, res.RightTris));
         }
         catch (System.Exception ex) { StatusMsg.Text = $"边界分割三角网：写出失败 {ex.Message}"; return; }
-        StatusMsg.Text = $"边界分割三角网：内 {inside.Tris.Count} 三角 / 外 {outside.Tris.Count} 三角 → split_inside/outside.off（质心判别，三角粒度）";
+        StatusMsg.Text = $"边界分割三角网：内 {res.LeftTris.Count} 三角 / 外 {res.RightTris.Count} 三角（沿边界精确切开 {res.CutFaces} 三角）→ split_inside/outside.off";
     }
 
     // 网格修复(原「修复拓扑关系」常见修复): 选 OFF → 焊接→朝向一致→补洞 流水线 → 写 repaired.off + 前后诊断
@@ -4934,6 +5234,54 @@ public partial class MainWindow : Window
             + (breakdown.Count > 0 ? " · 分类柱入场景" : "") + (name != null ? $" → {name}" : "");
     }
 
+    /// <summary>工程级正射影像路径（同原版 OrthophotoConfig：配一次就记住，不必每次选文件）。</summary>
+    private const string KeyOrthoPath = "Ortho.Basemap.Path";
+
+    // 影像底图(忠实原 TaskLib.Adjust.OrthophotoBasemap)：把当期航拍贴到**场景里的地表**上 ——
+    // 三角网/点云按世界 XY 采影像色。区别于既有的「正射着色」(那条是给新导入的 CSV 点上色)。
+    private async Task OrthoBasemapAsync(bool clear)
+    {
+        var targets = Cad.OrthoBasemap.TargetsOf(_scene.Entities);
+        if (targets.Count == 0)
+        {
+            StatusMsg.Text = "影像底图：场景里没有三角网或点云 —— 先加载地表数据（如「加载点云」「2.5D TIN」）再来。";
+            return;
+        }
+        if (clear)
+        {
+            BeginChange();
+            int n = Cad.OrthoBasemap.Clear(targets);
+            RefreshScene();
+            StatusMsg.Text = $"已清除影像底图：{n} 个对象恢复原色";
+            return;
+        }
+
+        // 记住的路径还在就直接用; 不在就选一次并记下来(原版口径: 在哪儿选的都算配上了)
+        string path = Cfg.Get<string>(KeyOrthoPath, "") ?? "";
+        if (path.Length == 0 || !System.IO.File.Exists(path))
+        {
+            var gf = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "影像底图：选 GeoTIFF 正射影像",
+                AllowMultiple = false,
+                FileTypeFilter = new[] { new FilePickerFileType("正射影像 (GeoTIFF)") { Patterns = new[] { "*.tif", "*.tiff" } } },
+            });
+            if (gf.Count == 0) return;
+            path = gf[0].Path.LocalPath;
+            Cfg.Set(KeyOrthoPath, path);
+        }
+
+        using var samp = Cad.GeoTiffSampler.Load(path);
+        if (!samp.Success) { StatusMsg.Text = $"影像底图：{samp.Error}（路径 {System.IO.Path.GetFileName(path)}）"; return; }
+
+        BeginChange();
+        var r = Cad.OrthoBasemap.Apply(new Cad.OrthoBasemap.GeoTiffAdapter(samp), targets);
+        RefreshScene();
+        // 覆盖范围提示一条都不吞 —— 落在影像外只会显示成一片灰, 人会以为是渲染坏了
+        StatusMsg.Text = r.Message + (r.Notes.Count > 0 ? "　◆ " + string.Join("；", r.Notes) : "")
+                       + $"（影像 {samp.Width}×{samp.Height}，已记住路径，下次直接套用；清除用「清除底图」）";
+    }
+
     // 正射着色(真实色)：选点 CSV + GeoTIFF 正射影像 → 逐点采像素色 → 真实色点云入场景
     private async Task OrthoColorAsync()
     {
@@ -5622,19 +5970,26 @@ public partial class MainWindow : Window
             FileTypeFilter = new[] { new FilePickerFileType("八叉树块体 (BLK)") { Patterns = new[] { "*.blk" } } }
         });
         if (files.Count == 0) return;
-        var r = BlkImportService.Load(files[0].Path.LocalPath, selectAttr);
+        string blkPath = files[0].Path.LocalPath;
+        StatusMsg.Text = $"正在后台读取 {Path.GetFileName(blkPath)}…界面可继续操作";
+        var r = await System.Threading.Tasks.Task.Run(() => BlkImportService.Load(blkPath, selectAttr));   // 八十多 MB 别占 UI 线程
         if (!r.Success) { StatusMsg.Text = $"导入 BLK：{r.Error}"; return; }
         if (r.Blocks.Count == 0) { StatusMsg.Text = "导入 BLK：无块"; return; }
-        _lastBlocks = r.Blocks;
-        _blockAttrs = r.AllAttrs.Count > 0 ? r.AllAttrs : null;   // 持全属性供无重导切换
-        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
-        foreach (var b in r.Blocks) { if (b.X < minX) minX = b.X; if (b.Y < minY) minY = b.Y; if (b.X > maxX) maxX = b.X; if (b.Y > maxY) maxY = b.Y; }
-        BeginChange();
-        RenderBlocks(r.Blocks);
-        RefreshScene();
-        if (maxX > minX && maxY > minY) Viewport.FitBounds(new[] { minX, minY, maxX, maxY });
+        // 与「导入块体」对话框同一条路：几何按文件给定的原点/三轴细格(25×25×0.5 m)/层级装配。
+        // 早先这里直接 RenderBlocks 出边长 = Size 的立方体 —— 竖向胖 50 倍, 模型糊成一块平板。
+        string uniq = Modeling.BlockModelStore.UniqueName(Path.GetFileNameWithoutExtension(blkPath));
+        var meta = await System.Threading.Tasks.Task.Run(() => Cad.BlockModelMeta.FromLeaves(
+            uniq, r.Blocks, r.AllAttrs.Count > 0 ? r.AllAttrs : null,
+            r.Ox, r.Oy, r.Oz, r.Bx, r.By, r.Bz, r.Nx, r.Ny, r.Nz, r.MaxSub, r.VarCellCount));
+        meta.DisplayStyle.FillColor = Cad.BlockDefaultPalette.Next(Modeling.BlockModelStore.Models.Count);
+        Modeling.ImportBlockModelWindow.ApplyBlkMetadata(meta, r);
+        // 「导入BLK <属性名>」显式点名的属性优先作活动着色属性(命令本来就是干这个的)
+        if (selectAttr != null && meta.PropertySchema.Exists(c => c.Name == r.UsedAttr))
+        { meta.ActiveColormapAttribute = r.UsedAttr; meta.ColormapRange = null; }
+        var err = await Modeling.BlockModelStore.CreateAsync(MdlCtx(), meta);
+        if (err != null) { StatusMsg.Text = $"导入 BLK：{err}"; return; }
         string attrs = r.AttrNames.Count > 0 ? string.Join("/", r.AttrNames) : "无";
-        StatusMsg.Text = $"导入 BLK：{r.BlockCount} 叶块 · 品位取「{r.UsedAttr}」 · 全属性[{attrs}]（切换免重导：切换属性 <属性名>）";
+        StatusMsg.Text = $"导入 BLK：{r.BlockCount:N0} 叶块 · 细格 {r.Bx:0.##}×{r.By:0.##}×{r.Bz:0.###} m · 着色「{meta.ActiveColormapAttribute}」 · 全属性[{attrs}]（切换免重导：切换属性 <属性名>）";
     }
 
     // 导入 PMB(PitMine 块体模型 v1, 公开格式)：解析网格几何+选定属性→grade-only 块入场景
@@ -5649,7 +6004,9 @@ public partial class MainWindow : Window
             FileTypeFilter = new[] { new FilePickerFileType("PitMine 块体 (PMB)") { Patterns = new[] { "*.pmb" } } }
         });
         if (files.Count == 0) return;
-        var r = PmbImportService.Load(files[0].Path.LocalPath, selectAttr);
+        string pmbPath = files[0].Path.LocalPath;
+        StatusMsg.Text = $"正在后台读取 {Path.GetFileName(pmbPath)}…界面可继续操作";
+        var r = await System.Threading.Tasks.Task.Run(() => PmbImportService.Load(pmbPath, selectAttr));   // 同 BLK: 大文件别占 UI 线程
         if (!r.Success) { StatusMsg.Text = $"导入 PMB：{r.Error}"; return; }
         if (r.Blocks.Count == 0) { StatusMsg.Text = "导入 PMB：无块"; return; }
         _lastBlocks = r.Blocks; _blockAttrs = r.AllAttrs.Count > 0 ? r.AllAttrs : null;   // 持全属性供无重导切换/属性报告(同 BLK)
@@ -5662,6 +6019,29 @@ public partial class MainWindow : Window
         string attrs = r.AttrNames.Count > 0 ? string.Join("/", r.AttrNames) : "无";
         string swHint = _blockAttrs != null ? "切换免重导：切换属性 <属性名>" : "改属性：导入PMB <属性名>";
         StatusMsg.Text = $"导入 PMB：{r.Nx}×{r.Ny}×{r.Nz} 网格 · {r.Blocks.Count} 块 · 品位取「{r.UsedAttr}」 · 全属性[{attrs}]（{swHint}）";
+    }
+
+    // 采剥过程演示(忠实原 MiningSimWindow)。非模态单例; 关窗即收起演示的临时隐藏并重渲。
+    private Views.Mining.MiningSimWindow? _simWin;
+    private void OpenMiningSim()
+    {
+        if (_simWin != null) { _simWin.ReloadModels(); _simWin.Activate(); StatusMsg.Text = "采剥过程演示已在前台"; return; }
+        var w = new Views.Mining.MiningSimWindow(
+            models: () => Modeling.BlockModelStore.Models.ToList(),
+            refresh: () => Modeling.BlockModelStore.RefreshDisplay(MdlCtx(), null),
+            zoomExtents: () =>
+            {
+                var m = _simWin?.SessionModels().FirstOrDefault();
+                if (m != null) Modeling.BlockModelStore.ZoomTo(MdlCtx(), m);
+            },
+            echo: msg => StatusMsg.Text = msg);
+        _simWin = w;
+        w.Closed += (_, _) => _simWin = null;
+        w.Show(this);
+        int n = Modeling.BlockModelStore.Models.Count;
+        StatusMsg.Text = n == 0
+            ? "采剥过程演示：场上还没有块体模型 —— 先用「导入块体」载入采场/排土场"
+            : $"采剥过程演示：场上 {n} 个块体模型，选好采场/外排/内排后点「装配」";
     }
 
     private async Task ImportBlockModelAsync()
@@ -6146,6 +6526,7 @@ public partial class MainWindow : Window
         }
         if (coal.Count == 0) { StatusMsg.Text = "块体煤岩分类：用法 块体煤岩分类 煤 <码...> [岩 <码...>] [容差 <t>]（按块体品位值作岩性类别码）"; return; }
         var clf = new Cad.CoalRockClassifier { CoalCodes = coal.ToArray(), RockCodes = rock.ToArray(), Tol = tol };
+        _lastCoalClassifier = clf;   // 记住关联：刀量切割 / 驱动量 按它数煤岩（原版存在 BlockModel.CoalAttribute 上）
         int nc = 0, nr = 0, ni = 0; double coalVol = 0, rockVol = 0;
         foreach (var b in _lastBlocks)
         {
@@ -6948,7 +7329,7 @@ public partial class MainWindow : Window
         double zTop = _lastBlocks.Max(b => b.Z + b.Size / 2);
         var top = Cad.TopOutline.FromBounds(minX, minY, maxX, maxY, zTop);
         var walls = new System.Collections.Generic.List<Cad.WallAngle>();
-        var db = EnsureGeoDb();
+        var db = EnsureGeoDb(resume: false);   // 边坡角取不到就用命令参数, 命令照跑 → 不能重跑
         if (db != null)
             foreach (var s in Data.GeoDataQueries.GetSlopeDesigns(db.Connection))
                 if (s.FinalAngle > 1) walls.Add(new Cad.WallAngle(s.Side, s.FinalAngle));
@@ -6986,7 +7367,7 @@ public partial class MainWindow : Window
         double zTop = _lastBlocks.Max(b => b.Z + b.Size / 2);
         var top = Cad.TopOutline.FromBounds(minX, minY, maxX, maxY, zTop);
         var walls = new System.Collections.Generic.List<Cad.WallAngle>();
-        var db = EnsureGeoDb();
+        var db = EnsureGeoDb(resume: false);   // 边坡角取不到就用命令参数, 命令照跑 → 不能重跑
         if (db != null)
             foreach (var s in Data.GeoDataQueries.GetSlopeDesigns(db.Connection))
                 if (s.FinalAngle > 1) walls.Add(new Cad.WallAngle(s.Side, s.FinalAngle));
@@ -7033,7 +7414,7 @@ public partial class MainWindow : Window
         double zTop = maxZ + cell / 2;
         var top = Cad.TopOutline.FromBounds(minX, minY, maxX, maxY, zTop);
         var walls = new System.Collections.Generic.List<Cad.WallAngle>();
-        var db = EnsureGeoDb();
+        var db = EnsureGeoDb(resume: false);   // 边坡角取不到就用命令参数, 命令照跑 → 不能重跑
         if (db != null)
             foreach (var s in Data.GeoDataQueries.GetSlopeDesigns(db.Connection))
                 if (s.FinalAngle > 1) walls.Add(new Cad.WallAngle(s.Side, s.FinalAngle));
@@ -7375,6 +7756,7 @@ public partial class MainWindow : Window
             var variants = Cad.LongTermScheduler.GenerateVariants(p, Cad.LongTermScheduler.DefaultWorkLines(), Cad.LongTermScheduler.DefaultDirections());
             var results = variants.Select(v => v.Result!).ToList();
             var best = Cad.LongTermComparer.Score(results);
+            foreach (var v in variants) RememberLongTermScheme(v);   // 供「进度计划方案出图」取用
             var ranked = results.OrderByDescending(x => x.CompositeScore).ToList();
             DrawCategoryBars(ranked.Take(8).Select(x => (x.Name, x.CompositeScore)).ToList(), "综合分");
             var nm = await SaveCsvAsync("导出中长远多方案", "long_term_variants.csv",
@@ -7386,6 +7768,7 @@ public partial class MainWindow : Window
         }
         Cad.LongTermScheduler.Schedule(p);
         var r = p.Result!;
+        RememberLongTermScheme(p);   // 供「进度计划方案出图」取用
         // 逐年生产剥采比曲线上屏(年 → 剥采比)
         var prod = p.Periods.Where(z => z.CoalWanT > 0).ToList();
         if (prod.Count >= 2)
@@ -7434,6 +7817,7 @@ public partial class MainWindow : Window
             return;
         }
         Cad.ShortTermScheduler.Schedule(p);
+        RememberShortTermScheme(p);   // 供「短期进度计划动态模拟」取用
         var r = p.Result!;
         DrawCategoryBars(p.Months.Select(m => ($"{m.Month}月", m.CoalWanT)).ToList(), "月煤万t");   // 月产柱
         var name = await SaveCsvAsync("导出短期生产计划", "short_term_plan.csv", ShortTermToCsv(p));
@@ -7512,36 +7896,6 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"合并多段线：{polys.Count} 条 → {merged.Count} 条";
     }
 
-    // ═══════════════════ 原版 SkeletonCommand 桩（分帮扩帮 / 最终帮并段）═══════════════════
-    // 原版这两钮本身就是空壳: 命令行回显「[骨架] 名:设计意图（待实现）」。移植只照回显, 不替原版把功能"补"出来。
-    private void SkeletonEcho(string feature, string intent)
-    {
-        EditEcho($"[骨架] {feature}：{intent}（待实现）");
-        StatusMsg.Text = $"[骨架] {feature}：待实现（原版即占位，此处同）";
-    }
-
-    // 动态调整（台阶交互设计 jig）：原版 = 选 1 条闭合境界 → 内核 StartBenchDesignJig, 鼠标调深度/层数实时预览坡面, 点击/回车确认。
-    // 内核回路在 xllAcEd(无源); Kylin 侧先按原版做同样的选集校验并如实说明, 交互 jig 由托管等价接(见 BenchJig)。
-    private void BenchDesignJigCmd()
-    {
-        var sel = _selected.FindAll(e => e is PolylineEntity pl && pl.Points.Count >= 2);
-        if (sel.Count != 1) { StatusMsg.Text = "动态调整台阶形态：请先在场景里选 1 条 polyline 作为境界线"; EditEcho("动态调整台阶形态:请先在场景里选 1 条 polyline 作为境界线", EchoLevel.Warn); return; }
-        var line = (PolylineEntity)sel[0];
-        if (line.Points.Count < 2) { StatusMsg.Text = "动态调整台阶形态：境界线点数不足(至少 2 点)"; return; }
-        _ = StartBenchJigAsync(line);
-    }
-
-    // 批量扩坑（按煤层层位分层放坡）：原版 = 选 1 条闭合境界 → 非模态 SeamPitDialog(顶/底板面) → 内核 BuildSeamPitMultiSeam。
-    private async System.Threading.Tasks.Task SeamPitCmd(string cmd)
-    {
-        var sel = _selected.FindAll(e => e is PolylineEntity pl && pl.Points.Count >= 3);
-        if (sel.Count < 1) { StatusMsg.Text = "批量扩坑：请先在场景里选 1 条【闭合】多段线作为境界线"; EditEcho("批量扩坑:请先在场景里选 1 条【闭合】多段线作为境界线", EchoLevel.Warn); return; }
-        var line = (PolylineEntity)sel[0];
-        bool closed = line.Closed || Dist2(line.Points[0], line.Points[^1]) < 1e-12;
-        EditEcho($"> 批量扩坑:锁定境界线（{(closed ? "闭合" : "非闭合")}，{line.Points.Count} 点），打开参数面板…");
-        await SeamPitRunAsync(line, cmd);
-    }
-
     // 分帮扩帮：选中台阶线/多段线，点方向 → 批量平行偏移
     private void StartBench()
     {
@@ -7566,7 +7920,7 @@ public partial class MainWindow : Window
     {
         var polys = new List<System.Collections.Generic.IReadOnlyList<(double x, double y)>>();
         foreach (var e in _scene.Entities)
-            if (e is PolylineEntity pl && pl.Points.Count >= 2) polys.Add(pl.Points);
+            if (e is PolylineEntity pl && pl.Points.Count >= 2 && IsPassableRoadLayer(pl.LayerName)) polys.Add(pl.Points);   // 检修/封闭按不通算（边状态即时影响寻径）
         if (polys.Count == 0) { StatusMsg.Text = "寻径：场景无路（多段线）"; return; }
 
         double tol = System.Math.Max(1e-6, SnapTolWorld(_lastPointer) * 0.5);
@@ -7744,7 +8098,10 @@ public partial class MainWindow : Window
         if (cf.Count == 0) return;
         var curr = ReadEvoLines(cf[0].Path.LocalPath);
         if (prev.Count == 0 && curr.Count == 0) { StatusMsg.Text = "演化对比：两期均未解析到中线(需 lineId,x,y[,z], 每线≥2点)"; return; }
-        var res = RoadEvolutionAnalyzer.Analyze(prev, curr, new RoadEvolutionOptions());
+        // 阈值取「延拓触发设置」那一份(没设过就是默认值, 与原写死的 new RoadEvolutionOptions() 完全一致 ⇒ 零回归)。
+        // 不接这一步的话, 参数中心改了阈值这里也不生效, 那就是个存了没人读的设置。
+        var evoCfg = Cad.Transport.ExtendTriggerSettings.Load();
+        var res = RoadEvolutionAnalyzer.Analyze(prev, curr, evoCfg.ToEvolutionOptions());
         // 按类别配色：保持灰/移位橙/延拓·新建绿/截短黄/废除红
         (float r, float g, float b) Col(RoadEvolutionClass c) => c switch
         {
@@ -7890,156 +8247,17 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"{title}：{tris.Count} 三角（{doneHint}）";
     }
 
-    // 图层管理器：列出图层复选框，勾选控制显隐
-    private void PopulateLayers(DxfImportService.ImportResult r)
-    {
-        var items = new List<CheckBox>();
-        foreach (var name in r.LayerOrder)
-        {
-            var cb = new CheckBox
-            {
-                Content = $"{name}（{r.LayerCounts.GetValueOrDefault(name)}）",
-                IsChecked = true,
-                Tag = name,
-                FontSize = 12
-            };
-            cb.IsCheckedChanged += OnLayerToggle;
-            items.Add(cb);
-        }
-        LayerList.ItemsSource = items;
-    }
-
-    private void OnLayerToggle(object? sender, RoutedEventArgs e)
-    {
-        if (sender is CheckBox cb && cb.Tag is string layer)
-            Viewport.SetLayerVisible(layer, cb.IsChecked == true);
-    }
-
-    // 文件管理器：选文件夹 → 列出该目录所有可导入图形（DXF/DWG/OFF/MapGIS/KDF/3DMine）
-    private async void OnOpenFolder(object? sender, RoutedEventArgs e)
-    {
-        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
-        {
-            Title = "选择图纸文件夹",
-            AllowMultiple = false
-        });
-        if (folders.Count == 0) return;
-
-        string dir = folders[0].Path.LocalPath;
-        FileFolderLabel.Text = dir;
-        var items = CadFileBrowser.ListImportable(dir);
-        FileList.ItemsSource = items
-            .Select(x => new ListBoxItem { Content = x.Name, Tag = x.Path })
-            .ToList();
-        StatusMsg.Text = items.Count == 0 ? "该文件夹无可导入图形（DXF/DWG/OFF/MapGIS/KDF/3DMine）" : $"{items.Count} 个图形文件（双击打开）";
-    }
-
-    // 双击文件列表项 → 导入该图纸
-    private void OnFileListDoubleTapped(object? sender, TappedEventArgs e)
-    {
-        if (FileList.SelectedItem is ListBoxItem { Tag: string path })
-            _ = ImportPath(path);
-    }
-
-    // 对象管理器：按图元类型列出导入的实体
-    private void PopulateObjectTree(DxfImportService.ImportResult r, string fileName)
-    {
-        ObjectTreeHint.IsVisible = false;
-        var root = new TreeViewItem { Header = $"{fileName}（{r.EntityCount} 实体）", IsExpanded = true };
-        foreach (var kv in r.TypeCounts)
-            root.Items.Add(new TreeViewItem { Header = $"{kv.Key} × {kv.Value}", Tag = kv.Key });
-        ObjectTree.ItemsSource = new[] { root };
-    }
-
-    // 对象管理器：按类型列出（可编辑导入）
-    private void PopulateObjectTreeCounts(Dictionary<string, int> typeCounts, string fileName, int total)
-    {
-        ObjectTreeHint.IsVisible = false;
-        var root = new TreeViewItem { Header = $"{fileName}（{total} 实体）", IsExpanded = true };
-        foreach (var kv in typeCounts)
-            root.Items.Add(new TreeViewItem { Header = $"{kv.Key} × {kv.Value}", Tag = kv.Key });
-        ObjectTree.ItemsSource = new[] { root };
-    }
-
-    // 对象管理器：实时反映绘制场景（按类型分组计数，随增删刷新；点类型节点→选中该类全部）
-    private int _lastSceneCount = -1;
-    private void RefreshObjectTree()
-    {
-        if (_scene.Count == 0)
-        {
-            if (_lastImport == null) { ObjectTree.ItemsSource = null; ObjectTreeHint.IsVisible = true; }
-            return;   // 空场景但有 OFF 显示导入：保留其类型树
-        }
-        var counts = new Dictionary<string, int>();
-        foreach (var en in _scene.Entities) { var t = CnOf(en); counts[t] = counts.GetValueOrDefault(t) + 1; }
-        ObjectTreeHint.IsVisible = false;
-        var root = new TreeViewItem { Header = $"图形（{_scene.Count} 实体）", IsExpanded = true };
-        foreach (var kv in counts)
-        {
-            var node = new TreeViewItem { Header = $"{kv.Key} × {kv.Value}", Tag = kv.Key };
-            if (kv.Key == "三角网")   // 三角网按名称列子项(建模对象可逐个选中)
-            {
-                node.IsExpanded = true;
-                foreach (var me in _scene.Entities.OfType<MeshEntity>())
-                    node.Items.Add(new TreeViewItem { Header = $"{me.Name}（{me.TriangleCount} 三角）", Tag = "mesh:" + me.Name });
-            }
-            else if (kv.Key == "点云")   // 点云同理: 一份点云一个子项(点云管理之外的第二个入口)
-            {
-                node.IsExpanded = true;
-                foreach (var pc in _scene.Entities.OfType<PointCloudEntity>())
-                    node.Items.Add(new TreeViewItem { Header = $"{pc.Name}（{pc.PointCount:N0} 点）", Tag = "cloud:" + pc.Name });
-            }
-            root.Items.Add(node);
-        }
-        ObjectTree.ItemsSource = new[] { root };
-    }
-
-    // 图层面板：每层一行 [显隐][冻结][锁定][色块][名称→设当前]，由绘制图层表驱动
+    // 对象管理器 + 功能区「当前图层」下拉：图层表/场景变了就刷（差量, 保留展开/勾选）。
+    // 原先这里是一份"[显隐][冻结][锁定][色块][名称]"的图层行列表 —— 原版左面板没有这种面板：
+    // 图层显隐在对象管理器的 ☑ 上、当前层在功能区下拉里、冻结/锁定/颜色在图层特性管理器里。现按原版归位。
     private void PopulateDrawingLayers()
     {
-        var rows = new List<Control>();
-        foreach (var l in _layers.Layers)
-        {
-            var layer = l;   // 闭包捕获
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3 };
-
-            var vis = new CheckBox { IsChecked = layer.Visible, MinWidth = 0, Padding = new Thickness(0), VerticalAlignment = VerticalAlignment.Center };
-            ToolTip.SetTip(vis, "显示/隐藏");
-            vis.IsCheckedChanged += (_, _) => { layer.Visible = vis.IsChecked == true; AfterLayerStateChange(); };
-
-            var frz = new ToggleButton { IsChecked = layer.Frozen, Content = "冻", FontSize = 10, Padding = new Thickness(3, 0), MinWidth = 0 };
-            ToolTip.SetTip(frz, "冻结（隐藏且不可选）");
-            frz.IsCheckedChanged += (_, _) => { layer.Frozen = frz.IsChecked == true; AfterLayerStateChange(); };
-
-            var lck = new ToggleButton { IsChecked = layer.Locked, Content = "锁", FontSize = 10, Padding = new Thickness(3, 0), MinWidth = 0 };
-            ToolTip.SetTip(lck, "锁定（可见不可选）");
-            lck.IsCheckedChanged += (_, _) => { layer.Locked = lck.IsChecked == true; AfterLayerStateChange(); };
-
-            var swatch = new Button
-            {
-                Width = 16, Height = 16, Padding = new Thickness(0), MinWidth = 0,
-                Background = new SolidColorBrush(Color.FromRgb((byte)(layer.Cr * 255), (byte)(layer.Cg * 255), (byte)(layer.Cb * 255))),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            ToolTip.SetTip(swatch, "点击换色（该层实体跟随变色）");
-            swatch.Click += (_, _) => CycleLayerColor(layer);
-
-            bool cur = ReferenceEquals(layer, _layers.Current);
-            var name = new Button
-            {
-                Content = (cur ? "● " : "") + layer.Name,
-                FontWeight = cur ? FontWeight.Bold : FontWeight.Normal,
-                Background = Brushes.Transparent, BorderThickness = new Thickness(0),
-                Padding = new Thickness(2, 0), FontSize = 12
-            };
-            ToolTip.SetTip(name, "点击设为当前图层");
-            name.Click += (_, _) => { _layers.SetCurrent(layer.Name); PopulateDrawingLayers(); StatusMsg.Text = $"当前图层「{layer.Name}」"; };
-
-            row.Children.Add(vis); row.Children.Add(frz); row.Children.Add(lck); row.Children.Add(swatch); row.Children.Add(name);
-            rows.Add(row);
-        }
-        LayerList.ItemsSource = rows;
+        RefreshObjectManager();
+        RefreshRibbonLayerCombo();
     }
+
+    // 对象管理器按"实体数变了才重建"的门闩(RefreshScene 每帧都可能来; 图层级变化另走 PopulateDrawingLayers)
+    private int _lastSceneCount = -1;
 
     // 图层显隐/冻结/锁定变更后：失效选择清理 + 重绘
     private void AfterLayerStateChange()
@@ -8047,28 +8265,6 @@ public partial class MainWindow : Window
         _selected.RemoveAll(en => !_layers.IsSelectable(en.LayerName));
         HighlightSelection();
         RefreshScene();
-    }
-
-    private static readonly (float r, float g, float b)[] LayerPalette =
-    {
-        (0.86f, 0.90f, 0.60f), (0.90f, 0.50f, 0.40f), (0.50f, 0.80f, 0.95f), (0.70f, 0.85f, 0.50f),
-        (0.90f, 0.75f, 0.40f), (0.75f, 0.60f, 0.90f), (0.55f, 0.90f, 0.70f), (0.90f, 0.60f, 0.75f)
-    };
-
-    // 图层改色：循环到下一预设色，该层实体跟随变色
-    private void CycleLayerColor(Layer l)
-    {
-        int idx = 0;
-        for (int i = 0; i < LayerPalette.Length; i++)
-            if (System.Math.Abs(LayerPalette[i].r - l.Cr) < 0.02f && System.Math.Abs(LayerPalette[i].g - l.Cg) < 0.02f && System.Math.Abs(LayerPalette[i].b - l.Cb) < 0.02f)
-            { idx = i; break; }
-        var c = LayerPalette[(idx + 1) % LayerPalette.Length];
-        l.Cr = c.r; l.Cg = c.g; l.Cb = c.b;
-        int n = _scene.RecolorLayer(l.Name, c.r, c.g, c.b);
-        RefreshScene();
-        HighlightSelection();
-        PopulateDrawingLayers();
-        StatusMsg.Text = $"图层「{l.Name}」改色（{n} 个实体跟随）";
     }
 
     // 帮助：命令与快捷键参考窗口
@@ -8159,63 +8355,6 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ShowOptions()
-    {
-        var grid = new CheckBox { Content = "显示网格", IsChecked = _gridOn };
-        var snap = new CheckBox { Content = "启用对象捕捉", IsChecked = SnapToggle.IsChecked == true };
-        var tolLabel = new TextBlock { Text = "捕捉容差 (像素)", VerticalAlignment = VerticalAlignment.Center };
-        var tol = new TextBox { Text = _snapTolPx.ToString("0"), Width = 80 };
-        var tolRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { tolLabel, tol } };
-
-        // 界面缩放：功能区内容 1:1 约需 2600px，1080p 及以下放不下，故可按屏幕选挡位（默认自动）
-        var scaleLabel = new TextBlock { Text = "功能区缩放（屏幕适配）", VerticalAlignment = VerticalAlignment.Center };
-        var scaleBox = new ComboBox { Width = 210, ItemsSource = RibbonScalePresets.Select(x => x.label).ToList() };
-        int curIdx = 0;
-        for (int i = 0; i < RibbonScalePresets.Length; i++)
-            if (System.Math.Abs(RibbonScalePresets[i].targetWidth - _ribbonScaleSetting) < 1e-6) { curIdx = i; break; }
-        scaleBox.SelectedIndex = curIdx;
-        scaleBox.SelectionChanged += (_, _) =>   // 选中即预览, 不必先点确定
-        {
-            int i = System.Math.Max(0, scaleBox.SelectedIndex);
-            _ribbonScaleSetting = RibbonScalePresets[i].targetWidth;
-            FitRibbons();
-        };
-        var scaleRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { scaleLabel, scaleBox } };
-        var scaleHint = new TextBlock
-        {
-            Text = "功能区按 1:1 需要约 2300px 宽，1080p 放不下故默认缩放。选固定分辨率按该宽度缩放，"
-                 + "适合投屏或多屏切换；选「自动」则跟随当前窗口宽度。选中即可预览。",
-            FontSize = 11, Foreground = Brush.Parse("#666"), TextWrapping = TextWrapping.Wrap, MaxWidth = 380,
-        };
-
-        var ok = new Button { Content = "确定", MinWidth = 72 };
-        var cancel = new Button { Content = "取消", MinWidth = 72 };
-        var btnRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right, Children = { ok, cancel } };
-
-        var panel = new StackPanel { Margin = new Thickness(16), Spacing = 12, Children = { grid, snap, tolRow, scaleRow, scaleHint, btnRow } };
-        var win = new Window
-        {
-            Title = "选项", Width = 430, Height = 300,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner, CanResize = false,
-            Content = panel
-        };
-        cancel.Click += (_, _) => win.Close();
-        ok.Click += (_, _) =>
-        {
-            SetGrid(grid.IsChecked == true);
-            SnapToggle.IsChecked = snap.IsChecked == true;
-            if (double.TryParse(tol.Text, out double t) && t >= 2 && t <= 60) _snapTolPx = t;
-            int si = System.Math.Max(0, scaleBox.SelectedIndex);
-            _ribbonScaleSetting = RibbonScalePresets[si].targetWidth;
-            SaveRibbonScaleSetting();
-            FitRibbons();
-            StatusMsg.Text = $"选项已应用（网格 {(_gridOn ? "开" : "关")} · 捕捉 {(SnapToggle.IsChecked == true ? "开" : "关")} · 容差 {_snapTolPx:0}px"
-                           + $" · 功能区按 {(_ribbonScaleSetting > 0 ? _ribbonScaleSetting.ToString("0") + "px 宽" : "窗口宽度")}适配）";
-            win.Close();
-        };
-        win.Show(this);
-    }
-
     // 场景实体 → 类型中文名（对象树高亮 / 快速选择匹配用）
     private static string CnOf(SceneEntity e) => EntityTypeName.Of(e);
 
@@ -8250,8 +8389,9 @@ public partial class MainWindow : Window
 
         if (toks.Count == 0)
         {
-            StatusMsg.Text = "快速选择：语法 快速选择 <类型|*> [<特性> <运算符> <值>] [排除][追加][当前]；"
-                           + "例 “快速选择 圆 半径 > 5”“快速选择 * 图层 = 煤层”。选中所有同类请用 选择类似。";
+            // 原版 QSELECT 本体就是对话框: 不带参数即开窗, 别再甩一句语法就走 ——
+            // 类型/特性叫什么、这张图有哪几个层名, 正是要靠下拉才知道的。
+            OpenQuickSelectDialog();
             return;
         }
 
@@ -8279,15 +8419,26 @@ public partial class MainWindow : Window
         else
         { StatusMsg.Text = "快速选择：特性筛选需 <特性> <运算符> <值> 三项(或只给类型选全部)。"; return; }
 
-        // ③ 候选集(整图 / 当前选择集内) → 快照 → 过滤
-        var pool = crit.Scope == QuickSelectScope.CurrentSelection
-            ? _selected.ToList()
-            : _scene.Entities.ToList();
-        if (pool.Count == 0) { StatusMsg.Text = "快速选择：候选为空(当前选择集内筛需先有选择)。"; return; }
+        // ③④ 跑条件并落选择集(与「快速选择」对话框的「确定」同一条路)
+        StatusMsg.Text = ApplyQuickSelect(crit);
+    }
+
+    /// <summary>「快速选择」的候选池：整图 / 当前选择集内。命令行与对话框共用。</summary>
+    private List<SceneEntity> QuickSelectPool(QuickSelectScope scope)
+        => scope == QuickSelectScope.CurrentSelection ? _selected.ToList() : _scene.Entities.ToList();
+
+    /// <summary>
+    /// 按条件跑一次快速选择并落到选择集，返回要显示的那句话。
+    /// 命令行 <c>快速选择 …</c> 与对话框「确定」走的是**同一条**路 —— 两套实现迟早会分叉。
+    /// </summary>
+    private string ApplyQuickSelect(QuickSelectCriteria crit)
+    {
+        var pool = QuickSelectPool(crit.Scope);
+        if (pool.Count == 0) return "快速选择：候选为空(当前选择集内筛需先有选择)。";
         var snaps = QuickSelectSnapshot.FromScene(pool);
         var res = QuickSelectFilter.Apply(snaps, crit);
 
-        // ④ 命中回映到实体(Handle=下标)，过滤锁定/关闭图层，落选择集
+        // 命中回映到实体(Handle=下标)，过滤锁定/关闭图层，落选择集
         SaveSel();
         var hit = new List<SceneEntity>();
         foreach (var h in res.Handles)
@@ -8298,7 +8449,34 @@ public partial class MainWindow : Window
         if (!res.AppendToCurrentSelection) _selected.Clear();
         foreach (var en in hit) if (!_selected.Contains(en)) _selected.Add(en);
         HighlightSelection();
-        StatusMsg.Text = QuickSelectFilter.Describe(crit, hit.Count, res.Examined);
+        return QuickSelectFilter.Describe(crit, hit.Count, res.Examined);
+    }
+
+    /// <summary>对话框「预览」：只算命中数，一律不碰选择集(锁定/关闭图层同样先滤掉，免得预览数与确定后不符)。</summary>
+    private int PreviewQuickSelect(QuickSelectCriteria crit)
+    {
+        var pool = QuickSelectPool(crit.Scope);
+        if (pool.Count == 0) return 0;
+        var res = QuickSelectFilter.Apply(QuickSelectSnapshot.FromScene(pool), crit);
+        int n = 0;
+        foreach (var h in res.Handles) if (_layers.IsSelectable(pool[(int)h].LayerName)) n++;
+        return n;
+    }
+
+    // 「快速选择」对话框(原版 QSELECT 的本体; 命令行带参那条是 Kylin 另加的便捷入口)。
+    // 非模态单例, 同图层特性管理器。
+    private Views.Selection.QuickSelectWindow? _qsWin;
+    private void OpenQuickSelectDialog()
+    {
+        if (_qsWin != null) { _qsWin.Activate(); StatusMsg.Text = "快速选择对话框已在前台"; return; }
+        var w = new Views.Selection.QuickSelectWindow(
+            snapshotsFor: scope => QuickSelectSnapshot.FromScene(QuickSelectPool(scope)),
+            apply: c => { var msg = ApplyQuickSelect(c); StatusMsg.Text = msg; return msg; },
+            preview: PreviewQuickSelect);
+        _qsWin = w;
+        w.Closed += (_, _) => _qsWin = null;
+        w.Show(this);
+        StatusMsg.Text = $"快速选择：整个图形 {_scene.Count} 个对象（按 类型/特性/运算符/值 组合条件，可先「预览」）";
     }
 
     // 类型中文名 → 目录类型 id(含 Kylin 别名); 未识别返回 null。
@@ -8339,43 +8517,6 @@ public partial class MainWindow : Window
         "全部" or "所有" or "all" => QuickSelectOperator.All,
         _ => null,
     };
-
-    // 对象树选中类型 → 高亮该类型几何；选根/无 → 清除
-    private void OnObjectTreeSelect(object? sender, SelectionChangedEventArgs e)
-    {
-        if (ObjectTree.SelectedItem is TreeViewItem { Tag: string type })
-        {
-            if (type.StartsWith("mesh:"))   // 单张三角网
-            {
-                var one = _scene.Entities.OfType<MeshEntity>().FirstOrDefault(m => m.Name == type.Substring(5));
-                if (one == null) return;
-                _selected.Clear(); _selected.Add(one); HighlightSelection();
-                var bb = one.Bounds; StatusMsg.Text = $"对象树：选中三角网「{one.Name}」 {one.VertexCount} 顶点 / {one.TriangleCount} 三角 · Z {bb.minZ:0.#}~{bb.maxZ:0.#}";
-                return;
-            }
-            if (type.StartsWith("cloud:"))   // 单份点云: 选中并顺手设为「当前点云」(各算子的输入锚点)
-            {
-                var one = _scene.Entities.OfType<PointCloudEntity>().FirstOrDefault(p => p.Name == type.Substring(6));
-                if (one == null) return;
-                _selected.Clear(); _selected.Add(one); HighlightSelection();
-                PcSetCurrent(one);
-                var cb = one.Bounds;
-                StatusMsg.Text = $"对象树：选中点云「{one.Name}」 {one.PointCount:N0} 点 · Z {cb.minZ:0.#}~{cb.maxZ:0.#} · 已设为当前点云";
-                return;
-            }
-            // OFF 显示态导入(不在场景)：仅高亮其类型几何
-            if (_scene.Count == 0 && _lastImport != null && _lastImport.TypeGeometry.TryGetValue(type, out var geom))
-            { Viewport.SetHighlight(geom); return; }
-            // 实时场景：真选中该类全部实体(可编辑/看特性)
-            var sel = new List<SceneEntity>();
-            foreach (var en in _scene.Entities) if (CnOf(en) == type) sel.Add(en);
-            if (sel.Count == 0) return;
-            _selected.Clear(); _selected.AddRange(sel);
-            HighlightSelection();
-            StatusMsg.Text = $"对象树：选中 {type} × {sel.Count}";
-        }
-        // 根节点/程序刷新导致的空选择：不动 _selected(避免刷新反噬清选)
-    }
 
     // ---------- 右键上下文菜单 ----------
     private void OnCtxZoomExtents(object? s, RoutedEventArgs e) => Viewport.ZoomExtents();
@@ -8521,13 +8662,7 @@ public partial class MainWindow : Window
         DispatchRibbon(sp.Length > 0 ? $"图案填充 {ang} {sp}" : $"图案填充 {ang}");
     }
 
-    // 图案下拉：ANSI31 斜线 / ANSI37 十字 → 映射到现有 十字交叉 开关。
-    private void OnHatchPatternChanged(object? sender, SelectionChangedEventArgs e)
-    {
-        if (HatchPatternBox == null) return;
-        bool cross = HatchPatternBox.SelectedIndex == 1;
-        if (cross != _hatchCross) { _hatchCross = cross; StatusMsg.Text = $"图案填充: {(cross ? "ANSI37 十字交叉" : "ANSI31 斜线")}"; }
-    }
+    // 图案/颜色/字体 三个下拉的处理见 MainWindow.HatchFont.cs
 
     // 线型下拉 → 现有 "线型 <名>" 命令(影响新画直线/多段线)。
     private void OnLinetypeChanged(object? sender, SelectionChangedEventArgs e)
@@ -8544,6 +8679,7 @@ public partial class MainWindow : Window
     private string CurrentPrompt()
     {
         if (AskingParams) return ParamAskPrompt();      // 参数问答优先：命令跑到一半在问参数
+        if (_oneShotPick != null && _pickPrompt.Length > 0) return _pickPrompt;   // 视口拾取(取点/选线/选面)的步骤提示
         if (_tool != null) return _tool.Prompt;
         if (_editAwaitSelect) return $"{_editName}：选择对象 — 单击选取 · 按住拖动框选 · 再点取消选 · 右键确定（已选 {_selected.Count}）";
         if (_editMode != EditMode.None)
@@ -8553,7 +8689,7 @@ public partial class MainWindow : Window
         if (_gripDrag.Active) return _gripDrag.Prompt;
         if (_measure != null || _angle != null) return MeasurePrompt();   // 测距/测角按步骤提示, 见 MainWindow.MeasureJig.cs
         if (_offsetActive) return "偏移：指定要偏移的那一侧上的点";
-        if (_trimActive) return "修剪/延伸：先选边界，再点要修剪或延伸的对象（Esc 退出）";
+        if (_trimActive) return TrimPrompt();
         if (_breakActive) return _breakPts.Count == 0 ? "打断：指定第一个打断点" : "打断：指定第二个打断点";
         if (_slideActive) return _slideDragging ? "滑动多段线：拖动中…松开结束" : "滑动多段线：按住左键拖动绘制";
         if (_ttrActive) return _ttrAwaitRadius ? "圆TTR：在命令行输入半径并回车" : _ttrRef1 == null ? "圆TTR：选择第一个相切对象（直线/圆）" : "圆TTR：选择第二个相切对象";
@@ -8570,30 +8706,59 @@ public partial class MainWindow : Window
         return "";
     }
 
+    /// <summary>
+    /// 当前交互状态该用哪种光标（忠实原版 EditorStates 的 BuildViewState）：
+    ///   空闲 = 十字 + 拾取框；绘图工具/取点(jig) = 只十字；
+    ///   「选择对象 / 选线 / 选圆」 = 只拾取框 —— 即 AutoCAD 选对象时十字线收起、只剩方框；
+    ///   逐面点选(三角网) = 黄框 + 十字。顺序同 <see cref="CurrentPrompt"/>(状态互斥优先级一致)。
+    /// </summary>
+    private Controls.CadGlViewport.CursorMode CurrentCursorMode()
+    {
+        var CW = Controls.CadGlViewport.CursorMode.CrosshairWithBox;
+        var CO = Controls.CadGlViewport.CursorMode.CrosshairOnly;
+        var PB = Controls.CadGlViewport.CursorMode.PickBox;
+        if (_oneShotPick != null) return _pickCursor;                   // 形态由发起拾取处给(取点/选线/选面)
+        if (_tool != null) return CO;
+        if (_editAwaitSelect) return _editSelectFaces ? Controls.CadGlViewport.CursorMode.MeshPickBox : PB;   // ← 「选择对象」= 方框; 选面 = 黄框+十字
+        if (_editMode != EditMode.None) return CO;
+        if (_gripDrag.Active) return CO;
+        if (_measure != null || _angle != null) return CO;
+        if (_offsetActive) return CO;                                  // 偏移: 指定偏移侧的点(原版 WaitingSide)
+        if (_trimActive) return PB;                                    // 修剪 / 延伸: 点选对象 → 方框光标
+        if (_breakActive || _slideActive) return CO;
+        if (_ttrActive) return _ttrAwaitRadius ? CW : PB;              // 选相切对象 = 方框
+        if (_serActive) return _serAwaitRadius ? CW : CO;
+        if (_dimActive || _dimAngActive) return CO;
+        if (_dimRadActive) return _dimRadCircle == null ? PB : CO;     // 先选圆/圆弧 = 方框
+        if (_pathActive || _pasteBaseActive || _benchActive || _spotActive || _coordLabelActive) return CO;
+        return CW;
+    }
+
+    /// <summary>把当前状态该用的光标推给视口(拖框选期间收起中央方框)。状态一变就调, 值没变则是空操作。</summary>
+    private void SyncCursorMode() => Viewport.SetCursorMode(CurrentCursorMode(), _selBoxActive);
+
     /// <summary>提示变化时：更新命令行提示标签 + 回显到信息栏历史(灰色, 区别于 ▸ 命令行)。</summary>
     private void SyncPrompt()
     {
+        SyncCursorMode();   // 光标形态与提示同源: 状态一变(选对象/取点/空闲)就换形态
         if (CmdPrompt == null) return;
         string p = CurrentPrompt();
         if (p == _lastPrompt) return;
         _lastPrompt = p;
         CmdPrompt.Text = p.Length == 0 ? "" : p + ":";
-        if (p.Length == 0 || CmdLog == null) return;
-        CmdLog.Children.Add(new TextBlock
-        {
-            Text = "  " + p + ":", FontSize = 11, FontFamily = new FontFamily("Consolas,monospace"),
-            Foreground = Brush.Parse("#6B7280")
-        });
-        while (CmdLog.Children.Count > 100) CmdLog.Children.RemoveAt(0);
-        CmdLogScroll?.ScrollToEnd();
+        if (p.Length == 0) return;
+        AppendHistoryLine(p + ":", CmdLogPromptBrush);
     }
     private void OnCtxClearHighlight(object? s, RoutedEventArgs e) { Viewport.SetHighlight(null); Viewport.SetHighlightFaces(null); }
 
     // 对象捕捉容差：约 12px 换算到世界单位
-    private double SnapTolWorld(Avalonia.Point p)
+    private double SnapTolWorld(Avalonia.Point p) => PixelsToWorld(p, _snapTolPx);
+
+    /// <summary>屏幕上 px 个像素在 p 处对应的世界长度(2D 用; 拾取框/捕捉容差换算)。</summary>
+    private double PixelsToWorld(Avalonia.Point p, double px)
     {
         var a = Viewport.ScreenToWorld(p.X, p.Y);
-        var b = Viewport.ScreenToWorld(p.X + _snapTolPx, p.Y);
+        var b = Viewport.ScreenToWorld(p.X + px, p.Y);
         if (a == null || b == null) return 0;
         double dx = b.Value.x - a.Value.x, dy = b.Value.y - a.Value.y;
         return System.Math.Sqrt(dx * dx + dy * dy);
@@ -8603,10 +8768,12 @@ public partial class MainWindow : Window
     private static float[] SnapCross(double x, double y, double s)
     {
         const float g0 = 0.2f, g1 = 1f, g2 = 0.4f;
+        double ox = Cad.Draw.RenderOrigin.X, oy = Cad.Draw.RenderOrigin.Y;   // 同图元镶嵌：先减原点再转 float
+        float cx = (float)(x - ox), cy = (float)(y - oy);
         return new float[]
         {
-            (float)(x - s), (float)y, 0, g0, g1, g2,  (float)(x + s), (float)y, 0, g0, g1, g2,
-            (float)x, (float)(y - s), 0, g0, g1, g2,  (float)x, (float)(y + s), 0, g0, g1, g2
+            cx - (float)s, cy, 0, g0, g1, g2,  cx + (float)s, cy, 0, g0, g1, g2,
+            cx, cy - (float)s, 0, g0, g1, g2,  cx, cy + (float)s, 0, g0, g1, g2
         };
     }
 
@@ -8702,6 +8869,13 @@ public partial class MainWindow : Window
     }
 
     // 新实体归当前图层（名称 + 图层色）
+    /// <summary>副本沿用源实体的图层与颜色（夹点「复制(C)」用；不套当前图层，免得副本跟原件不同层）。</summary>
+    private static void AssignLayerKeep(SceneEntity copy, SceneEntity src)
+    {
+        copy.LayerName = src.LayerName;
+        copy.Cr = src.Cr; copy.Cg = src.Cg; copy.Cb = src.Cb;
+    }
+
     private void AssignLayer(SceneEntity e)
     {
         e.LayerName = _layers.Current.Name;
@@ -8727,7 +8901,6 @@ public partial class MainWindow : Window
     private int _snapGeomVersion;                        // 每次 InvalidateSnapGeom +1
     private bool _snapGeomBuilding;
     private float[]? _snapVertBuildingSrc;               // 正在后台建索引的源数组(引用判重)
-
 
     private SceneIndex? _sceneIdx;   // 点选/框选的图元空间索引(懒建; 场景一变就丢, 同上面几个缓存)
 
@@ -8837,39 +9010,9 @@ public partial class MainWindow : Window
     // 原「填充」走引擎命名图案库(不可见, 记录); 此为标准可见的用户定义线填充, 亦本 2D 线渲染器唯一可行形式。
     private void HatchBoundaryCmd(double angleDeg, double spacing)
     {
-        List<(double x, double y)>? bnd = null;
-        foreach (var e in _selected)
-        {
-            if (e is PolylineEntity p && p.Closed && p.Points.Count >= 3) { bnd = new List<(double, double)>(p.Points); break; }
-            if (e is RectEntity r) { bnd = new List<(double, double)> { (r.X0, r.Y0), (r.X1, r.Y0), (r.X1, r.Y1), (r.X0, r.Y1) }; break; }
-            if (e is PolygonEntity pg && pg.Sides >= 3)
-            {
-                bnd = new List<(double, double)>();
-                for (int i = 0; i < pg.Sides; i++)
-                { double a = pg.Rotation + 2 * System.Math.PI * i / pg.Sides; bnd.Add((pg.Cx + pg.Radius * System.Math.Cos(a), pg.Cy + pg.Radius * System.Math.Sin(a))); }
-                break;
-            }
-        }
+        var bnd = PickHatchBoundary(out double elev);
         if (bnd == null) { StatusMsg.Text = "图案填充：请先选中一条闭合多段线/矩形/正多边形作边界"; return; }
-
-        // 间距缺省 = 边界包围盒对角线的 1/24（约 20~30 条线）
-        if (spacing <= 0)
-        {
-            double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
-            foreach (var v in bnd) { if (v.x < minX) minX = v.x; if (v.x > maxX) maxX = v.x; if (v.y < minY) minY = v.y; if (v.y > maxY) maxY = v.y; }
-            double diag = System.Math.Sqrt((maxX - minX) * (maxX - minX) + (maxY - minY) * (maxY - minY));
-            spacing = System.Math.Max(diag / 24.0, 1e-6);
-        }
-        var lines = HatchPattern.Generate(bnd, angleDeg, spacing, _hatchCross);
-        if (lines.Count == 0) { StatusMsg.Text = "图案填充：未生成剖面线（边界过小或间距过大）"; return; }
-        BeginChange();
-        foreach (var (x1, y1, x2, y2) in lines)
-        {
-            var le = new LineEntity { X0 = x1, Y0 = y1, X1 = x2, Y1 = y2, Cr = 0.40f, Cg = 0.70f, Cb = 0.85f };
-            AssignLayer(le); _scene.Add(le);
-        }
-        RefreshScene();
-        StatusMsg.Text = $"图案填充：{lines.Count} 条剖面线（角度 {angleDeg:0.#}° 间距 {spacing:0.##}{(_hatchCross ? " 十字" : "")}）";
+        HatchFillBoundary(bnd, angleDeg, spacing, elev);   // 图案/颜色 见 MainWindow.HatchFont.cs
     }
 
     // 切换某扩展捕捉模式(交点/最近/垂足)位; 顺带确保主对象捕捉开。
@@ -8895,6 +9038,24 @@ public partial class MainWindow : Window
     };
 
     // 重绘场景（进行中的预览走独立通道，见 RefreshScenePreview）
+    /// <summary>
+    /// 定本视口的渲染局部原点（世界 XY 中心）并同步给镶嵌侧。
+    ///
+    /// 顶点是在【转 float 之前】减原点的（见 <see cref="Cad.Draw.RenderOrigin"/>），所以原点必须在
+    /// 建几何前就定下来，且每篇文档只定一次 —— 已上传的缓冲按老原点算的，中途换原点会让模型整体跑飞。
+    /// 空场景不定（退化包围盒定出来的原点没有意义），等有几何了再定。
+    /// </summary>
+    private void EnsureRenderOrigin()
+    {
+        if (!Viewport.RenderOriginSet)
+        {
+            var wb = _scene.WorldBoundsXY();
+            if (wb != null && wb[2] >= wb[0] && wb[3] >= wb[1])
+                Viewport.SetRenderOrigin((wb[0] + wb[2]) * 0.5, (wb[1] + wb[3]) * 0.5);
+        }
+        Viewport.SyncRenderOrigin();
+    }
+
     private void RefreshScene()
     {
         // 分步落 TRACE：五十万图元的图纸刷一次要好几秒, 卡在哪一步(捕捉点/细分/三角面/注记/对象树)
@@ -8902,6 +9063,7 @@ public partial class MainWindow : Window
         var swR = PitMine3D.Kylin.CrashLog.TraceOn ? System.Diagnostics.Stopwatch.StartNew() : null;
         void T(string step) { if (swR != null) PitMine3D.Kylin.CrashLog.Trace($"RefreshScene/{step} {swR.ElapsedMilliseconds}ms"); }
 
+        EnsureRenderOrigin();   // 顶点在转 float 前要减渲染局部原点, 故原点必须赶在建几何之前定
         InvalidateSnapGeom();   // 场景/图层变了 → 捕捉几何缓存作废
         _snapVerts = _scene.SnapCandidates(_layers.IsShown);   // 语义 osnap 点(端点/中点/圆心/象限)
         T("捕捉点");
@@ -8909,15 +9071,18 @@ public partial class MainWindow : Window
         T("细分+上传");
         RefreshScenePreview();
         T("预览");
-        var faces = _scene.BuildFaces(_layers.IsShown);
+        var faceRanges = new List<(int first, int count)>();
+        var faces = _scene.BuildFaces(_layers.IsShown, faceRanges);
         T("三角面/生成");
-        Viewport.SetSceneFaces(faces);
+        Viewport.SetSceneFaces(faces, faceRanges);   // 分实体区间 → 共面的网按"后加压先加"稳定显示
         T("三角面/上传");
+        Viewport.SetMaterialFaces(_scene.BuildMaterialFaces(_layers.IsShown));   // 材质面(PBR/贴图/半透)走单独通道
+        T("材质面");
         Viewport.SetSceneCloud(_scene.BuildCloudPoints(_layers.IsShown), PcPointPixels());   // 点云(GL_POINTS)
         T("点云");
         Viewport.SetBillboards(_scene.BuildBillboards(_layers.IsShown));   // 注记始终朝屏幕(原版 screenFacing)
         T("注记");
-        if (_scene.Count != _lastSceneCount) { _lastSceneCount = _scene.Count; RefreshObjectTree(); }
+        if (_scene.Count != _lastSceneCount) { _lastSceneCount = _scene.Count; RefreshObjectManager(); }
         T("对象树");
     }
 
@@ -8928,6 +9093,7 @@ public partial class MainWindow : Window
     /// </summary>
     private void RefreshScenePreview()
     {
+        Viewport.SyncRenderOrigin();   // 预览几何也走镶嵌, 原点要对上本视口(多标签各有各的原点)
         var list = new List<float>();
         AppendScenePreview(list);
         Viewport.SetPreviewGeometry(list.Count == 0 ? null : list.ToArray());
@@ -8947,25 +9113,52 @@ public partial class MainWindow : Window
             var pv = new PolylineEntity { Points = _slidePts, Cr = 0.55f, Cg = 0.62f, Cb = 0.70f };
             pv.Tessellate(list);
         }
-        // 编辑即时预览(AutoCAD 式拖拽跟随)：选中实体按「已取点 + 光标」变换后以预览色叠加。
-        if (_cursorWorld != null && _selected.Count > 0 && BuildEditPreview(_cursorWorld.Value) is Affine2 em)
+        // 编辑即时预览(AutoCAD 式拖拽跟随)，两件东西一起画 —— 同原版 EditCommandState::BuildViewState：
+        //   ① 拖拽虚线: 基点 → 光标(镜像时它就是镜像轴);
+        //   ② 幽灵: 选中实体按「已取点 + 光标」变换后以预览色叠加(重实体已降级成抽稀替身)。
+        if (_cursorWorld != null && _editMode != EditMode.None && !_editAwaitSelect && _editPts.Count > 0)
         {
-            foreach (var e in _selected)
+            var cur = _cursorWorld.Value;
+            if (_selected.Count > 0 && BuildEditPreview(cur) is Affine2 em)
             {
-                var g = e.Apply(em);
-                g.Cr = 0.55f; g.Cg = 0.62f; g.Cb = 0.70f;   // 预览灰蓝
-                g.Tessellate(list);
+                // 备料只在"取点数变了"时重来: 拖拽期间不再碰实体几何, 每帧只按变换搬点。
+                if (_editPreview == null || _editPreviewPts != _editPts.Count)
+                { _editPreview = Cad.Draw.DragPreview.Build(_selected); _editPreviewPts = _editPts.Count; }
+                _editPreview.Append(list, em, 0.55f, 0.62f, 0.70f);   // 预览灰蓝
             }
-            if (_editMode == EditMode.Mirror && _editPts.Count == 1)   // 镜像轴线也预览
-                new LineEntity { X0 = _editPts[0].x, Y0 = _editPts[0].y, X1 = _cursorWorld.Value.x, Y1 = _cursorWorld.Value.y, Cr = 0.85f, Cg = 0.6f, Cb = 0.3f }.Tessellate(list);
+            var b0 = _editPts[0];
+            new LineEntity { X0 = b0.x, Y0 = b0.y, X1 = cur.x, Y1 = cur.y, Dash = RubberDash(), Cr = 1f, Cg = 1f, Cb = 1f }.Tessellate(list);
         }
     }
 
-    // 点选：命中则单选(再点取消)，未命中清空
-    private void PickAt(Avalonia.Point rel)
+    /// <summary>橡皮筋虚线的画/空长度(世界单位)：按当前视口宽度取，免得放大后成一条实线、缩小后全是空。</summary>
+    private double[] RubberDash()
+    {
+        var vb = CurrentViewBounds();
+        double w = vb != null ? System.Math.Max(vb[2] - vb[0], vb[3] - vb[1]) : 100;
+        double d = System.Math.Max(w / 120.0, 1e-6);
+        return new[] { d, d };
+    }
+
+    /// <summary>指针事件的修饰键 → 选择集语义（Ctrl 加/减选，Shift 减选；同时按下时 Ctrl 优先）。</summary>
+    private static SelectionOps.Modifier SelModifier(KeyModifiers km)
+        => km.HasFlag(KeyModifiers.Control) ? SelectionOps.Modifier.Ctrl
+         : km.HasFlag(KeyModifiers.Shift) ? SelectionOps.Modifier.Shift : SelectionOps.Modifier.None;
+
+    // 点选(忠实原 Picking::DoPointPick)：普通点击=替换为命中者、点空清空；Ctrl+点击=切换(加选/减选)、Ctrl 点空保持；
+    // 编辑命令「选择对象」阶段一律累加切换。
+    private void PickAt(Avalonia.Point rel, SelectionOps.Modifier mod = SelectionOps.Modifier.None)
     {
         SceneEntity? hit;
-        if (!Viewport.Is2DView)
+        if (_editAwaitSelect && _editSelectFaces)
+        {
+            // 「选择对象」要的是三角网面：只在网面上找、按"点落在面内"判(同命令里的黄框点选), 点/线一概不理
+            var w = Viewport.ScreenToWorld(rel.X, rel.Y);
+            SaveSel();
+            hit = PickFaceAt(_scene.Entities.OfType<MeshEntity>().Where(m => m.Visible && _layers.IsSelectable(m.LayerName)),
+                             rel.X, rel.Y, w?.x ?? double.NaN, w?.y ?? double.NaN);
+        }
+        else if (!Viewport.Is2DView)
         {
             // 3D：Z=0 平面反投影不代表实体位置(模型可在千米高程), 改屏幕空间点选(边线像素距离 + 三角网面命中取最前)
             SaveSel();
@@ -8978,13 +9171,13 @@ public partial class MainWindow : Window
             SaveSel();
             hit = PickWorld2D(w.Value.x, w.Value.y, SnapTolWorld(rel));
         }
-        // 编辑选择对象阶段: 累加/减选(不清空); 空闲态: 单选替换。
-        if (hit == null) { if (!_editAwaitSelect) _selected.Clear(); }
-        else if (_selected.Contains(hit)) _selected.Remove(hit);
-        else { if (!_editAwaitSelect) _selected.Clear(); _selected.Add(hit); }
+        SelectionOps.ApplyPick(_selected, hit, mod, _editAwaitSelect);
         HighlightSelection();
         if (_editAwaitSelect) StatusMsg.Text = $"{_editName}：选择对象（右键确定，已选 {_selected.Count}）";
-        else StatusMsg.Text = _selected.Count > 0 ? $"已选 {_selected.Count} 个实体" : "未选中";
+        else if (mod == SelectionOps.Modifier.Ctrl)
+            StatusMsg.Text = hit == null ? $"Ctrl 点空：保持已选 {_selected.Count} 个"
+                           : $"已选 {_selected.Count} 个实体（Ctrl 点选：{(_selected.Contains(hit) ? "加选" : "减选")}）";
+        else StatusMsg.Text = _selected.Count > 0 ? $"已选 {_selected.Count} 个实体（Ctrl+点选 加/减选）" : "未选中";
     }
 
     /// <summary>
@@ -9007,6 +9200,7 @@ public partial class MainWindow : Window
     // 选集变化入口：重建夹点表(旧夹点选择必然失效，同原版 Rebuild) → 重画高亮
     private void HighlightSelection()
     {
+        Viewport.SyncRenderOrigin();   // 高亮几何也走镶嵌, 原点要对上本视口
         UpdatePropertyPanel();
         _grips.Rebuild(_selected);
         _gripHover = -1;
@@ -9018,7 +9212,7 @@ public partial class MainWindow : Window
     // 只重画高亮 + 夹点方块(夹点选择/悬停变化时用，不动夹点表)
     private void RedrawHighlight()
     {
-        if (_selected.Count == 0) { Viewport.SetHighlight(null); Viewport.SetHighlightFaces(null); return; }
+        if (_selected.Count == 0) { _hlEntGeom = null; Viewport.SetHighlight(null); Viewport.SetHighlightFaces(null); return; }
         // 三角网：表面盖一层高亮色面 + 轮廓边线(大网省边线, 靠高亮色面即可辨识);
         // 其它实体：自身线框重着色。高亮色取青(与黄色地形/深色背景都拉得开)。
         const float hr = 0.15f, hg = 0.95f, hb = 1.0f;
@@ -9036,27 +9230,47 @@ public partial class MainWindow : Window
             else if (e is PointCloudEntity pcSel) pcSel.TessellateBoundsBox(ent);
             else e.TessellatePick(ent);   // 文字走轮廓: 真字体下 Tessellate 是空的, 选中了看不见高亮
         }
-        var o = new List<float>(Controls.CadGlViewport.Recolor(ent.ToArray(), hr, hg, hb));   // 实体=高亮青；夹点保留自身配色
+        _hlEntGeom = Controls.CadGlViewport.Recolor(ent.ToArray(), hr, hg, hb);   // 实体=高亮青；夹点保留自身配色
+        _hlEntOrigin = (Cad.Draw.RenderOrigin.X, Cad.Draw.RenderOrigin.Y);
         Viewport.SetHighlightFaces(faces.Count > 0 ? faces.ToArray() : null);
+        var o = new List<float>(_hlEntGeom);
         if (_gripsOn) AppendGripTable(o);
         AppendGizmo(o);   // 三轴变换手柄画在最上层(与夹点同通道), 见 MainWindow.Gizmo.cs
         Viewport.SetHighlight(o.ToArray(), recolor: false);
     }
 
-    // 夹点方块配色忠实原版 Viewport.cpp：冷=蓝、热(悬停)=亮蓝；多选选中=品红 + 白描边 + 大一号(拖任一个整组动，"要动几个点"一眼可见)
+    // 上次 RedrawHighlight 镶嵌好的实体高亮线(已重着色, 不含夹点)及其渲染原点 —— 视角变了只需重画夹点时直接复用,
+    // 免得转一下视图就把选中的实体(可能是几十万点的等高线)重新镶嵌一遍。
+    private float[]? _hlEntGeom;
+    private (double x, double y) _hlEntOrigin;
+    private long _gripViewRefreshTick;   // 上次因视角变化重画夹点的时刻(Stopwatch 计时), 旋转拖拽中限频用
+
+    /// <summary>
+    /// 视角/比例变了之后重画夹点(尺寸按新视角重算), 实体高亮线复用缓存。
+    /// force=false 走限频(旋转拖拽每帧都来, 几千个夹点 × 每个几十条扫描线, 逐帧全量重传太浪费), 收尾时 force=true 算准。
+    /// </summary>
+    private void RefreshGripsForView(bool force)
+    {
+        if (!_gripsOn || _selected.Count == 0 || _grips.Count == 0) return;
+        long now = System.Diagnostics.Stopwatch.GetTimestamp();
+        if (!force && (now - _gripViewRefreshTick) < System.Diagnostics.Stopwatch.Frequency / 15) return;   // ≥ 66ms 一次
+        _gripViewRefreshTick = now;
+        if (_hlEntGeom == null || _hlEntOrigin != (Cad.Draw.RenderOrigin.X, Cad.Draw.RenderOrigin.Y)) { RedrawHighlight(); return; }
+        var o = new List<float>(_hlEntGeom);
+        AppendGripTable(o);
+        AppendGizmo(o);   // 手柄尺寸也随视角变, 一起重画
+        Viewport.SetHighlight(o.ToArray(), recolor: false);
+    }
+
+    // 夹点方块配色同 AutoCAD：冷(未选)=蓝、暖(悬停)=绿、热(已选)=红，三态同尺寸、都是实心方块。
     private void AppendGripTable(List<float> o)
     {
-        double h = GripSize();
         for (int i = 0; i < _grips.Count; i++)
         {
             var g = _grips.Grips[i];
-            bool hot = i == _gripHover;
-            if (_grips.IsSelected(i))
-            {
-                AppendGripSquare(o, g.X, g.Y, h * 1.8, 1f, 1f, 1f);
-                AppendGripSquare(o, g.X, g.Y, h * 1.4, hot ? 1f : 0.95f, hot ? 0.45f : 0.05f, hot ? 0.95f : 0.75f);
-            }
-            else AppendGripSquare(o, g.X, g.Y, h, 0f, hot ? 0.8f : 0.5f, 1f);
+            var (r, gg, b) = GripGlyph.Color(_grips.IsSelected(i), i == _gripHover);
+            double z = g.Owner.GripZ(g.Index);
+            AppendGripSquare(o, g.X, g.Y, GripHalf(g.X, g.Y, z), r, gg, b, z);   // 方块落在节点自己的高程上, 尺寸按该处深度折算
         }
     }
 
@@ -9066,13 +9280,20 @@ public partial class MainWindow : Window
         var prev = _gripDrag.Preview(c.x, c.y);
         var ent = new List<float>();
         var o = new List<float>();
-        double h = GripSize();
         foreach (var e in _selected)
         {
             var hit = prev.Find(t => ReferenceEquals(t.old, e));
             var shown = hit.moved ?? e;
-            shown.Tessellate(ent);
-            if (_gripsOn) foreach (var g in shown.Grips()) AppendGripSquare(o, g.x, g.y, h);
+            shown.TessellatePreview(ent);   // 走预览镶嵌: 着色档三角网/点云的 Tessellate 是空的, 照搬就成了"拖着走却看不见"
+            if (_gripsOn)
+            {
+                var gs = shown.Grips();
+                for (int gi = 0; gi < gs.Count; gi++)
+                {
+                    double z = shown.GripZ(gi);
+                    AppendGripSquare(o, gs[gi].x, gs[gi].y, GripHalf(gs[gi].x, gs[gi].y, z), z: z);   // 同上: 落在节点自己的高程
+                }
+            }
         }
         o.InsertRange(0, Controls.CadGlViewport.Recolor(ent.ToArray(), 1f, 0.9f, 0.2f));
         Viewport.SetHighlight(o.ToArray(), recolor: false);
@@ -9084,6 +9305,7 @@ public partial class MainWindow : Window
         {
             GripMode.Rotate => $"角度 {v * 180 / System.Math.PI:0.0}°",
             GripMode.Scale => $"比例 {v:0.000}",
+            GripMode.Mirror => $"镜像线 {v * 180 / System.Math.PI:0.0}°",
             _ => $"距离 {v:0.00}",
         };
         ((TextBlock)tip.Child!).Text = $"{_gripDrag.Prompt} {val}";
@@ -9095,25 +9317,80 @@ public partial class MainWindow : Window
     // 夹点拖拽落地：整组一次 Replace + 一次 BeginChange(= 原版 AcDbDragGripsCommand 一步 Undo)
     private void CommitGripDrag((double x, double y) pt)
     {
+        // 「基点(B)」等着新基点: 这一点不落地, 只把变换基准挪过去(同 AutoCAD)
+        if (_gripAwaitBase)
+        {
+            _gripAwaitBase = false;
+            _gripDrag.SetBase(pt.x, pt.y);
+            StatusMsg.Text = $"夹点：基点已改为 ({pt.x:0.###}, {pt.y:0.###})";
+            SyncPrompt();
+            return;
+        }
+
         var res = _gripDrag.Preview(pt.x, pt.y);
         string mode = GripDrag.ModePrompt(_gripDrag.Mode);
+        bool copy = _gripCopy; _gripCopy = false;
         _gripDrag.Cancel(); _snapVertsDrag = null;
         if (res.Count > 0)
         {
             BeginChange();
             foreach (var (old, moved) in res)
             {
+                if (copy) { AssignLayerKeep(moved, old); _scene.Add(moved); continue; }   // 复制: 原实体不动, 只加副本
                 _scene.Replace(old, moved);
                 int k = _selected.IndexOf(old);
                 if (k >= 0) _selected[k] = moved;
             }
             RefreshScene();
-            StatusMsg.Text = $"夹点编辑完成 {mode}（{res.Count} 个实体）";
+            StatusMsg.Text = copy
+                ? $"夹点编辑完成 {mode} · 复制（新增 {res.Count} 个副本，原实体未动）"
+                : $"夹点编辑完成 {mode}（{res.Count} 个实体）";
         }
         else StatusMsg.Text = "夹点：该夹点不支持此操作，未改变";
         HighlightSelection();
         HideDragTip();
     }
+
+    /// <summary>
+    /// 夹点拖拽中在命令行键入的选项关键字（同 AutoCAD 的
+    /// <c>[基点(B)/复制(C)/放弃(U)/参照(R)/退出(X)]</c>）。认领了返回 true。
+    ///
+    /// 复制(C)：本次落地后不动原实体、只留一份变换后的副本 —— AutoCAD 的复制模式可连点多份，
+    /// 这里落一份即退出复制态（一次一份，够用且不会误连出一串）。
+    /// </summary>
+    private bool TryGripKeyword(string typed)
+    {
+        if (!_gripDrag.Active || string.IsNullOrWhiteSpace(typed)) return false;
+        switch (typed.Trim().ToUpperInvariant())
+        {
+            case "X": case "EXIT": case "退出":
+                CancelGripDrag();
+                StatusMsg.Text = "夹点：已退出";
+                return true;
+            case "U": case "UNDO": case "放弃":
+                CancelGripDrag();
+                DoUndo();                                   // 放弃 = 回退上一步(同 AutoCAD 夹点提示下的 U)
+                return true;
+            case "C": case "COPY": case "复制":
+                _gripCopy = true;
+                StatusMsg.Text = $"{_gripDrag.Prompt}  · 复制：本次落点将新建副本、原实体保持不动";
+                SyncPrompt();
+                return true;
+            case "B": case "BASE": case "基点":
+                _gripAwaitBase = true;
+                StatusMsg.Text = "夹点：指定新的基点（点视口或键入坐标）";
+                return true;
+            case "R": case "REFERENCE": case "参照":
+                if (_gripDrag.Mode is GripMode.Rotate or GripMode.Scale)
+                { StatusMsg.Text = "夹点：参照(R) 尚未接入，请直接指定角度/比例"; return true; }
+                return false;
+            default:
+                return false;
+        }
+    }
+
+    private bool _gripCopy;         // 夹点「复制(C)」：本次落地留副本, 原实体不动
+    private bool _gripAwaitBase;    // 夹点「基点(B)」：下一个点用作新的变换基点
 
     // 夹点拖拽取消：实体从未被改(预览式)，只清状态并恢复高亮
     private void CancelGripDrag()
@@ -9155,20 +9432,25 @@ public partial class MainWindow : Window
     }
 
     /// <summary>特性面板的分组标题行(常规/几何/选择/文档/视图)。</summary>
-    private static Control PropGroupHeader(string text) => new Border
+    private static Control PropGroupHeader(string text)
     {
-        Margin = new Thickness(0, 6, 0, 2),
-        Padding = new Thickness(6, 2, 6, 2),
-        Background = Brush.Parse("#EEF1F5"),
-        Child = new TextBlock { Text = text, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = Brush.Parse("#3A424C") },
-    };
+        var tb = new TextBlock { Text = text, FontSize = 11, FontWeight = FontWeight.SemiBold };
+        ThemeBind(tb, TextBlock.ForegroundProperty, "Theme.Text.Body");
+        var b = new Border { Margin = new Thickness(0, 6, 0, 2), Padding = new Thickness(6, 2, 6, 2), Child = tb };
+        ThemeBind(b, Border.BackgroundProperty, "Theme.Ribbon.Background");
+        return b;
+    }
 
     // 可编辑特性行: 值为 TextBox, 回车/失焦提交 → WithEdited 重建实体并替换。
+    // 「颜色」一行例外 —— 给取色器而不是文本框(同原版: 属性面板的颜色属性由 EntityColorPicker 编辑)。
     private Control EditablePropRow(SceneEntity ent, string label, string value)
     {
+        if (label == "颜色") return ColorPropRow(ent);
         var g = new Grid { ColumnDefinitions = new ColumnDefinitions("92,*"), Margin = new Thickness(6, 2, 6, 2) };
-        var l = new TextBlock { Text = label, FontSize = 11, Foreground = Brush.Parse("#6A727C"), VerticalAlignment = VerticalAlignment.Center };
-        var tb = new TextBox { Text = value, FontSize = 11, Padding = new Thickness(3, 1, 3, 1), MinHeight = 0, Background = Brush.Parse("#FBFCFD"), BorderBrush = Brush.Parse("#DCDFE4") };
+        var l = new TextBlock { Text = label, FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
+        ThemeBind(l, TextBlock.ForegroundProperty, "Theme.Text.Muted");
+        var tb = new TextBox { Text = value, FontSize = 11, Padding = new Thickness(3, 1, 3, 1), MinHeight = 0 };
+        ThemeBind(tb, TextBox.BackgroundProperty, "Theme.Input.Background"); ThemeBind(tb, TextBox.BorderBrushProperty, "Theme.Panel.Border");
         Grid.SetColumn(l, 0); Grid.SetColumn(tb, 1);
         g.Children.Add(l); g.Children.Add(tb);
 
@@ -9189,34 +9471,54 @@ public partial class MainWindow : Window
         return g;
     }
 
+    /// <summary>特性面板的「颜色」行：取色器(随层 / ACI 色板 / 更多颜色…)，选定即改选中实体。</summary>
+    private Control ColorPropRow(SceneEntity ent)
+    {
+        var g = new Grid { ColumnDefinitions = new ColumnDefinitions("92,*"), Margin = new Thickness(6, 2, 6, 2) };
+        var l = new TextBlock { Text = "颜色", FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
+        ThemeBind(l, TextBlock.ForegroundProperty, "Theme.Text.Muted");
+        var lay = _layers.Get(ent.LayerName) ?? _layers.Current;
+        var pick = new Controls.EntityColorPicker { Name = "PropColorPick", VerticalAlignment = VerticalAlignment.Center };
+        pick.SetValue((ent.Cr, ent.Cg, ent.Cb), (lay.Cr, lay.Cg, lay.Cb));
+        pick.ColorCommitted += (_, rgb) =>
+        {
+            if (IsLayerLocked(ent)) { StatusMsg.Text = $"特性编辑：图层「{ent.LayerName}」已锁定，未修改"; return; }
+            var c = rgb ?? LayerColorOf(ent);
+            var edited = Cad.Draw.EntityProperties.WithEdited(ent, "颜色", AciPalette.Hex(c.r, c.g, c.b));
+            if (edited == null) { StatusMsg.Text = "特性编辑：颜色未能写入"; return; }
+            BeginChange();
+            _scene.Replace(ent, edited);
+            _selected.Clear(); _selected.Add(edited);
+            RefreshScene(); HighlightSelection(); UpdatePropertyPanel();
+            StatusMsg.Text = $"特性编辑：颜色 → {(rgb == null ? "随层" : AciPalette.DisplayName(c.r, c.g, c.b))}";
+        };
+        Grid.SetColumn(l, 0); Grid.SetColumn(pick, 1);
+        g.Children.Add(l); g.Children.Add(pick);
+        return g;
+    }
+
     private static Control PropRow(string label, string value)
     {
         var g = new Grid { ColumnDefinitions = new ColumnDefinitions("92,*"), Margin = new Thickness(6, 2, 6, 2) };
-        var l = new TextBlock { Text = label, FontSize = 11, Foreground = Brush.Parse("#6A727C") };
-        var v = new TextBlock { Text = value, FontSize = 11, Foreground = Brush.Parse("#2A2F36"), TextWrapping = TextWrapping.Wrap };
+        var l = new TextBlock { Text = label, FontSize = 11 };
+        var v = new TextBlock { Text = value, FontSize = 11, TextWrapping = TextWrapping.Wrap };
+        ThemeBind(l, TextBlock.ForegroundProperty, "Theme.Text.Muted"); ThemeBind(v, TextBlock.ForegroundProperty, "Theme.Text.Body");
         Grid.SetColumn(l, 0); Grid.SetColumn(v, 1);
         g.Children.Add(l); g.Children.Add(v);
         return g;
     }
 
-    // 夹点方块（小正方形轮廓，蓝色）
-    private static void AppendGripSquare(List<float> o, double cx, double cy, double h, float r = 0.30f, float g = 0.62f, float b = 1.0f)
-    {
-        void Seg(double x0, double y0, double x1, double y1)
-        {
-            o.Add((float)x0); o.Add((float)y0); o.Add(0); o.Add(r); o.Add(g); o.Add(b);
-            o.Add((float)x1); o.Add((float)y1); o.Add(0); o.Add(r); o.Add(g); o.Add(b);
-        }
-        Seg(cx - h, cy - h, cx + h, cy - h); Seg(cx + h, cy - h, cx + h, cy + h);
-        Seg(cx + h, cy + h, cx - h, cy + h); Seg(cx - h, cy + h, cx - h, cy - h);
-    }
+    // 夹点方块（AutoCAD 样式：实心方块 + 压深描边）画法在 Cad/Draw/GripGlyph.cs，纯几何、有回归。
+    // z 必须给图元自己的高程, 否则三维视图里方块会飘离节点。
+    private static void AppendGripSquare(List<float> o, double cx, double cy, double h,
+                                        float r = 0.10f, float g = 0.45f, float b = 0.95f, double z = 0)
+        => GripGlyph.Append(o, cx, cy, h, r, g, b, z);
 
-    // 夹点世界半尺寸（约 5px 换算）
-    private double GripSize()
-    {
-        double w = ViewportHost.Bounds.Width, h = ViewportHost.Bounds.Height;
-        return SnapTolWorld(new Avalonia.Point(w / 2, h / 2)) * 0.45;
-    }
+    // 夹点世界半边长：固定屏幕像素(GripGlyph.HalfSizePx), 按**该夹点自己所在位置**的"每像素世界长度"折算。
+    // 旧法拿屏幕中心在 Z=0 平面上的反投影当比例: 图元一有标高(等高线/台阶线动辄上千米)、视角一斜, Z=0 交点
+    // 就跑到几公里外, 换算出的方块比该有的大好几倍, 近处节点连成一条粗蓝带 —— 用户看到的"节点显示尺寸太大"。
+    // 透视下每个夹点按各自深度算, 才能像原版那样在屏幕上恒定大小。
+    private double GripHalf(double x, double y, double z) => Viewport.WorldPerPixelAt(x, y, z) * GripGlyph.HalfSizePx;
 
     // 框选选框(世界坐标 P3_C3, 交叉=蓝/窗口=绿)
     private float[] BoxRect(Avalonia.Point a, Avalonia.Point b, bool crossing)
@@ -9229,47 +9531,59 @@ public partial class MainWindow : Window
         if (c0 == null || c1 == null || c2 == null || c3 == null) return System.Array.Empty<float>();
         float r = 0.4f, g = crossing ? 0.7f : 0.95f, bl = crossing ? 1.0f : 0.5f;
         var o = new List<float>();
+        double ox = Cad.Draw.RenderOrigin.X, oy = Cad.Draw.RenderOrigin.Y;   // 同图元镶嵌：先减原点再转 float
         void Seg((double x, double y, double z) p, (double x, double y, double z) q)
         {
-            o.Add((float)p.x); o.Add((float)p.y); o.Add((float)p.z); o.Add(r); o.Add(g); o.Add(bl);
-            o.Add((float)q.x); o.Add((float)q.y); o.Add((float)q.z); o.Add(r); o.Add(g); o.Add(bl);
+            o.Add((float)(p.x - ox)); o.Add((float)(p.y - oy)); o.Add((float)p.z); o.Add(r); o.Add(g); o.Add(bl);
+            o.Add((float)(q.x - ox)); o.Add((float)(q.y - oy)); o.Add((float)q.z); o.Add(r); o.Add(g); o.Add(bl);
         }
         Seg(c0.Value, c1.Value); Seg(c1.Value, c2.Value); Seg(c2.Value, c3.Value); Seg(c3.Value, c0.Value);
         return o.ToArray();
     }
 
-    // 框选：窗口选(左→右,全含)/交叉选(右→左,相交或含)
-    private void BoxSelect(Avalonia.Point a, Avalonia.Point b)
+    // 框选(忠实原 Picking::UpdateBoxSelection)：窗口选(左→右,全含)/交叉选(右→左,相交或含)；
+    // 普通=替换，Ctrl=并入，Shift=剔除；编辑选择对象阶段一律并入。
+    // 3D 未开「选择模式」时 Shift+左键本身就是框选的触发键(否则左键=轨道), 此时 Shift 不再兼作剔除。
+    private void BoxSelect(Avalonia.Point a, Avalonia.Point b, SelectionOps.Modifier mod = SelectionOps.Modifier.None)
     {
         bool crossing = b.X < a.X;
+        if (mod == SelectionOps.Modifier.Shift && !Viewport.Is2DView && !_selectMode) mod = SelectionOps.Modifier.None;
         SaveSel();
-        if (!_editAwaitSelect) _selected.Clear();   // 编辑选择阶段累加, 空闲态替换
-        if (!Viewport.Is2DView)
+        var matched = new List<SceneEntity>();
+        bool screenSpace = !Viewport.Is2DView;
+        if (screenSpace)
         {
             // 3D：透视下 Z=0 平面反投影不代表实体位置, 改在屏幕空间判定(实体边线投影后做窗口/交叉测试)
             var proj = Viewport.WorldToScreenProjector();
             foreach (var en in _scene.Entities)
             {
                 if (!en.Visible || !_layers.IsSelectable(en.LayerName)) continue;
-                if (SelectionBox.MatchScreen(en, a.X, a.Y, b.X, b.Y, crossing, proj) && !_selected.Contains(en)) _selected.Add(en);
+                if (SelectionBox.MatchScreen(en, a.X, a.Y, b.X, b.Y, crossing, proj)) matched.Add(en);
             }
-            HighlightSelection();
-            StatusMsg.Text = _selected.Count > 0 ? $"框选 {_selected.Count} 个（{(crossing ? "交叉" : "窗口")}，3D 屏幕空间）" : "框选：未选中";
-            return;
         }
-        var wa = Viewport.ScreenToWorld(a.X, a.Y);
-        var wb = Viewport.ScreenToWorld(b.X, b.Y);
-        if (wa == null || wb == null) return;
-        double minX = System.Math.Min(wa.Value.x, wb.Value.x), maxX = System.Math.Max(wa.Value.x, wb.Value.x);
-        double minY = System.Math.Min(wa.Value.y, wb.Value.y), maxY = System.Math.Max(wa.Value.y, wb.Value.y);
-        // 只判"包围盒与选框相交"的那些图元 —— 全场景逐个细分再判框, 50 万图元要 130+ ms, 框一次就顿一下
-        foreach (var en in SceneIdx().Query(minX, minY, maxX, maxY))
+        else
         {
-            if (!en.Visible || !_layers.IsSelectable(en.LayerName)) continue;
-            if (SelectionBox.Match(en, minX, minY, maxX, maxY, crossing) && !_selected.Contains(en)) _selected.Add(en);
+            var wa = Viewport.ScreenToWorld(a.X, a.Y);
+            var wb = Viewport.ScreenToWorld(b.X, b.Y);
+            if (wa == null || wb == null) return;
+            double minX = System.Math.Min(wa.Value.x, wb.Value.x), maxX = System.Math.Max(wa.Value.x, wb.Value.x);
+            double minY = System.Math.Min(wa.Value.y, wb.Value.y), maxY = System.Math.Max(wa.Value.y, wb.Value.y);
+            // 只判"包围盒与选框相交"的那些图元 —— 全场景逐个细分再判框, 50 万图元要 130+ ms, 框一次就顿一下
+            foreach (var en in SceneIdx().Query(minX, minY, maxX, maxY))
+            {
+                if (!en.Visible || !_layers.IsSelectable(en.LayerName)) continue;
+                if (SelectionBox.Match(en, minX, minY, maxX, maxY, crossing)) matched.Add(en);
+            }
         }
+        SelectionOps.ApplyBox(_selected, matched, mod, _editAwaitSelect);
         HighlightSelection();
-        StatusMsg.Text = _selected.Count > 0 ? $"框选 {_selected.Count} 个（{(crossing ? "交叉" : "窗口")}）" : "框选：未选中";
+        string how = (crossing ? "交叉" : "窗口") + (screenSpace ? "，3D 屏幕空间" : "");
+        StatusMsg.Text = mod switch
+        {
+            SelectionOps.Modifier.Ctrl => $"框选加选 {matched.Count} 个 → 共 {_selected.Count} 个（{how}）",
+            SelectionOps.Modifier.Shift => $"框选减选 {matched.Count} 个 → 剩 {_selected.Count} 个（{how}）",
+            _ => _selected.Count > 0 ? $"框选 {_selected.Count} 个（{how}）" : "框选：未选中",
+        };
     }
 
     private void DeleteSelected()
@@ -9471,7 +9785,7 @@ public partial class MainWindow : Window
           + "• 导入的显示态几何（线框 / 倾斜摄影通道）—— ⚠ 不可撤销\n"
           + "• 全部图层（只保留默认层 \"0\"）—— ⚠ 不进 Undo 栈；撤销找回实体时，它们用到的图层会按实体颜色补回\n\n"
           + "点云等其它模块数据不受影响。");
-        if (!go) { EditEcho("> ERASEALL (已取消)"); return; }
+        if (!go) { EditEcho("ERASEALL (已取消)"); return; }
 
         int removed = _scene.Entities.Count;
         if (removed > 0)
@@ -9508,16 +9822,15 @@ public partial class MainWindow : Window
             if (name != "0" && _layers.Remove(name)) layersRemoved++;
 
         PopulateDrawingLayers();
-        RefreshObjectTree();
         RefreshScene();
 
         string blkPart = blocksRemoved > 0 ? $" + 块体模型 {blocksRemoved} 个" : "";
         string impPart = hadImported ? " + 导入显示几何" : "";
         string lyrPart = layersRemoved > 0 ? $" + 图层 {layersRemoved} 个" : "";
         if (removed > 0 || blocksRemoved > 0 || hadImported || layersRemoved > 0)
-            EditEcho($"> ERASEALL (清空视图: 删除 {removed} 个实体{blkPart}{impPart}{lyrPart})", EchoLevel.Success);
+            EditEcho($"ERASEALL (清空视图: 删除 {removed} 个实体{blkPart}{impPart}{lyrPart})", EchoLevel.Success);
         else
-            EditEcho("> ERASEALL (视图已为空, 无实体可删除)", EchoLevel.Warn);
+            EditEcho("ERASEALL (视图已为空, 无实体可删除)", EchoLevel.Warn);
     }
 
     private void ClrMark()   // 清理标记 / CLRMARK：清高亮/捕捉标记
@@ -9870,6 +10183,7 @@ public partial class MainWindow : Window
         var (cx, cy) = ViewCenterWorld();
         var pts = RampCenterlines.Spiral(cx, cy, 0, radius: 50, startAngleDeg: 0, turns: 2, ccw: true, gradePct: 8);
         if (pts.Count < 2) { StatusMsg.Text = "螺旋斜坡道：参数无效"; return; }
+        RememberRouteForLanding(new[] { Flatten3(pts) }, roadWidth: 0, gradePct: 8, source: "螺旋坑线");
         var pl = new PolylineEntity { Cr = 0.30f, Cg = 0.95f, Cb = 0.95f };
         foreach (var (x, y, _) in pts) pl.Points.Add((x, y));
         BeginChange();
@@ -9885,6 +10199,7 @@ public partial class MainWindow : Window
         var pts = RampCenterlines.Switchback(sx, sy, 0, azimuthDeg: 0, turnSide: +1, legs: 3,
             legLength: 100, gradePct: 8, curveGradePct: 4, radius: 20);
         if (pts.Count < 2) { StatusMsg.Text = "折返斜坡道：参数无效"; return; }
+        RememberRouteForLanding(new[] { Flatten3(pts) }, roadWidth: 0, gradePct: 8, source: "折返坑线");
         var pl = new PolylineEntity { Cr = 0.95f, Cg = 0.55f, Cb = 0.20f };
         foreach (var (x, y, _) in pts) pl.Points.Add((x, y));
         BeginChange();
@@ -9905,6 +10220,7 @@ public partial class MainWindow : Window
         if (tk.Length >= 4) double.TryParse(tk[3], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out az);
         var pts = RampCenterlines.Straight(sx, sy, 0, az, grade, len);
         if (pts.Count < 2) { StatusMsg.Text = "直线斜坡道：参数无效(纵坡/长度需>0)"; return; }
+        RememberRouteForLanding(new[] { Flatten3(pts) }, roadWidth: 0, gradePct: grade, source: "直线斜坡道");
         var pl = new PolylineEntity { Cr = 0.55f, Cg = 0.85f, Cb = 0.35f, LayerName = "直线斜坡道" };
         foreach (var (x, y, _) in pts) pl.Points.Add((x, y));
         BeginChange(); _scene.Add(pl); RefreshScene(); Viewport.ZoomExtents();
@@ -9959,6 +10275,9 @@ public partial class MainWindow : Window
 
         var line = new PolylineEntity { Cr = 0.95f, Cg = 0.85f, Cb = 0.30f, LayerName = "运输坑线_预览" };
         foreach (var (x, y, _) in rr.Centerline) line.Points.Add((x, y));
+        // ★ 三维中线进落地缓存（原版 _lastRouteCenterlines）：图上那条预览线是二维的，
+        //   【坑线落地】要的是带 Z 的整条中线，从缓存取；路宽/限坡也一并记下（落地沿用布线实际用的值）
+        RememberRouteForLanding(new[] { Flatten3(rr.Centerline) }, roadWidth: B, gradePct: i, source: "直线坑线");
         BeginChange(); _scene.Add(line); RefreshScene(); Viewport.ZoomExtents();
         StatusMsg.Text = $"直线坑线自动布线：{n}环 限坡{i:0.#}% 台阶高{H:0.#}m → 贯通 {rr.LevelsConnected}/{rr.LevelsTotal} 级"
             + $"(直腿{rr.StraightLegs}/折返{rr.SwitchbackLegs}), 到达 Z={rr.ReachedZ:0.#}m"
@@ -10009,6 +10328,7 @@ public partial class MainWindow : Window
     private void StartEdit(EditMode mode, string name)
     {
         _editMode = mode; _editName = name; _editPts.Clear(); _editDisplacement = false;
+        _editPreview = null; _editPreviewPts = -1; _editHasDragStart = false;   // 上一条命令的备料作废
         _tool = null; _measure = null; _lastInputPoint = null;
         _editAwaitSelect = true;
         StatusMsg.Text = $"{name}：选择对象（单击/框选，右键确定" + (_selected.Count > 0 ? $"，已选 {_selected.Count}" : "") + "）";
@@ -10076,12 +10396,19 @@ public partial class MainWindow : Window
         StartBreak();
     }
 
-    private async Task TrimCmdAsync()
+    /// <summary>
+    /// 修剪(TRIM) / 延伸(EXTEND)：两条【各自独立】的命令，流程同原版 —— 先选剪切边 / 边界的边
+    /// （直接右键 = 全部选择），再循环点选要处理的对象，右键/回车结束。Shift 按住 = 本次反向。
+    /// </summary>
+    private async Task TrimCmdAsync(bool extend)
     {
-        var ents = await SelectObjectsAsync<SceneEntity>("修剪 / 延伸", "作为边界的对象（线/多段线/圆/弧/矩形）");
-        if (ents.Count == 0) return;
-        SelectEntities(new[] { ents[0] });
-        StartTrim();
+        string name = extend ? "延伸" : "修剪";
+        string what = extend ? "边界的边（右键/回车直接确定 = 全部选择）" : "剪切边（右键/回车直接确定 = 全部选择）";
+        if (!await AwaitSelectObjectsAsync(name, what)) { EditEcho($"{name}：已取消"); return; }
+        var bounds = _selected.Count > 0
+            ? new List<SceneEntity>(_selected)
+            : new List<SceneEntity>(_scene.Entities);           // 空选确定 = <全部选择>
+        StartTrim(extend, bounds);
     }
 
     private void StartOffset()
@@ -10091,12 +10418,89 @@ public partial class MainWindow : Window
         StatusMsg.Text = "偏移：点击偏移到的一侧";
     }
 
-    private void StartTrim()
+    /// <summary>
+    /// 偏移落地：点(或键入坐标)定的是"往哪一侧偏、偏多远"。
+    /// 多段线偏移在凹侧会自身折叠，去折叠/去环由 <see cref="Cad.Draw.OffsetTools"/> 收尾（见 PolylineEntity.Offset）。
+    /// </summary>
+    private void ApplyOffsetAt(double x, double y)
     {
-        if (_selected.Count != 1)
-        { StatusMsg.Text = "修剪/延伸：请先选一个作为边界的实体（线/多段线/圆/弧/矩形）"; return; }
-        _trimActive = true; _tool = null; _measure = null; _editMode = EditMode.None; _offsetActive = false;
-        StatusMsg.Text = "点击要修剪/延伸的直线（近端点移到与边界最近交点）";
+        if (_selected.Count == 1)
+        {
+            var off = _selected[0].Offset(x, y);
+            if (off != null) { BeginChange(); _scene.Add(off); StatusMsg.Text = $"已偏移（{EntityTypeName.Of(off)}）"; }
+            else StatusMsg.Text = "偏移失败：该实体不支持偏移，或偏移量过大已尖灭（换小一点的距离）";
+            RefreshScene();
+        }
+        _offsetActive = false;
+        SyncPrompt();
+    }
+
+    private void StartTrim(bool extend, List<SceneEntity> boundaries)
+    {
+        if (boundaries.Count == 0) { StatusMsg.Text = $"{(extend ? "延伸" : "修剪")}：图上没有可作边界的对象"; return; }
+        _trimActive = true; _trimExtend = extend; _trimBoundaries = boundaries;
+        _tool = null; _measure = null; _editMode = EditMode.None; _offsetActive = false;
+        StatusMsg.Text = TrimPrompt() + $"（边界 {boundaries.Count} 个）";
+    }
+
+    /// <summary>修剪/延伸循环里的提示词（两条命令各说各的，Shift 说明反向）。</summary>
+    private string TrimPrompt() => _trimExtend
+        ? "延伸：点选要延伸的对象（按住 Shift 改为修剪 · 右键/回车 结束）"
+        : "修剪：点选要修剪的对象（按住 Shift 改为延伸 · 右键/回车 结束）";
+
+    /// <summary>结束修剪/延伸的循环点选。</summary>
+    private void EndTrim()
+    {
+        if (!_trimActive) return;
+        string name = _trimExtend ? "延伸" : "修剪";
+        _trimActive = false; _trimBoundaries = new List<SceneEntity>();
+        StatusMsg.Text = $"{name}：结束";
+        SyncPrompt();
+    }
+
+    /// <summary>
+    /// 对点中的对象做一次修剪或延伸（<paramref name="doExtend"/> 由命令本身 ^ Shift 决定）。
+    /// 修剪 = 去掉点中那一段（缩短 / 断成两条 / 整条无交点则整体删除）；延伸 = 只把近端拉长到边界。
+    /// </summary>
+    private void ApplyTrimAt(double x, double y, bool doExtend)
+    {
+        string name = doExtend ? "延伸" : "修剪";
+        var target = _scene.Pick(x, y, SnapTolWorld(_lastPointer) * 3, _layers.IsSelectable);
+        if (target == null) { StatusMsg.Text = $"{name}：没点中对象，请点选要处理的对象（右键/回车 结束）"; return; }
+
+        if (doExtend)
+        {
+            var r = TrimTools.Extend(target, _trimBoundaries, x, y);
+            if (r == null) { StatusMsg.Text = $"延伸：该对象延伸不到任何边界（或该类型不支持），已跳过"; return; }
+            BeginChange();
+            _scene.Replace(target, r);
+            SwapBoundary(target, new List<SceneEntity> { r });
+            StatusMsg.Text = $"已延伸（{EntityTypeName.Of(r)}）";
+        }
+        else
+        {
+            var rest = TrimTools.Trim(target, _trimBoundaries, x, y);
+            if (rest == null) { StatusMsg.Text = $"修剪：该处没有与剪切边相交的段（或该类型不支持），已跳过"; return; }
+            BeginChange();
+            _scene.Remove(target);
+            foreach (var e2 in rest) _scene.Add(e2);
+            SwapBoundary(target, rest);
+            StatusMsg.Text = rest.Count == 0 ? "修剪：整条与剪切边无交点，已整体删除"
+                           : rest.Count >= 2 ? "已修剪（点中的一段去掉，断成两条）"
+                           : "已修剪";
+        }
+        _selected.RemoveAll(e => ReferenceEquals(e, target));
+        HighlightSelection();
+        RefreshScene();
+    }
+
+    /// <summary>被改掉的对象若也在剪切边/边界表里，用它的新几何顶上，免得后续点选拿着已删的边界求交。</summary>
+    private void SwapBoundary(SceneEntity old, List<SceneEntity> now)
+    {
+        int i = _trimBoundaries.FindIndex(e => ReferenceEquals(e, old));
+        if (i < 0) return;
+        _trimBoundaries.RemoveAt(i);
+        _trimBoundaries.InsertRange(i, now);
     }
 
     // 圆心轨迹：线→向点击侧偏移 r 的直线；圆→同心圆(外切 rc+r / 内切 |rc-r|，按点击在圆外/内)
@@ -10245,6 +10649,46 @@ public partial class MainWindow : Window
         AfterLayerStateChange();
         RefreshScene();
         StatusMsg.Text = $"已删除图层「{target.Name}」（{moved} 个实体移至图层 0，当前切至 0）";
+    }
+
+    // 图层特性管理器（忠实原 LayerManagerWindow）：一行一层的表 + 工具栏批量操作。
+    // 非模态、单例 —— 再点一次是把已开的那扇窗拉到前面并刷新，不叠第二扇（同原版 Show 语义）。
+    private Views.Layers.LayerManagerWindow? _layerMgrWin;
+    private void OpenLayerManager()
+    {
+        if (_layerMgrWin != null)
+        {
+            _layerMgrWin.Reload();
+            _layerMgrWin.Activate();
+            StatusMsg.Text = "图层特性管理器已在前台";
+            return;
+        }
+        var w = new Views.Layers.LayerManagerWindow(
+            _layers,
+            refresh: () => { PopulateDrawingLayers(); AfterLayerStateChange(); },
+            selectedEntityCount: () => _selected.Count,
+            assignSelected: name =>
+            {
+                // 「将对象置为当前图层」：选中实体搬到目标层。改的是实体特性，得能撤。
+                BeginChange();
+                int n = 0;
+                foreach (var en in _selected) { en.LayerName = name; n++; }
+                RefreshScene();
+                return n;
+            },
+            removeLayer: name =>
+            {
+                if (name == "0") return false;
+                BeginChange();
+                _scene.ReassignLayer(name, "0");     // 该层实体归并到 0 层(同 DeleteCurrentLayer)
+                bool ok = _layers.Remove(name);
+                RefreshScene();
+                return ok;
+            });
+        _layerMgrWin = w;
+        w.Closed += (_, _) => _layerMgrWin = null;
+        w.Show(this);
+        StatusMsg.Text = $"图层特性管理器：共 {_layers.Layers.Count} 个图层（双击一行=设为当前）";
     }
 
     // 图层重命名：当前层就地改名，实体 LayerName 随迁（忠实原版"图层命名/重命名"）
@@ -10398,11 +10842,17 @@ public partial class MainWindow : Window
         {
             double x0 = System.Math.Min(a.Value.x, b.Value.x), x1 = System.Math.Max(a.Value.x, b.Value.x);
             double y0 = System.Math.Min(a.Value.y, b.Value.y), y1 = System.Math.Max(a.Value.y, b.Value.y);
+            // 顶点缓冲是渲染局部坐标(转 float 前减过原点), 加回原点才能和世界系可见范围比
+            double rox = Viewport.RenderOriginX, roy = Viewport.RenderOriginY;
             for (int i = 0; i + 1 < geom.Length; i += 6)
-                if (geom[i] >= x0 && geom[i] <= x1 && geom[i + 1] >= y0 && geom[i + 1] <= y1) inside++;
+            {
+                double gx = geom[i] + rox, gy = geom[i + 1] + roy;
+                if (gx >= x0 && gx <= x1 && gy >= y0 && gy <= y1) inside++;
+            }
         }
         string msg = $"场景实体={_scene.Count} 细分顶点={n} 面顶点={(fc == null ? 0 : fc.Length / 6)} "
-                   + $"注记={texts} 可见范围={view} 落在视野内的顶点={inside}"
+                   + $"注记={texts} 预览段={Viewport.PreviewSegments} 光标={Viewport.CurrentCursorMode} "
+                   + $"可见范围={view} 落在视野内的顶点={inside}"
                    + (n > 0 ? $"（{100.0 * inside / n:0.##}%）" : "");
         PitMine3D.Kylin.CrashLog.Write("视口", msg);
         StatusMsg.Text = msg;
@@ -10503,6 +10953,7 @@ public partial class MainWindow : Window
         }
         string name = _editName;
         _editMode = EditMode.None; _editPts.Clear(); _editDisplacement = false;
+        _editPreview = null; _editPreviewPts = -1;
         HideDragTip(); RefreshScene();
         StatusMsg.Text = $"{name}：已结束（未改动）";
         SyncPrompt();
@@ -10527,7 +10978,7 @@ public partial class MainWindow : Window
 
     private bool TryCoordinateInput(string cmd)
     {
-        if (_tool == null && _editMode == EditMode.None && _measure == null && _angle == null) return false;   // 仅取点态接受坐标(测量取点也是取点)
+        if (_tool == null && _editMode == EditMode.None && !_offsetActive && _measure == null && _angle == null) return false;   // 仅取点态接受坐标(偏移的"侧点"/测量取点也是取点)
         if (_editMode != EditMode.None && !_editAwaitSelect)
         {
             // 编辑取点认三分量：x,y,z / @dx,dy,dz 的 z 进 dz(移动/复制)；只给 x,y 就是纯 XY
@@ -10612,6 +11063,7 @@ public partial class MainWindow : Window
     private void FeedPoint(double x, double y, double? z = null)
     {
         _lastInputPoint = (x, y);
+        if (_offsetActive) { ApplyOffsetAt(x, y); return; }   // 偏移侧点也可键入坐标(同 AutoCAD)
         if (_measure != null || _angle != null) { MeasureFeedPoint(x, y); return; }   // 测距/测角取点也可键入坐标, 见 MainWindow.MeasureJig.cs
         if (_editMode != EditMode.None)
         {
@@ -10622,11 +11074,17 @@ public partial class MainWindow : Window
             if (_editPts.Count == 0) { _editBaseZ = z ?? 0; _editBaseZKnown = z.HasValue; _editDz = 0; }
             else if (moveCopy && z.HasValue) _editDz = z.Value - _editBaseZ;   // 目标点给了 z 才动 z(见字段说明)
             _editPts.Add((x, y));
+            _editHasDragStart = false;   // 每落一个点就复位旋转的相对角基准(下一次有效移动重新锁)
             if (_editPts.Count >= EditPointCount(_editMode))
             {
+                // 先退出取点态, 再落地 —— ApplyEditTransform 里那次 RefreshScene 会顺带重建预览,
+                // 此时 _editMode/_editPts 若还在, 拖拽虚线与幽灵就被原样重传上去; 命令已结束,
+                // 之后光标移动不再刷预览(见 PointerMoved 的门), 那份预览便一直挂在屏幕上不走。
+                var m = BuildEditTransform();
+                bool copy = _editMode == EditMode.Copy;
                 double dz = moveCopy ? _editDz : 0;
-                ApplyEditTransform(BuildEditTransform(), _editMode == EditMode.Copy, dz);
                 _editMode = EditMode.None; _editPts.Clear();
+                ApplyEditTransform(m, copy, dz);
                 StatusMsg.Text = dz != 0 ? $"编辑完成（Δz {dz:0.###}）" : "编辑完成";
             }
             else StatusMsg.Text = EditPrompt(_editMode, _editPts.Count)
@@ -10647,29 +11105,6 @@ public partial class MainWindow : Window
         => (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y);
 
     // 修剪/延伸：目标直线的近点击端 移到 与边界(任意实体, 镶嵌成段)最近的交点
-    private LineEntity? TrimExtend(LineEntity target, SceneEntity boundary, (double x, double y) click)
-    {
-        var o = new List<float>();
-        boundary.Tessellate(o);
-        double d0 = Dist2(click, target.X0, target.Y0), d1 = Dist2(click, target.X1, target.Y1);
-        bool moveStart = d0 < d1;
-        double ex = moveStart ? target.X0 : target.X1, ey = moveStart ? target.Y0 : target.Y1;
-        (double x, double y)? best = null; double bestD = double.MaxValue;
-        for (int i = 0; i + 11 < o.Count; i += 12)
-        {
-            var isect = LineMath.IntersectInfiniteWithSegment(
-                target.X0, target.Y0, target.X1, target.Y1, o[i], o[i + 1], o[i + 6], o[i + 7]);
-            if (isect == null) continue;
-            double d = Dist2(isect.Value, ex, ey);
-            if (d < bestD) { bestD = d; best = isect; }
-        }
-        if (best == null) return null;
-        var nl = (LineEntity)target.Apply(Affine2.Translate(0, 0));
-        if (moveStart) { nl.X0 = best.Value.x; nl.Y0 = best.Value.y; }
-        else { nl.X1 = best.Value.x; nl.Y1 = best.Value.y; }
-        return nl;
-    }
-
     private static int EditPointCount(EditMode m) => m == EditMode.Scale ? 3 : 2;
 
     private static string EditPrompt(EditMode m, int have) => (m, have) switch
@@ -10683,10 +11118,13 @@ public partial class MainWindow : Window
         _ => "指定目标点"
     };
 
-    private Affine2 BuildEditTransform() => BuildTransformFrom(_editPts, _editMode);
+    private Affine2 BuildEditTransform() => BuildTransformFrom(_editPts, _editMode, RotDragBase());
 
-    // 由「已取点」构造编辑变换。move/copy=平移, mirror=镜像线, rotate=绝对角, scale=参照比例。
-    private static Affine2 BuildTransformFrom(System.Collections.Generic.IReadOnlyList<(double x, double y)> p, EditMode mode)
+    /// <summary>旋转拖拽的 0°基准：已锁起始角就用它(相对角)，否则 0(键入数值走绝对角，同原版)。</summary>
+    private double RotDragBase() => _editHasDragStart ? _editDragStartAngle : 0;
+
+    // 由「已取点」构造编辑变换。move/copy=平移, mirror=镜像线, rotate=相对起始角, scale=参照比例。
+    private static Affine2 BuildTransformFrom(System.Collections.Generic.IReadOnlyList<(double x, double y)> p, EditMode mode, double rotBase = 0)
     {
         switch (mode)
         {
@@ -10696,7 +11134,7 @@ public partial class MainWindow : Window
             case EditMode.Mirror:
                 return Affine2.MirrorLine(p[0].x, p[0].y, p[1].x, p[1].y);
             case EditMode.Rotate:
-                return Affine2.Rotate(System.Math.Atan2(p[1].y - p[0].y, p[1].x - p[0].x), p[0].x, p[0].y);
+                return Affine2.Rotate(System.Math.Atan2(p[1].y - p[0].y, p[1].x - p[0].x) - rotBase, p[0].x, p[0].y);
             case EditMode.Scale:
             {
                 double refLen = System.Math.Sqrt((p[1].x - p[0].x) * (p[1].x - p[0].x) + (p[1].y - p[0].y) * (p[1].y - p[0].y));
@@ -10712,12 +11150,31 @@ public partial class MainWindow : Window
     private Affine2? BuildEditPreview((double x, double y) cursor)
     {
         if (_editMode == EditMode.None || _editPts.Count != EditPointCount(_editMode) - 1) return null;
+        // 旋转相对角：落基点后第一次有效移动锁定"起始角"作 0°基准 —— 不锁的话，基点一落下物体就
+        // 按"基点→光标"的绝对方位角整个甩过去(同原版 EditCommandState 的 m_hasDragStart)。
+        if (_editMode == EditMode.Rotate)
+        {
+            var b = _editPts[0];
+            if (!_editHasDragStart)
+            {
+                double dxa = cursor.x - b.x, dya = cursor.y - b.y;
+                if (System.Math.Sqrt(dxa * dxa + dya * dya) > 1e-4)   // 离基点足够远才有明确方向
+                { _editDragStartAngle = System.Math.Atan2(dya, dxa); _editHasDragStart = true; }
+                else return Affine2.Translate(0, 0);                   // 尚未锁定 → 不转
+            }
+        }
         var pts = new System.Collections.Generic.List<(double x, double y)>(_editPts) { cursor };
-        return BuildTransformFrom(pts, _editMode);
+        return BuildTransformFrom(pts, _editMode, RotDragBase());
     }
 
     // 编辑拖拽即时信息(位移/角度/比例) —— 供光标浮标显示。
+    // 有实体被抽稀时明说一句(同原版 JigAnnotation)：否则用户看到稀疏网格会以为几何被改坏了。
     private string? EditDragHint((double x, double y) c)
+        => EditDragDim(c) is string s
+           ? s + (_editPreview != null && _editPreview.Decimated ? "  （预览已抽稀，确定后成形）" : "")
+           : null;
+
+    private string? EditDragDim((double x, double y) c)
     {
         if (_editMode == EditMode.None || _editPts.Count == 0) return null;
         var b = _editPts[0];
@@ -10730,7 +11187,9 @@ public partial class MainWindow : Window
                 return $"位移 {System.Math.Sqrt(dx * dx + dy * dy):0.##}  Δx {dx:0.##}  Δy {dy:0.##}";
             case EditMode.Rotate:
                 if (_editPts.Count != 1) return null;
-                double ang = System.Math.Atan2(c.y - b.y, c.x - b.x) * 180.0 / System.Math.PI;
+                // 与幽灵同一口径：相对起始角(未锁定时为 0)，浮标读数与看到的转角一致
+                double ang = (System.Math.Atan2(c.y - b.y, c.x - b.x) - RotDragBase()) * 180.0 / System.Math.PI;
+                if (!_editHasDragStart) ang = 0;
                 return $"角度 {(ang < 0 ? ang + 360.0 : ang):0.#}°";
             case EditMode.Mirror:
                 if (_editPts.Count != 1) return null;
@@ -10762,6 +11221,7 @@ public partial class MainWindow : Window
     // 所以整体抬降改 Elevation 即可, 逐顶点 z 原样保留。
     private void ApplyEditTransform(Affine2 m, bool copy, double dz = 0)
     {
+        _editPreview = null; _editPreviewPts = -1;   // 落地后备料作废(选择集已换成新实体)
         BeginChange();
         var newSel = new List<SceneEntity>();
         foreach (var e in _selected)
@@ -10799,12 +11259,29 @@ public partial class MainWindow : Window
         StatusMsg.Text = _snapOn ? $"栅格捕捉: 开（步长 {_snapStep:0.##}）" : "栅格捕捉: 关";
     }
 
+    private bool _lineWeightDisplay = true;   // 线宽显示开关(原版 Editor::m_showLineWeight, 默认开)
+
+    // 状态栏「线宽」开关 → _lineWeightDisplay（原版 OnStatusLineWeightToggleClick：记状态 + 回显 LWDISPLAY ON/OFF）
+    private void OnLineWeightToggle(object? sender, RoutedEventArgs e)
+    {
+        if (_syncToggle) return;
+        _lineWeightDisplay = LineWeightToggle.IsChecked == true;
+        EchoLineWeightDisplay();
+    }
+
+    private void EchoLineWeightDisplay()
+    {
+        EditEcho(_lineWeightDisplay ? "LWDISPLAY ON：线宽显示开（按实体线宽渲染，thick-line 渲染待渲染管线升级）"
+                                    : "LWDISPLAY OFF：线宽显示关（所有实体按 1px 渲染）");
+    }
+
     // 命令/键切换正交/栅格后：同步状态栏开关按钮视觉态
     private void SyncDraftToggles()
     {
         _syncToggle = true;
         if (OrthoToggle != null) OrthoToggle.IsChecked = _orthoOn;
         if (GridSnapToggle != null) GridSnapToggle.IsChecked = _snapOn;
+        if (LineWeightToggle != null) LineWeightToggle.IsChecked = _lineWeightDisplay;
         _syncToggle = false;
     }
     private double _snapStep = 1.0; // 栅格步长（世界单位）
@@ -10859,10 +11336,33 @@ public partial class MainWindow : Window
             string cmd = raw.Trim();
             if (cmd.Length == 0) continue;
             RunSelftestStep(cmd);
+            SyncCursorMode();   // 同真实交互: 每个事件处理完都会同步一次光标形态(见 SyncPrompt)
             // 每步落一条结果到日志/stderr：无人值守跑自检时靠它核对, 不必只依赖截图。
             var foc = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement();
             PitMine3D.Kylin.CrashLog.Write("自检",
-                $"{cmd}  →  状态栏「{StatusMsg.Text}」 命令框「{CommandInput.Text}」 焦点={foc?.GetType().Name ?? "无"}");
+                $"{cmd}  →  状态栏「{StatusMsg.Text}」 命令框「{CommandInput.Text}」 焦点={foc?.GetType().Name ?? "无"} 光标={Viewport.CurrentCursorMode}");
+        }
+        LogStatusLater();
+    }
+
+    /// <summary>
+    /// 脚本跑完之后再补记两次状态栏。
+    /// <b>为什么需要它</b>：连库是异步的 —— 首次派发只会显示「数据库尚未连接，正在尝试连接…」，
+    /// 真正的结果要等连上以后**重新派发**那一次才有，而那一次不经过自检的循环、记不进日志。
+    /// 状态栏又常常落在屏幕外（主窗比工作区高），截图也读不到。于是无人值守跑自检时，
+    /// 一条读台账的命令到底出了什么，谁都看不见。
+    /// </summary>
+    private void LogStatusLater()
+    {
+        foreach (int sec in new[] { 4, 12 })
+        {
+            var t = new Avalonia.Threading.DispatcherTimer { Interval = System.TimeSpan.FromSeconds(sec) };
+            t.Tick += (_, _) =>
+            {
+                t.Stop();
+                try { PitMine3D.Kylin.CrashLog.Write("自检", $"+{sec}s  状态栏「{StatusMsg.Text}」"); } catch { }
+            };
+            t.Start();
         }
     }
 
@@ -10875,6 +11375,45 @@ public partial class MainWindow : Window
                 int ms = int.TryParse(cmd.Substring(3).Trim(), out int v) ? v : 1000;
                 var end = System.DateTime.Now.AddMilliseconds(ms);
                 while (System.DateTime.Now < end) { Avalonia.Threading.Dispatcher.UIThread.RunJobs(); System.Threading.Thread.Sleep(15); }
+                return;
+            }
+            if (cmd.StartsWith("@关层 "))   // @关层 <图层名>: 关掉一个图层的显示(截图核对被大面盖住的产物用)
+            {
+                var lay = _layers.Get(cmd.Substring(4).Trim());
+                if (lay != null) { lay.Visible = false; RefreshScene(); }
+                StatusMsg.Text = lay != null ? $"自检：图层「{lay.Name}」已关" : "自检：无此图层";
+                return;
+            }
+            if (cmd == "@信息栏")   // 把信息栏历史逐行打到日志(核对回显格式: 时间戳/符号/文案)
+            {
+                DumpCmdLog();
+                return;
+            }
+            if (cmd.StartsWith("@取景 "))   // @取景 <x> <y> <半宽m>: 把相机对准某处并放大(截图核对放大后的显示细节用)
+            {
+                var a = cmd.Substring(4).Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
+                if (a.Length >= 3 && double.TryParse(a[0], out double fx) && double.TryParse(a[1], out double fy)
+                    && double.TryParse(a[2], out double fh))
+                {
+                    // 排到队尾: 几何是下一帧才上传的, 那时才定得下渲染原点; 立刻取景会被原点变更甩偏。
+                    Avalonia.Threading.Dispatcher.UIThread.Post(
+                        () => Viewport.FitBounds(new[] { fx - fh, fy - fh, fx + fh, fy + fh }),
+                        Avalonia.Threading.DispatcherPriority.Background);
+                    StatusMsg.Text = $"自检取景：({fx:0.#}, {fy:0.#}) 半宽 {fh:0} m";
+                }
+                return;
+            }
+            if (cmd.StartsWith("@钻孔示例"))   // @钻孔示例 [孔数] [取景半宽m]: 合成钻孔走真实展绘路径并放大(截图核对柱体/标注用)
+            {
+                var a = cmd.Length > 5 ? cmd.Substring(5).Split(' ', System.StringSplitOptions.RemoveEmptyEntries) : System.Array.Empty<string>();
+                int nh = a.Length > 0 && int.TryParse(a[0], out int h0) ? h0 : 6;
+                double half = a.Length > 1 && double.TryParse(a[1], out double w0) ? w0 : 400;
+                SelftestSampleBoreholes(nh, half);
+                return;
+            }
+            if (cmd.StartsWith("@露头示例"))   // @露头示例: 造现状斜面 + 两层顶/底板并入场景(供「煤层露头着色」实机核对)
+            {
+                SelftestSampleSeams();
                 return;
             }
             if (cmd == "@中长远示例") { SelftestLongTermSample(); return; }   // @中长远示例: 自检块体+西缘工作线并选中 → 派生窗拾取+生成多套方案(中长远五窗实机核对用)
@@ -10897,6 +11436,49 @@ public partial class MainWindow : Window
                 SelftestSampleBlockModel(nx, ny, nz);
                 return;
             }
+            if (cmd.StartsWith("@页面截图 "))   // @页面截图 <png路径>: 把最近打开的数据库页面(GeoDbWindows.Last)按其 DPI 渲染存 PNG(无 GL 的页面拍得到; 不抓整屏, 不带别的窗口)
+            {
+                string png = cmd.Substring(6).Trim().Trim('"');
+                if (GeoDb.GeoDbWindows.Last is Window pw && pw.IsVisible)
+                {
+                    double sc = pw.RenderScaling;
+                    using var rtb = new Avalonia.Media.Imaging.RenderTargetBitmap(
+                        new PixelSize((int)(pw.Bounds.Width * sc), (int)(pw.Bounds.Height * sc)), new Vector(96 * sc, 96 * sc));
+                    rtb.Render(pw);
+                    rtb.Save(png);
+                    PitMine3D.Kylin.CrashLog.Write("自检", $"@页面截图 {pw.GetType().Name} {pw.Bounds.Width:0}×{pw.Bounds.Height:0} @{sc:0.##} → {png}");
+                }
+                else StatusMsg.Text = "自检页面截图：没有打开着的数据库页面";
+                return;
+            }
+            if (cmd.StartsWith("@控件截图 "))   // @控件截图 <x:Name> <png路径>: 把主窗里一个具名控件(状态栏/功能区组等非 GL 部件)渲染存 PNG —— 主窗常比屏幕高, 状态栏截屏截不到时用
+            {
+                var a = cmd.Substring(6).Trim().Split(' ', 2, System.StringSplitOptions.RemoveEmptyEntries);
+                if (a.Length == 2 && this.FindControl<Control>(a[0]) is { } ctl && ctl.Bounds.Width > 0 && ctl.Bounds.Height > 0
+                    && ctl.TranslatePoint(new Point(0, 0), this) is { } at)
+                {
+                    // 子控件单独 Render 会带着它在窗里的布局偏移(主窗内容常比窗高, 状态栏 y 可达数千)画到画布外;
+                    // 故渲染整窗到"够到该控件底边"的画布, 控件矩形写进日志, 事后按矩形裁。
+                    double sc = RenderScaling;
+                    var px = new PixelSize((int)(Bounds.Width * sc), (int)((at.Y + ctl.Bounds.Height) * sc));
+                    using var rtb = new Avalonia.Media.Imaging.RenderTargetBitmap(px, new Vector(96 * sc, 96 * sc));
+                    rtb.Render(this);
+                    rtb.Save(a[1].Trim('"'));
+                    PitMine3D.Kylin.CrashLog.Write("自检", $"@控件截图 {a[0]} 矩形(px) x={at.X * sc:0} y={at.Y * sc:0} w={ctl.Bounds.Width * sc:0} h={ctl.Bounds.Height * sc:0} @{sc:0.##} → {a[1]}");
+                }
+                else StatusMsg.Text = $"自检控件截图：找不到控件或尚未布局「{(a.Length > 0 ? a[0] : "")}」";
+                return;
+            }
+            if (cmd.StartsWith("@钻孔导入 "))   // @钻孔导入 <路径>: 打开「导入钻孔数据」页并跳过文件对话框读入该 CSV(截图核对预览表列宽/文案用)
+            {
+                SelftestBoreholeImportPreview(cmd.Substring(6).Trim().Trim('"'));
+                return;
+            }
+            if (cmd.StartsWith("@块体导入 "))   // @块体导入 <路径>: 跳过文件对话框直接导入 .blk/.pmb(核对大块体模型耗时/显示), 同「导入块体」对话框那条路
+            {
+                _ = SelftestImportBlockModel(cmd.Substring(6).Trim().Trim('"'));
+                return;
+            }
             if (cmd.StartsWith("@点云导入 "))   // @点云导入 <路径>: 跳过文件对话框直接加载 LAS/CSV 点云(核对真实航测点云的覆盖范围/耗时), 同「加载点云」那条路
             {
                 _ = PcLoadPathAsync(cmd.Substring(6).Trim().Trim('"'));
@@ -10911,14 +11493,217 @@ public partial class MainWindow : Window
                 SelftestSamplePointCloud(cn, rn, dz);
                 return;
             }
+            if (cmd.StartsWith("@裁剪示例"))   // @裁剪示例 [外] [质心]: 合成起伏三角网 + 斜放闭合裁刀, 走闭合线裁剪并取景(截图核对边界贴线)
+            {
+                SelftestSampleClip(!cmd.Contains("外"), cmd.Contains("质心"));
+                return;
+            }
             if (cmd == "@嵌入示例")   // @嵌入示例: 起伏三角网 + 红线(原样穿山悬空) + 黄线(嵌入后贴面), 东南视角压低(截图核对贴面)
             {
                 SelftestSampleEmbed();
                 return;
             }
+            if (cmd == "@页面布置示例")   // @页面布置示例: 把对象管理器挪到右侧组、右侧切到 AI 助手、左栏加宽, 并立即记录(核对下次启动能否复原)
+            {
+                if (_dockFactory != null && _objectsTool?.Owner is DCore.IDock src && _propsTool?.Owner is DCore.IDock dst && src != dst)
+                {
+                    _dockFactory.MoveDockable(src, dst, _objectsTool, null);
+                    if (_assistantTool != null) _dockFactory.SetActiveDockable(_assistantTool);
+                    src.Proportion = 0.25;
+                }
+                SaveDockLayout();
+                StatusMsg.Text = $"自检：页面布置已改并记录 → {DescribeDockLayout()}";
+                return;
+            }
+            if (cmd == "@页面布置")   // @页面布置: 打印当前停靠排布(各组面板/当前页/比例)与是否来自记录
+            {
+                StatusMsg.Text = $"自检：页面布置 来自记录={_dockLayoutRestored} → {DescribeDockLayout()}";
+                return;
+            }
+            if (cmd.StartsWith("@主题 "))   // @主题 <浅|深>: 只切界面主题不落盘(截图核对深色配色)
+            {
+                ApplyTheme(cmd.Contains("深"), persist: false);
+                StatusMsg.Text = $"自检：界面主题 → {(cmd.Contains("深") ? "深色" : "浅色")}";
+                return;
+            }
+            if (cmd.StartsWith("@视口背景 "))   // @视口背景 <RRGGBB> [光标RRGGBB]: 只改视口背景/光标色不落盘(截图核对白底黑线/格网明暗)
+            {
+                var a = cmd.Substring(5).Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
+                if (a.Length >= 1 && ParseRgb("#" + a[0].TrimStart('#')) is { } bgc) { _bg2D = _bg3D = bgc; }
+                if (a.Length >= 2 && ParseRgb("#" + a[1].TrimStart('#')) is { } cc) _cursorRgb = cc;
+                ApplyViewportColors();
+                StatusMsg.Text = $"自检：视口背景 {ToHex(_bg2D)} 光标 {ToHex(_cursorRgb)} · 活动视口实际 {ToHex(Viewport.CurrentBackground)}";
+                return;
+            }
             if (cmd.StartsWith("@线示例"))   // @线示例 [圈]: 造一条剖面线(默认)或闭合边界并选中(点云剖面/分割/圈量/剖面分析用)
             {
                 SelftestSampleLine(cmd.Contains("圈") || cmd.Contains("闭合"));
+                return;
+            }
+            if (cmd == "@工程位置配对")   // @工程位置配对: 在已打开的「创建工程位置」窗里跑就近自动配对（截图核对连线用）
+            {
+                if (_epWin == null) { StatusMsg.Text = "自检：创建工程位置窗口未打开"; return; }
+                _epWin.AutoPair();
+                StatusMsg.Text = $"自检：工程位置就近配对 → 节点 {_epWin.NodeCount} / 连线 {_epWin.LinkCount}；{_epWin.StatusText}";
+                return;
+            }
+            if (cmd == "@工程位置预览替换")   // @工程位置预览替换: 自动查找工作线 → ④预览替换
+            {
+                if (_epWin == null) { StatusMsg.Text = "自检：创建工程位置窗口未打开"; return; }
+                _epWin.FindWorkLines(); _epWin.PreviewReplace();
+                StatusMsg.Text = $"自检：④预览 → 要删 {_epWin.PlanDeleteCount}；{_epWin.PlanDiag}";
+                return;
+            }
+            if (cmd == "@工程位置覆盖台账")   // @工程位置覆盖台账: 切到覆盖范围台账页签（截图核对）
+            {
+                if (_epWin == null) { StatusMsg.Text = "自检：创建工程位置窗口未打开"; return; }
+                _epWin.ShowCoverLedger();
+                StatusMsg.Text = "自检：已切到覆盖范围台账";
+                return;
+            }
+            if (cmd == "@工程位置执行替换")   // @工程位置执行替换: ⑤执行替换（自检下确认框直通）
+            {
+                if (_epWin == null) { StatusMsg.Text = "自检：创建工程位置窗口未打开"; return; }
+                _epWin.ApplyReplace();
+                return;
+            }
+            if (cmd == "@工程位置新建")   // @工程位置新建: ⑥ 生成新建工程位置（采场档；自检下确认框直通）
+            {
+                if (_epWin == null) { StatusMsg.Text = "自检：创建工程位置窗口未打开"; return; }
+                _epWin.FindWorkLines(); _epWin.BuildNewPositionForSelftest();
+                return;
+            }
+            if (cmd == "@工程位置台阶面")   // @工程位置台阶面: 把模板 1200/1210 两条线配成一对（坡顶/坡底）→ ⑦ 生成台阶面
+            {
+                if (_epWin == null) { StatusMsg.Text = "自检：创建工程位置窗口未打开"; return; }
+                var hs = _epWin.LineHandles().Where(h => h.Layer.StartsWith("台阶_")).Select(h => h.Handle).ToList();
+                if (hs.Count >= 2) _epWin.PairFaceByHandles(hs[1], hs[0]);
+                _epWin.BuildBenchFaces();
+                return;
+            }
+            if (cmd == "@刀量切割示例")   // @刀量切割示例: 合成一个带倾斜煤层的块体(_lastBlocks) + 一条选中的工作线（刀量切割 实机核对用）
+            {
+                var blocks = new System.Collections.Generic.List<BlockModel.Block>();
+                const double sz = 10;
+                for (int i = 0; i < 30; i++) for (int j = 0; j < 12; j++) for (int k = 0; k < 8; k++)
+                {
+                    double x = i * sz + sz / 2, y = j * sz + sz / 2, z = 1000 + k * sz + sz / 2;
+                    double seamTop = 1030 + 0.15 * x;          // 煤层：随 x 缓倾，厚 20 m
+                    bool coal = z <= seamTop && z > seamTop - 20;
+                    blocks.Add(new BlockModel.Block { X = x, Y = y, Z = z, Size = sz, Grade = coal ? 1 : 0 });
+                }
+                _lastBlocks = blocks; _blockGmin = 0; _blockGmax = 1; _lastCoalClassifier = new Cad.CoalRockClassifier { CoalCodes = new[] { 1.0 }, Tol = 0.1 };
+                BeginChange();
+                RenderBlocks(blocks);
+                var wl = new PolylineEntity { LayerName = WorkLineLayer, Elevation = 1000, Cr = 0.2f, Cg = 0.8f, Cb = 0.95f };
+                wl.Points.Add((0, 0)); wl.Points.Add((0, 120));          // 基线沿 y，往 +x 推进
+                var end = new PolylineEntity { LayerName = WorkLineLayer + "_结束线", Elevation = 1000, Cr = 0.2f, Cg = 0.8f, Cb = 0.95f, Dash = new[] { 4.0, 2.0 } };
+                end.Points.Add((60, 0)); end.Points.Add((60, 120));
+                _scene.Add(wl); _scene.Add(end);
+                _selected.Clear(); _selected.Add(wl);
+                RefreshScene();
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => Viewport.FitBounds(new[] { -20.0, -20.0, 320.0, 140.0 }), Avalonia.Threading.DispatcherPriority.Background);
+                StatusMsg.Text = $"自检：刀量切割示例已入图（块体 {blocks.Count} 块，煤 {blocks.Count(b => b.Grade > 0.5)} 块；工作线已选中，往 +x 推进）";
+                return;
+            }
+            if (cmd.StartsWith("@刀量表 "))   // @刀量表 <面 n | 阶段 lo hi>: 在已打开的累积量表窗里点刀/卡阶段
+            {
+                if (_cutTableWin == null) { StatusMsg.Text = "自检：累积量表窗未打开"; return; }
+                var a = cmd.Substring(5).Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
+                if (a.Length >= 2 && a[0] == "面" && int.TryParse(a[1], out int fi)) _cutTableWin.SelftestFace(fi);
+                else if (a.Length >= 3 && a[0] == "阶段" && int.TryParse(a[1], out int lo) && int.TryParse(a[2], out int hi)) _cutTableWin.SelftestStage(lo, hi);
+                StatusMsg.Text = $"自检：累积量表 {_cutTableWin.RowCount} 刀｜{_cutTableWin.StageText}";
+                return;
+            }
+            if (cmd == "@驱动量示例")   // @驱动量示例: 合成两层煤的块体(块体仓,带类别名表)+顶底板/现状面三角网+一条工作线，开「驱动量」面板并按示例填好、确认
+            {
+                SelftestSampleIncline();
+                return;
+            }
+            if (cmd.StartsWith("@驱动量 "))   // @驱动量 <推进 line d | 调整 开/关 | 控制线 | 台阶 | 关闭>
+            {
+                if (_inclineWin == null) { StatusMsg.Text = "自检：驱动量面板未打开"; return; }
+                var a = cmd.Substring(5).Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
+                switch (a.Length > 0 ? a[0] : "")
+                {
+                    case "推进":
+                        if (a.Length >= 3 && int.TryParse(a[1], out int li) && double.TryParse(a[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double dd))
+                        { _inclineWin.SelftestAdjust(li, dd); StatusMsg.Text = $"自检：推进调整 线{li} d={dd:0.#} → 各线 [{string.Join(",", _inclineWin.AdjustPerLineD.Select(v => v.ToString("0.#")))}]"; }
+                        break;
+                    case "调整": _inclineWin.SetAdjustMode(a.Length >= 2 && a[1] == "开"); StatusMsg.Text = $"自检：推进调整模式 {(a.Length >= 2 ? a[1] : "")}"; break;
+                    case "控制线": _inclineWin.SelftestAddControlLine(); StatusMsg.Text = $"自检：控制线 {_inclineWin.BoundaryCount} 条"; break;
+                    case "台阶": _inclineWin.SelftestGenerateBench(); break;
+                    case "关闭": _inclineWin.Close(); _inclineWin = null; StatusMsg.Text = "自检：驱动量面板已关闭"; break;
+                    case "顶部": _inclineWin.SelftestScrollTop(); StatusMsg.Text = "自检：驱动量面板滚到顶部"; break;
+                }
+                return;
+            }
+            if (cmd == "@道路中心线示例")   // @道路中心线示例: 在「点云_道路中心线」层造 T 形 3 条 + 断开 1 条(带 Z)，道路运输系统 19 钮批量自检用
+            {
+                BeginChange();
+                var amber = new Cad.Road.Rgb(242, 165, 23);
+                RoadEnsureLayer(RoadCenterlineLayer, amber, 0.5f);
+                RoadAddFlat(RoadCenterlineLayer, new double[] { 0, 0, 100, 100, 0, 102, 200, 0, 104 }, amber);
+                RoadAddFlat(RoadCenterlineLayer, new double[] { 100, 0, 102, 100, 80, 106 }, amber);
+                RoadAddFlat(RoadCenterlineLayer, new double[] { 230, 0, 104, 330, 0, 104 }, amber);
+                RefreshScene();
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => Viewport.FitBounds(new[] { -20.0, -40.0, 350.0, 100.0 }), Avalonia.Threading.DispatcherPriority.Background);
+                StatusMsg.Text = "自检：道路中心线示例已入图（T 形 3 条 + 断开 1 条，层「点云_道路中心线」）";
+                return;
+            }
+            if (cmd == "@路网示例")   // @路网示例: 造一个 T 形路网 + 一段断开的路（增量增删边 实机核对用）
+            {
+                BeginChange();
+                PolylineEntity R(params (double x, double y)[] xy) { var pl = new PolylineEntity { LayerName = "道路中线", Cr = 0.35f, Cg = 0.75f, Cb = 0.95f }; pl.Points.AddRange(xy); _scene.Add(pl); return pl; }
+                R((0, 0), (100, 0), (200, 0));
+                R((100, 0), (100, 80));
+                R((230, 0), (330, 0));
+                RefreshScene();
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => Viewport.FitBounds(new[] { -20.0, -40.0, 350.0, 100.0 }), Avalonia.Threading.DispatcherPriority.Background);
+                StatusMsg.Text = "自检：路网示例已入图（T 形 3 条 + 断开 1 条）";
+                return;
+            }
+            if (cmd.StartsWith("@路网编辑 "))   // @路网编辑 <加边 x1 y1 x2 y2 | 删边 x y | 插交叉口 x y | 改状态 x y | 线路类型 x y | 撤销 | 清空 | 提交>
+            {
+                if (_roadEdit == null) { StatusMsg.Text = "自检：路网编辑会话未开"; return; }
+                var a = cmd.Substring(6).Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
+                double P(int i) => a.Length > i && double.TryParse(a[i], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double v) ? v : 0;
+                switch (a.Length > 0 ? a[0] : "")
+                {
+                    case "加边":
+                    {
+                        var na = _roadEdit.Draft.NearestNode(new Cad.Point3d(P(1), P(2), 0), RoadEditSnapM); var nb = _roadEdit.Draft.NearestNode(new Cad.Point3d(P(3), P(4), 0), RoadEditSnapM);
+                        if (na == null || nb == null || na.Id == nb.Id) { StatusMsg.Text = "自检：加边两点须落在不同节点附近"; return; }
+                        var id = _roadEdit.NewEdgeId();
+                        _roadEdit.Apply(new Cad.RoadChange { Kind = Cad.RoadChangeKind.AddEdge, EdgeId = id, FromNodeId = na.Id, ToNodeId = nb.Id, Centerline = new[] { na.Position, nb.Position }, Title = $"{id}（{na.Id}—{nb.Id}）" });
+                        AfterRoadEdit($"✓ 暂存·加边 {id}（{na.Id}—{nb.Id}）"); break;
+                    }
+                    case "删边": RoadEditRemoveEdge(new Cad.Point3d(P(1), P(2), 0)); break;
+                    case "插交叉口": RoadEditSplitEdge(new Cad.Point3d(P(1), P(2), 0)); break;
+                    case "改状态": RoadEditSetStatus(new Cad.Point3d(P(1), P(2), 0)); break;
+                    case "线路类型": RoadEditSetRoadClass(new Cad.Point3d(P(1), P(2), 0)); break;
+                    case "撤销": if (_roadEdit.Undo()) { RenderRoadEditDiff(); _roadEditWin?.RefreshFromSession(); EchoRoadTopologyDelta(); } StatusMsg.Text = "自检：已撤销"; break;
+                    case "清空": _roadEdit.Clear(); RenderRoadEditDiff(); _roadEditWin?.RefreshFromSession(); StatusMsg.Text = "自检：已清空"; break;
+                    case "提交": _ = RoadEditCommitAsync(); break;
+                }
+                if (_roadEditWin != null) StatusMsg.Text += "｜" + _roadEditWin.SummaryText.Replace('\n', '；');
+                return;
+            }
+            if (cmd == "@工程位置关闭")   // @工程位置关闭: 关掉「创建工程位置」窗（截主视口用）
+            {
+                _epWin?.Close(); _epWin = null;
+                StatusMsg.Text = "自检：创建工程位置窗口已关闭";
+                return;
+            }
+            if (cmd == "@工程位置落地")   // @工程位置落地: 在已打开的窗里跑 ③ 生成衔接并落地
+            {
+                if (_epWin == null) { StatusMsg.Text = "自检：创建工程位置窗口未打开"; return; }
+                _epWin.Materialize();
+                return;
+            }
+            if (cmd.StartsWith("@工程位置示例"))   // @工程位置示例: 造模板台阶线(台阶_*)+横穿范围环的采场台阶线+选中范围环(「创建工程位置」实机核对用)
+            {
+                SelftestSampleEngineeringPosition();
                 return;
             }
             if (cmd.StartsWith("@选中 "))   // @选中 <x> <y>: 「选择对象」阶段按世界坐标加/减选(等价视口单击)
@@ -10933,6 +11718,25 @@ public partial class MainWindow : Window
                 var a = cmd.Substring(3).Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
                 if (a.Length >= 2 && double.TryParse(a[0], out double px) && double.TryParse(a[1], out double py))
                     SelftestFeedPick(px, py);
+                return;
+            }
+            if (cmd.StartsWith("@光标 "))   // @光标 <x> <y>: 直设光标世界坐标并刷预览(不模拟鼠标), 截图核对拖拽幽灵/橡皮筋
+            {
+                var a = cmd.Substring(3).Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
+                if (a.Length >= 2 && double.TryParse(a[0], out double cwx) && double.TryParse(a[1], out double cwy))
+                {
+                    _cursorWorld = (cwx, cwy);
+                    var csp = Viewport.WorldToScreen(cwx, cwy, 0);   // 顺带把屏幕光标放过去: 截图里才看得到十字/拾取框
+                    if (csp != null) Viewport.SetCursorScreen(csp.Value.sx, csp.Value.sy);
+                    SyncCursorMode();
+                    RefreshScenePreview();
+                    // 预览到底出没出几何, 截图看不准也不好比对 —— 直接把段数报到日志(0 段 = 幽灵没画出来)
+                    var probe = new List<float>();
+                    AppendScenePreview(probe);
+                    string lv = _editPreview == null ? "未备料"
+                              : $"轻 {_editPreview.LightVertices} 顶点 · 替身 {_editPreview.ProxySegments} 段{(_editPreview.Decimated ? "(抽稀)" : "")}";
+                    StatusMsg.Text = $"自检光标：({cwx:0.##}, {cwy:0.##})  预览 {probe.Count / 12} 段 · {lv}  {EditTipText((cwx, cwy)) ?? MeasureJigHint((cwx, cwy)) ?? "无提示"}";   // 测距/测角取点中报实时读数
+                }
                 return;
             }
             if (cmd.StartsWith("@命令 "))   // @命令 <行>: 走命令行提交路径(含 AutoCAD 别名解析/历史/回显)
@@ -10952,6 +11756,42 @@ public partial class MainWindow : Window
                     target.RaiseEvent(new TextInputEventArgs
                     { RoutedEvent = InputElement.TextInputEvent, Source = target, Text = ch.ToString() });
                 }
+                return;
+            }
+            if (cmd.StartsWith("@框选态 "))   // @框选态 <x0> <y0> <x1> <y1>: 直设选框几何(不模拟鼠标), 截图核对选框画没画出来
+            {
+                var a = cmd.Substring(5).Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
+                if (a.Length >= 4 && double.TryParse(a[0], out double bx0) && double.TryParse(a[1], out double by0)
+                                  && double.TryParse(a[2], out double bx1) && double.TryParse(a[3], out double by1))
+                {
+                    var pa = new Avalonia.Point(bx0, by0); var pb = new Avalonia.Point(bx1, by1);
+                    _selBoxStart = pa;
+                    var geom = BoxRect(pa, pb, crossing: bx1 < bx0);
+                    Viewport.SetSnapMarker(geom); _snapShown = true;
+                    string g0 = geom.Length >= 3 ? $"首点局部({geom[0]:0.###},{geom[1]:0.###})" : "空";
+                    StatusMsg.Text = $"自检框选态：屏({bx0:0},{by0:0})→({bx1:0},{by1:0}) 段数 {geom.Length / 12} · {g0}"
+                                   + $" · 原点=({Viewport.RenderOriginX:0.###},{Viewport.RenderOriginY:0.###})";
+                }
+                else StatusMsg.Text = "自检框选态：参数须为 x0 y0 x1 y1";
+                return;
+            }
+            if (cmd.StartsWith("@按键 "))   // @按键 <键名>: 向当前焦点元素发一次真实 KeyDown(走完整隧道/冒泡路由)
+            {
+                string kn = cmd.Substring(4).Trim();
+                var mods = KeyModifiers.None;                       // 支持 "ctrl+z" 这种写法
+                while (kn.IndexOf('+') is var plus && plus > 0)
+                {
+                    string m = kn.Substring(0, plus).Trim().ToLowerInvariant();
+                    mods |= m switch { "ctrl" => KeyModifiers.Control, "shift" => KeyModifiers.Shift, "alt" => KeyModifiers.Alt, _ => KeyModifiers.None };
+                    kn = kn.Substring(plus + 1).Trim();
+                }
+                if (System.Enum.TryParse<Key>(kn, ignoreCase: true, out var key))
+                {
+                    var t2 = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() as Interactive ?? Viewport;
+                    t2.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Source = t2, Key = key, KeyModifiers = mods });
+                    StatusMsg.Text = $"自检按键：{key} → 焦点 {t2.GetType().Name} · 场景 {_scene.Count} 实体 · 选中 {_selected.Count}";
+                }
+                else StatusMsg.Text = $"自检按键：认不出键名「{kn}」";
                 return;
             }
             if (cmd == "@空格")   // 敲一个空格(AutoCAD 的"空格=回车"): 单列一条, 因为脚本按 ; 切分后会被 Trim 掉
@@ -10988,16 +11828,81 @@ public partial class MainWindow : Window
                 }
                 return;
             }
-            if (cmd.StartsWith("@导入 "))   // @导入 <路径>: 跳过文件对话框直接导入(核对大图纸能否打开/耗时)
+            if (cmd == "@指针诊断")   // 屏幕↔世界往返自检: 光标落点与画出来的几何对不对得上(偏移类问题定位用)
             {
-                _ = ImportPath(cmd.Substring(4).Trim().Trim('"'));
+                PointerRoundTripDiag();
                 return;
             }
-            if (cmd == "@文字清单")   // 场景里全部文字的 位置/字高/内容(核对在位编辑/拖放结果)
+            if (cmd == "@最大化" || cmd == "@还原")   // 改窗口尺寸后再诊断: 复现"视口一改大小就错位"
             {
-                var sbT = new System.Text.StringBuilder("文字清单：");
-                foreach (var te in _scene.Entities.OfType<TextEntity>()) sbT.Append($"[({te.X:0.##},{te.Y:0.##}) h{te.Height:0.##} 「{te.Text.Replace('\n', '|')}」] ");
-                StatusMsg.Text = sbT.ToString();
+                WindowState = cmd == "@最大化" ? WindowState.Maximized : WindowState.Normal;
+                return;
+            }
+            if (cmd.StartsWith("@填充 "))   // @填充 <图案名> [比例] [角度]: 直设图案(不点下拉)并对选中边界填一次, 截图核对各图案
+            {
+                var fa = cmd.Substring(3).Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
+                SelftestHatch(fa);
+                return;
+            }
+            if (cmd.StartsWith("@工作目录 "))   // @工作目录 <路径>: 直接把文件夹加进文件管理器的工作目录(不弹对话框, 截图核对文件树用)
+            {
+                SelftestAddWorkingDir(cmd.Substring(5).Trim().Trim('"'));
+                return;
+            }
+            if (cmd.StartsWith("@文件树菜单 "))   // @文件树菜单 <工作目录根|工作目录|目录|文件|我的电脑>: 选中该类节点并弹出右键菜单(截图核对菜单项)
+            {
+                SelftestOpenFileTreeMenu(cmd.Substring(6).Trim());
+                return;
+            }
+            if (cmd.StartsWith("@对象管理器"))   // @对象管理器 [菜单 <节点名前缀> | 双击 <节点名前缀> | 勾 <节点名前缀> <开|关>]: 把左面板切到对象管理器, 可再对某节点弹菜单/双击/勾选(截图核对)
+            {
+                SelftestObjectManager(cmd.Substring(6).Trim());
+                return;
+            }
+            if (cmd.StartsWith("@导入 "))   // @导入 <路径>: 跳过文件对话框直接打开/导入(核对大图纸能否打开/耗时)
+            {
+                // 走文件管理器双击那条路(按后缀分派: .pmx 打开 / .pmb 块体 / 其余导入), 自检与用户实际操作同一条路
+                OpenOrImportFile(cmd.Substring(4).Trim().Trim('"'));
+                return;
+            }
+            if (cmd.StartsWith("@光标尺寸 "))   // @光标尺寸 <2..100>: 直设十字光标尺寸并把十字摆到视口中心(截图核对用)
+            {
+                var a = cmd.Substring(5).Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
+                if (a.Length >= 1 && double.TryParse(a[0], out double pct))
+                {
+                    SetCursorSize(pct);
+                    double fx = a.Length >= 3 && double.TryParse(a[1], out double f1) ? f1 : 0.5;   // 光标位置(视口比例), 默认正中
+                    double fy = a.Length >= 3 && double.TryParse(a[2], out double f2) ? f2 : 0.5;
+                    double cw = ViewportHost.Bounds.Width * fx, ch = ViewportHost.Bounds.Height * fy;
+                    Viewport.SetCursorScreen(cw, ch);
+                    RefreshScene();   // 直设状态后要自己驱动一帧, 否则这一帧可能早就排完了(截图会是空的)
+                    var (ax, ay) = PitMine3D.Kylin.Controls.CadGlViewport.CursorArmNdc(
+                        _cursorSizePct, Viewport.Bounds.Width, Viewport.Bounds.Height);
+                    StatusMsg.Text = $"十字光标尺寸 {_cursorSizePct:0}%：臂长 NDC=({ax:0.###},{ay:0.###})"
+                                   + $" = 横 {ax * Viewport.Bounds.Width / 2:0} px · 竖 {ay * Viewport.Bounds.Height / 2:0} px"
+                                   + $"（视口 {Viewport.Bounds.Width:0}×{Viewport.Bounds.Height:0}）";
+                }
+                return;
+            }
+            if (cmd.StartsWith("@修剪点 "))   // @修剪点 <x> <y>: 按世界坐标走一次修剪/延伸的点选(不模拟鼠标), 循环里可连点多次
+            {
+                var a = cmd.Substring(4).Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
+                if (!_trimActive) { StatusMsg.Text = "自检修剪点：当前不在修剪/延伸的点选循环中"; return; }
+                if (a.Length >= 2 && double.TryParse(a[0], out double tx) && double.TryParse(a[1], out double ty))
+                    ApplyTrimAt(tx, ty, _trimExtend);
+                return;
+            }
+            if (cmd.StartsWith("@点选 "))   // @点选 <x> <y>: 按世界坐标走真实点选路径(含空间索引), 计时见 TRACE
+            {
+                var a = cmd.Substring(4).Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
+                if (a.Length >= 2 && double.TryParse(a[0], out double px) && double.TryParse(a[1], out double py))
+                {
+                    var swS = System.Diagnostics.Stopwatch.StartNew();
+                    var hit = PickWorld2D(px, py, a.Length >= 3 && double.TryParse(a[2], out double t) ? t : 5.0);
+                    StatusMsg.Text = $"点选({px:0.#}, {py:0.#}) {swS.Elapsed.TotalMilliseconds:0.##}ms → "
+                                   + (hit == null ? "未命中" : $"命中 {hit.GetType().Name} 层「{hit.LayerName}」");
+                    if (hit != null) { _selected.Clear(); _selected.Add(hit); HighlightSelection(); }
+                }
                 return;
             }
             if (cmd.StartsWith("@鼠标 "))   // @鼠标 <按下|移动|松开|滚轮|双击> <x> <y> [右|格数]: 世界坐标→屏幕后向视口宿主投一次真实指针事件(走 _onHostPressed/Moved/Released 全链)
@@ -11053,17 +11958,24 @@ public partial class MainWindow : Window
                 else StatusMsg.Text = "自检鼠标：参数须为 <按下|移动|松开> <x> <y> [右] 且点在视口内";
                 return;
             }
-            if (cmd.StartsWith("@点选 "))   // @点选 <x> <y>: 按世界坐标走真实点选路径(含空间索引), 计时见 TRACE
+            if (cmd.StartsWith("@夹点态"))   // @夹点态 [悬停序号] [选中序号]: 直设夹点冷/暖/热三态(截图核对配色用)
             {
-                var a = cmd.Substring(4).Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
-                if (a.Length >= 2 && double.TryParse(a[0], out double px) && double.TryParse(a[1], out double py))
+                var a = cmd.Length > 4 ? cmd.Substring(4).Split(' ', System.StringSplitOptions.RemoveEmptyEntries) : System.Array.Empty<string>();
+                int hov = a.Length > 0 && int.TryParse(a[0], out int hv) ? hv : 1;
+                int sel = a.Length > 1 && int.TryParse(a[1], out int sv) ? sv : 2;
+                if (_grips.Count > 0)
                 {
-                    var swS = System.Diagnostics.Stopwatch.StartNew();
-                    var hit = PickWorld2D(px, py, a.Length >= 3 && double.TryParse(a[2], out double t) ? t : 5.0);
-                    StatusMsg.Text = $"点选({px:0.#}, {py:0.#}) {swS.Elapsed.TotalMilliseconds:0.##}ms → "
-                                   + (hit == null ? "未命中" : $"命中 {hit.GetType().Name} 层「{hit.LayerName}」");
-                    if (hit != null) { _selected.Clear(); _selected.Add(hit); HighlightSelection(); }
+                    _gripHover = System.Math.Clamp(hov, 0, _grips.Count - 1);
+                    _grips.SelectOnly(System.Math.Clamp(sel, 0, _grips.Count - 1));
+                    RedrawHighlight();
+                    StatusMsg.Text = $"夹点 {_grips.Count} 个：悬停 #{_gripHover}(绿) · 选中 #{sel}(红) · 其余冷态(蓝)";
                 }
+                else StatusMsg.Text = "夹点态：当前没有夹点（先选中实体）";
+                return;
+            }
+            if (cmd.StartsWith("@文件树坐标 "))   // @文件树坐标 <名字前缀>: 记该节点标题行的屏幕中心 + 树的滚动偏移, 之后每秒再记偏移 12 次(外部真点一下, 看横向偏移动没动)
+            {
+                SelftestFileTreeProbe(cmd.Substring(6).Trim());
                 return;
             }
             if (cmd.StartsWith("@稍后 "))   // @稍后 <毫秒> <步骤>: 真回到消息循环等这么久再跑该步(切标签会销毁/重建 GL 上下文, 得让它真的渲染过才有意义)
@@ -11077,8 +11989,8 @@ public partial class MainWindow : Window
                     t.Tick += (_, _) =>
                     {
                         t.Stop();
-                        try { RunSelftestStep(later); } catch (System.Exception ex) { StatusMsg.Text = "自检步骤异常: " + ex.Message; }
-                        PitMine3D.Kylin.CrashLog.Write("自检", $"(+{ms}ms) {later}  →  状态栏「{StatusMsg.Text}」");
+                        try { RunSelftestStep(later); SyncCursorMode(); } catch (System.Exception ex) { StatusMsg.Text = "自检步骤异常: " + ex.Message; }
+                        PitMine3D.Kylin.CrashLog.Write("自检", $"(+{ms}ms) {later}  →  状态栏「{StatusMsg.Text}」 光标={Viewport.CurrentCursorMode}");
                     };
                     t.Start();
                 }
@@ -11130,6 +12042,25 @@ public partial class MainWindow : Window
                 else StatusMsg.Text = $"自检：无第 {cmd.Substring(3).Trim()} 个文档(共 {_docs.Count} 个)";
                 return;
             }
+            if (cmd == "@文字清单")   // 场景里全部文字的 位置/字高/内容(核对在位编辑/拖放结果)
+            {
+                var sbT = new System.Text.StringBuilder("文字清单：");
+                foreach (var te in _scene.Entities.OfType<TextEntity>()) sbT.Append($"[({te.X:0.##},{te.Y:0.##}) h{te.Height:0.##} 「{te.Text.Replace('\n', '|')}」] ");
+                StatusMsg.Text = sbT.ToString();
+                return;
+            }
+            if (cmd == "@高亮诊断")   // 选中高亮/夹点到底画在哪: 高亮缓冲的世界范围 vs 可见范围, 原点是否对上
+            {
+                var he = Viewport.HighlightExtent();
+                var vb = CurrentViewBounds();
+                var gsb = new System.Text.StringBuilder();
+                for (int gi = 0; gi < _grips.Count && gi < 4; gi++) gsb.Append($"({_grips.Grips[gi].X:0.###},{_grips.Grips[gi].Y:0.###}) ");
+                StatusMsg.Text = $"高亮诊断：段数 {he.segs} 世界范围 X[{he.minX:0.###},{he.maxX:0.###}] Y[{he.minY:0.###},{he.maxY:0.###}] · "
+                               + $"可见 X[{(vb?[0] ?? 0):0.###},{(vb?[2] ?? 0):0.###}] Y[{(vb?[1] ?? 0):0.###},{(vb?[3] ?? 0):0.###}] · "
+                               + $"视口原点 ({Viewport.RenderOriginX:0.###},{Viewport.RenderOriginY:0.###}) 镶嵌原点 ({Cad.Draw.RenderOrigin.X:0.###},{Cad.Draw.RenderOrigin.Y:0.###}) 高亮原点 ({_hlEntOrigin.x:0.###},{_hlEntOrigin.y:0.###}) · "
+                               + $"选中 {_selected.Count} 夹点 {_grips.Count} {gsb}· 夹点半边 {(_grips.Count > 0 ? GripHalf(_grips.Grips[0].X, _grips.Grips[0].Y, 0) : 0):0.####}";
+                return;
+            }
             if (cmd == "@视口")   // 报告"屏幕上到底有没有东西": 可见世界范围 + 落在其中的顶点比例
             {
                 ReportViewportContent();
@@ -11141,13 +12072,103 @@ public partial class MainWindow : Window
                 et.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Source = et, Key = Key.Escape });
                 return;
             }
-            if (cmd == "@确认") { if (!ConfirmOneShotPick() && !ConfirmEditPoint()) FinishSelectObjects(true); return; }   // 右键/回车确认(逐面点选 / 选择对象阶段)
+            if (cmd == "@确认")   // 右键确认(逐面点选 / 编辑命令的选择对象阶段 / 选择对象阶段)
+            {
+                // 顺序照真实右键那条路(见 OnViewportContextMenuOpening): 先认 SelectObjectsAsync 的等待,
+                // 再认编辑命令的选择对象阶段 —— 反过来会把「修剪/延伸 选剪切边」错当成移动的选择集确认。
+                if (!ConfirmOneShotPick())
+                {
+                    if (_selectObjectsTcs != null) FinishSelectObjects(true);
+                    else if (_editAwaitSelect) ConfirmEditSelection();
+                    else if (!ConfirmEditPoint()) FinishSelectObjects(true);
+                }
+                return;
+            }
             if (cmd == "@取消") { if (!CancelOneShotPick()) FinishSelectObjects(false); return; }
+            if (cmd.StartsWith("@框选面 "))   // @框选面 <x0> <y0> <x1> <y1> [shift]: 世界坐标矩形直接喂给拾取框选回调(x1<x0 = 交叉; shift = 移除)
+            {
+                var a = cmd.Substring(4).Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
+                if (a.Length >= 4 && double.TryParse(a[0], out double bx0) && double.TryParse(a[1], out double by0)
+                                  && double.TryParse(a[2], out double bx1) && double.TryParse(a[3], out double by1))
+                {
+                    if (_pickBox == null) { StatusMsg.Text = "自检框选面：当前没有拾取框选回调"; return; }
+                    var s0 = Viewport.WorldToScreen(bx0, by0, 0); var s1 = Viewport.WorldToScreen(bx1, by1, 0);
+                    if (s0 == null || s1 == null) { StatusMsg.Text = "自检框选面：角点投不到屏幕"; return; }
+                    bool rm = a.Length >= 5 && a[4].Equals("shift", System.StringComparison.OrdinalIgnoreCase);
+                    _pickBox(new Avalonia.Point(s0.Value.sx, s0.Value.sy), new Avalonia.Point(s1.Value.sx, s1.Value.sy), s1.Value.sx < s0.Value.sx, rm);
+                    var (tris, segs) = Viewport.FacePickOverlayCounts;
+                    StatusMsg.Text += $"  [自检框选面 ({bx0:0.#},{by0:0.#})→({bx1:0.#},{by1:0.#}) {(s1.Value.sx < s0.Value.sx ? "交叉" : "窗口")}{(rm ? " 移除" : "")} 叠层 面{tris}/线{segs} 标签「{CmdPrompt?.Text}」]";
+                }
+                else StatusMsg.Text = "自检框选面：参数须为 x0 y0 x1 y1 [shift]";
+                return;
+            }
+            if (cmd.StartsWith("@悬停 "))   // @悬停 <x> <y> [z]: 把世界点直接喂给拾取悬停回调(逐面点选的"光标压到哪个面亮哪个面"), 不模拟鼠标
+            {
+                var a = cmd.Substring(3).Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
+                if (a.Length >= 2 && double.TryParse(a[0], out double hx) && double.TryParse(a[1], out double hy))
+                {
+                    double hz = a.Length >= 3 && double.TryParse(a[2], out double z3) ? z3 : 0;
+                    if (_pickHover == null) { StatusMsg.Text = $"自检悬停：当前没有拾取悬停回调（({hx:0.##}, {hy:0.##}) 被忽略）"; return; }
+                    var sp = Viewport.WorldToScreen(hx, hy, hz);
+                    var pt = sp is { } s0 ? new Avalonia.Point(s0.sx, s0.sy) : new Avalonia.Point(double.NaN, double.NaN);
+                    _pickHover(pt, (hx, hy));
+                    RefreshPickTip(pt);
+                    var (tris, segs) = Viewport.FacePickOverlayCounts;
+                    StatusMsg.Text = $"自检悬停 ({hx:0.##}, {hy:0.##}, {hz:0.##}) 屏幕({pt.X:0},{pt.Y:0}) → 「{_pickHoverInfo}」 叠层 面{tris}/线{segs} 浮标「{(_active.DragTip?.Child as TextBlock)?.Text}」";
+                }
+                else StatusMsg.Text = "自检悬停：参数须为 <x> <y> [z]";
+                return;
+            }
             if (cmd.StartsWith("@示例两体")) { SelftestTwoSolids(); return; }   // 两个相互重叠的立方体(布尔/刀切用)
             if (cmd.StartsWith("@示例点线")) { SelftestPointsAndLines(); return; }   // 若干高程点 + 两条多段线并选中(点/线编辑用)
+            if (cmd.StartsWith("@点击 "))   // @点击 <x> <y> [ctrl|shift]: 世界坐标→屏幕坐标后走真正的空闲态点选 PickAt(选集按修饰键更新; 区别于 @点选 只探命中)
+            {
+                var a = cmd.Substring(3).Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
+                if (a.Length >= 2 && double.TryParse(a[0], out double sx) && double.TryParse(a[1], out double sy)
+                    && Viewport.WorldToScreen(sx, sy, 0) is { } sp)
+                {
+                    var mod = a.Length >= 3 && a[2].Equals("ctrl", System.StringComparison.OrdinalIgnoreCase) ? SelectionOps.Modifier.Ctrl
+                            : a.Length >= 3 && a[2].Equals("shift", System.StringComparison.OrdinalIgnoreCase) ? SelectionOps.Modifier.Shift
+                            : SelectionOps.Modifier.None;
+                    _snapWorld = null;
+                    PickAt(new Avalonia.Point(sp.sx, sp.sy), mod);
+                    StatusMsg.Text += $"  [自检点击 ({sx:0.#},{sy:0.#}) 屏幕({sp.sx:0},{sp.sy:0}) 容差 {SnapTolWorld(new Avalonia.Point(sp.sx, sp.sy)):0.##} {mod} → 选集: {string.Join(",", _selected.Select(en => en.GetType().Name.Replace("Entity", "")))}]";
+                }
+                else StatusMsg.Text = "自检点击：参数须为 <x> <y> [ctrl|shift] 且点在视口内";
+                return;
+            }
             if (cmd.StartsWith("@示例刀面")) { SelftestKnife(); return; }   // 一张 z=40 的开放水平面(刀切实体用)
+            if (cmd.StartsWith("@共面示例")) { SelftestCoplanar(cmd.Contains("低角")); return; }   // 地形 + 贴在其上的两张网(近共面/严格共面), 截图核对共面显示不交错; "低角" = 取景后压低视角(擦边看)
             if (cmd.StartsWith("@示例裁剪")) { SelftestClipFixture(); return; }   // 裁刀 + 带完整属性的被裁线(核对裁剪是否改属性)
             if (cmd.StartsWith("@列属性")) { SelftestDumpProps(); return; }               // 把场景里多段线的全部属性打到信息栏
+            if (cmd.StartsWith("@标注示例"))   // @标注示例 [对齐|半径]: 直接造一条标注实体入场景并选中(核对上屏/特性面板)
+            {
+                bool rad = cmd.Contains("半径");
+                var de = rad
+                    ? new Cad.Draw.DimensionEntity { Kind = Cad.Draw.DimensionEntity.DimKind.Radial, Cx = 40, Cy = 30, Radius = 25, DirX = 1, DirY = 0.6, BaseHeight = 4, LayerName = _layers.Current.Name, Cr = 0.95f, Cg = 0.85f, Cb = 0.30f }
+                    : new Cad.Draw.DimensionEntity { Kind = Cad.Draw.DimensionEntity.DimKind.Aligned, X1 = 10, Y1 = 10, X2 = 110, Y2 = 10, OffX = 10, OffY = 35, BaseHeight = 4, LayerName = _layers.Current.Name, Cr = 0.95f, Cg = 0.85f, Cb = 0.30f };
+                BeginChange();
+                _scene.Add(de);
+                RefreshScene();                       // 先重建场景(渲染原点可能随之变)
+                Viewport.FitBounds(new double[] { -20, -20, 150, 90 });
+                SelectEntities(new Cad.Draw.SceneEntity[] { de });   // 再建高亮 —— 反过来高亮会按旧原点画, 整体偏一截
+                StatusMsg.Text = $"自检标注：{Cad.Draw.EntityTypeName.Of(de)} 测量值 {de.Measurement:0.##} · 已入场景并选中";
+                return;
+            }
+            if (cmd.StartsWith("@取色 "))   // @取色 <取色器名> <ACI号|随层>: 等价于在下拉里点一格(核对"选了色有没有写进实体")
+            {
+                var a = cmd.Substring(4).Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
+                if (a.Length >= 2 && SelftestFindControl(a[0]) is Controls.EntityColorPicker pk)
+                    pk.PickForSelftest(a[1] is "随层" or "bylayer" or "ByLayer" ? 0 : (int.TryParse(a[1], out int ai) ? ai : 1));
+                else StatusMsg.Text = $"自检取色：找不到取色器「{(a.Length > 0 ? a[0] : "")}」";
+                return;
+            }
+            if (cmd == "@选择颜色") { SelftestOpenColorDialog(); return; }   // 开「更多颜色…」那个对话框(截图核对)
+            if (cmd.StartsWith("@弹下拉 "))   // @弹下拉 <控件名>: 打开某按钮挂的下拉(不模拟鼠标), 截图核对下拉内容
+            {
+                SelftestOpenFlyout(cmd.Substring(5).Trim());
+                return;
+            }
             if (cmd.StartsWith("@编辑填充窗 "))   // @编辑填充窗 <图案|-> <角度|-> <比例|自动|-> [十字 开|关] [确定]: 直设开着的「编辑填充」对话框各项并可按确定(核对 确定→写回→重算 那条路)
             {
                 var a = cmd.Substring(6).Trim().Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
@@ -11164,9 +12185,311 @@ public partial class MainWindow : Window
                 { WindowState = WindowState.Normal; Position = new PixelPoint(0, 0); Width = w; Height = h; }
                 return;
             }
+            if (cmd.StartsWith("@渲染配置"))   // @渲染配置 [页名]: 开窗并切页(截图核对窗体用)
+            {
+                SelftestOpenRenderConfig(cmd.Length > 5 ? cmd.Substring(5).Trim() : "着色");
+                return;
+            }
+            if (cmd.StartsWith("@材质") || cmd.StartsWith("@贴图") || cmd.StartsWith("@透明"))
+            {   // @材质 <金属度> <粗糙度> · @贴图 <内置名|路径> [平铺尺度] · @透明 <百分比>
+                string kind = cmd.Substring(1, 2);
+                var ma = cmd.Length > 3
+                    ? cmd.Substring(3).Split(' ', System.StringSplitOptions.RemoveEmptyEntries)
+                    : System.Array.Empty<string>();
+                SelftestSetMaterial(kind, ma);
+                return;
+            }
+            if (cmd.StartsWith("@着色"))   // @着色 <档> [等高距] [色带]: 直设「渲染配置」的着色状态(截图核对各档配色用, 不去模拟点窗体控件)
+            {
+                var a = cmd.Length > 3
+                    ? cmd.Substring(3).Split(' ', System.StringSplitOptions.RemoveEmptyEntries)
+                    : System.Array.Empty<string>();
+                SelftestSetShading(a);
+                return;
+            }
+            if (cmd.StartsWith("@班次日历"))   // @班次日历 [yyyy-MM-dd] [生成整月|保存]: 开窗并可跑一次操作
+            {
+                var a = cmd.Length > 5 ? cmd.Substring(5).Split(' ', System.StringSplitOptions.RemoveEmptyEntries) : System.Array.Empty<string>();
+                OpenShiftCalendar();
+                var sw = _shiftCalWin;
+                if (sw == null) { StatusMsg.Text = "@班次日历: 窗没开起来"; return; }
+                foreach (var t in a)
+                {
+                    if (System.DateTime.TryParse(t, System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.None, out var d)) sw.SetDate(d);
+                    else if (t == "生成整月") sw.BuildMonth();
+                    else if (t == "保存") sw.SaveDay();
+                }
+                StatusMsg.Text = $"@班次日历: {sw.StatusText} · {sw.MonthText}";
+                return;
+            }
+            if (cmd.StartsWith("@注册"))   // @注册 [激活码]: 开注册窗; 给了码就试着激活一次(核对状态横幅与报错文案)
+            {
+                string code = cmd.Length > 3 ? cmd.Substring(3).Trim() : "";
+                OpenRegisterWindow();
+                var rw = _registerWin;
+                if (rw == null) { StatusMsg.Text = "@注册: 窗没开起来"; return; }
+                if (code.Length > 0) { rw.SetActivationCode(code); rw.DoActivate(); }
+                StatusMsg.Text = $"@注册: 机器码 {rw.MachineText} · 状态「{rw.StatusTitle}」{(rw.ResultText.Length > 0 ? " · " + rw.ResultText : "")}";
+                return;
+            }
+            if (cmd.StartsWith("@数据库浏览"))   // @数据库浏览 [表名] [SQL...]: 开窗、选表、跑一条只读查询
+            {
+                var rest = cmd.Length > 6 ? cmd.Substring(6).Trim() : "";
+                SelftestSqlBrowser(rest);
+                return;
+            }
+            if (cmd.StartsWith("@采剥"))   // @采剥 [采场名] [外排名|-] [内排名|-] [进度 0..1] [反向]: 装配并定格到某进度
+            {
+                var a = cmd.Length > 3
+                    ? cmd.Substring(3).Split(' ', System.StringSplitOptions.RemoveEmptyEntries)
+                    : System.Array.Empty<string>();
+                SelftestMiningSim(a);
+                return;
+            }
+            if (cmd.StartsWith("@格网导出"))   // @格网导出 [obj|ply|stl|off] [法线] [翻转] [缩放=N] [选中|全部]: 直设选项并跑一次
+            {
+                var a = cmd.Length > 5
+                    ? cmd.Substring(5).Split(' ', System.StringSplitOptions.RemoveEmptyEntries)
+                    : System.Array.Empty<string>();
+                SelftestMeshExport(a);
+                return;
+            }
+            if (cmd.StartsWith("@快选"))   // @快选 [类型] [特性] [运算符] [值] [排除] [追加] [当前] [预览|确定]: 直设「快速选择」对话框各下拉并跑
+            {
+                var a = cmd.Length > 3
+                    ? cmd.Substring(3).Split(' ', System.StringSplitOptions.RemoveEmptyEntries)
+                    : System.Array.Empty<string>();
+                SelftestQuickSelect(a);
+                return;
+            }
+            if (cmd.StartsWith("@图层"))   // @图层 <层名> [透明度%] [线宽mm] [冻结|锁定|不打印|说明=文本]: 直设图层特性并开管理器(截图核对表与随层透明用)
+            {
+                var a = cmd.Length > 3
+                    ? cmd.Substring(3).Split(' ', System.StringSplitOptions.RemoveEmptyEntries)
+                    : System.Array.Empty<string>();
+                SelftestSetLayer(a);
+                return;
+            }
             _cmdLineDriven = false;   // 脚本里的裸命令等同"点 Ribbon 按钮": 参数取默认值, 不在命令行等人答
             DispatchRibbon(cmd);
         }
+    }
+
+    /// <summary>
+    /// 自检：开「数据库浏览」窗，可选选中一张表、再跑一条只读查询。
+    /// 用法 <c>@数据库浏览 [表名] [SELECT ...]</c>（表名与 SQL 用空格分隔，SQL 取剩余全部）。
+    /// </summary>
+    private void SelftestSqlBrowser(string rest)
+    {
+        OpenSqlBrowser();
+        var w = _sqlBrowserWin;
+        if (w == null) { StatusMsg.Text = "@数据库浏览: 窗没开起来(可能没连上数据库)"; return; }
+        string note = "";
+        if (rest.Length > 0)
+        {
+            int sp = rest.IndexOf(' ');
+            string table = sp < 0 ? rest : rest.Substring(0, sp);
+            string sql = sp < 0 ? "" : rest.Substring(sp + 1).Trim();
+            if (!w.SelectTable(table)) note += $" · 表「{table}」不在树里";
+            if (sql.Length > 0) { w.SetSql(sql); w.Execute(); }
+        }
+        StatusMsg.Text = $"@数据库浏览: {w.StatusText} · 列 {w.ColumnRowCount} · 预览「{w.PreviewCountText}」 · SQL「{w.SqlStatusText}」{note}";
+    }
+
+    /// <summary>
+    /// 自检：开「采剥过程演示」窗，按名字直设三个模型下拉、装配、定格到给定进度。
+    /// 用法 <c>@采剥 [采场名] [外排名|-] [内排名|-] [进度] [反向]</c>；名字给 - 表示「不用」。
+    /// </summary>
+    private void SelftestMiningSim(string[] a)
+    {
+        OpenMiningSim();
+        var w = _simWin;
+        if (w == null) { StatusMsg.Text = "@采剥: 窗没开起来"; return; }
+        var notes = new List<string>();
+        double? seek = null;
+        int i = 0;
+        foreach (var t in a)
+        {
+            if (t == "反向") { w.SetReverse(true); continue; }
+            if (double.TryParse(t, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double v) && v >= 0 && v <= 1)
+            { seek = v; continue; }
+            string name = t == "-" ? "（不用）" : t;
+            bool ok = (i++) switch { 0 => w.SelectPit(name), 1 => w.SelectExt(name), 2 => w.SelectInt(name), _ => true };
+            if (!ok) notes.Add($"「{t}」不在候选里");
+        }
+        if (!w.Setup()) { StatusMsg.Text = $"@采剥: {w.PhaseText}"; return; }
+        if (seek is { } p) w.SeekTo(p);
+        string why = notes.Count > 0 ? " · " + string.Join("/", notes) : "";
+        StatusMsg.Text = $"@采剥: {w.StripText} · {w.MinedText} · {w.PhaseText}{why}";
+    }
+
+    /// <summary>
+    /// 自检：开「格网导出」窗，按名字直设格式与三个选项，再点导出。脚本点不了控件，故直设后走同一条路径。
+    /// 用法 <c>@格网导出 [obj|ply|stl|off] [法线] [翻转] [缩放=N] [选中|全部]</c>。
+    /// </summary>
+    private void SelftestMeshExport(string[] a)
+    {
+        OpenMeshExportDialog();
+        var w = _meshExportWin;
+        if (w == null) { StatusMsg.Text = "@格网导出: 窗没开起来"; return; }
+        bool selectedOnly = false, run = false;
+        var notes = new List<string>();
+        foreach (var t in a)
+        {
+            if (t == "法线") { w.SetNormals(true); continue; }
+            if (t == "翻转") { w.SetFlip(true); continue; }
+            if (t.StartsWith("缩放=")) { w.SetScale(t.Substring(3)); continue; }
+            if (t == "选中") { selectedOnly = true; run = true; continue; }
+            if (t == "全部") { selectedOnly = false; run = true; continue; }
+            if (!w.SelectFormat(t)) notes.Add($"格式「{t}」不认");
+        }
+        if (run) w.DoExport(selectedOnly);
+        string why = notes.Count > 0 ? " · " + string.Join("/", notes) : "";
+        StatusMsg.Text = $"@格网导出: {w.StatusText}{why}";
+    }
+
+    /// <summary>
+    /// 自检：把「快速选择」对话框开出来，按名字直设各下拉，再点预览/确定。
+    /// 脚本点不了 ComboBox，故走与窗体控件完全相同的选中路径（同 <c>@着色</c>/<c>@图层</c> 的做法）。
+    /// 用法 <c>@快选 [类型名] [特性名] [运算符名] [值] [排除] [追加] [当前] [预览|确定]</c>。
+    /// </summary>
+    private void SelftestQuickSelect(string[] a)
+    {
+        OpenQuickSelectDialog();
+        var w = _qsWin;
+        if (w == null) { StatusMsg.Text = "@快选: 对话框没开起来"; return; }
+        var notes = new List<string>();
+        string tail = "";
+        int i = 0;
+        foreach (var t in a)
+        {
+            if (t is "排除") { w.SetExclude(true); continue; }
+            if (t is "追加") { w.SetAppend(true); continue; }
+            if (t is "当前" or "当前选择集") { if (!w.SelectScope(1)) notes.Add("范围?"); continue; }
+            if (t is "预览" or "确定") { tail = t; continue; }
+            // 位置参数: 类型 → 特性 → 运算符 → 值
+            switch (i++)
+            {
+                case 0: if (!w.SelectType(t)) notes.Add($"类型「{t}」不在候选里"); break;
+                case 1: if (!w.SelectProperty(t)) notes.Add($"特性「{t}」不在候选里"); break;
+                case 2: if (!w.SelectOperator(t)) notes.Add($"运算符「{t}」不在候选里"); break;
+                default: w.SetValue(t); break;
+            }
+        }
+        if (tail == "预览") w.DoPreview();
+        else if (tail == "确定") w.DoOk();
+        string why = notes.Count > 0 ? " · 未命中: " + string.Join("/", notes) : "";
+        StatusMsg.Text = tail == "确定" ? StatusMsg.Text : $"@快选: {w.StatusText.Replace("\n", " ")}{why}";
+    }
+
+    /// <summary>
+    /// 自检：直设某图层的特性并把图层特性管理器开出来。窗体是非模态的、脚本点不了 DataGrid，
+    /// 所以按 @着色/@夹点态 的老办法 —— 直设状态再走与窗体完全相同的刷新路径。
+    /// 用法 <c>@图层 &lt;层名&gt; [透明度%] [线宽mm] [冻结] [锁定] [不打印] [说明=文本]</c>；层名不存在则新建。
+    /// </summary>
+    private void SelftestSetLayer(string[] a)
+    {
+        if (a.Length == 0) { OpenLayerManager(); StatusMsg.Text = $"@图层: 已开管理器 · 共 {_layers.Layers.Count} 层"; return; }
+        string name = a[0];
+        var l = _layers.Get(name);
+        if (l == null) { l = _layers.New(name); }
+        for (int i = 1; i < a.Length; i++)
+        {
+            string t = a[i];
+            if (t == "冻结") l.Frozen = true;
+            else if (t == "解冻") l.Frozen = false;
+            else if (t == "锁定") l.Locked = true;
+            else if (t == "解锁") l.Locked = false;
+            else if (t == "不打印") l.Plottable = false;
+            else if (t == "打印") l.Plottable = true;
+            else if (t.StartsWith("说明=")) l.Description = t.Substring(3);
+            else if (t.EndsWith("mm") && double.TryParse(t.Substring(0, t.Length - 2), out double mm))
+                l.LineWeight = Cad.Draw.LineWeightUtil.Snap((short)System.Math.Clamp((int)System.Math.Round(mm * 100), 0, 211));
+            else if (short.TryParse(t.TrimEnd('%'), out short tr)) l.Transparency = System.Math.Clamp(tr, (short)0, (short)90);
+        }
+        PopulateDrawingLayers();
+        AfterLayerStateChange();
+        OpenLayerManager();
+        _layerMgrWin?.SelectRow(name);
+        StatusMsg.Text = $"@图层「{l.Name}」透明 {l.Transparency}% · 线宽 {Cad.Draw.LineWeightUtil.Display(l.LineWeight)} · "
+                       + $"{(l.Frozen ? "冻结" : l.Visible ? "开" : "关")}/{(l.Locked ? "锁" : "解锁")}/{(l.Plottable ? "打印" : "不打印")}";
+    }
+
+    /// <summary>自检：打开指定控件挂的下拉(Flyout)，把类型/开合/项数报到状态栏与日志(截图核对下拉用)。</summary>
+    /// <summary>自检：按名字找控件 —— 先查 XAML 名域, 代码建的(如特性面板那个取色器)退回 visual 树按 Name 找; "#tag" = 按 Tag 找按钮。</summary>
+    private Control? SelftestFindControl(string name) => name.StartsWith("#")
+        ? this.GetVisualDescendants().OfType<Button>().FirstOrDefault(b => (b.Tag as string) == name.Substring(1))
+        : this.FindControl<Control>(name) ?? this.GetVisualDescendants().OfType<Control>().FirstOrDefault(c => c.Name == name);
+
+    /// <summary>自检：打开指定控件的下拉 —— 取色器直接展开, 其余按挂着的 Flyout 弹, 并把项数报到日志。</summary>
+    private void SelftestOpenFlyout(string name)
+    {
+        Control? ctl = SelftestFindControl(name);
+        if (ctl == null) { StatusMsg.Text = $"自检下拉：找不到控件「{name}」"; return; }
+        if (ctl is Controls.EntityColorPicker cp)   // 取色器是 ToggleButton + Popup(非 Flyout), 直接开
+        {
+            cp.OpenDropdown();
+            StatusMsg.Text = $"自检下拉：{name} → 取色器 展开={cp.IsDropdownOpen}";
+            PitMine3D.Kylin.CrashLog.Write("自检下拉", StatusMsg.Text);
+            return;
+        }
+        var fl = (ctl as Button)?.Flyout ?? (ctl as SplitButton)?.Flyout ?? FlyoutBase.GetAttachedFlyout(ctl);
+        if (fl == null) { StatusMsg.Text = $"自检下拉：「{name}」没挂 Flyout"; return; }
+        string err = "";
+        try { fl.ShowAt(ctl); } catch (System.Exception ex) { err = " 异常=" + ex.GetType().Name + ":" + ex.Message; }
+        int n = fl is MenuFlyout mf
+            ? (mf.ItemsSource?.Cast<object>().Count() ?? mf.Items.Count)
+            : -1;
+        StatusMsg.Text = $"自检下拉：{name} → {fl.GetType().Name} IsOpen={fl.IsOpen} 项数={n}{err}";
+        PitMine3D.Kylin.CrashLog.Write("自检下拉", StatusMsg.Text);
+        SelftestProbeFlyoutHost(fl, name);
+    }
+
+    /// <summary>自检：弹出体真正上屏了没 —— 取 Flyout 内部 Popup 的宿主(PopupRoot), 记尺寸/可见/呈现器项数, 并把宿主渲染成 PNG 落到数据目录。</summary>
+    private void SelftestProbeFlyoutHost(FlyoutBase fl, string name)
+    {
+        try
+        {
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            const System.Reflection.BindingFlags bf = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.FlattenHierarchy;
+            Popup? popup = null;
+            for (var t = fl.GetType(); t != null && popup == null; t = t.BaseType)
+            {
+                foreach (var pi in t.GetProperties(bf)) if (typeof(Popup).IsAssignableFrom(pi.PropertyType) && pi.GetIndexParameters().Length == 0) { popup = pi.GetValue(fl) as Popup; if (popup != null) break; }
+                if (popup == null) foreach (var fi in t.GetFields(bf)) if (typeof(Popup).IsAssignableFrom(fi.FieldType)) { popup = fi.GetValue(fl) as Popup; if (popup != null) break; }
+            }
+            if (popup == null) { PitMine3D.Kylin.CrashLog.Write("自检下拉", $"{name}: 取不到 Popup"); return; }
+            var host = popup.Host as Visual;
+            int items = -1; string presenter = "无";
+            if (popup.Child is Control child)
+            {
+                presenter = child.GetType().Name + $" 尺寸={child.Bounds.Width:0}x{child.Bounds.Height:0} 可见={child.IsVisible}";
+                items = child.GetVisualDescendants().OfType<MenuItem>().Count();
+                if (child is ItemsControl ic)
+                    presenter += $" ItemCount={ic.ItemCount} 源同一={(fl is MenuFlyout m && ReferenceEquals(ic.ItemsSource, m.Items))} 源型={ic.ItemsSource?.GetType().Name} 面板子项={ic.ItemsPanelRoot?.Children.Count.ToString() ?? "无面板"} 模板已套={ic.GetVisualDescendants().Any()}";
+            }
+            string hostInfo = host == null ? "宿主=null" : $"宿主={host.GetType().Name} 尺寸={host.Bounds.Width:0}x{host.Bounds.Height:0} 可见={host.IsVisible}";
+            PitMine3D.Kylin.CrashLog.Write("自检下拉", $"{name}: Popup.IsOpen={popup.IsOpen} {hostInfo} 呈现器={presenter} 可见MenuItem={items}");
+            if (host is Control hc && hc.Bounds.Width > 0 && hc.Bounds.Height > 0)
+            {
+                double sc = RenderScaling;
+                using var rtb = new Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize((int)(hc.Bounds.Width * sc), (int)(hc.Bounds.Height * sc)), new Vector(96 * sc, 96 * sc));
+                rtb.Render(hc);
+                string png = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(PitMine3D.Kylin.CrashLog.Path) ?? ".", $"flyout_{name}.png");
+                rtb.Save(png);
+                PitMine3D.Kylin.CrashLog.Write("自检下拉", $"{name}: 弹出体已渲染 → {png}");
+            }
+        }
+        catch (System.Exception ex) { PitMine3D.Kylin.CrashLog.Write("自检下拉", $"{name}: 探针异常 {ex.GetType().Name}: {ex.Message}"); }
+    }
+
+    /// <summary>自检：直接开「选择颜色」对话框(不弹模态, 便于截图核对控件长相)。</summary>
+    private void SelftestOpenColorDialog()
+    {
+        var d = new Controls.ColorPickDialog(Avalonia.Media.Color.FromRgb(0, 128, 255));
+        d.Show(this);
+        StatusMsg.Text = "自检：已打开「选择颜色」对话框";
     }
 
     /// <summary>
@@ -11177,7 +12500,8 @@ public partial class MainWindow : Window
     private void SelftestFeedPick(double x, double y)
     {
         if (_oneShotPick == null) { StatusMsg.Text = $"自检拾取：当前没有挂起的拾取（({x:0.##}, {y:0.##}) 被忽略）"; return; }
-        var cb = _oneShotPick; _oneShotPick = null; _pickConfirmable = false;
+        var cb = _oneShotPick; _oneShotPick = null; _pickConfirmable = false; _pickPrompt = "";
+        _lastPickScreen = Viewport.WorldToScreen(x, y, 0) is { } sp ? (sp.sx, sp.sy) : (double.NaN, double.NaN);   // 3D 下按屏幕点做深度拾取
         cb(x, y);
     }
 
@@ -11225,6 +12549,83 @@ public partial class MainWindow : Window
         StatusMsg.Text = _editAwaitSelect
             ? $"{_editName}：选择对象（右键确定，已选 {_selected.Count}）"
             : (_selected.Count > 0 ? $"已选 {_selected.Count} 个实体" : "未选中");
+    }
+
+    /// <summary>
+    /// 自检：屏幕↔世界往返诊断。报告本视口的尺寸/缩放、渲染局部原点（视口 vs 全局静态），
+    /// 以及三个屏幕点「反投影→再投影」的像素误差 —— 光标位置与画出来的几何对不上时，
+    /// 一眼看出是投影口径不一致，还是镶嵌用错了原点。
+    /// </summary>
+    private readonly System.Diagnostics.Stopwatch _dragDiag = System.Diagnostics.Stopwatch.StartNew();
+
+    /// <summary>
+    /// 拖框/取点偏移排查：把「光标像素 → 视平面世界点 → 再投影回屏幕」这一圈的两端与误差落日志，
+    /// 连同视口尺寸、上一帧实际渲染像素、渲染局部原点(视口 vs 全局)一并记下。节流 200ms。
+    /// </summary>
+    private void LogDragDiag(Avalonia.Point p)
+    {
+        if (_dragDiag.ElapsedMilliseconds < 200) return;
+        _dragDiag.Restart();
+        var wv = Viewport.ScreenToViewPlane(p.X, p.Y);
+        string line;
+        if (wv == null)
+        {
+            line = $"起点({_selBoxStart.X:0},{_selBoxStart.Y:0}) 光标({p.X:0},{p.Y:0}) → 视平面 null";
+        }
+        else
+        {
+            var bk = Viewport.WorldToScreen(wv.Value.x, wv.Value.y, wv.Value.z);
+            line = $"起点({_selBoxStart.X:0},{_selBoxStart.Y:0}) 光标({p.X:0},{p.Y:0})"
+                 + $" → 视平面({wv.Value.x:0.###},{wv.Value.y:0.###},{wv.Value.z:0.###})"
+                 + (bk == null ? " → 屏 null"
+                    : $" → 屏({bk.Value.sx:0.#},{bk.Value.sy:0.#}) Δ=({bk.Value.sx - p.X:+0.#;-0.#},{bk.Value.sy - p.Y:+0.#;-0.#})px");
+        }
+        var lr = Viewport.LastRenderPx;
+        PitMine3D.Kylin.CrashLog.Write("框选诊断",
+            line + $" | 视口={Viewport.Bounds.Width:0.#}x{Viewport.Bounds.Height:0.#} 宿主={ViewportHost.Bounds.Width:0.#}x{ViewportHost.Bounds.Height:0.#}"
+                 + $" 上帧={lr.w}x{lr.h} 缩放={(VisualRoot?.RenderScaling ?? 1):0.###}"
+                 + $" 原点=({Viewport.RenderOriginX:0.###},{Viewport.RenderOriginY:0.###}) 全局=({Cad.Draw.RenderOrigin.X:0.###},{Cad.Draw.RenderOrigin.Y:0.###})"
+                 + $" | {Viewport.CameraDebug()}");
+    }
+
+    private void PointerRoundTripDiag()
+    {
+        // 先报最要紧的一条：上次光标位置反投影再投影回来差了多少像素(偏移问题就看它)
+        var lp = _lastPointer;
+        var lw = Viewport.ScreenToWorld(lp.X, lp.Y);
+        var lb = lw == null ? null : Viewport.WorldToScreen(lw.Value.x, lw.Value.y, 0);
+        string cur = lw == null
+            ? $"光标({lp.X:0},{lp.Y:0})→世界 null"
+            : lb == null
+                ? $"光标({lp.X:0},{lp.Y:0})→世界({lw.Value.x:0.###},{lw.Value.y:0.###})→屏 null"
+                : $"光标({lp.X:0},{lp.Y:0})→世界({lw.Value.x:0.###},{lw.Value.y:0.###})→屏({lb.Value.sx:0.#},{lb.Value.sy:0.#}) Δ=({lb.Value.sx - lp.X:+0.#;-0.#},{lb.Value.sy - lp.Y:+0.#;-0.#})px";
+
+        double hw = ViewportHost.Bounds.Width, hh = ViewportHost.Bounds.Height;
+        double vw = Viewport.Bounds.Width, vh = Viewport.Bounds.Height;
+        double scale = VisualRoot?.RenderScaling ?? 1.0;
+        double gox = Cad.Draw.RenderOrigin.X, goy = Cad.Draw.RenderOrigin.Y;
+        var sb = new System.Text.StringBuilder();
+        var lr = Viewport.LastRenderPx;
+        double aBounds = vh > 0 ? vw / vh : 0, aRender = lr.h > 0 ? (double)lr.w / lr.h : 0;
+        sb.Append(cur).Append(" | ")
+          .Append($"上帧渲染={lr.w}x{lr.h} 宽高比 渲染={aRender:0.####} 反投影={aBounds:0.####} 一致={(System.Math.Abs(aRender - aBounds) < 1e-3)} | ")
+          .Append($"宿主={hw:0.#}x{hh:0.#} 视口={vw:0.#}x{vh:0.#}@({Viewport.Bounds.X:0.#},{Viewport.Bounds.Y:0.#}) 缩放={scale:0.###}")
+          .Append($" 绘图区光标={(ReferenceEquals(ViewportHost.Cursor, InvisibleCursor) ? "隐形" : "非隐形!")}"
+                + $"/{(_invisibleIsBitmap ? "透明位图" : "None枚举")}")
+          .Append($" 视口原点=({Viewport.RenderOriginX:0.###},{Viewport.RenderOriginY:0.###},{Viewport.RenderOriginSet})")
+          .Append($" 全局原点=({gox:0.###},{goy:0.###}) 原点一致={(System.Math.Abs(gox - Viewport.RenderOriginX) < 1e-9 && System.Math.Abs(goy - Viewport.RenderOriginY) < 1e-9)}")
+          .Append(" | ").Append(Viewport.CameraDebug());
+        foreach (var (sx, sy) in new[] { (hw * 0.25, hh * 0.25), (hw * 0.5, hh * 0.5), (hw * 0.8, hh * 0.7) })
+        {
+            var w = Viewport.ScreenToWorld(sx, sy);
+            if (w == null) { sb.Append($" | ({sx:0},{sy:0})→世界 null"); continue; }
+            var back = Viewport.WorldToScreen(w.Value.x, w.Value.y, 0);
+            sb.Append(back == null
+                ? $" | ({sx:0},{sy:0})→世界({w.Value.x:0.###},{w.Value.y:0.###})→屏 null"
+                : $" | ({sx:0},{sy:0})→世界({w.Value.x:0.###},{w.Value.y:0.###})→屏({back.Value.sx:0.#},{back.Value.sy:0.#}) Δ=({back.Value.sx - sx:+0.#;-0.#},{back.Value.sy - sy:+0.#;-0.#})px");
+        }
+        StatusMsg.Text = sb.ToString();
+        PitMine3D.Kylin.CrashLog.Write("指针诊断", sb.ToString());
     }
 
     /// <summary>自检：一把闭合矩形裁刀 + 两条属性齐全的被裁多段线（核对裁剪前后属性是否走样）。</summary>
@@ -11282,7 +12683,8 @@ public partial class MainWindow : Window
             for (int i = 0; i < pl.Points.Count; i++) { double z = pl.ZAt(i); z0 = System.Math.Min(z0, z); z1 = System.Math.Max(z1, z); }
             string line = $"点{pl.Points.Count} 层「{pl.LayerName}」 色 {(int)(pl.Cr * 255)},{(int)(pl.Cg * 255)},{(int)(pl.Cb * 255)}"
                         + $" 线型 {(pl.Dash == null ? "实线" : string.Join("/", pl.Dash))} 线宽 {pl.LineWeight} 透明 {pl.Transparency}"
-                        + $" 闭合 {(pl.Closed ? "是" : "否")} 标高 {pl.Elevation:0.##} Z {z0:0.##}~{z1:0.##}";
+                        + $" 闭合 {(pl.Closed ? "是" : "否")} 标高 {pl.Elevation:0.##} Z {z0:0.##}~{z1:0.##}"
+                        + $" 自交 {(Cad.Draw.OffsetTools.HasSelfIntersection(pl.Points, pl.Closed) ? "是" : "否")}";
             EditEcho("[属性] " + line);
             PitMine3D.Kylin.CrashLog.Write("属性", line);
         }
@@ -11299,6 +12701,51 @@ public partial class MainWindow : Window
         AssignLayer(knife); _scene.Add(knife);
         RefreshScene();
         StatusMsg.Text = "自检：已放入 z=40 的开放水平刀面「自检刀面」";
+    }
+
+    /// <summary>
+    /// 自检：一张 1 km² 起伏地形(橙) + 两张贴在它上面的网 —— 左边一张(黄)在另一套格网上按同一高程函数重采样(近共面,
+    /// 差几厘米, 即"设计面贴地形"), 右边一张(绿)取地形同一片顶点只把对角线翻转(严格共面, 即"分割后又拼回")。
+    /// 东南等轴测从约 2 km 外看: 修前两张都是随机交错的锯齿/阶梯, 修后黄/绿整片盖住地形。
+    /// </summary>
+    private void SelftestCoplanar(bool lowAngle = false)
+    {
+        static double Z(double x, double y) => 25 * System.Math.Sin(x / 110.0) * System.Math.Cos(y / 90.0) + 0.03 * x;   // 高程贴着 0 走, 取景(zCenter=0)才框得住
+        var v = new List<(double x, double y, double z)>(); var t = new List<(int a, int b, int c)>();
+        int n = 100; double w = 1000;
+        for (int j = 0; j <= n; j++) for (int i = 0; i <= n; i++) { double x = i * w / n, y = j * w / n; v.Add((x, y, Z(x, y))); }
+        for (int j = 0; j < n; j++) for (int i = 0; i < n; i++)
+        { int a = j * (n + 1) + i, b = a + 1, c = a + n + 1, d = c + 1; t.Add((a, b, d)); t.Add((a, d, c)); }
+        // 黄: [100,450]×[200,800] 另一套 37×37 格重采样
+        var v2 = new List<(double x, double y, double z)>(); var t2 = new List<(int a, int b, int c)>();
+        int m = 37;
+        for (int j = 0; j <= m; j++) for (int i = 0; i <= m; i++) { double x = 100 + i * 350.0 / m, y = 200 + j * 600.0 / m; v2.Add((x, y, Z(x, y))); }
+        for (int j = 0; j < m; j++) for (int i = 0; i < m; i++)
+        { int a = j * (m + 1) + i, b = a + 1, c = a + m + 1, d = c + 1; t2.Add((a, b, d)); t2.Add((a, d, c)); }
+        // 绿: 地形 i∈[55,90], j∈[20,80] 那片原顶点, 对角线翻转
+        var v3 = new List<(double x, double y, double z)>(); var t3 = new List<(int a, int b, int c)>();
+        int i0 = 55, i1 = 90, j0 = 20, j1 = 80, cols = i1 - i0 + 1;
+        for (int j = j0; j <= j1; j++) for (int i = i0; i <= i1; i++) v3.Add(v[j * (n + 1) + i]);
+        for (int j = 0; j < j1 - j0; j++) for (int i = 0; i < i1 - i0; i++)
+        { int a = j * cols + i, b = a + 1, c = a + cols, d = c + 1; t3.Add((a, b, c)); t3.Add((b, d, c)); }
+        BeginChange();
+        var terrain = new MeshEntity("自检地形", v, t);
+        var design = new MeshEntity("自检设计面(近共面)", v2, t2);
+        var patch = new MeshEntity("自检拼回片(严格共面)", v3, t3);
+        foreach (var me in new[] { terrain, design, patch }) { AssignLayer(me); _scene.Add(me); }   // AssignLayer 会套当前层色, 颜色要在它之后给
+        terrain.Cr = 0.93f; terrain.Cg = 0.55f; terrain.Cb = 0.15f;
+        design.Cr = 1f; design.Cg = 0.95f; design.Cb = 0.1f;
+        patch.Cr = 0.2f; patch.Cg = 0.9f; patch.Cb = 0.3f;
+        RefreshScene();
+        Viewport.SetView("se");   // 取景用脚本里的 @稍后 … 范围缩放(面要等下一帧上传后才有高程中心)
+        if (lowAngle)
+        {
+            // 取景之后再压低俯仰角到 ~7°(擦边看面): 深度斜率最大, 共面交错最容易露馅的视角
+            var tm = new Avalonia.Threading.DispatcherTimer { Interval = System.TimeSpan.FromMilliseconds(3000) };
+            tm.Tick += (_, _) => { tm.Stop(); Viewport.Orbit(0, -0.5); RefreshScene(); };
+            tm.Start();
+        }
+        StatusMsg.Text = $"自检共面：地形 {t.Count} 三角 + 近共面设计面 {t2.Count} + 严格共面拼回片 {t3.Count}（东南等轴测）";
     }
 
     /// <summary>自检：放两个相互重叠的立方体并选中（布尔 / 刀切 / 面交线等两体算子的现成料）。</summary>
@@ -11331,6 +12778,195 @@ public partial class MainWindow : Window
     }
 
     /// <summary>自检：建一个规则块体模型入场景并切三维（核对块体是否为体素）。</summary>
+    /// <summary>
+    /// 自检：按「导入块体」对话框那条路直接读一份 .blk/.pmb 并入场景（跳过文件对话框），
+    /// 把各段耗时写进标题栏 —— 三百万块的现场模型只能靠这条无人值守核对，对话框点不了。
+    /// </summary>
+    /// <summary>
+    /// 自检 @钻孔导入: 派发「导入钻孔数据」后等页面真的开出来再喂文件 ——
+    /// 首次点数据库功能时 <see cref="EnsureGeoDb"/> 必返回 null(异步连库, 连上后命令自动重跑), 页面要过一会儿才有。
+    /// </summary>
+    private void SelftestBoreholeImportPreview(string path)
+    {
+        DispatchRibbon("导入钻孔数据");
+        int tries = 0;
+        var t = new Avalonia.Threading.DispatcherTimer { Interval = System.TimeSpan.FromMilliseconds(300) };
+        t.Tick += (_, _) =>
+        {
+            if (GeoDb.GeoDbWindows.Last is GeoDb.BoreholeImportWindow w && w.IsVisible)
+            {
+                t.Stop();
+                w.LoadFile(path);
+                PitMine3D.Kylin.CrashLog.Write("自检", $"@钻孔导入 {path} → 已喂给预览表");
+            }
+            else if (++tries > 60) { t.Stop(); StatusMsg.Text = "自检钻孔导入：页面 18 秒内没打开（数据库未连上？）"; }
+        };
+        t.Start();
+    }
+
+    private async System.Threading.Tasks.Task SelftestImportBlockModel(string path)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        string ext = Path.GetExtension(path).ToLowerInvariant();
+        List<BlockModel.Block> blocks; System.Collections.Generic.Dictionary<string, double[]>? attrs;
+        BlkImportService.Result? blk = null;
+        if (ext == ".pmb")
+        {
+            var r = await System.Threading.Tasks.Task.Run(() => PmbImportService.Load(path));
+            if (!r.Success) { StatusMsg.Text = $"自检块体导入：{r.Error}"; return; }
+            blocks = r.Blocks; attrs = r.AllAttrs.Count > 0 ? r.AllAttrs : null;
+        }
+        else
+        {
+            var r = await System.Threading.Tasks.Task.Run(() => BlkImportService.Load(path));
+            if (!r.Success) { StatusMsg.Text = $"自检块体导入：{r.Error}"; return; }
+            blk = r; blocks = r.Blocks; attrs = r.AllAttrs.Count > 0 ? r.AllAttrs : null;
+        }
+        long tRead = sw.ElapsedMilliseconds; sw.Restart();
+        string uniq = Modeling.BlockModelStore.UniqueName(Path.GetFileNameWithoutExtension(path));
+        var meta = await System.Threading.Tasks.Task.Run(() => blk != null
+            ? Cad.BlockModelMeta.FromLeaves(uniq, blocks, attrs, blk.Ox, blk.Oy, blk.Oz,
+                blk.Bx, blk.By, blk.Bz, blk.Nx, blk.Ny, blk.Nz, blk.MaxSub, blk.VarCellCount)
+            : Cad.BlockModelMeta.FromBlocks(uniq, blocks, attrs));
+        meta.DisplayStyle.FillColor = Cad.BlockDefaultPalette.Next(Modeling.BlockModelStore.Models.Count);
+        if (meta.PropertySchema.Count > 0) { meta.ActiveColormapAttribute = meta.PropertySchema[0].Name; meta.ColormapRange = null; }
+        if (blk != null) Modeling.ImportBlockModelWindow.ApplyBlkMetadata(meta, blk);
+        long tMeta = sw.ElapsedMilliseconds; sw.Restart();
+        var err = await Modeling.BlockModelStore.CreateAsync(MdlCtx(), meta);
+        long tShow = sw.ElapsedMilliseconds;
+        if (err != null) { StatusMsg.Text = $"自检块体导入：{err}"; return; }
+        DispatchRibbon("3D");
+        Title += $" [自检 块体导入 {blocks.Count:N0}块 格{meta.Sx:0.##}x{meta.Sy:0.##}x{meta.Sz:0.###} 着色「{meta.ActiveColormapAttribute}」 读{tRead}ms 建模{tMeta}ms 建网+上屏{tShow}ms]";
+        StatusMsg.Text = $"自检块体导入 {meta.Name}：{blocks.Count:N0} 块 · 细格 {meta.Sx:0.##}×{meta.Sy:0.##}×{meta.Sz:0.###} m · 读 {tRead}ms · 建模 {tMeta}ms · 建网+上屏 {tShow}ms";
+    }
+
+    /// <summary>
+    /// 自检：合成若干真实钻孔(孔口高程/孔深/多层"正常"煤层)并走「展绘钻孔」同一条几何生成路径,
+    /// 入「钻孔柱状图」图层 → 三维视图 → 按 half 半宽框住第一个孔(放大核对柱面/标注细腻度)。
+    /// 不连数据库, 供无人值守截图核对用。
+    /// </summary>
+    private void SelftestSampleBoreholes(int holes, double half)
+    {
+        var rows = new System.Collections.Generic.List<Data.GeoDbViews.BoreholeRow>();
+        var seams = new System.Collections.Generic.Dictionary<long, System.Collections.Generic.List<Data.GeoDbViews.BoreholeSeamRow>>();
+        string[] codes = { "4（4-1）", "9", "11" };
+        double[] floorOff = { 60, 130, 165 };   // 各煤层底板距孔口(m)
+        double[] thick = { 6.5, 3.2, 2.4 };
+        for (int i = 0; i < holes; i++)
+        {
+            int gx = i % 3, gy = i / 3;
+            double x = 38550000 + gx * 500.0, y = 4400000 + gy * 500.0, z = 1250 + gx * 3 - gy * 2;
+            rows.Add(new Data.GeoDbViews.BoreholeRow { Id = i + 1, HoleId = $"ZK{i + 1:00}", X = x, Y = y, ZCollar = z, DepthTotal = 200 });
+            var list = new System.Collections.Generic.List<Data.GeoDbViews.BoreholeSeamRow>();
+            for (int k = 0; k < codes.Length; k++)
+                list.Add(new Data.GeoDbViews.BoreholeSeamRow
+                {
+                    Id = i * 10 + k + 1, BoreholeId = i + 1, SeamCode = codes[k], Status = "正常",
+                    FloorElevation = z - floorOff[k], AdoptedThickness = thick[k],
+                });
+            seams[i + 1] = list;
+        }
+
+        var r = Data.GeoDbViews.BuildBoreholeColumns(rows, seams);
+        BeginChange();
+        var lay = _layers.Get(Data.GeoDbViews.BoreholeColumnLayerName)
+               ?? _layers.EnsureImported(Data.GeoDbViews.BoreholeColumnLayerName, 0.3f, 0.75f, 0.95f);
+        foreach (var e in r.Entities) { e.LayerName = lay.Name; _scene.Add(e); }
+        RefreshScene();
+        DispatchRibbon("3D");
+        double cx = rows[0].X, cy = rows[0].Y;
+        // 取景排到队尾: 场景几何是下一帧才上传的, 那时才会定下渲染原点; 立刻 FitBounds 会被原点变更甩偏。
+        Avalonia.Threading.Dispatcher.UIThread.Post(
+            () => Viewport.FitBounds(new[] { cx - half, cy - half, cx + half, cy + half }),
+            Avalonia.Threading.DispatcherPriority.Background);
+        StatusMsg.Text = $"自检展绘钻孔：{r.HoleCount} 孔 · {r.SeamCount} 煤层段 · {r.MeshGroups} 合并网格（半宽 {half:0} m）";
+        Title += $" [自检 钻孔 {r.HoleCount}孔/{r.SeamCount}段]";
+    }
+
+    /// <summary>自检：把信息栏历史逐行打到日志 —— 回显格式(时间戳/符号/文案)靠它核对, 不必只依赖截图。</summary>
+    private void DumpCmdLog()
+    {
+        if (CmdLog == null) { StatusMsg.Text = "自检信息栏：面板未建"; return; }
+        int n = 0;
+        foreach (var child in CmdLog.Children)
+        {
+            if (child is not TextBlock tb) continue;
+            string line = tb.Inlines is { Count: > 0 }
+                ? string.Concat(tb.Inlines.Select(i => i is Avalonia.Controls.Documents.Run r ? r.Text : ""))
+                : tb.Text ?? "";
+            PitMine3D.Kylin.CrashLog.Write("信息栏", line);
+            n++;
+        }
+        StatusMsg.Text = $"自检信息栏：已导出 {n} 行到日志";
+    }
+
+    /// <summary>
+    /// 自检用：造一张沿 X 从 0 升到 100 的现状斜面 + 两层水平顶/底板（2煤 30~40、3煤 70~80），
+    /// 供「煤层露头着色」实机核对（斜面穿过两层 ⇒ 两条露头带都切得出来）。
+    /// </summary>
+    /// <summary>自检样例：两级模板台阶线 + 两条横穿范围环的采场台阶线（一条比模板高 1m，好看见 Δz）+ 范围环（选中）。仅自检用，几何与单测同形。</summary>
+    private void SelftestSampleEngineeringPosition()
+    {
+        BeginChange();
+        PolylineEntity L(string layer, double z, float r, float g, float b, bool closed, params (double x, double y)[] xy)
+        {
+            var pl = new PolylineEntity { LayerName = layer, Elevation = z, Cr = r, Cg = g, Cb = b, Closed = closed };
+            pl.Points.AddRange(xy); _scene.Add(pl); return pl;
+        }
+        L("台阶_1200", 1200, 0.2f, 0.7f, 1f, false, (110, 0), (190, 0));
+        L("台阶_1210", 1210, 0.2f, 0.7f, 1f, false, (110, 10), (190, 10));
+        // 现状采场台阶：端帮线在范围两侧顺着帮转向（竖着走），端头落在环外 —— 同级的走势相交才接得上（平行的两条按原版口径记"接不上"）
+        L("采场_坡底线", 1200, 0.9f, 0.9f, 0.6f, false, (85, -30), (85, -100));
+        L("采场_坡底线", 1200, 0.9f, 0.9f, 0.6f, false, (215, -30), (215, -100));
+        L("采场_坡底线", 1210, 0.9f, 0.9f, 0.6f, false, (75, -30), (75, -100));
+        L("采场_坡底线", 1210, 0.9f, 0.9f, 0.6f, false, (225, -30), (225, -100));
+        L("采场_坡底线", 1211, 0.9f, 0.9f, 0.6f, false, (235, 30), (235, 100));      // 比模板高 1m：自动配对不认，留给人拖（看 Δz）
+        // ④⑤ 用：一条工作线（基线在模板后方、往 +y 推进）+ 两条横穿模板影响区域的老台阶线（一条同级 1200 会被裁，一条 1205 归不进级要保留）
+        L(WorkLineLayer, 1200, 0.20f, 0.80f, 0.95f, false, (110, -30), (190, -30));
+        L(WorkLineLayer + "_结束线", 1200, 0.20f, 0.80f, 0.95f, false, (110, 20), (190, 20));
+        L("现状_坡底线", 1200, 0.75f, 0.75f, 0.75f, false, (60, 5), (240, 5));
+        L("现状_坡底线", 1222, 0.75f, 0.75f, 0.75f, false, (60, 8), (240, 8));    // 离最近的新台阶级 12m > 归格容差 5m ⇒ 归不进级，保留
+        var ring = L("采场范围", 1200, 1f, 0.5f, 0.1f, true, (100, -50), (200, -50), (200, 50), (100, 50));
+        _selected.Clear(); _selected.Add(ring);
+        RefreshScene();
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => Viewport.FitBounds(new[] { -10.0, -70.0, 310.0, 70.0 }), Avalonia.Threading.DispatcherPriority.Background);
+        StatusMsg.Text = "自检：工程位置示例已入图（模板 2 级 / 采场台阶 2 条 / 范围环已选中）";
+    }
+
+    private void SelftestSampleSeams()
+    {
+        Cad.Draw.MeshEntity Ramp(string name, double z0, double z1, int n)
+        {
+            var m = new Cad.Draw.MeshEntity { Name = name, Cr = 0.62f, Cg = 0.62f, Cb = 0.66f };
+            for (int i = 0; i <= n; i++)
+            {
+                double x = 400.0 * i / n, z = z0 + (z1 - z0) * i / n;
+                m.Verts.Add((x, 0, z));
+                m.Verts.Add((x, 300, z));
+            }
+            for (int i = 0; i < n; i++)
+            {
+                int a = i * 2, b = a + 1, c = a + 2, d = a + 3;
+                m.Tris.Add((a, c, d));
+                m.Tris.Add((a, d, b));
+            }
+            return m;
+        }
+        Cad.Draw.MeshEntity Flat(string name, double z) => Ramp(name, z, z, 1);
+
+        BeginChange();
+        foreach (var m in new[]
+                 {
+                     Ramp("现状面", 0, 100, 24),
+                     Flat("2煤顶板", 40), Flat("2煤底板", 30),
+                     Flat("3煤顶板", 80), Flat("3煤底板", 70),
+                 })
+            _scene.Entities.Add(m);
+        RefreshScene();
+        Viewport.FitBounds(new[] { -20.0, -20.0, 420.0, 320.0 });
+        StatusMsg.Text = "自检：已造现状斜面 + 2煤/3煤顶底板共 5 张面";
+    }
+
     private void SelftestSampleBlockModel(int nx, int ny, int nz)
     {
         var m = Cad.BlockModelMeta.CreateRegular("自检块体", 0, 0, 0, 20, 20, 10, nx, ny, nz);
@@ -11387,7 +13023,7 @@ public partial class MainWindow : Window
     /// 连接放后台线程 + 进度窗口: 服务器不可达要等到超时(8 秒), 在 UI 线程上直接连界面就僵住,
     /// 用户看到的是程序卡死而不是"正在连接"。
     /// </summary>
-    private async void ConnectDbInteractiveAsync()
+    private async void ConnectDbInteractiveAsync(string? resumeCmd = null)
     {
         if (_dbPromptShowing) return;      // 连点几个数据库命令时只走一次
         _dbPromptShowing = true;
@@ -11396,10 +13032,10 @@ public partial class MainWindow : Window
             var (ok, err) = await Views.GeoDb.DbConnectingDialog.RunAsync(
                 this, () => _geoDb = Data.GeoDatabase.OpenSeeded());
 
-            if (ok) { StatusMsg.Text = "数据库已连接，请重新执行刚才的操作。"; return; }
+            if (ok) { ResumeAfterDbConnected(resumeCmd); return; }
             if (err == null) { StatusMsg.Text = "已放弃连接数据库。"; return; }
 
-            await PromptDbNotConnectedAsync(Data.DbConnectionDiagnosis.Diagnose(err));
+            await PromptDbNotConnectedAsync(Data.DbConnectionDiagnosis.Diagnose(err), resumeCmd);
         }
         catch (System.Exception ex) { StatusMsg.Text = "连接数据库时出错：" + ex.Message; }
         finally { _dbPromptShowing = false; }
@@ -11411,15 +13047,34 @@ public partial class MainWindow : Window
     /// 连不上时不再把异常原文丢给用户 —— 那是 "Failed to connect to 192.168.114.131:5432"
     /// 这种既看不懂也不知道去哪改的东西。改成: 明确说清是哪一类问题, 并直接给一个入口去配置。
     /// </summary>
-    private Data.GeoDatabase? EnsureGeoDb()
+    /// <param name="resume">
+    /// true(默认) = 调用方「拿不到库就中止本次命令」, 连上后由这里把该命令重跑一遍。
+    /// false = 调用方**没有库也照跑**(数据库值只是锦上添花, 如采场设计基准/边坡角), 此时绝不能重跑 ——
+    /// 命令已经跑完并出了图, 再跑一遍就是把几何又画一份。
+    /// </param>
+    private Data.GeoDatabase? EnsureGeoDb(bool resume = true)
     {
         if (_geoDb != null) return _geoDb;
 
         // 这里**不做同步连接** —— 连不上要等到 8 秒超时, 在 UI 线程上等就是界面僵住。
-        // 改为: 本次命令直接中止, 另起一条带进度窗口的连接流程; 连上后提示用户重新执行。
+        // 改为: 本次命令直接中止, 另起一条带进度窗口的连接流程。
+        // 连上后**自动把这条命令重跑一遍**: 首次点数据库功能时命令必然停在这儿, 只写一句
+        // 「请重新执行」就等于把用户点的那个窗口吞掉了 —— 看着像点了没反应。
         StatusMsg.Text = "数据库尚未连接，正在尝试连接…";
-        ConnectDbInteractiveAsync();
+        ConnectDbInteractiveAsync(resume ? _cmdInFlight : null);
         return null;
+    }
+
+    /// <summary>当前正在执行的 Ribbon/命令行命令名(<see cref="OnRibbonCommand"/> 入口写)。连库后按它重跑。</summary>
+    private string? _cmdInFlight;
+
+    /// <summary>连上库后把被中止的那条命令重跑一遍(命令行侧不再重复回显)。</summary>
+    private void ResumeAfterDbConnected(string? cmd)
+    {
+        if (_geoDb == null || string.IsNullOrEmpty(cmd))
+        { StatusMsg.Text = "数据库已连接，请重新执行刚才的操作。"; return; }
+        StatusMsg.Text = $"数据库已连接，继续执行「{cmd}」…";
+        DispatchRibbon(cmd!);
     }
 
     /// <summary>
@@ -11427,7 +13082,7 @@ public partial class MainWindow : Window
     /// 状态栏一行字很容易被当成"点了没反应"。
     /// 重入保护在调用方 ConnectDbInteractiveAsync 里, 这里不重复。
     /// </summary>
-    private async System.Threading.Tasks.Task PromptDbNotConnectedAsync(Data.DbConnectionDiagnosis.Result d)
+    private async System.Threading.Tasks.Task PromptDbNotConnectedAsync(Data.DbConnectionDiagnosis.Result d, string? resumeCmd = null)
     {
         try
         {
@@ -11448,7 +13103,7 @@ public partial class MainWindow : Window
                 var (ok2, err2) = await Views.GeoDb.DbConnectingDialog.RunAsync(
                     this, () => _geoDb = Data.GeoDatabase.OpenSeeded());
 
-                if (ok2) { StatusMsg.Text = "数据库已连接，请重新执行刚才的操作。"; return; }
+                if (ok2) { ResumeAfterDbConnected(resumeCmd); return; }
                 if (err2 == null) { StatusMsg.Text = "已放弃连接数据库。"; return; }
 
                 cur = Data.DbConnectionDiagnosis.Diagnose(err2);
@@ -11927,12 +13582,28 @@ public partial class MainWindow : Window
     }
 
     // 通用 CSV 保存：SaveFilePicker → WriteAllText；成功返回文件名，取消/失败返回 null(状态自报)。
-    private async Task<string?> SaveCsvAsync(string title, string suggestedName, string content)
+    /// <summary>
+    /// 保存文本到用户选的位置。<paramref name="ext"/> 缺省 csv；给别的扩展名(obj/ply/stl/off…)时
+    /// 过滤器与默认扩展名一并跟着改 —— 写死 CSV 过滤器会让保存框把 .obj 之类过滤没，看起来像"目录是空的"。
+    /// 自检(PITMINE_SELFTEST)下**不弹框**，直接写到临时目录的同名文件（同 PromptDialog/ColorPickDialog 的做法），
+    /// 否则批量脚本会卡在模态保存框上。
+    /// </summary>
+    private async Task<string?> SaveCsvAsync(string title, string suggestedName, string content, string? ext = null)
     {
+        string e = (ext ?? System.IO.Path.GetExtension(suggestedName).TrimStart('.')).Trim();
+        if (e.Length == 0) e = "csv";
+
+        if (System.Environment.GetEnvironmentVariable("PITMINE_SELFTEST") is { Length: > 0 })
+        {
+            string outPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), suggestedName);
+            try { System.IO.File.WriteAllText(outPath, content); return outPath; }
+            catch (System.Exception ex) { StatusMsg.Text = $"{title}：写出失败 {ex.Message}"; return null; }
+        }
+
         var file = await StorageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
         {
-            Title = title, DefaultExtension = "csv", SuggestedFileName = suggestedName,
-            FileTypeChoices = new[] { new Avalonia.Platform.Storage.FilePickerFileType("CSV") { Patterns = new[] { "*.csv" } } }
+            Title = title, DefaultExtension = e, SuggestedFileName = suggestedName,
+            FileTypeChoices = new[] { new Avalonia.Platform.Storage.FilePickerFileType(e.ToUpperInvariant()) { Patterns = new[] { "*." + e } } }
         });
         if (file == null) return null;
         try { System.IO.File.WriteAllText(file.Path.LocalPath, content); return System.IO.Path.GetFileName(file.Path.LocalPath); }
@@ -12748,6 +14419,2092 @@ public partial class MainWindow : Window
         StatusMsg.Text = $"数据导出：{ok}/{tables.Length} 张 §四 表 → {dir}（导入需模板对话框，受阻记录）";
     }
 
+    // 周计划编制(忠实原 TaskLib.Features.WeekPlanWindow)。非模态单例。
+    // 口径在 Data/WeekPlanLink(W1–W8, 纯函数), 取数在 Data/WeekPlanSource, 本窗只显示与翻页。
+    private Views.GeoDb.WeekPlanWindow? _weekPlanWin;
+    private void OpenWeekPlan()
+    {
+        if (_weekPlanWin != null) { _weekPlanWin.Reload(); _weekPlanWin.Activate(); StatusMsg.Text = "周计划编制已在前台"; return; }
+        var w = new Views.GeoDb.WeekPlanWindow(() => EnsureGeoDb()?.Connection, msg => StatusMsg.Text = msg);
+        _weekPlanWin = w;
+        w.Closed += (_, _) => _weekPlanWin = null;
+        w.Show(this);
+        StatusMsg.Text = "周计划编制：月量 ÷ 本月作业日 摊到七天（除数与装箱同一份口径）；未排班的日子计 0，判不了的显示「—」";
+        EnsureGeoDb();
+    }
+
+    // 去向台账(忠实原 TaskLib.Features.SinkLedgerWindow)。非模态单例。
+    // dump_site/load_unload_point/sink_profile 三张表此前零消费者, 本窗与 Data/SinkRegistryLoader
+    // 一起把"读—改—存"闭环接通; 当日入方走 Data/SinkInbound(读 working_face_routing)。
+    private Views.GeoDb.SinkLedgerWindow? _sinkLedgerWin;
+    private void OpenSinkLedger()
+    {
+        if (_sinkLedgerWin != null) { _sinkLedgerWin.Reload(); _sinkLedgerWin.Activate(); StatusMsg.Text = "去向台账已在前台"; return; }
+        var w = new Views.GeoDb.SinkLedgerWindow(() => EnsureGeoDb()?.Connection, msg => StatusMsg.Text = msg);
+        _sinkLedgerWin = w;
+        w.Closed += (_, _) => _sinkLedgerWin = null;
+        w.Show(this);
+        StatusMsg.Text = "去向台账：库容一律按占容方(V实×Kr)记与扣; 破碎站/煤仓不占库容显示「—」; 「已填」只能走「盘点修正」改";
+        EnsureGeoDb();
+    }
+
+    // 破碎站位置设置(忠实原 RoadLib.Views.CrusherStationWindow)。非模态单例 ——
+    // 窗内「拾取位置」要去视口取点, 模态会吞掉视口点击。
+    // 落库走 Data/CrusherStore 的增量 CRUD: 按 name 匹配、主键不变, 绝不清表重插 ——
+    // 去向台账用 LUP-{id} 存引用(sink_profile.sink_id), 重新编号会让卸载点档案集体错位。
+    private Views.GeoDb.CrusherStationWindow? _crusherWin;
+    private void OpenCrusherStations()
+    {
+        // 连库后重跑本命令会走到这儿: 补种一次(只在上次没连上时补, 不冲掉已改的行)
+        if (_crusherWin != null) { _crusherWin.ReseedIfNotSeeded(); _crusherWin.Activate(); StatusMsg.Text = "破碎站位置设置已在前台"; return; }
+        // 取点走道路取点通路（X/Y 光标落点 + Z 取地形三角网），同原版 PickOnePoint 回 (x,y,z)；不用 GeoDbContext 的二维取点。
+        var w = new Views.GeoDb.CrusherStationWindow(() => EnsureGeoDb()?.Connection, msg => StatusMsg.Text = msg,
+                                                    async prompt => { var p = await RoadPickOnePointAsync(prompt); return p is { } q ? (q.X, q.Y, q.Z) : null; });
+        _crusherWin = w;
+        w.Closed += (_, _) => _crusherWin = null;
+        w.Saved += (rows, ins, upd, del, persisted) => RoadAfterCrusherSaved(rows, ins, upd, del, persisted);   // 原版第②③步：共享设置 + 会话路网源汇 + 旗标（库未连则仅会话）
+        w.Cancelled += () => EditEcho("破碎站位置设置：未修改");
+        w.Show(this);
+        StatusMsg.Text = "破碎站位置设置：只管破碎站一类; 排土场/储矿场请用「去向台账」, 采剥点跟着工作面走";
+        EnsureGeoDb();
+    }
+
+    // 约束条件设置(忠实原 MineAssLib.Views.TransportConstraintDialog)。非模态单例。
+    // 口径与校验在 Cad/Transport(纯函数): 预览与确认共用同一份判据。
+    // 持久化是「多方案 + 当前是哪一份」, 存时把当前方案镜像回老的单份配置键, 消费侧只读那一个。
+    private Views.GeoDb.TransportConstraintWindow? _transConstraintWin;
+    private void OpenTransportConstraints()
+    {
+        if (_transConstraintWin != null) { _transConstraintWin.Activate(); StatusMsg.Text = "约束条件设置已在前台"; return; }
+        // 只在库**碰巧已经开着**时读它(为了带出在册车型), 绝不为此发起连库 ——
+        // 本窗的配置存在 UserSettings(JSON)里, 不依赖数据库; 为一个可选增强弹"数据库连不上"
+        // 的模态提示, 对着点开设置对话框的人就是莫名其妙。读不到就只剩吨级经验档, 窗口照常可用。
+        var w = new Views.GeoDb.TransportConstraintWindow(() => _geoDb?.Connection,
+                                                          msg => StatusMsg.Text = msg);
+        _transConstraintWin = w;
+        w.Closed += (_, _) => _transConstraintWin = null;
+        w.Show(this);
+        StatusMsg.Text = "约束条件设置：能从设备库/几何/规范推出来的都自动算, 只有设备选型与价/成本要人填";
+    }
+
+    // 延拓触发设置(忠实原 RoadLib.Views.ExtendParamsDialog「延拓参数中心」)。非模态单例。
+    // 三段参数(触发条件/演化判定阈值/推进方向先验)收编为一处持久默认, 键 road.extend.trigger;
+    // 「演化对比」读的就是它的 B 段(见 RoadEvolutionAnalyzer.Analyze 那处调用)。
+    private Views.GeoDb.ExtendParamsWindow? _extendParamsWin;
+    private void OpenExtendParams()
+    {
+        if (_extendParamsWin != null) { _extendParamsWin.Activate(); StatusMsg.Text = "延拓触发设置已在前台"; return; }
+        var w = new Views.GeoDb.ExtendParamsWindow(msg => StatusMsg.Text = msg);
+        _extendParamsWin = w;
+        w.Closed += (_, _) => _extendParamsWin = null;
+        w.Show(this);
+        StatusMsg.Text = "延拓触发设置：触发条件 + 演化判定阈值 + 推进方向先验, 一处配好供演化对比/路网更新共用";
+    }
+
+    // 煤层露头着色(忠实原 MineAssLib.SeamOutcrop)。非模态单例。
+    // 露头 = 现状面高程夹在【底板 <= 现状 <= 顶板】的区域; 判定在 Cad/SeamOutcrop(纯函数),
+    // 上色走 MeshEntity.VertColors —— 与「影像底图」同一条逐顶点色通路。
+    private Views.Modeling.SeamOutcropWindow? _seamOutcropWin;
+    private void OpenSeamOutcrop()
+    {
+        if (_seamOutcropWin != null) { _seamOutcropWin.Reload(); _seamOutcropWin.Activate(); StatusMsg.Text = "煤层露头着色已在前台"; return; }
+        var w = new Views.Modeling.SeamOutcropWindow(
+            SceneMeshNames, SceneClosedPolylineNames, ApplySeamOutcrop, msg => StatusMsg.Text = msg);
+        _seamOutcropWin = w;
+        w.Closed += (_, _) => _seamOutcropWin = null;
+        w.Show(this);
+        StatusMsg.Text = "煤层露头着色：选现状面 + 逐层顶/底板与颜色; 层序即优先级, 先配的层先认领顶点";
+    }
+
+    private System.Collections.Generic.List<string> SceneMeshNames()
+    {
+        var r = new System.Collections.Generic.List<string>();
+        foreach (var e in _scene.Entities)
+            if (e is Cad.Draw.MeshEntity m && m.Verts.Count > 0 && !r.Contains(m.Name)) r.Add(m.Name);
+        return r;
+    }
+
+    /// <summary>可采范围的来源：场景里的**闭合多段线**(与其它工具指认范围的口径一致)。</summary>
+    private System.Collections.Generic.List<string> SceneClosedPolylineNames()
+    {
+        var r = new System.Collections.Generic.List<string>();
+        foreach (var e in _scene.Entities)
+            if (e is Cad.Draw.PolylineEntity p && p.Closed && p.Points.Count >= 3)
+            {
+                string nm = string.IsNullOrWhiteSpace(e.LayerName) ? "多段线" : e.LayerName;
+                if (!r.Contains(nm)) r.Add(nm);
+            }
+        return r;
+    }
+
+    private string ApplySeamOutcrop(Cad.SeamOutcrop.SeamOutcropRequest req)
+    {
+        Cad.Draw.MeshEntity? Mesh(string name)
+        {
+            foreach (var e in _scene.Entities)
+                if (e is Cad.Draw.MeshEntity m && string.Equals(m.Name, name, System.StringComparison.Ordinal)) return m;
+            return null;
+        }
+        static double[] V(Cad.Draw.MeshEntity m)
+        {
+            var a = new double[m.Verts.Count * 3];
+            for (int i = 0; i < m.Verts.Count; i++)
+            { a[i * 3] = m.Verts[i].x; a[i * 3 + 1] = m.Verts[i].y; a[i * 3 + 2] = m.Verts[i].z; }
+            return a;
+        }
+        static int[] T(Cad.Draw.MeshEntity m)
+        {
+            var a = new int[m.Tris.Count * 3];
+            for (int i = 0; i < m.Tris.Count; i++)
+            { a[i * 3] = m.Tris[i].a; a[i * 3 + 1] = m.Tris[i].b; a[i * 3 + 2] = m.Tris[i].c; }
+            return a;
+        }
+
+        var terrain = Mesh(req.TerrainName);
+        if (terrain == null) return $"✖ 找不到现状面「{req.TerrainName}」";
+
+        var layers = new System.Collections.Generic.List<Cad.SeamOutcrop.SeamOutcropRunner.Layer>();
+        foreach (var sp in req.Seams)
+        {
+            var roof = Mesh(sp.RoofName);
+            var floor = Mesh(sp.FloorName);
+            if (roof == null) return $"✖ 找不到「{sp.Name}」的顶板面「{sp.RoofName}」";
+            if (floor == null) return $"✖ 找不到「{sp.Name}」的底板面「{sp.FloorName}」";
+            layers.Add(new Cad.SeamOutcrop.SeamOutcropRunner.Layer
+            {
+                Name = sp.Name, PackedRgb = sp.PackedRgb,
+                RoofVerts = V(roof), RoofTris = T(roof), FloorVerts = V(floor), FloorTris = T(floor),
+            });
+        }
+
+        // 可采范围：把选中图层里的闭合多段线全收进来(多环取并集)
+        System.Collections.Generic.List<double[]>? rings = null;
+        if (req.RegionName.Length > 0)
+        {
+            rings = new System.Collections.Generic.List<double[]>();
+            foreach (var e in _scene.Entities)
+                if (e is Cad.Draw.PolylineEntity p && p.Closed && p.Points.Count >= 3
+                    && string.Equals(string.IsNullOrWhiteSpace(e.LayerName) ? "多段线" : e.LayerName,
+                                     req.RegionName, System.StringComparison.Ordinal))
+                {
+                    var flat = new double[p.Points.Count * 2];
+                    for (int i = 0; i < p.Points.Count; i++) { flat[i * 2] = p.Points[i].x; flat[i * 2 + 1] = p.Points[i].y; }
+                    rings.Add(flat);
+                }
+            if (rings.Count == 0) return $"✖ 图层「{req.RegionName}」里没有闭合多段线, 圈不出可采范围";
+        }
+
+        if (req.RefineOnIntersection)
+            return RefineSeamOutcrop(terrain, layers, rings, req.SnapEps, V(terrain), T(terrain));
+
+        var rep = Cad.SeamOutcrop.SeamOutcropRunner.Run(V(terrain), T(terrain), layers, rings, req.SnapEps);
+        _seamOutcropWin?.ShowStats(rep);
+        if (rep.TotalMarked == 0) return "✖ 一个顶点都没染上 —— " + rep.Why;
+
+        // 只覆盖被认领的顶点, 其余保留原色(没有原色就用实体基色) —— 与原版"克隆现状网再覆盖"同口径
+        BeginChange();
+        var cols = new System.Collections.Generic.List<(float r, float g, float b)>(terrain.Verts.Count);
+        bool hadColors = terrain.VertColors != null && terrain.VertColors.Count == terrain.Verts.Count;
+        for (int i = 0; i < terrain.Verts.Count; i++)
+        {
+            if (rep.Assigned[i])
+            {
+                var (r8, g8, b8) = Cad.SeamOutcrop.SeamSpec.Unpack(rep.Color[i]);
+                cols.Add((r8 / 255f, g8 / 255f, b8 / 255f));
+            }
+            else cols.Add(hadColors ? terrain.VertColors![i] : (terrain.Cr, terrain.Cg, terrain.Cb));
+        }
+        terrain.VertColors = cols;
+        RefreshScene();
+
+        string detail = string.Join("；", rep.Layers.Select(l =>
+            $"{l.Name} {l.Marked} 点" + (l.NoData > 0 ? $"(判不了 {l.NoData})" : "")));
+        return $"煤层露头着色：共染 {rep.TotalMarked} 个顶点 —— {detail}"
+             + (rep.TotalUncovered > 0
+                 ? $"　◆ 另有约 {rep.TotalUncovered} 个三角面被露头带穿过却三个顶点都没染上"
+                   + "(按节点着色的固有精度=三角尺度, 窄露头带会漏; 需沿交线重剖分才补得全)"
+                 : "");
+    }
+
+    /// <summary>
+    /// 交线重剖分那条路：切开现状网逐面着色 → 生成**一张新面**入场景（不改原面）。
+    /// 与按节点着色的区别在于它会改拓扑, 就地改会把原面的顶点/三角全换掉 ——
+    /// 再想对比"切之前什么样"就没得可比了, 故新出一张。
+    /// </summary>
+    private string RefineSeamOutcrop(Cad.Draw.MeshEntity terrain,
+                                     System.Collections.Generic.List<Cad.SeamOutcrop.SeamOutcropRunner.Layer> layers,
+                                     System.Collections.Generic.List<double[]>? rings,
+                                     double eps, double[] tv, int[] tt)
+    {
+        var r = Cad.SeamOutcrop.SeamOutcropRunner.Refine(tv, tt, layers, rings, eps);
+        _seamOutcropWin?.ShowRefineStats(r.SeamTris, r.SeamArea3D, r.SeamAreaXY);
+        if (r.Tris.Length < 3) return "✖ 重剖分没能切出任何面 —— 检查顶/底板与现状面是不是同一个坐标系";
+        if (r.CoalTris == 0) return "✖ 切开了但没有一片落在露头带内 —— 检查顶/底板选得对不对、容差是不是太小";
+
+        var mesh = new Cad.Draw.MeshEntity
+        {
+            Name = terrain.Name + "·露头着色",
+            LayerName = terrain.LayerName,
+            Cr = terrain.Cr, Cg = terrain.Cg, Cb = terrain.Cb,
+        };
+        for (int i = 0; i < r.Verts.Length; i += 3) mesh.Verts.Add((r.Verts[i], r.Verts[i + 1], r.Verts[i + 2]));
+        for (int i = 0; i + 2 < r.Tris.Length; i += 3) mesh.Tris.Add(((int)r.Tris[i], (int)r.Tris[i + 1], (int)r.Tris[i + 2]));
+
+        var cols = new System.Collections.Generic.List<(float r, float g, float b)>(mesh.Verts.Count);
+        for (int i = 0; i < mesh.Verts.Count; i++)
+        {
+            uint c = i < r.Colors.Length ? r.Colors[i] : Cad.SeamOutcrop.SeamOutcropRefiner.BaseColorSentinel;
+            // 哨兵不是"白色": 它表示"这一片不是露头, 用源面自身的生效色"。
+            // 直接当颜色用会把非露头区整片染成白的。
+            if (c == Cad.SeamOutcrop.SeamOutcropRefiner.BaseColorSentinel) cols.Add((terrain.Cr, terrain.Cg, terrain.Cb));
+            else { var (r8, g8, b8) = Cad.SeamOutcrop.SeamSpec.Unpack(c); cols.Add((r8 / 255f, g8 / 255f, b8 / 255f)); }
+        }
+        mesh.VertColors = cols;
+
+        BeginChange();
+        _scene.Entities.Add(mesh);
+        RefreshScene();
+
+        string detail = string.Join("；", layers.Select((l, i) =>
+            $"{l.Name} {r.SeamTris[i]} 面 / 三维 {r.SeamArea3D[i]:N0} m²(投影 {r.SeamAreaXY[i]:N0})"));
+        return $"露头交线重剖分：切出 {r.TotalTris} 面(交线插点 {r.CutVerts}, 切割 {r.SplitTris} 次), "
+             + $"露头 {r.CoalTris} 面 —— {detail}。已生成「{mesh.Name}」";
+    }
+
+    // 参数化开采模板编辑器(忠实原 MineAssLib.Views.MiningTemplateEditorWindow)。非模态单例。
+    // 采场/排土同一个窗, 与原版一致(原版「参数化模板」与「排土模板」两个按钮开的就是同一个窗)。
+    // 存进去的模板由 Data/BenchTemplateResolver 读回来 —— 写与读用**同一个标记常量**,
+    // 两边字面量对不上就是"排土场永不读模板"那个坑重现。
+    private Views.Modeling.BenchTemplateEditorWindow? _tplEditorWin;
+    private void OpenBenchTemplateEditor(bool dump)
+    {
+        if (_tplEditorWin != null) { _tplEditorWin.Activate(); StatusMsg.Text = "参数化开采模板已在前台"; return; }
+        var w = new Views.Modeling.BenchTemplateEditorWindow(() => EnsureGeoDb()?.Connection,
+                                                             msg => StatusMsg.Text = msg, dump);
+        _tplEditorWin = w;
+        w.Closed += (_, _) => _tplEditorWin = null;
+        w.Show(this);
+        StatusMsg.Text = dump
+            ? "排土模板：配好 H/α/W 存为命名模板 → 排土场放坡/参数校核自动套用(不必每处重填)"
+            : "参数化开采模板：H/α/W 实时算最终帮坡角与越界校核, 存为命名模板供放坡入口套用";
+        EnsureGeoDb();
+    }
+
+    /// <summary>
+    /// 已排产的中长远方案(会话内)。「中长远进度计划」命令排一次就往这儿放一份,
+    /// 「进度计划方案出图」从这儿取 —— 出图窗**不自己排产**, 免得同一套参数在两处各排一遍、
+    /// 图上一个数、表里另一个数。
+    /// </summary>
+    private readonly System.Collections.Generic.List<Cad.LongTermPlan> _longTermSchemes = new();
+
+    private void RememberLongTermScheme(Cad.LongTermPlan p)
+    {
+        if (p?.Result == null) return;
+        // 同名覆盖: 反复用同一组参数排产不该堆出一串重名方案
+        int i = _longTermSchemes.FindIndex(x => string.Equals(x.Name, p.Name, System.StringComparison.Ordinal));
+        if (i >= 0) _longTermSchemes[i] = p; else _longTermSchemes.Add(p);
+        _longTermChartWin?.Reload();
+    }
+
+    /// <summary>动态模拟取方案：新库(派生/规划计算)已排产的 → 转旧口径；再并上旧命令行「中长远进度计划」排出的。</summary>
+    private System.Collections.Generic.List<Cad.LongTermPlan> LongTermPlansForSim()
+    {
+        var list = Cad.Plan.LongTermSchemeStore.Schemes.Where(s => s.Result != null).Select(Cad.Plan.LongTermScheduler.ToLegacy).ToList();
+        foreach (var p in _longTermSchemes) if (!list.Any(x => x.Name == p.Name)) list.Add(p);
+        return list;
+    }
+
+    // 中长远规划动态模拟(忠实原 TaskLib.Features.LongTermSimWindow 的年轨那一支)。非模态单例。
+    // 一帧=一年: 逐年量曲线与游标联动 + 逐年扣去向库容到排满。口径在 Cad/LongTermSimTimeline(纯函数)。
+    // 三维逐年挖除/堆填(整套 Sim*Stage 几何管线)本轮未移, 窗口里如实写明。
+    private Views.Plan.LongTermSimWindow? _longTermSimWin;
+    private void OpenLongTermSim()
+    {
+        if (_longTermSimWin != null) { _longTermSimWin.Reload(); _longTermSimWin.Activate(); StatusMsg.Text = "中长远规划动态模拟已在前台"; return; }
+        var w = new Views.Plan.LongTermSimWindow(
+            LongTermPlansForSim,
+            // 去向台账碰巧连着就拿来做库容校核; 连不上就只演量, 不为此弹连库提示
+            () => _geoDb == null ? null : Data.SinkRegistryLoader.Load(_geoDb.Connection),
+            msg => StatusMsg.Text = msg);
+        _longTermSimWin = w;
+        w.Closed += (_, _) => _longTermSimWin = null;
+        w.Show(this);
+        int nSim = LongTermPlansForSim().Count;
+        StatusMsg.Text = nSim > 0
+            ? $"中长远规划动态模拟：{nSim} 个方案可推演 —— 一帧一年, 逐年扣库容看哪年排不下"
+            : "中长远规划动态模拟：还没有已排产方案 —— 先「派生计划方案」→「规划计算」排产(或命令行「中长远进度计划 一键」)";
+    }
+
+    /// <summary>已排产的月度方案(会话内)。「短期生产计划」排一次放一份, 动态模拟从这儿取。</summary>
+    private readonly System.Collections.Generic.List<Cad.ShortTermPlan> _shortTermSchemes = new();
+
+    private void RememberShortTermScheme(Cad.ShortTermPlan p)
+    {
+        if (p?.Result == null) return;
+        int i = _shortTermSchemes.FindIndex(x => string.Equals(x.Name, p.Name, System.StringComparison.Ordinal));
+        if (i >= 0) _shortTermSchemes[i] = p; else _shortTermSchemes.Add(p);
+        _shortTermSimWin?.Reload();
+    }
+
+    // 短期进度计划动态模拟(年轨的月度孪生)。非模态单例。口径在 Cad/ShortTermSimTimeline(与年轨同源)。
+    // 车流/设备图标/路线标注/班次那一层(整套 Sim*Stage)本轮未移, 窗口里如实写明。
+    private Views.Plan.ShortTermSimWindow? _shortTermSimWin;
+    private void OpenShortTermSim()
+    {
+        if (_shortTermSimWin != null) { _shortTermSimWin.Reload(); _shortTermSimWin.Activate(); StatusMsg.Text = "短期进度计划动态模拟已在前台"; return; }
+        var w = new Views.Plan.ShortTermSimWindow(
+            () => new System.Collections.Generic.List<Cad.ShortTermPlan>(_shortTermSchemes),
+            () => _geoDb == null ? null : Data.SinkRegistryLoader.Load(_geoDb.Connection),
+            msg => StatusMsg.Text = msg);
+        _shortTermSimWin = w;
+        w.Closed += (_, _) => _shortTermSimWin = null;
+        w.Show(this);
+        StatusMsg.Text = _shortTermSchemes.Count > 0
+            ? $"短期进度计划动态模拟：{_shortTermSchemes.Count} 个月度方案可推演 —— 一帧一月, 逐月扣库容"
+            : "短期进度计划动态模拟：还没有已排产的月度方案 —— 先跑「短期生产计划」";
+    }
+
+    // 实绩录入(原 TaskLib.Features.ActualEntryWindow 在 Kylin 数据模型上的落地)。非模态单例。
+    // §三三六 的周计划一直在读 daily_mine_summary 算达成度, 这里补上写的一头。
+    // 口径(六列相加 + 煤密度折方)直接引用 WeekPlanSource 那一份, 不另抄。
+    private Views.GeoDb.ActualEntryWindow? _actualEntryWin;
+    private void OpenActualEntry()
+    {
+        if (_actualEntryWin != null) { _actualEntryWin.Activate(); StatusMsg.Text = "实绩录入已在前台"; return; }
+        var w = new Views.GeoDb.ActualEntryWindow(() => EnsureGeoDb()?.Connection,
+            () => _geoDb == null ? null : Data.SinkRegistryLoader.Load(_geoDb.Connection),
+            msg => StatusMsg.Text = msg);
+        _actualEntryWin = w;
+        w.Closed += (_, _) => _actualEntryWin = null;
+        w.Show(this);
+        StatusMsg.Text = "实绩录入：当日出煤按六路外运通道分录(筒仓是库存不计), 剥离可按占容方回灌排土场库容";
+        EnsureGeoDb();
+    }
+
+    // 生产报告(原 TaskLib.Reporting 四层架构里的 取数→指标 两层, 落在 Kylin 实绩事实表上)。非模态单例。
+    // 模板设计器/叙述报告/交叉表/PDF·Word 渲染与存档对比未移, 已在窗口注释与 §三五〇 登记。
+    private Views.GeoDb.ProductionReportWindow? _prodReportWin;
+    private void OpenProductionReport()
+    {
+        if (_prodReportWin != null) { _prodReportWin.Reload(); _prodReportWin.Activate(); StatusMsg.Text = "生产报告已在前台"; return; }
+        var w = new Views.GeoDb.ProductionReportWindow(() => EnsureGeoDb()?.Connection, msg => StatusMsg.Text = msg);
+        _prodReportWin = w;
+        w.Closed += (_, _) => _prodReportWin = null;
+        w.Show(this);
+        StatusMsg.Text = "生产报告：日/周/月 × 指标; 算不出来显示「—」不编数, 实绩录入完整度单列一行";
+        EnsureGeoDb();
+    }
+
+    // 采排配对(忠实原 PlanLib「采排配对」窗口的视图部分)。非模态单例。
+    // 源—汇矩阵(行=作业面·物料 列=去向) + 去向库容条 + 本期汇总(汇总复用 PeriodBalance, 不另算一份)。
+    // ★ 本窗不自己做配对, 只取台账里已有的对位关系 —— 两处各解一次会分叉, 而两边各自都自洽。
+    // ★ 库容按占容方扣(V容 = V实 × Kr): 拿实方去扣会把排土场算得比实际能装得多。
+    private Views.GeoDb.DumpPairingWindow? _dumpPairWin;
+    private void OpenDumpPairing()
+    {
+        if (_dumpPairWin != null) { _dumpPairWin.Reload(); _dumpPairWin.Activate(); StatusMsg.Text = "采排配对已在前台"; return; }
+        if (EnsureGeoDb() == null) return;
+        var w = new Views.GeoDb.DumpPairingWindow(() => EnsureGeoDb()?.Connection, msg => StatusMsg.Text = msg);
+        _dumpPairWin = w;
+        w.Closed += (_, _) => _dumpPairWin = null;
+        w.Show(this);
+        StatusMsg.Text = "采排配对：源—汇流向矩阵 + 去向库容条(按占容方扣) + 本期汇总";
+    }
+
+    // 班内工艺·工序推演(忠实原 TaskLib.ShiftOps.ShiftProcessModel 的判定部分)。非模态单例。
+    // 任务(日/班)尺度: 工序互锁 + 每条工艺线的能力配比 + 此刻卡在哪(铲等车/车等铲/排土受限)。
+    // ★ 与月度那套不共用任何口径: 采排配对在一个班上必然报不守恒(挖了先堆在采场边、下一班才拉走),
+    //   推进反算的分母是月度工作线长 —— 那些判据在班尺度上不成立, 这里一条都不放。
+    // ★ 在途车数 n = λ×W 不取整: n<1 时"每隔几分钟才有一台车在途"是真实状态。
+    private Views.GeoDb.ShiftProcessWindow? _shiftProcWin;
+    private void OpenShiftProcess()
+    {
+        if (_shiftProcWin != null) { _shiftProcWin.Reload(); _shiftProcWin.Activate(); StatusMsg.Text = "班内工艺·工序推演已在前台"; return; }
+        if (EnsureGeoDb() == null) return;
+        var w = new Views.GeoDb.ShiftProcessWindow(() => EnsureGeoDb()?.Connection, msg => StatusMsg.Text = msg);
+        _shiftProcWin = w;
+        w.Closed += (_, _) => _shiftProcWin = null;
+        w.Show(this);
+        StatusMsg.Text = "班内工艺·工序推演：拖班内时钟 → 那一刻在跑哪几条线、系统卡在哪";
+    }
+
+    // 生产任务动态调整(忠实原 TaskLib.Features.DynamicAdjustWindow 的原因码路由 + 滚动重排两段)。非模态单例。
+    // 重排算法是本仓已有的 TaskRescheduler —— 它移过来之后一直没有入口, 本窗是那条接线。
+    // ★ 原因码这一步不能跳: 动作选错了, 重排出来的计划照样排得满满的, 而现场还是干不动。
+    // ★ 实绩没录 ≠ 实绩为 0: 按 0 算会让没录的面全成"欠产 100%", 重排把整天的量又排一遍。
+    private Views.GeoDb.DynamicAdjustWindow? _dynAdjustWin;
+    private void OpenDynamicAdjust()
+    {
+        if (_dynAdjustWin != null) { _dynAdjustWin.Reload(); _dynAdjustWin.Activate(); StatusMsg.Text = "生产任务动态调整已在前台"; return; }
+        if (EnsureGeoDb() == null) return;
+        var w = new Views.GeoDb.DynamicAdjustWindow(() => EnsureGeoDb()?.Connection, msg => StatusMsg.Text = msg);
+        _dynAdjustWin = w;
+        w.Closed += (_, _) => _dynAdjustWin = null;
+        w.Show(this);
+        StatusMsg.Text = "生产任务动态调整：判原因码 → 选调整动作 → 滚动重排 + 欠量回摊";
+    }
+
+    // 派车单(忠实原 TaskLib.Features.DispatchOrderWindow + DispatchEngine 的固定配车展开 A 段)。非模态单例。
+    // s(i,k) = 起始 + (i−1)·τ_L + (k−1)·T_c; 车次数取 时间法 与 量法 的小者。
+    // ★ 载重是吨(三口径间唯一的守恒量), 实方/松方由它按物料折; 密度常量一律经 MaterialCatalog。
+    private Views.GeoDb.DispatchOrderWindow? _dispatchOrderWin;
+    private void OpenDispatchOrder()
+    {
+        if (_dispatchOrderWin != null) { _dispatchOrderWin.Reload(); _dispatchOrderWin.Activate(); StatusMsg.Text = "派车单已在前台"; return; }
+        if (EnsureGeoDb() == null) return;
+        var w = new Views.GeoDb.DispatchOrderWindow(() => EnsureGeoDb()?.Connection, msg => StatusMsg.Text = msg);
+        _dispatchOrderWin = w;
+        w.Closed += (_, _) => _dispatchOrderWin = null;
+        w.Show(this);
+        StatusMsg.Text = "派车单：任务 → 车次(错峰进场 + 循环时间); 一趟算数的条件是能把料卸掉, 再按目标量封顶";
+    }
+
+    // 班组派工(忠实原 TaskLib.Features.CrewAssignWindow 的口径部分)。非模态单例。
+    // 自动派工按【设备类别 ↔ 持证类别】匹配, 避开休班与重复占用; 持证校核是真校核, 不是一律打勾。
+    // ★ 姓名不是主键: 花名册重名的一律不认, 当场点名要用工号区分 —— 随手挑一个去校证, 挑错了看不出来。
+    // ★ 不生成样例花名册: 编出来的是人名, 会被当成真人派工、写进单据、发到班组。
+    private Views.GeoDb.CrewAssignWindow? _crewAssignWin;
+    private void OpenCrewAssign()
+    {
+        if (_crewAssignWin != null) { _crewAssignWin.Reload(); _crewAssignWin.Activate(); StatusMsg.Text = "班组派工已在前台"; return; }
+        if (EnsureGeoDb() == null) return;
+        var w = new Views.GeoDb.CrewAssignWindow(() => EnsureGeoDb()?.Connection, msg => StatusMsg.Text = msg);
+        _crewAssignWin = w;
+        w.Closed += (_, _) => _crewAssignWin = null;
+        w.Show(this);
+        StatusMsg.Text = "班组派工：先在下半张表录花名册, 再自动派工; 持证/出勤逐条比对, 爆破按口径不指人";
+    }
+
+    // 生产任务书(忠实原 TaskLib.Order.TaskOrderWindow 的口径部分)。非模态单例。
+    // 单据命门是「从哪采 → 拉到哪」: 卸载地点紧跟作业地点, 计划量给实方与吨双口径; 缺卸点不得下达。
+    // **本窗只出单据不签发** —— 签发唯一入口是「任务下达」, 这里只如实回显那边的结果。
+    private Views.GeoDb.TaskOrderWindow? _taskOrderWin;
+    private void OpenTaskOrder()
+    {
+        if (_taskOrderWin != null) { _taskOrderWin.Reload(); _taskOrderWin.Activate(); StatusMsg.Text = "生产任务书已在前台"; return; }
+        if (EnsureGeoDb() == null) return;
+        var w = new Views.GeoDb.TaskOrderWindow(() => EnsureGeoDb()?.Connection, msg => StatusMsg.Text = msg);
+        _taskOrderWin = w;
+        w.Closed += (_, _) => _taskOrderWin = null;
+        w.Show(this);
+        StatusMsg.Text = "生产任务书：三本方量账分列不合并；缺卸点的任务单列红字，不得下达";
+    }
+
+    // 任务下达(忠实原 TaskLib.Features.TaskDispatchWindow + Engine.DispatchEngine.ValidateForIssue)。非模态单例。
+    // "计划 → 执行"的闸门: Error级校核/缺去向/缺主设备一律不得下达; 下达落 TaskInstance + 回执(JSON);
+    // 撤回也是一条回执, 不抹掉下达那一条(单据流水只增不改)。稳定键 = 日期+班次+主设备+工序+作业面。
+    private Views.GeoDb.TaskDispatchWindow? _taskDispatchWin;
+    private void OpenTaskDispatch()
+    {
+        if (_taskDispatchWin != null) { _taskDispatchWin.Reload(); _taskDispatchWin.Activate(); StatusMsg.Text = "任务下达已在前台"; return; }
+        // ★ 按 EnsureGeoDb 的约定先拿库再开窗（连上后本命令会自动重跑）：
+        //   先开窗、末尾再 EnsureGeoDb 的话，窗口构造时连接还是空的 ——
+        //   装出来的是一盘"什么台账都没有"，得手动点一次「重新装配」才对。
+        if (EnsureGeoDb() == null) return;
+        var w = new Views.GeoDb.TaskDispatchWindow(() => EnsureGeoDb()?.Connection, msg => StatusMsg.Text = msg);
+        _taskDispatchWin = w;
+        w.Closed += (_, _) => _taskDispatchWin = null;
+        w.Show(this);
+        StatusMsg.Text = "任务下达：缺去向/缺主设备/Error 级校核一律不得下达；下达与撤回都留回执";
+    }
+
+    // 编制配置(忠实原 TaskLib.Features.CompileConfigWindow + Engine.CompileOverrides 的人工锚点部分)。非模态单例。
+    // 只放**真的会喂进引擎**的那几项：降效(全盘/分环节) / 交接班损失 / 面日产能工时 / 配煤三项 / 备采保有下限。
+    // 作业组织策略与大段回显未移(依赖未移植的排产装配层) —— 摆上去却不生效正是原版当初要修的毛病。
+    private Views.GeoDb.CompileConfigWindow? _compileCfgWin;
+    private void OpenCompileConfig()
+    {
+        if (_compileCfgWin != null) { _compileCfgWin.Reload(); _compileCfgWin.Activate(); StatusMsg.Text = "编制配置已在前台"; return; }
+        var w = new Views.GeoDb.CompileConfigWindow(() => EnsureGeoDb()?.Connection, msg => StatusMsg.Text = msg);
+        _compileCfgWin = w;
+        w.Closed += (_, _) => _compileCfgWin = null;
+        w.Show(this);
+        StatusMsg.Text = "编制配置：裂解装箱的切分规则(人工锚点) —— 每格留空=不设, 与填 0 不是一回事";
+        EnsureGeoDb();
+    }
+
+    // 钻爆计划衔接(忠实原 TaskLib.Features.BlastPlanWindow + Engine.BlastPlanLink 的 B1–B7 口径)。非模态单例。
+    // drill_plan 表 V044 建好后一直零消费者, 本窗是那条接线, 也是全仓唯一的穿孔计划入口。
+    // 「进装箱时窗」一列在 Kylin 侧判不了(排产装配层未移植) —— 判不了不写成"未进"。
+    private Views.GeoDb.BlastPlanWindow? _blastPlanWin;
+    private void OpenBlastPlan()
+    {
+        if (_blastPlanWin != null) { _blastPlanWin.Reload(); _blastPlanWin.Activate(); StatusMsg.Text = "钻爆计划衔接已在前台"; return; }
+        // 同上：先拿库再开窗，否则第一次开出来的是"台账都读不到"那一版
+        if (EnsureGeoDb() == null) return;
+        var w = new Views.GeoDb.BlastPlanWindow(() => EnsureGeoDb()?.Connection, msg => StatusMsg.Text = msg);
+        _blastPlanWin = w;
+        w.Closed += (_, _) => _blastPlanWin = null;
+        w.Show(this);
+        StatusMsg.Text = "钻爆计划衔接：逐炮排程(blast_event) → 停产清场窗口 → 衔接采装面；下半张表排穿孔计划(drill_plan)";
+    }
+
+    // 作业区划分(忠实原 TaskLib.Features.WorkZoneLayoutWindow 的口径部分)。非模态单例。
+    // mineable_region 表 V015/V016/V018 建好后一直零消费者, 本窗是那条接线。
+    // Z 必须有出处(现状面采样 / 基准标高), 否则拒绝入库 —— 写 0 会被推演当成台账实测高程。
+    private Views.GeoDb.WorkZoneWindow? _workZoneWin;
+    private void OpenWorkZone()
+    {
+        if (_workZoneWin != null) { _workZoneWin.Reload(); _workZoneWin.Activate(); StatusMsg.Text = "作业区划分已在前台"; return; }
+        var w = new Views.GeoDb.WorkZoneWindow(
+            () => EnsureGeoDb()?.Connection,
+            () => _geoDb == null ? null : Data.SinkRegistryLoader.Load(_geoDb.Connection),
+            SceneClosedPolylineNames,
+            RingOfLayer,
+            SceneMeshNames,
+            SampleZOnMesh,
+            msg => StatusMsg.Text = msg);
+        _workZoneWin = w;
+        w.Closed += (_, _) => _workZoneWin = null;
+        w.Show(this);
+        StatusMsg.Text = "作业区划分：把场景里的闭合多段线落成作业区域台账(推演的推进轮廓/路网裁剪范围读的就是它)";
+        EnsureGeoDb();
+    }
+
+    /// <summary>取某图层里第一条可用的闭合多段线的 XY 环。</summary>
+    private System.Collections.Generic.List<(double x, double y)> RingOfLayer(string layer)
+    {
+        foreach (var e in _scene.Entities)
+            if (e is Cad.Draw.PolylineEntity p && p.Closed && p.Points.Count >= 3
+                && string.Equals(string.IsNullOrWhiteSpace(e.LayerName) ? "多段线" : e.LayerName, layer,
+                                 System.StringComparison.Ordinal))
+                return new System.Collections.Generic.List<(double, double)>(p.Points);
+        return new System.Collections.Generic.List<(double x, double y)>();
+    }
+
+    /// <summary>
+    /// 在某张三角网上逐点采 Z（复用 §三四一 的 2.5D 采样器）。
+    /// **有一个点采不到就整体返回 null** —— 半环有 Z、半环没有比全没有更糟：
+    /// 落库之后没人看得出哪几个顶点是编的。
+    /// </summary>
+    // ═══════════════════ 坑线落地 / 撤销坑线 / 平盘联络道（忠实原 MineAssLib 运输工程组）═══════════════════
+    //
+    //  原版管线：① 转角圆弧化（C#）→ ② 贴面 + 限坡（C#）→ ③ 横断面加宽/超高（C#）→ ④ 被切面白名单 →
+    //           ⑤ 走廊放样 + 切帮（C++ 内核 IPitDesignCapability）。
+    //  ①②③ 原本就是 C# 侧的纯几何，逐行照移在 Cad/RoadLanding.cs；⑤ 是无源内核，
+    //  这里用托管的 RoadCorridorLofter 等价：路面 + 挖填方边坡各一张网，**独立叠加实体、不切原网**
+    //  （同 §三四二 煤层露头着色的处置）。差异登记在 RoadCorridorLofter 的类文档。
+    //
+    //  落地缓存 _lastRouteCenterlines：与原版同名同义 —— 图上的预览线是二维的，落地要的是带 Z 的整条中线。
+
+    private readonly System.Collections.Generic.List<double[]> _lastRouteCenterlines = new();
+    private double _lastRouteRoadWidth, _lastRouteGradePct;
+    private string _lastRouteSource = "";
+    /// <summary>已落地的坑线段（每段 = 本次落地生成的全部实体），供【撤销坑线】逐段往回撤。</summary>
+    private readonly System.Collections.Generic.List<System.Collections.Generic.List<SceneEntity>> _landedRampSegments = new();
+
+    private static double[] Flatten3(System.Collections.Generic.IReadOnlyList<(double X, double Y, double Z)> pts)
+    {
+        var a = new double[pts.Count * 3];
+        for (int i = 0; i < pts.Count; i++) { a[i * 3] = pts[i].X; a[i * 3 + 1] = pts[i].Y; a[i * 3 + 2] = pts[i].Z; }
+        return a;
+    }
+
+    private void RememberRouteForLanding(System.Collections.Generic.IEnumerable<double[]> lines, double roadWidth, double gradePct, string source)
+    {
+        _lastRouteCenterlines.Clear();
+        foreach (var l in lines) if (l != null && l.Length >= 6) _lastRouteCenterlines.Add(l);
+        _lastRouteRoadWidth = roadWidth; _lastRouteGradePct = gradePct; _lastRouteSource = source;
+    }
+
+    /// <summary>选集里的三角网 → 一个采样器（多选合并）。没选返回 null。</summary>
+    private Cad.IRoadZSampler? SamplerFromSelectedMeshes(out int meshCount)
+    {
+        var verts = new System.Collections.Generic.List<double>();
+        var tris = new System.Collections.Generic.List<int>();
+        meshCount = 0;
+        foreach (var e in _selected)
+        {
+            if (e is not Cad.Draw.MeshEntity m || m.Verts.Count < 3 || m.Tris.Count < 1) continue;
+            int b = verts.Count / 3;
+            foreach (var v in m.Verts) { verts.Add(v.x); verts.Add(v.y); verts.Add(v.z); }
+            foreach (var t in m.Tris) { tris.Add(t.a + b); tris.Add(t.b + b); tris.Add(t.c + b); }
+            meshCount++;
+        }
+        return meshCount == 0 ? null : Cad.MeshZSampler.Build(verts.ToArray(), tris.ToArray());
+    }
+
+    /// <summary>落地参数：以运输约束配置为底，再用本次布线实际用的路宽/限坡盖掉那两项（不回读全局）。</summary>
+    private Cad.RampDesignParams LandingParams()
+    {
+        var c = Cad.Transport.TransportConstraintProfileStore.LoadMirrorOrDefault(UserSettings.Current);
+        return new Cad.RampDesignParams
+        {
+            RoadWidth = _lastRouteRoadWidth > 1e-9 ? _lastRouteRoadWidth : System.Math.Max(3, c.RoadWidthPreview()),
+            MaxGradePct = _lastRouteGradePct > 1e-9 ? _lastRouteGradePct : c.MaxGradePct,
+            MinTurnRadius = c.MinCurveRadiusM,
+            CurveGradePct = c.CurveMaxGradePct,
+            SuperElevPct = c.MaxSuperelevationPct,
+            CurveWiden = c.CurveWidenThresholdM,
+            BermHeight = c.BermHeightPreview(),
+            LaneCount = System.Math.Max(1, c.LaneCount),
+            WheelbaseM = c.VehicleWheelbase,
+        };
+    }
+
+    // 坑线落地：把缓存里的整条中线落地成路面 + 挖填方边坡。命令行可带 "坑线落地 <路宽> <限坡%>" 覆盖。
+    private async System.Threading.Tasks.Task LandRampRouteCmd(string cmd)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var p = LandingParams();
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        if (tk.Length >= 2 && double.TryParse(tk[1], System.Globalization.NumberStyles.Float, inv, out double w) && w > 0) p.RoadWidth = w;
+        if (tk.Length >= 3 && double.TryParse(tk[2], System.Globalization.NumberStyles.Float, inv, out double g) && g > 0) p.MaxGradePct = g;
+
+        // 缓存没有 → 退回图上选中的预览线（重开软件后也能接着落地；Z 由贴面重定，命令行如实说）
+        var lines = new System.Collections.Generic.List<double[]>(_lastRouteCenterlines);
+        bool fromPreview = false;
+        if (lines.Count == 0)
+        {
+            foreach (var e in _selected)
+                if (e is PolylineEntity pl && pl.Points.Count >= 2)
+                {
+                    var a = new double[pl.Points.Count * 3];
+                    for (int i = 0; i < pl.Points.Count; i++) { a[i * 3] = pl.Points[i].x; a[i * 3 + 1] = pl.Points[i].y; a[i * 3 + 2] = 0; }
+                    lines.Add(a); fromPreview = true;
+                }
+        }
+        if (lines.Count == 0)
+        {
+            StatusMsg.Text = "坑线落地：缓存里没有可落地的整条中线 —— 先点【直线坑线】（或选中一条中线折线再点本命令）。";
+            return;
+        }
+
+        var sampler = SamplerFromSelectedMeshes(out int meshCount);
+        if (sampler == null)
+        {
+            // 没点名被切面：原版摆明两种后果让人拍板（是=切所有面 / 否=只出路面 / 取消）。
+            // Kylin 不切原网，所以"是"那条路不存在 —— 只剩「只出路面（没有边坡、Z 不贴面）」与「取消」。
+            bool go = await Views.Modeling.BlockMsgBox.ConfirmAsync(this, "坑线落地 · 未指定被切面",
+                "本次没有选中任何三角网（现状面 / 台阶坡面）。\n\n"
+              + "「继续」= 只出路面带：Z 沿中线线性插值、没有挖填方边坡，路会浮在地形上。\n"
+              + "「取消」= 本次不创建。\n\n要贴到面上并出边坡，请取消后先选中那张（或那几张）面，再点一次本命令。",
+                "继续", "取消");
+            if (!go) { StatusMsg.Text = "坑线落地：未指定被切面，已取消（未落地）。"; return; }
+        }
+        if (fromPreview && sampler == null)
+        {
+            StatusMsg.Text = "坑线落地：选中的是二维预览线且没选面，Z 无从而来 —— 请同时选中一张面。";
+            return;
+        }
+
+        var log = new System.Collections.Generic.List<string>();
+        int okLines = 0, failLines = 0;
+        var segment = new System.Collections.Generic.List<SceneEntity>();
+        BeginChange();
+        for (int li = 0; li < lines.Count; li++)
+        {
+            string tag = lines.Count > 1 ? $"坑线落地#{li + 1}" : "坑线落地";
+            var o = LandCenterlineAsRoad(lines[li], p, sampler, tag, segment, log, arcRound: !fromPreview);
+            if (o) okLines++; else failLines++;
+        }
+        if (segment.Count > 0) _landedRampSegments.Add(segment);
+        RefreshScene();
+
+        foreach (var l in log) AppendHistoryLine("  " + l, EchoBrush(l.StartsWith("⚠") ? EchoLevel.Warn : EchoLevel.Info));
+        StatusMsg.Text = $"坑线落地：{okLines}/{lines.Count} 条落地成功" + (failLines > 0 ? $"，{failLines} 条失败（原因见信息栏）" : "")
+                       + $" · 基宽 {p.RoadWidth:0.#}m 限坡 {p.MaxGradePct:0.#}%"
+                       + (sampler != null ? $" · 贴 {meshCount} 张面出挖填方边坡（叠加实体，不切原网）" : " · 未贴面，只出路面带")
+                       + $" · 共 {_landedRampSegments.Count} 段可撤（【撤销坑线】）";
+    }
+
+    /// <summary>单条中线走统一落地管线。返回是否成功；生成的实体追加进 segment。</summary>
+    private bool LandCenterlineAsRoad(double[] xyz, Cad.RampDesignParams p, Cad.IRoadZSampler? sampler,
+                                      string tag, System.Collections.Generic.List<SceneEntity> segment,
+                                      System.Collections.Generic.List<string> log, bool arcRound)
+    {
+        double[] center = xyz;
+        // ── ① 转角圆弧化（只动 XY；必须先圆弧化、后贴面 —— 反过来做会把贴好的 Z 冲掉）──
+        if (arcRound && p.MinTurnRadius > 1e-9 && xyz.Length >= 9)
+        {
+            var pts = new System.Collections.Generic.List<(double X, double Y, double Z)>();
+            for (int i = 0; i + 2 < xyz.Length; i += 3) pts.Add((xyz[i], xyz[i + 1], xyz[i + 2]));
+            var lf = Cad.CenterlineLineForm.Apply(pts, null, 0.0, p.MinTurnRadius);
+            if (lf.Line.Count >= 2)
+            {
+                center = Flatten3(lf.Line);
+                log.Add($"{tag} 线形：转角圆弧化 R≥{p.MinTurnRadius:0.#}m（实达 {lf.MinRadiusM:0.#}m"
+                      + (lf.Violations > 0 ? $"；{lf.Violations} 处相邻段太短放不下切线长，被迫降 R" : "")
+                      + $"），中线 {xyz.Length / 3} 点 → {lf.Line.Count} 点。");
+            }
+        }
+
+        // ── ② 贴面 + 限坡 ──
+        if (sampler != null)
+        {
+            var prof = Cad.RoadSurfaceProfiler.Fit(center, sampler, p.MaxGradePct);
+            foreach (var d in prof.Diagnostics) log.Add($"{tag} {d}");
+            if (prof.Ok) center = prof.Centerline;
+            else log.Add($"⚠ {tag} 贴面失败（{prof.Error}）—— 本次退回「首末匀坡」老口径，中间不看地形。");
+        }
+
+        // ── ③ 横断面：弯道加宽 + 超高 ──
+        double[]? stationW = null, stationE = null;
+        if (p.CurveWiden > 1e-9 || p.SuperElevPct > 1e-9)
+        {
+            var pts3 = new System.Collections.Generic.List<(double X, double Y, double Z)>();
+            for (int i = 0; i + 2 < center.Length; i += 3) pts3.Add((center[i], center[i + 1], center[i + 2]));
+            if (pts3.Count >= 3)
+            {
+                var xs = Cad.RoadCrossSection.ComputeAlong(pts3, p.RoadWidth, p.CurveWiden, System.Math.Max(1, p.LaneCount),
+                                                          p.WheelbaseM, p.DesignSpeedKmh, p.SuperElevPct);
+                stationW = xs.WidthM; stationE = xs.SuperelevationPct;
+                log.Add($"{tag} 横断面：弯道加宽 ≤{xs.MaxWideningM:0.##}m，超高 ≤{xs.MaxSuperelevationPct:0.#}%（上限 {p.SuperElevPct:0.#}%）");
+            }
+        }
+
+        // ── ⑤ 走廊放样（托管等价内核）──
+        var cor = Cad.RoadCorridorLofter.Loft(center, p.RoadWidth, stationW, stationE, sampler, p.CutSlopeDeg, p.FillSlopeDeg);
+        if (!cor.Ok) { log.Add($"⚠ {tag} 放样失败：{cor.Error}"); return false; }
+
+        var deck = new Cad.Draw.MeshEntity($"{tag}·路面", cor.DeckVerts, cor.DeckTris) { Cr = 0.55f, Cg = 0.55f, Cb = 0.60f, LayerName = "运输坑线_路面" };
+        _scene.Add(deck); segment.Add(deck);
+        if (cor.CutTris.Count > 0)
+        {
+            var cut = new Cad.Draw.MeshEntity($"{tag}·挖方边坡", cor.CutVerts, cor.CutTris) { Cr = 0.85f, Cg = 0.55f, Cb = 0.35f, LayerName = "运输坑线_挖方边坡" };
+            _scene.Add(cut); segment.Add(cut);
+        }
+        if (cor.FillTris.Count > 0)
+        {
+            var fill = new Cad.Draw.MeshEntity($"{tag}·填方边坡", cor.FillVerts, cor.FillTris) { Cr = 0.45f, Cg = 0.70f, Cb = 0.40f, LayerName = "运输坑线_填方边坡" };
+            _scene.Add(fill); segment.Add(fill);
+        }
+        foreach (var edge in new[] { cor.LeftEdge, cor.RightEdge })
+        {
+            var pl = new PolylineEntity { Cr = 0.95f, Cg = 0.95f, Cb = 0.95f, LayerName = "运输坑线_路肩" };
+            foreach (var (x, y, _) in edge) pl.Points.Add((x, y));
+            _scene.Add(pl); segment.Add(pl);
+        }
+
+        string slope = sampler == null ? "未贴面，无边坡"
+            : $"挖方坡最高 {cor.MaxCutHeightM:0.#}m / 填方坡最高 {cor.MaxFillHeightM:0.#}m"
+              + (cor.SlopeMissed > 0 ? $"；{cor.SlopeMissed} 站找不到坡脚/坡顶（超出面或放坡上限），那些站不出边坡、不外推" : "");
+        log.Add($"{tag} 放样：{cor.Stations} 站，路面 {cor.DeckTris.Count} 三角，{slope}");
+
+        if (sampler != null)
+        {
+            var cf = Cad.RoadCutFillCalculator.Compute(cor.DeckFlat(), cor.DeckTrisFlat(), sampler);
+            log.Add(cf.Ok ? $"{tag} 挖填方：{cf.Describe()}" : $"⚠ {tag} 挖填方算不出：{cf.Error}");
+        }
+        return true;
+    }
+
+    // 撤销坑线：选中某段坑线实体则撤该段，否则撤最近落地的一段；可重复点，逐段往回撤。
+    private void UndoRampCmd()
+    {
+        if (_landedRampSegments.Count == 0) { StatusMsg.Text = "撤销坑线：当前没有已落地的坑线段可撤销。"; return; }
+        int idx = _landedRampSegments.Count - 1;
+        bool bySelection = false;
+        if (_selected.Count > 0)
+        {
+            var selSet = new System.Collections.Generic.HashSet<SceneEntity>(_selected);
+            for (int gi = 0; gi < _landedRampSegments.Count && !bySelection; gi++)
+                foreach (var e in _landedRampSegments[gi])
+                    if (selSet.Contains(e)) { idx = gi; bySelection = true; break; }
+        }
+        BeginChange();
+        int del = 0;
+        foreach (var e in _landedRampSegments[idx]) if (_scene.Remove(e)) del++;
+        _landedRampSegments.RemoveAt(idx);   // 无论删没删掉都移出：句柄已作废，留着只会挡住后面几段
+        _selected.Clear();
+        RefreshScene();
+        StatusMsg.Text = del == 0
+            ? $"撤销坑线：该段实体已不存在（可能已被删除），没什么可删；已把它移出记录，剩 {_landedRampSegments.Count} 段。"
+            : $"✓ 已撤销{(bySelection ? "选中" : "上段")}坑线（删 {del} 个实体）；剩 {_landedRampSegments.Count} 段。"
+              + (bySelection ? "" : "再点继续撤上一段。");
+    }
+
+    // 平盘联络道：配路宽/纵坡/镜像 → 坡面上点一下 → 按该处坡面高差与纵坡解出斜矩形路面 → 出挖填方边坡 + 路面。
+    // 命令行："平盘联络道 [路宽] [纵坡%] [镜像0/1]"；先选中要连的那张坡面（台阶坡面网），再在坡面上点一下。
+    private async System.Threading.Tasks.Task BenchConnectorRampCmd(string cmd)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var p = LandingParams();
+        bool mirror = false;
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        if (tk.Length >= 2 && double.TryParse(tk[1], System.Globalization.NumberStyles.Float, inv, out double w) && w > 0) p.RoadWidth = w;
+        if (tk.Length >= 3 && double.TryParse(tk[2], System.Globalization.NumberStyles.Float, inv, out double g) && g > 0) p.MaxGradePct = g;
+        if (tk.Length >= 4 && (tk[3] == "1" || tk[3] == "镜像")) mirror = true;
+
+        var sampler = SamplerFromSelectedMeshes(out int meshCount);
+        if (sampler == null) { StatusMsg.Text = "平盘联络道：先选中要连的那张台阶坡面（三角网），再点本命令。"; return; }
+        if (tk.Length < 2)   // 界面点击：参数框（忠实原 InsertRampDirectDialog：所属边坡 / 路宽 / 纵坡 / 镜像）
+        {
+            var v = await Views.Modeling.PromptDialog.AskAsync(this, "平盘联络道（平盘联络斜坡道）", new System.Collections.Generic.List<Views.Modeling.PromptDialog.Field>
+            {
+                new("type", "所属边坡", "采场", Choices: new[] { "采场", "排土场" }, Numeric: false, Hint: "影响图层命名"),
+                new("w", "路宽", p.RoadWidth.ToString("0.##", inv), "m"),
+                new("g", "纵坡", p.MaxGradePct.ToString("0.##", inv), "%"),
+                new("mirror", "镜像方向", "", Bool: true, Hint: "同一 O 点的另一斜向"),
+            }, $"已选中 {meshCount} 张坡面；确认后在坡面上点一下起坡点 → 按该处台阶段 + 纵坡解出斜矩形路面，切进坡面出挖填方边坡 + 路面，一步落地");
+            if (v == null) { StatusMsg.Text = "平盘联络道：用户取消"; EditEcho("平盘联络道:用户取消"); return; }
+            p.IsDump = v.S("type") == "排土场"; p.RoadWidth = v.D("w", p.RoadWidth); p.MaxGradePct = v.D("g", p.MaxGradePct); mirror = v.B("mirror");
+            if (p.RoadWidth <= 0 || p.MaxGradePct <= 0) { StatusMsg.Text = "平盘联络道：路宽与纵坡须 > 0"; return; }
+        }
+
+        var (kind, px, py) = await PickPointOrConfirmAsync("平盘联络道：在坡面上点一下（起坡点）", false);
+        if (kind != PickKind.Picked) { StatusMsg.Text = "平盘联络道：已取消。"; return; }
+        if (!sampler.TrySample(px, py, out double z0)) { StatusMsg.Text = "平盘联络道：点的位置不在所选坡面上。"; return; }
+
+        var solve = Cad.BenchConnectorSolver.Solve(sampler, px, py, z0, p.MaxGradePct, mirror);
+        if (!solve.Ok) { StatusMsg.Text = "平盘联络道：" + solve.Error; return; }
+
+        var log = new System.Collections.Generic.List<string>();
+        var segment = new System.Collections.Generic.List<SceneEntity>();
+        BeginChange();
+        bool ok = LandCenterlineAsRoad(solve.Centerline, p, sampler, "平盘联络道", segment, log, arcRound: false);
+        if (segment.Count > 0) _landedRampSegments.Add(segment);
+        RefreshScene();
+        foreach (var l in log) AppendHistoryLine("  " + l, EchoBrush(l.StartsWith("⚠") ? EchoLevel.Warn : EchoLevel.Info));
+        StatusMsg.Text = ok
+            ? $"平盘联络道：台阶高差 {solve.BenchHeightM:0.#}m · 纵坡 {p.MaxGradePct:0.#}% ⇒ 展线 {solve.LengthM:0.#}m · 路宽 {p.RoadWidth:0.#}m{(mirror ? " · 镜像" : "")}，已落地为一段（可【撤销坑线】）"
+            : "平盘联络道：落地失败（见信息栏）。";
+    }
+
+    // ═══════════════════ 局部台阶 / 排土场放坡（忠实原 MineAssLib 挖掘组·排土组；内核那一段托管等价 BenchBuilder）═══════════════════
+
+    /// <summary>把 BenchBuilder 的产物落成实体（坡面网 / 平盘网 / 各级坡脚线），返回新建实体。</summary>
+    private System.Collections.Generic.List<SceneEntity> AddBenchEntities(Cad.BenchBuildResult r, string tag, string layer, bool isDump)
+    {
+        var made = new System.Collections.Generic.List<SceneEntity>();
+        if (r.FaceTris.Count > 0)
+        {
+            var face = new Cad.Draw.MeshEntity($"{tag}·坡面", r.FaceVerts, r.FaceTris)
+            { Cr = isDump ? 0.62f : 0.80f, Cg = isDump ? 0.52f : 0.66f, Cb = isDump ? 0.40f : 0.45f, LayerName = layer + "_坡面" };
+            _scene.Add(face); made.Add(face);
+        }
+        if (r.BermTris.Count > 0)
+        {
+            var berm = new Cad.Draw.MeshEntity($"{tag}·平盘", r.BermVerts, r.BermTris)
+            { Cr = 0.70f, Cg = 0.72f, Cb = 0.60f, LayerName = layer + "_平盘" };
+            _scene.Add(berm); made.Add(berm);
+        }
+        foreach (var lv in r.Levels)
+        {
+            var toe = new PolylineEntity { Cr = 0.95f, Cg = 0.80f, Cb = 0.30f, LayerName = layer + "_坡脚线", Elevation = lv.ToeZ, Closed = lv.Crest.Count >= 3 && r.Levels.Count > 0 && IsRing(lv.Crest, lv.Toe) };
+            toe.Points.AddRange(lv.Toe);
+            _scene.Add(toe); made.Add(toe);
+        }
+        return made;
+    }
+
+    private static bool IsRing(System.Collections.Generic.IReadOnlyList<(double x, double y)> a, System.Collections.Generic.IReadOnlyList<(double x, double y)> b)
+        => a.Count >= 3 && b.Count == a.Count && System.Math.Abs(Cad.BenchLines.SignedArea(b)) > 1e-9;
+
+    // 局部台阶：选 1 条开口线 → 自动解析 H/α/W（模板→规范→兜底）→ 选形态（均匀/楔形；到标高）→ 生成完整台阶（坡面+平盘）。
+    // 命令行："局部台阶 [均匀|楔形] [到标高 <Z>] [左|右]"；界面点击走对话框（忠实原 LocalBenchDialog）。
+    private async System.Threading.Tasks.Task LocalBenchCmd(string cmd)
+    {
+        var sel = _selected.FindAll(e => e is PolylineEntity pl && pl.Points.Count >= 2);
+        if (sel.Count != 1 || sel[0] is not PolylineEntity line)
+        { StatusMsg.Text = "局部台阶：请先在场景里选 1 条开口线（台阶段）。"; return; }
+        if (line.Closed || (line.Points.Count >= 3 && System.Math.Abs(Cad.BenchLines.SignedArea(line.Points)) > 1e-9
+                            && Dist2(line.Points[0], line.Points[^1]) < 1e-12))
+        { StatusMsg.Text = "局部台阶：需开口线（局部台阶段）；闭合境界请用「批量台阶扩帮」。"; return; }
+
+        var db = EnsureGeoDb();
+        var rp = Data.BenchTemplateResolver.Resolve(db?.Connection, isDump: false);
+        double startZ = line.Elevation;
+
+        // 形态参数：命令行直给，否则对话框（自检下取默认值直通）
+        bool taper = false, useStop = false; double stopZ = startZ - rp.BenchHeight; int side = 1;
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        bool fromArgs = tk.Length >= 2;
+        if (fromArgs)
+        {
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            for (int i = 1; i < tk.Length; i++)
+            {
+                if (tk[i] == "楔形") taper = true;
+                else if (tk[i] == "均匀") taper = false;
+                else if (tk[i] == "右") side = -1;
+                else if (tk[i] == "左") side = 1;
+                else if (tk[i] == "到标高" && i + 1 < tk.Length && double.TryParse(tk[i + 1], System.Globalization.NumberStyles.Float, inv, out double z)) { useStop = true; stopZ = z; i++; }
+            }
+        }
+        else
+        {
+            var fields = new System.Collections.Generic.List<Views.Modeling.PromptDialog.Field>
+            {
+                new("form", "形态", "均匀完整", Choices: new[] { "均匀完整", "楔形·弧长收口", "楔形·到标高" }, Numeric: false),
+                new("stop", "到标高 Z", stopZ.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture), "m", "只在「楔形·到标高」时生效"),
+                new("side", "放坡侧", "左", Choices: new[] { "左", "右" }, Numeric: false, Hint: "沿线行进方向的哪一侧"),
+            };
+            var v = await Views.Modeling.PromptDialog.AskAsync(this, "局部台阶",
+                fields, $"依据 {rp.Provenance} ｜ 自动配 H={rp.BenchHeight:0.#} / α={rp.FaceAngleDeg:0.#} / W={rp.BermWidth:0.#}");
+            if (v == null) { StatusMsg.Text = "局部台阶：用户取消。"; return; }
+            string form = v.S("form");
+            taper = form.StartsWith("楔形");
+            useStop = form == "楔形·到标高";
+            stopZ = v.D("stop", stopZ);
+            side = v.S("side") == "右" ? -1 : 1;
+        }
+
+        int levels = useStop ? System.Math.Max(1, (int)System.Math.Ceiling(System.Math.Abs(startZ - stopZ) / rp.BenchHeight)) : 1;
+        bool downward = !useStop || stopZ <= startZ;
+        var r = Cad.BenchBuilder.Build(line.Points, closed: false, z0: startZ, benchH: rp.BenchHeight, faceAngleDeg: rp.FaceAngleDeg,
+                                       bermW: rp.BermWidth, levels: levels, downward: downward, isDump: false, side: side,
+                                       taper: taper && !useStop, stopZ: useStop ? stopZ : null);
+        if (!r.Ok) { StatusMsg.Text = "局部台阶失败：" + r.Error; return; }
+
+        BeginChange();
+        var made = AddBenchEntities(r, "局部台阶", "局部台阶", isDump: false);
+        RefreshScene();
+        foreach (var n in r.Notes) AppendHistoryLine("  " + n, EchoBrush(EchoLevel.Info));
+        string formZh = useStop ? $"楔形·到标高 {stopZ:0.#}" : taper ? "楔形·弧长收口" : "均匀完整";
+        StatusMsg.Text = $"✓ 局部台阶·{formZh}（坡面+平盘）：H={rp.BenchHeight:0.#}/α={rp.FaceAngleDeg:0.#}/W={rp.BermWidth:0.#}（依据 {rp.Provenance}），"
+                       + $"{r.Levels.Count} 级 · 新建 {made.Count} 实体（可 Ctrl+Z）";
+    }
+
+    // 排土场放坡：【画二维堆顶线 → 与已有坡脚线求交定标高 → 向下逐级放坡到现状面】。
+    // 为什么不"先选线"：堆顶线是设计出来的，不是图上现成的；标高恰恰是这一步要算的东西。
+    // 一个交点都没有 = 拦下，不替用户编一个标高。选中一张三角网 = 现状面（放到它为止）。
+    private const string DumpCrestLayer = "排土场_堆顶线";
+    private async System.Threading.Tasks.Task OuterDumpSlopeCmd()
+    {
+        var ground = SamplerFromSelectedMeshes(out int meshCount);
+        var db = EnsureGeoDb();
+        var rp = Data.BenchTemplateResolver.Resolve(db?.Connection, isDump: true);
+
+        // 左键依次点堆顶线平面形态（≥3 点，自动闭合），右键结束。Z 不用管 —— 由与坡脚线的交点算出来
+        var xy = new System.Collections.Generic.List<(double x, double y)>();
+        EditEcho($"排土场放坡：左键依次点【堆顶线平面形态】（≥3 点，自动闭合），右键结束。标高由这条线与已有坡脚线的交点算出来。依据 {rp.Provenance}：H={rp.BenchHeight:0.#}/α={rp.FaceAngleDeg:0.#}/W={rp.BermWidth:0.#}");
+        while (true)
+        {
+            var (kind, x, y) = await PickPointOrConfirmAsync($"堆顶线点 {xy.Count + 1}（右键 / 回车结束，Esc 取消）", true);
+            if (kind == PickKind.Cancelled) { StatusMsg.Text = "排土场放坡：已取消。"; return; }
+            if (kind == PickKind.Confirmed) break;
+            xy.Add((x, y));
+            EditEcho($"堆顶线点 {xy.Count}");
+        }
+        if (xy.Count < 3) { StatusMsg.Text = "排土场放坡：点数不足 3（闭合形态至少 3 点），已取消。"; return; }
+
+        // 标高口径：向下推 ⇒ 跟【坡脚线】交，取交点标高 max 起算。只吃当前显示着的线（用户靠关图层圈定范围）。
+        var existing = new System.Collections.Generic.List<(System.Collections.Generic.IReadOnlyList<(double x, double y)> pts, double z)>();
+        foreach (var e in _scene.Entities)
+            if (e is PolylineEntity pl && pl.Visible && pl.Points.Count >= 2 && pl.LayerName != DumpCrestLayer && _layers.IsShown(pl.LayerName))
+                existing.Add((pl.Points, pl.Elevation));
+        var (ok, z0, hits, why) = Cad.BenchBuilder.ResolveDumpCrestZ(xy, existing);
+        if (!ok) { StatusMsg.Text = "排土场放坡：" + why; EditEcho(why, EchoLevel.Warn); return; }
+
+        BeginChange();
+        var crest = new PolylineEntity { Closed = true, Cr = 0.95f, Cg = 0.60f, Cb = 0.25f, LayerName = DumpCrestLayer, Elevation = z0 };
+        crest.Points.AddRange(xy);
+        _scene.Add(crest);
+
+        // 向下逐级放坡：排土场语义（往外放），有现状面就推到面为止，否则按模板级数封顶（防无穷）
+        int levels = ground != null ? 60 : 3;
+        var r = Cad.BenchBuilder.Build(xy, closed: true, z0: z0, benchH: rp.BenchHeight, faceAngleDeg: rp.FaceAngleDeg,
+                                       bermW: rp.BermWidth, levels: levels, downward: true, isDump: true, stopAtGround: ground);
+        if (!r.Ok) { RefreshScene(); StatusMsg.Text = "排土场放坡：堆顶线已入图，但放坡失败 —— " + r.Error; return; }
+        var made = AddBenchEntities(r, "排土场放坡", "排土场", isDump: true);
+        RefreshScene();
+        foreach (var n in r.Notes) AppendHistoryLine("  " + n, EchoBrush(EchoLevel.Info));
+        StatusMsg.Text = $"✓ 排土场放坡：{why}；向下 {r.Levels.Count} 级 / 总高 {r.TotalDropM:0.#} m"
+                       + (ground != null ? $"（推到所选 {meshCount} 张现状面为止）" : "（未选现状面：按 3 级封顶，选中现状面再点可一路推到面）")
+                       + $" · 新建 {made.Count + 1} 实体（可 Ctrl+Z）";
+    }
+
+    // ═══════════════════ 编辑台阶 / 处理尖灭 ═══════════════════
+    //
+    //  原版「编辑台阶」是内核里的交互 jig：点选台阶坡面 → 整组台阶线转夹点，拖一条其余按平盘宽联动，回车落地。
+    //  Kylin 的夹点拖拽是现成的（GripDrag），联动这一步托管等价：
+    //    选中【一条已改过的台阶线】→ 按模板 H/α/W 从它往下（下伏联动↓）或往上（上覆联动↑）重算整组，
+    //    替换掉同组（同图层前缀）里原来那几级。命令行 "编辑台阶 U|D [级数]"。
+
+    private async System.Threading.Tasks.Task EditBenchFaceCmd(string cmd)
+    {
+        var sel = _selected.FindAll(e => e is PolylineEntity pl && pl.Points.Count >= 2);
+        if (sel.Count != 1 || sel[0] is not PolylineEntity line)
+        { StatusMsg.Text = "编辑台阶：请先选中【一条台阶线】（拖夹点改好形态后再点本命令，其余台阶按平盘宽联动重算）。"; return; }
+
+        bool up = false; int levels = 3;
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        for (int i = 1; i < tk.Length; i++)
+        {
+            if (tk[i] is "U" or "u" or "上覆" or "上") up = true;
+            else if (tk[i] is "D" or "d" or "下伏" or "下") up = false;
+            else if (int.TryParse(tk[i], out int n) && n > 0) levels = n;
+        }
+        if (tk.Length < 2)
+        {
+            var v = await Views.Modeling.PromptDialog.AskAsync(this, "编辑台阶", new System.Collections.Generic.List<Views.Modeling.PromptDialog.Field>
+            {
+                new("dir", "联动方向", "下伏联动↓", Choices: new[] { "下伏联动↓", "上覆联动↑" }, Numeric: false, Hint: "拖上面那级，下面的台阶按平盘宽逐级跟随；或反过来"),
+                new("levels", "联动级数", "3", "级"),
+            }, "选中的台阶线作为基准，其余台阶按模板 H/α/W 重算");
+            if (v == null) { StatusMsg.Text = "编辑台阶：用户取消。"; return; }
+            up = v.S("dir").StartsWith("上覆");
+            levels = System.Math.Max(1, (int)v.D("levels", 3));
+        }
+
+        bool closed = line.Closed || (line.Points.Count >= 3 && Dist2(line.Points[0], line.Points[^1]) < 1e-12);
+        bool isDump = (line.LayerName ?? "").StartsWith("排土场");
+        var db = EnsureGeoDb();
+        var rp = Data.BenchTemplateResolver.Resolve(db?.Connection, isDump: isDump);
+
+        var r = Cad.BenchBuilder.Build(line.Points, closed, line.Elevation, rp.BenchHeight, rp.FaceAngleDeg, rp.BermWidth,
+                                       levels, downward: !up, isDump: isDump);
+        if (!r.Ok) { StatusMsg.Text = "编辑台阶：联动重算失败 —— " + r.Error; return; }
+
+        // 替换同组：同图层前缀、且由本命令/局部台阶/排土场放坡生成的坡面·平盘·坡脚线
+        string prefix = (line.LayerName ?? "").Split('_')[0];
+        if (prefix.Length == 0) prefix = isDump ? "排土场" : "局部台阶";
+        BeginChange();
+        int removed = 0;
+        foreach (var e in _scene.Entities.ToList())
+        {
+            if (ReferenceEquals(e, line)) continue;
+            string ln = e.LayerName ?? "";
+            if (ln.StartsWith(prefix + "_") && (ln.EndsWith("_坡面") || ln.EndsWith("_平盘") || ln.EndsWith("_坡脚线")))
+            { _scene.Remove(e); removed++; }
+        }
+        var made = AddBenchEntities(r, up ? "编辑台阶↑" : "编辑台阶↓", prefix, isDump);
+        RefreshScene();
+        foreach (var n in r.Notes) AppendHistoryLine("  " + n, EchoBrush(EchoLevel.Info));
+        StatusMsg.Text = $"✓ 编辑台阶·{(up ? "上覆联动↑" : "下伏联动↓")}：以选中线为基准按 H={rp.BenchHeight:0.#}/α={rp.FaceAngleDeg:0.#}/W={rp.BermWidth:0.#} 重算 {r.Levels.Count} 级，"
+                       + $"替换同组 {removed} 实体 → 新建 {made.Count}（可 Ctrl+Z）";
+    }
+
+    // ═══════════════════ 原版 SkeletonCommand 桩（分帮扩帮 / 最终帮并段）═══════════════════
+    // 原版这两钮本身就是空壳: 命令行回显「[骨架] 名:设计意图（待实现）」。移植只照回显, 不替原版把功能"补"出来。
+    private void SkeletonEcho(string feature, string intent)
+    {
+        EditEcho($"[骨架] {feature}：{intent}（待实现）");
+        StatusMsg.Text = $"[骨架] {feature}：待实现（原版即占位，此处同）";
+    }
+
+    // 动态调整（台阶交互设计 jig）：原版 = 选 1 条闭合境界 → 内核 StartBenchDesignJig, 鼠标调深度/层数实时预览坡面, 点击/回车确认。
+    // 内核回路在 xllAcEd(无源); Kylin 侧先按原版做同样的选集校验并如实说明, 交互 jig 由托管等价接(见 BenchJig)。
+    private void BenchDesignJigCmd()
+    {
+        var sel = _selected.FindAll(e => e is PolylineEntity pl && pl.Points.Count >= 2);
+        if (sel.Count != 1) { StatusMsg.Text = "动态调整台阶形态：请先在场景里选 1 条 polyline 作为境界线"; EditEcho("动态调整台阶形态:请先在场景里选 1 条 polyline 作为境界线", EchoLevel.Warn); return; }
+        var line = (PolylineEntity)sel[0];
+        if (line.Points.Count < 2) { StatusMsg.Text = "动态调整台阶形态：境界线点数不足(至少 2 点)"; return; }
+        _ = StartBenchJigAsync(line);
+    }
+
+    // 批量扩坑（按煤层层位分层放坡）：原版 = 选 1 条闭合境界 → 非模态 SeamPitDialog(顶/底板面) → 内核 BuildSeamPitMultiSeam。
+    private async System.Threading.Tasks.Task SeamPitCmd(string cmd)
+    {
+        var sel = _selected.FindAll(e => e is PolylineEntity pl && pl.Points.Count >= 3);
+        if (sel.Count < 1) { StatusMsg.Text = "批量扩坑：请先在场景里选 1 条【闭合】多段线作为境界线"; EditEcho("批量扩坑:请先在场景里选 1 条【闭合】多段线作为境界线", EchoLevel.Warn); return; }
+        var line = (PolylineEntity)sel[0];
+        bool closed = line.Closed || Dist2(line.Points[0], line.Points[^1]) < 1e-12;
+        EditEcho($"> 批量扩坑:锁定境界线（{(closed ? "闭合" : "非闭合")}，{line.Points.Count} 点），打开参数面板…");
+        await SeamPitRunAsync(line, cmd);
+    }
+
+    // 处理尖灭：手动 = 选 1 条台阶线 → 视口点尖灭点 → 该线在最近处截断；煤层 = 选 1 条台阶线 + 2 张面（先顶板后底板）→ 沿线煤厚→0 处截断。
+    // 命令行 "处理尖灭 手动|煤层 [最小煤厚]"。不做"强制贯通"：贯通出来那段图上像台阶、地质上没有煤。
+    private async System.Threading.Tasks.Task HandlePinchCmd(string cmd)
+    {
+        var lines = _selected.FindAll(e => e is PolylineEntity pl && pl.Points.Count >= 2);
+        var meshes = _selected.FindAll(e => e is Cad.Draw.MeshEntity m && m.Tris.Count > 0);
+        if (lines.Count != 1) { StatusMsg.Text = "处理尖灭：请先选中 1 条台阶线（煤层模式再加选顶板、底板两张面）。"; return; }
+        var line = (PolylineEntity)lines[0];
+
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        bool seam = meshes.Count >= 2; double minThick = 0.3;
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        for (int i = 1; i < tk.Length; i++)
+        {
+            if (tk[i] == "手动") seam = false;
+            else if (tk[i] == "煤层") seam = true;
+            else if (double.TryParse(tk[i], System.Globalization.NumberStyles.Float, inv, out double t) && t > 0) minThick = t;
+        }
+
+        Cad.PinchResult r;
+        string mode;
+        if (seam)
+        {
+            if (meshes.Count < 2) { StatusMsg.Text = "处理尖灭·煤层：需要同时选中顶板面与底板面（选择顺序：先顶板后底板）。"; return; }
+            var top = SamplerOf((Cad.Draw.MeshEntity)meshes[0]);
+            var bot = SamplerOf((Cad.Draw.MeshEntity)meshes[1]);
+            // 顶板应在底板之上：拿线的第一点验一下，反了就换过来并说明
+            if (top != null && bot != null && top.TrySample(line.Points[0].x, line.Points[0].y, out double zt) && bot.TrySample(line.Points[0].x, line.Points[0].y, out double zb) && zt < zb)
+            { (top, bot) = (bot, top); AppendHistoryLine("  处理尖灭：选中的两张面顶底反了，已按标高对调（高者为顶板）。", EchoBrush(EchoLevel.Warn)); }
+            r = Cad.BenchPinch.TruncateWhereThin(line.Points, top, bot, minThick);
+            mode = $"煤层（最小煤厚 {minThick:0.##} m）";
+        }
+        else
+        {
+            var (kind, px, py) = await PickPointOrConfirmAsync("处理尖灭·手动：在视口点【尖灭点】（Esc 取消）", false);
+            if (kind != PickKind.Picked) { StatusMsg.Text = "处理尖灭：已取消。"; return; }
+            r = Cad.BenchPinch.TruncateAtPoint(line.Points, px, py);
+            mode = "手动";
+        }
+        if (!r.Ok) { StatusMsg.Text = $"处理尖灭·{mode}：{r.Error}"; return; }
+        if (r.CutLengthM < 1e-6) { StatusMsg.Text = $"处理尖灭·{mode}：{r.Note}"; return; }
+
+        BeginChange();
+        var cut = new PolylineEntity { Cr = line.Cr, Cg = line.Cg, Cb = line.Cb, LayerName = line.LayerName, Elevation = line.Elevation };
+        cut.Points.AddRange(r.Line);
+        _scene.Remove(line);
+        _scene.Add(cut);
+        var mark = new PointEntity { X = r.PinchX, Y = r.PinchY, Cr = 0.95f, Cg = 0.25f, Cb = 0.25f, LayerName = "尖灭点" };
+        _scene.Add(mark);
+        _selected.Clear();
+        RefreshScene();
+        StatusMsg.Text = $"✓ 处理尖灭·{mode}：{r.Note}（尖灭点已标红，可 Ctrl+Z）";
+    }
+
+    private static Cad.IRoadZSampler? SamplerOf(Cad.Draw.MeshEntity m)
+    {
+        var v = new double[m.Verts.Count * 3];
+        for (int i = 0; i < m.Verts.Count; i++) { v[i * 3] = m.Verts[i].x; v[i * 3 + 1] = m.Verts[i].y; v[i * 3 + 2] = m.Verts[i].z; }
+        var t = new int[m.Tris.Count * 3];
+        for (int i = 0; i < m.Tris.Count; i++) { t[i * 3] = m.Tris[i].a; t[i * 3 + 1] = m.Tris[i].b; t[i * 3 + 2] = m.Tris[i].c; }
+        return Cad.MeshZSampler.Build(v, t);
+    }
+
+    // ═══════════════════ 创建工作线（忠实原 MineAssLib：基线 + 结束位置形态线 + 方向箭头；扇形加回转中心）═══════════════════
+    //
+    //  单按钮：空选 → 弹「工作线类型」+ 台阶水平 → 视口手工点两点画基线新建；选 1 条已有工作线 → 同对话框改类型。
+    //  工作线只表征推进方向、不设驱动距离；基线一律拍平到台阶水平（工作线即台阶线）。
+    //  图层约定（下游「驱动量 / 创建工程位置 / 平行推进」按它识别）：
+    //    工作线（基线，Elevation=台阶水平）/ 工作线_结束线（虚线，可拖顶点）/ 工作线_箭头 / 工作线_回转中心（点）。
+    private const string WorkLineLayer = "工作线";
+    private double? _lastWorkLineLevelZ;
+
+    private async System.Threading.Tasks.Task CreateWorkLineCmd(string cmd)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var selWl = _selected.FindAll(e => e is PolylineEntity pl && pl.LayerName == WorkLineLayer && pl.Points.Count >= 2);
+        bool isEdit = selWl.Count == 1;
+
+        // 预填标高：上次建线用过的 → 选中台阶线的标高 → 留空(=取第一点)
+        double? defZ = _lastWorkLineLevelZ;
+        if (!defZ.HasValue && _selected.Count == 1 && _selected[0] is PolylineEntity pz) defZ = pz.Elevation;
+
+        Cad.WorkLineMode mode = Cad.WorkLineMode.Straight; double? levelZ = defZ; int side = 1;
+        var tk = cmd.Split(new[] { ' ', ',', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        if (tk.Length >= 2)
+        {
+            for (int i = 1; i < tk.Length; i++)
+            {
+                if (tk[i] == "扇形") mode = Cad.WorkLineMode.Fan;
+                else if (tk[i] == "直线") mode = Cad.WorkLineMode.Straight;
+                else if (tk[i] == "右") side = -1;
+                else if (double.TryParse(tk[i], System.Globalization.NumberStyles.Float, inv, out double z)) levelZ = z;
+            }
+        }
+        else
+        {
+            var fields = new System.Collections.Generic.List<Views.Modeling.PromptDialog.Field>
+            {
+                new("mode", "工作线类型", isEdit && ((PolylineEntity)selWl[0]).Dash != null ? "扇形工作线（回转推进）" : "直线工作线（平行推进）",
+                    Choices: new[] { "直线工作线（平行推进）", "扇形工作线（回转推进）" }, Numeric: false),
+                new("z", "台阶水平 Z", defZ.HasValue ? defZ.Value.ToString("0.##", inv) : "", "m", "留空 = 取第一点标高"),
+                new("side", "推进方向", "左", Choices: new[] { "左", "右" }, Numeric: false, Hint: "沿基线起点→终点方向的哪一侧；建好后可拖琥珀色箭头改"),
+            };
+            var v = await Views.Modeling.PromptDialog.AskAsync(this, isEdit ? "工作线 · 改类型" : "创建工作线", fields,
+                isEdit ? "改后结束位置形态线退回默认；拖虚线顶点定收尾形态"
+                       : "确认后在视口点两点画基线（左键起点 → 左键终点，Esc 取消）。两种类型都由「基线 + 结束位置形态线（虚线）」构成，扇形再加回转中心。");
+            if (v == null) { StatusMsg.Text = "创建工作线：已取消。"; return; }
+            mode = v.S("mode").StartsWith("扇形") ? Cad.WorkLineMode.Fan : Cad.WorkLineMode.Straight;
+            string zs = v.S("z").Trim();
+            levelZ = zs.Length > 0 && double.TryParse(zs, System.Globalization.NumberStyles.Float, inv, out double zz) ? zz : null;
+            side = v.S("side") == "右" ? -1 : 1;
+        }
+
+        (double x, double y) a, b;
+        if (isEdit)
+        {
+            var wl = (PolylineEntity)selWl[0];
+            a = wl.Points[0]; b = wl.Points[^1];
+            levelZ ??= wl.Elevation;
+            // 改类型：先撤掉它附属的结束线/箭头/回转中心（按同起点位置识别）
+            BeginChange();
+            foreach (var e in _scene.Entities.ToList())
+                if (e.LayerName is WorkLineLayer + "_结束线" or WorkLineLayer + "_箭头" or WorkLineLayer + "_回转中心")
+                    if (NearWorkLine(e, wl)) _scene.Remove(e);
+            _scene.Remove(wl);
+        }
+        else
+        {
+            var (k1, x1, y1) = await PickPointOrConfirmAsync($"创建工作线（{(mode == Cad.WorkLineMode.Fan ? "扇形" : "直线")}，台阶水平 {(levelZ.HasValue ? $"Z={levelZ.Value:0.##}" : "取起点标高")}）：左键点起点（Esc 取消）", false);
+            if (k1 != PickKind.Picked) { StatusMsg.Text = "创建工作线：已取消（未点满两点）。"; return; }
+            EditEcho($"工作线起点：({x1:0.#}, {y1:0.#}) —— 再点终点");
+            var (k2, x2, y2) = await PickPointOrConfirmAsync("创建工作线：左键点终点（两点直线基线，Esc 取消）", false);
+            if (k2 != PickKind.Picked) { StatusMsg.Text = "创建工作线：已取消（未点满两点）。"; return; }
+            a = (x1, y1); b = (x2, y2);
+            BeginChange();
+        }
+        double zLevel = levelZ ?? 0.0;   // 留空 = 取第一点标高；二维视口拾取无 Z ⇒ 0（如实回显）
+
+        var g = Cad.WorkLineModel.FromTwoPoints(a, b, mode, zLevel, side);
+        if (g == null) { RefreshScene(); StatusMsg.Text = "创建工作线失败：两点重合（定不出推进方向）。"; return; }
+
+        var baseLine = new PolylineEntity { Cr = 0.20f, Cg = 0.80f, Cb = 0.95f, LayerName = WorkLineLayer, Elevation = zLevel, LineWeight = 50 };
+        baseLine.Points.AddRange(g.Base);
+        var endLine = new PolylineEntity { Cr = 0.20f, Cg = 0.80f, Cb = 0.95f, LayerName = WorkLineLayer + "_结束线", Elevation = zLevel, Dash = new[] { 4.0, 2.0 } };
+        endLine.Points.AddRange(g.EndLine);
+        var arrow = new PolylineEntity { Cr = 0.98f, Cg = 0.75f, Cb = 0.20f, LayerName = WorkLineLayer + "_箭头", Elevation = zLevel };
+        arrow.Points.AddRange(g.Arrow);
+        _scene.Add(baseLine); _scene.Add(endLine); _scene.Add(arrow);
+        if (g.Pivot is { } pv)
+            _scene.Add(new PointEntity { X = pv.x, Y = pv.y, Cr = 0.98f, Cg = 0.75f, Cb = 0.20f, LayerName = WorkLineLayer + "_回转中心", Style = 2 + 32 });
+        _selected.Clear(); _selected.Add(baseLine);
+        _lastWorkLineLevelZ = zLevel;
+        RefreshScene();
+        StatusMsg.Text = (isEdit ? "> 工作线类型已更新：" : "> 工作线已创建（") + g.ModeLabel
+                       + (isEdit ? "" : $"，两点直线基线，台阶水平 Z={zLevel:0.##}m{(levelZ.HasValue ? "" : "，取自起点")}）")
+                       + (mode == Cad.WorkLineMode.Fan ? $"；回转角默认 {g.SweepDeg:+0.#;-0.#}°，拖圆点挪回转中心" : "；拖琥珀色箭头改方向")
+                       + "，拖虚线顶点定收尾形态；选中后再点本按钮可改类型；Ctrl+Z 撤销";
+    }
+
+    /// <summary>附属件（结束线/箭头/回转中心）是否属于这条工作线：同标高、且落在基线中点 2 倍基线长的范围内。</summary>
+    private static bool NearWorkLine(SceneEntity e, PolylineEntity wl)
+    {
+        var mid = ((wl.Points[0].x + wl.Points[^1].x) * 0.5, (wl.Points[0].y + wl.Points[^1].y) * 0.5);
+        double reach = 2 * System.Math.Sqrt(Dist2(wl.Points[0], wl.Points[^1])) + 1;
+        return e switch
+        {
+            PolylineEntity p when p.Points.Count > 0 => System.Math.Abs(p.Elevation - wl.Elevation) < 1e-6 && Dist2(p.Points[0], mid) < reach * reach,
+            PointEntity pt => Dist2((pt.X, pt.Y), mid) < reach * reach,
+            _ => false,
+        };
+    }
+
+    // ═══════════════════ 创建工程位置（忠实原 MineAssLib：工作帮模板 ⊕ 端帮对接 · ①②③）═══════════════════
+    //
+    //  非模态窗口：① 提取节点（模板台阶线 = 台阶_* / 人勾的模板图层白名单；其余多段线 = 现状采场台阶；所有端点各成一个节点）
+    //            ② 平面图上把一个端点拖到另一个端点上建立衔接（改挂 / 双击解除 / Delete 删）
+    //            ③ 生成衔接并落地：EpConnectorBuilder 按纵坡闸 + 拐点做法出三维衔接段，整层替换「创建工程位置_衔接 / _交点」上一批产物。
+    //  采场范围：选中的闭合多段线（首项）+ 库里「选定」的采场/可采区域（不弹连库；没库就只有前者 / 不用范围）。
+    private Views.Modeling.EngineeringPositionWindow? _epWin;
+    /// <summary>「创建工程位置」用的稳定句柄：实体 ↔ 编号（按首次见到的顺序发号，跨次读图不变，删了就不再复用）。</summary>
+    private readonly System.Collections.Generic.Dictionary<SceneEntity, ulong> _epHandleOf = new(System.Collections.Generic.ReferenceEqualityComparer.Instance);
+    private readonly System.Collections.Generic.Dictionary<ulong, SceneEntity> _epEntityOf = new();
+    private ulong _epNextHandle = 1;
+    private ulong EpHandle(SceneEntity e)
+    {
+        if (!_epHandleOf.TryGetValue(e, out ulong h)) { h = _epNextHandle++; _epHandleOf[e] = h; _epEntityOf[h] = e; }
+        return h;
+    }
+
+    private void OpenEngineeringPositionCmd()
+    {
+        if (_epWin != null) { _epWin.RefreshInput(); _epWin.Extract(); _epWin.Activate(); StatusMsg.Text = "> 创建工程位置：已按当前图面重新提取"; return; }
+        _epWin = new Views.Modeling.EngineeringPositionWindow(ReadEpInput, LandEpConnectors, ApplyEpReplace, WriteEpNewPosition, (s, warn) => EditEcho(s, warn ? EchoLevel.Warn : EchoLevel.Info));
+        _epWin.Closed += (_, _) => _epWin = null;
+        _epWin.Show(this);
+        _epWin.RefreshInput(); _epWin.Extract();
+        StatusMsg.Text = "> 创建工程位置：已打开对接窗口（非模态）—— ①提取节点 → ②在平面图上把端点拖到端点建立衔接 → ③生成衔接并落地";
+    }
+
+    private Views.Modeling.EpInput ReadEpInput()
+    {
+        var inp = new Views.Modeling.EpInput();
+        void Bump(string lay, int ents, int polys)
+        {
+            var v = inp.ScanHist.TryGetValue(lay, out var o) ? o : (0, 0);
+            inp.ScanHist[lay] = (v.Item1 + ents, v.Item2 + polys);
+        }
+        var workBases = new System.Collections.Generic.List<PolylineEntity>();
+        foreach (var e in _scene.Entities)
+        {
+            if (!e.Visible || !_layers.IsShown(e.LayerName)) continue;
+            Bump(e.LayerName, 1, 0);
+            if (e is not PolylineEntity pl || pl.Points.Count < 2) continue;
+            if (pl.LayerName == WorkLineLayer) { workBases.Add(pl); continue; }                       // 工作线基线：另作投影几何
+            if (pl.LayerName.StartsWith(WorkLineLayer, System.StringComparison.Ordinal)) continue;   // 结束线/箭头不是台阶
+            Bump(pl.LayerName, 0, 1);
+            var xyz = new double[pl.Points.Count * 3];
+            for (int i = 0; i < pl.Points.Count; i++) { xyz[i * 3] = pl.Points[i].x; xyz[i * 3 + 1] = pl.Points[i].y; xyz[i * 3 + 2] = pl.ZAt(i); }
+            inp.Lines.Add(new Cad.EpPolyline(EpHandle(pl), pl.LayerName, xyz, pl.Closed));
+        }
+        foreach (var e in _scene.Entities)
+        {
+            if (e is not MeshEntity me || !me.Visible || me.Tris.Count == 0 || !_layers.IsShown(me.LayerName)) continue;
+            var (v, t) = me.Flatten();
+            inp.Meshes.Add((EpHandle(me), me.Name, me.LayerName, v, t));
+        }
+        foreach (var e in _selected) if (_epHandleOf.TryGetValue(e, out ulong sh)) inp.SelectedHandles.Add(sh);
+        // 工作线：基线 + 同位置的结束线（定推进方向 / 回转角）+ 回转中心点（扇形）
+        foreach (var wl in workBases)
+        {
+            PolylineEntity? endLine = null; PointEntity? pivot = null;
+            foreach (var e in _scene.Entities)
+            {
+                if (e is PolylineEntity p2 && p2.LayerName == WorkLineLayer + "_结束线" && NearWorkLine(p2, wl)) endLine ??= p2;
+                else if (e is PointEntity pt && pt.LayerName == WorkLineLayer + "_回转中心" && NearWorkLine(pt, wl)) pivot ??= pt;
+            }
+            bool fan = pivot != null;
+            var g = Cad.WorkLineSamples.FromWorkLine(wl.Points, wl.Elevation, fan, endLine?.Points, pivot != null ? (pivot.X, pivot.Y) : null,
+                                                     fallbackDir: (-(wl.Points[^1].y - wl.Points[0].y), wl.Points[^1].x - wl.Points[0].x), closed: wl.Closed);
+            ulong h = EpHandle(wl);
+            inp.WorkLines.Add((h, g));
+            if (_selected.Contains(wl)) inp.SelectedHandles.Add(h);
+        }
+        // 采场范围：选中的闭合多段线优先（它是范围环，不再当台阶线），其次库里的采场 / 可采区域（「选定」的排前面）
+        PolylineEntity? ringPl = null;
+        foreach (var e in _selected)
+            if (e is PolylineEntity pl && pl.Closed && pl.Points.Count >= 3)
+            {
+                var xy = new double[pl.Points.Count * 2];
+                for (int i = 0; i < pl.Points.Count; i++) { xy[i * 2] = pl.Points[i].x; xy[i * 2 + 1] = pl.Points[i].y; }
+                inp.Regions.Add(($"选中闭合线·图层 {pl.LayerName}", xy));
+                ringPl = pl;
+                break;
+            }
+        if (ringPl != null)
+        {
+            int idx = inp.Lines.FindIndex(l => l.Layer == ringPl.LayerName && l.Closed && l.Xyz.Length == ringPl.Points.Count * 3
+                                                && System.Math.Abs(l.Xyz[0] - ringPl.Points[0].x) < 1e-9 && System.Math.Abs(l.Xyz[1] - ringPl.Points[0].y) < 1e-9);
+            if (idx >= 0) inp.Lines.RemoveAt(idx);
+        }
+        if (_geoDb != null)
+        {
+            try
+            {
+                foreach (var rec in Data.MineableRegions.List(_geoDb.Connection)
+                             .Where(r => r.RingUsable && (r.Category == Data.MineableRegions.CatPit || r.Category == Data.MineableRegions.CatMineable))
+                             .OrderByDescending(Data.MineableRegions.IsActive).ThenBy(r => r.Category == Data.MineableRegions.CatPit ? 0 : 1))
+                {
+                    var xy = new double[rec.PointCount * 2];
+                    for (int i = 0; i < rec.PointCount; i++) { xy[i * 2] = rec.Points[i * 3]; xy[i * 2 + 1] = rec.Points[i * 3 + 1]; }
+                    inp.Regions.Add(($"{Data.MineableRegions.CategoryZh(rec.Category)}「{rec.Name}」{(Data.MineableRegions.IsActive(rec) ? "[选定]" : "")}", xy));
+                }
+            }
+            catch (System.Exception ex) { EditEcho("创建工程位置：读作业区域失败 —— " + ex.Message, EchoLevel.Warn); }
+        }
+        return inp;
+    }
+
+    /// <summary>⑥⑦ 非破坏产物：多段线 / 三角网 / 点标记写进「新建工程位置_*」图层，原图一根不动（一次编辑，Ctrl+Z 整体撤销）。</summary>
+    private void WriteEpNewPosition(Views.Modeling.EpNewPositionRequest r)
+    {
+        BeginChange();
+        int nl = 0, nm = 0, nk = 0;
+        foreach (var (lay, pts, closed, col) in r.Polylines)
+        {
+            if (pts.Count < 2) continue;
+            var pl = new PolylineEntity { LayerName = lay, Closed = closed, Cr = col.r, Cg = col.g, Cb = col.b, Elevation = pts[0].Z, Zs = new System.Collections.Generic.List<double>(pts.Count) };
+            foreach (var q in pts) { pl.Points.Add((q.X, q.Y)); pl.Zs.Add(q.Z - pts[0].Z); }
+            _scene.Add(pl); nl++;
+        }
+        foreach (var (lay, name, v, t, col) in r.Meshes)
+        {
+            var verts = new System.Collections.Generic.List<(double x, double y, double z)>(v.Length / 3);
+            for (int i = 0; i + 2 < v.Length; i += 3) verts.Add((v[i], v[i + 1], v[i + 2]));
+            var tris = new System.Collections.Generic.List<(int a, int b, int c)>(t.Length / 3);
+            for (int i = 0; i + 2 < t.Length; i += 3) tris.Add((t[i], t[i + 1], t[i + 2]));
+            _scene.Add(new MeshEntity(name, verts, tris) { LayerName = lay, Cr = col.r, Cg = col.g, Cb = col.b }); nm++;
+        }
+        foreach (var (lay, x, y, z) in r.Marks)
+        { _scene.Add(new PointEntity { X = x, Y = y, Elevation = z, Size = 1.5, Style = 3 + 32, Cr = 0.90f, Cg = 0.35f, Cb = 0.35f, LayerName = lay }); nk++; }
+        RefreshScene();
+        StatusMsg.Text = $"> 创建工程位置·新建工程位置：新增 {nl} 条线{(nm > 0 ? $" + {nm} 张面" : "")}{(nk > 0 ? $" + {nk} 处标记" : "")}（「{Cad.EngineeringPositionBuilder.NewPositionLayerPrefix}_*」，原图一根没动）；Ctrl+Z 撤销";
+    }
+
+    /// <summary>⑤ 执行替换：写回保留段 → 落衔接段 → 删原线，同一次编辑（Ctrl+Z 整体撤销）。返回实际删掉的实体数。</summary>
+    private int ApplyEpReplace(Views.Modeling.EpApplyRequest r)
+    {
+        BeginChange();
+        int written = 0, deleted = 0;
+        foreach (var (lay, pts, from) in r.Keep)
+        {
+            if (pts.Count < 2) continue;
+            _epEntityOf.TryGetValue(from, out var src);
+            var pl = new PolylineEntity { LayerName = lay, Elevation = pts[0].Z, Zs = new System.Collections.Generic.List<double>(pts.Count) };
+            if (src != null) { pl.Cr = src.Cr; pl.Cg = src.Cg; pl.Cb = src.Cb; pl.LineWeight = src.LineWeight; pl.Dash = src.Dash; }
+            foreach (var q in pts) { pl.Points.Add((q.X, q.Y)); pl.Zs.Add(q.Z - pts[0].Z); }
+            _scene.Add(pl); written++;
+        }
+        if (r.Connectors.Count > 0) LandEpConnectorsCore(r.Connectors, r.Scene, r.GradePct, out _, out _, out _);
+        foreach (var h in r.Delete)
+        {
+            if (!_epEntityOf.TryGetValue(h, out var e)) continue;
+            if (_scene.Entities.Contains(e)) { _scene.Remove(e); deleted++; }
+            _selected.Remove(e);
+        }
+        RefreshScene();
+        StatusMsg.Text = $"> 创建工程位置·替换台阶线：删 {deleted}/{r.Delete.Length}，写回保留段 {written}，衔接 {r.Connectors.Count(c => c.HasGeometry)} 段；Ctrl+Z 撤销";
+        return deleted;
+    }
+
+    /// <summary>③ 落地：整层替换上一批衔接段 / 交点标记（本功能只对自己的图层负责，不动任何原实体）。</summary>
+    private void LandEpConnectors(System.Collections.Generic.IReadOnlyList<Cad.EpConnector> cons, Cad.EpScene s, double gradePct)
+    {
+        BeginChange();
+        LandEpConnectorsCore(cons, s, gradePct, out int n, out int marks, out int old);
+        RefreshScene();
+        AppendHistoryLine($"创建工程位置 · 衔接台账（{s.SideAName}/{s.SideBName}，纵坡闸 {gradePct:0.##}%）：{n} 段入图{(marks > 0 ? $"，{marks} 处交点标记" : "")}{(old > 0 ? $"，已替换上一批 {old} 个实体" : "")}", EchoBrush(EchoLevel.Info));
+        StatusMsg.Text = $"> 创建工程位置：已落地 {n} 段衔接（图层「{Views.Modeling.EngineeringPositionWindow.LinkLayer}」，橙 = 超闸）{(marks > 0 ? $" + {marks} 处交点标记（「{Views.Modeling.EngineeringPositionWindow.CrossLayer}」）" : "")}；Ctrl+Z 撤销";
+    }
+
+    private void LandEpConnectorsCore(System.Collections.Generic.IReadOnlyList<Cad.EpConnector> cons, Cad.EpScene s, double gradePct, out int n, out int marks, out int old)
+    {
+        const string linkLayer = Views.Modeling.EngineeringPositionWindow.LinkLayer;
+        const string crossLayer = Views.Modeling.EngineeringPositionWindow.CrossLayer;
+        old = 0;
+        foreach (var e in _scene.Entities.ToList())
+            if (e.LayerName == linkLayer || e.LayerName == crossLayer) { _scene.Remove(e); old++; }
+        n = 0; marks = 0;
+        foreach (var c in cons)
+        {
+            if (c.Overlapped)
+            {
+                // 两线已交叉：不出线，只在交点落个红标记 —— 越界尾巴由人对着账目裁
+                _scene.Add(new PointEntity { X = c.CornerX, Y = c.CornerY, Elevation = 0.5 * (c.TemplateZ + c.WallZ), Size = 1.5, Style = 3 + 32, Cr = 0.90f, Cg = 0.35f, Cb = 0.35f, LayerName = crossLayer });
+                marks++; continue;
+            }
+            if (!c.HasGeometry) continue;
+            var pl = new PolylineEntity
+            {
+                Cr = c.OverGrade ? 0.95f : 0.48f, Cg = c.OverGrade ? 0.55f : 0.88f, Cb = c.OverGrade ? 0.20f : 0.66f,
+                LayerName = linkLayer, Elevation = c.TemplateZ, LineWeight = 50,
+                Zs = new System.Collections.Generic.List<double>(c.Pts.Count),
+            };
+            foreach (var p in c.Pts) { pl.Points.Add((p.X, p.Y)); pl.Zs.Add(p.Z - c.TemplateZ); }
+            _scene.Add(pl); n++;
+        }
+    }
+
+    // ═══════════════════ 增量增删边（路网暂存式编辑；忠实原 RoadLibPlugin.EnsureEditSession/Edit*/RenderEditDiff/EditCommit）═══════════════════
+    //
+    //  Kylin 的路网 = 图上的多段线（寻径/运距都直接拿多段线 noding）。会话基准图从图上多段线抽（RoadGraphBuilder），
+    //  边状态 / 线路类型改判持久化在**图层名**里：路网图_边[·干线|·支线|·孤立段][_检修|_封闭]，寻径按 _检修/_封闭 不通算。
+    //  提交（更新路网）两种锁定：当前路网更新 = 换掉基准那批中线；增量路网更新 = 原中线保留、新网另落到带名字的图层。
+    private Cad.RoadEditSession? _roadEdit;
+    private Views.Modeling.RoadEditWindow? _roadEditWin;
+    private readonly System.Collections.Generic.List<PolylineEntity> _roadEditSources = new();
+    private bool _roadEditJustCommitted;
+    private const string RoadEdgeLayer = "路网图_边";
+    private const string RoadEditDiffLayer = "路网_编辑预览";
+    private const double RoadEditSnapM = 30.0;
+
+    /// <summary>层名 → (边状态, 改判类型)。</summary>
+    private static (Cad.RoadEdgeStatus status, Cad.RoadSegmentClass? cls) RoadLayerAttrs(string layer)
+    {
+        var st = layer.EndsWith("_封闭", System.StringComparison.Ordinal) ? Cad.RoadEdgeStatus.Closed
+               : layer.EndsWith("_检修", System.StringComparison.Ordinal) ? Cad.RoadEdgeStatus.Maintenance : Cad.RoadEdgeStatus.Open;
+        Cad.RoadSegmentClass? cls = layer.Contains("·干线") ? Cad.RoadSegmentClass.Trunk : layer.Contains("·支线") ? Cad.RoadSegmentClass.Spur : layer.Contains("·孤立段") ? Cad.RoadSegmentClass.Isolated : null;
+        return (st, cls);
+    }
+
+    /// <summary>(边状态, 改判类型) → 层名。</summary>
+    private static string RoadLayerFor(string baseLayer, Cad.RoadEdgeStatus st, Cad.RoadSegmentClass? cls)
+        => baseLayer + (cls switch { Cad.RoadSegmentClass.Trunk => "·干线", Cad.RoadSegmentClass.Spur => "·支线", Cad.RoadSegmentClass.Isolated => "·孤立段", _ => "" })
+                     + (st switch { Cad.RoadEdgeStatus.Closed => "_封闭", Cad.RoadEdgeStatus.Maintenance => "_检修", _ => "" });
+
+    /// <summary>寻径/运距是否把这一层的多段线当可通行的路（检修/封闭按不通算 —— 原版边状态即时影响寻径）。</summary>
+    private static bool IsPassableRoadLayer(string layer)
+        => !(layer.EndsWith("_封闭", System.StringComparison.Ordinal) || layer.EndsWith("_检修", System.StringComparison.Ordinal) || layer == RoadEditDiffLayer);
+
+    /// <summary>当前网从哪批多段线来：选中的 → 已提交过的「路网图_边*」 → 图上全部可见多段线（与寻径同口径）。</summary>
+    private (System.Collections.Generic.List<PolylineEntity> src, string how) RoadEditSourceLines()
+    {
+        var sel = _selected.OfType<PolylineEntity>().Where(p => p.Points.Count >= 2).ToList();
+        if (sel.Count > 0) return (sel, $"选中的 {sel.Count} 条多段线");
+        var committed = _scene.Entities.OfType<PolylineEntity>().Where(p => p.Visible && p.Points.Count >= 2 && p.LayerName.StartsWith(RoadEdgeLayer, System.StringComparison.Ordinal) && _layers.IsShown(p.LayerName)).ToList();
+        if (committed.Count > 0) return (committed, $"「{RoadEdgeLayer}*」{committed.Count} 条");
+        var all = _scene.Entities.OfType<PolylineEntity>().Where(p => p.Visible && p.Points.Count >= 2 && p.LayerName != RoadEditDiffLayer && _layers.IsShown(p.LayerName)).ToList();
+        return (all, $"图上全部可见多段线 {all.Count} 条");
+    }
+
+    private Cad.RoadGraph? BuildRoadEditGraph(System.Collections.Generic.List<PolylineEntity> src)
+    {
+        var polys = new System.Collections.Generic.List<System.Collections.Generic.IReadOnlyList<Cad.Point3d>>();
+        foreach (var pl in src)
+        {
+            var l = new System.Collections.Generic.List<Cad.Point3d>(pl.Points.Count);
+            for (int i = 0; i < pl.Points.Count; i++) l.Add(new Cad.Point3d(pl.Points[i].x, pl.Points[i].y, pl.ZAt(i)));
+            if (pl.Closed && l.Count >= 3) l.Add(l[0]);
+            polys.Add(l);
+        }
+        if (polys.Count == 0) return null;
+        var g = Cad.RoadGraphBuilder.FromPolylines(polys, out _, snapToleranceM: 2.0, gradeSeparationM: 4.0, bridgeGapM: 0);
+        // 边状态 / 改判从来源层名认回：按边中线中点落在哪条来源线上（≤0.5 m）
+        foreach (var e in g.Edges)
+        {
+            if (e.Centerline.Count < 2) continue;
+            var m = e.Centerline[e.Centerline.Count / 2];
+            if (e.Centerline.Count == 2) m = new Cad.Point3d((e.Centerline[0].X + e.Centerline[1].X) * 0.5, (e.Centerline[0].Y + e.Centerline[1].Y) * 0.5, 0);
+            foreach (var pl in src)
+            {
+                if (pl.LayerName == RoadEdgeLayer || !pl.LayerName.StartsWith(RoadEdgeLayer, System.StringComparison.Ordinal)) continue;
+                if (DistToPolylineXY(m.X, m.Y, pl.Points, pl.Closed) > 0.5) continue;
+                var (st, cls) = RoadLayerAttrs(pl.LayerName);
+                e.Status = st; e.RoadClass = cls;
+                break;
+            }
+        }
+        return g;
+    }
+
+    private void RoadEditCmd()
+    {
+        if (_roadEditWin != null) { _roadEditWin.Activate(); return; }
+        var (src, how) = RoadEditSourceLines();
+        var graph = BuildRoadEditGraph(src);
+        if (graph == null || graph.NodeCount < 1) { EditEcho("路网编辑：当前无路网。先画中线 / 「基础道路网络构建」。", EchoLevel.Warn); StatusMsg.Text = "路网编辑：图上没有多段线"; return; }
+        _roadEditSources.Clear(); _roadEditSources.AddRange(src);
+        _roadEditJustCommitted = false;
+        _roadEdit = new Cad.RoadEditSession(graph, how);
+        var h = new Views.Modeling.RoadEditHandlers
+        {
+            AddEdge = () => _ = RoadEditAddEdgeAsync(),
+            RemoveEdge = () => _ = RoadEditPickAsync("删边：点路段（≤30 m）", RoadEditRemoveEdge),
+            SplitEdge = () => _ = RoadEditPickAsync("插交叉口：点路段上要打断的位置（≤30 m）", RoadEditSplitEdge),
+            SetStatus = () => _ = RoadEditPickAsync("改状态：点路段（开放→检修→封闭 循环）", RoadEditSetStatus),
+            SetRoadClass = () => _ = RoadEditPickAsync("线路类型：点路段（自动→干线→支线→孤立段 循环，落到整条路段）", RoadEditSetRoadClass),
+            Undo = () => { if (_roadEdit?.Undo() == true) { RenderRoadEditDiff(); _roadEditWin?.RefreshFromSession(); EditEcho("↶ 已撤销上一步"); EchoRoadTopologyDelta(); } },
+            Clear = () => { _roadEdit?.Clear(); RenderRoadEditDiff(); _roadEditWin?.RefreshFromSession(); EditEcho("已清空暂存变更（拓扑已回到进编辑时的样子）"); },
+            Commit = () => _ = RoadEditCommitAsync(),
+        };
+        _roadEditWin = new Views.Modeling.RoadEditWindow(_roadEdit, h);
+        _roadEditWin.Exited += () =>
+        {
+            _roadEditWin = null; _roadEdit = null;
+            ClearRoadEditDiff();
+            if (!_roadEditJustCommitted) EditEcho("路网编辑：已退出（未提交的变更已放弃）。");
+            _roadEditJustCommitted = false;
+        };
+        _roadEditWin.Show(this);
+        var t = _roadEdit.BaseTopology;
+        EditEcho($"路网编辑：已进入暂存编辑（基准 = {how} → {graph.NodeCount} 节点 / {graph.EdgeCount} 边；{t.Summary}）。选工具→在视口操作；变更先暂存，点「更新路网」才锁定。");
+        StatusMsg.Text = "> 增量增删边：路网编辑面板已打开（非模态）";
+    }
+
+    private async System.Threading.Tasks.Task RoadEditPickAsync(string prompt, System.Action<Cad.Point3d> act)
+    {
+        if (_roadEdit == null) return;
+        var (k, x, y) = await PickPointOrConfirmAsync(prompt + "（Esc 取消）", false);
+        if (k != PickKind.Picked) { StatusMsg.Text = "路网编辑：已取消。"; return; }
+        act(new Cad.Point3d(x, y, 0));
+    }
+
+    /// <summary>加边：取两点 → 各吸附最近已有节点(≤30m) → 直线加边进会话。</summary>
+    private async System.Threading.Tasks.Task RoadEditAddEdgeAsync()
+    {
+        var s = _roadEdit; if (s == null) return;
+        var (k1, x1, y1) = await PickPointOrConfirmAsync("加边：点第一个节点附近（≤30 m，Esc 取消）", false);
+        if (k1 != PickKind.Picked) { StatusMsg.Text = "路网编辑：已取消。"; return; }
+        var (k2, x2, y2) = await PickPointOrConfirmAsync("加边：点第二个节点附近（≤30 m，Esc 取消）", false);
+        if (k2 != PickKind.Picked) { StatusMsg.Text = "路网编辑：已取消。"; return; }
+        var a = s.Draft.NearestNode(new Cad.Point3d(x1, y1, 0), RoadEditSnapM);
+        var b = s.Draft.NearestNode(new Cad.Point3d(x2, y2, 0), RoadEditSnapM);
+        if (a is null || b is null || a.Id == b.Id) { EditEcho("加边：两点须落在不同的已有节点附近(≤30m)。", EchoLevel.Warn); return; }
+        var id = s.NewEdgeId();
+        s.Apply(new Cad.RoadChange { Kind = Cad.RoadChangeKind.AddEdge, EdgeId = id, FromNodeId = a.Id, ToNodeId = b.Id, Centerline = new[] { a.Position, b.Position }, Title = $"{id}（{a.Id}—{b.Id}）" });
+        AfterRoadEdit($"✓ 暂存·加边 {id}（{a.Id}—{b.Id}）");
+    }
+
+    private void RoadEditRemoveEdge(Cad.Point3d p)
+    {
+        var s = _roadEdit; if (s == null) return;
+        var e = s.Draft.NearestEdge(p, RoadEditSnapM);
+        if (e is null) { EditEcho("删边：附近无路段(≤30m)。", EchoLevel.Warn); return; }
+        s.Apply(new Cad.RoadChange { Kind = Cad.RoadChangeKind.RemoveEdge, EdgeId = e.Id, Title = e.Id });
+        AfterRoadEdit($"✓ 暂存·删边 {e.Id}");
+    }
+
+    private void RoadEditSplitEdge(Cad.Point3d p)
+    {
+        var s = _roadEdit; if (s == null) return;
+        var e = s.Draft.NearestEdge(p, RoadEditSnapM);
+        if (e is null) { EditEcho("插交叉口：附近无路段(≤30m)。", EchoLevel.Warn); return; }
+        var nid = s.NewNodeId();
+        s.Apply(new Cad.RoadChange { Kind = Cad.RoadChangeKind.SplitEdge, EdgeId = e.Id, At = p, NewNodeId = nid, Title = $"{e.Id}→{nid}" });
+        AfterRoadEdit($"✓ 暂存·在 {e.Id} 插交叉口 {nid}");
+    }
+
+    private static string RoadStatusText(Cad.RoadEdgeStatus st) => st switch { Cad.RoadEdgeStatus.Maintenance => "检修", Cad.RoadEdgeStatus.Closed => "封闭", _ => "开放" };
+    private static string RoadClassText(Cad.RoadSegmentClass? c) => c is null ? "自动" : Cad.RoadTopology.TextOf(c.Value);
+
+    private void RoadEditSetStatus(Cad.Point3d p)
+    {
+        var s = _roadEdit; if (s == null) return;
+        var e = s.Draft.NearestEdge(p, RoadEditSnapM);
+        if (e is null) { EditEcho("改状态：附近无路段(≤30m)。", EchoLevel.Warn); return; }
+        var next = e.Status switch { Cad.RoadEdgeStatus.Open => Cad.RoadEdgeStatus.Maintenance, Cad.RoadEdgeStatus.Maintenance => Cad.RoadEdgeStatus.Closed, _ => Cad.RoadEdgeStatus.Open };
+        s.Apply(new Cad.RoadChange { Kind = Cad.RoadChangeKind.SetStatus, EdgeId = e.Id, Status = next, Title = $"{e.Id}→{RoadStatusText(next)}" });
+        AfterRoadEdit($"✓ 暂存·{e.Id} 状态→{RoadStatusText(next)}");
+    }
+
+    /// <summary>改线路类型（R-T7 人工改判）：吸附最近边 → 找到它所属的整条路段 → 自动/干线/支线/孤立段 循环，落到该路段每一条边。</summary>
+    private void RoadEditSetRoadClass(Cad.Point3d p)
+    {
+        var s = _roadEdit; if (s == null) return;
+        var e = s.Draft.NearestEdge(p, RoadEditSnapM);
+        if (e is null) { EditEcho("改线路类型：附近无路段(≤30m)。", EchoLevel.Warn); return; }
+        var topo = s.DraftTopology();
+        if (!topo.SegmentByEdge.TryGetValue(e.Id, out var seg)) { EditEcho($"改线路类型：边 {e.Id} 未归入任何路段（图退化？）。", EchoLevel.Warn); return; }
+        Cad.RoadSegmentClass? next = e.RoadClass switch
+        {
+            null => Cad.RoadSegmentClass.Trunk,
+            Cad.RoadSegmentClass.Trunk => Cad.RoadSegmentClass.Spur,
+            Cad.RoadSegmentClass.Spur => Cad.RoadSegmentClass.Isolated,
+            _ => null,
+        };
+        s.Apply(new Cad.RoadChange { Kind = Cad.RoadChangeKind.SetRoadClass, EdgeId = e.Id, EdgeIds = seg.EdgeIds, RoadClass = next, Title = $"{seg.Id}（{seg.EdgeIds.Count} 边 / {seg.LengthM:F0}m）→{RoadClassText(next)}" });
+        AfterRoadEdit($"✓ 暂存·路段 {seg.Id} 线路类型→{RoadClassText(next)}（{seg.EdgeIds.Count} 条边 / {seg.LengthM:F0}m；自动判据为「{Cad.RoadTopology.TextOf(seg.AutoClass)}」）");
+    }
+
+    private void AfterRoadEdit(string msg)
+    {
+        RenderRoadEditDiff();
+        _roadEditWin?.RefreshFromSession();
+        EditEcho(msg.StartsWith("✓ ") ? msg.Substring(2) : msg, EchoLevel.Success);   // Success 档回显自带 ✓
+        EchoRoadTopologyDelta();
+        StatusMsg.Text = msg;
+    }
+
+    private void EchoRoadTopologyDelta()
+    {
+        var s = _roadEdit; if (s == null) return;
+        string structural = s.TopologyDelta();
+        if (structural.Length > 0) EditEcho($"   拓扑（结构）：{structural}");
+        string passable = s.TopologyDelta(passableOnly: true);
+        if (passable.Length > 0) EditEcho($"   拓扑（可通行，检修/封闭按不通算）：{passable}", EchoLevel.Warn);
+    }
+
+    /// <summary>diff 预览层：新增绿 + / 删除红 × / 改状态琥珀 / 改线橙 / 改判 = 改成的类别色 + 菱形。</summary>
+    private void RenderRoadEditDiff()
+    {
+        ClearRoadEditDiff();
+        var s = _roadEdit; if (s == null) return;
+        var diff = s.ComputeDiff();
+        if (diff.IsEmpty) { RefreshScene(); return; }
+        void Edge(Cad.RoadEdge e, float r, float g, float b, char marker)
+        {
+            var c = e.Centerline; if (c.Count < 2) return;
+            var pl = new PolylineEntity { LayerName = RoadEditDiffLayer, Cr = r, Cg = g, Cb = b, LineWeight = 60, Elevation = c[0].Z, Zs = new System.Collections.Generic.List<double>() };
+            foreach (var q in c) { pl.Points.Add((q.X, q.Y)); pl.Zs.Add(q.Z - c[0].Z); }
+            _scene.Add(pl);
+            var m = c[c.Count / 2]; const double sz = 6.0;
+            void Seg(double x0, double y0, double x1, double y1) { var l = new PolylineEntity { LayerName = RoadEditDiffLayer, Cr = r, Cg = g, Cb = b, Elevation = m.Z }; l.Points.Add((x0, y0)); l.Points.Add((x1, y1)); _scene.Add(l); }
+            if (marker == 'x') { Seg(m.X - sz, m.Y - sz, m.X + sz, m.Y + sz); Seg(m.X - sz, m.Y + sz, m.X + sz, m.Y - sz); }
+            else if (marker == '+') { Seg(m.X - sz, m.Y, m.X + sz, m.Y); Seg(m.X, m.Y - sz, m.X, m.Y + sz); }
+            else if (marker == 'd') { var d = new PolylineEntity { LayerName = RoadEditDiffLayer, Cr = r, Cg = g, Cb = b, Closed = true, Elevation = m.Z }; d.Points.Add((m.X, m.Y - sz)); d.Points.Add((m.X + sz, m.Y)); d.Points.Add((m.X, m.Y + sz)); d.Points.Add((m.X - sz, m.Y)); _scene.Add(d); }
+        }
+        foreach (var e in diff.Added) Edge(e, 0.30f, 0.85f, 0.40f, '+');
+        foreach (var e in diff.Removed) Edge(e, 0.92f, 0.30f, 0.30f, 'x');
+        foreach (var e in diff.StatusChanged) Edge(e, 0.95f, 0.75f, 0.20f, '\0');
+        foreach (var e in diff.Modified) Edge(e, 0.95f, 0.55f, 0.20f, '\0');
+        foreach (var e in diff.ClassChanged)
+        {
+            var (r, g, b) = e.RoadClass switch { Cad.RoadSegmentClass.Trunk => (0.30f, 0.85f, 0.40f), Cad.RoadSegmentClass.Spur => (0.35f, 0.65f, 0.95f), Cad.RoadSegmentClass.Isolated => (0.85f, 0.35f, 0.85f), _ => (0.6f, 0.6f, 0.6f) };
+            Edge(e, r, g, b, 'd');
+        }
+        RefreshScene();
+    }
+
+    private void ClearRoadEditDiff()
+    {
+        bool any = false;
+        foreach (var e in _scene.Entities.ToList()) if (e.LayerName == RoadEditDiffLayer) { _scene.Remove(e); any = true; }
+        if (any) RefreshScene();
+    }
+
+    /// <summary>「更新路网」：算 diff 摘要 → 提交闸门（当前路网更新 / 增量路网更新）→ 落图 → 关编辑窗。</summary>
+    private async System.Threading.Tasks.Task RoadEditCommitAsync()
+    {
+        var s = _roadEdit; if (s == null) return;
+        if (!s.HasChanges) { EditEcho("更新路网：没有可提交的变更。", EchoLevel.Warn); return; }
+        var diff = s.ComputeDiff();
+        var repNew = s.Draft.Validate(); var repOld = s.BaseSnapshot.Validate();
+        string summary = $"+{diff.Added.Count} 边 / −{diff.Removed.Count} 边 / {diff.StatusChanged.Count} 改状态 / {diff.Modified.Count} 改线 / {diff.ClassChanged.Count} 改类型；连通分量 {repOld.ComponentCount} → {repNew.ComponentCount}";
+        string topoStruct = s.TopologyDelta(), topoPass = s.TopologyDelta(passableOnly: true);
+        if (topoStruct.Length > 0) summary += $"\n拓扑（结构）：{topoStruct}";
+        if (topoPass.Length > 0) summary += $"\n拓扑（可通行，检修/封闭按不通算）：{topoPass}";
+        string? warning = repNew.IsFullyConnected ? null : $"提交后路网未全连通（{repNew.ComponentCount} 个独立片）。";
+
+        // 统一提交闸门：当前路网更新（换掉基准那批中线）/ 增量路网更新（原中线保留、新网另落带名字的图层）
+        string defName = $"路网 +编辑 {System.DateTime.Now:MM-dd HH:mm}";
+        var fields = new System.Collections.Generic.List<Views.Modeling.PromptDialog.Field>
+        {
+            new("mode", "锁定方式", "当前路网更新（替换原中线）", Choices: new[] { "当前路网更新（替换原中线）", "增量路网更新（原中线保留，新网另落图层）" }, Numeric: false),
+            new("name", "增量更新的路网名", defName, Hint: "增量更新时作图层后缀：路网图_边(名)…", Numeric: false),
+        };
+        var v = await Views.Modeling.PromptDialog.AskAsync(this, "更新路网 · 提交暂存变更", fields, "变更摘要：\n" + summary + (warning != null ? "\n⚠ " + warning : "") + "\n\n提交后寻径/运距即基于新网（检修/封闭的路段按不通算）。");
+        if (v == null) { StatusMsg.Text = "更新路网：已取消，暂存变更保留。"; return; }
+        bool incremental = v.S("mode").StartsWith("增量");
+        string name = v.S("name").Trim();
+        string baseLayer = incremental ? $"{RoadEdgeLayer}({(name.Length > 0 ? name : defName)})" : RoadEdgeLayer;
+
+        BeginChange();
+        int removed = 0, written = 0;
+        if (!incremental)
+            foreach (var src in _roadEditSources) if (_scene.Entities.Contains(src)) { _scene.Remove(src); _selected.Remove(src); removed++; }
+        foreach (var e in s.Draft.Edges)
+        {
+            var c = e.Centerline.Count >= 2 ? e.Centerline : new[] { s.Draft.GetNode(e.FromId)!.Position, s.Draft.GetNode(e.ToId)!.Position };
+            var (r, g, b) = e.Status switch { Cad.RoadEdgeStatus.Closed => (0.92f, 0.30f, 0.30f), Cad.RoadEdgeStatus.Maintenance => (0.95f, 0.75f, 0.20f), _ => (0.35f, 0.75f, 0.95f) };
+            var pl = new PolylineEntity { LayerName = RoadLayerFor(baseLayer, e.Status, e.RoadClass), Cr = r, Cg = g, Cb = b, Elevation = c[0].Z, Zs = new System.Collections.Generic.List<double>() };
+            if (e.Status != Cad.RoadEdgeStatus.Open) pl.Dash = new[] { 4.0, 2.0 };
+            foreach (var q in c) { pl.Points.Add((q.X, q.Y)); pl.Zs.Add(q.Z - c[0].Z); }
+            _scene.Add(pl); written++;
+        }
+        ClearRoadEditDiff();
+        RefreshScene();
+        string msg = $"✓ 路网编辑已锁定（{summary.Replace('\n', '；')}）→ {(incremental ? $"增量路网更新：新网 {written} 条边落到「{baseLayer}*」，原中线保留" : $"当前路网更新：换掉原中线 {removed} 条，新网 {written} 条边落到「{RoadEdgeLayer}*」")}；寻径/运距即基于新网。" + (warning != null ? " ⚠ " + warning : "");
+        EditEcho(msg.Substring(2), warning != null ? EchoLevel.Warn : EchoLevel.Success);   // Success 档回显自带 ✓
+        StatusMsg.Text = msg;
+        _roadEditJustCommitted = true;
+        _roadEditWin?.Close();
+    }
+
+    private static double DistToPolylineXY(double px, double py, System.Collections.Generic.IReadOnlyList<(double x, double y)> pts, bool closed)
+    {
+        double best = double.MaxValue;
+        int n = pts.Count, lim = closed ? n : n - 1;
+        for (int i = 0; i < lim; i++)
+        {
+            var a = pts[i]; var b = pts[(i + 1) % n];
+            double dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
+            double t = l2 < 1e-12 ? 0 : System.Math.Clamp(((px - a.x) * dx + (py - a.y) * dy) / l2, 0, 1);
+            double qx = a.x + t * dx, qy = a.y + t * dy;
+            best = System.Math.Min(best, System.Math.Sqrt((px - qx) * (px - qx) + (py - qy) * (py - qy)));
+        }
+        return best;
+    }
+
+    // ═══════════════════ 刀量切割（忠实原 DriveTemplateRunner.RunInteractive(distanceOnly) + DriveTemplateDialog + CutTableWindow）═══════════════════
+    //
+    //  选 1 条工作线 → 参数面板（工作线长 L 自动、采高 H、密度 ρ、工作帮坡角 α、驱动距离 v(=刀距)、刀数 N；
+    //  ☐ 切到最后一刀(台阶高度/最小平盘) → 累积量表窗；☐ 趋势整合台阶(λ)）→ 沿工作线每驱动一刀分煤/岩 → 逐刀切割线 + 工程位置入图。
+    //  块体 = 最近导入的块体(_lastBlocks)；煤/岩判据 = 「块体煤岩分类」指定的类别码，未指定则品位 ≥ 平均品位算煤（与「开采程序切分」同口径）。
+    private Cad.CoalRockClassifier? _lastCoalClassifier;
+    private Views.Modeling.CutTableWindow? _cutTableWin;
+    private const string DriveLayer = "工程位置_驱动";
+    private const string CutFaceLayer = "刀量切割_台阶面";
+
+    /// <summary>当前块体 → 引擎单元表（煤/岩判据见上）。没块体返回 null。</summary>
+    private (System.Collections.Generic.List<Cad.CellBox>? cells, string prov) BlockCellsForDriving()
+    {
+        if ((_lastBlocks == null || _lastBlocks.Count == 0) && Modeling.BlockModelStore.Active is { Blocks.Count: > 0 } act)
+        {
+            // 没导过 BLK/PMB 但块体浏览器里有激活模型 → 用它（Grade 列）
+            _lastBlocks = act.Blocks.Where((b, i) => !act.DeletedIds.Contains(i)).ToList();
+            if (_lastBlocks.Count > 0) { _blockGmin = _lastBlocks.Min(b => b.Grade); _blockGmax = System.Math.Max(_blockGmin + 1e-9, _lastBlocks.Max(b => b.Grade)); }
+        }
+        if (_lastBlocks == null || _lastBlocks.Count == 0) return (null, "");
+        var cells = new System.Collections.Generic.List<Cad.CellBox>(_lastBlocks.Count);
+        string prov;
+        if (_lastCoalClassifier != null)
+        {
+            var clf = _lastCoalClassifier;
+            for (int i = 0; i < _lastBlocks.Count; i++) { var b = _lastBlocks[i]; cells.Add(new Cad.CellBox { Cx = b.X, Cy = b.Y, Cz = b.Z, Sx = b.Size, Sy = b.Size, Sz = b.Size, IsCoal = clf.IsCoal(b.Grade), IsRock = clf.IsRock(b.Grade), SourceIndex = i }); }
+            prov = $"块体 {_lastBlocks.Count} 块 · 煤码[{string.Join(",", clf.CoalCodes)}]{(clf.RockCodes.Length > 0 ? $"·岩码[{string.Join(",", clf.RockCodes)}]" : "·非煤即岩")}";
+        }
+        else
+        {
+            double gsum = 0; foreach (var b in _lastBlocks) gsum += b.Grade; double cutoff = gsum / _lastBlocks.Count;
+            for (int i = 0; i < _lastBlocks.Count; i++) { var b = _lastBlocks[i]; cells.Add(new Cad.CellBox { Cx = b.X, Cy = b.Y, Cz = b.Z, Sx = b.Size, Sy = b.Size, Sz = b.Size, IsCoal = b.Grade >= cutoff, IsRock = b.Grade < cutoff, SourceIndex = i }); }
+            prov = $"块体 {_lastBlocks.Count} 块 · 品位≥{cutoff:0.###}(平均)算煤（未做「块体煤岩分类」）";
+        }
+        return (cells, prov);
+    }
+
+    /// <summary>选中的工作线 → 投影几何（「工作线」图层的基线带结束线/回转中心；其它选中多段线按左法向推进兜底）。</summary>
+    private (Cad.WorkLineSamples? geo, PolylineEntity? line, string how) SelectedWorkLineSamples()
+    {
+        var wl = _selected.OfType<PolylineEntity>().FirstOrDefault(p => p.LayerName == WorkLineLayer && p.Points.Count >= 2)
+              ?? _selected.OfType<PolylineEntity>().FirstOrDefault(p => p.Points.Count >= 2);
+        if (wl == null) return (null, null, "未选中工作线");
+        PolylineEntity? endLine = null; PointEntity? pivot = null;
+        if (wl.LayerName == WorkLineLayer)
+            foreach (var e in _scene.Entities)
+            {
+                if (e is PolylineEntity p2 && p2.LayerName == WorkLineLayer + "_结束线" && NearWorkLine(p2, wl)) endLine ??= p2;
+                else if (e is PointEntity pt && pt.LayerName == WorkLineLayer + "_回转中心" && NearWorkLine(pt, wl)) pivot ??= pt;
+            }
+        var g = Cad.WorkLineSamples.FromWorkLine(wl.Points, wl.Elevation, pivot != null, endLine?.Points, pivot != null ? (pivot.X, pivot.Y) : null,
+                                                 fallbackDir: (-(wl.Points[^1].y - wl.Points[0].y), wl.Points[^1].x - wl.Points[0].x), closed: wl.Closed);
+        string how = wl.LayerName == WorkLineLayer ? (pivot != null ? "扇形工作线（绕回转中心）" : endLine != null ? "直线工作线（基线→结束线）" : "工作线（无结束线，取左法向）") : "选中多段线（左法向推进）";
+        return (g, wl, how);
+    }
+
+    private async System.Threading.Tasks.Task CuttingCmd(string cmd, string label = "刀量切割")
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        bool preFull = cmd.Contains("全刀") || cmd.Contains("最后一刀"), preTrend = cmd.Contains("趋势");   // 命令行/自检预填
+        var (geo, wlEnt, how) = SelectedWorkLineSamples();
+        if (geo == null || !geo.Success)
+        { StatusMsg.Text = label + "：请先选中 1 条工作线（「创建工作线」画的基线，或任一多段线作方向线）"; EditEcho(label + "：未提取到工作线方向 —— 请先选中 1 条工作线。", EchoLevel.Warn); return; }
+        double lLen = 0; for (int i = 1; i < wlEnt!.Points.Count; i++) lLen += System.Math.Sqrt(Dist2(wlEnt.Points[i - 1], wlEnt.Points[i]));
+
+        // 采高 H / 采宽 预填：取开采模板（库不在就兜底默认，不弹连库）
+        double h = 12.0; double? mw = null; string prov = "默认";
+        try { var rp = Data.BenchTemplateResolver.Resolve(_geoDb?.Connection, isDump: false); if (rp != null) { if (rp.BenchHeight > 0) h = rp.BenchHeight; mw = rp.MiningWidth; prov = rp.Provenance; } } catch { }
+        var (cells, cellProv) = BlockCellsForDriving();
+
+        var fields = new System.Collections.Generic.List<Views.Modeling.PromptDialog.Field>
+        {
+            new("L", "工作线长 L", lLen.ToString("0.##", inv), "m", Hint: "取自选中工作线"),
+            new("H", "采高 H", h.ToString("0.##", inv), "m", Hint: $"依据 {prov}"),
+            new("rho", "煤密度 ρ", "1.3", "t/m³"),
+            new("alpha", "工作帮坡角 α", "75", "°", Hint: "由煤底板投影线起坡构斜面"),
+            new("v", "驱动距离 v(=刀距)", (mw is > 0 ? mw.Value : 10).ToString("0.##", inv), "m", Hint: label + "：一刀 = 一个驱动距离"),
+            new("N", "刀数 N", "10", "刀"),
+            new("full", "切到最后一刀", preFull ? "true" : "", Bool: true, Hint: "忽略刀数，驱动到物料尽头，弹累积量表（点任意一刀看台阶面 / 卡阶段块）"),
+            new("benchH", "台阶高度 Hb", "15", "m", Hint: "切到最后一刀的台阶面；0 = 单斜面"),
+            new("berm", "最小工作平盘 b", "20", "m"),
+            new("trend", "趋势整合台阶", preTrend ? "true" : "", Bool: true, Hint: "把工作线当趋势线，沿其方向与现状台阶线求交、按真实标高聚级，每级整合成规整线"),
+            new("lambda", "展开系数 λ", "1", "", Hint: "趋势整合用：0 各级收拢于基线，1 完整放坡"),
+        };
+        string desc = "沿工作线每驱动一段距离切一刀，逐刀分煤/岩累成累积量表（给剥采比均衡）。\n"
+                    + (cells != null ? $"块体：{cellProv}" : "未导入块体 → 只画几何刀线（不数量）；导入块体后可数煤量/剥采比。")
+                    + $"\n工作线：{how}，{wlEnt.Points.Count} 点 · L={lLen:0.#}m";
+        var v = await Views.Modeling.PromptDialog.AskAsync(this, label + "（按距离驱动）", fields, desc);
+        if (v == null) { StatusMsg.Text = label + "：已取消"; EditEcho(label + ":已取消"); return; }
+
+        double L = v.D("L"), H = v.D("H"), rho = v.D("rho") > 0 ? v.D("rho") : 1.3, alpha = v.D("alpha"), adv = v.D("v");
+        int N = (int)System.Math.Round(v.D("N"));
+        bool fullCut = v.B("full"), trend = v.B("trend");
+        double benchH = v.D("benchH") >= 0 ? v.D("benchH") : 15, berm = v.D("berm") >= 0 ? v.D("berm") : 20, lambda = v.D("lambda") >= 0 ? v.D("lambda") : 1;
+        if (!trend && !fullCut && L <= 0) { StatusMsg.Text = label + "：工作线长 L 必须是正数。"; return; }
+        if (!trend && H <= 0) { StatusMsg.Text = label + "：采高 H 必须是正数。"; return; }
+        if (alpha <= 0 || alpha >= 90) { StatusMsg.Text = label + "：工作帮坡角 α 必须在 0~90° 之间。"; return; }
+        if (!trend && adv <= 0) { StatusMsg.Text = label + "：驱动距离 v 必须是正数。"; return; }
+        if (!trend && !fullCut && N <= 0) { StatusMsg.Text = label + "：刀数 N 必须是正整数。"; return; }
+
+        // 趋势整合台阶：工作线当趋势线，沿其方向与现状台阶线求交、按真实标高聚级，每级整合成规整线，趋势形态放各平盘
+        if (trend)
+        {
+            var benchLines = new System.Collections.Generic.List<double[]>();
+            foreach (var e in _scene.Entities)
+            {
+                if (e is not PolylineEntity pl || pl.Points.Count < 2 || ReferenceEquals(pl, wlEnt)) continue;
+                if (pl.LayerName is "趋势整合台阶" or "量约束前界" or "形态扩展" or DriveLayer || pl.LayerName.StartsWith(WorkLineLayer, System.StringComparison.Ordinal)) continue;
+                var xyz = new double[pl.Points.Count * 3];
+                for (int i = 0; i < pl.Points.Count; i++) { xyz[i * 3] = pl.Points[i].x; xyz[i * 3 + 1] = pl.Points[i].y; xyz[i * 3 + 2] = pl.ZAt(i); }
+                benchLines.Add(xyz);
+            }
+            if (benchLines.Count == 0) { EditEcho($"> {label}·趋势整合:当前视图没读到多段线台阶线。请确认视图里有台阶线。", EchoLevel.Warn); StatusMsg.Text = label + "·趋势整合：视图无台阶线"; return; }
+            var levels = Cad.TrendBenchIntegrator.ExtractPlatformLevelsAlongTrend(geo.Baseline, benchLines, benchH / 2);
+            if (levels.Length == 0) { EditEcho($"> {label}·趋势整合:趋势线没穿过任何台阶线(方向/位置不对?或台阶线是二维且与趋势不在同一平面)。", EchoLevel.Warn); StatusMsg.Text = label + "·趋势整合：趋势线没穿过台阶线"; return; }
+            var fe = Cad.BenchFormExpander.ExpandOnLevels(geo, levels, alpha, berm, lambda);
+            if (!fe.Success) { EditEcho($"> {label}·趋势整合:{fe.Error}。", EchoLevel.Warn); StatusMsg.Text = label + "·趋势整合失败：" + fe.Error; return; }
+            EditEcho($"> {label}·趋势整合:读 {benchLines.Count} 条台阶线 → 提取 {levels.Length} 个平盘水平(标高 {levels[0]:0.#}~{levels[^1]:0.#}m) → 趋势形态放各平盘(λ={lambda:0.##},最大退距 {fe.MaxRetreat:0.#}m)。", EchoLevel.Success);
+            EditEcho($"  平盘标高(降序): {string.Join(", ", System.Array.ConvertAll(levels, z => z.ToString("0.##")))}");
+            BeginChange();
+            int nLv = fe.Levels.Count;
+            for (int li = 0; li < nLv; li++)
+            {
+                double t = nLv > 1 ? (double)li / (nLv - 1) : 0;
+                var line = fe.Levels[li];
+                var pl = new PolylineEntity { LayerName = "趋势整合台阶", Elevation = line[0].Z, Cr = li == 0 ? 0.78f : (float)((200 - 160 * t) / 255), Cg = li == 0 ? 0.78f : (float)((200 - 40 * t) / 255), Cb = li == 0 ? 0.78f : (float)((200 + 30 * t) / 255) };
+                foreach (var p in line) pl.Points.Add((p.X, p.Y));
+                _scene.Add(pl);
+                _scene.Add(new TextEntity { X = line[0].X, Y = line[0].Y, Elevation = line[0].Z, Text = $"{line[0].Z:0.#}", Height = System.Math.Max(2.0, fe.MaxRetreat * 0.05 + 2), LayerName = "趋势整合台阶", Cr = 0.16f, Cg = 0.16f, Cb = 0.16f });
+            }
+            RefreshScene();
+            StatusMsg.Text = $"> {label}·趋势整合台阶：{levels.Length} 级入图（图层「趋势整合台阶」，级数渐变 + 标高）；改 λ 重跑看展开；Ctrl+Z 撤销";
+            return;
+        }
+
+        // 切到最后一刀：驱动到物料尽头 → 累积量表窗（逐刀量 + 点看台阶面 + 卡阶段块）。需块体。
+        if (fullCut)
+        {
+            if (cells == null) { EditEcho($"{label}·切到最后一刀:未导入块体 → 无法逐刀数煤/岩。请先导入/生成块体（可用「块体煤岩分类」指定煤岩）。", EchoLevel.Warn); StatusMsg.Text = label + "：未导入块体"; return; }
+            var full = Cad.TemplateDrivingEngine.Run(cells, geo, volumeDriven: false, advancePerPeriod: adv, targetCoalM3PerPeriod: 0, periods: 1, alphaDeg: alpha, coalDensity: rho, sliceWidth: adv, cutToEnd: true, benchStepHeight: benchH, minBermWidth: berm, provenance: cellProv);
+            if (!full.Success) { EditEcho($"> {label}·切到最后一刀:{full.Error}。", EchoLevel.Warn); StatusMsg.Text = label + "：" + full.Error; return; }
+            EditEcho($"> {label}·切到最后一刀（{full.Provenance}）：切出 {full.Cuts.Count} 刀(刀距 {adv:0.#}m) | 总推进 {full.TotalAdvance:0.#}m | 煤 {full.TotalCoalTonnage / 1e4:0.0}万t 岩 {full.TotalRockVolM3 / 1e4:0.0}万m³ | 综合剥采比 {full.OverallStripRatio:0.00} → 弹出累积量表。", EchoLevel.Success);
+            OpenCutTable(full, geo, cells, alpha, benchH, berm);
+            StatusMsg.Text = $"> {label}·切到最后一刀：{full.Cuts.Count} 刀，累积量表已打开（非模态：点任意一刀看台阶面，起~止刀号卡阶段块）";
+            return;
+        }
+
+        var drv = cells != null
+            ? Cad.TemplateDrivingEngine.Run(cells, geo, false, adv, 0, N, alpha, rho, adv, provenance: cellProv)
+            : Cad.TemplateDrivingEngine.PreviewGeometry(geo, adv, N, adv);
+        if (!drv.Success) { EditEcho($"> {label}（v={adv:0.#}m × {N}刀）：{drv.Error}。", EchoLevel.Warn); StatusMsg.Text = label + "：" + drv.Error; return; }
+        double qPer = L * adv * H / 1e4;
+        string summary = $"基于距离 v={adv:0.#}m/期（≈{qPer:0.0}万m³/期）× {N}期";
+        if (cells != null)
+        {
+            EditEcho($"> {label}（{summary} · {drv.Provenance}）：刀量切割 Δ={adv:0.#}m,逐刀分煤/岩,卡量只数煤——", EchoLevel.Success);
+            foreach (var p in drv.Periods)
+                EditEcho($"  第{p.Index}期: 推进 {p.AdvanceFrom:0.#}→{p.AdvanceTo:0.#}m | 煤 {p.CoalVolM3 / 1e4:0.00}万m³({p.CoalTonnage / 1e4:0.00}万t) | 岩 {p.RockVolM3 / 1e4:0.00}万m³ | 剥采比 {p.StripRatio:0.00}");
+            EditEcho($"  累积量表: {drv.Cuts.Count} 刀(每 {adv:0.#}m) | 推进 {drv.TotalAdvance:0.#}m | 煤 {drv.TotalCoalVolM3 / 1e4:0.0}万m³({drv.TotalCoalTonnage / 1e4:0.0}万t) 岩 {drv.TotalRockVolM3 / 1e4:0.0}万m³ | 综合剥采比 {drv.OverallStripRatio:0.00}{(drv.RanOutOfCoal ? " · 煤不足切满N期" : "")} → 已就绪给均衡剥采比");
+        }
+        else
+        {
+            EditEcho($"> {label}（{summary}）：未导入块体 → 只画几何刀线(不数量);导入块体后可数煤量/剥采比。", EchoLevel.Warn);
+            EditEcho($"  几何预览: {drv.Cuts.Count} 条刀线(每 {adv:0.#}m) + {drv.Periods.Count} 个工程位置 | 推进 {drv.TotalAdvance:0.#}m。");
+        }
+        // 逐刀切割线(浅灰蓝) + 工程位置(琥珀 + 期号)入图，一步 Undo
+        BeginChange();
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        foreach (var p in drv.Periods) foreach (var q in p.PositionLine) { minX = System.Math.Min(minX, q.X); maxX = System.Math.Max(maxX, q.X); minY = System.Math.Min(minY, q.Y); maxY = System.Math.Max(maxY, q.Y); }
+        double diag = minX <= maxX ? System.Math.Sqrt((maxX - minX) * (maxX - minX) + (maxY - minY) * (maxY - minY)) : 0;
+        double th = System.Math.Max(3.0, System.Math.Min(25.0, diag * 0.02));
+        foreach (var cut in drv.Cuts)
+        {
+            var pl = new PolylineEntity { LayerName = DriveLayer, Cr = 148 / 255f, Cg = 163 / 255f, Cb = 184 / 255f, Elevation = cut.PositionLine.Count > 0 ? cut.PositionLine[0].Z : 0 };
+            foreach (var q in cut.PositionLine) pl.Points.Add((q.X, q.Y));
+            _scene.Add(pl);
+        }
+        foreach (var p in drv.Periods)
+        {
+            var pl = new PolylineEntity { LayerName = DriveLayer, Cr = 245 / 255f, Cg = 158 / 255f, Cb = 11 / 255f, LineWeight = 50, Elevation = p.PositionLine.Count > 0 ? p.PositionLine[0].Z : 0 };
+            foreach (var q in p.PositionLine) pl.Points.Add((q.X, q.Y));
+            _scene.Add(pl);
+            if (p.PositionLine.Count > 0) _scene.Add(new TextEntity { X = p.PositionLine[0].X, Y = p.PositionLine[0].Y, Elevation = p.PositionLine[0].Z, Text = $"P{p.Index}", Height = th, LayerName = DriveLayer, Cr = 0.16f, Cg = 0.16f, Cb = 0.16f });
+        }
+        RefreshScene();
+        EditEcho($"  已入图(layer『{DriveLayer}』): {drv.Cuts.Count} 条逐刀切割线(浅色) + {drv.Periods.Count} 个工程位置(琥珀·带期号),可选中 / Ctrl+Z 撤销。");
+        StatusMsg.Text = $"> {label}：{drv.Cuts.Count} 刀 · {drv.Periods.Count} 期 · 推进 {drv.TotalAdvance:0.#}m" + (cells != null ? $" · 煤 {drv.TotalCoalTonnage / 1e4:0.0}万t 岩 {drv.TotalRockVolM3 / 1e4:0.0}万m³ · 综合剥采比 {drv.OverallStripRatio:0.00}" : "（几何预览，未数量）") + "；Ctrl+Z 撤销";
+    }
+
+    private void OpenCutTable(Cad.DriveOutput drv, Cad.WorkLineSamples geo, System.Collections.Generic.List<Cad.CellBox> cells, double alpha, double benchH, double berm)
+    {
+        _cutTableWin?.Close();
+        var prof = Cad.TemplateDrivingEngine.BenchProfile(drv.MinZ, drv.MaxZ, alpha, benchH, berm);
+        void ClearLayer(string lay) { foreach (var e in _scene.Entities.ToList()) if (e.LayerName == lay) _scene.Remove(e); }
+        void AddFace(double a, string caption, bool translucent)
+        {
+            var (verts, tris) = Cad.TemplateDrivingEngine.FaceMesh(geo, a, prof);
+            if (verts.Count < 3) return;
+            var m = new MeshEntity($"台阶面 {caption}", verts, tris) { LayerName = CutFaceLayer, Cr = 70 / 255f, Cg = 130 / 255f, Cb = 200 / 255f };
+            if (translucent) m.Transparency = 60;
+            _scene.Add(m);
+            int n = geo.Baseline.Count, P = prof.Count;
+            // 趾线 + 顶线 + 两端阶梯廓线
+            var toe = new PolylineEntity { LayerName = CutFaceLayer, Cr = 30 / 255f, Cg = 64 / 255f, Cb = 120 / 255f, Elevation = prof[0].z };
+            var top = new PolylineEntity { LayerName = CutFaceLayer, Cr = 30 / 255f, Cg = 64 / 255f, Cb = 120 / 255f, Elevation = prof[P - 1].z };
+            for (int i = 0; i < n; i++) { var q0 = verts[i * P]; var q1 = verts[i * P + P - 1]; toe.Points.Add((q0.x, q0.y)); top.Points.Add((q1.x, q1.y)); }
+            _scene.Add(toe); _scene.Add(top);
+            foreach (int i in new[] { 0, n - 1 })
+            {
+                var pl = new PolylineEntity { LayerName = CutFaceLayer, Cr = 30 / 255f, Cg = 64 / 255f, Cb = 120 / 255f, Elevation = prof[0].z, Zs = new System.Collections.Generic.List<double>() };
+                for (int p = 0; p < P; p++) { var q = verts[i * P + p]; pl.Points.Add((q.x, q.y)); pl.Zs.Add(q.z - prof[0].z); }
+                _scene.Add(pl);
+            }
+            var t0 = verts[0];
+            _scene.Add(new TextEntity { X = t0.x, Y = t0.y, Elevation = drv.MaxZ + System.Math.Max(2.0, (drv.MaxZ - drv.MinZ) * 0.04), Text = caption, Height = System.Math.Max(2.0, (drv.MaxZ - drv.MinZ) * 0.05), LayerName = CutFaceLayer, Cr = 0.12f, Cg = 0.12f, Cb = 0.12f });
+        }
+        bool hidden = false;
+        var h = new Views.Modeling.CutTableHandlers
+        {
+            DrawFace = (a, cap) => { BeginChange(); ClearLayer(CutFaceLayer); AddFace(a, cap, false); RefreshScene(); },
+            Stage = (loA, hiA, a0, a1, showCoal, showRock) =>
+            {
+                var sub = Cad.TemplateDrivingEngine.CollectCellsBetween(cells, geo, alpha, benchH, berm, a0, a1, showCoal, showRock, out double cv, out double rv);
+                int nc = sub.Count(c => c.IsCoal), nr = sub.Count - nc;
+                BeginChange();
+                ClearLayer(CutFaceLayer);
+                AddFace(loA, "", true); AddFace(hiA, $"阶段 {loA:0.#}~{hiA:0.#}m", true);
+                if (_lastBlocks != null) RenderBlocks(sub.Count > 0 ? sub.Select(c => _lastBlocks[c.SourceIndex]).ToList() : _lastBlocks);   // 隔离显示这段的真实块
+                hidden = false;
+                RefreshScene();
+                return (cv, rv, nc, nr);
+            },
+            ClearFaces = () =>
+            {
+                BeginChange();
+                int n = _scene.Entities.Count(e => e.LayerName == CutFaceLayer || e.LayerName == DriveLayer);
+                ClearLayer(CutFaceLayer); ClearLayer(DriveLayer);
+                if (_lastBlocks != null) RenderBlocks(_lastBlocks);
+                RefreshScene();
+                return n;
+            },
+            HideBlocks = hide => { if (hide == hidden) return; hidden = hide; if (_lastBlocks == null) return; if (hide) RenderBlocks(System.Array.Empty<BlockModel.Block>()); else RenderBlocks(_lastBlocks); RefreshScene(); },
+            Zoom = () => { Viewport.ZoomExtents(); },
+            RestoreIsolation = () => { if (_lastBlocks != null && !hidden) { RenderBlocks(_lastBlocks); RefreshScene(); } },
+            Echo = (s, warn) => EditEcho(s, warn ? EchoLevel.Warn : EchoLevel.Info),
+        };
+        _cutTableWin = new Views.Modeling.CutTableWindow(drv, alpha, benchH, berm, h);
+        _cutTableWin.Closed += (_, _) => _cutTableWin = null;
+        _cutTableWin.Show(this);
+    }
+
+    private double[]? SampleZOnMesh(string meshName, System.Collections.Generic.IReadOnlyList<(double x, double y)> ring)
+    {
+        Cad.Draw.MeshEntity? mesh = null;
+        foreach (var e in _scene.Entities)
+            if (e is Cad.Draw.MeshEntity m && string.Equals(m.Name, meshName, System.StringComparison.Ordinal)) { mesh = m; break; }
+        if (mesh == null || mesh.Verts.Count < 3 || mesh.Tris.Count < 1) return null;
+
+        var v = new double[mesh.Verts.Count * 3];
+        for (int i = 0; i < mesh.Verts.Count; i++)
+        { v[i * 3] = mesh.Verts[i].x; v[i * 3 + 1] = mesh.Verts[i].y; v[i * 3 + 2] = mesh.Verts[i].z; }
+        var t = new int[mesh.Tris.Count * 3];
+        for (int i = 0; i < mesh.Tris.Count; i++)
+        { t[i * 3] = mesh.Tris[i].a; t[i * 3 + 1] = mesh.Tris[i].b; t[i * 3 + 2] = mesh.Tris[i].c; }
+
+        var sampler = new Cad.SeamOutcrop.MeshZSampler(v, t);
+        if (sampler.IsEmpty) return null;
+        var zs = new double[ring.Count];
+        for (int i = 0; i < ring.Count; i++)
+        {
+            if (!sampler.TrySampleZ(ring[i].x, ring[i].y, out double z)) return null;
+            zs[i] = z;
+        }
+        return zs;
+    }
+
+    // 检修档期(忠实原 TaskLib.Features.MaintenancePlanWindow)。非模态单例。
+    // maintenance_window 表 V042 就建好了但一直没人读写, 本窗与 Data/MaintenanceWindows 一起把它接通。
+    private Views.GeoDb.MaintenancePlanWindow? _maintWin;
+    private void OpenMaintenancePlan()
+    {
+        if (_maintWin != null) { _maintWin.Reload(); _maintWin.Activate(); StatusMsg.Text = "检修档期已在前台"; return; }
+        var w = new Views.GeoDb.MaintenancePlanWindow(() => EnsureGeoDb()?.Connection, msg => StatusMsg.Text = msg);
+        _maintWin = w;
+        w.Closed += (_, _) => _maintWin = null;
+        w.Show(this);
+        StatusMsg.Text = "检修档期：按日排设备计划检修时窗；跨零点请拆两条（当日 22:00–24:00 + 次日 00:00–02:00）";
+        EnsureGeoDb();
+    }
+
+    // 班次日历(忠实原 TaskLib.Features.ShiftCalendarWindow)。非模态单例。
+    // shift_calendar 表 V001 就建好了但一直没人读写, 本窗与 Data/WorkCalendar 一起把它接通。
+    private Views.GeoDb.ShiftCalendarWindow? _shiftCalWin;
+    private void OpenShiftCalendar()
+    {
+        if (_shiftCalWin != null) { _shiftCalWin.Reload(); _shiftCalWin.Activate(); StatusMsg.Text = "班次日历已在前台"; return; }
+        var w = new Views.GeoDb.ShiftCalendarWindow(() => EnsureGeoDb()?.Connection, msg => StatusMsg.Text = msg);
+        _shiftCalWin = w;
+        w.Closed += (_, _) => _shiftCalWin = null;
+        w.Show(this);
+        StatusMsg.Text = "班次日历：按日排三班（开班时刻/班长/爆破班/天气），「生成整月」一次铺满当月（已排过的保留）";
+        EnsureGeoDb();   // 没连上就异步去连, 连上后本命令重跑 → 刷新本窗(同数据库浏览的做法)
+    }
+
+    // 注册/授权(忠实原 Licensing.Views.RegisterWindow)。非模态单例。
+    private Views.RegisterWindow? _registerWin;
+    private void OpenRegisterWindow()
+    {
+        if (_registerWin != null) { _registerWin.Refresh(); _registerWin.Activate(); StatusMsg.Text = "注册/授权已在前台"; return; }
+        var w = new Views.RegisterWindow();
+        _registerWin = w;
+        w.Closed += (_, _) => _registerWin = null;
+        w.Show(this);
+        var info = Licensing.LicenseService.Current;
+        StatusMsg.Text = info.Status switch
+        {
+            Licensing.LicenseStatus.Licensed => info.Perpetual ? "授权状态：已注册（永久）" : $"授权状态：已注册，有效期至 {info.ExpiryText}",
+            Licensing.LicenseStatus.Expired => "授权状态：使用期限已到 —— 粘贴激活码即可继续",
+            _ => $"授权状态：试用中，至 {info.ExpiryText}（剩余 {info.DaysLeft} 天）",
+        };
+    }
+
+    // 数据库浏览(忠实原 SqlLib.UI.SqlBrowserWindow)：表树 + 表结构/数据预览/SQL 控制台/迁移历史。非模态单例。
+    private Views.GeoDb.SqlBrowserWindow? _sqlBrowserWin;
+    private void OpenSqlBrowser()
+    {
+        // 先开窗、再连库: EnsureGeoDb 连不上时是**异步**去连(连上会把本命令重跑一遍, 那时走上面
+        // 「已在前台」分支顺带 RefreshAll)。先 EnsureGeoDb 再开窗的话, 没连上就直接什么都不弹 ——
+        // 用户点了看不到任何窗口, 只有状态栏一行字。窗自己认得 conn==null 并如实说原因。
+        if (_sqlBrowserWin != null) { _sqlBrowserWin.RefreshAll(); _sqlBrowserWin.Activate(); StatusMsg.Text = "数据库浏览已在前台"; return; }
+        var w = new Views.GeoDb.SqlBrowserWindow(
+            conn: () => EnsureGeoDb()?.Connection,
+            echo: msg => StatusMsg.Text = msg,
+            save: (title, name, content) => SaveCsvAsync(title, name, content));
+        _sqlBrowserWin = w;
+        w.Closed += (_, _) => _sqlBrowserWin = null;
+        w.Show(this);
+        StatusMsg.Text = "数据库浏览：左侧选表看结构与数据，「SQL 控制台」可跑只读查询（默认禁止写入）";
+        EnsureGeoDb();   // 没连上就异步去连, 连上后本命令重跑 → 上面那条分支刷新本窗
+    }
+
     // 数据字典导出(原 SqlLib「导出数据字典」)：全部用户表结构(表,列,类型,非空,主键)→ CSV。
     private async System.Threading.Tasks.Task ExportDataDictionaryAsync()
     {
@@ -12919,11 +16676,9 @@ public partial class MainWindow : Window
     {
         if (AssistantPanel == null) return;
         AssistantPanel.Children.Clear();
-        AssistantPanel.Children.Add(new TextBlock
-        {
-            Text = r.Content, FontSize = 12, TextWrapping = TextWrapping.Wrap,
-            Foreground = Brush.Parse("#3A3F46"), Margin = new Thickness(4, 2, 4, 8)
-        });
+        var body = new TextBlock { Text = r.Content, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(4, 2, 4, 8) };
+        ThemeBind(body, TextBlock.ForegroundProperty, "Theme.Text.Body");
+        AssistantPanel.Children.Add(body);
         foreach (var opt in r.Options)
         {
             var btn = new Button
@@ -12932,9 +16687,10 @@ public partial class MainWindow : Window
                 FontSize = 12, HorizontalAlignment = HorizontalAlignment.Stretch,
                 HorizontalContentAlignment = HorizontalAlignment.Left,
                 Margin = new Thickness(0, 0, 0, 3), Padding = new Thickness(8, 4, 8, 4),
-                Background = Brush.Parse(opt.Command == null ? "#E8EDF3" : "#DDEBFB"),
-                BorderBrush = Brush.Parse("#C7D2DE")
             };
+            // 菜单项底色/描边随主题(可执行命令的项用主色淡底)
+            ThemeBind(btn, Button.BackgroundProperty, opt.Command == null ? "Theme.Ribbon.Background" : "Theme.Accent.Soft");
+            ThemeBind(btn, Button.BorderBrushProperty, "Theme.Panel.Border");
             var captured = opt;
             btn.Click += (_, _) => OnAssistantOption(captured);
             AssistantPanel.Children.Add(btn);
@@ -13031,24 +16787,59 @@ public partial class MainWindow : Window
     private double _ribbonNeedMax;
     private double _lastRibbonScale = 1;
 
+    // ── 十字光标尺寸(选项·显示) ──────────────────────────────────────────────
+    // 值域 2~100 %，100 = 满屏十字(默认)。同原版 Options.Display.CursorSize。
+    private double _cursorSizePct = 100;
+
+    private static string CursorSizeFile =>
+        System.IO.Path.Combine(System.IO.Path.GetDirectoryName(PitMine3D.Kylin.CrashLog.Path) ?? ".", "cursor-size.txt");
+
+    private void LoadCursorSizeSetting()
+    {
+        // 统一走 config.json(见 MainWindow.Settings.cs); 老版本散落的 cursor-size.txt 再读一次做迁移
+        double v = Cfg.Get<double>(KeyCursorSize, double.NaN);
+        if (double.IsNaN(v))
+            try
+            {
+                if (File.Exists(CursorSizeFile) && double.TryParse(File.ReadAllText(CursorSizeFile).Trim(), out double old)) v = old;
+            }
+            catch { }
+        if (!double.IsNaN(v)) _cursorSizePct = System.Math.Clamp(v, 2, 100);
+        ApplyCursorSize();
+    }
+
+    private void SaveCursorSizeSetting() => Cfg.Set(KeyCursorSize, _cursorSizePct);
+
+    /// <summary>改十字光标尺寸并立即生效(所有已建视口)。</summary>
+    private void SetCursorSize(double pct)
+    {
+        _cursorSizePct = System.Math.Clamp(pct, 2, 100);
+        ApplyCursorSize();
+    }
+
+    // 多标签每个文档一个独立视口, 设置要逐个套上(新建的标签在 EnsureHost 里继承当前值)
+    private void ApplyCursorSize()
+    {
+        foreach (var d in _docs) if (d.Vp != null) d.Vp.CursorSizePercent = _cursorSizePct;
+    }
+
     private static string RibbonScaleFile =>
         System.IO.Path.Combine(System.IO.Path.GetDirectoryName(PitMine3D.Kylin.CrashLog.Path) ?? ".", "ribbon-scale.txt");
 
     private void LoadRibbonScaleSetting()
     {
-        try
-        {
-            if (File.Exists(RibbonScaleFile) &&
-                double.TryParse(File.ReadAllText(RibbonScaleFile).Trim(), out double v) && v >= 0 && v <= 8000)
-                _ribbonScaleSetting = v;
-        }
-        catch { }
+        // 同十字光标: 统一走 config.json, 老的 ribbon-scale.txt 再读一次做迁移
+        double v = Cfg.Get<double>(KeyRibbonScale, double.NaN);
+        if (double.IsNaN(v))
+            try
+            {
+                if (File.Exists(RibbonScaleFile) && double.TryParse(File.ReadAllText(RibbonScaleFile).Trim(), out double old)) v = old;
+            }
+            catch { }
+        if (!double.IsNaN(v) && v >= 0 && v <= 8000) _ribbonScaleSetting = v;
     }
 
-    private void SaveRibbonScaleSetting()
-    {
-        try { File.WriteAllText(RibbonScaleFile, _ribbonScaleSetting.ToString("0.###")); } catch { }
-    }
+    private void SaveRibbonScaleSetting() => Cfg.Set(KeyRibbonScale, _ribbonScaleSetting);
 
     /// <summary>
     /// 屏幕挡位 → 目标宽度(像素)。缩放不写死百分比，而是按「目标宽度 ÷ 功能区实际需要的宽度」算，
@@ -13112,14 +16903,9 @@ public partial class MainWindow : Window
     // 命令历史/输出面板：回显执行的命令（▸ cmd），滚动到底，上限 100 行
     private void LogCommand(string cmd)
     {
-        if (CmdLog == null || string.IsNullOrWhiteSpace(cmd)) return;
-        CmdLog.Children.Add(new TextBlock
-        {
-            Text = "▸ " + cmd, FontSize = 11, FontFamily = new FontFamily("Consolas,monospace"),
-            Foreground = Brush.Parse("#2F5FA8")   // 信息栏为浅色面板(同原版 Theme.Surface), 用深蓝可读
-        });
-        while (CmdLog.Children.Count > 100) CmdLog.Children.RemoveAt(0);
-        CmdLogScroll?.ScrollToEnd();
+        // 「> 命令」是原版命令行的回显写法(MainWindow.Commands.cs); 时间戳与截断由 AppendHistoryLine 统一补。
+        // 信息栏是浅色面板(同原版 Theme.Surface), 命令行用深蓝, 一眼能从结果行里挑出来。
+        if (!string.IsNullOrWhiteSpace(cmd)) AppendHistoryLine("> " + cmd, CmdLogCmdBrush);
     }
 
     // 命令目录（供命令行自动补全候选；主要功能命令，覆盖 Home + 各模块）
@@ -13127,7 +16913,7 @@ public partial class MainWindow : Window
     {
         // 文件/绘制/修改
         "新建","打开","保存","另存为","导入","导入PMX","导出PMX","选项","命令别名","帮助",
-        "点","直线","多段线","滑动多段线","圆","矩形","正多边形","文字","多行文字","编辑文字","圆弧","图案填充","填充十字",
+        "点","直线","多段线","滑动多段线","圆","矩形","正多边形","文字","多行文字","编辑文字","圆弧","图案填充","填充十字","编辑填充","填充颜色","字体",
         "复制","移动","旋转","偏移","修剪","延伸","打断","分解","删除","撤销","重做",
         // 对象捕捉
         "对象捕捉","交点捕捉","最近捕捉","垂足捕捉","捕捉全模式",
@@ -13146,7 +16932,7 @@ public partial class MainWindow : Window
         // 线编辑
         "加密多段线","简化","平滑","样条平滑","抽稀等值线","两线交点","闭合多段线","删除重复点","删除重复线","连接多段线","组合工作线",
         // 网格/建模
-        "网格度量","网格诊断","创建三角网","约束三角网","裁剪三角网","网格焊接","网格边界","网格交线","网格剖面","网格光顺","合并三角网","固化成体","侧面三角网","台阶面提取","煤岩台阶判定","煤层露头线","更新煤层面","立方体","球体","圆柱","体素格网体积","自适应体素算量","实体转块体",
+        "网格度量","网格诊断","创建三角网","约束三角网","裁剪三角网","网格焊接","网格边界","网格交线","网格剖面","网格光顺","合并三角网","固化成体","侧面三角网","台阶面提取","煤岩台阶判定","煤层露头线","更新煤层面","立方体","球体","圆柱","体素格网体积","自适应体素算量","实体转块体","格网导出","导出三角网","采剥演示",
         // 区域/地形/点云
         "区域求差","区域重叠检测","克里金估值","泛克里金","简单克里金","快速估值","最近邻估值","移动平均估值",
         "坡度","坡向","粗糙度","曲率","加载点云","点云着色","SOR去噪","点云抽稀","自适应抽稀","均匀抽稀","随机抽稀","地面点滤波","高程着色","色带","图例","指北针","比例尺","标题栏","点云质量统计","点云裁剪","分割点云","区域生长分割","移除障碍物",
@@ -13158,7 +16944,7 @@ public partial class MainWindow : Window
         "设备台账","生产数据","产能分析","故障分析","爆破分析","设备累计工时","KPI分析","机型KPI","设备智能编组","钻孔管理","煤质统计","煤层管理","工艺架构","展绘层位数据","层位求交","导入生产记录","导入月度产能","导入故障记录","导入爆破记录","导入月度KPI","导入设备台账","导入设备型号","导入煤质","导入观测点","导入月度计划","导入见煤成果","导入路况","导入边坡","导入模板","导出分析",
         "数据库连接","现场验收","参数验收判定","兼容机型","作业面台账","参数模板库","月度计划","路况显示","排土场台账","钻孔煤质汇总","边坡设计","钻孔展绘","机群总览","机群驾驶舱","设备综合评分","数据看板","煤种分类","煤质数据健康度","分煤层煤质",
         "煤层台阶参数","设备约束","煤质分级","观测点","矿区位置","设备效能预测","年度产量","设备故障排名","班次产量对比","KPI趋势",
-        "产能分类对比","故障类型分布","设备因素分析","效能提升模拟","分工序验收合格率","数据导出","数据字典","达成度评价","产量预测","时序预测","编组优化","智能编组优化","导出编组","导出预测",
+        "产能分类对比","故障类型分布","设备因素分析","效能提升模拟","分工序验收合格率","数据导出","数据字典","数据库浏览","注册","影像底图","清除底图","班次日历","检修档期","周计划编制","去向台账","破碎站位置设置","约束条件设置","延拓触发设置","煤层露头着色","排土模板","进度计划方案出图","中长远规划动态模拟","短期进度计划动态模拟","实绩录入","生产报告","作业区划分","钻爆计划衔接","编制配置","任务下达","生产任务书","班组派工","派车单","生产任务动态调整","动态调整","班内工艺·工序推演","采排配对","坑线落地","撤销坑线","平盘联络道","局部台阶","排土场放坡","编辑台阶","处理尖灭","创建工作线","创建工程位置","增量增删边","刀量切割","驱动量","达成度评价","产量预测","时序预测","编组优化","智能编组优化","导出编组","导出预测",
         "商品煤符合性","煤质达标","导出符合性","品位储量曲线","导出品位储量","分标高煤质","导出分标高","煤质离群","导出离群","洗选提质","导出洗选","用途适宜性","导出用途","灰分发热量回归","煤质综合结论","煤类反推","煤类一致率","煤质审核","测井一致","工分自洽","分煤层煤质","煤质三维插值","品位块模型","交叉验证","变差函数分析",
         // TaskLib 自足计算
         "生产量核算","物料换算","采剥平衡","排土场按量推进","配煤核算","工序进度跟踪","编组产能","环节降效",
@@ -13253,6 +17039,27 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// 窗口级隧道 Delete：删除选中对象。
+    ///
+    /// 什么时候**不抢**(让给文本编辑, 同 AutoCAD):
+    ///   · 焦点在命令框且里面已经打了字 —— 这时 Delete 是在改这行命令;
+    ///   · 焦点在别的输入框/可编辑下拉(改图层名、特性栏、表格单元格)。
+    /// 其余情况(含焦点停在空命令框上)按"删除选中对象"处理; 没有选中对象就不拦, 交给原来的冒泡处理去报"未选中实体"。
+    /// </summary>
+    private void OnWindowDeleteKey(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Delete || e.KeyModifiers != KeyModifiers.None || _selected.Count == 0) return;
+        var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement();
+        if (ReferenceEquals(focused, CommandInput))
+        {
+            if (!string.IsNullOrEmpty(CommandInput?.Text)) return;   // 命令行里有字: Delete 归文本编辑
+        }
+        else if (focused is TextBox or AutoCompleteBox or ComboBox) return;
+        DeleteSelected();
+        e.Handled = true;
+    }
+
+    /// <summary>
     /// 窗口级隧道 Ctrl+X / Ctrl+C / Ctrl+V / Ctrl+Shift+V：实体剪贴板 —— 剪切 / 复制 / 粘贴(原坐标) / 基点粘贴。
     /// 原版右键菜单与 Ribbon「剪贴板」菜单都标着这四个手势(InputGestureText), 窗口级 PreviewKeyDown 却只接了
     /// Ctrl+C / Ctrl+V(→ 原坐标粘贴), Ctrl+X 落到引擎 OnKeyDown 也没人认 —— 这里四个一起接上, 映射照原版菜单。
@@ -13315,6 +17122,8 @@ public partial class MainWindow : Window
         string cmd = (tb.Text ?? "").Trim();
         if (cmd.Length == 0)
         {
+            // 修剪/延伸循环中回车 = 结束(同原版: 右键/回车/空格都收尾)
+            if (_trimActive) { tb.Text = string.Empty; EndTrim(); return; }
             // 文字 jig 空回车 = 字高/角度取默认值(原版 "<2.5000>" / "<0>")；等内容时空回车 = 结束
             if (_tool is TextTool) { tb.Text = string.Empty; TextToolAcceptDefault(); return; }
             // 多点绘制中回车 = 结束（同 AutoCAD：PLINE 敲回车收笔）。原先只能双击或 Esc。
@@ -13327,9 +17136,10 @@ public partial class MainWindow : Window
         }
         tb.Text = string.Empty;
 
-        // 夹点拖拽中：键入坐标(x,y / @dx,dy 相对被拖夹点 / d<ang) → 精确落点(原版 CommitDragAt)
+        // 夹点拖拽中：先认 AutoCAD 的夹点选项关键字, 再认坐标(x,y / @dx,dy 相对被拖夹点 / d<ang)
         if (_gripDrag.Active)
         {
+            if (TryGripKeyword(cmd)) return;
             var gp = ParseCoord(cmd, _gripDrag.Base);
             if (gp != null) { CommitGripDrag(gp.Value); return; }
         }
@@ -13742,9 +17552,11 @@ public partial class MainWindow : Window
                 break;
             case "TRIM":
             case "TR":
+                _ = TrimCmdAsync(extend: false);
+                break;
             case "EXTEND":
             case "EX":
-                _ = TrimCmdAsync();
+                _ = TrimCmdAsync(extend: true);
                 break;
             case "PLDRAG":
             case "SPL":
@@ -13761,6 +17573,11 @@ public partial class MainWindow : Window
                 _orthoOn = !_orthoOn;
                 SyncDraftToggles();
                 StatusMsg.Text = _orthoOn ? "正交: 开（取点锁定水平/垂直）" : "正交: 关";
+                break;
+            case "LWDISPLAY":   // 线宽显示开关(原内核命令表同名; 状态栏「线宽」按钮同一开关)
+                _lineWeightDisplay = !_lineWeightDisplay;
+                SyncDraftToggles();
+                EchoLineWeightDisplay();
                 break;
             case "SNAP":
                 _snapOn = !_snapOn;

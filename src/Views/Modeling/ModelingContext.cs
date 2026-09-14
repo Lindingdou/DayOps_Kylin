@@ -56,6 +56,13 @@ public sealed class ModelingContext
     public required Action<List<BlockModel.Block>?, Dictionary<string, double[]>?> SetBlocks { get; init; }
     /// <summary>只重渲给定子集(筛选/切面显示), 不改模型。</summary>
     public required Action<IReadOnlyList<BlockModel.Block>> ShowBlocks { get; init; }
+    /// <summary>
+    /// 块体仓重渲专用的一次到位：设块体数据(不另出主窗口的品位方块) + 换掉图层里的块体网 + 只刷一次场景(+可选缩放)。
+    /// 拆成 SetBlocks / ShowBlocks / RemoveLayerEntities / AddEntities 四步走时，一次导入要建两遍网、
+    /// 刷四遍场景、还往撤销栈压两份整场景 JSON —— 311 万块的模型上单份快照就近 1 GB。
+    /// 参数：(未删块, 逐块属性表, 已配色的块体网实体, 图层名, 缩放范围 [minX,minY,maxX,maxY] 或 null)。
+    /// </summary>
+    public required Action<List<BlockModel.Block>?, Dictionary<string, double[]>?, IReadOnlyList<SceneEntity>, string, double[]?> SetBlockDisplay { get; init; }
 
     // ── 文件/命令 ──
     public required Func<string, string, string, Task<string?>> SaveTextAsync { get; init; }

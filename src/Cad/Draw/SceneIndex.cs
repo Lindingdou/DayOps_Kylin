@@ -81,8 +81,13 @@ public sealed class SceneIndex
     ///   （踩过两次：第一次点选先卡 3.2 秒、改轮廓后仍卡 1.9 秒）。
     /// · 其余：细分线段取极值；线段为空(如着色面模式下的面)再退回三角面。
     /// </summary>
+    /// <summary>单个实体的世界 XY 包围盒（供 <see cref="Scene.WorldBoundsXY"/> 复用同一套口径）。</summary>
+    internal static (double, double, double, double) WorldAabb(SceneEntity e, List<float> buf) => Aabb(e, buf);
+
     private static (double, double, double, double) Aabb(SceneEntity e, List<float> buf)
     {
+        using var _ro = RenderOrigin.Suspend();   // 索引存世界包围盒，镶嵌须回世界系
+
         if (e is MeshEntity me)
         {
             if (me.VertexCount == 0) return (double.MaxValue, double.MaxValue, double.MinValue, double.MinValue);

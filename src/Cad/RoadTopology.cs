@@ -26,8 +26,15 @@ public sealed class RoadTopoSegment
     public int FromNode { get; init; }
     public int ToNode { get; init; }
     public double LengthM { get; init; }
+    /// <summary>显示类别：有人工改判取改判值，否则 = <see cref="AutoClass"/>。</summary>
     public RoadSegmentClass Class { get; init; }
+    /// <summary>纯拓扑判据给的类别（两端接没接上）。</summary>
+    public RoadSegmentClass AutoClass { get; init; }
     public bool IsLoop => FromNode == ToNode;
+    /// <summary>路段序号（"S1"…，按 RoadGraph 分析时有）。</summary>
+    public string Id { get; init; } = "";
+    /// <summary>串成这一路段的边 id（按 RoadGraph 分析时有；路段是派生对象，改判要按边落）。</summary>
+    public IReadOnlyList<string> EdgeIds { get; init; } = Array.Empty<string>();
 }
 
 public sealed class RoadTopologyReport
@@ -40,6 +47,9 @@ public sealed class RoadTopologyReport
     public int RealNodeCount { get; init; }
     public int SeamCount { get; init; }
     public double TotalLengthM { get; init; }
+
+    /// <summary>边 id → 所属路段（按 RoadGraph 分析时有）。</summary>
+    public IReadOnlyDictionary<string, RoadTopoSegment> SegmentByEdge { get; init; } = new Dictionary<string, RoadTopoSegment>();
 
     public int JunctionCount => NodeCountByClass[(int)RoadNodeClass.Tee] + NodeCountByClass[(int)RoadNodeClass.Multi];
     public int DangleCount => NodeCountByClass[(int)RoadNodeClass.Endpoint] + NodeCountByClass[(int)RoadNodeClass.Isolated];
@@ -197,7 +207,7 @@ public static class RoadTopology
             int open = (degree[startId] <= 1 ? 1 : 0) + (degree[endId] <= 1 ? 1 : 0);
             cls = open switch { 0 => RoadSegmentClass.Trunk, 1 => RoadSegmentClass.Spur, _ => RoadSegmentClass.Isolated };
         }
-        return new RoadTopoSegment { NodePath = path, FromNode = startId, ToNode = endId, LengthM = len, Class = cls };
+        return new RoadTopoSegment { NodePath = path, FromNode = startId, ToNode = endId, LengthM = len, Class = cls, AutoClass = cls };
     }
 
     private static int CountComponents(int n, List<Edge> edges)
@@ -210,6 +220,70 @@ public static class RoadTopology
         var roots = new HashSet<int>();
         for (int i = 0; i < n; i++) roots.Add(Find(i));
         return roots.Count;
+    }
+
+    /// <summary>
+    /// 按 <see cref="RoadGraph"/> 分析（忠实原 RoadTopology.Analyze(RoadGraph, passableOnly)）：
+    /// 节点/边映射成无向 (nodes, adj) 走同一套判据；<paramref name="passableOnly"/>=true 时检修/封闭的边按不存在算（可通行轴）。
+    /// 路段附带 EdgeIds / SegmentByEdge；边上有人工改判（<see cref="RoadEdge.RoadClass"/>）且一路段内一致时显示类别取改判值。
+    /// </summary>
+    public static RoadTopologyReport Analyze(RoadGraph g, bool passableOnly = false)
+    {
+        var ids = new List<string>(); var idx = new Dictionary<string, int>();
+        var nodes = new List<(double x, double y)>();
+        foreach (var n in g.Nodes) { idx[n.Id] = ids.Count; ids.Add(n.Id); nodes.Add((n.Position.X, n.Position.Y)); }
+        var adj = new List<List<(int to, double w)>>(nodes.Count);
+        for (int i = 0; i < nodes.Count; i++) adj.Add(new List<(int, double)>());
+        var edgeAt = new Dictionary<(int, int), List<RoadEdge>>();
+        foreach (var e in g.Edges)
+        {
+            if (passableOnly && e.Status != RoadEdgeStatus.Open) continue;
+            if (!idx.TryGetValue(e.FromId, out int a) || !idx.TryGetValue(e.ToId, out int b)) continue;
+            double w = e.LengthM > 0 ? e.LengthM : 1e-6;
+            adj[a].Add((b, w)); adj[b].Add((a, w));
+            var key = a < b ? (a, b) : (b, a);
+            if (!edgeAt.TryGetValue(key, out var lst)) { lst = new List<RoadEdge>(); edgeAt[key] = lst; }
+            lst.Add(e);
+        }
+        var rep = Analyze(nodes, adj);
+
+        // 路段 ↔ 边：沿 NodePath 逐对取边（平行重边按出现顺序各取一次）
+        var segs = new List<RoadTopoSegment>(rep.Segments.Count);
+        var byEdge = new Dictionary<string, RoadTopoSegment>();
+        var taken = new HashSet<string>();
+        var segCount = new int[Enum.GetValues<RoadSegmentClass>().Length];
+        var segLen = new double[segCount.Length];
+        int si = 0;
+        foreach (var s0 in rep.Segments)
+        {
+            var eids = new List<string>();
+            for (int i = 1; i < s0.NodePath.Count; i++)
+            {
+                int a = s0.NodePath[i - 1], b = s0.NodePath[i];
+                var key = a < b ? (a, b) : (b, a);
+                if (!edgeAt.TryGetValue(key, out var lst)) continue;
+                var pick = lst.Find(e => !taken.Contains(e.Id)) ?? lst[0];
+                taken.Add(pick.Id); eids.Add(pick.Id);
+            }
+            RoadSegmentClass? over = null; bool same = true;
+            foreach (var id in eids)
+            {
+                var rc = g.GetEdge(id)?.RoadClass;
+                if (over == null && rc != null) over = rc;
+                else if (rc != over) { same = false; break; }
+            }
+            var cls = same && over != null ? over.Value : s0.Class;
+            var seg = new RoadTopoSegment { NodePath = s0.NodePath, FromNode = s0.FromNode, ToNode = s0.ToNode, LengthM = s0.LengthM, Class = cls, AutoClass = s0.Class, Id = $"S{++si}", EdgeIds = eids };
+            segs.Add(seg);
+            foreach (var id in eids) byEdge[id] = seg;
+            segCount[(int)cls]++; segLen[(int)cls] += seg.LengthM;
+        }
+        return new RoadTopologyReport
+        {
+            NodeCountByClass = rep.NodeCountByClass, SegmentCountByClass = segCount, SegmentLengthByClass = segLen,
+            Segments = segs, SegmentByEdge = byEdge, ComponentCount = rep.ComponentCount, RealNodeCount = rep.RealNodeCount,
+            SeamCount = rep.SeamCount, TotalLengthM = rep.TotalLengthM,
+        };
     }
 
     /// <summary>两次分析之间的变化(只列真动了的项; 没动返回空串)。</summary>

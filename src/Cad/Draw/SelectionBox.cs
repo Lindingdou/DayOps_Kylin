@@ -11,6 +11,7 @@ public static class SelectionBox
     /// <summary>实体是否被选框选中。crossing=false 窗口选(整体在框内)；true 交叉选(任一点在框内或任一段与框相交)。</summary>
     public static bool Match(SceneEntity e, double minX, double minY, double maxX, double maxY, bool crossing)
     {
+        using var _ro = RenderOrigin.Suspend();   // 下面拿镶嵌结果和世界坐标比，需世界系
         if (e is MeshEntity me) return MatchMesh(me, minX, minY, maxX, maxY, crossing);
         if (e is PointCloudEntity pc) return MatchCloud(pc, minX, minY, maxX, maxY, crossing);
         var o = new List<float>();
@@ -36,6 +37,7 @@ public static class SelectionBox
     /// </summary>
     public static bool MatchMesh(MeshEntity me, double minX, double minY, double maxX, double maxY, bool crossing)
     {
+        using var _ro = RenderOrigin.Suspend();   // 下面拿镶嵌结果和世界坐标比，需世界系
         if (me.VertexCount == 0) return false;
         var b = me.Bounds;
         bool boxInside = b.minX >= minX && b.maxX <= maxX && b.minY >= minY && b.maxY <= maxY;
@@ -78,6 +80,7 @@ public static class SelectionBox
     /// <summary>实体是否被多边形圈选。crossing=false 全含(所有顶点在多边形内)；true 任一顶点在内。</summary>
     public static bool MatchPolygon(SceneEntity e, IReadOnlyList<(double x, double y)> poly, bool crossing)
     {
+        using var _ro = RenderOrigin.Suspend();   // 下面拿镶嵌结果和世界坐标比，需世界系
         if (poly.Count < 3) return false;
         var o = new List<float>();
         if (e is PointCloudEntity pcp)
@@ -109,6 +112,7 @@ public static class SelectionBox
     public static bool MatchScreen(SceneEntity e, double sx0, double sy0, double sx1, double sy1, bool crossing,
         Func<double, double, double, (double sx, double sy)?> project)
     {
+        using var _ro = RenderOrigin.Suspend();   // 下面拿镶嵌结果和世界坐标比，需世界系
         var o = new List<float>();
         if (e is PointCloudEntity pcs)
         {
@@ -154,6 +158,7 @@ public static class SelectionBox
     public static SceneEntity? PickScreen(IEnumerable<SceneEntity> entities, double sx, double sy, double tolPx,
         Func<double, double, double, (double sx, double sy, double depth)?> project, Func<string, bool>? canSelect = null)
     {
+        using var _ro = RenderOrigin.Suspend();   // 下面拿镶嵌结果和世界坐标比，需世界系
         SceneEntity? bestEdge = null; double bestD = tolPx;
         SceneEntity? bestFace = null; double bestDepth = double.MaxValue;
         var o = new List<float>();

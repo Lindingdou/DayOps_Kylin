@@ -70,6 +70,9 @@ internal sealed class Camera
         Dist = Math.Clamp(span * 1.4, 2.0, 100000.0);
     }
 
+    /// <summary>只改注视点高程(切 3D 时把注视点落到视野内几何的高度; XY / 距离 / 朝向都不动)。</summary>
+    public void SetTargetZ(double z) => Target[2] = (float)z;
+
     /// <summary>平移注视点（世界 XY）。</summary>
     public void ShiftTarget(double dx, double dy)
     {
@@ -172,9 +175,14 @@ internal sealed class Camera
             float[] proj2 = Mat4.Ortho(-halfH * aspect, halfH * aspect, -halfH, halfH, 0.01f, far2);
             return Mat4.Mul(proj2, view2);
         }
-        // 透视：远平面随距离放大，避免大图纸被裁
+        // 透视：远平面随距离放大，避免大图纸被裁；近平面跟随距离(忠实原版 Camera::GetProjMatrix 的
+        // nearZ = distance×0.0005, 下限 1mm) —— 深度缓冲的分辨率 ∝ z²/near, 早前钉死 0.1 m 时看 2 km 外的面
+        // 最小可分辨深度差约 2.4 m, 贴在地形上的设计面/分割后拼回的两片就成片交错闪烁; 随距离抬到 1 m 后是 0.24 m。
+        // far/near 比同样按原版封在 1e5 以内。
         float far = (float)(Dist * 4.0 + 200.0);
-        float[] proj = Mat4.Perspective(MathF.PI / 4f, aspect, 0.1f, far);
+        float near = MathF.Max((float)(Dist * 0.0005), 0.001f);
+        if (far > near * 1e5f) near = far / 1e5f;
+        float[] proj = Mat4.Perspective(MathF.PI / 4f, aspect, near, far);
         float[] view = Mat4.LookAt(Eye(), Target, new[] { 0f, 0f, 1f });
         return Mat4.Mul(proj, view);
     }
@@ -234,6 +242,24 @@ internal sealed class Camera
         double dx = (sx - vw / 2) * upp, dy = (sy - vh / 2) * upp;
         var (rx, ry, rz, ux, uy, uz) = ViewAxes();
         return (Target[0] + dx * rx - dy * ux, Target[1] + dx * ry - dy * uy, Target[2] + dx * rz - dy * uz);
+    }
+
+    /// <summary>
+    /// 世界(局部)点处 1 个屏幕像素(DIP)对应的世界长度 —— 夹点方块这类"按屏幕像素定尺寸、却要画进世界系"的标记用。
+    /// 2D 正交下是常数(视高 = 2·Dist 铺满 vh 像素)；3D 透视下按该点沿视线的深度算, 近大远小。
+    /// 不能拿"屏幕中心在 Z=0 平面上的反投影"当比例：图元一有标高、视角一斜, Z=0 交点就跑到几公里外,
+    /// 折算出的方块比该有的大好几倍(节点连成粗蓝带), 平视时交点在无穷远还会算成 0。
+    /// </summary>
+    public double WorldPerPixelAt(double x, double y, double z, double vh)
+    {
+        if (vh < 1) return 0;
+        if (Is2D) return 2.0 * Dist / vh;
+        float[] e = Eye();
+        double fx = Target[0] - e[0], fy = Target[1] - e[1], fz = Target[2] - e[2];
+        double fl = Math.Sqrt(fx * fx + fy * fy + fz * fz); if (fl < 1e-12) fl = 1;
+        double depth = ((x - e[0]) * fx + (y - e[1]) * fy + (z - e[2]) * fz) / fl;   // 沿视线的深度
+        if (depth < 1e-6) depth = 1e-6;   // 相机后方/贴脸的点反正画不出来, 给个极小值免得除零
+        return 2.0 * depth * Math.Tan(Math.PI / 8) / vh;   // 视场角 π/4(同 ViewProj), 半角正切 × 深度 = 半视高
     }
 
     /// <summary>

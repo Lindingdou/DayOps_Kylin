@@ -148,6 +148,98 @@ public class ModelingBlockModelTests
         Assert.Equal(new[] { 0, 3, 7 }, cats.Select(c => c.Code).ToArray());
     }
 
+    /// <summary>
+    /// 取色预案(ColorPlan)必须与逐块现算的 ColorOf 给出同一颜色 —— 五种着色分支逐一对拍。
+    /// 建网格走的是预案那条(见下面的 BuildCellMesh_is_linear_in_block_count)，两条不一致就是配色错。
+    /// </summary>
+    [Fact]
+    public void ColorOf_with_plan_matches_per_block_recompute()
+    {
+        var m = Small();
+        var g = m.EnsureAttr("grade"); for (int i = 0; i < g.Length; i++) g[i] = i;
+        var rk = m.EnsureAttr("rock"); rk[0] = 3; rk[1] = 3; rk[2] = 7;
+        m.FindColumn("rock")!.IsCategorical = true;
+        m.DisplayStyle.EnsureCategoryColors("rock")[7] = (9, 9, 9);
+
+        void Same(string what)
+        {
+            var plan = m.MakeColorPlan();
+            for (int i = 0; i < m.Blocks.Count; i++)
+                Assert.Equal(m.ColorOf(i), m.ColorOf(i, plan));   // what: 出错时看调用行
+            Assert.NotNull(what);
+        }
+
+        m.ActiveColormapAttribute = null; Same("关闭着色");
+        m.ActiveColormapAttribute = BlockModelMeta.ZElevationSentinel; Same("高程 Z");
+        m.ActiveColormapAttribute = "grade"; m.ColormapRange = null; Same("连续属性(自动值域)");
+        m.ColormapRange = (2, 8); Same("连续属性(固定值域)");
+        m.ColormapRange = null;
+        m.DisplayStyle.ClassBreaks["grade"] = new List<BlockColorClass> { new(0, 6, (255, 0, 0)), new(6, 11, (0, 255, 0)) };
+        Same("分级区间");
+        m.ActiveColormapAttribute = "rock"; Same("分类离散");
+        m.ActiveColormapAttribute = "不存在的列"; Same("缺列回落默认值");
+    }
+
+    /// <summary>
+    /// 建网格必须是 O(块数)，不是 O(块数²)。
+    ///
+    /// 曾经是后者：着色值域未固定时（导入块体正是这么设的）逐块取色都要扫一遍整列属性，
+    /// 实测 2 万块 0.6 秒、16 万块 26 秒，311 万块的东露天块体模型外推近 3 小时 —— 导入块体
+    /// 「(未响应)」卡死就是这个。这里给 12 万块一个宽到不会误报的上限：真退回 O(n²) 得几十秒。
+    /// </summary>
+    [Fact]
+    public void BuildCellMesh_is_linear_in_block_count()
+    {
+        const int n = 120_000;
+        var blocks = new List<BlockModel.Block>(n);
+        var vals = new double[n];
+        for (int i = 0; i < n; i++)
+        {
+            blocks.Add(new BlockModel.Block { X = i % 100 * 10, Y = i / 100 % 100 * 10, Z = i / 10000 * 5, Size = 10, Grade = i % 97 });
+            vals[i] = i % 97;
+        }
+        var m = BlockModelMeta.FromBlocks("大", blocks, new Dictionary<string, double[]> { ["品位"] = vals });
+        m.ActiveColormapAttribute = "品位";
+        m.ColormapRange = null;   // 值域自动 —— 正是会触发逐块重扫的那档
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var mesh = m.BuildCellMesh(null, out var stat);
+        sw.Stop();
+        Assert.NotNull(mesh);
+        Assert.True(stat.DrawnCells > 0);
+        Assert.True(sw.Elapsed.TotalSeconds < 8,
+            $"{n:N0} 块建网格用了 {sw.Elapsed.TotalSeconds:0.0} 秒 —— 逐块取色八成又在扫全表(O(块数²))");
+    }
+
+    /// <summary>
+    /// 八叉树叶块建模：几何由文件给定（原点/三轴细格/维度），逐块边长倍数按 Size/Sx 推，
+    /// 于是粗块画成 k·(Sx,Sy,Sz) 的长方体 —— 而不是边长 Size 的立方体。
+    /// 平朔块体细格 25×25×0.5 m，画成立方体就竖向胖 50 倍，整个模型糊成一块平板。
+    /// </summary>
+    [Fact]
+    public void FromLeaves_keeps_anisotropic_cell_geometry()
+    {
+        // 细格 25×25×0.5：一个最细块 + 一个 4 倍的粗块（彼此不相邻，都要画）
+        var blocks = new List<BlockModel.Block>
+        {
+            new() { X = 12.5, Y = 12.5, Z = 0.25, Size = 25 },
+            new() { X = 1000, Y = 1000, Z = 100, Size = 100 },
+        };
+        var m = BlockModelMeta.FromLeaves("八叉树", blocks, null, 0, 0, 0, 25, 25, 0.5, 240, 244, 1088, 11, 1);
+        Assert.Equal(25, m.Sx, 9); Assert.Equal(25, m.Sy, 9); Assert.Equal(0.5, m.Sz, 9);
+        Assert.Equal(1.0, m.CellScale(blocks[0]), 9);
+        Assert.Equal(4.0, m.CellScale(blocks[1]), 9);   // 100/25
+
+        var mesh = m.BuildCellMesh(null, out var stat);
+        Assert.Equal(2, stat.DrawnCells);
+        // 粗块的 Z 半高 = 4 × 0.5/2 = 1（若按立方体就是 50）
+        double zTop = mesh!.Verts.Where(v => v.x > 500).Max(v => v.z);
+        double zBot = mesh.Verts.Where(v => v.x > 500).Min(v => v.z);
+        Assert.Equal(101, zTop, 6);
+        Assert.Equal(99, zBot, 6);
+        // 体积按 k³·细格体积（25·25·0.5），不是 Size³
+        Assert.Equal(25 * 25 * 0.5 * (1 + 64), m.LiveVolume(), 6);
+    }
+
     [Fact]
     public void BuildCells_respects_deleted_filter_and_clip()
     {
@@ -157,12 +249,18 @@ public class ModelingBlockModelTests
         var mesh = m.BuildCellMesh(null, out var stat);
         Assert.NotNull(mesh);
         Assert.Equal(11, stat.DrawnCells);
-        Assert.Equal(11 * 24, mesh!.Verts.Count);
-        // 头一个立方体自身的 X 尺寸 = Sx = 10（前 24 个顶点属于第一块）
-        double x0 = double.MaxValue, x1 = double.MinValue, z0 = double.MaxValue, z1 = double.MinValue;
-        for (int i = 0; i < 24; i++) { var v = mesh.Verts[i]; x0 = Math.Min(x0, v.x); x1 = Math.Max(x1, v.x); z0 = Math.Min(z0, v.z); z1 = Math.Max(z1, v.z); }
+        // 3×2×2 的盒子外表面 = 2·(3·2 + 3·2 + 2·2) = 32 张面；抠掉一个角块，它自己的 3 张外面没了、
+        // 邻居原先被它挡住的 3 张露出来，面数不变。被挡住的面不发，见 BlockMeshBuilder 类注释。
+        Assert.Equal(32, stat.FaceCount);
+        Assert.Equal(stat.FaceCount * 4, mesh!.Verts.Count);
+        // 孤立的一块要有真实厚度(不是平板)：单块模型六面全发, X 边 = Sx, Z 边 = Sz
+        var one = BlockModelMeta.CreateRegular("单块", 100, 200, 300, 10, 10, 5, 1, 1, 1);
+        var oneMesh = one.BuildCellMesh(null, out var oneStat)!;
+        Assert.Equal(6, oneStat.FaceCount);
+        double x0 = oneMesh.Verts.Min(v => v.x), x1 = oneMesh.Verts.Max(v => v.x);
+        double z0 = oneMesh.Verts.Min(v => v.z), z1 = oneMesh.Verts.Max(v => v.z);
         Assert.Equal(10, x1 - x0, 9);
-        Assert.Equal(m.Sz, z1 - z0, 9);   // 有真实厚度, 不再是平板
+        Assert.Equal(5, z1 - z0, 9);
         m.BuildCellMesh(b => b.Z < 305, out var clipped);
         Assert.Equal(5, clipped.DrawnCells);   // 剖切：上层 6 块被切，下层 0 号已删 → 5
         m.Filter = new BlockFilterSet();

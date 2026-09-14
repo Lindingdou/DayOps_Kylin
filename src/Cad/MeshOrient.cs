@@ -19,7 +19,7 @@ public static class MeshOrient
         if (n == 0 || verts == null || verts.Count == 0) return T;
 
         long Key(int u, int w) { int lo = u < w ? u : w, hi = u < w ? w : u; return ((long)lo << 32) | (uint)hi; }
-        var edgeFaces = new Dictionary<long, List<int>>(n * 3);
+        var edgeFaces = new Dictionary<long, List<int>>(n * 3, PackedKeyComparer.Instance);
         void AddE(int u, int w, int f) { var k = Key(u, w); if (!edgeFaces.TryGetValue(k, out var l)) { l = new List<int>(2); edgeFaces[k] = l; } l.Add(f); }
         for (int f = 0; f < n; f++) { var (a, b, c) = T[f]; AddE(a, b, f); AddE(b, c, f); AddE(c, a, f); }
 
@@ -71,7 +71,7 @@ public static class MeshOrient
     /// <summary>朝向是否一致：每条内部边恰被两面**反向**各遍历一次(同向即不一致)。开放边(单面)忽略。</summary>
     public static bool IsConsistent(IReadOnlyList<(int a, int b, int c)> tris)
     {
-        var dir = new HashSet<long>();
+        var dir = new HashSet<long>(PackedKeyComparer.Instance);
         long DKey(int u, int w) => ((long)u << 32) | (uint)w;
         foreach (var (a, b, c) in tris)
         {

@@ -24,24 +24,72 @@ public abstract class SceneEntity
     public virtual void TessellateFaces(List<float> o) { }
 
     /// <summary>
+    /// 拖拽预览代价 ≈ 本实体走一次镶嵌会吐出的顶点数量级(见 <see cref="DragPreview"/>)。
+    /// 忠实原版 AcDbEntity::previewCost：实现必须 O(1) —— 它自己不许去遍历几何，
+    /// 否则只是把开销从"每帧"挪到"每次定基点"。默认给个小常数：线/圆/文字这类轻量图元无所谓。
+    /// </summary>
+    public virtual int PreviewCost() => 64;
+
+    /// <summary>
+    /// 拖拽幽灵用的镶嵌。默认同 <see cref="Tessellate"/>；
+    /// 着色档三角网、点云这类"线段通道本来就不出几何"的实体必须覆盖它，否则拖着走一路看不见东西。
+    /// </summary>
+    public virtual void TessellatePreview(List<float> o) => Tessellate(o);
+
+    /// <summary>
     /// 拾取 / 框选 / 选中高亮用的线段镶嵌。默认同 <see cref="Tessellate"/>；
     /// 文字这类"字形本体走面通道、线段通道什么都不出"的实体必须覆盖成轮廓，
     /// 否则点不中、框不到、选中了也没高亮。
     /// </summary>
     public virtual void TessellatePick(List<float> o) => Tessellate(o);
 
+    /// <summary>
+    /// 拖拽预览的替身几何：往 o 追加线段端点(每 2 个一段，世界坐标)，总段数不得超过 maxSegments。
+    /// 忠实原版 AcDbEntity::buildPreviewProxy —— 定基点时一次性烘焙(允许 O(N)，只调一次)，
+    /// 拖拽期间每帧只重画这些线段，于是每帧开销与实体多重【无关】。
+    /// 默认给包围盒的 12 条棱：够说清"东西在哪、多大"，但说不清形状 ——
+    /// 重实体应覆盖成【抽稀后的自身形状】，拖一张地形网格时用户要认得出这是地形。
+    /// </summary>
+    public virtual void BuildPreviewProxy(List<(double x, double y, double z)> o, int maxSegments)
+    {
+        if (maxSegments < 12) return;                 // 盒子是 12 条, 给不起就整个不画, 别画半个
+        if (PreviewAabb() is not { } b) return;       // 给不出包围盒就不画(同原版空盒守卫: 照画会得到横跨整个世界的假棱)
+        AppendBoxEdges(o, b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ);
+    }
+
+    /// <summary>预览替身兜底用的三维包围盒(世界坐标)；null = 给不出(默认替身就不画)。</summary>
+    public virtual (double minX, double minY, double minZ, double maxX, double maxY, double maxZ)? PreviewAabb() => null;
+
+    /// <summary>包围盒 12 条棱(底面 4 + 顶面 4 + 立柱 4)追加到替身线段表。</summary>
+    protected static void AppendBoxEdges(List<(double x, double y, double z)> o,
+        double x0, double y0, double z0, double x1, double y1, double z1)
+    {
+        void E(double ax, double ay, double az, double bx, double by, double bz)
+        { o.Add((ax, ay, az)); o.Add((bx, by, bz)); }
+        foreach (double z in new[] { z0, z1 })
+        {
+            E(x0, y0, z, x1, y0, z); E(x1, y0, z, x1, y1, z);
+            E(x1, y1, z, x0, y1, z); E(x0, y1, z, x0, y0, z);
+        }
+        E(x0, y0, z0, x0, y0, z1); E(x1, y0, z0, x1, y0, z1);
+        E(x1, y1, z0, x1, y1, z1); E(x0, y1, z0, x0, y1, z1);
+    }
+
     protected void Seg(List<float> o, double x0, double y0, double x1, double y1)
     {
+        // 减渲染局部原点后再转 float：大坐标下 float32 的间隔能到 0.5 m，见 RenderOrigin
+        double ox = RenderOrigin.X, oy = RenderOrigin.Y;
         float z = (float)Elevation;
-        o.Add((float)x0); o.Add((float)y0); o.Add(z); o.Add(Cr); o.Add(Cg); o.Add(Cb);
-        o.Add((float)x1); o.Add((float)y1); o.Add(z); o.Add(Cr); o.Add(Cg); o.Add(Cb);
+        o.Add((float)(x0 - ox)); o.Add((float)(y0 - oy)); o.Add(z); o.Add(Cr); o.Add(Cg); o.Add(Cb);
+        o.Add((float)(x1 - ox)); o.Add((float)(y1 - oy)); o.Add(z); o.Add(Cr); o.Add(Cg); o.Add(Cb);
     }
 
     /// <summary>逐端点真高程的线段(三角网边线用, 不走线型)。</summary>
     protected void Seg3(List<float> o, double x0, double y0, double z0, double x1, double y1, double z1)
     {
-        o.Add((float)x0); o.Add((float)y0); o.Add((float)z0); o.Add(Cr); o.Add(Cg); o.Add(Cb);
-        o.Add((float)x1); o.Add((float)y1); o.Add((float)z1); o.Add(Cr); o.Add(Cg); o.Add(Cb);
+        double ox = RenderOrigin.X, oy = RenderOrigin.Y;   // 同 Seg：先减原点再转 float
+        o.Add((float)(x0 - ox)); o.Add((float)(y0 - oy)); o.Add((float)z0); o.Add(Cr); o.Add(Cg); o.Add(Cb);
+        o.Add((float)(x1 - ox)); o.Add((float)(y1 - oy)); o.Add((float)z1); o.Add(Cr); o.Add(Cg); o.Add(Cb);
     }
 
     /// <summary>按线型 Dash 把一段切成虚线子段镶嵌(实线时=单段)。</summary>
@@ -54,6 +102,7 @@ public abstract class SceneEntity
     /// <summary>点 (px,py) 到本实体几何的最近距离（拾取用；对自身镶嵌的每段求点到线段距离取最小）。</summary>
     public virtual double DistanceTo(double px, double py)
     {
+        using var _ro = RenderOrigin.Suspend();   // px/py 是世界坐标，镶嵌须回世界系
         var o = new List<float>();
         TessellatePick(o);                        // 文字等面通道实体走轮廓, 见 TessellatePick
         double best = double.MaxValue;
@@ -90,6 +139,13 @@ public abstract class SceneEntity
 
     /// <summary>夹点位置（端点/中点/圆心/象限/顶点…）；无夹点返回空。</summary>
     public virtual List<(double x, double y)> Grips() => new();
+
+    /// <summary>
+    /// 第 index 个夹点所在的高程 Z。夹点方块必须画在**图元自己那个 Z 上** ——
+    /// 一律画在 Z=0 的话，图元只要有标高（等高线/台阶线/三维多段线都有），
+    /// 三维视图里方块就会飘到离节点老远的地方（踩过：看着像"夹点位置不对"）。
+    /// </summary>
+    public virtual double GripZ(int index) => Elevation;
 
     /// <summary>把第 i 个夹点移到 (nx,ny)，返回修改后的新实体；不支持返回 null。</summary>
     public virtual SceneEntity? MoveGrip(int i, double nx, double ny) => null;
@@ -450,6 +506,9 @@ public sealed class PolylineEntity : SceneEntity
     public bool Has3D => Zs != null && Zs.Count == Points.Count && Points.Count > 0;
     /// <summary>第 i 顶点的 z(三维取 Zs[i]+Elevation, 平面取 Elevation)。</summary>
     public double ZAt(int i) => Has3D ? Zs![i] + Elevation : Elevation;
+
+    /// <summary>夹点就落在顶点上，Z 自然取该顶点的 Z（三维多段线逐点不同高）。</summary>
+    public override double GripZ(int index) => index >= 0 && index < Points.Count ? ZAt(index) : Elevation;
     public override void Tessellate(List<float> o)
     {
         bool z3 = Has3D;
@@ -483,6 +542,28 @@ public sealed class PolylineEntity : SceneEntity
         if (Closed && Points.Count > 1) list.Add(L(Points.Count - 1, 0));
         return list.Count > 0 ? list : null;
     }
+    /// <summary>忠实原版 AcDbPolyline::previewCost —— 点数 ×2(每段两个顶点)，O(1)。</summary>
+    public override int PreviewCost() => Points.Count * 2;
+
+    /// <summary>
+    /// 拖拽预览的抽稀替身。忠实原版 AcDbPolyline::buildPreviewProxy：
+    /// 多段线的形状全在点序里，等间隔挑点连起来大形一点不丢。首尾必留 ——
+    /// 少了尾点，长境界线拖起来会看着"短了一截"。
+    /// </summary>
+    public override void BuildPreviewProxy(List<(double x, double y, double z)> o, int maxSegments)
+    {
+        int n = Points.Count;
+        if (n < 2 || maxSegments < 1) { base.BuildPreviewProxy(o, maxSegments); return; }
+        int maxPts = Closed ? maxSegments : maxSegments + 1;      // 闭合线要多留一段回到起点
+        int stride = (n + maxPts - 1) / maxPts;                    // 向上取整
+        var kept = new List<int>(maxPts + 1);
+        for (int i = 0; i < n; i += stride) kept.Add(i);
+        if (kept[^1] != n - 1) kept.Add(n - 1);
+        (double x, double y, double z) P(int i) => (Points[i].x, Points[i].y, ZAt(i));
+        for (int k = 0; k + 1 < kept.Count; k++) { o.Add(P(kept[k])); o.Add(P(kept[k + 1])); }
+        if (Closed && kept.Count > 1) { o.Add(P(kept[^1])); o.Add(P(kept[0])); }
+    }
+
     public override List<(double x, double y)> Grips() => new(Points);   // 各顶点
     public override SceneEntity? MoveGrip(int i, double nx, double ny)
     {
@@ -536,6 +617,13 @@ public sealed class PolylineEntity : SceneEntity
                 r.Points.Add(p ?? oa[i]);
             }
         }
+        // 等距偏移在【凹侧】只要偏移量越过局部曲率中心就会自身折叠，画出来是个小环(用户看到的"偏移后自相交")。
+        // 照原版 OffsetEngine 的口径收拾: 先按源线弧长参数把折回的点筛掉, 再补一遍去残环(原版这步靠 Clipper2)。
+        var clean = OffsetTools.RemoveSelfLoops(OffsetTools.FilterFolded(Points, r.Points, Closed), Closed);
+        if (clean.Count < 2) return null;                                        // 全折没了 = 尖灭
+        if (Closed && (clean.Count < 3 || OffsetTools.ClosedDegenerate(Points, clean))) return null;
+        r.Points.Clear(); r.Points.AddRange(clean);
+        if (Has3D) r.Zs = OffsetTools.MapZ(Points, Zs!, Closed, clean);          // 三维线(等高线/台阶线)偏移后仍是三维线
         return r.Points.Count >= 2 ? Colored(r) : null;
     }
     public override List<SceneEntity>? Break(double x1, double y1, double x2, double y2)   // 两点间移除一段
@@ -919,7 +1007,7 @@ public sealed class TextEntity : SceneEntity
         double c = Math.Cos(Rotation), s = Math.Sin(Rotation);
         void P(double lx, double ly)
         {
-            o.Add((float)(X + lx * c - ly * s)); o.Add((float)(Y + lx * s + ly * c)); o.Add((float)Elevation);
+            o.Add((float)(X + lx * c - ly * s - RenderOrigin.X)); o.Add((float)(Y + lx * s + ly * c - RenderOrigin.Y)); o.Add((float)Elevation);
             o.Add(Cr); o.Add(Cg); o.Add(Cb);
         }
         foreach (var (ax, ay, bx, by, cx2, cy2) in LocalFillTriangles()) { P(ax, ay); P(bx, by); P(cx2, cy2); }
@@ -979,12 +1067,13 @@ public sealed class TextEntity : SceneEntity
     }
 
     /// <summary>
-    /// 拾取 / 框选 / 高亮一律用轮廓笔画（实心字形也描边）。
+    /// 拾取 / 框选 / 高亮 / 拖拽幽灵一律用轮廓笔画（实心字形也描边）。
     /// 真字体下 <see cref="Tessellate"/> 对可填充字形什么都不出（字形走面通道），拾取若走它，
     /// 点在字上算出的距离是 +∞ —— "文字点不中、框不到、选中了没高亮"就是这么来的（踩过）。
     /// 公告板文字按未旋转的平面排版取几何：2D 视图下它就是这么画的。
     /// </summary>
     public override void TessellatePick(List<float> o) => Strokes(o, skipFilled: false, rotation: ScreenFacing ? 0 : Rotation);
+    public override void TessellatePreview(List<float> o) => TessellatePick(o);
 
     /// <summary>
     /// 到轮廓的距离，且点落在实心字形内部即 0 —— 同 AutoCAD 里 TrueType 填充字：点在笔画实心处就选中。
@@ -1042,6 +1131,8 @@ public static class EntityTypeName
         TextEntity => "文字",
         MeshEntity => "三角网",
         PointCloudEntity => "点云",
+        HatchEntity => "填充",
+        DimensionEntity d => d.Kind == DimensionEntity.DimKind.Radial ? "半径标注" : "对齐标注",
         _ => "其他"
     };
 }
@@ -1155,13 +1246,94 @@ public sealed class Scene
         return o.ToArray();
     }
 
-    /// <summary>可见实体的着色三角面(交错 P3_C3, GL_TRIANGLES)。</summary>
-    public float[] BuildFaces(Func<string, bool>? isShown = null)
+    /// <summary>
+    /// 图层特性下发钩子：给一个"层名 → 图层透明度(0..90 百分比)"的解析器，建面前把它推到各三角网上，
+    /// 实体「透明度」为 -1(随层) 的就照这条走。<c>null</c> = 不解析(全按不透明)。
+    ///
+    /// 为什么是"每次建面前推一遍"而不是图层一改就同步：同步点只要有一处漏了，用户看到的就是
+    /// "图层特性管理器里改了不生效"；而建面是渲染的唯一入口，放在这里不可能漏。遍历只过三角网，
+    /// 大图纸上也就几十几百个对象，代价可以忽略。
+    /// </summary>
+    public Func<string, short>? LayerTranspOf;
+
+    /// <summary>把 <see cref="LayerTranspOf"/> 的结果推到各三角网的 <c>LayerTransp</c> 上。</summary>
+    public void SyncLayerProps()
     {
+        if (LayerTranspOf == null) return;
+        foreach (var e in Entities)
+            if (e is MeshEntity m) m.LayerTransp = LayerTranspOf(m.LayerName);
+    }
+
+    /// <summary>可见实体的着色三角面(交错 P3_C3, GL_TRIANGLES)。</summary>
+    public float[] BuildFaces(Func<string, bool>? isShown = null) => BuildFaces(isShown, null);
+
+    /// <summary>
+    /// 同 <see cref="BuildFaces(Func{string, bool}?)"/>，另按场景顺序回报每个出了面的实体在缓冲里的顶点区间
+    /// (first, count 单位=顶点)。视口据此逐实体下发不同深度偏移：共面的两张网(设计面压在地形上、分割后又拼回)
+    /// 不再随机交错闪烁/锯齿，后加的实体稳定盖在先加的之上。
+    /// </summary>
+    public float[] BuildFaces(Func<string, bool>? isShown, List<(int first, int count)>? ranges)
+    {
+        SyncLayerProps();
         var o = new List<float>();
         foreach (var e in Entities)
-            if (e.Visible && (isShown == null || isShown(e.LayerName))) e.TessellateFaces(o);
+        {
+            if (!e.Visible || (isShown != null && !isShown(e.LayerName))) continue;
+            int before = o.Count;
+            e.TessellateFaces(o);
+            if (ranges != null && o.Count > before) ranges.Add((before / 6, (o.Count - before) / 6));
+        }
         return o.ToArray();
+    }
+
+    /// <summary>
+    /// 材质通道的一批面：同一档 + 同一组材质参数(金属度/粗糙度/不透明度)的网合成一块缓冲，
+    /// 一次 draw call 一批 —— 参数是 uniform，不同参数没法合批。
+    /// </summary>
+    public readonly record struct MaterialBatch(int Mode, float Metallic, float Roughness, float Alpha, float[] Verts);
+
+    /// <summary>
+    /// 走材质通道的三角面（PBR / 贴图 / 半透），按材质参数分组。
+    /// 顺序：先不透明、后半透 —— 半透要在不透明体都进了深度缓冲之后才画，否则会把后面的挡没。
+    /// 这些网在 <see cref="BuildFaces"/> 里被跳过（<c>MeshEntity.TessellateFaces</c> 自己让路），不会画两遍。
+    /// </summary>
+    public List<MaterialBatch> BuildMaterialFaces(Func<string, bool>? isShown = null)
+    {
+        SyncLayerProps();
+        var groups = new Dictionary<(int mode, float met, float rough, float alpha), List<float>>();
+        foreach (var e in Entities)
+        {
+            if (!e.Visible || (isShown != null && !isShown(e.LayerName))) continue;
+            if (e is not MeshEntity m || !m.UsesMaterialPass) continue;
+            var key = (m.MaterialMode, (float)m.EffMetallic, (float)m.EffRoughness, m.EffAlpha);
+            if (!groups.TryGetValue(key, out var list)) groups[key] = list = new List<float>();
+            m.TessellateFacesMat(list);
+        }
+        var r = new List<MaterialBatch>(groups.Count);
+        foreach (var (k, v) in groups)
+            if (v.Count > 0) r.Add(new MaterialBatch(k.mode, k.met, k.rough, k.alpha, v.ToArray()));
+        r.Sort((a, b) => b.Alpha.CompareTo(a.Alpha));   // 不透明(alpha=1) 排前, 半透排后
+        return r;
+    }
+
+    /// <summary>
+    /// 全部实体的世界 XY 包围盒 [minX,minY,maxX,maxY]；场景空/无有效几何返回 null。
+    /// 用来定渲染局部原点（见 <see cref="RenderOrigin"/>），故必须是世界系、且要在建几何之前能算出来。
+    /// 走 <see cref="SceneIndex"/> 同一套 AABB 口径：三角网/点云/文字用各自的现成包围盒，其余才镶嵌。
+    /// </summary>
+    public double[]? WorldBoundsXY()
+    {
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        var buf = new List<float>();
+        foreach (var e in Entities)
+        {
+            buf.Clear();
+            var (a, b, c, d) = SceneIndex.WorldAabb(e, buf);
+            if (a > c || b > d) continue;                       // 空实体
+            if (a < minX) minX = a; if (b < minY) minY = b;
+            if (c > maxX) maxX = c; if (d > maxY) maxY = d;
+        }
+        return minX > maxX ? null : new[] { minX, minY, maxX, maxY };
     }
 
     /// <summary>可见注记条数（供性能诊断：注记是大图纸上屏耗时的主要来源）。</summary>

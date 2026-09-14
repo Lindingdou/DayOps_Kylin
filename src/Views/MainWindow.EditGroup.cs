@@ -23,31 +23,96 @@ namespace PitMine3D.Kylin.Views;
 /// </summary>
 public partial class MainWindow
 {
-    // ═══════════════════ 命令行回显（原版 ICommandLineCapability.Echo 的等价）═══════════════════
+    // ═══════════════════ 信息栏回显（原版 ICommandLineCapability.Echo 的等价）═══════════════════
     private enum EchoLevel { Info, Success, Warn, Error }
 
-    /// <summary>把一行结果写进信息栏（同原版命令行的 Info/Success/Warn/Error 分色回显）。</summary>
+    /// <summary>
+    /// 信息栏一行的**统一格式**（忠实原版 <c>MainWindow.Commands.cs / AppendToHistoryCore</c>）：
+    ///
+    ///   <c>[HH:mm:ss] &lt;符号&gt;&lt;正文&gt;</c>
+    ///
+    /// 时间戳单独一种淡色, 正文按类别上色; 符号即原版那套: Info 无 / Success ✓ / Warn ⚠ / Error ✗。
+    /// 所有进信息栏的东西(命令回显 / 交互提示 / 结果)都只经这一个口子, 免得又各写各的格式。
+    /// 调用方一律传**裸文本**, 时间与符号由这里补 —— 同原版接口约定。
+    /// </summary>
+    private void AppendHistoryLine(string body, string fgKey)
+    {
+        if (CmdLog == null || string.IsNullOrWhiteSpace(body)) return;
+        // 行高写死一点: 中英混排时中文走字体回退, 回退字体的行盒比 Consolas 高,
+        // 不给 LineHeight 就按各行自己的度量走 —— 行距忽宽忽窄, 中文那几行上下还会被切掉一点。
+        var tb = new TextBlock
+        {
+            FontSize = 12,
+            LineHeight = 18,
+            FontFamily = new FontFamily("Consolas,monospace"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Avalonia.Thickness(0, 0, 0, 1),
+        };
+        var time = new Avalonia.Controls.Documents.Run($"[{DateTime.Now:HH:mm:ss}] ");
+        var text = new Avalonia.Controls.Documents.Run(body);
+        tb.Inlines!.Add(time); tb.Inlines.Add(text);
+        ThemeBind(time, Avalonia.Controls.Documents.TextElement.ForegroundProperty, CmdLogTimeBrush);
+        ThemeBind(text, Avalonia.Controls.Documents.TextElement.ForegroundProperty, fgKey);
+        CmdLog.Children.Add(tb);
+        while (CmdLog.Children.Count > CmdLogMaxLines) CmdLog.Children.RemoveAt(0);
+        CmdLogScroll?.ScrollToEnd();
+    }
+
+    private const int CmdLogMaxLines = 100;                                    // 历史上限(超出丢最早的)
+    // 信息栏配色一律是主题资源键(Styles/Theme.axaml 浅/深各一套), 每个 Run 绑资源 —— 切主题后历史行一起换色
+    private const string CmdLogTimeBrush = "Theme.Log.Time";       // 时间戳: 比正文淡, 不抢读
+    internal const string CmdLogCmdBrush = "Theme.Log.Cmd";        // 命令回显「> 命令」
+    private const string CmdLogPromptBrush = "Theme.Log.Prompt";   // 交互提示
+
+    /// <summary>severity → 前缀符号(同原版: Info 不加符号)。</summary>
+    private static string EchoSymbol(EchoLevel level) => level switch
+    {
+        EchoLevel.Success => "✓ ",
+        EchoLevel.Warn => "⚠ ",
+        EchoLevel.Error => "✗ ",
+        _ => "",
+    };
+
+    private static string EchoBrush(EchoLevel level) => level switch
+    {
+        EchoLevel.Success => "Theme.Log.Success",
+        EchoLevel.Warn => "Theme.Log.Warn",
+        EchoLevel.Error => "Theme.Log.Error",
+        _ => "Theme.Log.Body",
+    };
+
+    /// <summary>把一行结果写进信息栏（同原版命令行的 Info/Success/Warn/Error 分色回显）+ 状态栏。</summary>
     private void EditEcho(string text, EchoLevel level = EchoLevel.Info)
     {
         if (string.IsNullOrWhiteSpace(text)) return;
+        _statusEchoed = text;       // 这句已由本方法带 severity 写进信息栏, 状态栏钩子别再写一遍
         StatusMsg.Text = text;
-        if (CmdLog == null) return;
-        CmdLog.Children.Add(new TextBlock
+        AppendHistoryLine(EchoSymbol(level) + text, EchoBrush(level));
+    }
+
+    private string? _statusEchoed;   // 最近一条已进信息栏的文案(去重: 同一句连着设两遍只留一行)
+
+    /// <summary>
+    /// 状态栏 → 信息栏留痕。
+    ///
+    /// 为什么要这条钩子: 命令结果散在一千多处 <c>StatusMsg.Text = …</c> 里, 只有走
+    /// <see cref="EditEcho"/> 的那部分进得了信息栏 —— 于是信息栏里常见「&gt; 距离」后面什么都没有,
+    /// 翻不出这一步到底做成没有。逐处去改既改不全、以后也一定会漏, 所以在**唯一的出口**上挂钩子:
+    /// 状态栏文案一变就按统一格式(带时间戳)补一行, 去重防止同一句刷屏。
+    ///
+    /// 严重度: 这类调用点没带 severity, 一律按 Info 记; 要标 ✓/⚠/✗ 就改用 <see cref="EditEcho"/>。
+    /// </summary>
+    private void InstallStatusEcho()
+    {
+        if (StatusMsg == null) return;
+        StatusMsg.PropertyChanged += (_, e) =>
         {
-            Text = "  " + text,
-            FontSize = 11,
-            FontFamily = new FontFamily("Consolas,monospace"),
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = level switch
-            {
-                EchoLevel.Success => Brush.Parse("#1E7A46"),
-                EchoLevel.Warn => Brush.Parse("#9A6510"),
-                EchoLevel.Error => Brush.Parse("#B3261E"),
-                _ => Brush.Parse("#374151"),
-            },
-        });
-        while (CmdLog.Children.Count > 100) CmdLog.Children.RemoveAt(0);
-        CmdLogScroll?.ScrollToEnd();
+            if (e.Property != TextBlock.TextProperty) return;
+            string? t = e.NewValue as string;
+            if (string.IsNullOrWhiteSpace(t) || t == _statusEchoed) return;
+            _statusEchoed = t;
+            AppendHistoryLine(t!, EchoBrush(EchoLevel.Info));
+        };
     }
 
     // ═══════════════════ 视口拾取状态机（原版 kernel PickBox 状态机的托管等价）═══════════════════
@@ -55,11 +120,16 @@ public partial class MainWindow
 
     /// <summary>
     /// 一次视口取点。<paramref name="confirmable"/> = true 时右键 / 回车 = 确认结束（原版 DELFACES 的手势）。
+    /// 提示同时进 命令行提示标签 + 光标旁浮标(随指针移动显示, 同绘制工具的步骤提示) + 信息栏；
+    /// <paramref name="quiet"/> = true 只更新标签与浮标、不再往信息栏写一行 —— 逐面点选那种"每点一下就重新等下一点"的循环,
+    /// 每圈都回显一遍提示会把信息栏刷满。
     /// </summary>
-    private Task<(PickKind kind, double x, double y)> PickPointOrConfirmAsync(string prompt, bool confirmable)
+    private Task<(PickKind kind, double x, double y)> PickPointOrConfirmAsync(string prompt, bool confirmable,
+        Controls.CadGlViewport.CursorMode? cursor = null, bool quiet = false)
     {
         var tcs = new TaskCompletionSource<(PickKind, double, double)>();
         _pickConfirmable = confirmable;
+        _pickCursor = cursor ?? Controls.CadGlViewport.CursorMode.CrosshairOnly;   // 默认取点 = 十字; 选线/选面由调用处给形态
         _oneShotPick = (x, y) =>
         {
             _pickConfirmable = false;
@@ -67,29 +137,84 @@ public partial class MainWindow
             else if (double.IsPositiveInfinity(x)) tcs.TrySetResult((PickKind.Confirmed, 0, 0));
             else tcs.TrySetResult((PickKind.Picked, x, y));
         };
-        EditEcho(prompt);
+        SetPickPrompt(prompt, quiet);
         Activate();
         return tcs.Task;
     }
 
     /// <summary>
+    /// 拾取步骤提示三处同步：命令行提示标签(直接写, 并记为 _lastPrompt 免得 SyncPrompt 再往信息栏灰字重复一行)、
+    /// 光标旁浮标(下次指针移动时按 CurrentPrompt 取到)、信息栏(quiet 时省略)。
+    /// </summary>
+    private void SetPickPrompt(string prompt, bool quiet = false)
+    {
+        _pickPrompt = prompt;
+        if (!quiet) EditEcho(prompt);
+        _lastPrompt = prompt;
+        if (CmdPrompt != null) CmdPrompt.Text = prompt.Length == 0 ? "" : prompt + ":";
+        SyncCursorMode();
+        if (_active.DragTip is { Opacity: > 0 }) RefreshPickTip(_lastPointer);   // 浮标已经在光标旁: 指针不动也把文案换掉
+    }
+
+    /// <summary>
+    /// 拾取期间光标旁浮标：有悬停实时说明就只显示它(面号/面积/点击效果/已选数, 整句步骤提示已在命令行标签里),
+    /// 否则显示步骤提示。指针移动路径(_onHostMoved)每次都算一遍; 指针不动时提示/悬停信息变了(点了一下、命令换了提示)
+    /// 也要调这一下, 否则浮标上还是旧文案。
+    /// </summary>
+    private void RefreshPickTip(Avalonia.Point p)
+    {
+        if (_oneShotPick == null && _pickHover == null) return;
+        string text = _pickHover != null && !string.IsNullOrEmpty(_pickHoverInfo) ? _pickHoverInfo! : _pickPrompt;
+        if (text.Length == 0) { HideDragTip(); return; }
+        if (double.IsNaN(p.X) || double.IsNaN(p.Y)) return;   // 没有屏幕点(自检直喂世界坐标)就不摆浮标
+        ShowTipAt(p, text);
+    }
+
+    private (double sx, double sy) _lastPickScreen = (double.NaN, double.NaN);   // 最近一次一次性拾取的屏幕点(ConsumeOneShotPick 记)
+
+    /// <summary>
     /// 在视口中点选一个指定类型的实体（原版"方框光标点选…"）。点空了就照原版那样提示重选，Esc 取消返回 null。
+    /// 点/线与面两套判定分开（忠实原 Picking::PickSortedAcDb）：
+    /// <list type="bullet">
+    /// <item><b>点/线</b>（白方框光标）：落在拾取框内才算 —— 容差就是屏幕上画的那个框(<see cref="Controls.CadGlViewport.CursorBoxPx"/>)，
+    ///   所见即所选；早前用捕捉容差×2(≈24 px)，框外一大圈的线也会被选上。</item>
+    /// <item><b>面</b>（黄框 + 十字光标）：射线落在某个三角内才算命中，没有边线容差 —— 早前 2D 按"到边线距离 ≤ 容差"判，
+    ///   点在面外一圈也能选中面。多张网叠在一起时取最前(3D 深度最近 / 2D 该处高程最高)的那张。</item>
+    /// </list>
+    /// 3D 视图一律按屏幕点做深度拾取(同 PickAt)：Z=0 反投影的世界点不代表实体位置(模型在千米高程)，早前拿它算 XY 距离，
+    /// 上下相叠的两张网选完第一张就再也点不中第二张（「面交线」实测）。extra 排除掉的实体不参与命中，所以第二张即使
+    /// 整张被第一张盖着，点它的投影范围也能选到。
     /// </summary>
     private async Task<T?> PickEntityInViewportAsync<T>(string prompt, Func<T, bool>? extra = null,
                                                        string? missHint = null) where T : SceneEntity
     {
+        // 光标形态照原版分步给: 拾取三角网 = 黄框 + 十字(MeshPickBox), 拾取线/其它实体 = 白方框(PickBox)。
+        bool faces = typeof(MeshEntity).IsAssignableFrom(typeof(T));
+        var pickCursor = faces ? Controls.CadGlViewport.CursorMode.MeshPickBox : Controls.CadGlViewport.CursorMode.PickBox;
         while (true)
         {
-            var (kind, x, y) = await PickPointOrConfirmAsync(prompt, false);
+            var (kind, x, y) = await PickPointOrConfirmAsync(prompt, false, pickCursor);
             if (kind != PickKind.Picked) return null;
-            double tol = SnapTolWorld(_lastPointer) * 2;
-            T? best = null; double bd = tol;
-            foreach (var e in _scene.Entities.OfType<T>())
+            var cands = _scene.Entities.OfType<T>()
+                .Where(e => e.Visible && _layers.IsSelectable(e.LayerName) && (extra == null || extra(e))).ToList();
+            T? best = null;
+            var sp = _lastPickScreen;
+            if (faces)
             {
-                if (!e.Visible || !_layers.IsSelectable(e.LayerName)) continue;
-                if (extra != null && !extra(e)) continue;
-                double d = e.DistanceTo(x, y);
-                if (d <= bd) { bd = d; best = e; }
+                best = PickFaceAt(cands.OfType<MeshEntity>(), sp.sx, sp.sy, x, y) as T;
+            }
+            else if (!Viewport.Is2DView && !double.IsNaN(sp.sx))
+            {
+                best = SelectionBox.PickScreen(cands, sp.sx, sp.sy, Controls.CadGlViewport.CursorBoxPx, Viewport.WorldToScreenDepthProjector()) as T;
+            }
+            else
+            {
+                double bd = PixelsToWorld(_lastPointer, Controls.CadGlViewport.CursorBoxPx);
+                foreach (var e in cands)
+                {
+                    double d = e.DistanceTo(x, y);
+                    if (d <= bd) { bd = d; best = e; }
+                }
             }
             if (best != null)
             {
@@ -100,20 +225,42 @@ public partial class MainWindow
         }
     }
 
+    /// <summary>
+    /// 面拾取：射线落在某个三角内才算命中，没有边线容差。3D 按屏幕点取深度最前的网(容差 0 → 线框模式下的网格边线也不参与)；
+    /// 2D 取该 XY 处高程最高的网(俯视看得见的)。屏幕点为 NaN(自检直喂世界坐标)时退回 2D 判法。
+    /// </summary>
+    private MeshEntity? PickFaceAt(IEnumerable<MeshEntity> cands, double sx, double sy, double wx, double wy)
+    {
+        if (!Viewport.Is2DView && !double.IsNaN(sx))
+            return SelectionBox.PickScreen(cands, sx, sy, 0, Viewport.WorldToScreenDepthProjector()) as MeshEntity;
+        MeshEntity? best = null; double bestZ = double.MinValue;
+        foreach (var me in cands)
+        {
+            double? z = me.TopZAt(wx, wy);
+            if (z == null || z.Value <= bestZ) continue;
+            bestZ = z.Value; best = me;
+        }
+        return best;
+    }
+
     // ═══════════════════ 「选择对象」阶段（AutoCAD 动词-名词流程）═══════════════════
     // 编辑类命令一律：先激活命令 → 提示"选择对象" → 单击/框选加减选 → 右键 / 回车确定 → 再弹参数、再执行。
     // 不再出现"请先选中 X"然后什么都不做的死胡同。已有预选会作为初始选择集带进来，右键即确定。
 
     private TaskCompletionSource<bool>? _selectObjectsTcs;   // 「选择对象」阶段的等待者
+    // 本轮「选择对象」要的是三角网面：光标换黄框+十字、点选按"射线落在面内"判(见 PickAt)，
+    // 白方框 + 边线容差那套留给点/线 —— 修复拓扑/合并三角网等选面的命令别再顶着线拾取的方框。
+    private bool _editSelectFaces;
 
-    /// <summary>进入「选择对象」阶段并等待用户右键/回车确定（Esc 取消）。返回 false = 取消。</summary>
-    private Task<bool> AwaitSelectObjectsAsync(string cmdName, string what)
+    /// <summary>进入「选择对象」阶段并等待用户右键/回车确定（Esc 取消）。返回 false = 取消。faces = 选的是三角网面。</summary>
+    private Task<bool> AwaitSelectObjectsAsync(string cmdName, string what, bool faces = false)
     {
         _selectObjectsTcs?.TrySetResult(false);
         var tcs = new TaskCompletionSource<bool>();
         _selectObjectsTcs = tcs;
         _editName = cmdName;
         _editAwaitSelect = true;
+        _editSelectFaces = faces;
         _tool = null; _measure = null; _angle = null;
         EditEcho($"{cmdName}：选择{what} — 单击选取 · 按住拖动框选 · 再点取消选 · 右键/回车确定 · Esc 取消"
                + (_selected.Count > 0 ? $"（已选 {_selected.Count}）" : ""));
@@ -128,7 +275,7 @@ public partial class MainWindow
         var tcs = _selectObjectsTcs;
         if (tcs == null) return false;
         _selectObjectsTcs = null;
-        _editAwaitSelect = false;
+        _editAwaitSelect = false; _editSelectFaces = false;
         tcs.TrySetResult(confirmed);
         return true;
     }
@@ -140,9 +287,10 @@ public partial class MainWindow
     private async Task<List<T>> SelectObjectsAsync<T>(
         string cmdName, string what, int min = 1, Func<T, bool>? filter = null) where T : SceneEntity
     {
+        bool faces = typeof(MeshEntity).IsAssignableFrom(typeof(T));
         while (true)
         {
-            if (!await AwaitSelectObjectsAsync(cmdName, what))
+            if (!await AwaitSelectObjectsAsync(cmdName, what, faces))
             { EditEcho($"{cmdName}：已取消"); return new List<T>(); }
             var got = _selected.OfType<T>().Where(e => filter == null || filter(e)).ToList();
             if (got.Count >= min)
@@ -189,7 +337,7 @@ public partial class MainWindow
 
             // ── 面编辑 ──
             case "生成三角网边界": case "网格边界": await EdMeshBoundaryAsync(); return true;
-            case "闭合线裁剪面": case "裁剪面": await EdMeshClipByLoopAsync(); return true;
+            case "闭合线裁剪面": case "裁剪面": await EdMeshClipByLoopAsync(); return true;   // 「裁剪面」原版与「闭合线裁剪面」调同一命令, 功能区已去掉那个重复项, 只留命令别名
             case "沿线分割三角网": await EdMeshSplitAlongAsync(); return true;
             case "面交线": case "两网交线": case "网格交线": await EdMeshIntersectAsync(); return true;
             case "合并三角网": await EdMergeMeshesAsync(); return true;
@@ -215,7 +363,7 @@ public partial class MainWindow
     {
         var meshes = await SelectObjectsAsync<MeshEntity>("合并三角网", "三角网", 2);
         if (meshes.Count < 2) return;
-        EditEcho($"> MERGEMESH (合并三角网)：{meshes.Count} 张网");
+        EditEcho($"MERGEMESH (合并三角网)：{meshes.Count} 张网");
         var (verts, tris) = MeshWeld.Concat(meshes
             .Select(m => ((IReadOnlyList<(double x, double y, double z)>)m.Verts, (IReadOnlyList<(int a, int b, int c)>)m.Tris)).ToList());
         var mm = MeshMetrics.Compute(verts, tris);
@@ -229,7 +377,7 @@ public partial class MainWindow
         me.CopyStyleFrom(meshes[0]);                       // 默认沿用第一张源网的图层 / 颜色
         _scene.Add(me); RefreshScene(); SelectEntities(new SceneEntity[] { me });
         var d = MeshDiagnose.Analyze(w.Verts, w.Tris);
-        EditEcho($"✓ 合并完成「{me.Name}」：{meshes.Count} 张网 → {w.OutputTris} 三角"
+        EditEcho($"合并完成「{me.Name}」：{meshes.Count} 张网 → {w.OutputTris} 三角"
                + $"（接缝焊接 {w.InputVerts - w.OutputVerts} 顶点、去重叠重复三角 {w.DuplicateTris}）· "
                + $"开放边 {d.BoundaryEdges} · 非流形 {d.NonManifoldEdges}", EchoLevel.Success);
     }
@@ -320,7 +468,7 @@ public partial class MainWindow
         if (meshes.Count > 2)
             EditEcho($"布尔-{MeshBoolean.OpName(op)}：选中 {meshes.Count} 个，只取前两个作 A、B", EchoLevel.Warn);
         var mA = meshes[0]; var mB = meshes[1];
-        EditEcho($"> {tag} (布尔-{MeshBoolean.OpName(op)})：A =「{mA.Name}」, B =「{mB.Name}」");
+        EditEcho($"{tag} (布尔-{MeshBoolean.OpName(op)})：A =「{mA.Name}」, B =「{mB.Name}」");
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var r = MeshBoolean.Compute(mA.Verts, mA.Tris, mB.Verts, mB.Tris, op);
         if (!r.Success) { EditEcho($"布尔运算失败：{r.Error}", EchoLevel.Error); return; }
@@ -331,7 +479,7 @@ public partial class MainWindow
         res.CopyStyleFrom(mA);
         _scene.Add(res); RefreshScene(); SelectEntities(new SceneEntity[] { res });
         var d = MeshDiagnose.Analyze(r.Verts, r.Tris);
-        EditEcho($"✓ {MeshBoolean.OpName(op)} 完成：{r.Verts.Count} 顶点 / {r.Tris.Count} 面 · "
+        EditEcho($"{MeshBoolean.OpName(op)} 完成：{r.Verts.Count} 顶点 / {r.Tris.Count} 面 · "
                + $"{(d.IsClosed ? $"闭合体, 体积 {MeshMetrics.RobustVolume(r.Verts, r.Tris):0.##}" : $"开放(开放边 {d.BoundaryEdges})")} · "
                + $"{sw.ElapsedMilliseconds} ms →「{res.Name}」", EchoLevel.Success);
     }
@@ -346,7 +494,7 @@ public partial class MainWindow
         { new PromptDialog.Field("side", "保留侧", "刀下方", null, null, false, new[] { "刀下方", "刀上方" }) });
         if (dlg == null) { EditEcho("分割地质体：用户取消"); return; }
         bool keepBelow = dlg.S("side") == "刀下方";
-        EditEcho($"> 刀切闭合实体（保留{(keepBelow ? "刀下方" : "刀上方")}）：先点选刀(开放面)，再点选要被切的闭合实体…");
+        EditEcho($"刀切闭合实体（保留{(keepBelow ? "刀下方" : "刀上方")}）：先点选刀(开放面)，再点选要被切的闭合实体…");
         var knife = await PickEntityInViewportAsync<MeshEntity>(
             "① 点选刀（开放面）…（Esc 取消）", null, "该处没有三角网，请重选刀面（Esc 取消）");
         if (knife == null) { EditEcho("分割地质体：已取消"); return; }
@@ -361,7 +509,7 @@ public partial class MainWindow
         var nu = new MeshEntity(NewMeshName(solid.Name + (keepBelow ? "-下" : "-上")), r.Verts, r.Tris);
         ReplaceMesh(solid, nu);
         var d = MeshDiagnose.Analyze(r.Verts, r.Tris);
-        EditEcho($"✓ 刀切完成：「{nu.Name}」{r.Verts.Count} 顶点 / {r.Tris.Count} 面 · "
+        EditEcho($"刀切完成：「{nu.Name}」{r.Verts.Count} 顶点 / {r.Tris.Count} 面 · "
                + $"{(d.IsClosed ? $"水密闭合体, 体积 {MeshMetrics.RobustVolume(r.Verts, r.Tris):0.##}" : $"开放边 {d.BoundaryEdges}（接缝未完全闭合，可用「修复拓扑关系」补）")} · "
                + $"{sw.ElapsedMilliseconds} ms", EchoLevel.Success);
     }
@@ -378,11 +526,11 @@ public partial class MainWindow
             $"把选中的 {pts.Count} 个点的高程统一设为指定值");
         if (dlg == null) { EditEcho("修改高程点：用户取消"); return; }
         double z = dlg.D("z");
-        EditEcho($"> POINTSETZ z={z:F3}");
+        EditEcho($"POINTSETZ z={z:F3}");
         BeginChange();
         foreach (var p in pts) p.Elevation = z;
-        RefreshScene();
-        EditEcho($"✓ {pts.Count} 个点的 Z 已置为 {z:F3}", EchoLevel.Success);
+        RefreshScene(); HighlightSelection();   // 就地改 Z 的图元仍选中: 高亮线缓存(_hlEntGeom)得重镶嵌, 否则 3D 里青色高亮留在旧高程、夹点却在新高程
+        EditEcho($"{pts.Count} 个点的 Z 已置为 {z:F3}", EchoLevel.Success);
     }
 
     /// <summary>删除重复点 (POINTDEDUPE)：容差对话框 → 选中点按容差去重。</summary>
@@ -392,7 +540,7 @@ public partial class MainWindow
         if (pts.Count < 2) return;
         double? tol = await AskToleranceAsync("删除重复点", 1e-3);
         if (tol == null) return;
-        EditEcho($"> POINTDEDUPE tolerance={tol.Value:G}");
+        EditEcho($"POINTDEDUPE tolerance={tol.Value:G}");
         var coords = pts.Select(p => (p.X, p.Y)).ToList();
         var keep = new HashSet<int>(GeomDedup.KeepAfterDedup(coords, tol.Value));
         int removed = 0;
@@ -427,8 +575,8 @@ public partial class MainWindow
         double size = dlg.D("size");
         BeginChange();
         foreach (var p in pts) { p.Style = style; if (size > 0) p.Size = size; }
-        RefreshScene();
-        EditEcho($"> 修改点样式：style={s.Split(' ')[0]} size={size:0.##}，已更新 {pts.Count}", EchoLevel.Success);
+        RefreshScene(); HighlightSelection();   // 样式/大小变了, 选中高亮要按新符号重镶嵌
+        EditEcho($"修改点样式：style={s.Split(' ')[0]} size={size:0.##}，已更新 {pts.Count}", EchoLevel.Success);
     }
 
     /// <summary>赋节点高程：按公式 Z = a·X + b·Y + c 给选中的 Point / Polyline 逐节点赋 Z。</summary>
@@ -456,8 +604,8 @@ public partial class MainWindow
             foreach (var (x, y) in l.Points) zs.Add(a * x + b * y + c);
             l.Zs = zs; l.Elevation = 0; n++; nodes += zs.Count;
         }
-        RefreshScene();
-        EditEcho($"> 赋节点高程：Z = {a}·X + {b}·Y + {c}，已更新 {n} 个实体 / {nodes} 个节点",
+        RefreshScene(); HighlightSelection();   // 同「修改高程点」: 就地改 Z, 高亮/夹点/特性面板都要跟上
+        EditEcho($"赋节点高程：Z = {a}·X + {b}·Y + {c}，已更新 {n} 个实体 / {nodes} 个节点",
                  n > 0 ? EchoLevel.Success : EchoLevel.Warn);
     }
 
@@ -474,14 +622,14 @@ public partial class MainWindow
         if (mesh == null) { EditEcho("点落到面上：未指定目标三角网", EchoLevel.Warn); return; }
         double? tol = await AskToleranceAsync("点落到面上", 1e-6);
         if (tol == null) return;
-        EditEcho($"> POINTPROJECT tolerance={tol.Value:G}");
+        EditEcho($"POINTPROJECT tolerance={tol.Value:G}");
         BeginChange();
         int hit = 0;
         foreach (var p in pts) { var z = MeshZ(mesh, p.X, p.Y); if (z.HasValue) { p.Elevation = z.Value; hit++; } }
-        RefreshScene();
+        RefreshScene(); HighlightSelection();   // 同「修改高程点」
         int missed = pts.Count - hit;
-        if (missed > 0) EditEcho($"⚠ {missed} 个点未能投影到 mesh 范围内", EchoLevel.Warn);
-        EditEcho($"✓ 已投影 {hit} 个点的 Z 到「{mesh.Name}」表面", EchoLevel.Success);
+        if (missed > 0) EditEcho($"{missed} 个点未能投影到 mesh 范围内", EchoLevel.Warn);
+        EditEcho($"已投影 {hit} 个点的 Z 到「{mesh.Name}」表面", EchoLevel.Success);
     }
 
     /// <summary>顶点焊接 (WELD)：容差对话框 → 合并选中三角网中距离相近的重复顶点。</summary>
@@ -491,7 +639,7 @@ public partial class MainWindow
         if (meshes.Count == 0) return;
         double? tol = await AskToleranceAsync("顶点焊接参数", 1e-6);
         if (tol == null) return;
-        EditEcho($"> WELD (顶点焊接) tolerance={tol.Value:G}");
+        EditEcho($"WELD (顶点焊接) tolerance={tol.Value:G}");
         int vIn = 0, vOut = 0, fIn = 0, fOut = 0;
         foreach (var m in meshes.ToList())
         {
@@ -499,8 +647,8 @@ public partial class MainWindow
             vIn += w.InputVerts; vOut += w.OutputVerts; fIn += w.InputTris; fOut += w.OutputTris;
             ReplaceMesh(m, new MeshEntity(m.Name, w.Verts, w.Tris));
         }
-        if (vIn == vOut) { EditEcho("✓ 无重复顶点，未做任何合并", EchoLevel.Success); return; }
-        EditEcho($"✓ 焊接完成：顶点 {vIn} → {vOut} (合并 {vIn - vOut} 个), 面 {fIn} → {fOut}", EchoLevel.Success);
+        if (vIn == vOut) { EditEcho("无重复顶点，未做任何合并", EchoLevel.Success); return; }
+        EditEcho($"焊接完成：顶点 {vIn} → {vOut} (合并 {vIn - vOut} 个), 面 {fIn} → {fOut}", EchoLevel.Success);
     }
 
     // ══════════════════════════════ 线编辑 ══════════════════════════════
@@ -512,7 +660,7 @@ public partial class MainWindow
         if (polys.Count < 2) return;
         double? tol = await AskToleranceAsync("删除重复线", 1e-3);
         if (tol == null) return;
-        EditEcho($"> POLYDEDUPE tolerance={tol.Value:G}");
+        EditEcho($"POLYDEDUPE tolerance={tol.Value:G}");
         var kept = new List<PolylineEntity>();
         var dups = new List<PolylineEntity>();
         foreach (var p in polys)
@@ -520,11 +668,11 @@ public partial class MainWindow
             bool isDup = kept.Any(q => GeomDedup.SamePolyline(p.Points, p.Closed, q.Points, q.Closed, tol.Value));
             if (isDup) dups.Add(p); else kept.Add(p);
         }
-        if (dups.Count == 0) { EditEcho($"✓ 未发现重复多段线（共 {polys.Count} 条）", EchoLevel.Success); return; }
+        if (dups.Count == 0) { EditEcho($"未发现重复多段线（共 {polys.Count} 条）", EchoLevel.Success); return; }
         BeginChange();
         foreach (var d in dups) _scene.Remove(d);
         SelectEntities(kept); RefreshScene();
-        EditEcho($"✓ 删除重复多段线：{polys.Count} → {kept.Count} (-{dups.Count})", EchoLevel.Success);
+        EditEcho($"删除重复多段线：{polys.Count} → {kept.Count} (-{dups.Count})", EchoLevel.Success);
     }
 
     /// <summary>
@@ -540,7 +688,7 @@ public partial class MainWindow
         });
         if (dlg == null) { EditEcho("闭合线裁剪：用户取消"); return; }
         bool keepInside = dlg.S("side") == "圈内";
-        EditEcho($"> POLYCLIP tolerance={dlg.D("tolerance"):G} side={(keepInside ? "圈内" : "圈外")}");
+        EditEcho($"POLYCLIP tolerance={dlg.D("tolerance"):G} side={(keepInside ? "圈内" : "圈外")}");
         var knife = await PickEntityInViewportAsync<PolylineEntity>(
             "请用小方框光标点击作为裁刀的闭合形状（多段线/矩形/多边形）…（Esc 取消）",
             p => p.Closed && p.Points.Count >= 3,
@@ -570,7 +718,7 @@ public partial class MainWindow
         }
         RefreshScene();
         if (added.Count > 0) SelectEntities(added);
-        EditEcho($"✓ 闭合线裁剪：{targets.Count} 条线保留{(keepInside ? "圈内" : "圈外")} → {made} 段"
+        EditEcho($"闭合线裁剪：{targets.Count} 条线保留{(keepInside ? "圈内" : "圈外")} → {made} 段"
                + (intact > 0 ? $"（{intact} 条整条在保留侧, 原样未动）" : "")
                + (dropped > 0 ? $"（{dropped} 条整条落在保留侧之外已删除）" : ""), EchoLevel.Success);
     }
@@ -596,12 +744,12 @@ public partial class MainWindow
             new[] { new PromptDialog.Field("z", "目标 Z", lines[0].Elevation.ToString("0.###", Inv), "m") });
         if (dlg == null) { EditEcho("统一线高程：用户取消"); return; }
         double z = dlg.D("z");
-        EditEcho($"> POLYUNIFYZ z={z:F3}");
+        EditEcho($"POLYUNIFYZ z={z:F3}");
         BeginChange();
         int verts = 0;
         foreach (var l in lines) { l.Elevation = z; l.Zs = null; verts += l.Points.Count; }
-        RefreshScene();
-        EditEcho($"✓ {lines.Count} 条多段线 / {verts} 个顶点 Z 已置为 {z:F3}", EchoLevel.Success);
+        RefreshScene(); HighlightSelection();   // 同「修改高程点」: 就地改 Z, 高亮/夹点要跟上
+        EditEcho($"{lines.Count} 条多段线 / {verts} 个顶点 Z 已置为 {z:F3}", EchoLevel.Success);
     }
 
     /// <summary>闭合多段线 (POLYCLOSE)：把选中多段线全部置为闭合（无参数）。</summary>
@@ -609,9 +757,9 @@ public partial class MainWindow
     {
         var polys = await SelectObjectsAsync<PolylineEntity>("闭合多段线", "多段线");
         if (polys.Count == 0) return;
-        EditEcho("> POLYCLOSE (闭合多段线)");
+        EditEcho("POLYCLOSE (闭合多段线)");
         var open = polys.Where(p => !p.Closed && p.Points.Count >= 3).ToList();
-        if (open.Count == 0) { EditEcho("✓ 所有选中多段线已经是闭合状态", EchoLevel.Success); return; }
+        if (open.Count == 0) { EditEcho("所有选中多段线已经是闭合状态", EchoLevel.Success); return; }
         BeginChange();
         var newSel = new List<SceneEntity>();
         foreach (var p in polys)
@@ -623,7 +771,7 @@ public partial class MainWindow
             _scene.Replace(p, np); newSel.Add(np);
         }
         SelectEntities(newSel); RefreshScene();
-        EditEcho($"✓ 闭合完成：{open.Count} 条多段线", EchoLevel.Success);
+        EditEcho($"闭合完成：{open.Count} 条多段线", EchoLevel.Success);
     }
 
     /// <summary>加密多段线 (POLYDENSIFY)：最大间距对话框 → 每段超长即等距插点。</summary>
@@ -635,7 +783,7 @@ public partial class MainWindow
             new[] { new PromptDialog.Field("maxStep", "最大间距", "10", "m", "每段超过此长度则插入中间点") });
         if (dlg == null) { EditEcho("加密多段线：用户取消"); return; }
         double step = Math.Max(dlg.D("maxStep"), 1e-6);
-        EditEcho($"> POLYDENSIFY maxStep={step:F3}");
+        EditEcho($"POLYDENSIFY maxStep={step:F3}");
         BeginChange();
         int ov = 0, fv = 0;
         var newSel = new List<SceneEntity>();
@@ -647,7 +795,7 @@ public partial class MainWindow
             _scene.Replace(p, np); newSel.Add(np);
         }
         SelectEntities(newSel); RefreshScene();
-        EditEcho($"✓ {polys.Count} 条多段线：顶点 {ov} → {fv} (+{fv - ov})", EchoLevel.Success);
+        EditEcho($"{polys.Count} 条多段线：顶点 {ov} → {fv} (+{fv - ov})", EchoLevel.Success);
     }
 
     /// <summary>抽稀等值线 (POLYSIMPLIFY)：Douglas-Peucker，容差 + 最少节点数（节点少的台阶线整条不动）。</summary>
@@ -665,7 +813,7 @@ public partial class MainWindow
         if (dlg == null) { EditEcho("抽稀等值线：用户取消"); return; }
         double tol = Math.Max(dlg.D("tolerance"), 1e-6);
         int minNodes = Math.Max(dlg.I("minNodes"), 3);
-        EditEcho($"> POLYSIMPLIFY tolerance={tol:F3} minNodes={minNodes}（只动节点>{minNodes} 的线，台阶线不动）");
+        EditEcho($"POLYSIMPLIFY tolerance={tol:F3} minNodes={minNodes}（只动节点>{minNodes} 的线，台阶线不动）");
         BeginChange();
         int processed = 0, ov = 0, fv = 0;
         var newSel = new List<SceneEntity>();
@@ -679,8 +827,8 @@ public partial class MainWindow
             _scene.Replace(p, np); newSel.Add(np);
         }
         SelectEntities(newSel); RefreshScene();
-        if (processed == 0) { EditEcho($"✓ 选中的 {polys.Count} 条线节点均不超过 {minNodes}，未做抽稀", EchoLevel.Success); return; }
-        EditEcho($"✓ 抽稀 {processed} 条等值线(节点>{minNodes})：顶点 {ov} → {fv} (减 {ov - fv})；台阶线/短线未动", EchoLevel.Success);
+        if (processed == 0) { EditEcho($"选中的 {polys.Count} 条线节点均不超过 {minNodes}，未做抽稀", EchoLevel.Success); return; }
+        EditEcho($"抽稀 {processed} 条等值线(节点>{minNodes})：顶点 {ov} → {fv} (减 {ov - fv})；台阶线/短线未动", EchoLevel.Success);
     }
 
     /// <summary>连接多段线 (POLYJOIN)：端点容差匹配，把 N 条合并成更少条。</summary>
@@ -690,10 +838,10 @@ public partial class MainWindow
         if (polys.Count < 2) return;
         double? tol = await AskToleranceAsync("连接多段线", 1e-3);
         if (tol == null) return;
-        EditEcho($"> POLYJOIN tolerance={tol.Value:G}");
+        EditEcho($"POLYJOIN tolerance={tol.Value:G}");
         var chains = PolylineJoin.Join(polys.Select(p => (IReadOnlyList<(double x, double y)>)p.Points).ToList(), tol.Value);
         if (chains.Count >= polys.Count)
-        { EditEcho($"⚠ 无可连接的端点对（共 {polys.Count} 条多段线）", EchoLevel.Warn); return; }
+        { EditEcho($"无可连接的端点对（共 {polys.Count} 条多段线）", EchoLevel.Warn); return; }
         BeginChange();
         foreach (var p in polys) _scene.Remove(p);
         var added = new List<SceneEntity>();
@@ -708,7 +856,7 @@ public partial class MainWindow
             _scene.Add(np); added.Add(np);
         }
         SelectEntities(added); RefreshScene();
-        EditEcho($"✓ 连接完成：{polys.Count} → {added.Count} (合并了 {polys.Count - added.Count} 条)", EchoLevel.Success);
+        EditEcho($"连接完成：{polys.Count} → {added.Count} (合并了 {polys.Count - added.Count} 条)", EchoLevel.Success);
     }
 
     /// <summary>
@@ -761,14 +909,14 @@ public partial class MainWindow
             if (AsSequence(e, out var pts, out var closed)) seqs.Add((pts, closed));
         double? tol = await AskToleranceAsync("两线交点", 1e-6);
         if (tol == null) return;
-        EditEcho($"> POLYINTERSECT tolerance={tol.Value:G}");
+        EditEcho($"POLYINTERSECT tolerance={tol.Value:G}");
         double t = Math.Max(tol.Value, 1e-12);
         var all = new List<(double x, double y)>();
         for (int i = 0; i < seqs.Count; i++)
             for (int j = i + 1; j < seqs.Count; j++)
                 foreach (var h in PolylineIntersect.Between(seqs[i].pts, seqs[i].closed, seqs[j].pts, seqs[j].closed, t))
                     if (!all.Any(q => (q.x - h.x) * (q.x - h.x) + (q.y - h.y) * (q.y - h.y) <= t * t)) all.Add(h);
-        if (all.Count == 0) { EditEcho("✓ 两条多段线无 2D 交点", EchoLevel.Success); return; }
+        if (all.Count == 0) { EditEcho("两条多段线无 2D 交点", EchoLevel.Success); return; }
         BeginChange();
         var added = new List<SceneEntity>();
         foreach (var (x, y) in all)
@@ -777,7 +925,7 @@ public partial class MainWindow
             AssignLayer(pe); _scene.Add(pe); added.Add(pe);
         }
         SelectEntities(added); RefreshScene();
-        EditEcho($"✓ 找到 {all.Count} 个交点，已创建 POINT 实体", EchoLevel.Success);
+        EditEcho($"找到 {all.Count} 个交点，已创建 POINT 实体", EchoLevel.Success);
     }
 
     /// <summary>
@@ -797,7 +945,7 @@ public partial class MainWindow
         if (mesh == null) { EditEcho("线落到面上：未指定目标三角网", EchoLevel.Warn); return; }
         double? tol = await AskToleranceAsync("线落到面上", 1e-6);
         if (tol == null) return;
-        EditEcho($"> POLYPROJECT tolerance={tol.Value:G}");
+        EditEcho($"POLYPROJECT tolerance={tol.Value:G}");
         var input = new List<MeshEmbed.Line>(lines.Count);
         foreach (var l in lines)
             input.Add(new MeshEmbed.Line(l.Points, Enumerable.Range(0, l.Points.Count).Select(l.ZAt).ToList(), l.Closed));
@@ -814,9 +962,9 @@ public partial class MainWindow
             l.Points = xy; l.Zs = zs;
             if (l.Closed && xy.Count < 3) l.Closed = false;
         }
-        RefreshScene();
-        if (res.OutsideNodes > 0) EditEcho($"⚠ {res.OutsideNodes} 个顶点在 mesh 范围外, 保留原高程", EchoLevel.Warn);
-        EditEcho($"✓ {lines.Count} 条多段线已投影到「{mesh.Name}」：节点重算 {res.InputNodes} → {res.OutputNodes}"
+        RefreshScene(); HighlightSelection();   // 同「修改高程点」
+        if (res.OutsideNodes > 0) EditEcho($"{res.OutsideNodes} 个顶点在 mesh 范围外, 保留原高程", EchoLevel.Warn);
+        EditEcho($"{lines.Count} 条多段线已投影到「{mesh.Name}」：节点重算 {res.InputNodes} → {res.OutputNodes}"
                + $"(补 {Math.Max(0, res.OutputNodes - res.InputNodes)} 个与三角边的交点), 逐段贴面", EchoLevel.Success);
     }
 
@@ -828,11 +976,13 @@ public partial class MainWindow
     /// </summary>
     private async Task EdMeshBoundaryAsync()
     {
-        EditEcho("> BOUNDARY (生成三角网边界)：请在视口中点选三角网…");
+        EditEcho("BOUNDARY (生成三角网边界)：请在视口中点选三角网…");
         var m = await PickEntityInViewportAsync<MeshEntity>(
             "生成三角网边界：请点选三角网…（Esc 取消）", null, "该处没有三角网，请重选（Esc 取消）");
         if (m == null) { EditEcho("生成三角网边界：已取消"); return; }
-        var loops = MeshBoundaryLoops.Extract(m.Verts, OrientUp(m.Verts, m.Tris));
+        EditEcho($"生成三角网边界：「{m.Name}」{m.TriangleCount} 三角，提取中…");
+        // 百万三角的面模型朝向一致化 + 边界环要 1~2 s(见 MeshBoundaryBench), 别占 UI 线程; 网格顶点/三角在此期间只读。
+        var loops = await Task.Run(() => MeshBoundaryLoops.Extract(m.Verts, OrientUp(m.Verts, m.Tris)));
         List<(double x, double y, double z)> ring;
         string how;
         if (loops.Count > 0)
@@ -854,7 +1004,7 @@ public partial class MainWindow
         _scene.Add(pl);
         PopulateDrawingLayers(); RefreshScene(); SelectEntities(new SceneEntity[] { pl });
         var b = m.Bounds;
-        EditEcho($"✓ 边界提取：「{m.Name}」{how} · {ring.Count} 节点 · "
+        EditEcho($"边界提取：「{m.Name}」{how} · {ring.Count} 节点 · "
                + $"AABB {b.maxX - b.minX:0.#}×{b.maxY - b.minY:0.#} · 已落「边界」图层", EchoLevel.Success);
     }
 
@@ -877,7 +1027,7 @@ public partial class MainWindow
         { new PromptDialog.Field("side", "保留侧", "圈内", null, null, false, new[] { "圈内", "圈外" }) });
         if (dlg == null) { EditEcho("闭合线裁剪：用户取消"); return; }
         bool keepInside = dlg.S("side") == "圈内";
-        EditEcho($"> CLIP {(keepInside ? "内裁剪 (保留圈内)" : "外裁剪 (保留圈外)")}");
+        EditEcho($"CLIP {(keepInside ? "内裁剪 (保留圈内)" : "外裁剪 (保留圈外)")}");
         EditEcho("① 方框光标点选闭合多段线（裁刀）→ ② 黄框光标点选三角网（Esc 取消）");
         var loop = await PickEntityInViewportAsync<PolylineEntity>(
             "① 点选闭合多段线（裁刀）…（Esc 取消）", p => p.Closed && p.Points.Count >= 3,
@@ -887,17 +1037,16 @@ public partial class MainWindow
             "② 点选要裁剪的三角网…（Esc 取消）", null, "该处没有三角网，请重选（Esc 取消）");
         if (m == null) { EditEcho("闭合线裁剪：已取消"); return; }
 
-        var inside = PolylineClipper.TrianglesInside(m.Verts, m.Tris, loop.Points);
-        var insideSet = new HashSet<int>(inside);
-        var drop = keepInside
-            ? Enumerable.Range(0, m.Tris.Count).Where(i => !insideSet.Contains(i)).ToList()
-            : inside;
-        if (drop.Count == 0) { EditEcho("⚠ 裁剪后无三角被删除（裁刀未覆盖该网）", EchoLevel.Warn); return; }
-        if (drop.Count >= m.Tris.Count) { EditEcho("⚠ 裁剪会删掉整张网，已放弃", EchoLevel.Warn); return; }
-        var (nv, nt) = PolylineClipper.RemoveTriangles(m.Verts, m.Tris, drop);
+        // 精确裁剪(原内核 clip_tin_by_polygon)：跨界三角沿裁刀边切开, 不再按质心整块取舍(那样边界锯齿、尖刺伸出裁刀)。
+        if (!MeshPolygonClip.IsSingleValuedSurface(m.Verts, m.Tris))
+        { EditEcho("检测到封闭实体或悬挑面（三角网法向有上有下），闭合线裁剪仅支持单值高程面，已中止", EchoLevel.Error); return; }
+        var res = MeshPolygonClip.Clip(m.Verts, m.Tris, loop.Points, keepInside);
+        if (res == null) { EditEcho("闭合线裁剪：裁刀多边形退化（顶点 <3 或自交/共线），无法剖分", EchoLevel.Error); return; }
+        if (res.Value.Tris.Count == 0)
+        { EditEcho(keepInside ? "裁剪结果为空（多段线未覆盖任何面）" : "裁剪结果为空（多段线覆盖了整个三角网）", EchoLevel.Warn); return; }
         int before = m.Tris.Count;
-        ReplaceMesh(m, new MeshEntity(m.Name, nv, nt));
-        EditEcho($"✓ 裁剪完成：「{m.Name}」三角 {before} → {nt.Count}（删 {drop.Count}，保留{(keepInside ? "圈内" : "圈外")}）", EchoLevel.Success);
+        ReplaceMesh(m, new MeshEntity(m.Name, res.Value.Verts, res.Value.Tris));
+        EditEcho($"裁剪完成：「{m.Name}」三角 {before} → {res.Value.Tris.Count}（沿裁刀边精确切开，保留{(keepInside ? "圈内" : "圈外")}）", EchoLevel.Success);
     }
 
     /// <summary>
@@ -912,7 +1061,7 @@ public partial class MainWindow
         bool anyMesh = _scene.Entities.OfType<MeshEntity>().Any(e => e.Visible && _layers.IsSelectable(e.LayerName));
         if (!anyMesh) { EditEcho("分割三角网：场景里没有三角网，请先用「2.5D TIN」把点云建成面。", EchoLevel.Error); return; }
         if (!anyLine) { EditEcho("分割三角网：场景里没有可作切线的多段线，请先画一条穿过三角网的线。", EchoLevel.Error); return; }
-        EditEcho("> SPLITALONG (沿线分割三角网)：请按提示 ① 选切线（多段线） ② 选三角网…");
+        EditEcho("SPLITALONG (沿线分割三角网)：请按提示 ① 选切线（多段线） ② 选三角网…");
         var line = await PickEntityInViewportAsync<PolylineEntity>(
             "① 点选切线（多段线 / 直线段）…（Esc 取消）", p => p.Points.Count >= 2,
             "该处没有多段线，请重选切线（Esc 取消）");
@@ -921,25 +1070,30 @@ public partial class MainWindow
             "② 点选要分割的三角网…（Esc 取消）", null, "该处没有三角网，请重选（Esc 取消）");
         if (m == null) { EditEcho("沿线分割三角网：已取消"); return; }
 
-        var p0 = line.Points[0]; var p1 = line.Points[^1];
-        if (line.Points.Count > 2)
-            EditEcho("⚠ 多段折线按首尾两点确定的竖直面切分（逐段折线切分需内核）", EchoLevel.Warn);
-        var (left, right) = MeshPlaneSplit.Split(m.Verts, m.Tris, p0.x, p0.y, p1.x, p1.y);
-        if (left.t.Count == 0 || right.t.Count == 0)
-        { EditEcho("分割失败：分割线未穿过该三角网，请重选", EchoLevel.Error); return; }
+        // 严格沿多段线 XY 投影逐段切（原内核 splitByPolylineVertical）：跨线三角沿折线切开、子三角按最近段定左右。
+        // 早前只按首末两点的竖直面切，折线一拐就不再贴着线走。闭合多段线补上闭合段，作边界用时左/右即圈内/圈外。
+        var cut = new List<(double x, double y)>(line.Points);
+        if (line.Closed && cut.Count >= 3 && (cut[0].x != cut[^1].x || cut[0].y != cut[^1].y)) cut.Add(cut[0]);
+        EditEcho($"沿线分割三角网：「{m.Name}」{m.TriangleCount} 三角 · 切线 {cut.Count - 1} 段，切分中…");
+        var res = await Task.Run(() => MeshPolylineSplit.Split(m.Verts, m.Tris, cut, 1e-6));
+        if (!res.Success) { EditEcho($"沿线分割失败：{res.Error}", EchoLevel.Error); return; }
+        if (!res.HasLeft || !res.HasRight)
+        { EditEcho("分割失败：分割线未穿过该三角网（整张网在切线一侧），请重选", EchoLevel.Error); return; }
         BeginChange();
         _scene.Remove(m); _selected.Remove(m); _surfGrids.Remove(m);
-        var a = new MeshEntity(NewMeshName(m.Name + "-左"), left.v, left.t); a.CopyStyleFrom(m);
-        var b = new MeshEntity(NewMeshName(m.Name + "-右"), right.v, right.t); b.CopyStyleFrom(m);
+        var a = new MeshEntity(NewMeshName(m.Name + "-左"), res.LeftVerts, res.LeftTris); a.CopyStyleFrom(m);
+        var b = new MeshEntity(NewMeshName(m.Name + "-右"), res.RightVerts, res.RightTris); b.CopyStyleFrom(m);
         b.Cg = Math.Min(1, b.Cg + 0.15f); b.Cb = Math.Min(1, b.Cb + 0.15f);
         _scene.Add(a); _scene.Add(b); RefreshScene(); SelectEntities(new SceneEntity[] { a, b });
-        EditEcho($"✓ 分割完成：「{m.Name}」→ 左 {left.t.Count} 三角 /「{a.Name}」、右 {right.t.Count} 三角 /「{b.Name}」（可 Ctrl+Z 还原）", EchoLevel.Success);
+        string cap = res.CapLoops > 0 ? $" · 闭合体切口封盖 {res.CapLoops} 环" : "";
+        EditEcho($"分割完成：「{m.Name}」→ 左 {res.LeftTris.Count} 三角 /「{a.Name}」、右 {res.RightTris.Count} 三角 /「{b.Name}」"
+               + $"（沿线切开 {res.CutFaces} 三角{cap}，可 Ctrl+Z 还原）", EchoLevel.Success);
     }
 
     /// <summary>面交线 (INTERSECT)：依次点选两个三角网 → 逐三角求交 + 连通拼接 → 交线落「交线」图层。</summary>
     private async Task EdMeshIntersectAsync()
     {
-        EditEcho("> INTERSECT (面交线)：请在视口中依次点选两个三角网…");
+        EditEcho("INTERSECT (面交线)：请在视口中依次点选两个三角网…");
         var m1 = await PickEntityInViewportAsync<MeshEntity>(
             "① 点选第一个三角网…（Esc 取消）", null, "该处没有三角网，请重选（Esc 取消）");
         if (m1 == null) { EditEcho("面交线：已取消"); return; }
@@ -949,7 +1103,7 @@ public partial class MainWindow
         if (m2 == null) { EditEcho("面交线：已取消"); return; }
 
         var segs = MeshIntersect.IntersectionSegments(m1.Verts, m1.Tris, m2.Verts, m2.Tris);
-        if (segs.Count == 0) { EditEcho($"⚠ 「{m1.Name}」与「{m2.Name}」不相交", EchoLevel.Warn); return; }
+        if (segs.Count == 0) { EditEcho($"「{m1.Name}」与「{m2.Name}」不相交", EchoLevel.Warn); return; }
         var b = m1.Bounds;
         double tol = Math.Max(Math.Max(b.maxX - b.minX, b.maxY - b.minY) * 1e-6, 1e-9);
         var zLookup = new Dictionary<(long, long), double>();
@@ -973,7 +1127,7 @@ public partial class MainWindow
             _scene.Add(pl); added.Add(pl);
         }
         PopulateDrawingLayers(); RefreshScene(); SelectEntities(added);
-        EditEcho($"✓ 面交线「{m1.Name}」∩「{m2.Name}」：{segs.Count} 段 → {added.Count} 条交线（已落「交线」图层）", EchoLevel.Success);
+        EditEcho($"面交线「{m1.Name}」∩「{m2.Name}」：{segs.Count} 段 → {added.Count} 条交线（已落「交线」图层）", EchoLevel.Success);
     }
 
     /// <summary>修复拓扑关系 (REPAIR)：参数面板取 6 个修复开关 + 容差 → 原位替换选中三角网。</summary>
@@ -1002,11 +1156,12 @@ public partial class MainWindow
             SplitNonManifold = dlg.B("splitNonManifold"),
             FlipInverted = dlg.B("flipInverted"),
         };
-        EditEcho($"> REPAIR (修复拓扑) tolerance={opt.Tolerance:G}");
+        EditEcho($"REPAIR (修复拓扑) tolerance={opt.Tolerance:G}");
         foreach (var m in meshes.ToList())
         {
-            var r = MeshRepair.Repair(m.Verts, m.Tris, opt);
-            if (r.TotalChanges == 0) { EditEcho($"✓ 「{m.Name}」已经干净，无需修复", EchoLevel.Success); continue; }
+            EditEcho($"「{m.Name}」{m.TriangleCount} 三角，修复中…");
+            var r = await Task.Run(() => MeshRepair.Repair(m.Verts, m.Tris, opt));   // 大网别占 UI 线程; 期间网格只读
+            if (r.TotalChanges == 0) { EditEcho($"「{m.Name}」已经干净，无需修复", EchoLevel.Success); continue; }
             if (r.RemovedDegenerate > 0) EditEcho($"去退化面: {r.RemovedDegenerate}");
             if (r.WeldedVertices > 0) EditEcho($"焊接顶点: {r.WeldedVertices}");
             if (r.FilledHoles > 0) EditEcho($"填充孔洞: {r.FilledHoles} 个 ({r.FilledFaces} 面)");
@@ -1014,79 +1169,173 @@ public partial class MainWindow
             if (r.FlippedFaces > 0) EditEcho($"翻转面: {r.FlippedFaces}");
             if (r.SplitNonManifoldEdges > 0) EditEcho($"拆分非流形边: {r.SplitNonManifoldEdges}");
             ReplaceMesh(m, new MeshEntity(m.Name, r.Verts, r.Tris));
-            EditEcho($"✓ 「{m.Name}」修复完成：最终 {r.Verts.Count} 顶点 / {r.Tris.Count} 面 · 开放边 {r.BoundaryBefore} → {r.BoundaryAfter}", EchoLevel.Success);
+            EditEcho($"「{m.Name}」修复完成：最终 {r.Verts.Count} 顶点 / {r.Tris.Count} 面 · 开放边 {r.BoundaryBefore} → {r.BoundaryAfter}", EchoLevel.Success);
         }
     }
 
     /// <summary>
-    /// 删除三角面 (DELFACES)：① 点选三角网 → ② 逐个点选要删的三角面（再点一次可取消该面）
-    /// → ③ 右键 / 回车确认删除（Esc 放弃，全程可 Ctrl+Z 还原）。
+    /// 删除三角面 (DELFACES)：① 点选三角网 → ② 点选 / 拖框选要删的三角面（再点同一面 = 取消选中；左→右窗口 / 右→左交叉框选一次
+    /// 框进多个面, Shift+拖框 = 从已选中移除）→ ③ 右键 / 回车一起删除（Esc 放弃，全程可 Ctrl+Z 还原）。忠实原版 DeleteMeshFacesCommandState
+    /// （原版只有逐个点选；拖框多选是用户要求加的, 与 Kylin 空闲态框选同一手势与颜色）：
+    /// <list type="bullet">
+    /// <item>已选面黄色描边(原版 RefreshDeleteFacesOverlay) + 红色盖面(Kylin 惯例, 线框/着色档都看得清)；</item>
+    /// <item>光标压到哪个三角面就亮哪个面(黄色盖面 + 描边; 压在已选面上转橙色, 提示"点击=取消")，浮标里跟着报
+    ///   面号 / 面积 / 点击效果；命令行提示标签实时带「已选 N 面」(原版 BuildViewState 的 JigPrompt)；</item>
+    /// <item>3D 视图按屏幕点做深度拾取(原版走射线求交)，2D 俯视按 XY 取最高的那层 —— 早前只有 XY 投影一条路,
+    ///   3D 里点到的世界点是 Z=0 反投影, 与模型不在一个高程, 逐面点选在 3D 视图里根本点不中。</item>
+    /// </list>
     /// </summary>
     private async Task EdDeleteMeshFacesAsync()
     {
-        EditEcho("> DELFACES (删除三角面)：请按提示 ① 选三角网 ② 点选要删除的面 ③ 右键 / 回车确认");
+        EditEcho("DELFACES (删除三角面)：请按提示 ① 选三角网 ② 点选要删除的面 ③ 右键 / 回车确认");
         var m = await PickEntityInViewportAsync<MeshEntity>(
-            "① 点选三角网…（Esc 取消）", null, "该处没有三角网，请重选（Esc 取消）");
+            "① 点选要编辑的三角网…（Esc 取消）", null, "删除三角面：该处没有三角网，请重选（Esc 取消）");
         if (m == null) { EditEcho("删除三角面：已取消"); return; }
+        if (m.Tris.Count == 0) { EditEcho($"删除三角面：「{m.Name}」三角网几何为空", EchoLevel.Warn); return; }
 
-        var marked = new HashSet<int>();
-        while (true)
-        {
-            HighlightMeshFaces(m, marked);
-            var (kind, x, y) = await PickPointOrConfirmAsync(
-                $"② 点选要删除的三角面（已选 {marked.Count} 个）；右键 / 回车确认，Esc 放弃", true);
-            if (kind == PickKind.Cancelled) { Viewport.SetHighlightFaces(null); RefreshScene(); EditEcho("删除三角面：已放弃"); return; }
-            if (kind == PickKind.Confirmed) break;
-            int ti = FindTriangleAt(m, x, y);
-            if (ti < 0) { EditEcho("该处不在三角网上，请重选", EchoLevel.Warn); continue; }
-            if (!marked.Add(ti)) marked.Remove(ti);   // 再点一次 = 取消该面
-        }
+        // 选中态的青色盖面撤掉, 逐面点选要看得见网面本身与逐个三角(青色边线留着, 便于认三角)
         Viewport.SetHighlightFaces(null);
-        if (marked.Count == 0) { RefreshScene(); EditEcho("⚠ 未选中任何三角面，未做删除", EchoLevel.Warn); return; }
-        int before = m.Tris.Count;
-        var (nv, nt) = PolylineClipper.RemoveTriangles(m.Verts, m.Tris, marked.ToList());
-        ReplaceMesh(m, new MeshEntity(m.Name, nv, nt));
-        EditEcho($"✓ 删除三角面「{m.Name}」：删除 {marked.Count} 个面，{before} → {nt.Count}（可 Ctrl+Z 还原）", EchoLevel.Success);
-    }
-
-    /// <summary>光标 XY 落在哪个三角形内（多个重叠时取 Z 最高的那个，同"实时曲面坐标"的取法）。</summary>
-    private static int FindTriangleAt(MeshEntity m, double px, double py)
-    {
-        int best = -1; double bestZ = double.NegativeInfinity;
-        for (int i = 0; i < m.Tris.Count; i++)
+        var picker = new MeshFacePick(m);
+        var marked = new HashSet<int>();
+        int hover = -2;   // -1 = 不在网上; -2 = 未算过(强制下一次悬停重画)
+        bool cancelled = false;
+        string Prompt() => $"② 点选 / 拖框选要删除的三角面（再点同一面=取消；Shift+拖框=移除；右键/回车=确认；Esc=取消）— 已选 {marked.Count} 面";
+        _pickHover = (sp, w) =>
         {
-            var (a, b, c) = m.Tris[i];
-            if (a >= m.Verts.Count || b >= m.Verts.Count || c >= m.Verts.Count) continue;
-            var p = m.Verts[a]; var q = m.Verts[b]; var r = m.Verts[c];
-            double d = (q.y - r.y) * (p.x - r.x) + (r.x - q.x) * (p.y - r.y);
-            if (Math.Abs(d) < 1e-15) continue;
-            double w0 = ((q.y - r.y) * (px - r.x) + (r.x - q.x) * (py - r.y)) / d;
-            double w1 = ((r.y - p.y) * (px - r.x) + (p.x - r.x) * (py - r.y)) / d;
-            double w2 = 1 - w0 - w1;
-            if (w0 < -1e-9 || w1 < -1e-9 || w2 < -1e-9) continue;
-            double z = w0 * p.z + w1 * q.z + w2 * r.z;
-            if (z > bestZ) { bestZ = z; best = i; }
-        }
-        return best;
-    }
-
-    /// <summary>把已标记的三角面高亮到视口（删除前的可视反馈）。</summary>
-    private void HighlightMeshFaces(MeshEntity m, IReadOnlyCollection<int> tris)
-    {
-        if (tris.Count == 0) { Viewport.SetHighlightFaces(null); return; }
-        var buf = new List<float>(tris.Count * 18);   // P3_C3：每顶点 x,y,z,r,g,b
-        foreach (var ti in tris)
+            int ti = FaceAtPointer(picker, sp, w);
+            if (ti == hover) return;
+            hover = ti;
+            RefreshDelFacesOverlay(picker, marked, hover);
+            _pickHoverInfo = DelFacesHoverInfo(picker, marked, hover);
+            RefreshPickTip(sp);   // 说明随悬停即时换(指针不动、只是点了一下也要换)
+        };
+        // 拖框多选：框内的面一次全加进来(Shift = 全移出去); 拾取仍挂着, 松开后接着点/框/确认
+        _pickBox = (a, b, crossing, remove) =>
         {
-            if (ti < 0 || ti >= m.Tris.Count) continue;
-            var (a, b, c) = m.Tris[ti];
-            if (a >= m.Verts.Count || b >= m.Verts.Count || c >= m.Verts.Count) continue;
-            foreach (var v in new[] { m.Verts[a], m.Verts[b], m.Verts[c] })
+            var hits = FacesInBox(picker, a, b, crossing);
+            string mode = crossing ? "交叉" : "窗口";
+            if (hits.Count == 0) EditEcho($"框选（{mode}）：框内没有三角面 — 共 {marked.Count} 面待删除", EchoLevel.Warn);
+            else
             {
-                buf.Add((float)v.x); buf.Add((float)v.y); buf.Add((float)v.z);
-                buf.Add(0.95f); buf.Add(0.25f); buf.Add(0.25f);   // 待删面标红
+                int changed = 0;
+                if (remove) { foreach (var t in hits) if (marked.Remove(t)) changed++; }
+                else { foreach (var t in hits) if (marked.Add(t)) changed++; }
+                double area = 0; foreach (var t in hits) area += picker.Area(t);
+                EditEcho(remove
+                    ? $"框选（{mode}）移除 {changed} 面（框内 {hits.Count} 面）— 共 {marked.Count} 面待删除"
+                    : $"框选（{mode}）加入 {changed} 面（框内 {hits.Count} 面，{area:0.##} m²）— 共 {marked.Count} 面待删除");
+            }
+            hover = -2;
+            _pickHover!(b, Viewport.ScreenToWorld(b.X, b.Y));   // 按新选集重画叠层 + 悬停说明(光标停在松开处)
+            SetPickPrompt(Prompt(), quiet: true);                // 命令行标签上的「已选 N 面」跟着变
+        };
+        try
+        {
+            EditEcho($"三角网「{m.Name}」已确认（{m.Tris.Count} 面）。点选或拖框选要删除的三角面：再点同一面 = 取消选中；左→右窗口 / 右→左交叉框选；Shift+拖框 = 移除；右键 / 回车 = 一起删除；Esc = 取消");
+            bool first = true;
+            while (true)
+            {
+                // 每圈先按光标当前位置算一次悬停(点选状态变了, 同一面的颜色与说明也要换): 刚点完鼠标还压在那个面上,
+                // 不等它动就把"已选中，点击取消"亮出来; 选完三角网那一下也一样, 光标就在网上
+                hover = -2;
+                _pickHover(_lastPointer, Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y));
+                var (kind, x, y) = await PickPointOrConfirmAsync(Prompt(), true,
+                    Controls.CadGlViewport.CursorMode.MeshPickBox, quiet: !first);   // 逐面点选 = 黄框 + 十字; 提示只回显一次, 之后只换标签/浮标
+                first = false;
+                if (kind == PickKind.Cancelled) { cancelled = true; break; }
+                if (kind == PickKind.Confirmed) break;
+                var sp = double.IsNaN(_lastPickScreen.sx) ? (Avalonia.Point?)null : new Avalonia.Point(_lastPickScreen.sx, _lastPickScreen.sy);
+                int ti = FaceAtPointer(picker, sp, (x, y));
+                if (ti < 0) { EditEcho("删除三角面：未命中三角面，请在三角网上点击（右键 / 回车确认，Esc 取消）", EchoLevel.Warn); continue; }
+                double area = picker.Area(ti);
+                if (marked.Add(ti)) EditEcho($"已选中三角面 #{ti}（面积 {area:0.##} m²）— 共 {marked.Count} 面待删除");
+                else { marked.Remove(ti); EditEcho($"取消选中三角面 #{ti} — 共 {marked.Count} 面待删除"); }
             }
         }
-        Viewport.SetHighlightFaces(buf.ToArray());
+        finally
+        {
+            _pickHover = null; _pickHoverInfo = null; _pickBox = null; _pickDragging = false;
+            Viewport.SetFacePickOverlay(null, null);
+            HideDragTip();
+        }
+        if (cancelled) { HighlightSelection(); EditEcho("删除三角面：已放弃（未改动三角网）", EchoLevel.Warn); return; }
+        if (marked.Count == 0) { HighlightSelection(); EditEcho("未选中任何三角面，取消删除", EchoLevel.Warn); return; }
+        int before = m.Tris.Count, beforeV = m.Verts.Count;
+        var (nv, nt) = PolylineClipper.RemoveTriangles(m.Verts, m.Tris, marked.ToList());
+        ReplaceMesh(m, new MeshEntity(m.Name, nv, nt));
+        EditEcho($"删除三角面完成「{m.Name}」：删除 {marked.Count} 面，{beforeV} 顶点 / {before} 面 → {nv.Count} 顶点 / {nt.Count} 面"
+               + $"{(beforeV - nv.Count > 0 ? $"（清掉 {beforeV - nv.Count} 个孤立顶点）" : "")}。Ctrl+Z 可还原。", EchoLevel.Success);
+    }
+
+    /// <summary>
+    /// 指针(屏幕点 + Z=0 反投影世界点) → 三角面索引。3D 视图按屏幕点做深度拾取(同 PickEntityInViewportAsync / PickAt 的口径),
+    /// 2D 俯视按 XY 取该处最高的那层；没命中 -1。
+    /// </summary>
+    private int FaceAtPointer(MeshFacePick picker, Avalonia.Point? screen, (double x, double y)? world)
+    {
+        if (!Viewport.Is2DView)
+            return screen == null ? -1 : picker.FindAtScreen(screen.Value.X, screen.Value.Y, Viewport.ViewStamp, Viewport.WorldToScreenDepthProjector());
+        return world == null ? -1 : picker.FindAtXY(world.Value.x, world.Value.y);
+    }
+
+    /// <summary>
+    /// 拖框 → 三角面索引集(与 FaceAtPointer 同口径)：3D 按屏幕矩形对投影判(被挡住的背面也算, 同 CAD 窗选)，2D 按世界 XY 矩形判。
+    /// 左→右窗口(全含才选) / 右→左交叉(碰到即选)由调用处按拖动方向给。
+    /// </summary>
+    private List<int> FacesInBox(MeshFacePick picker, Avalonia.Point a, Avalonia.Point b, bool crossing)
+    {
+        if (!Viewport.Is2DView)
+            return picker.FacesInScreenRect(a.X, a.Y, b.X, b.Y, crossing, Viewport.ViewStamp, Viewport.WorldToScreenDepthProjector());
+        var wa = Viewport.ScreenToWorld(a.X, a.Y); var wb = Viewport.ScreenToWorld(b.X, b.Y);
+        if (wa == null || wb == null) return new List<int>();
+        return picker.FacesInRect(wa.Value.x, wa.Value.y, wb.Value.x, wb.Value.y, crossing);
+    }
+
+    /// <summary>
+    /// 悬停面的实时说明(光标旁浮标)：面号 / 面积 / 点击效果 ＋ 已选数与下一步手势(原版 JigPrompt 里的「已选 N 面」)；
+    /// 不在网上则提示到网上点。
+    /// </summary>
+    private static string DelFacesHoverInfo(MeshFacePick picker, HashSet<int> marked, int hover)
+    {
+        string tail = marked.Count == 0 ? "尚未选面 · 拖框可多选 · Esc 放弃" : $"已选 {marked.Count} 面 · 右键/回车一起删除";
+        if (hover < 0) return $"光标不在三角网上 ｜ {tail}";
+        bool sel = marked.Contains(hover);
+        return $"▲ 面 #{hover} · {picker.Area(hover):0.##} m² · {(sel ? "已选中，点击取消" : "点击选中")} ｜ {tail}";
+    }
+
+    /// <summary>
+    /// 删除三角面的可视反馈(原版 RefreshDeleteFacesOverlay 的等价, 多一层盖面)：
+    /// 已选面 = 红色盖面 + 黄色描边；悬停面 = 黄色盖面 + 黄描边(已选面上悬停 → 橙色, 提示点击会取消)。
+    /// 几何按 SetHighlight 约定先减渲染原点再转 float(大坐标矿区不减就飞出视野)，Z 加 Elevation 贴在网面上。
+    /// </summary>
+    private void RefreshDelFacesOverlay(MeshFacePick picker, IReadOnlyCollection<int> marked, int hover)
+    {
+        var m = picker.Mesh;
+        if (marked.Count == 0 && hover < 0) { Viewport.SetFacePickOverlay(null, null); return; }
+        double ox = RenderOrigin.X, oy = RenderOrigin.Y, elev = m.Elevation;
+        var fills = new List<float>((marked.Count + 1) * 18);
+        var lines = new List<float>((marked.Count + 1) * 36);
+        const float yr = 1.0f, yg = 0.92f, yb = 0.0f;   // 原版 DELFACES 描边黄
+        void Tri(int ti, float fr, float fg, float fb)
+        {
+            if (ti < 0 || ti >= m.Tris.Count) return;
+            var (a, b, c) = m.Tris[ti];
+            if (a >= m.Verts.Count || b >= m.Verts.Count || c >= m.Verts.Count) return;
+            var p = m.Verts[a]; var q = m.Verts[b]; var r = m.Verts[c];
+            void F((double x, double y, double z) v)
+            { fills.Add((float)(v.x - ox)); fills.Add((float)(v.y - oy)); fills.Add((float)(v.z + elev)); fills.Add(fr); fills.Add(fg); fills.Add(fb); }
+            void L((double x, double y, double z) v)
+            { lines.Add((float)(v.x - ox)); lines.Add((float)(v.y - oy)); lines.Add((float)(v.z + elev)); lines.Add(yr); lines.Add(yg); lines.Add(yb); }
+            F(p); F(q); F(r);
+            L(p); L(q); L(q); L(r); L(r); L(p);
+        }
+        foreach (var ti in marked) if (ti != hover) Tri(ti, 0.95f, 0.25f, 0.25f);   // 待删面：红
+        if (hover >= 0)
+        {
+            if (marked.Contains(hover)) Tri(hover, 1.0f, 0.55f, 0.15f);   // 压在已选面上：橙(点击将取消)
+            else Tri(hover, 1.0f, 0.85f, 0.25f);                          // 未选面：黄(点击将选中)
+        }
+        Viewport.SetFacePickOverlay(fills.ToArray(), lines.ToArray());
     }
 
     // ══════════════════════════════ 公共小件 ══════════════════════════════

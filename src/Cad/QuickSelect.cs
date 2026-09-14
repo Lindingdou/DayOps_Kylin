@@ -544,4 +544,30 @@ public static class QuickSelectSnapshot
         for (int i = 0; i < entities.Count; i++) list.Add(From(entities[i], (ulong)i));
         return list;
     }
+
+    /// <summary>
+    /// 范围里**真有的**类型 id（按目录顺序，去重）。QSELECT「对象类型」下拉的数据源。
+    /// 忠实原 <c>QuickSelectService.PresentTypeIds</c> 的用意：列图上根本没有的类型，
+    /// 用户选中后只能得到空集 —— 那是白给一次挫败。
+    /// </summary>
+    public static IReadOnlyList<int> PresentTypeIds(IReadOnlyList<EntitySnapshot>? snaps)
+    {
+        if (snaps == null || snaps.Count == 0) return Array.Empty<int>();
+        var present = new HashSet<int>();
+        foreach (var s in snaps) present.Add(s.TypeId);
+        var ordered = new List<int>();
+        foreach (int id in QuickSelectCatalog.AllTypeIds()) if (present.Remove(id)) ordered.Add(id);
+        foreach (int id in present) ordered.Add(id);   // 目录里没登记的(不该有)也别丢
+        return ordered;
+    }
+
+    /// <summary>范围里出现过的图层名（去重、按名排序）。QSELECT「值」下拉在特性=图层时的候选。
+    /// 让人手打层名是快速选择最容易白跑一趟的地方 —— 差一个字就是空集。</summary>
+    public static IReadOnlyList<string> PresentLayerNames(IReadOnlyList<EntitySnapshot>? snaps)
+    {
+        if (snaps == null || snaps.Count == 0) return Array.Empty<string>();
+        var set = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var s in snaps) if (!string.IsNullOrEmpty(s.LayerName)) set.Add(s.LayerName);
+        return set.ToList();
+    }
 }

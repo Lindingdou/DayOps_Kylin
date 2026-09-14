@@ -28,7 +28,7 @@
             <TextBlock Classes="panel-title" Text="导出列" Margin="0,0,0,8"/>
             <CheckBox Content="✓ 几何（cx, cy, cz, sx, sy, sz）" IsChecked="True" IsEnabled="False" Margin="0,0,0,4"/>
             <StackPanel x:Name="attrChecks" Spacing="2"/>
-            <TextBlock x:Name="attrHint" Foreground="#FF6B7280" FontSize="11" Margin="0,4,0,0" Text="选定来源块体后，模型的所有属性列将自动列出供勾选。"/>
+            <TextBlock x:Name="attrHint" Foreground="{DynamicResource Theme.Text.Muted}" FontSize="11" Margin="0,4,0,0" Text="选定来源块体后，模型的所有属性列将自动列出供勾选。"/>
           </StackPanel>
         </Border>
 

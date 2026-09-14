@@ -1,8 +1,9 @@
+using System;
 using System.Collections.Generic;
 
 namespace PitMine3D.Kylin.Cad.Draw;
 
-/// <summary>图层：名称 + 颜色 + 开关/冻结/锁定。对应 Home 图层管理（托管重实现）。</summary>
+/// <summary>图层：名称 + 颜色 + 开关/冻结/锁定 + 线宽/透明度/打印/说明。对应原版「图层特性管理器」一行（托管重实现）。</summary>
 public sealed class Layer
 {
     public string Name;
@@ -10,6 +11,22 @@ public sealed class Layer
     public bool Visible = true;    // 关闭=不显示
     public bool Frozen;            // 冻结=不显示且不参与(比关闭更强)
     public bool Locked;            // 锁定=显示但不可选/改
+
+    /// <summary>图层线宽(DXF LineWeightType 值: -3=默认, 0..211=0.01mm)。实体线宽为 -1(随层) 时取这条。
+    /// 注: 图层本身不能"随层", 故不收 -1。</summary>
+    public short LineWeight = -3;
+
+    /// <summary>图层透明度(0=不透明, 1..90=百分比)。实体透明度为 -1(随层) 时取这条。
+    /// **口径**: 与 Kylin 实体「透明度」特性同为百分比 —— 原版这一列存的是 0..255 原始 alpha,
+    /// 但随层解析必须与实体同单位，否则算出来的不透明度没有意义。</summary>
+    public short Transparency;
+
+    /// <summary>是否打印(不打印的层仍上屏, 只是出图/导出时略过)。</summary>
+    public bool Plottable = true;
+
+    /// <summary>说明(自由文本)。</summary>
+    public string Description = "";
+
     public Layer(string name, float r, float g, float b) { Name = name; Cr = r; Cg = g; Cb = b; }
 
     /// <summary>是否上屏（开且未冻结）。</summary>
@@ -100,6 +117,27 @@ public sealed class LayerTable
         return true;
     }
 
+    /// <summary>随层解析 —— 实体透明度 -1(随层) 时取所在图层的透明度; 否则用实体自己的。
+    /// 未知图层按不透明处理。结果一律夹到 0..90（同实体特性口径）。</summary>
+    public short EffectiveTransparency(short entityTransp, string layerName)
+    {
+        if (entityTransp >= 0) return Math.Clamp(entityTransp, (short)0, (short)90);
+        var l = Get(layerName);
+        return l == null ? (short)0 : Math.Clamp(l.Transparency, (short)0, (short)90);
+    }
+
+    /// <summary>随层解析 —— 实体线宽 -1(随层) 时取所在图层的线宽; 否则用实体自己的。
+    /// 未知图层返 -3(默认)。-2(随块) 原样返回：Kylin 无块表, 不臆造解析。</summary>
+    public short EffectiveLineWeight(short entityLw, string layerName)
+    {
+        if (entityLw != -1) return entityLw;
+        var l = Get(layerName);
+        return l?.LineWeight ?? (short)-3;
+    }
+
+    /// <summary>该图层是否打印（未知图层按打印处理）。</summary>
+    public bool IsPlottable(string name) { var l = Get(name); return l == null || l.Plottable; }
+
     /// <summary>该图层上的实体是否上屏（未知图层按显示处理）。</summary>
     public bool IsShown(string name) { var l = Get(name); return l == null || l.Shown; }
     /// <summary>该图层上的实体是否可拾取/编辑（未知图层按可选处理）。</summary>
@@ -129,7 +167,12 @@ public sealed class LayerTable
         if (layers == null || layers.Count == 0) return;
         _layers.Clear();
         foreach (var ls in layers)
-            _layers.Add(new Layer(ls.Name, ls.Cr, ls.Cg, ls.Cb) { Visible = ls.Visible, Frozen = ls.Frozen, Locked = ls.Locked });
+            _layers.Add(new Layer(ls.Name, ls.Cr, ls.Cg, ls.Cb)
+            {
+                Visible = ls.Visible, Frozen = ls.Frozen, Locked = ls.Locked,
+                LineWeight = ls.LineWeight, Transparency = ls.Transparency,
+                Plottable = ls.Plottable, Description = ls.Description ?? "",
+            });
         if (_layers.Count == 0) _layers.Add(new Layer("0", Palette[0].r, Palette[0].g, Palette[0].b));
         Current = Get(current) ?? _layers[0];
     }

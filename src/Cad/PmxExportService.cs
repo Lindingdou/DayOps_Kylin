@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -55,6 +55,10 @@ public static class PmxExportService
             switch (e)
             {
                 case LineEntity l: Ent(1, l, w => { XY(w, l.X0, l.Y0); XY(w, l.X1, l.Y1); }); break;
+                case HatchEntity ha:   // 填充: 原版 Hatch 记录本移植不写, 按图案线导出(出图一致)
+                    foreach (var (hx1, hy1, hx2, hy2) in ha.Lines())
+                        Ent(1, ha, w => { XY(w, hx1, hy1); XY(w, hx2, hy2); });
+                    break;
                 case PointEntity p: Ent(3, p, w => XY(w, p.X, p.Y)); break;
                 case PolylineEntity pl:
                     Ent(2, pl, w => { w.Write((byte)(pl.Closed ? 1 : 0)); w.Write(pl.Points.Count); foreach (var (vx, vy) in pl.Points) XY(w, vx, vy); });

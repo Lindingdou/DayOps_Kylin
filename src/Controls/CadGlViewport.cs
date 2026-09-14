@@ -63,6 +63,21 @@ public partial class CadGlViewport : OpenGlControlBase
     private bool _hasFaces;
     private float[]? _pendingFaces;
     private bool _facesDirty;
+    // ── 24 位深度缓冲 ──
+    // Avalonia 给 OpenGlControlBase 的 FBO 在 GLES(ANGLE/国产 GPU)下挂的是 GL_DEPTH_COMPONENT16(实测 ANGLE 上问出来
+    // 就是 0x81A5/16 位)。16 位深度在千米级矿区场景里最小可分辨深度差是几十米：贴在地形上的设计面、分割后拼回的两片、
+    // 甚至相邻台阶都逐像素随机交错 —— 用户看到的"共面锯齿/阶梯"根子在这。每帧开画前把 FBO 的深度附件换成
+    // 我们自己建的 GL_DEPTH_COMPONENT24(尺寸照抄 Avalonia 那块)；Avalonia 只在尺寸变了才重建/重挂它那块,
+    // 一旦发现挂回去了就再换一次。挂不上(GLES 2.0 无 OES_depth24 等)就原样用 16 位, 不影响出图。
+    private int _deepDepthRb;              // 我们的 24 位深度渲染缓冲(0 = 未建)
+    private bool _deepDepthDisabled;       // 驱动不支持 / 桌面 GL 本来就 ≥24 位: 不再尝试
+    private bool _deepDepthLogged;
+    // 着色面缓冲里各实体的顶点区间(场景顺序)。共面显示：逐实体画, 越早加的实体深度偏移越大(往后推),
+    // 后加的盖在先加的之上 —— 一块缓冲一次画完时, 两张共面的网(设计面贴在地形上 / 分割后拼回)
+    // 每个像素谁赢全看插值舍入, 屏幕上就是随机交错的锯齿。偏移只在 MaxCoplanarLevels 档内递增,
+    // 再往前的实体共用最大档 + LEQUAL 按画序决胜: 档位越多偏得越远, 真正前后有别的面会被错序。
+    private IReadOnlyList<(int first, int count)>? _pendingFaceRanges, _faceRanges;
+    private const int MaxCoplanarLevels = 4;
     private double _sceneZc;          // 线几何高程中心(供 ZE/FitBounds 把注视点放到模型高度)
     private double[]? _facesBounds;   // 着色面 XY 包围盒(着色面模式下三角网不进线通道, ZE 得单独并进来)
     private double _facesZc;          // 着色面高程中心
@@ -76,6 +91,19 @@ public partial class CadGlViewport : OpenGlControlBase
     private float _cloudPx = 2f;      // 点径(像素)
     private double[]? _cloudBounds;   // 点云 XY 包围盒(点云不进线段通道, ZE 得单独并进来)
     private const int GL_POINTS = 0x0000;   // Avalonia 的 GlConsts 没导出它
+
+    // 材质面(PBR / 贴图 / 半透): 每种材质参数一批, 走单独的材质 GL 程序(带法线, 逐片元打光)
+    private readonly List<(PitMine3D.Kylin.Cad.Draw.Scene.MaterialBatch batch, GlRenderer.Mesh mesh)> _matMeshes = new();
+    private List<PitMine3D.Kylin.Cad.Draw.Scene.MaterialBatch>? _pendingMat;
+    private bool _matDirty;
+    private double[]? _matBounds;   // 材质面 XY 包围盒(它们不进 _pendingFaces, ZE 得单独并进来)
+    private double _matZc;          // 材质面高程中心
+
+    // 贴图(三平面投影): 托管侧解好的 RGBA8 像素 → GL 纹理
+    private byte[]? _pendingTexPixels;
+    private int _pendingTexW, _pendingTexH;
+    private bool _texDirty;
+    private int _texture;
 
     // 选中高亮的着色面(选中三角网表面盖高亮色, GL_TRIANGLES)
     private GlRenderer.Mesh _highlightFaces;
@@ -117,14 +145,73 @@ public partial class CadGlViewport : OpenGlControlBase
     private float[]? _pendingSnap;
     private bool _snapDirty;
 
+    // 逐面拾取叠层(删除三角面等"点选某个三角面"的命令: 悬停面 + 已点选面)。面通道(深度开 + 负偏移压住原面)与
+    // 线通道(深度关, 描边画最上层)各一块; 鼠标一动就换一次, 与捕捉标记/预览同一套"复用 VBO 重灌"。
+    private GlRenderer.Mesh _pickFaces, _pickLines;
+    private bool _hasPickFaces, _hasPickLines;
+    private float[]? _pendingPickFaces, _pendingPickLines;
+    private bool _pickOverlayDirty;
+
     // CAD 十字光标（满视口横竖两线 + 中心拾取框, 随光标移动; 屏幕对齐, NDC 直接画）。对应内核光标(GetCursorPos)。
-    private const double CursorBoxPx = 7;                 // 中心拾取框半边长(像素)
+    public const double CursorBoxPx = 7;                  // 中心拾取框半边长(像素); 命令里"方框点选线/点"的命中容差就按它(所见即所选)
+    private double _cursorSizePct = 100;                  // 十字尺寸(占屏百分比; 100=满屏十字, 同原版「选项·显示·十字光标尺寸」)
+    private CursorMode _cursorMode = CursorMode.CrosshairWithBox;
+    private bool _cursorBoxSelecting;                     // 正在拖框选: 不画中心小方框(与拖出的矩形打架)
     private GlRenderer.Mesh _cursor;
     private bool _hasCursor;
     private double _cursorSx, _cursorSy;                 // 光标屏幕坐标(DIP)
     private bool _showCursor;                             // 光标在视口内 → 显示
     private double _curBuiltSx = double.NaN, _curBuiltSy;// 上次建网格的光标位/尺寸(变了才重建)
     private double _curBuiltW, _curBuiltH;
+    private CursorMode _curBuiltMode = CursorMode.CrosshairWithBox;   // 上次建网格用的形态(换形态要重建)
+    private bool _curBuiltBoxSel;
+
+    // ── 视口配色（选项 · 显示，同原版 Options.Display.Bg2D / Bg3D / CursorColor）──
+    // 背景 2D/3D 各一份(原版 Editor 按当前视图选用); 格网明暗按背景亮度自动推(浅底压深、深底提亮), 不单独配。
+    public static readonly (float r, float g, float b) DefaultBackground = (0.13f, 0.14f, 0.16f);
+    /// <summary>深色界面主题配套的视口底色：原版深色主题那种海军蓝(与面板 #16273E 同调、略深)。</summary>
+    public static readonly (float r, float g, float b) DarkThemeBackground = (0.094f, 0.137f, 0.220f);
+    private (float r, float g, float b) _bg2D = DefaultBackground, _bg3D = DefaultBackground;
+    private (float r, float g, float b) _cursorRgb = (1f, 1f, 1f);
+    private (float r, float g, float b) _gridBuiltBg = (float.NaN, 0, 0);   // 上次建格网时的背景(变了要重建换色)
+
+    /// <summary>2D 视口背景色（0..1）。</summary>
+    public (float r, float g, float b) Background2D
+    {
+        get => _bg2D;
+        set { if (_bg2D.Equals(value)) return; _bg2D = value; RequestNextFrameRendering(); }
+    }
+
+    /// <summary>3D 视口背景色（0..1）。</summary>
+    public (float r, float g, float b) Background3D
+    {
+        get => _bg3D;
+        set { if (_bg3D.Equals(value)) return; _bg3D = value; RequestNextFrameRendering(); }
+    }
+
+    /// <summary>十字光标/拾取框颜色（0..1）。</summary>
+    public (float r, float g, float b) CursorColor
+    {
+        get => _cursorRgb;
+        set { if (_cursorRgb.Equals(value)) return; _cursorRgb = value; _curBuiltSx = double.NaN; RequestNextFrameRendering(); }
+    }
+
+    /// <summary>当前视图(2D/3D)实际使用的背景色。</summary>
+    public (float r, float g, float b) CurrentBackground => _camera.Is2D ? _bg2D : _bg3D;
+
+    /// <summary>
+    /// 格网细线/主线颜色：按背景亮度推。深底 → 比背景略亮(细 +0.055 / 主 +0.17，与老的写死值一致)；
+    /// 浅底(亮度 &gt; 0.5) → 比背景略暗。这样白底/黑底/自定义色都有可见但不抢的格网。
+    /// </summary>
+    public static ((float r, float g, float b) minor, (float r, float g, float b) major) GridShades((float r, float g, float b) bg)
+    {
+        double lum = 0.2126 * bg.r + 0.7152 * bg.g + 0.0722 * bg.b;
+        float sgn = lum > 0.5 ? -1f : 1f;
+        float mn = sgn * 0.055f, mj = sgn * 0.17f;
+        static float C(float v) => Math.Clamp(v, 0f, 1f);
+        return ((C(bg.r + mn), C(bg.g + mn + 0.01f * sgn), C(bg.b + mn + 0.02f * sgn)),
+                (C(bg.r + mj), C(bg.g + mj + 0.015f * sgn), C(bg.b + mj + 0.03f * sgn)));
+    }
 
     private readonly Stopwatch _clock = Stopwatch.StartNew();
 
@@ -132,6 +219,17 @@ public partial class CadGlViewport : OpenGlControlBase
     public event Action<string>? GlReady;
     /// <summary>帧时间采样(每秒一次)：(fps, 平均帧时 ms)。UI 线程回调。</summary>
     public event Action<double, double>? FrameStats;
+
+    /// <summary>
+    /// 视图比例变了（缩放 / 框住 / 切视图 / 切 2D-3D）。
+    ///
+    /// 给"按屏幕像素定尺寸、却存成世界坐标"的叠加物用 —— 夹点方块就是：它的世界半边长由
+    /// 当前像素比例换算而来，缩放后不重算就会跟着放大缩小（放大后还会露出填充扫描线）。
+    /// 平移/轨道不发：比例没变，而它们逐帧触发会把重建摊到每一帧上。
+    /// </summary>
+    public event Action? ScaleChanged;
+
+    private void RaiseScaleChanged() => ScaleChanged?.Invoke();
     private int _frameCount;
     private long _statT0;
 
@@ -140,6 +238,7 @@ public partial class CadGlViewport : OpenGlControlBase
     public string GlFailReason { get; private set; } = "";
 
     private bool _firstFrameLogged;
+    private int _lastRenderW, _lastRenderH;   // 上一帧实际渲染像素尺寸(诊断横向错位: 与 Bounds 宽高比对不上就是它)
 
     /// <summary>已请求但尚未绘出的帧(重绘去重, 见 SetCursorScreen)。</summary>
     private bool _renderQueued;
@@ -183,7 +282,8 @@ public partial class CadGlViewport : OpenGlControlBase
 
         _renderer.Init(gl, _ext, _isGles, GlVersion.Major, GlVersion.Minor);
         // 驱动实况落盘: 原生崩溃(SIGSEGV)抓不到堆栈, 这几行是判断"崩在哪类驱动"的第一手材料
-        PitMine3D.Kylin.CrashLog.Write("GL", $"渲染器就绪, 着色器方言={_renderer.ShaderProfile}, 扩展 {_ext!.Resolved}");
+        PitMine3D.Kylin.CrashLog.Write("GL", $"渲染器就绪, 着色器方言={_renderer.ShaderProfile}, 扩展 {_ext!.Resolved}"
+            + $", 材质通道={(_renderer.MaterialReady ? "可用" : "不可用: " + _renderer.MaterialFailReason)}");
         try
         {
             string renderer = gl.GetString(0x1F01) ?? "", vendor = gl.GetString(0x1F00) ?? "";
@@ -208,10 +308,15 @@ public partial class CadGlViewport : OpenGlControlBase
         if (_pendingHighlightFaces != null) _highlightFacesDirty = true;
         if (_pendingSnap != null) _snapDirty = true;
         if (_pendingPreview != null) _previewDirty = true;
+        if (_pendingPickFaces != null || _pendingPickLines != null) _pickOverlayDirty = true;
+        if (_pendingMat != null) _matDirty = true;
+        if (_pendingTexPixels != null) _texDirty = true;
     }
 
     protected override void OnOpenGlDeinit(GlInterface gl)
     {
+        if (_deepDepthRb != 0) { try { gl.DeleteRenderbuffer(_deepDepthRb); } catch { } _deepDepthRb = 0; }
+        _deepDepthDisabled = false; _deepDepthLogged = false;   // 上下文重建后重新探测
         if (GlFailed) return;
 
         if (_hasGrid) _renderer.DeleteMesh(_grid);
@@ -221,10 +326,15 @@ public partial class CadGlViewport : OpenGlControlBase
         if (_hasHighlight) _renderer.DeleteMesh(_highlight);
         if (_hasSnap) _renderer.DeleteMesh(_snap);
         if (_hasPreview) _renderer.DeleteMesh(_preview);
+        if (_pickFaces.Vbo != 0) _renderer.DeleteMesh(_pickFaces);
+        if (_pickLines.Vbo != 0) _renderer.DeleteMesh(_pickLines);
         if (_hasScene) _renderer.DeleteMesh(_scene);
         if (_hasFaces) _renderer.DeleteMesh(_faces);
         if (_hasCloud) _renderer.DeleteMesh(_cloud);
         if (_hasHighlightFaces) _renderer.DeleteMesh(_highlightFaces);
+        foreach (var (_, m) in _matMeshes) _renderer.DeleteMesh(m);
+        _matMeshes.Clear();
+        if (_texture != 0) { _renderer.DeleteTexture(_texture); _texture = 0; }
         if (_hasBillboards) _renderer.DeleteMesh(_billboards);
         if (_hasBillboardFills) _renderer.DeleteMesh(_billboardFills);
         if (_hasCursor) _renderer.DeleteMesh(_cursor);
@@ -236,10 +346,13 @@ public partial class CadGlViewport : OpenGlControlBase
         // 走 UpdateMesh「复用同一 VBO 重灌」的三块(光标/捕捉标记/预览)还攥着旧上下文的缓冲名, 也要清零:
         // 否则重建后 BindBuffer(旧名) 会撞上新上下文里恰好同名的别的缓冲(场景/格网), 把它灌成光标线段——花屏/丢线。
         _cursor = default; _snap = default; _preview = default;
+        _pickFaces = default; _pickLines = default; _hasPickFaces = _hasPickLines = false;
         _hasBillboards = false; _hasBillboardFills = false; _bbYaw = double.NaN;
         if (_pendingFaces != null) _facesDirty = true;
         if (_pendingCloud != null) _cloudDirty = true;
         if (_pendingHighlightFaces != null) _highlightFacesDirty = true;
+        if (_pendingMat != null) _matDirty = true;
+        if (_pendingTexPixels != null) _texDirty = true;
         _hasCursor = false; _curBuiltSx = double.NaN;   // 十字光标下次移动即按当前上下文重建
     }
 
@@ -247,12 +360,52 @@ public partial class CadGlViewport : OpenGlControlBase
     {
         // 渲染回调里的托管异常此前会直接把进程带走。改为记下原因、停掉本视口绘制,
         // 窗口/面板/命令行都还在 —— 报错而不是崩溃。(原生段错误仍拦不住, 那是信号不是异常。)
-        try { RenderCore(gl, fb); }
+        try { EnsureDeepDepthBuffer(gl); RenderCore(gl, fb); }
         catch (Exception ex)
         {
             GlFailed = true;
             GlFailReason = ex.Message;
             PitMine3D.Kylin.CrashLog.Write("GL", "渲染失败, 已停止本视口绘制(程序继续): " + ex);
+        }
+    }
+
+    private void EnsureDeepDepthBuffer(GlInterface gl)
+    {
+        if (_deepDepthDisabled || _ext == null) return;
+        const int GL_FRAMEBUFFER = 0x8D40, GL_RENDERBUFFER = 0x8D41, GL_DEPTH_ATTACHMENT = 0x8D00, GL_DEPTH_COMPONENT24 = 0x81A6, GL_FRAMEBUFFER_COMPLETE = 0x8CD5;
+        if (_ext.GetInteger(0x8CA6 /*GL_FRAMEBUFFER_BINDING*/) == 0) return;   // 直接画到默认帧缓冲: 深度格式由窗口决定, 换不了
+        int cur = _ext.FramebufferAttachmentName(GL_DEPTH_ATTACHMENT);
+        if (cur != 0 && cur == _deepDepthRb) return;   // 还是我们那块
+        var info = _ext.RenderbufferInfo(cur);
+        if (cur == 0 || info.w <= 0 || info.h <= 0) return;   // 没挂深度 / 问不到尺寸: 不动
+        if (info.depthBits >= 24)
+        {
+            _deepDepthDisabled = true;
+            if (!_deepDepthLogged) { _deepDepthLogged = true; PitMine3D.Kylin.CrashLog.Write("GL", $"帧缓冲深度 {info.depthBits} 位, 无需替换"); }
+            return;
+        }
+        try
+        {
+            if (_deepDepthRb != 0) gl.DeleteRenderbuffer(_deepDepthRb);
+            _deepDepthRb = gl.GenRenderbuffer();
+            gl.BindRenderbuffer(GL_RENDERBUFFER, _deepDepthRb);
+            gl.RenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, info.w, info.h);
+            gl.FramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, _deepDepthRb);
+            int status = gl.CheckFramebufferStatus(GL_FRAMEBUFFER);
+            var mine = _ext.RenderbufferInfo(_deepDepthRb);
+            if (status != GL_FRAMEBUFFER_COMPLETE || mine.depthBits < 24)
+            {
+                gl.FramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, cur);   // 挂回 Avalonia 那块
+                gl.DeleteRenderbuffer(_deepDepthRb); _deepDepthRb = 0; _deepDepthDisabled = true;
+                PitMine3D.Kylin.CrashLog.Write("GL", $"24 位深度缓冲挂不上(状态 0x{status:X}, 位数 {mine.depthBits}), 沿用 {info.depthBits} 位");
+                return;
+            }
+            if (!_deepDepthLogged) { _deepDepthLogged = true; PitMine3D.Kylin.CrashLog.Write("GL", $"帧缓冲深度 {info.depthBits} 位 → 已换成 {mine.depthBits} 位({info.w}×{info.h})"); }
+        }
+        catch (Exception ex)
+        {
+            _deepDepthDisabled = true; _deepDepthRb = 0;
+            PitMine3D.Kylin.CrashLog.Write("GL", "替换深度缓冲失败, 沿用原深度: " + ex.Message);
         }
     }
 
@@ -269,9 +422,9 @@ public partial class CadGlViewport : OpenGlControlBase
         // 消费待上传的导入几何（必须在 GL 线程 = 本回调内）。源保留于 _pendingImport 供上下文重建后重传。
         if (_importedDirty)
         {
-            _importedDirty = false;
             var src = _pendingImport ?? Array.Empty<float>();
-            EnsureOrigin(_pendingBounds);
+            EnsureOrigin(_pendingBounds);   // 先定原点(可能回标脏), 再清标志: 本帧就按新原点上传
+            _importedDirty = false;
             if (_hasImported) _renderer.DeleteMesh(_imported);
             _imported = _renderer.Upload(Localize(src));
             _hasImported = !_imported.IsEmpty;
@@ -283,15 +436,18 @@ public partial class CadGlViewport : OpenGlControlBase
         {
             _highlightDirty = false;
             if (_hasHighlight) _renderer.DeleteMesh(_highlight);
-            _highlight = _renderer.Upload(Localize(_pendingHighlight!));
+            _highlight = _renderer.Upload(_pendingHighlight!);
             _hasHighlight = !_highlight.IsEmpty;
         }
 
         if (_snapDirty)
         {
             // 捕捉标记同十字光标: 鼠标一动就换一次, 复用同一 VBO 重灌, 不再每次删一个缓冲再建一个
+            // 注意**不要**再 Localize: 选框(BoxRect)与捕捉十字(SnapCross)都已在生成时自己减过渲染原点,
+            // 与 _pendingHighlight / _pendingPreview 同一套约定。再减一次就等于把选框整体平移了一个原点 ——
+            // 原点小(新图)时只是画偏, 原点是矿区真实坐标(百万级)时直接飞出视野, 表现为"拖框看不见框"。
             _snapDirty = false;
-            _renderer.UpdateMesh(ref _snap, Localize(_pendingSnap!));
+            _renderer.UpdateMesh(ref _snap, _pendingSnap!);
             _hasSnap = !_snap.IsEmpty;
         }
 
@@ -299,23 +455,33 @@ public partial class CadGlViewport : OpenGlControlBase
         {
             // 同捕捉标记: 鼠标一动就换一次, 复用同一 VBO 重灌, 不删缓冲不重建
             _previewDirty = false;
-            _renderer.UpdateMesh(ref _preview, Localize(_pendingPreview!));
+            _renderer.UpdateMesh(ref _preview, _pendingPreview!);
             _hasPreview = !_preview.IsEmpty;
+        }
+
+        if (_pickOverlayDirty)
+        {
+            // 逐面拾取叠层: 悬停一动就换, 同预览复用 VBO 重灌。几何已在生成时减过渲染原点, 不再 Localize。
+            _pickOverlayDirty = false;
+            _renderer.UpdateMesh(ref _pickFaces, _pendingPickFaces ?? Array.Empty<float>());
+            _renderer.UpdateMesh(ref _pickLines, _pendingPickLines ?? Array.Empty<float>());
+            _hasPickFaces = !_pickFaces.IsEmpty; _hasPickLines = !_pickLines.IsEmpty;
         }
 
         if (_facesDirty)
         {
             _facesDirty = false;
             if (_hasFaces) _renderer.DeleteMesh(_faces);
-            _faces = _renderer.Upload(Localize(_pendingFaces!));
+            _faces = _renderer.Upload(_pendingFaces!);
             _hasFaces = !_faces.IsEmpty;
+            _faceRanges = _pendingFaceRanges;
         }
 
         if (_cloudDirty)
         {
             _cloudDirty = false;
             if (_hasCloud) _renderer.DeleteMesh(_cloud);
-            _cloud = _renderer.Upload(Localize(_pendingCloud!));
+            _cloud = _renderer.Upload(_pendingCloud!);
             _hasCloud = !_cloud.IsEmpty;
         }
 
@@ -323,15 +489,36 @@ public partial class CadGlViewport : OpenGlControlBase
         {
             _highlightFacesDirty = false;
             if (_hasHighlightFaces) _renderer.DeleteMesh(_highlightFaces);
-            _highlightFaces = _renderer.Upload(Localize(_pendingHighlightFaces!));
+            _highlightFaces = _renderer.Upload(_pendingHighlightFaces!);
             _hasHighlightFaces = !_highlightFaces.IsEmpty;
+        }
+
+        if (_texDirty)
+        {
+            _texDirty = false;
+            if (_texture != 0) { _renderer.DeleteTexture(_texture); _texture = 0; }
+            if (_pendingTexPixels is { Length: > 0 })
+                _texture = _renderer.CreateTexture(_pendingTexPixels, _pendingTexW, _pendingTexH);
+        }
+
+        if (_matDirty)
+        {
+            _matDirty = false;
+            foreach (var (_, m) in _matMeshes) _renderer.DeleteMesh(m);
+            _matMeshes.Clear();
+            if (_pendingMat != null)
+                foreach (var b in _pendingMat)
+                {
+                    var mesh = _renderer.UploadMat(b.Verts);
+                    if (!mesh.IsEmpty) _matMeshes.Add((b, mesh));
+                }
         }
 
         if (_sceneDirty)
         {
             _sceneDirty = false;
             if (_hasScene) _renderer.DeleteMesh(_scene);
-            _scene = _renderer.Upload(Localize(_pendingScene!));
+            _scene = _renderer.Upload(_pendingScene!);
             _hasScene = !_scene.IsEmpty;
         }
 
@@ -339,23 +526,47 @@ public partial class CadGlViewport : OpenGlControlBase
         // 它是「鼠标每动一次就删一个 GL 缓冲再传一个」的唯一路径 —— 驱动有问题时最先崩在这，
         // 故留 PITMINE_NO_CURSOR=1 应急开关: 关掉光标即可判断闪退是不是这条路引起的。
         if (!NoCursor && _showCursor && Bounds.Width > 0 && Bounds.Height > 0 &&
-            (_cursorSx != _curBuiltSx || _cursorSy != _curBuiltSy || Bounds.Width != _curBuiltW || Bounds.Height != _curBuiltH))
+            (_cursorSx != _curBuiltSx || _cursorSy != _curBuiltSy || Bounds.Width != _curBuiltW || Bounds.Height != _curBuiltH
+             || _cursorMode != _curBuiltMode || _cursorBoxSelecting != _curBuiltBoxSel))
         {
             _curBuiltSx = _cursorSx; _curBuiltSy = _cursorSy; _curBuiltW = Bounds.Width; _curBuiltH = Bounds.Height;
+            _curBuiltMode = _cursorMode; _curBuiltBoxSel = _cursorBoxSelecting;
             float nx = (float)(2.0 * _cursorSx / Bounds.Width - 1.0);
             float ny = (float)(1.0 - 2.0 * _cursorSy / Bounds.Height);
             float hx = (float)(CursorBoxPx * 2.0 / Bounds.Width);    // 中心拾取框半宽(px→NDC)
             float hy = (float)(CursorBoxPx * 2.0 / Bounds.Height);
-            const float r = 1f, g = 1f, b = 1f;   // 白色十字光标(醒目, 区别于红/绿轴与灰网格)
-            float[] verts = {
-                nx, -1f, 0f, r, g, b,   nx, 1f, 0f, r, g, b,        // 竖线(满屏)
-                -1f, ny, 0f, r, g, b,   1f, ny, 0f, r, g, b,        // 横线(满屏)
-                nx - hx, ny - hy, 0f, r,g,b,   nx + hx, ny - hy, 0f, r,g,b,   // 拾取框: 下
-                nx + hx, ny - hy, 0f, r,g,b,   nx + hx, ny + hy, 0f, r,g,b,   // 右
-                nx + hx, ny + hy, 0f, r,g,b,   nx - hx, ny + hy, 0f, r,g,b,   // 上
-                nx - hx, ny + hy, 0f, r,g,b,   nx - hx, ny - hy, 0f, r,g,b,   // 左
-            };
-            // 复用同一个 VBO 重灌(顶点数恒定 12)，不再每次移动都删一个缓冲再建一个
+            // 忠实原版 AcGi::Cursor::Build：
+            //   十字 = CrosshairWithBox / CrosshairOnly；方框 = CrosshairWithBox / PickBox；
+            //   拖框选期间不画中心方框(与拖出的矩形视觉冲突)；MeshPickBox = 黄框 + 略出框的十字。
+            bool showCross = _cursorMode is CursorMode.CrosshairWithBox or CursorMode.CrosshairOnly;
+            bool showBox = !_cursorBoxSelecting && _cursorMode is CursorMode.CrosshairWithBox or CursorMode.PickBox;
+            bool showMesh = !_cursorBoxSelecting && _cursorMode == CursorMode.MeshPickBox;
+            var cv = new List<float>(24 * 6);
+            void V(float x, float y, float r, float g, float b) { cv.Add(x); cv.Add(y); cv.Add(0f); cv.Add(r); cv.Add(g); cv.Add(b); }
+            void Box(float ex, float ey, float r, float g, float b)
+            {
+                V(nx - ex, ny - ey, r, g, b); V(nx + ex, ny - ey, r, g, b);   // 下
+                V(nx + ex, ny - ey, r, g, b); V(nx + ex, ny + ey, r, g, b);   // 右
+                V(nx + ex, ny + ey, r, g, b); V(nx - ex, ny + ey, r, g, b);   // 上
+                V(nx - ex, ny + ey, r, g, b); V(nx - ex, ny - ey, r, g, b);   // 左
+            }
+            var (cr, cg, cb) = _cursorRgb;   // 默认白(醒目, 区别于红/绿轴与灰网格); 可在「选项·显示·十字光标颜色」改
+            if (showCross)   // 臂长按「十字光标尺寸」设定
+            {
+                var (ax, ay) = CursorArmNdc(_cursorSizePct, Bounds.Width, Bounds.Height);   // 尺寸可调, 100% = 满屏
+                V(nx, ny - ay, cr, cg, cb); V(nx, ny + ay, cr, cg, cb);
+                V(nx - ax, ny, cr, cg, cb); V(nx + ax, ny, cr, cg, cb);
+            }
+            if (showBox) Box(hx, hy, cr, cg, cb);
+            if (showMesh)   // 拾取三角网/面: 黄框 + 略超出框的十字(与线拾取的白方框区分)
+            {
+                Box(hx, hy, 1f, 1f, 0f);
+                float cx = hx * 1.6f, cy = hy * 1.6f;
+                V(nx - cx, ny, 1f, 1f, 0f); V(nx + cx, ny, 1f, 1f, 0f);
+                V(nx, ny - cy, 1f, 1f, 0f); V(nx, ny + cy, 1f, 1f, 0f);
+            }
+            float[] verts = cv.ToArray();
+            // 复用同一个 VBO 重灌，不再每次移动都删一个缓冲再建一个
             PitMine3D.Kylin.CrashLog.Trace("光标更新 前");
             _renderer.UpdateMesh(ref _cursor, verts);
             _hasCursor = !_cursor.IsEmpty;
@@ -372,7 +583,8 @@ public partial class CadGlViewport : OpenGlControlBase
         EnsureGrid(aspect);   // 自适应格网: 缩放换挡/平移出界时重建(必须在 GL 线程)
 
         if (T) PitMine3D.Kylin.CrashLog.Trace("帧 开始");
-        _renderer.BeginFrame(w, h, 0.13f, 0.14f, 0.16f);
+        var bg = CurrentBackground;   // 2D/3D 各自的背景色(选项·显示·视口背景)
+        _renderer.BeginFrame(w, h, bg.r, bg.g, bg.b);
         if (T) PitMine3D.Kylin.CrashLog.Trace("帧 格网趟");
         GridPass(vp);
         if (T) PitMine3D.Kylin.CrashLog.Trace("帧 场景趟");
@@ -393,6 +605,9 @@ public partial class CadGlViewport : OpenGlControlBase
             _firstFrameLogged = true;
             PitMine3D.Kylin.CrashLog.Write("GL", $"首帧完成 {w}x{h}");
         }
+        // 本帧实际用的像素尺寸/宽高比 —— 供「指针诊断」比对: 反投影用的是 Bounds 的宽高比,
+        // 两者一旦不同, 光标点出来的世界点画回屏幕就会横向错位(纵向不动)。
+        _lastRenderW = w; _lastRenderH = h;
 
         // 帧时间采样：每秒汇总一次 FPS / 平均帧时(ms) → 状态栏 Performance 项(同原版 FrameProfiler)
         _frameCount++;
@@ -416,7 +631,9 @@ public partial class CadGlViewport : OpenGlControlBase
     {
         if (!_showGrid || !_hasGrid) return;
         _renderer.BeginPass(depthTest: false);
+        _renderer.SetWhiteRemap(false);   // 格网线是按背景推的浅灰, 浅底下不能被当成"白几何"压黑
         _renderer.Draw(_grid, GL_LINES, vp);
+        _renderer.SetWhiteRemap(true);
         _renderer.EndPass();
     }
 
@@ -427,7 +644,8 @@ public partial class CadGlViewport : OpenGlControlBase
     private void ScenePass(float[] vp)
     {
         _renderer.BeginPass(depthTest: true);
-        if (_hasFaces) { _renderer.SetPolygonOffset(true); _renderer.Draw(_faces, GL_TRIANGLES, vp); _renderer.SetPolygonOffset(false); }   // 着色面先画, 深度偏移让边线浮在面上
+        if (_hasFaces) DrawSceneFaces(vp);   // 着色面先画, 深度偏移让边线浮在面上
+        DrawMaterialFaces(vp, translucent: false);   // 不透明的材质面(PBR/贴图)与普通面同批次序
         if (_hasCloud)
         {
             _renderer.SetPointSize(_cloudPx);
@@ -435,13 +653,78 @@ public partial class CadGlViewport : OpenGlControlBase
             _renderer.Draw(_cloud, GL_POINTS, vp);
             _renderer.SetDepthLessEqual(false);
         }
+        // 2D 俯视：线框 / 橡皮筋预览 / 注记一律关深度, 靠画家顺序压在面上(忠实原版 Renderer::DrawCachedLine
+        // 「2D 俯视下 depthTest=false」与 Jig 预览 DrawLine(…, Is3DView())) —— 平面图元在 z=0、三维面在千米高程,
+        // 开着深度的话在面区域画多段线连预览都看不见。3D 视图仍开深度(线该被前面的面挡住)。
+        bool linesOverFaces = _camera.Is2D;
+        if (linesOverFaces) _renderer.BeginPass(depthTest: false);
         if (_hasImported) _renderer.Draw(_imported, GL_LINES, vp);
         if (_hasScene) _renderer.Draw(_scene, GL_LINES, vp);
         if (_hasPreview) _renderer.Draw(_preview, GL_LINES, vp);   // 进行中的橡皮筋/拖拽预览, 紧跟场景之后(与合缓冲时同序)
         // 注记始终朝屏幕: 实心字形先画三角(忠实原版 fillTris), 缺字回退的简笔画再画线
         if (_hasBillboardFills) _renderer.Draw(_billboardFills, GL_TRIANGLES, vp);
         if (_hasBillboards) _renderer.Draw(_billboards, GL_LINES, vp);
+        if (linesOverFaces) _renderer.BeginPass(depthTest: true);
+        DrawMaterialFaces(vp, translucent: true);   // 半透最后画: 前面的不透明体都已进深度缓冲, 才透得对
         _renderer.EndPass();
+    }
+
+    /// <summary>
+    /// 着色面：有分实体区间时逐实体画，深度偏移按"离最后一个实体的距离"分档，到 MaxCoplanarLevels 档封顶，
+    /// 同档之间开 LEQUAL 让后画的赢。于是共面的两张网稳定显示后加的那张(与 CAD 的"后画压先画"一致)，不再逐像素随机交错。
+    /// <para>
+    /// 每档 factor +1、units +2。**斜率项(factor)才是关键**：units 是深度缓冲最小刻度的整数倍，而两张几乎共面的网
+    /// 各自三角的深度斜率不同，擦边看时斜率项 factor×DZ 的差就有好几个刻度，只拉 units 压不住(实测 2/8/16 个刻度
+    /// 都还有交错斑，斜率每档 +1 就干净了)。斜率项按"每像素深度变化"计, 折成世界距离不过一两个像素的量,
+    /// 真正前后有别的面不会因此错序。
+    /// </para>
+    /// 只有一个实体(或没拿到区间)时仍是一次 draw call、偏移 (1,1)。
+    /// </summary>
+    private void DrawSceneFaces(float[] vp)
+    {
+        var ranges = _faceRanges;
+        if (ranges == null || ranges.Count <= 1)
+        {
+            _renderer.SetPolygonOffset(true); _renderer.Draw(_faces, GL_TRIANGLES, vp); _renderer.SetPolygonOffset(false);
+            return;
+        }
+        _renderer.SetDepthLessEqual(true);
+        int n = ranges.Count;
+        for (int k = 0; k < n; k++)
+        {
+            int level = Math.Min(n - 1 - k, MaxCoplanarLevels);
+            _renderer.SetPolygonOffset(true, 1.0f + level, 1.0f + 2.0f * level);
+            _renderer.Draw(_faces, GL_TRIANGLES, vp, ranges[k].first, ranges[k].count);
+        }
+        _renderer.SetPolygonOffset(false);
+        _renderer.SetDepthLessEqual(false);
+    }
+
+    /// <summary>
+    /// 材质面一趟：按批下发材质参数(档/金属度/粗糙度/不透明度)与相机位。
+    /// 半透那批开混合并关深度写；不透明那批照常。相机位给的是**渲染局部系**的 —— 顶点也在这个系里，
+    /// PBR 的视线方向必须与顶点同系，否则大坐标场景下高光会跑到天边去。
+    /// </summary>
+    private void DrawMaterialFaces(float[] vp, bool translucent)
+    {
+        if (_matMeshes.Count == 0 || !_renderer.MaterialReady) return;
+        var eye = _camera.Eye();
+        bool any = false;
+        foreach (var (b, mesh) in _matMeshes)
+        {
+            if ((b.Alpha < 0.999f) != translucent) continue;
+            if (!any)
+            {
+                any = true;
+                if (translucent) _renderer.SetBlend(true);
+                else _renderer.SetPolygonOffset(true);
+            }
+            _renderer.DrawMaterial(mesh, vp, b.Mode, b.Alpha, b.Metallic, b.Roughness,
+                                   (float)PitMine3D.Kylin.Cad.Draw.MeshEntity.TexScale, eye, _texture);
+        }
+        if (!any) return;
+        if (translucent) _renderer.SetBlend(false);
+        else _renderer.SetPolygonOffset(false);
     }
 
     /// <summary>选择高亮：先在选中三角网表面盖一层高亮色面(深度开 + 负偏移压住原面)，再把高亮线画在最上层(深度关)。</summary>
@@ -455,9 +738,19 @@ public partial class CadGlViewport : OpenGlControlBase
             _renderer.SetPolygonOffset(false);
             _renderer.EndPass();
         }
-        if (!_hasHighlight && !_hasSnap) return;
+        if (_hasPickFaces)
+        {
+            // 逐面拾取的悬停/已选面: 偏移再多拉一档, 压在选中高亮盖面之上(否则与青色盖面共面交错)
+            _renderer.BeginPass(depthTest: true);
+            _renderer.SetPolygonOffset(true, -2.5f, -2.5f);
+            _renderer.Draw(_pickFaces, GL_TRIANGLES, vp);
+            _renderer.SetPolygonOffset(false);
+            _renderer.EndPass();
+        }
+        if (!_hasHighlight && !_hasSnap && !_hasPickLines) return;
         _renderer.BeginPass(depthTest: false);
         if (_hasHighlight) _renderer.Draw(_highlight, GL_LINES, vp);
+        if (_hasPickLines) _renderer.Draw(_pickLines, GL_LINES, vp);   // 描边压在选中高亮线之上
         if (_hasSnap) _renderer.Draw(_snap, GL_LINES, vp);
         _renderer.EndPass();
     }
@@ -489,7 +782,7 @@ public partial class CadGlViewport : OpenGlControlBase
     public void Orbit(double dYaw, double dPitch) => _camera.Orbit(dYaw, dPitch);
 
     /// <summary>缩放。factor &lt;1 拉近，&gt;1 拉远。</summary>
-    public void Zoom(double factor) => _camera.Zoom(factor);
+    public void Zoom(double factor) { _camera.Zoom(factor); RaiseScaleChanged(); }
 
     /// <summary>屏幕拖拽平移（光标抓取的世界点跟随光标；2D/3D 通用）。</summary>
     public void Pan(double sx0, double sy0, double sx1, double sy1)
@@ -502,6 +795,7 @@ public partial class CadGlViewport : OpenGlControlBase
     public void ZoomAt(double sx, double sy, double factor)
     {
         _camera.ZoomAtScreen(sx, sy, Bounds.Width, Bounds.Height, factor);
+        RaiseScaleChanged();
         RequestNextFrameRendering();
     }
 
@@ -524,6 +818,53 @@ public partial class CadGlViewport : OpenGlControlBase
         RequestNextFrameRendering();
     }
 
+    /// <summary>
+    /// 光标形态（忠实原版 <c>AcGi::ViewState::CursorMode</c>）：
+    /// 空闲 = 十字 + 中央拾取框；绘图/取点(jig) = 只十字；选对象/选线 = 只拾取框(AutoCAD 的选择光标)；
+    /// 选三角网面 = 黄框 + 十字。原版还有一档「取点红十字」，是 处理尖灭 专用，本系统无此命令故不设。
+    /// </summary>
+    public enum CursorMode { CrosshairWithBox = 0, CrosshairOnly = 1, PickBox = 2, None = 3, MeshPickBox = 4 }
+
+    /// <summary>切光标形态；<paramref name="boxSelecting"/> = 正在拖框选(此时不画中央方框, 免得和拖出的矩形打架)。</summary>
+    public void SetCursorMode(CursorMode mode, bool boxSelecting = false)
+    {
+        if (_cursorMode == mode && _cursorBoxSelecting == boxSelecting) return;
+        _cursorMode = mode; _cursorBoxSelecting = boxSelecting;
+        RequestNextFrameRendering();
+    }
+
+    /// <summary>当前光标形态(自检用)。</summary>
+    public CursorMode CurrentCursorMode => _cursorMode;
+
+    /// <summary>
+    /// 十字光标尺寸（2~100 %，100 = 满屏十字）。对应原版「选项 · 显示 · 十字光标尺寸(%)」
+    /// (Options.Display.CursorSize，滑杆 2~100、默认 100；原版存了值但没接渲染，这里接上)。
+    /// </summary>
+    public double CursorSizePercent
+    {
+        get => _cursorSizePct;
+        set
+        {
+            double v = Math.Clamp(value, 2, 100);
+            if (Math.Abs(v - _cursorSizePct) < 1e-9) return;
+            _cursorSizePct = v;
+            _curBuiltSx = double.NaN;   // 逼下一帧重建(光标网格只在位置/尺寸/模式变化时才重建)
+            RequestNextFrameRendering();
+        }
+    }
+
+    /// <summary>
+    /// 十字臂长(NDC 半长)。尺寸是"占屏幕的百分比"，基准取【整屏长边】而不是半屏 ——
+    /// 这样 100 % 时光标不论落在哪个角，横竖两条线都还是拉满整个视图（满屏十字这一档要的就是这个效果）；
+    /// 按半屏算的话光标一贴边，对面那半截就够不到了。
+    /// 两个方向取【同一像素长度】，所以调小以后是个正十字，不会被视口宽高比拉扁。
+    /// </summary>
+    internal static (float ax, float ay) CursorArmNdc(double pct, double w, double h)
+    {
+        double armPx = Math.Clamp(pct, 2, 100) / 100.0 * Math.Max(w, h);
+        return ((float)(armPx * 2.0 / Math.Max(1, w)), (float)(armPx * 2.0 / Math.Max(1, h)));
+    }
+
     /// <summary>隐藏十字光标（光标离开视口）。</summary>
     public void HideCursor()
     {
@@ -536,18 +877,19 @@ public partial class CadGlViewport : OpenGlControlBase
     public void SetSceneGeometry(float[] verts)
     {
         _pendingScene = verts ?? Array.Empty<float>();
-        _sceneBounds = ComputeXYBounds(_pendingScene);   // 手绘/编辑后更新 ZE 目标包围盒
+        _sceneBounds = Worldize(ComputeXYBounds(_pendingScene));   // 手绘/编辑后更新 ZE 目标包围盒
         _sceneZc = ComputeZCenter(_pendingScene);
         _sceneDirty = true;
         RequestNextFrameRendering();
     }
 
-    // 从 P3_C3 顶点缓冲(stride 6, XY 在 0/1，世界坐标)算 XY 包围盒；空缓冲返回 null。
-    private static double[]? ComputeXYBounds(float[] v)
+    // 从顶点缓冲(XY 在 0/1，世界坐标)算 XY 包围盒；空缓冲返回 null。
+    // stride: 6 = P3_C3(线/点/普通面)，9 = P3_C3_N3(材质面)。
+    private static double[]? ComputeXYBounds(float[] v, int stride = 6)
     {
-        if (v == null || v.Length < 6) return null;
+        if (v == null || v.Length < stride) return null;
         double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
-        for (int i = 0; i + 5 < v.Length; i += 6)
+        for (int i = 0; i + stride - 1 < v.Length; i += stride)
         {
             double x = v[i], y = v[i + 1];
             if (x < minX) minX = x; if (x > maxX) maxX = x;
@@ -598,7 +940,7 @@ public partial class CadGlViewport : OpenGlControlBase
         _hiddenLayers.Clear();
         _pendingImport = Array.Empty<float>();
         _importedDirty = true;
-        _originSet = false; _ox = 0; _oy = 0;   // 新文档：复位渲染局部原点
+        _originSet = false; _ox = 0; _oy = 0; SyncRenderOrigin();   // 新文档：复位渲染局部原点
         RequestNextFrameRendering();
     }
 
@@ -623,6 +965,7 @@ public partial class CadGlViewport : OpenGlControlBase
     {
         if (_pendingScene is { Length: > 0 }) return _sceneZc;
         if (_pendingFaces is { Length: > 0 }) return _facesZc;
+        if (_pendingMat is { Count: > 0 }) return _matZc;
         if (_pendingCloud is { Length: > 0 }) return _cloudZc;
         return _sceneZc;
     }
@@ -630,9 +973,10 @@ public partial class CadGlViewport : OpenGlControlBase
     public void ZoomExtents()
     {
         // 框住 导入几何 ∪ 手绘场景几何；无任何几何才不动。(LocalizeBounds 按当前原点态一致换算)
-        var b = UnionBounds(UnionBounds(UnionBounds(_lastBounds, _sceneBounds), _facesBounds), _cloudBounds);
+        var b = UnionBounds(UnionBounds(UnionBounds(UnionBounds(_lastBounds, _sceneBounds), _facesBounds), _matBounds), _cloudBounds);
         if (b == null) return;
         var lb = LocalizeBounds(b)!; _camera.FitBounds(lb[0], lb[1], lb[2], lb[3], FramingZc());
+        RaiseScaleChanged();
         RequestNextFrameRendering();
     }
 
@@ -643,6 +987,7 @@ public partial class CadGlViewport : OpenGlControlBase
         _lastBounds = bounds;
         EnsureOrigin(bounds);
         var lb2 = LocalizeBounds(bounds)!; _camera.FitBounds(lb2[0], lb2[1], lb2[2], lb2[3], FramingZc());
+        RaiseScaleChanged();
         RequestNextFrameRendering();
     }
 
@@ -695,18 +1040,85 @@ public partial class CadGlViewport : OpenGlControlBase
         RequestNextFrameRendering();
     }
 
+    /// <summary>
+    /// 逐面拾取叠层(删除三角面等命令的悬停面 / 已点选面)：<paramref name="fills"/> = P3_C3 三角(深度开 + 负偏移, 盖在原面上),
+    /// <paramref name="lines"/> = P3_C3 线段(深度关, 描边画最上层)。两者都须已减过渲染原点(同 SetHighlight 约定)。空/null → 清除。
+    /// </summary>
+    public void SetFacePickOverlay(float[]? fills, float[]? lines)
+    {
+        _pendingPickFaces = (fills == null || fills.Length == 0) ? Array.Empty<float>() : fills;
+        _pendingPickLines = (lines == null || lines.Length == 0) ? Array.Empty<float>() : lines;
+        _pickOverlayDirty = true;
+        RequestNextFrameRendering();
+    }
+
+    /// <summary>
+    /// 视图戳：相机状态 + 视口尺寸。值没变 ⇒ 世界→屏幕投影没变, 逐面拾取(<see cref="PitMine3D.Kylin.Cad.Draw.MeshFacePick"/>)据此复用顶点投影缓存。
+    /// </summary>
+    public object ViewStamp => (_camera.Snapshot(), Bounds.Width, Bounds.Height, _ox, _oy);
+
+    /// <summary>逐面拾取叠层当前有几个三角 / 几条线段(自检用)。</summary>
+    public (int tris, int segs) FacePickOverlayCounts => ((_pendingPickFaces?.Length ?? 0) / 18, (_pendingPickLines?.Length ?? 0) / 12);
+
+    /// <summary>渲染局部原点（世界 XY）；未定为 (0,0)。见 <see cref="Cad.Draw.RenderOrigin"/>。</summary>
+    public double RenderOriginX => _ox;
+    public double RenderOriginY => _oy;
+    public bool RenderOriginSet => _originSet;
+
+    /// <summary>
+    /// 由外部（主窗口按场景包围盒）先定渲染局部原点，并同步给 <see cref="Cad.Draw.RenderOrigin"/>。
+    ///
+    /// 必须赶在建几何【之前】：顶点是在转 float 前减原点的，缓冲一旦按原点 A 传上去，
+    /// 原点就不能再变（否则已传的缓冲与相机错位、模型整体跑飞）。故原点每篇文档只定一次。
+    /// </summary>
+    public void SetRenderOrigin(double ox, double oy)
+    {
+        if (_originSet) { SyncRenderOrigin(); return; }
+        ApplyOrigin(ox, oy);
+    }
+
+    /// <summary>
+    /// 落定渲染局部原点，并把相机一起换算到新局部系。
+    ///
+    /// 局部 = 世界 - 原点：原点一变，同一个世界点的局部坐标整体平移了 -Delta，注视点若不跟着平移，
+    /// 视图就会当场挪一下 —— 空图纸画【第一个】圆/矩形时正是此刻才定原点(此前原点为 0)，
+    /// 表现就是"刚画的图元不在落笔的位置、视图自己动了一下"。故注视点同量反向平移，视图纹丝不动。
+    /// 顺带把世界系的导入缓冲标脏：它是按老原点减过再传的，原点变了要按新原点重传。
+    /// </summary>
+    private void ApplyOrigin(double ox, double oy)
+    {
+        double dx = _ox - ox, dy = _oy - oy;
+        _ox = ox; _oy = oy; _originSet = true;
+        SyncRenderOrigin();
+        if (dx == 0 && dy == 0) return;
+        _camera.ShiftTarget(dx, dy);
+        if (_pendingImport is { Length: > 0 }) _importedDirty = true;
+        _hasGridPlan = false;   // 格网也是按老原点减过再传的, 不作废就会整体偏一个原点
+    }
+
+    /// <summary>把本视口的原点写回全局镶嵌原点（多标签各有各的原点，建几何前先对齐）。</summary>
+    public void SyncRenderOrigin() => Cad.Draw.RenderOrigin.Set(_ox, _oy);
+
+    // 局部包围盒 → 世界（LocalizeBounds 的逆）
+    private double[]? Worldize(double[]? b)
+    {
+        if (b == null || b.Length < 4 || !_originSet) return b;
+        return new[] { b[0] + _ox, b[1] + _oy, b[2] + _ox, b[3] + _oy };
+    }
+
     // 首次拿到有效包围盒时锁定渲染局部原点(XY 中心)，整篇文档稳定。
+    // (显示态导入通道 ShowImportedLayers 走这条懒设；场景通道由 SetRenderOrigin 先定。)
     private void EnsureOrigin(double[]? bounds)
     {
         if (_originSet || bounds == null || bounds.Length < 4) return;
         if (bounds[2] <= bounds[0] || bounds[3] <= bounds[1]) return;   // 空/退化包围盒不定原点
-        _ox = (bounds[0] + bounds[2]) * 0.5;
-        _oy = (bounds[1] + bounds[3]) * 0.5;
-        _originSet = true;
+        ApplyOrigin((bounds[0] + bounds[2]) * 0.5, (bounds[1] + bounds[3]) * 0.5);
     }
 
     // 世界 P3_C3 → 渲染局部(仅减 XY 原点；Z/颜色不动)。原点未定或空则原样返回。
-    // 减法在 float 内近距抵消(Sterbenz)精确，仅保留上传时已有的量化；结果近原点 → 矩阵不再抵消。
+    // 只给【本来就是世界系 float 缓冲】的通道用：显示态导入几何、捕捉标记/框选矩形。
+    // 场景通道不要用 —— 它们在转 float 之【前】就减过原点了(见 Cad.Draw.RenderOrigin)，
+    // 这里再减一次就是双重减；而且 float 减法补不回转换时已丢的精度(大坐标下间隔 0.5 m)。
     private float[] Localize(float[]? world)
     {
         if (!_originSet || world == null || world.Length == 0) return world ?? Array.Empty<float>();
@@ -751,6 +1163,7 @@ public partial class CadGlViewport : OpenGlControlBase
         if (_viewHistory.Count == 0) return false;
         _camera.Restore(_viewHistory[^1]);
         _viewHistory.RemoveAt(_viewHistory.Count - 1);
+        RaiseScaleChanged();   // 距离/视角都可能变了, 夹点尺寸随之重算
         RequestNextFrameRendering();
         return true;
     }
@@ -758,7 +1171,10 @@ public partial class CadGlViewport : OpenGlControlBase
     public void SetViewMode(bool is2D)
     {
         PushView();
+        bool was2D = _camera.Is2D;
         _camera.SetMode(is2D);
+        if (was2D && !is2D) AimTargetAtVisibleGeometry();   // 2D→3D: 注视点高程落到视野内几何上, 否则视锥罩不到模型
+        RaiseScaleChanged();
         RequestNextFrameRendering();
     }
 
@@ -766,6 +1182,7 @@ public partial class CadGlViewport : OpenGlControlBase
     public void SetView(string preset)
     {
         PushView();
+        bool was2D = _camera.Is2D;
         const double iso = 0.61547971;   // atan(1/√2) ≈ 35.26°
         const double pi = System.Math.PI;
         switch (preset)
@@ -782,7 +1199,70 @@ public partial class CadGlViewport : OpenGlControlBase
             case "nw": _camera.SetOrientation(3 * pi / 4, iso); break;      // 西北等轴测
             default: _camera.SetMode(false); break;
         }
+        if (was2D && !_camera.Is2D) AimTargetAtVisibleGeometry();   // 同 SetViewMode: 从 2D 切进任一 3D 视角
+        RaiseScaleChanged();   // 2D/3D 切换或视角一换, 按像素定尺寸的夹点方块要按新视角重算
         RequestNextFrameRendering();
+    }
+
+    /// <summary>
+    /// 2D→3D 切换时把注视点高程落到「当前 2D 视野里的几何」上(取视野内顶点高程的中值; 视野里没顶点就退到全场景)。
+    /// <para>
+    /// 注视点 Z 只在取景(ZE/FitBounds)时按全场景 (minZ+maxZ)/2 定一次, 之后不再跟着几何走。场景里既有 z=0 的
+    /// 新画点、又有 z≈1300 的等高线时它落在 650 —— 那里什么都没有; 再把点「修改高程」到 1300 后, 所有几何都在
+    /// 注视点上方六七百米, 透视视锥(半角 22.5°)根本罩不到 → 一切到 3D 就"整个视图一片黑"。2D 正交不裁 Z,
+    /// 这个偏差在 2D 里看不出来, 只在切 3D 那一刻爆发。原版是 2D 缩放与 3D 距离两套参数、首次进 3D 按
+    /// 含 Z 的包围盒取景, 不会撞上; Kylin 两种模式共用 Dist(切 3D 保留 2D 看的那块区域), 所以切换时得自己校 Z。
+    /// </para>
+    /// <para>
+    /// 取中值而非极值中点: 视野里常混着 z=0 的平面图元(2D 里画的边界线)与千米高程的地形, 极值中点两头都不靠;
+    /// 中值落在几何最密的那一层, 保住当前缩放级别 —— 另一层本就离得远, 在此缩放下看不到属正常。
+    /// </para>
+    /// </summary>
+    private void AimTargetAtVisibleGeometry()
+    {
+        double h = Bounds.Height, w = Bounds.Width;
+        if (h < 1 || w < 1) return;
+        double cx = _camera.Target[0], cy = _camera.Target[1];
+        double hh = _camera.Dist, hw = hh * (w / h);   // 2D 正交: 半高 = Dist(局部系, 与顶点缓冲同系)
+        // 五条通道(线/面/点云/材质面/显示态导入线框); 导入线框存的是世界坐标, 上传时才减原点, 这里也得减
+        var channels = new List<(float[]? verts, int stride, float ox, float oy)>
+        {
+            (_pendingScene, 6, 0f, 0f), (_pendingFaces, 6, 0f, 0f), (_pendingCloud, 6, 0f, 0f),
+            (_pendingImport, 6, _originSet ? (float)_ox : 0f, _originSet ? (float)_oy : 0f),
+        };
+        if (_pendingMat != null) foreach (var b in _pendingMat) channels.Add((b.Verts, 9, 0f, 0f));
+        var zc = VisibleZMedian(channels, cx - hw, cy - hh, cx + hw, cy + hh);
+        if (zc != null) _camera.SetTargetZ(zc.Value);
+    }
+
+    /// <summary>
+    /// 窗口 [x0,x1]×[y0,y1] 内顶点高程的中值; 窗口里没顶点就退到全部顶点; 一个顶点都没有返回 null。
+    /// channels = (交错顶点缓冲, 步长, 该缓冲要减的 XY 原点)。顶点多时按固定步长抽样(上限约 20 万),
+    /// 排序求中值才不会在百万点的点云上卡一下。纯函数, 供单测。
+    /// </summary>
+    internal static double? VisibleZMedian(IReadOnlyList<(float[]? verts, int stride, float ox, float oy)> channels,
+                                           double x0, double y0, double x1, double y1, int cap = 200_000)
+    {
+        var zs = new List<float>();
+        void Collect(double ax0, double ay0, double ax1, double ay1)
+        {
+            foreach (var (v, stride, ox, oy) in channels)
+            {
+                if (v == null || v.Length < stride) continue;
+                int n = v.Length / stride, step = Math.Max(1, n / Math.Max(1, cap));
+                for (int i = 0; i + 2 < v.Length; i += stride * step)
+                {
+                    double x = v[i] - ox, y = v[i + 1] - oy;
+                    if (x < ax0 || x > ax1 || y < ay0 || y > ay1) continue;
+                    zs.Add(v[i + 2]);
+                }
+            }
+        }
+        Collect(x0, y0, x1, y1);
+        if (zs.Count == 0) Collect(double.NegativeInfinity, double.NegativeInfinity, double.PositiveInfinity, double.PositiveInfinity);
+        if (zs.Count == 0) return null;
+        zs.Sort();
+        return zs.Count % 2 == 1 ? zs[zs.Count / 2] : 0.5 * (zs[zs.Count / 2 - 1] + zs[zs.Count / 2]);
     }
 
     /// <summary>当前是否 2D 平面视图。</summary>
@@ -814,6 +1294,9 @@ public partial class CadGlViewport : OpenGlControlBase
         double ox = _ox, oy = _oy;
         return (x, y, z) => f(x - ox, y - oy, z);
     }
+
+    /// <summary>世界点处 1 屏幕像素(DIP)对应的世界长度：3D 透视随该点深度变(近大远小)，2D 为常数。夹点等"按像素定尺寸"的标记用。</summary>
+    public double WorldPerPixelAt(double x, double y, double z) => _camera.WorldPerPixelAt(x - _ox, y - _oy, z, Bounds.Height);
 
     /// <summary>屏幕点 → 视平面(过注视点、垂直视线)上的世界三维点；2D 时为 Z=0 平面点。供 3D 选框/拾取落点。</summary>
     public (double x, double y, double z)? ScreenToViewPlane(double sx, double sy)
@@ -847,9 +1330,12 @@ public partial class CadGlViewport : OpenGlControlBase
         double cx = cxL + _ox, cy = cyL + _oy;                 // 世界坐标中心(主线要对齐世界原点)
         double coverage = is2D ? 1.15 : 3.0;                   // 3D 多铺一些, 边界落到视野外
 
+        var bgNow = CurrentBackground;
         if (_hasGridPlan && Math.Abs(_gridWpp - wpp) < _gridWpp * 0.15 && _gridIs2D == is2D
+            && _gridBuiltBg.Equals(bgNow)
             && GridPlanner.Covers(_gridPlan, cx, cy, viewW, viewH))
-            return;                                            // 缩放挡位未变且仍罩得住 → 复用
+            return;                                            // 缩放挡位未变、背景未变且仍罩得住 → 复用
+        _gridBuiltBg = bgNow;
 
         var plan = GridPlanner.For(wpp, viewW, viewH, cx, cy, minPx: 10, majorEvery: 5, coverage: coverage);
         _gridPlan = plan; _gridWpp = wpp; _gridIs2D = is2D; _hasGridPlan = true;
@@ -860,9 +1346,10 @@ public partial class CadGlViewport : OpenGlControlBase
             v.Add((float)(x0 - _ox)); v.Add((float)(y0 - _oy)); v.Add(0); v.Add(r); v.Add(g); v.Add(b);
             v.Add((float)(x1 - _ox)); v.Add((float)(y1 - _oy)); v.Add(0); v.Add(r); v.Add(g); v.Add(b);
         }
-        // 细线 / 主线(主线更亮)；轴线单独画在最后, 盖住同位置的格线
-        const float mnR = 0.185f, mnG = 0.200f, mnB = 0.225f;   // 细线: 比背景(0.13,0.14,0.16)略亮
-        const float mjR = 0.300f, mjG = 0.325f, mjB = 0.360f;   // 主线
+        // 细线 / 主线(主线更醒目)；轴线单独画在最后, 盖住同位置的格线。明暗按背景推(见 GridShades)
+        var (mnC, mjC) = GridShades(bgNow);
+        float mnR = mnC.r, mnG = mnC.g, mnB = mnC.b;
+        float mjR = mjC.r, mjG = mjC.g, mjB = mjC.b;
         for (int i = 0; i < plan.VerticalLines; i++)
         {
             double x = plan.X0 + i * plan.Minor;
@@ -1011,11 +1498,52 @@ public partial class CadGlViewport
         RequestNextFrameRendering();
     }
 
-    /// <summary>设置托管场景的着色三角面（P3_C3, GL_TRIANGLES）；空 → 清除。</summary>
-    public void SetSceneFaces(float[] tris)
+    /// <summary>
+    /// 设置材质面各批（PBR / 贴图 / 半透；P3_C3_N3）。空表 → 清除。
+    /// </summary>
+    public void SetMaterialFaces(List<PitMine3D.Kylin.Cad.Draw.Scene.MaterialBatch>? batches)
     {
+        _pendingMat = batches;
+        // 取景包围盒要并上材质面: 它们不进 _pendingFaces, 不并进来就是「半透/PBR 的网 ZE 框不到」
+        // ——与 §三一七「着色面不进取景包围盒」同一个坑, 别再踩一次。
+        double[]? bb = null; double zc = 0; int nb = 0;
+        if (batches != null)
+            foreach (var b in batches)
+            {
+                bb = UnionBounds(bb, Worldize(ComputeXYBounds(b.Verts, 9)));
+                zc += ComputeZCenter(b.Verts, 9); nb++;
+            }
+        _matBounds = bb;
+        _matZc = nb > 0 ? zc / nb : 0;
+        _matDirty = true;
+        RequestNextFrameRendering();
+    }
+
+    /// <summary>
+    /// 设置三平面投影贴图的像素（RGBA8, 行优先）。null/空 → 清除贴图（贴图档退回白底光照，同原版）。
+    /// </summary>
+    public void SetTexturePixels(byte[]? rgba, int w, int h)
+    {
+        _pendingTexPixels = rgba; _pendingTexW = w; _pendingTexH = h;
+        _texDirty = true;
+        RequestNextFrameRendering();
+    }
+
+    /// <summary>材质通道是否可用（着色器编译成功 + 驱动有混合/纹理入口）。false 时材质面退回不透明普通面。</summary>
+    public bool MaterialReady => !GlFailed && _renderer.MaterialReady;
+
+    /// <summary>材质通道不可用的原因（状态栏/自检用）。</summary>
+    public string MaterialFailReason => _renderer.MaterialFailReason;
+
+    /// <summary>设置托管场景的着色三角面（P3_C3, GL_TRIANGLES）；空 → 清除。</summary>
+    public void SetSceneFaces(float[] tris) => SetSceneFaces(tris, null);
+
+    /// <summary>着色面 + 各实体在缓冲里的顶点区间(见 <see cref="_faceRanges"/>)。ranges 为 null 时整块一次画。</summary>
+    public void SetSceneFaces(float[] tris, IReadOnlyList<(int first, int count)>? ranges)
+    {
+        _pendingFaceRanges = ranges;
         _pendingFaces = tris ?? Array.Empty<float>();
-        _facesBounds = ComputeXYBounds(_pendingFaces);
+        _facesBounds = Worldize(ComputeXYBounds(_pendingFaces));
         _facesZc = ComputeZCenter(_pendingFaces);
         _facesDirty = true;
         RequestNextFrameRendering();
@@ -1029,7 +1557,7 @@ public partial class CadGlViewport
     public void SetSceneCloud(float[] verts, float pointPixels = 2f)
     {
         _pendingCloud = verts ?? Array.Empty<float>();
-        _cloudBounds = ComputeXYBounds(_pendingCloud);
+        _cloudBounds = Worldize(ComputeXYBounds(_pendingCloud));
         _cloudZc = ComputeZCenter(_pendingCloud);
         _cloudPx = pointPixels > 0 ? pointPixels : 2f;
         _cloudDirty = true;
@@ -1037,6 +1565,14 @@ public partial class CadGlViewport
     }
 
     // 顶点缓冲 Z 的中值近似(极值中点)，供注视点落到模型高度；空缓冲为 0。
+    private static double ComputeZCenter(float[] v, int stride)
+    {
+        if (v == null || v.Length < stride) return 0;
+        double lo = double.MaxValue, hi = double.MinValue;
+        for (int i = 2; i < v.Length; i += stride) { if (v[i] < lo) lo = v[i]; if (v[i] > hi) hi = v[i]; }
+        return lo > hi ? 0 : (lo + hi) * 0.5;
+    }
+
     private static double ComputeZCenter(float[] v)
     {
         if (v == null || v.Length < 6) return 0;
@@ -1048,6 +1584,23 @@ public partial class CadGlViewport
 
 public partial class CadGlViewport
 {
+    /// <summary>上一帧实际渲染的像素尺寸(= Bounds × RenderScaling)。诊断横向错位用。</summary>
+    public (int w, int h) LastRenderPx => (_lastRenderW, _lastRenderH);
+
+    /// <summary>当前预览通道里挂着的线段数(自检用)。命令结束后应为 0 —— 不为 0 就是"拖拽虚线/幽灵没擦干净"。</summary>
+    public int PreviewSegments => (_pendingPreview?.Length ?? 0) / 12;   // 12 float = 2 顶点 × P3_C3
+
+    /// <summary>高亮通道当前挂着的线段数与其局部 XY 包围盒(自检: 高亮到底画在哪)。</summary>
+    public (int segs, double minX, double minY, double maxX, double maxY) HighlightExtent()
+    {
+        var h = _pendingHighlight;
+        if (h == null || h.Length < 12) return (0, 0, 0, 0, 0);
+        double a = double.MaxValue, b = double.MaxValue, c = double.MinValue, d = double.MinValue;
+        for (int i = 0; i + 5 < h.Length; i += 6)
+        { if (h[i] < a) a = h[i]; if (h[i] > c) c = h[i]; if (h[i + 1] < b) b = h[i + 1]; if (h[i + 1] > d) d = h[i + 1]; }
+        return (h.Length / 12, a + _ox, b + _oy, c + _ox, d + _oy);
+    }
+
     /// <summary>GPU 侧状态串(自检用): 上下文有没有、画了几帧、各通道"托管源有/已上传/待传"——多文档切标签后"空白"就看它。</summary>
     public string GlDebug()
         => $"帧={_frameCount} 失败={GlFailed} 附着={Avalonia.VisualTree.VisualExtensions.IsAttachedToVisualTree(this)} 尺寸={Bounds.Width:0}x{Bounds.Height:0} "
@@ -1059,6 +1612,6 @@ public partial class CadGlViewport
     {
         var s = _camera.Snapshot();
         string B(double[]? b) => b == null ? "null" : $"[{b[0]:0.#},{b[1]:0.#},{b[2]:0.#},{b[3]:0.#}]";
-        return $"yaw={s.Yaw:0.##} pitch={s.Pitch:0.##} dist={s.Dist:0.#} target=({s.Tx:0.#},{s.Ty:0.#},{s.Tz:0.#}) 2D={s.Is2D} origin=({_ox:0.#},{_oy:0.#},{_originSet}) scene={B(_sceneBounds)} faces={B(_facesBounds)} cloud={B(_cloudBounds)} last={B(_lastBounds)} zc={FramingZc():0.#} bounds={Bounds.Width:0}x{Bounds.Height:0}";
+        return $"yaw={s.Yaw:0.##} pitch={s.Pitch:0.##} dist={s.Dist:0.#} target=({s.Tx:0.#},{s.Ty:0.#},{s.Tz:0.#}) 2D={s.Is2D} origin=({_ox:0.#},{_oy:0.#},{_originSet}) 光标尺寸={_cursorSizePct:0}% scene={B(_sceneBounds)} faces={B(_facesBounds)} cloud={B(_cloudBounds)} last={B(_lastBounds)} zc={FramingZc():0.#} bounds={Bounds.Width:0}x{Bounds.Height:0}";
     }
 }

@@ -216,6 +216,7 @@ public static class AcadCommands
         new("GRID",       null,         "栅格开关",       "草图"),
         new("SNAP",       null,         "栅格捕捉开关",   "草图"),
         new("SN",         "SNAP",       "栅格捕捉开关",   "草图"),
+        new("LWDISPLAY",  null,         "线宽显示开关",   "草图"),
 
         // ── 三维实体 ──
         new("BOX",        null,         "立方体",         "三维"),

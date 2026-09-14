@@ -179,16 +179,21 @@ public class GripTableTests
         Assert.Equal(6, m.Radius, 6);
     }
 
+    /// <summary>
+    /// 模式环与提示改为对齐 AutoCAD：比原来多一个「镜像」档（五档环），
+    /// 标题也从英文 <c>** STRETCH **</c> 换成中文 <c>** 拉伸 **</c>。详见 GripModeAutoCadTests。
+    /// </summary>
     [Fact]
-    public void Mode_cycle_and_prompts_follow_original_order()
+    public void Mode_cycle_and_prompts_follow_autocad_order()
     {
         Assert.Equal(GripMode.Move, GripDrag.NextMode(GripMode.Stretch));
         Assert.Equal(GripMode.Rotate, GripDrag.NextMode(GripMode.Move));
         Assert.Equal(GripMode.Scale, GripDrag.NextMode(GripMode.Rotate));
-        Assert.Equal(GripMode.Stretch, GripDrag.NextMode(GripMode.Scale));
-        Assert.Equal("** STRETCH **", GripDrag.ModePrompt(GripMode.Stretch));
+        Assert.Equal(GripMode.Mirror, GripDrag.NextMode(GripMode.Scale));
+        Assert.Equal(GripMode.Stretch, GripDrag.NextMode(GripMode.Mirror));
+        Assert.Equal("** 拉伸 **", GripDrag.ModePrompt(GripMode.Stretch));
         var d = new GripDrag { Mode = GripMode.Rotate };
-        Assert.StartsWith("** ROTATE **", d.Prompt);
+        Assert.StartsWith("** 旋转 **", d.Prompt);
     }
 
     [Fact]

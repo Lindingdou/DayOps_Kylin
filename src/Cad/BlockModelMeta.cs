@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using PitMine3D.Kylin.Cad.Draw;
@@ -383,6 +383,8 @@ public sealed class BlockModelMeta
     public (double Min, double Max)? ColormapRange { get; set; }
     public BlockFilterSet? Filter { get; set; }
     public string? CoalAttribute { get; set; }
+    /// <summary>「驱动量」上次斜面约束的删除记录（原 BlockModel.LastInclineUndo）：重跑先精确回退、勾掉约束重跑=撤销。</summary>
+    public BlockDeleteRecord? LastInclineUndo { get; set; }
 
     public bool IsZElevationColoring => string.Equals(ActiveColormapAttribute, ZElevationSentinel, StringComparison.Ordinal);
 
@@ -402,10 +404,11 @@ public sealed class BlockModelMeta
             double minX = double.MaxValue, minY = double.MaxValue, minZ = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue, maxZ = double.MinValue;
             foreach (var b in Blocks)
             {
-                double h = b.Size * 0.5;
-                if (b.X - h < minX) minX = b.X - h; if (b.X + h > maxX) maxX = b.X + h;
-                if (b.Y - h < minY) minY = b.Y - h; if (b.Y + h > maxY) maxY = b.Y + h;
-                if (b.Z - Sz * 0.5 < minZ) minZ = b.Z - Sz * 0.5; if (b.Z + Sz * 0.5 > maxZ) maxZ = b.Z + Sz * 0.5;
+                double k = CellScale(b);
+                double hx = k * Sx * 0.5, hy = k * Sy * 0.5, hz = k * Sz * 0.5;
+                if (b.X - hx < minX) minX = b.X - hx; if (b.X + hx > maxX) maxX = b.X + hx;
+                if (b.Y - hy < minY) minY = b.Y - hy; if (b.Y + hy > maxY) maxY = b.Y + hy;
+                if (b.Z - hz < minZ) minZ = b.Z - hz; if (b.Z + hz > maxZ) maxZ = b.Z + hz;
             }
             return (minX, minY, minZ, maxX, maxY, maxZ);
         }
@@ -526,11 +529,21 @@ public sealed class BlockModelMeta
         return (i, j, k);
     }
 
-    /// <summary>cell 当前是否可见：非删除 ∩ 通过 Filter（同原 IsCellVisible）。</summary>
+    /// <summary>
+    /// 采剥演示（§三二五）临时藏起来的 cell。**不是「删除块体」**：不入存档、不进撤销、关掉演示即清空 ——
+    /// 演示要一帧一帧把已采的块藏掉，借 <see cref="DeletedIds"/> 会把演示状态写进用户的模型里。
+    /// </summary>
+    public HashSet<int> SimHidden { get; } = new();
+
+    /// <summary>收起演示的临时隐藏（关窗/重置时调）。</summary>
+    public void ClearSimHidden() => SimHidden.Clear();
+
+    /// <summary>cell 当前是否可见：非删除 ∩ 非演示隐藏 ∩ 通过 Filter（同原 IsCellVisible）。</summary>
     public bool IsCellVisible(int idx)
     {
         if (idx < 0 || idx >= Blocks.Count) return false;
         if (DeletedIds.Contains(idx)) return false;
+        if (SimHidden.Count > 0 && SimHidden.Contains(idx)) return false;
         var f = Filter;
         if (f != null && f.Conditions.Count > 0)
         {
@@ -557,12 +570,26 @@ public sealed class BlockModelMeta
         {
             if (DeletedIds.Contains(i)) continue;
             var b = Blocks[i];
-            v += IsSubCell(b) ? b.Size * b.Size * b.Size : CellVolume;
+            double k = CellScale(b); v += k * k * k * CellVolume;
         }
         return v;
     }
 
-    private bool IsSubCell(in BlockModel.Block b) => SubCellCount > 0 && b.Size < Sx - 1e-9;
+    /// <summary>
+    /// 变尺寸单元（子块 / 八叉树粗叶块）：块的 X 边长 <see cref="BlockModel.Block.Size"/> ≠ 模型细格 <see cref="Sx"/>。
+    /// 原来只认"比 Sx 小"(子块)；.blk 的八叉树叶块可以比最细格【大】(层级 sub &lt; maxSub)，也得认。
+    /// </summary>
+    public bool IsVarCell(in BlockModel.Block b) => SubCellCount > 0 && Math.Abs(b.Size - Sx) > 1e-9;
+
+    /// <summary>
+    /// 单元相对细格的边长倍数 k：单元尺寸 = k·(Sx, Sy, Sz)。
+    ///
+    /// 关键在于**按三轴各自的细格尺寸缩放**，而不是画成边长 b.Size 的立方体。.blk 的最细格是
+    /// 25×25×0.5 m（水平规则 + 垂向自适应细分），画成 25×25×25 的立方体就竖向胖了 50 倍，
+    /// 整个模型糊成一块平板 —— 原版 SurfaceInstanceBuilder 发的是 (s·sx, s·sy, s·sz) 的长方体。
+    /// 各向同性的模型（实体转块体/体素退化，Sx=Sy=Sz）下 k·(Sx,Sy,Sz) 恰好还原成原来的立方体。
+    /// </summary>
+    public double CellScale(in BlockModel.Block b) => IsVarCell(b) && Sx > 1e-12 ? b.Size / Sx : 1.0;
 
     // ── 建模/导入 ──
 
@@ -578,6 +605,32 @@ public sealed class BlockModelMeta
                 for (int i = 0; i < nx; i++)
                     blocks.Add(new BlockModel.Block { X = ox + (i + 0.5) * sx, Y = oy + (j + 0.5) * sy, Z = oz + (k + 0.5) * sz, Size = sx, Grade = 0 });
         m.Blocks = blocks;
+        return m;
+    }
+
+    /// <summary>
+    /// 用八叉树叶块建模（.blk 导入）：几何由文件直接给定 —— 原点 / 三轴细格尺寸 / 细格维度 / 最深层级，
+    /// 不走 <see cref="FromBlocks"/> 那套"从块中心猜尺寸"（猜出来只有一个各向同性尺寸，25×25×0.5 的
+    /// 细格会被猜成 25 的立方体，模型竖向胖 50 倍）。变尺寸叶块数记入 <see cref="SubCellCount"/>，
+    /// 逐块边长倍数由 <see cref="CellScale"/> 从 Size/Sx 推。
+    /// </summary>
+    public static BlockModelMeta FromLeaves(
+        string name, List<BlockModel.Block> blocks, Dictionary<string, double[]>? attrs,
+        double ox, double oy, double oz, double sx, double sy, double sz,
+        int nx, int ny, int nz, int subDepthMax, int varCellCount)
+    {
+        var m = new BlockModelMeta
+        {
+            Name = name, IsRegular = false, Blocks = blocks,
+            Ox = ox, Oy = oy, Oz = oz,
+            Sx = sx > 0 ? sx : 1, Sy = sy > 0 ? sy : 1, Sz = sz > 0 ? sz : 1,
+            Nx = Math.Max(1, nx), Ny = Math.Max(1, ny), Nz = Math.Max(1, nz),
+            StorageMode = BlockStorageMode.Sparse,
+            SubCellCount = varCellCount,
+        };
+        if (subDepthMax > 0) m.SubBlockDepthMax = subDepthMax;
+        m.SubMinX = m.Sx; m.SubMinY = m.Sy; m.SubMinZ = m.Sz;   // 次级退化最小尺寸 = 最细格(同原 BlkReader)
+        RegisterAttrs(m, blocks, attrs);
         return m;
     }
 
@@ -601,6 +654,13 @@ public sealed class BlockModelMeta
             m.Ny = Math.Max(1, (int)Math.Round((maxY - minY) / size, MidpointRounding.AwayFromZero) + 1);
             m.Nz = Math.Max(1, (int)Math.Round((maxZ - minZ) / size, MidpointRounding.AwayFromZero) + 1);
         }
+        RegisterAttrs(m, blocks, attrs);
+        return m;
+    }
+
+    /// <summary>属性列登记（长度对得上的入表）+ 品位列兜底。FromBlocks / FromLeaves 共用。</summary>
+    private static void RegisterAttrs(BlockModelMeta m, List<BlockModel.Block> blocks, Dictionary<string, double[]>? attrs)
+    {
         if (attrs != null)
             foreach (var kv in attrs)
             {
@@ -617,7 +677,6 @@ public sealed class BlockModelMeta
             m.Attrs["grade"] = g;
             m.PropertySchema.Insert(0, new BlockPropertyColumn { Name = "grade", Description = "品位" });
         }
-        return m;
     }
 
     // ── 删除/恢复（原 BlockEditor 稠密路径）──
@@ -701,27 +760,72 @@ public sealed class BlockModelMeta
 
     // ── 着色 ──
 
-    /// <summary>按当前显示样式/着色属性算块 idx 的颜色（忠实原 SurfaceInstanceBuilder 的取色分支）。</summary>
-    public (byte r, byte g, byte b) ColorOf(int idx)
+    /// <summary>
+    /// 逐块取色的「预案」：把 <see cref="ColorOf(int)"/> 里与块号无关的那部分（活动属性列 / 取值数组 /
+    /// 值域 / 分类色表 / 分级表 / 高程范围）先算一次，逐块只查表。
+    ///
+    /// 非它不可：着色值域未固定（<see cref="ColormapRange"/> 为 null，导入块体正是这么设的）时，
+    /// ColorOf 每块都要 <see cref="GetAttributeRange"/> 扫一遍整列属性，于是「建网格时逐块取色」是
+    /// O(块数²) —— 实测 2 万块 0.6 秒、4 万块 1.7 秒、8 万块 6.4 秒、16 万块 26 秒，311 万块的东露天
+    /// 块体模型外推近 3 小时。导入块体「未响应」卡死的就是这一步。
+    /// </summary>
+    public readonly struct ColorPlan
     {
-        var ds = DisplayStyle;
-        var attr = ActiveColormapAttribute;
-        if (string.IsNullOrEmpty(attr)) return ds.FillColor;
-        if (IsZElevationColoring)
+        public readonly bool Solid;                                     // 着色关闭 → 一律填充色
+        public readonly (byte r, byte g, byte b) Fill;
+        public readonly BlockColormapPreset Ramp;
+        public readonly bool ByElevation;                               // 按高程 Z 着色
+        public readonly double Lo, Hi;                                  // 高程/属性值域(已定好, 不再逐块重算)
+        public readonly string Attr;
+        public readonly double[]? Data;                                 // 活动属性列数据(缺列时为 null)
+        public readonly double Default;                                 // 缺列/越界时的取值(同 GetValue)
+        public readonly bool Categorical;
+        public readonly Dictionary<int, (byte r, byte g, byte b)>? CatColors;
+        public readonly List<BlockColorClass>? Classes;
+
+        internal ColorPlan(BlockModelMeta m)
         {
-            var b = Bounds; double lo = b.minZ, hi = b.maxZ;
-            double t = hi > lo ? (Blocks[idx].Z - lo) / (hi - lo) : 0.5;
-            return BlockColormap.Sample(ds.DefaultColormap, t);
+            var ds = m.DisplayStyle;
+            Fill = ds.FillColor; Ramp = ds.DefaultColormap;
+            Attr = m.ActiveColormapAttribute ?? "";
+            Solid = string.IsNullOrEmpty(m.ActiveColormapAttribute);
+            ByElevation = !Solid && m.IsZElevationColoring;
+            Data = null; Default = 0; Categorical = false; CatColors = null; Classes = null; Lo = 0; Hi = 1;
+            if (Solid) return;
+            if (ByElevation) { var b = m.Bounds; Lo = b.minZ; Hi = b.maxZ; return; }
+            m.Attrs.TryGetValue(Attr, out Data);
+            Default = m.ColumnDefault(Attr);
+            Categorical = m.FindColumn(Attr) is { IsCategorical: true };
+            if (Categorical) { ds.CategoryColors.TryGetValue(Attr, out CatColors); return; }
+            if (ds.ClassBreaks.TryGetValue(Attr, out var cls) && cls.Count > 0) { Classes = cls; return; }
+            var range = m.ColormapRange ?? m.GetAttributeRange(Attr) ?? (0, 1);
+            Lo = range.Min; Hi = range.Max;
         }
-        var col = FindColumn(attr);
-        double v = GetValue(attr, idx);
-        if (col is { IsCategorical: true })
+    }
+
+    /// <summary>备一份取色预案（逐块取色前调一次，见 <see cref="ColorPlan"/>）。</summary>
+    public ColorPlan MakeColorPlan() => new ColorPlan(this);
+
+    /// <summary>按当前显示样式/着色属性算块 idx 的颜色（忠实原 SurfaceInstanceBuilder 的取色分支）。</summary>
+    public (byte r, byte g, byte b) ColorOf(int idx) => ColorOf(idx, MakeColorPlan());
+
+    /// <summary>同上，但取色预案由调用方备好 —— 逐块建网格走这条，别让值域每块重扫一遍。</summary>
+    public (byte r, byte g, byte b) ColorOf(int idx, in ColorPlan p)
+    {
+        if (p.Solid) return p.Fill;
+        if (p.ByElevation)
+        {
+            double t = p.Hi > p.Lo ? (Blocks[idx].Z - p.Lo) / (p.Hi - p.Lo) : 0.5;
+            return BlockColormap.Sample(p.Ramp, t);
+        }
+        double v = p.Data != null && idx >= 0 && idx < p.Data.Length ? p.Data[idx] : p.Default;
+        if (p.Categorical)
         {
             int code = (int)Math.Round(v);
-            if (ds.CategoryColors.TryGetValue(attr, out var map) && map.TryGetValue(code, out var cc)) return cc;
+            if (p.CatColors != null && p.CatColors.TryGetValue(code, out var cc)) return cc;
             return BlockCategoricalPalette.ColorForCode(code);
         }
-        if (ds.ClassBreaks.TryGetValue(attr, out var classes) && classes.Count > 0)
+        if (p.Classes is { Count: > 0 } classes)
         {
             if (v < classes[0].Min) return classes[0].Color;
             for (int c = 0; c < classes.Count; c++)
@@ -731,9 +835,8 @@ public sealed class BlockModelMeta
             }
             return classes[classes.Count - 1].Color;
         }
-        var range = ColormapRange ?? GetAttributeRange(attr) ?? (0, 1);
-        double tt = range.Max > range.Min ? (v - range.Min) / (range.Max - range.Min) : 0.5;
-        return BlockColormap.Sample(ds.DefaultColormap, tt);
+        double tt = p.Hi > p.Lo ? (v - p.Lo) / (p.Hi - p.Lo) : 0.5;
+        return BlockColormap.Sample(p.Ramp, tt);
     }
 
     /// <summary>
@@ -749,25 +852,38 @@ public sealed class BlockModelMeta
         return r == null ? new List<SceneEntity>() : new List<SceneEntity> { r };
     }
 
-    /// <summary>块数超过这个数就不再描边（边线数 = 12·块数，太多会盖死面并拖慢视口）。</summary>
-    public const int WireframeCellLimit = 60_000;
+    /// <summary>
+    /// 画出的块数超过这个数就不再描边（边线数 ≈ 12·块数，太多会盖死面并拖慢视口）。
+    ///
+    /// 原版是**恒描边**的（一堆同色立方体只画面会糊成一整块，看不出块界），这里的上限纯粹是
+    /// 托管渲染的线预算。定 6 万是当年「311 万叶块剔不掉、只能抽稀画 30 万块」时的保守值；
+    /// 原版是**恒描边**的（一堆同色立方体只画面会糊成一整块，看不出块界），这里的上限纯粹是
+    /// 托管渲染的线预算。定 6 万是当年「311 万叶块剔不掉、只能抽稀画 30 万块」时的保守值。
+    ///
+    /// 现在两件事都变了：一是按细格占用剔块，平朔那份 311 万叶块只剩 7.1 万块壳层；二是<b>逐面</b>
+    /// 剔除后只发露出来的面，棱也只从这些面上出 —— 于是描的正好是"看得见的块界"，顶面是粗叶块的
+    /// 大格子、侧面是薄片的层理，跟原版一个样。（早先放宽上限却<b>不</b>剔面时，六张面连同被挡住的
+    /// 那几张一起描边，侧面糊成一片白噪，那是面没剔干净，不是棱太多。）
+    /// </summary>
+    public const int WireframeCellLimit = 200_000;
 
     /// <summary>可见块 → 一张六面体三角网；stat 给出画了几块/剔了几块/截断几块。无可见块返回 null。</summary>
     public MeshEntity? BuildCellMesh(Func<BlockModel.Block, bool>? clip, out BlockMeshBuilder.Result stat)
     {
         var cells = new List<BlockMeshBuilder.Cell>(Blocks.Count);
         double hz = Sz * 0.5;
+        var plan = MakeColorPlan();      // 取色预案备一次: 逐块现算值域是 O(块数²), 见 ColorPlan
         for (int i = 0; i < Blocks.Count; i++)
         {
             if (!IsCellVisible(i)) continue;
             var b = Blocks[i];
             if (clip != null && !clip(b)) continue;
-            double hx, hy, h = hz;
-            if (IsSubCell(b)) { hx = hy = h = b.Size * 0.5; } else { hx = Sx * 0.5; hy = Sy * 0.5; }
-            var (cr, cg, cb) = ColorOf(i);
+            double k = CellScale(b);
+            double hx = k * Sx * 0.5, hy = k * Sy * 0.5, h = k * hz;
+            var (cr, cg, cb) = ColorOf(i, plan);
             cells.Add(new BlockMeshBuilder.Cell(b.X, b.Y, b.Z, hx, hy, h, cr / 255f, cg / 255f, cb / 255f));
         }
-        stat = BlockMeshBuilder.Build(cells);
+        stat = BlockMeshBuilder.Build(cells, edgeLimit: WireframeCellLimit);
         var ds = DisplayStyle;
         var mesh = BlockMeshBuilder.ToMesh(stat, $"块体-{Name}", (ds.FillColor.r / 255f, ds.FillColor.g / 255f, ds.FillColor.b / 255f));
         if (mesh == null) return null;   // 无可见块(全删/全被筛掉/全被剖切)

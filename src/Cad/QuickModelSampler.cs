@@ -459,7 +459,7 @@ public static class QuickModelSampler
         int maxPass = Math.Min(64, nTri * 2 + 8);
         for (int pass = 0; pass < maxPass; pass++)
         {
-            var edge = new Dictionary<long, (int t0, int t1)>(idx.Count);
+            var edge = new Dictionary<long, (int t0, int t1)>(idx.Count, PackedKeyComparer.Instance);
             void AddEdge(int a, int b, int t)
             {
                 long k = EKey(a, b);
@@ -796,8 +796,8 @@ public static class QuickModelSampler
 
     private static List<(int, int)> CollectOpenEdges(List<int> tris)
     {
-        var count = new Dictionary<long, int>(tris.Count);
-        var dir = new Dictionary<long, (int, int)>(tris.Count);
+        var count = new Dictionary<long, int>(tris.Count, PackedKeyComparer.Instance);
+        var dir = new Dictionary<long, (int, int)>(tris.Count, PackedKeyComparer.Instance);
         void Add(int u, int v)
         {
             long key = Key(u, v);
@@ -812,7 +812,7 @@ public static class QuickModelSampler
 
     private static int CountOpenEdges(List<int> tris)
     {
-        var count = new Dictionary<long, int>(tris.Count);
+        var count = new Dictionary<long, int>(tris.Count, PackedKeyComparer.Instance);
         void Add(int u, int v) { long k = Key(u, v); count[k] = count.TryGetValue(k, out int n) ? n + 1 : 1; }
         for (int t = 0; t + 2 < tris.Count; t += 3) { Add(tris[t], tris[t + 1]); Add(tris[t + 1], tris[t + 2]); Add(tris[t + 2], tris[t]); }
         int open = 0;

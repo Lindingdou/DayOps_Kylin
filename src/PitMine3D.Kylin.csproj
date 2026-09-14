@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -31,6 +31,8 @@
     <PackageReference Include="Dock.Model.Mvvm" Version="11.2.0" />
     <!-- 地质与工程信息数据库页面(§四/§八 24 个窗口)的表格控件 -->
     <PackageReference Include="Avalonia.Controls.DataGrid" Version="11.2.1" />
+    <!-- 「更多颜色…（自定义 RGB）」取色对话框的 ColorView(原版这里调 WinForms 系统取色框, 麒麟上没有) -->
+    <PackageReference Include="Avalonia.Controls.ColorPicker" Version="11.2.1" />
     <!-- 地质/生产数据库(§四/§八): SQLite 嵌入式, 跨平台可移(非 DM8) + Dapper POCO 映射 —— 与原 SqlLib 同版本 -->
     <PackageReference Include="Dapper" Version="2.1.35" />
     <PackageReference Include="Npgsql" Version="8.0.9" />
@@ -57,6 +59,11 @@
   <!-- 设备信息管理「三维展示」: 原 GeoDataBase/Models3D 的 PNG 转台序列帧(12 类 × 60 帧), 随程序输出 -->
   <ItemGroup>
     <None Include="Assets\Models3D\**\*.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- 「渲染配置 → 贴图」内置地学贴图: 原 PitMineApp 的 Textures\Geo 那 12 张(1024², 逐字节照搬), 随程序输出 -->
+  <ItemGroup>
+    <None Include="Assets\Textures\Geo\*.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

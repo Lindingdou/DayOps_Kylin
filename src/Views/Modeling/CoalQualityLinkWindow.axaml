@@ -11,7 +11,7 @@
     </StackPanel>
     <Border Grid.Row="3" Classes="panel" Margin="0,2,0,8">
       <DockPanel>
-        <Grid DockPanel.Dock="Top" Background="#FFF3F4F6" ColumnDefinitions="110,80,*">
+        <Grid DockPanel.Dock="Top" Background="{DynamicResource Theme.Window.Background}" ColumnDefinitions="110,80,*">
           <TextBlock Text="属性值" Margin="8,4" FontWeight="SemiBold"/>
           <TextBlock Grid.Column="1" Text="块数" Margin="4,4" FontWeight="SemiBold"/>
           <TextBlock Grid.Column="2" Text="→ 映射到煤层" Margin="4,4" FontWeight="SemiBold"/>

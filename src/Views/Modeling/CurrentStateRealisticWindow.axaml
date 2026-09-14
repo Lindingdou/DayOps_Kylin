@@ -10,15 +10,15 @@
                           ToolTip.Tip="当前现状写实批次(拾取的见煤点归入此批次)；系统唯一时间标签"/>
                 <Button Content="新建批次" Click="OnNewBatch" Padding="8,2"/>
                 <Button Content="数据管理" Click="OnManageData" Padding="8,2" ToolTip.Tip="按批次(时间标签)删除 / 改名"/>
-                <Border Width="1" Background="#D0D4DA" Margin="2,2"/>
+                <Border Width="1" Background="{DynamicResource Theme.Panel.Border}" Margin="2,2"/>
                 <Button Content="煤层结构…" Click="OnEditStructure" Padding="8,2" ToolTip.Tip="预置煤层(拾取弹窗从这里选煤层)"/>
-                <Border Width="1" Background="#D0D4DA" Margin="2,2"/>
+                <Border Width="1" Background="{DynamicResource Theme.Panel.Border}" Margin="2,2"/>
                 <Button x:Name="pickButton" Content="开始拾取" Click="OnStartPick" Padding="8,2" Classes="primary"
                         ToolTip.Tip="进入拾取:在视口点击三角网/点上的见煤点，逐点弹窗定煤层+顶/底；Esc 结束"/>
                 <Button Content="停止拾取" Click="OnStopPick" Padding="8,2"/>
                 <Button Content="采集选中点" Click="OnCollectSelected" Padding="8,2"
                         ToolTip.Tip="把视口里当前选中的点(带高程)整批记为见煤点，弹一次窗定煤层+顶/底"/>
-                <Border Width="1" Background="#D0D4DA" Margin="2,2"/>
+                <Border Width="1" Background="{DynamicResource Theme.Panel.Border}" Margin="2,2"/>
                 <Button Content="删除" Click="OnDelete" Padding="8,2" Classes="danger"/>
                 <Button Content="保存" Click="OnSave" Padding="8,2" Classes="primary"/>
             </StackPanel>
@@ -33,11 +33,11 @@
                          ToolTip.Tip="标注基准尺寸(米)：文字字高=该值，十字臂长=0.75倍，竖杆=1.6倍。按模型大小调，改完点「重绘标注」"/>
                 <Button Content="重绘标注" Click="OnRedrawMarks" Padding="8,2" ToolTip.Tip="按当前字高重画本批次全部见煤点的标注"/>
                 <Button Content="清除标注" Click="OnClearMarks" Padding="8,2" ToolTip.Tip="删除图层「现状见煤点标注」上的全部标注（不影响已记录的数据）"/>
-                <Border Width="1" Background="#D0D4DA" Margin="2,2"/>
+                <Border Width="1" Background="{DynamicResource Theme.Panel.Border}" Margin="2,2"/>
                 <Button Content="下载模板…" Click="OnDownloadTemplate" Padding="8,2" ToolTip.Tip="现状点 CSV 模板：经距X / 纬距Y / 高程Z / 备注 / 煤层编号 / 层位"/>
                 <Button Content="导入 CSV…" Click="OnImportCsv" Padding="8,2" ToolTip.Tip="导入现状点(CSV)到当前批次；点「保存」入库"/>
                 <Button Content="导出 CSV" Click="OnExportCsv" Padding="8,2"/>
-                <Border Width="1" Background="#D0D4DA" Margin="2,2"/>
+                <Border Width="1" Background="{DynamicResource Theme.Panel.Border}" Margin="2,2"/>
                 <Button Content="建现状面" Click="OnBuildSurface" Padding="8,2"
                         ToolTip.Tip="由当前批次全部现状点 Delaunay 三角化建「现状面」三角网入场景（需 ≥3 点）"/>
             </StackPanel>

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace PitMine3D.Kylin.Cad.Draw;
@@ -344,8 +344,9 @@ public sealed class PolylineTool : DrawTool
     public override string? DragHint(double x, double y) => _pts.Count == 0 ? null : LenAng(_pts[^1].x, _pts[^1].y, x, y);
     private static void Seg(List<float> o, (double x, double y) a, (double x, double y) b, float r, float g, float bl)
     {
-        o.Add((float)a.x); o.Add((float)a.y); o.Add(0); o.Add(r); o.Add(g); o.Add(bl);
-        o.Add((float)b.x); o.Add((float)b.y); o.Add(0); o.Add(r); o.Add(g); o.Add(bl);
+        double ox = RenderOrigin.X, oy = RenderOrigin.Y;   // 先减原点再转 float, 见 RenderOrigin
+        o.Add((float)(a.x - ox)); o.Add((float)(a.y - oy)); o.Add(0); o.Add(r); o.Add(g); o.Add(bl);
+        o.Add((float)(b.x - ox)); o.Add((float)(b.y - oy)); o.Add(0); o.Add(r); o.Add(g); o.Add(bl);
     }
     public override void Reset() => _pts.Clear();
 }

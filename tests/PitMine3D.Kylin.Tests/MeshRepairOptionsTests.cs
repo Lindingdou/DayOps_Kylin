@@ -124,3 +124,57 @@ public class MeshRepairOptionsTests
         Assert.Equal(v.Count, r.Verts.Count);
     }
 }
+
+/// <summary>
+/// 修复拓扑在地形面上的护栏（用户实测「很慢、执行后直接卡死」）：
+/// 外轮廓是个大"洞"，不设面积上限就用扇面把它封死 —— 几千个横贯整张图的巨三角，随后的自交检测逐个落格直接卡死。
+/// 现在只补 XY 面积 ≤ MaxHoleArea(原版 1e6) 的小洞、修复前后诊断不做自交检测、巨三角在自交网格里单独处理。
+/// </summary>
+public class MeshRepairTerrainTests
+{
+    private static (List<(double x, double y, double z)> v, List<(int a, int b, int c)> t) Terrain(int n, double size, params (int i, int j)[] holes)
+    {
+        var v = new List<(double x, double y, double z)>(); var t = new List<(int a, int b, int c)>();
+        double step = size / n;
+        for (int j = 0; j <= n; j++) for (int i = 0; i <= n; i++) v.Add((500000 + i * step, 4000000 + j * step, 1200 + 10 * System.Math.Sin(i * 0.2) * System.Math.Cos(j * 0.15)));
+        var skip = new HashSet<(int, int)>(holes);
+        for (int j = 0; j < n; j++) for (int i = 0; i < n; i++)
+        {
+            if (skip.Contains((i, j))) continue;   // 挖掉一格 → 一个 4 边小洞
+            int a = j * (n + 1) + i, b = a + 1, c = a + n + 1, d = c + 1;
+            t.Add((a, b, d)); t.Add((a, d, c));
+        }
+        return (v, t);
+    }
+
+    [Fact]
+    public void 地形面_只补小洞_外轮廓不封_秒级完成()
+    {
+        var (v, t) = Terrain(600, 3000, (100, 100), (300, 250), (450, 500));   // 72 万三角, 3 个小洞
+        int outer = 4 * 600;   // 外轮廓开放边
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var r = MeshRepair.Repair(v, t, new MeshRepair.Options());
+        sw.Stop();
+        Assert.Equal(3, r.FilledHoles);
+        Assert.Equal(3 * 4, r.FilledFaces);                 // 每洞 4 条边 → 4 个扇面
+        Assert.Equal(outer + 12, r.BoundaryBefore);
+        Assert.Equal(outer, r.BoundaryAfter);               // 外轮廓照旧开放
+        Assert.Equal(0, r.FlippedFaces);                    // 翻转开关默认关: 一根不翻
+        Assert.Equal(t.Take(5).ToList(), r.Tris.Take(5).ToList());   // 原三角绕向原样
+        Assert.True(sw.ElapsedMilliseconds < 20000, $"72 万三角修复用了 {sw.ElapsedMilliseconds} ms（实测约 2 s）");
+    }
+
+    [Fact]
+    public void 诊断_巨三角不拖死自交检测()
+    {
+        var (v, t) = Terrain(150, 1000);   // 4.5 万三角(在自交检测上限内)
+        // 追加几百个"扇面巨三角": 从外轮廓顶点到中心, 横贯整张图
+        int c = v.Count; v.Add((500500, 4000500, 1200));
+        for (int i = 0; i < 150; i += 1) t.Add((i, i + 1, c));
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var d = MeshDiagnose.Analyze(v, t);
+        sw.Stop();
+        Assert.True(d.SelfIntersectTriangles > 0);          // 扇面横切地形, 必有自交
+        Assert.True(sw.ElapsedMilliseconds < 30000, $"带巨三角的自交检测用了 {sw.ElapsedMilliseconds} ms");
+    }
+}

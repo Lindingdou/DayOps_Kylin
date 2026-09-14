@@ -67,7 +67,7 @@
 
                     <Grid Grid.Row="1">
                         <!-- 序列帧播放器(检测到 PNG 序列时启用) -->
-                        <Grid x:Name="frameViewerHost" IsVisible="False" RowDefinitions="*,Auto" Background="#FFF7F8FA">
+                        <Grid x:Name="frameViewerHost" IsVisible="False" RowDefinitions="*,Auto" Background="{DynamicResource Theme.Panel.Background}">
                             <Image Grid.Row="0" x:Name="frameImage" Stretch="Uniform" Margin="80,40,80,20" Cursor="SizeWestEast"
                                    PointerPressed="OnFramePointerPressed" PointerMoved="OnFramePointerMoved"
                                    PointerReleased="OnFramePointerReleased" PointerWheelChanged="OnFramePointerWheel"/>
@@ -80,7 +80,7 @@
                             </Border>
                         </Grid>
                         <!-- 回退:没有序列帧时(原为 HelixToolkit 程序化几何视图, Kylin 无 Helix → 占位) -->
-                        <Grid x:Name="fallbackHost" Background="#FFF7F8FA">
+                        <Grid x:Name="fallbackHost" Background="{DynamicResource Theme.Panel.Background}">
                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                                 <TextBlock x:Name="fallbackText" Text="无模型" FontSize="20" FontWeight="Bold" Classes="muted" HorizontalAlignment="Center"/>
                                 <TextBlock Text="未找到该型号/类别的转台序列帧(Assets/Models3D)" FontSize="11" Classes="muted" HorizontalAlignment="Center" Margin="0,6,0,0"/>

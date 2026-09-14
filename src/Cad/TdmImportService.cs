@@ -326,7 +326,7 @@ public static class TdmImportService
             if (m.HasColor && m.Cr == 0 && m.Cg == 0 && m.Cb == 0) { cr = MeshColor.r; cg = MeshColor.g; cb = MeshColor.b; }
             string layer = string.IsNullOrWhiteSpace(m.Tag) ? $"网格{meshIdx}" : m.Tag;
 
-            var seen = new HashSet<long>();
+            var seen = new HashSet<long>(PackedKeyComparer.Instance);
             var layerVerts = new List<float>();
             int nTri = m.Indices.Length / 3;
             totalFaces += nTri;

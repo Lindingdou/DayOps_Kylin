@@ -73,7 +73,7 @@
                 </StackPanel>
               </Border>
 
-              <Border Background="#F7F8FA" BorderBrush="#DCDFE4" BorderThickness="1" CornerRadius="3" Margin="0,10,0,0" Padding="8">
+              <Border Background="{DynamicResource Theme.Panel.Background}" BorderBrush="{DynamicResource Theme.Panel.Border}" BorderThickness="1" CornerRadius="3" Margin="0,10,0,0" Padding="8">
                 <StackPanel>
                   <TextBlock Text="空间分布结论" FontWeight="Bold"/>
                   <TextBlock x:Name="spatialConclusion" TextWrapping="Wrap" FontSize="11" Margin="0,4,0,0"
@@ -90,7 +90,7 @@
       <!-- 右 3D 视图 -->
       <Border Grid.Column="2" Classes="panel">
         <DockPanel>
-          <Border DockPanel.Dock="Bottom" Background="#F7F8FA">
+          <Border DockPanel.Dock="Bottom" Background="{DynamicResource Theme.Panel.Background}">
             <StackPanel Orientation="Horizontal" Margin="10,4">
               <TextBlock Text="图例：" VerticalAlignment="Center" Margin="0,0,6,0"/>
               <ItemsControl x:Name="legendItems">

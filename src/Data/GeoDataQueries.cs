@@ -1113,6 +1113,61 @@ public static class GeoDataQueries
         catch (System.Exception ex) { return (false, ex.Message, 0); }
     }
 
+    /// <summary>一次只读查询的结果：列名 + 行（每行按列顺序的字符串；NULL 统一成空串）。</summary>
+    public sealed record SelectResult(bool Ok, string Error, List<string> Columns, List<string[]> Rows, bool Truncated);
+
+    /// <summary>
+    /// 只读 SQL 查询 → 列名 + 行（SQL 浏览器的表格用；<see cref="RunSelectCsv"/> 是同一条路的 CSV 出口）。
+    /// 与 CSV 版同一条守则：非只读语句一律拒绝，绝不因为"是内部工具"就放开写入。
+    /// <paramref name="maxRows"/> 截断时 <c>Truncated</c> 为 true —— 让调用方能如实说"只显示了前 N 行"，
+    /// 而不是让人以为表就这么大。
+    /// </summary>
+    public static SelectResult RunSelect(DbConnection conn, string sql, int maxRows = 1000)
+    {
+        var cols = new List<string>();
+        var rows = new List<string[]>();
+        if (conn == null) return new SelectResult(false, "无数据库连接", cols, rows, false);
+        if (string.IsNullOrWhiteSpace(sql)) return new SelectResult(false, "空查询", cols, rows, false);
+        if (!IsReadOnlySql(sql)) return new SelectResult(false, "仅允许只读查询（SELECT / PRAGMA / WITH / EXPLAIN）", cols, rows, false);
+        try
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = sql;
+            using var rd = cmd.ExecuteReader();
+            int nc = rd.FieldCount;
+            for (int i = 0; i < nc; i++) cols.Add(rd.GetName(i));
+            bool more = false;
+            while (rd.Read())
+            {
+                if (rows.Count >= maxRows) { more = true; break; }
+                var r = new string[nc];
+                for (int i = 0; i < nc; i++) r[i] = rd.IsDBNull(i) ? "" : rd.GetValue(i)?.ToString() ?? "";
+                rows.Add(r);
+            }
+            return new SelectResult(true, "", cols, rows, more);
+        }
+        catch (System.Exception ex) { return new SelectResult(false, ex.Message, cols, rows, false); }
+    }
+
+    /// <summary>一张表的行数；查不到（无权限/表不存在）返回 -1，由调用方决定怎么显示。</summary>
+    public static long TableRowCount(DbConnection conn, string table)
+    {
+        try
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = $"SELECT COUNT(*) FROM {QuoteIdent(table)}";
+            var o = cmd.ExecuteScalar();
+            return o == null || o is System.DBNull ? -1 : System.Convert.ToInt64(o);
+        }
+        catch { return -1; }
+    }
+
+    /// <summary>
+    /// 标识符加引号。**双引号内的双引号要翻倍**（SQL 标准转义）—— 不翻倍的话，一个名字里带引号的表
+    /// 就成了注入点；这里虽然表名来自系统目录、不是用户输入，但拼 SQL 的地方就该照规矩来。
+    /// </summary>
+    public static string QuoteIdent(string ident) => "\"" + (ident ?? "").Replace("\"", "\"\"") + "\"";
+
     public sealed record KpiTrendRow(int Year, double AvgAvailabilityPct, double AvgUtilizationPct, double AvgRunRatePct = 0);   // 三率齐: +作业率
 
     /// <summary>KPI 趋势：equipment_kpi_monthly 按年平均 三率 可用率/作业率/利用率（比率自适应 0..1 或 0..100）。</summary>

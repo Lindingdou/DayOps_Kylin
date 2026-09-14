@@ -40,6 +40,7 @@ public static class SceneIO
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public float[]? Pc { get; set; }    // 点云逐点色 r,g,b 扁平(null=全份基色)
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public float[]? Mc { get; set; }    // 三角网逐顶点色(着色结果; 原版「随工程持久化」)
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public float[]? Mr { get; set; }    // 三角网逐顶点真实色(建面时自点云带来)
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public double?[]? Dv { get; set; }   // 标注的逐实体覆盖(null=未覆盖; NaN 不是合法 JSON, 故用可空)
         // ── 只出现在撤销快照(Snapshot)里、落盘存档(Save/SaveDoc)永远不写 ──
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public long[]? K { get; set; }       // 点云重数据 key [点, 逐点色, 真实色, 法向](0=无)
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public string? Src { get; set; }     // 点云源文件路径
@@ -52,6 +53,12 @@ public static class SceneIO
         public bool V { get; set; } = true;                // Visible
         public bool F { get; set; }                        // Frozen
         public bool K { get; set; }                        // Locked
+        // 图层特性管理器新增四列; 旧档缺这些字段时按默认值(默认线宽/不透明/打印/无说明)读回
+        // Lw 不加 WhenWritingDefault: 那条按"类型默认 0"省略, 而 0 是合法线宽(0.00mm), 省了读回会变成 -3
+        public short Lw { get; set; } = -3;                                                                  // 线宽(-3=默认)
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public short Tr { get; set; }        // 透明度(0=不透明)
+        public bool P { get; set; } = true;                                                                  // Plottable
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public string? D { get; set; }       // 说明
     }
 
     private sealed class Doc
@@ -62,7 +69,8 @@ public static class SceneIO
     }
 
     /// <summary>一层的持久化状态（LoadDoc 回传，供 LayerTable 恢复）。</summary>
-    public readonly record struct LayerState(string Name, float Cr, float Cg, float Cb, bool Visible, bool Frozen, bool Locked);
+    public readonly record struct LayerState(string Name, float Cr, float Cg, float Cb, bool Visible, bool Frozen, bool Locked,
+                                            short LineWeight = -3, short Transparency = 0, bool Plottable = true, string? Description = null);
 
     /// <summary>LoadDoc 结果：场景 + 图层表状态 + 当前层名（旧格式时图层列表为空、当前层 "0"）。</summary>
     public sealed class LoadedDoc
@@ -93,6 +101,8 @@ public static class SceneIO
                 PolylineEntity pl => PolyDto(pl),
                 MeshEntity me => MeshDto(me),
                 PointCloudEntity pc => heavy != null ? CloudRefDto(pc, heavy) : CloudDto(pc),
+                HatchEntity ha => HatchDto(ha),
+                DimensionEntity dm => DimDto(dm),
                 _ => null
             };
             if (d == null) continue;
@@ -133,6 +143,8 @@ public static class SceneIO
                 "poly" => BuildPoly(d),
                 "mesh" when d.V != null && d.I != null => BuildMesh(d),
                 "cloud" when d.V != null => BuildCloud(d),
+                "hatch" when d.P != null => BuildHatch(d),
+                "dim" when d.N.Length >= 12 => BuildDim(d),   // 12 = 几何最少位数(旗标缺省按可见)
                 _ => null
             };
             if (e == null) continue;
@@ -196,7 +208,8 @@ public static class SceneIO
     {
         var doc = new Doc { Cur = current, E = ToDtos(scene) };
         foreach (var l in layers)
-            doc.L.Add(new LayerDto { N = l.Name, C = new[] { l.Cr, l.Cg, l.Cb }, V = l.Visible, F = l.Frozen, K = l.Locked });
+            doc.L.Add(new LayerDto { N = l.Name, C = new[] { l.Cr, l.Cg, l.Cb }, V = l.Visible, F = l.Frozen, K = l.Locked,
+                                     Lw = l.LineWeight, Tr = l.Transparency, P = l.Plottable, D = string.IsNullOrEmpty(l.Description) ? null : l.Description });
         return JsonSerializer.Serialize(doc, Opts);
     }
 
@@ -216,9 +229,85 @@ public static class SceneIO
         foreach (var l in doc.L)
         {
             float r = l.C.Length >= 3 ? l.C[0] : 0.86f, g = l.C.Length >= 3 ? l.C[1] : 0.9f, b = l.C.Length >= 3 ? l.C[2] : 0.6f;
-            layers.Add(new LayerState(l.N, r, g, b, l.V, l.F, l.K));
+            layers.Add(new LayerState(l.N, r, g, b, l.V, l.F, l.K, l.Lw, l.Tr, l.P, l.D));
         }
         return new LoadedDoc { Scene = scene, Layers = layers, Current = string.IsNullOrEmpty(doc.Cur) ? "0" : doc.Cur };
+    }
+
+    // 填充: 存「边界 + 图案名 + 比例/角度/十字」, 图案线是读回来重算的(它就是个参数化对象, 不存几千根线)
+    // 标注(§三二七): 只存**定义参数**, 几何读回后现推 —— 存线段的话, 改了字高/箭头再打开还是老样子。
+    // N = 几何与基准(恒有); Dv = 逐实体覆盖(可空, null 即未覆盖 —— NaN 不是合法 JSON, 不能拿它当哨兵);
+    // S = 文字内容覆盖。旧档没有 dim 这一型, 不存在兼容问题。
+    private static Dto DimDto(DimensionEntity m) => new()
+    {
+        T = "dim",
+        N = new[]
+        {
+            (double)(int)m.Kind, m.X1, m.Y1, m.X2, m.Y2, m.OffX, m.OffY,
+            m.Cx, m.Cy, m.Radius, m.DirX, m.DirY, m.BaseHeight,
+            m.ExtLine1Visible ? 1 : 0, m.ExtLine2Visible ? 1 : 0, m.DimLineVisible ? 1 : 0,
+        },
+        S = m.TextOverride,
+        Dv = new double?[]
+        {
+            m.ArrowSize, m.ExtLineOffset, m.ExtLineExtension, m.TextHeight, m.TextOffset,
+            m.TextPosX, m.TextPosY, m.DecimalPlaces,
+            m.DimLineColor?.r, m.DimLineColor?.g, m.DimLineColor?.b,
+            m.ExtLineColor?.r, m.ExtLineColor?.g, m.ExtLineColor?.b,
+            m.TextColor?.r, m.TextColor?.g, m.TextColor?.b,
+        },
+    };
+
+    private static (float r, float g, float b)? ColFrom(double?[]? v, int i)
+        => v != null && v.Length > i + 2 && v[i] is { } r && v[i + 1] is { } g && v[i + 2] is { } b
+            ? ((float)r, (float)g, (float)b) : null;
+
+    private static SceneEntity BuildDim(Dto d)
+    {
+        var n = d.N;
+        var v = d.Dv;
+        double? Opt(int i) => v != null && v.Length > i ? v[i] : null;
+        bool Flag(int i, bool dflt) => i < n.Length ? n[i] != 0 : dflt;
+        var m = new DimensionEntity
+        {
+            Kind = (DimensionEntity.DimKind)(int)n[0],
+            X1 = n[1], Y1 = n[2], X2 = n[3], Y2 = n[4], OffX = n[5], OffY = n[6],
+            Cx = n[7], Cy = n[8], Radius = n[9], DirX = n[10], DirY = n[11],
+            BaseHeight = n.Length > 12 ? n[12] : 2.0,
+            ExtLine1Visible = Flag(13, true), ExtLine2Visible = Flag(14, true), DimLineVisible = Flag(15, true),
+            ArrowSize = Opt(0), ExtLineOffset = Opt(1), ExtLineExtension = Opt(2),
+            TextHeight = Opt(3), TextOffset = Opt(4), TextPosX = Opt(5), TextPosY = Opt(6),
+            TextOverride = string.IsNullOrEmpty(d.S) ? null : d.S,
+            DimLineColor = ColFrom(v, 8), ExtLineColor = ColFrom(v, 11), TextColor = ColFrom(v, 14),
+        };
+        if (Opt(7) is { } dp) m.DecimalPlaces = (int)dp;
+        return m;
+    }
+
+    private static Dto HatchDto(HatchEntity h) => new()
+    {
+        T = "hatch",
+        S = h.PatternName,
+        N = new[] { h.Scale, h.Angle, h.Cross ? 1.0 : 0.0, h.OriginX, h.OriginY },
+        P = h.Boundary.ConvertAll(p => new[] { p.x, p.y }),
+        Closed = true,
+    };
+
+    private static SceneEntity BuildHatch(Dto d)
+    {
+        var h = new HatchEntity
+        {
+            PatternName = string.IsNullOrWhiteSpace(d.S) ? "ANSI31" : d.S!,
+            Scale = d.N.Length > 0 ? d.N[0] : 0,
+            Angle = d.N.Length > 1 ? d.N[1] : 0,
+            Cross = d.N.Length > 2 && d.N[2] != 0,
+            OriginX = d.N.Length > 3 ? d.N[3] : 0,
+            OriginY = d.N.Length > 4 ? d.N[4] : 0,
+        };
+        if (d.P != null)
+            foreach (var p in d.P)
+                if (p.Length >= 2) h.Boundary.Add((p[0], p[1]));
+        return h;
     }
 
     private static Dto PolyDto(PolylineEntity pl)
