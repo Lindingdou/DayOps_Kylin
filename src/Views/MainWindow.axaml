@@ -179,9 +179,12 @@
                                         <Button Classes="ribbon-btn large" Tag="渲染配置" Click="OnRibbonCommand">
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_render_cfg}" /><TextBlock Text="渲染&#x0a;配置" /></StackPanel>
                                         </Button>
-                                        <Button Classes="ribbon-btn large" ToolTip.Tip="切换窗口：列出已打开的文档，点选即切换；下方为标准视图预设">
+                                        <Button x:Name="SwitchViewBtn" Classes="ribbon-btn large" ToolTip.Tip="切换窗口：列出已打开的文档，点选即切换；下方为标准视图预设">
                                             <Button.Flyout>
-                                                <MenuFlyout Opening="OnSwitchViewFlyoutOpening" />
+                                                <!-- 占位项不能删：Avalonia 11.2 的呈现器在 Opening 之前建好, 直接引用 Items 的内部列表;
+                                                     从没写过的 Items 内部还是共享的空数组, Opening 里再 Add 会另起一个列表 → 下拉永远空白(实测 3x32)。
+                                                     有了这一项, 内部列表在解析期就建好, Opening 里的 Clear/Add 呈现器才看得见。 -->
+                                                <MenuFlyout Opening="OnSwitchViewFlyoutOpening"><MenuItem Header="（加载中…）" IsEnabled="False" /></MenuFlyout>
                                             </Button.Flyout>
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_win}" /><TextBlock Text="切换&#x0a;窗口 ▾" /></StackPanel>
                                         </Button>
@@ -203,7 +206,7 @@
                                 <DockPanel>
                                     <TextBlock Classes="ribbon-caption" DockPanel.Dock="Bottom" Text="注释" />
                                     <StackPanel Orientation="Horizontal">
-                                        <Button Classes="ribbon-btn large" ToolTip.Tip="标注：对齐 / 连续 / 半径 · 标注样式">
+                                        <Button x:Name="DimFlyoutBtn" Classes="ribbon-btn large" ToolTip.Tip="标注：对齐 / 连续 / 半径 · 标注样式">
                                             <Button.Flyout>
                                                 <MenuFlyout>
                                                     <MenuItem Header="对齐标注" Tag="对齐标注" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_linear_dimension}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
@@ -314,9 +317,10 @@
                                         <Button Classes="ribbon-btn large" Tag="创建选择集" Click="OnRibbonCommand" ToolTip.Tip="将当前选择保存为命名选择集">
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_create_selection}" /><TextBlock Text="创建&#x0a;选择集" /></StackPanel>
                                         </Button>
-                                        <Button Classes="ribbon-btn large" ToolTip.Tip="调用选择集：列出已保存的命名选择集，点选即重新选中">
+                                        <Button x:Name="RecallSelBtn" Classes="ribbon-btn large" ToolTip.Tip="调用选择集：列出已保存的命名选择集，点选即重新选中">
                                             <Button.Flyout>
-                                                <MenuFlyout Opening="OnRecallSelFlyoutOpening" />
+                                                <!-- 占位项不能删, 理由同「切换窗口」 -->
+                                                <MenuFlyout Opening="OnRecallSelFlyoutOpening"><MenuItem Header="（加载中…）" IsEnabled="False" /></MenuFlyout>
                                             </Button.Flyout>
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{StaticResource icon_recall_selection}" /><TextBlock Text="调用&#x0a;选择集 ▾" /></StackPanel>
                                         </Button>

@@ -4331,3 +4331,13 @@ DelineationMethod/EconRatioMethod 四枚举 · EconParams 四式 · WallAngle ·
 **验证**：原 `EquipmentAssignTests` 37 / `FaceUnitResolveTests` 11 / `FaceDeriveEndToEndTests` 9 / `MonthlyPlanRunner` 1 / `ChainDataReadinessTests` 2 / `ShiftDutyWindowTests` 11 / `DrillPlanWriterTests` 逐条通过；D1 死输入扫描去掉 §四〇六 的三项过渡豁免后照过（FallbackDetour/FaceQuotas/FaceSegments 现由本窗口赋值）；全套 **5136 通过 · 8 Skip**。实机 `@采掘单元清单示例`：表 60 行 → 排产写回 19 行（煤 136.08 万t · 岩 345.6 万m³ · 剥采比 2.54 · 排到 24 个位置 · 均运距 1.25 km）→ 设备指派 挖装 19 台 / 卡车 59 台 · 台班 1152 · 逐笔 93 · 覆盖表 7 类（电铲 6 台解不出台效 ⇒ 不可派、推土机/平路机/洒水车无实测）→ 本期一览 5 面 / 24 位（平面示意源→汇连线、内排位置充填标红）。
 
 **短期组至此 10 钮全部按原版重做完毕**：短期生产计划编制 / 月度计划编制 / 量驱动采剥接续 / 短期进度计划动态模拟(另一会话) / 采场参数识别 / 标注台阶标高(SplitButton) / 确定开采程序 / 采排配对 / 采掘单元清单 / 派生计划方案。
+
+## §四〇八 「切换窗口」/「调用选择集」下拉空白修复 —— Avalonia 11.2 MenuFlyout 首开前从未写过 Items 则呈现器永远绑在空数组上 (2026-09-14)
+
+**现象**：开始页「切换窗口 ▾」点开后看不到任何已打开的文档（用户报「切换窗口中现在不显示已有视图」）；「调用选择集 ▾」同样。`@弹下拉` 自检记 `IsOpen=True 项数=7`，但弹出体 `PopupRoot` 只有 **3×32**、`MenuFlyoutPresenter.ItemCount=0`、面板子项 0 —— 开了但空白。静态项的「标注 ▾」同一自检 110×135、5 项正常。
+
+**根因**（读 Avalonia 11.2.1 `MenuFlyout.cs` / `ItemCollection.cs` / `ItemsSourceView.cs`）：`PopupFlyoutBase.ShowAtCore` 在触发 `Opening` **之前**就 `CreatePresenter()`，呈现器 `ItemsSource = Items`；`ItemsSourceView.SetSource` 遇到 `ItemsSourceView` 会**拆包取其内部 `Source`**。从没写过的 `ItemCollection` 内部是静态共享的 `s_uninitialized` 空数组，呈现器就此绑死在这个空数组上；`Opening` 里第一次 `Items.Add` 才由 `WritableSource` 懒建一个新 `AvaloniaList`，呈现器对它一无所知 → 每次打开都是空的。XAML 里写了项的 MenuFlyout 在解析期就建好了内部列表，故不受影响。此前记忆里「Opening 里 Items.Clear/Add 没坏」是误判，从未被核对过。
+
+**修法**：`MainWindow.axaml` 两个带 `Opening=` 的 `MenuFlyout` 各放一个 `<MenuItem Header="（加载中…）" IsEnabled="False"/>` 占位项（XAML 注释说明不能删），让内部列表在解析期建好；`Opening` 处理器照旧 `Items.Clear()/Add()`，呈现器这回看得见。三个按钮补 `x:Name`（SwitchViewBtn / RecallSelBtn / DimFlyoutBtn）供自检定位。`@弹下拉` 探针加 `SelftestProbeFlyoutHost`：反射取 Flyout 内部 `Popup` → 宿主尺寸/可见/`ItemCount`/面板子项数落日志，并把 `PopupRoot` 渲染成 `flyout_<名>.png` 落数据目录（弹出层是独立 OS 窗口，`PrintWindow` 主窗截不到；整屏 `CopyFromScreen` 会拍到用户正开着的别的窗口，禁用）。
+
+**验证**：`新建;新建;@弹下拉 RecallSelBtn / SwitchViewBtn;@文档 1;@弹下拉 SwitchViewBtn` → 调用选择集 197×39 · 1 项「（暂无，先用 创建选择集）」；切换窗口 129×192 · `ItemCount=7` · 可见 MenuItem 6（视图1/2/3 + 标准视图▸ + 范围缩放 + 上一视图，分隔线另计），切到视图1 后 ● 标记随之移到「视图1」；渲染 PNG 与日志一致。其它代码建 MenuFlyout 的地方（`MiningUnitPlanWindow.MenuBtn`）都是先加项再挂 Flyout，不受影响；`ContextMenu Opening=` 三处本身是 ItemsControl，不受影响。
