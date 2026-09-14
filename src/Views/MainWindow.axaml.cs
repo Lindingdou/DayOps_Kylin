@@ -820,6 +820,7 @@ public partial class MainWindow : Window
                 StatusMsg.Text = $"多段线完成（已画 {_scene.Count}）";
             }
             else if (TryBeginTextEditAt(te.GetPosition(ViewportHost))) { }   // 双击文字 = 在位改内容(AutoCAD TEXTEDIT)
+            else if (TryBeginHatchEditAt(te.GetPosition(ViewportHost))) { }  // 双击填充 = 开「编辑填充」对话框(AutoCAD HATCHEDIT)
             else Viewport.ZoomExtents();                                  // 否则 = 范围缩放
         };
         _onHostExited = (_, _) =>                                          // 光标离开视口 → 收起十字与浮标, 状态栏坐标清空(同原版)
@@ -8121,7 +8122,7 @@ public partial class MainWindow : Window
             "  中键拖拽 = 平移 · 滚轮 = 朝光标缩放\n" +
             "  2D 左键拖拽 = 窗口框选（左→右全含，右→左交叉）\n" +
             "  3D 左键拖拽 = 轨道旋转 · 右键 = 上下文菜单\n" +
-            "  双击 = 结束多段线 / 否则范围缩放\n" +
+            "  双击 = 结束多段线 / 文字→在位编辑 / 填充→编辑填充对话框 / 否则范围缩放\n" +
             "\n【快捷键】\n" +
             "  ESC 取消当前命令 · Del 删除选中 · Ctrl+Z 撤销 · Ctrl+Y 重做\n" +
             "\n【命令行】与 AutoCAD 一致\n" +
@@ -11187,6 +11188,15 @@ public partial class MainWindow : Window
             if (cmd.StartsWith("@示例刀面")) { SelftestKnife(); return; }   // 一张 z=40 的开放水平面(刀切实体用)
             if (cmd.StartsWith("@示例裁剪")) { SelftestClipFixture(); return; }   // 裁刀 + 带完整属性的被裁线(核对裁剪是否改属性)
             if (cmd.StartsWith("@列属性")) { SelftestDumpProps(); return; }               // 把场景里多段线的全部属性打到信息栏
+            if (cmd.StartsWith("@编辑填充窗 "))   // @编辑填充窗 <图案|-> <角度|-> <比例|自动|-> [十字 开|关] [确定]: 直设开着的「编辑填充」对话框各项并可按确定(核对 确定→写回→重算 那条路)
+            {
+                var a = cmd.Substring(6).Trim().Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
+                if (GeoDb.GeoDbWindows.Last is not HatchEditWindow hw) { StatusMsg.Text = "自检编辑填充窗：对话框没开着"; return; }
+                bool? cross = a.Contains("十字") ? (a.Contains("开") ? true : a.Contains("关") ? false : null) : null;
+                hw.SelftestSet(a.Length > 0 ? a[0] : "-", a.Length > 1 ? a[1] : "-", a.Length > 2 ? a[2] : "-", cross, a.Contains("确定"));
+                PitMine3D.Kylin.CrashLog.Write("自检", $"@编辑填充窗 → 已确定={hw.Accepted} 图案={hw.PatternName} 角度={hw.Angle} 比例={hw.Scale} 十字={hw.Cross}");
+                return;
+            }
             if (cmd.StartsWith("@窗口 "))   // @窗口 <宽> <高>: 退出最大化并定尺寸(截图核对用)
             {
                 var a = cmd.Substring(3).Split(' ', System.StringSplitOptions.RemoveEmptyEntries);

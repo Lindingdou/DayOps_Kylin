@@ -4341,3 +4341,13 @@ DelineationMethod/EconRatioMethod 四枚举 · EconParams 四式 · WallAngle ·
 **修法**：`MainWindow.axaml` 两个带 `Opening=` 的 `MenuFlyout` 各放一个 `<MenuItem Header="（加载中…）" IsEnabled="False"/>` 占位项（XAML 注释说明不能删），让内部列表在解析期建好；`Opening` 处理器照旧 `Items.Clear()/Add()`，呈现器这回看得见。三个按钮补 `x:Name`（SwitchViewBtn / RecallSelBtn / DimFlyoutBtn）供自检定位。`@弹下拉` 探针加 `SelftestProbeFlyoutHost`：反射取 Flyout 内部 `Popup` → 宿主尺寸/可见/`ItemCount`/面板子项数落日志，并把 `PopupRoot` 渲染成 `flyout_<名>.png` 落数据目录（弹出层是独立 OS 窗口，`PrintWindow` 主窗截不到；整屏 `CopyFromScreen` 会拍到用户正开着的别的窗口，禁用）。
 
 **验证**：`新建;新建;@弹下拉 RecallSelBtn / SwitchViewBtn;@文档 1;@弹下拉 SwitchViewBtn` → 调用选择集 197×39 · 1 项「（暂无，先用 创建选择集）」；切换窗口 129×192 · `ItemCount=7` · 可见 MenuItem 6（视图1/2/3 + 标准视图▸ + 范围缩放 + 上一视图，分隔线另计），切到视图1 后 ● 标记随之移到「视图1」；渲染 PNG 与日志一致。其它代码建 MenuFlyout 的地方（`MiningUnitPlanWindow.MenuBtn`）都是先加项再挂 Flyout，不受影响；`ContextMenu Opening=` 三处本身是 ItemsControl，不受影响。
+
+## §四〇九 「编辑填充」对话框 + 双击填充进编辑 (2026-09-14)
+
+**现象**：用户报「双击填充图案后不能进入填充编辑，同时填充编辑没有界面」。此前 Kylin 的「填充 ▾ → 编辑填充」只是把功能区四项静默写进选中填充（无窗体）；双击落在填充上走的是「否则范围缩放」。
+
+**原版**：`MainWindow.xaml` 填充 SplitButton 下拉有「编辑填充」项，处理器 `OnHatchEditClick` 发 `HATCHEDIT` 给引擎并回显「待引擎实现 HATCHEDIT 命令」—— 引擎无此命令（全仓 grep 仅此一处），是空壳；原版也没有左键双击进实体编辑（引擎只有中键双击缩放全图）。本节是用户拍板补的界面（同 GIZMO / 法向预览 那类增量），照 AutoCAD HATCHEDIT 的「图案填充编辑」布局做。
+
+**Kylin**：新 `Views/HatchEditWindow.cs`（类型和图案：图案下拉 + 取色器 EntityColorPicker(随层/ACI/自定义) · 角度和比例：角度 / 比例↔间距(随图案种类改名, 空=自动) / 十字交叉(仅用户定义可勾) · 实心图案角度比例禁用 · 右侧按**这块填充自己的边界**实时预览(边界 + 图案线 StreamGeometry, 只画前 6000 段, 说明行报 段数/上限) · 恢复原值/确定/取消, 页脚 Dock 到底 + 内容 ScrollViewer + WindowFit）。新 `Views/MainWindow.HatchEdit.cs`：`TryBeginHatchEditAt`（双击落点 2D 走 PickWorld2D / 3D 走 SelectionBox.PickScreen；空闲态且图层未锁才接管；落在多选里就一并改选中的全部填充）、`HatchEditCommandAsync`（动词-名词：没选中先 PickEntityAsync 让选一个；锁定层跳过）、`OpenHatchEditWindowAsync`（模态 ShowDialog；SELFTEST 下非模态 + NoteLast + Closed 时按 Accepted 写回）、`ApplyHatchEdit`（BeginChange 一步可撤销 → 写图案/比例/角度/十字/颜色(随层=各自图层色) → Invalidate → RefreshScene/HighlightSelection/SyncHatchRibbonFromSelection）。双击处理器在文字在位编辑之后、范围缩放之前插一档；`编辑填充`/`HATCHEDIT` 命令改开对话框；HatchFont.cs 里静默的 `EditHatchCmd` 删除（功能区四项改一项即写入的即时路径保留）；帮助文案「双击 = … / 填充→编辑填充对话框 / …」。自检 `@编辑填充窗 <图案|-> <角度|-> <比例|自动|-> [十字 开|关] [确定]`。
+
+**验证**：`@线示例 圈;@填充 ANSI31;@命令 取消选择;@稍后 800 @鼠标 双击 90 60` → 日志「编辑填充：对话框已打开（1 个填充 · ANSI31 …）选集: 填充」（走 `_onHostDoubleTapped` 真指针链）；`@页面截图` 整窗渲染 700×351：图案/颜色/角度/比例/十字/预览(4 点边界 · 23 段)/三钮齐全；`@编辑填充窗 USER 30 5 十字 开` → 比例栏改名「间距」、十字可勾且勾上、预览 43 段交叉网；`@编辑填充窗 - - - 确定` → 状态栏「编辑填充：1 个填充 → USER 用户定义 · 间距 5 · 角度 30° · 十字 · 颜色 随层」，视口填充已按新参数重画（截图交叉网 + 高亮）。命令路径 `@命令 编辑填充`（选中态）同样开窗。
