@@ -228,7 +228,7 @@ public partial class MainWindow
             case "快速测量":
             case "快速测距":
                 _measure = new MeasureState(); _tool = null; _angle = null;
-                StatusMsg.Text = "测量 - 快速：点第一点（两点测距，ESC 取消）";
+                StatusMsg.Text = "测量 - 快速：" + MeasurePrompt() + "（两点测距，ESC 取消）";
                 return true;
             case "测量半径":
             case "半径测量":
@@ -256,6 +256,8 @@ public partial class MainWindow
             if (kind == "距离") { _measure = new MeasureState(); _angle = null; }
             else { _angle = new AngleState(); _measure = null; }
             _tool = null;
+            StatusMsg.Text = MeasurePrompt();   // 按步骤提示(牵引线/读数随光标, 见 MainWindow.MeasureJig.cs)
+            return;
         }
         StatusMsg.Text = r.Text;
     }

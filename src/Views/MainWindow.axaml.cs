@@ -144,57 +144,12 @@ public partial class MainWindow : Window
                 return;
             }
 
-            // 测距模式：左键取点（第一/第二点）
-            if (_measure != null && props.IsLeftButtonPressed)
+            // 测距 / 三点测角：左键取点(与命令行键入坐标共用 MeasureFeedPoint; 橡皮筋/读数见 MainWindow.MeasureJig.cs)
+            if ((_measure != null || _angle != null) && props.IsLeftButtonPressed)
             {
                 _nav = NavMode.None;
                 var wp = PickWorld();
-                if (wp != null)
-                {
-                    var first = _measure.First;
-                    var d = _measure.AddPoint(wp.Value.x, wp.Value.y);
-                    if (d == null)
-                        StatusMsg.Text = "测距：点第二点";
-                    else
-                    {
-                        StatusMsg.Text = $"距离 = {d:0.###}";
-                        if (first != null)
-                            Viewport.SetHighlight(new float[]
-                            {
-                                (float)first.Value.x, (float)first.Value.y, 0, 0, 0, 0,
-                                (float)wp.Value.x,    (float)wp.Value.y,    0, 0, 0, 0
-                            });
-                        _measure = null;
-                    }
-                }
-                return;
-            }
-
-            // 三点测角模式：顶点 → 第一射线端 → 第二射线端
-            if (_angle != null && props.IsLeftButtonPressed)
-            {
-                _nav = NavMode.None;
-                var wp = PickWorld();
-                if (wp != null)
-                {
-                    var v = _angle.Vertex; var a = _angle.FirstRay;
-                    var deg = _angle.AddPoint(wp.Value.x, wp.Value.y);
-                    if (deg == null)
-                        StatusMsg.Text = _angle.HasFirstRay ? "测角：点第二边端点" : "测角：点第一边端点";
-                    else
-                    {
-                        StatusMsg.Text = $"角度 = {deg:0.##}°";
-                        if (v != null && a != null)
-                            Viewport.SetHighlight(new float[]
-                            {
-                                (float)a.Value.x, (float)a.Value.y, 0, 0, 0, 0,
-                                (float)v.Value.x, (float)v.Value.y, 0, 0, 0, 0,
-                                (float)v.Value.x, (float)v.Value.y, 0, 0, 0, 0,
-                                (float)wp.Value.x, (float)wp.Value.y, 0, 0, 0, 0
-                            });
-                        _angle = null;
-                    }
-                }
+                if (wp != null) MeasureFeedPoint(wp.Value.x, wp.Value.y);
                 return;
             }
 
@@ -667,6 +622,7 @@ public partial class MainWindow : Window
             if (_gizmoDrag != null) { GizmoDragMove(p); _lastPointer = p; return; }
             if (_nav == NavMode.None && _tool == null && _editMode == EditMode.None && !_gripDrag.Active) GizmoHover(p);
             if (_nav == NavMode.None) DimJigOnPointerMoved();   // 标注橡皮筋随光标重画, 见 MainWindow.DimJig.cs
+            if (_nav == NavMode.None) MeasureJigOnPointerMoved();   // 测距/测角牵引线 + 读数随光标重画, 见 MainWindow.MeasureJig.cs
 
             // 夹点拖拽：按当前模式(拉伸/移动/旋转/缩放)实时预览变换后的实体 + 光标旁模式提示
             if (_gripDrag.Active)
@@ -693,7 +649,8 @@ public partial class MainWindow : Window
                     string prompt = CurrentPrompt();
                     string? dims = _tool != null ? _tool.DragHint(shown.Value.x, shown.Value.y)
                                  : (_editMode != EditMode.None && !_editAwaitSelect) ? EditDragHint(shown.Value)
-                                 : DimJigHint(shown.Value);   // 标注取点中的实时读数(距离/半径/角度/坐标), 见 MainWindow.DimJig.cs
+                                 : DimJigHint(shown.Value)    // 标注取点中的实时读数(距离/半径/角度/坐标), 见 MainWindow.DimJig.cs
+                                   ?? MeasureJigHint(shown.Value);   // 测距/测角取点中的实时读数, 见 MainWindow.MeasureJig.cs
                     if (prompt.Length > 0) dh = dims != null ? $"{prompt}  {dims}" : prompt;
                 }
                 if (dh != null)
@@ -8592,8 +8549,7 @@ public partial class MainWindow : Window
                 ? $"{_editName}：{EditFirstPrompt()}"
                 : EditPrompt(_editMode, _editPts.Count);
         if (_gripDrag.Active) return _gripDrag.Prompt;
-        if (_measure != null) return "测量：指定下一点（右键/Esc 结束）";
-        if (_angle != null) return "角度测量：依次指定 顶点、第一点、第二点";
+        if (_measure != null || _angle != null) return MeasurePrompt();   // 测距/测角按步骤提示, 见 MainWindow.MeasureJig.cs
         if (_offsetActive) return "偏移：指定要偏移的那一侧上的点";
         if (_trimActive) return "修剪/延伸：先选边界，再点要修剪或延伸的对象（Esc 退出）";
         if (_breakActive) return _breakPts.Count == 0 ? "打断：指定第一个打断点" : "打断：指定第二个打断点";
@@ -8983,6 +8939,7 @@ public partial class MainWindow : Window
         BenchJigAppendPreview(list);   // 「动态调整」台阶交互设计 jig(逐级坡脚环随光标深度变), 见 MainWindow.BenchJig.cs; 没在调时空转
         RegionBrushAppendPreview(list);   // 「采场/排土场圈定」选区笔刷圆圈随光标, 见 MainWindow.RegionBrush.cs; 没在涂时空转
         AppendDimPreview(list);   // 标注橡皮筋(线性/对齐/连续/半径/直径/角度/坐标标注取点中整条随光标), 见 MainWindow.DimJig.cs
+        AppendMeasurePreview(list);   // 测距/测角牵引线 + 世界坐标处读数(原版 JigAnnotation), 见 MainWindow.MeasureJig.cs
         if (_slideDragging && _slidePts.Count > 1)     // 滑动多段线拖动预览
         {
             var pv = new PolylineEntity { Points = _slidePts, Cr = 0.55f, Cg = 0.62f, Cb = 0.70f };
@@ -10568,7 +10525,7 @@ public partial class MainWindow : Window
 
     private bool TryCoordinateInput(string cmd)
     {
-        if (_tool == null && _editMode == EditMode.None) return false;   // 仅取点态接受坐标
+        if (_tool == null && _editMode == EditMode.None && _measure == null && _angle == null) return false;   // 仅取点态接受坐标(测量取点也是取点)
         if (_editMode != EditMode.None && !_editAwaitSelect)
         {
             // 编辑取点认三分量：x,y,z / @dx,dy,dz 的 z 进 dz(移动/复制)；只给 x,y 就是纯 XY
@@ -10653,6 +10610,7 @@ public partial class MainWindow : Window
     private void FeedPoint(double x, double y, double? z = null)
     {
         _lastInputPoint = (x, y);
+        if (_measure != null || _angle != null) { MeasureFeedPoint(x, y); return; }   // 测距/测角取点也可键入坐标, 见 MainWindow.MeasureJig.cs
         if (_editMode != EditMode.None)
         {
             // 位移模式只认命令行键入的向量(同原版 WaitingDisplacement)：矿区坐标动辄几十万，
@@ -13585,14 +13543,14 @@ public partial class MainWindow : Window
             case "DIST":
             case "DI":
                 _measure = new MeasureState();
-                _tool = null;
-                StatusMsg.Text = "测距：点第一点";
+                _tool = null; _angle = null;
+                StatusMsg.Text = MeasurePrompt();
                 break;
             case "MANG":
             case "ANG":
                 _angle = new AngleState();
                 _tool = null; _measure = null;
-                StatusMsg.Text = "测角：点顶点";
+                StatusMsg.Text = MeasurePrompt();
                 break;
             case "ERASE":
             case "E":
