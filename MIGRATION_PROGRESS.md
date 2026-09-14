@@ -4361,3 +4361,13 @@ DelineationMethod/EconRatioMethod 四枚举 · EconParams 四式 · WallAngle ·
 **Kylin**：新 `Views/MainWindow.MeasureJig.cs`：`AppendMeasurePreview`（预览通道出口：牵引线走 DimRubberDash 虚线、已定的第一条边实线；读数以 TextEntity 轮廓笔画画在世界坐标处，字高定 15 屏幕像素不随视图比例变，颜色照原版 黄/青）、`MeasureJigHint`（光标浮标里接在步骤提示后的「距离 x.xxx」「角度 x.xx°」）、`MeasurePrompt`（按步骤提示，供状态栏/命令行标签/浮标同源）、`MeasureFeedPoint`（左键与命令行坐标共用；落完最后一点即报结果、`ShowMeasuredLines` 把量过的线镶嵌后进高亮通道——原先直接塞世界坐标进 `SetHighlight` 没减渲染原点，大坐标图纸上会整体跑飞——随即擦橡皮筋/收浮标）、`MeasureJigOnPointerMoved`（同标注橡皮筋：活动时每次移动重刷，命令结束那一次也刷一遍把残留擦掉）。`MainWindow.axaml.cs`：左键两段测量分支合并走 `MeasureFeedPoint`；`AppendScenePreview` / 指针移动 / 浮标读数 各接一行；`CurrentPrompt` 改按步骤；`TryCoordinateInput` + `FeedPoint` 认测量态；DIST/MANG 派发与 `MeasureBySelection`/快速测量 的初始提示改用 `MeasurePrompt`；自检 `@光标` 报 `MeasureJigHint`。
 
 **验证**：`@命令 DIST;@命令 0,0;@光标 100 60` → 日志「预览 1855 段 · 距离 116.619」，截图 (0,0)→光标 白虚线 + 中点黄字「距离: …」，浮标「测距：指定第二点  距离 …」；`@命令 100,60` → 「距离 = 116.619」，随后 `@光标 50 50` → 「预览 0 段」（橡皮筋已擦）。`@命令 MANG;@命令 0,0;@命令 100,60;@光标 100 -40` → 「预览 1547 段」，截图 顶点→(100,60) 白实线 + 顶点→光标 虚线 + 顶点右上青字「角度: 52.77°」；`@命令 0,100`（第一条边 (100,0)）→ 「角度 = 90°」，再 `@光标` → 「预览 0 段」。
+
+## §四一一 Ctrl+X 剪切无响应 —— 实体剪贴板四个快捷键(Ctrl+X / Ctrl+C / Ctrl+V / Ctrl+Shift+V)按原版菜单标注接到窗口级隧道 (2026-09-14)
+
+**现象**：选中实体后按 Ctrl+X 没有任何反应（用户报「ctrl+x 无法执行剪切」）；Ctrl+C / Ctrl+V 同样不动。Ribbon「剪贴板 ▾」菜单与右键菜单里点「剪切」是好的（`CutClip` 早已在：入剪贴板 + 一步可撤销删除）。
+
+**根因**：Kylin 的键盘处理只在窗口 `KeyDown`（冒泡）里接了 Ctrl+Z / Ctrl+Y，剪贴板三键从没接过。而且命令行常驻聆听后焦点多半停在命令框 `TextBox` 上，TextBox 会把 Ctrl+X/C/V 当"剪切/复制/粘贴文字"自己处理并标 `Handled`，就算在冒泡层接了也收不到——同 Delete 键此前「明明选中了东西按 Delete 没反应」的根因。核对原版 `MainWindow.xaml`：右键菜单和 Ribbon 剪贴板菜单四项都标着 `InputGestureText` Ctrl+X / Ctrl+C / Ctrl+V / Ctrl+Shift+V；`MainWindow.xaml.cs OnPreviewKeyDown` 实际只接了 Ctrl+C（`OnCtxCopyClick`）和 Ctrl+V（`OnCtxPasteOriginClick` = 原坐标粘贴），Ctrl+X 落到 `PitMine_OnKeyDown` 引擎侧 `Editor::OnKeyDown / Picking::OnKeyDown` 也只认 Esc —— 原版自己也是"菜单上写着、按了没用"。
+
+**修法**：`MainWindow.axaml.cs` 新增窗口级隧道处理器 `OnWindowClipboardKey`（与 `OnWindowTextInput` 一同 `AddHandler(KeyDownEvent, …, RoutingStrategies.Tunnel)`），四个手势按原版菜单标注映射：Ctrl+X → `CutClip`、Ctrl+C → `CopyClip`、Ctrl+V → `PasteClip`（原坐标，同原版 Ctrl+V）、Ctrl+Shift+V → `StartPasteBase`（基点粘贴，进取点态）。不抢的情形同 Delete：命令框里已有字（这时是在剪/贴这行命令）或焦点在别的输入框/可编辑下拉；Ctrl+V 另加一条——实体剪贴板为空就放行，让命令框照常贴系统剪贴板里的坐标串。右键菜单 `Cmd(...)` 加 `gesture` 参数写 `InputGesture`（复制 Ctrl+C / 剪切 Ctrl+X / 粘贴 Ctrl+V / 删除 Delete），`MainWindow.axaml` Ribbon 剪贴板菜单四项加 `InputGesture`——只作标注（同原版 `InputGestureText`），快捷键本身由隧道接。
+
+**验证**：`@线示例;@按键 ctrl+x;@按键 ctrl+v;@按键 ctrl+c;@按键 ctrl+x;@敲字 ab;@按键 ctrl+x;@按键 ctrl+v;@命令 撤销;@按键 ctrl+shift+v` → 日志：选中 1 实体 → Ctrl+X 后「场景 0 · 选中 0」→ Ctrl+V 后「场景 1 · 选中 1」→ 再 Ctrl+X「场景 0」；命令框敲入 `ab` 后 Ctrl+X / Ctrl+V 不再碰场景（归文本编辑）；`撤销` 回到「场景 1」；焦点停在空命令框上 Ctrl+Shift+V 光标切到 `CrosshairOnly`（基点粘贴取点态已起）。

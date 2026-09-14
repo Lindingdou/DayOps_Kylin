@@ -255,10 +255,10 @@
                                         <Button Classes="ribbon-btn large" ToolTip.Tip="剪贴板：剪切 / 复制 / 粘贴 / 基点粘贴 / 原坐标粘贴">
                                             <Button.Flyout>
                                                 <MenuFlyout>
-                                                    <MenuItem Header="剪切" Tag="剪切" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_cut}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
-                                                    <MenuItem Header="复制" Tag="复制到剪贴板" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_copy}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
-                                                    <MenuItem Header="粘贴" Tag="粘贴" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_paste}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
-                                                    <MenuItem Header="基点粘贴" Tag="基点粘贴" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_paste_base}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="剪切" Tag="剪切" InputGesture="Ctrl+X" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_cut}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="复制" Tag="复制到剪贴板" InputGesture="Ctrl+C" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_copy}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="粘贴" Tag="粘贴" InputGesture="Ctrl+V" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_paste}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="基点粘贴" Tag="基点粘贴" InputGesture="Ctrl+Shift+V" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_paste_base}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
                                                     <MenuItem Header="原坐标粘贴" Tag="原坐标粘贴" Click="OnRibbonCommand"><MenuItem.Icon><Image Source="{StaticResource icon_paste_origin}" Width="16" Height="16" /></MenuItem.Icon></MenuItem>
                                                 </MenuFlyout>
                                             </Button.Flyout>

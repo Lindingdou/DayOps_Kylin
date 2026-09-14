@@ -794,6 +794,8 @@ public partial class MainWindow : Window
         // 原先必须先用鼠标点一下底部命令框才能打命令, 是"命令系统没激活"最直接的表现。
         // 用隧道(Tunnel)在窗口这一层先接：隧道从根往下走, 不论焦点落在视口还是停靠面板都能接到。
         AddHandler(TextInputEvent, OnWindowTextInput, RoutingStrategies.Tunnel);
+        // Ctrl+X / Ctrl+C / Ctrl+V / Ctrl+Shift+V(实体剪贴板)也走窗口级隧道, 抢在命令框 TextBox 把它们当文字剪贴之前(见 OnWindowClipboardKey)。
+        AddHandler(KeyDownEvent, OnWindowClipboardKey, RoutingStrategies.Tunnel);
 
         // ESC：退出当前绘制/测量
         KeyDown += (_, e) =>
@@ -1145,8 +1147,8 @@ public partial class MainWindow : Window
         Image? Ico(string key) => MenuIcon(key);
         void Item(string header, System.EventHandler<RoutedEventArgs> click, string? icon = null)
         { var mi = new MenuItem { Header = header, Icon = icon == null ? null : Ico(icon) }; mi.Click += click; m.Items.Add(mi); }
-        void Cmd(string header, string tag, string? icon = null)
-        { var mi = new MenuItem { Header = header, Tag = tag, Icon = icon == null ? null : Ico(icon) }; mi.Click += OnCtxCommand; m.Items.Add(mi); }
+        void Cmd(string header, string tag, string? icon = null, string? gesture = null)   // gesture 只作标注(同原版 InputGestureText), 快捷键本身在窗口级隧道接
+        { var mi = new MenuItem { Header = header, Tag = tag, Icon = icon == null ? null : Ico(icon), InputGesture = gesture == null ? null : KeyGesture.Parse(gesture) }; mi.Click += OnCtxCommand; m.Items.Add(mi); }
         void Sep() => m.Items.Add(new Separator());
         // 视图模式三项(忠实原版右键顶部)：2D 视图 / 3D Orbit / 3D 选择模式；
         // 弹出时隐藏当前所处那一项，用户看到的总是"另外两种可切目标"。
@@ -1166,10 +1168,10 @@ public partial class MainWindow : Window
         Cmd("全部选择", "全部选择", "icon_select_all");
         m.Items.Add(new MenuItem { Header = "调用选择集", Name = "CtxSelSets", Icon = Ico("icon_recall_selection") });
         Sep();
-        Cmd("复制", "复制到剪贴板", "icon_copy");
-        Cmd("剪切", "剪切", "icon_cut");
-        Cmd("粘贴", "粘贴", "icon_paste");
-        Cmd("删除", "删除", "icon_delete");
+        Cmd("复制", "复制到剪贴板", "icon_copy", "Ctrl+C");
+        Cmd("剪切", "剪切", "icon_cut", "Ctrl+X");
+        Cmd("粘贴", "粘贴", "icon_paste", "Ctrl+V");
+        Cmd("删除", "删除", "icon_delete", "Delete");
         Sep();
         Cmd("隐藏对象", "隐藏对象", "icon_hide_object");
         Cmd("隐藏同一图层对象", "隐藏同一图层对象", "icon_hide_layer");
@@ -13248,6 +13250,35 @@ public partial class MainWindow : Window
         if (e.Key == Key.Space && SpaceSubmitsNow(tb.Text ?? "")) { e.Handled = true; }
         else if (e.Key != Key.Enter) return;
         SubmitCommandLine(tb);
+    }
+
+    /// <summary>
+    /// 窗口级隧道 Ctrl+X / Ctrl+C / Ctrl+V / Ctrl+Shift+V：实体剪贴板 —— 剪切 / 复制 / 粘贴(原坐标) / 基点粘贴。
+    /// 原版右键菜单与 Ribbon「剪贴板」菜单都标着这四个手势(InputGestureText), 窗口级 PreviewKeyDown 却只接了
+    /// Ctrl+C / Ctrl+V(→ 原坐标粘贴), Ctrl+X 落到引擎 OnKeyDown 也没人认 —— 这里四个一起接上, 映射照原版菜单。
+    /// 走隧道的原因: 命令行常驻聆听后焦点多半停在命令框上, TextBox 会把 Ctrl+X 当"剪切文字"吃掉并标 Handled,
+    /// 现象正是"选中了实体, 按 Ctrl+X 没反应"。
+    /// 什么时候**不抢**(让给文本编辑, 同 AutoCAD):
+    ///   · 焦点在命令框且里面已经打了字 —— 这时是在剪/贴这行命令;
+    ///   · 焦点在别的输入框/可编辑下拉(改图层名、特性栏、表格单元格);
+    ///   · Ctrl+V 另加一条: 实体剪贴板是空的就放行, 让命令框照常贴系统剪贴板里的文字(坐标串)。
+    /// </summary>
+    private void OnWindowClipboardKey(object? sender, KeyEventArgs e)
+    {
+        bool ctrl = e.KeyModifiers == KeyModifiers.Control;
+        bool ctrlShift = e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift);
+        if (!(ctrl && e.Key is Key.X or Key.C or Key.V) && !(ctrlShift && e.Key == Key.V)) return;
+        var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement();
+        if (ReferenceEquals(focused, CommandInput))
+        {
+            if (!string.IsNullOrEmpty(CommandInput?.Text)) return;   // 命令行里有字: 归文本编辑
+        }
+        else if (focused is TextBox or AutoCompleteBox or ComboBox) return;
+        if (ctrlShift) StartPasteBase();
+        else if (e.Key == Key.X) CutClip();
+        else if (e.Key == Key.C) CopyClip();
+        else { if (_clip.IsEmpty) return; PasteClip(); }
+        e.Handled = true;
     }
 
     /// <summary>
