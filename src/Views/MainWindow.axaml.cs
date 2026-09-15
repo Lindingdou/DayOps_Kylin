@@ -150,6 +150,15 @@ public partial class MainWindow : Window
                 return;
             }
 
+            // 面积 jig：右键闭合当前区域并报告面积/周长
+            if (_area != null && props.IsRightButtonPressed)
+            {
+                _nav = NavMode.None;
+                FinishAreaMeasure();
+                e.Handled = true;
+                return;
+            }
+
             // 逐面点选一类拾取(删除三角面)：右键 = 确认结束, 与原版状态机手势一致
             if (_oneShotPick != null && _pickConfirmable && props.IsRightButtonPressed)
             {
@@ -175,8 +184,8 @@ public partial class MainWindow : Window
                 return;
             }
 
-            // 测距 / 三点测角：左键取点(与命令行键入坐标共用 MeasureFeedPoint; 橡皮筋/读数见 MainWindow.MeasureJig.cs)
-            if ((_measure != null || _angle != null) && props.IsLeftButtonPressed)
+            // 测距 / 三点测角 / 面积区域：左键取点(与命令行键入坐标共用 MeasureFeedPoint; 橡皮筋/读数见 MainWindow.MeasureJig.cs)
+            if ((_measure != null || _angle != null || _area != null) && props.IsLeftButtonPressed)
             {
                 _nav = NavMode.None;
                 var wp = PickWorld();
@@ -239,22 +248,59 @@ public partial class MainWindow : Window
                 return;
             }
 
-            // 线性标注：取两点 → 尺寸线 + 距离文字
+            // 连续标注落位后仍保持命令激活；此时尺寸线中点夹点优先于“选择下一对象”，
+            // 否则 _dimActive 会先吞掉左键，用户看得到夹点却永远拖不动。
+            if (_dimActive && _dimContinue && _dimP1 == null && _dimP2 == null
+                && props.IsLeftButtonPressed && _selected.Count == 1 && _gripsOn)
+            {
+                var raw = Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
+                int gi = raw is { } gp ? _grips.HitTest(gp.x, gp.y, SnapTolWorld(_lastPointer)) : -1;
+                if (gi >= 0 && _grips.Grips[gi].Owner is DimensionEntity && _grips.Grips[gi].Index == 2)
+                {
+                    _gripDrag.Mode = GripMode.Stretch;
+                    _gripCopy = false; _gripAwaitBase = false;
+                    _grips.SelectOnly(gi);
+                    var wpd = PickWorld() ?? raw;
+                    _gripDrag.Begin(_grips, gi, wpd!.Value.x, wpd.Value.y);
+                    _snapVertsDrag = SnapPoints.Exclude(_lastImport?.LineVertices ?? _snapVerts, _gripDrag.Base.x, _gripDrag.Base.y);
+                    _nav = NavMode.None;
+                    e.Pointer.Capture(ViewportHost);
+                    RedrawHighlight();
+                    StatusMsg.Text = "连续标注：拖动中部夹点调整统一高度，松开后继续选择对象";
+                    return;
+                }
+            }
+
+            // 所有线性标注统一手动取点；不再先选择对象或从对象边提取端点。
             if (_dimActive && props.IsLeftButtonPressed)
             {
                 _nav = NavMode.None;
                 var wp = PickWorld();
                 if (wp != null)
                 {
-                    if (_dimP1 == null) { _dimP1 = (wp.Value.x, wp.Value.y); StatusMsg.Text = "标注：指定第二点"; }
-                    else if (!_dimContinue && _dimP2 == null) { _dimP2 = (wp.Value.x, wp.Value.y); StatusMsg.Text = "标注：指定尺寸线位置"; }
+                    if (_dimP1 == null) { _dimP1 = (wp.Value.x, wp.Value.y); StatusMsg.Text = "标注：拾取第二点"; }
+                    else if (_dimP2 == null) { _dimP2 = (wp.Value.x, wp.Value.y); StatusMsg.Text = "标注：拾取标注位置"; }
                     else
                     {
                         double h = System.Math.Max(SnapTolWorld(_lastPointer) * 2.5, 1e-3);
-                        // 普通: (P1,P2)测点 + wp 偏移; 连续: (上P2,wp)测点 + 沿用上尺寸线偏移点
-                        double x1, y1, x2, y2, ox, oy;
-                        if (_dimContinue) { x1 = _dimP1.Value.x; y1 = _dimP1.Value.y; x2 = wp.Value.x; y2 = wp.Value.y; ox = _lastDimOffsetPt?.x ?? wp.Value.x; oy = _lastDimOffsetPt?.y ?? wp.Value.y; }
-                        else { x1 = _dimP1.Value.x; y1 = _dimP1.Value.y; x2 = _dimP2!.Value.x; y2 = _dimP2.Value.y; ox = wp.Value.x; oy = wp.Value.y; }
+                        double x1 = _dimP1.Value.x, y1 = _dimP1.Value.y;
+                        double x2 = _dimP2.Value.x, y2 = _dimP2.Value.y;
+                        double ox = wp.Value.x, oy = wp.Value.y;
+                        LinearDimensionPlacement linearPlacement = default;
+                        if (!_dimAligned)
+                        {
+                            linearPlacement = DimensionPlacement.ResolveLinearAxis(x1, y1, x2, y2, ox, oy);
+                            ox = linearPlacement.OffsetX;
+                            oy = linearPlacement.OffsetY;
+                        }
+                        DimensionEntity? placedDimension = null;
+                        if (_dimAligned)
+                        {
+                            var offset = ResolveAlignedDimOffset(ox, oy);
+                            ox = offset.X; oy = offset.Y;
+                            if (_dimContinue && _dimContinueOffsetDistance == null)
+                                _dimContinueOffsetDistance = offset.Distance;
+                        }
                         BeginChange();
                         if (_dimAligned)
                         {
@@ -264,10 +310,18 @@ public partial class MainWindow : Window
                             {
                                 Kind = DimensionEntity.DimKind.Aligned,
                                 X1 = x1, Y1 = y1, X2 = x2, Y2 = y2, OffX = ox, OffY = oy,
-                                BaseHeight = h, LayerName = _layers.Current.Name,
+                                BaseHeight = _dimStyle.TextHeight > 0 ? _dimStyle.TextHeight : h,
+                                TextHeight = _dimStyle.TextHeight > 0 ? _dimStyle.TextHeight : h,
+                                ArrowSize = (_dimStyle.TextHeight > 0 ? _dimStyle.TextHeight : h) * _dimStyle.ArrowRatio,
+                                ExtLineOffset = (_dimStyle.TextHeight > 0 ? _dimStyle.TextHeight : h) * _dimStyle.ExtLineOffsetRatio,
+                                ExtLineExtension = (_dimStyle.TextHeight > 0 ? _dimStyle.TextHeight : h) * _dimStyle.ExtLineExtensionRatio,
+                                TextOffset = (_dimStyle.TextHeight > 0 ? _dimStyle.TextHeight : h) * _dimStyle.TextOffsetRatio,
+                                DecimalPlaces = _dimStyle.DecimalPlaces,
+                                LayerName = _layers.Current.Name,
                                 Cr = 0.95f, Cg = 0.85f, Cb = 0.30f,   // 同 DimTools 的标注色
                             };
                             _scene.Add(de);
+                            placedDimension = de;
                         }
                         else
                         {
@@ -276,9 +330,32 @@ public partial class MainWindow : Window
                             { de.LayerName = _layers.Current.Name; _scene.Add(de); }
                         }
                         RefreshScene();
-                        StatusMsg.Text = "已标注";
-                        _lastDimP2 = (x2, y2); _lastDimOffsetPt = (ox, oy);   // 供连续标注接续(同尺寸线级)
-                        _dimActive = false; _dimP1 = null; _dimP2 = null; _dimContinue = false;
+                        if (placedDimension != null)
+                        {
+                            // 新标注立即成为当前选择，连续命令中也能看到并拖动尺寸线中点的高度夹点。
+                            _selected.Clear();
+                            _selected.Add(placedDimension);
+                            HighlightSelection();
+                        }
+                        double measured;
+                        if (_dimAligned) measured = System.Math.Sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
+                        else
+                        {
+                            measured = linearPlacement.Horizontal ? System.Math.Abs(x2 - x1) : System.Math.Abs(y2 - y1);
+                        }
+                        string value = measured.ToString(_dimStyle.NumberFormat, System.Globalization.CultureInfo.InvariantCulture);
+                        if (DimensionContinuation.AfterPlacement(_dimContinue) == DimensionNextStep.PickPoints)
+                        {
+                            // 连续 = 连续执行独立的对齐标注；下一条仍从点1、点2开始，不选择对象。
+                            _dimP1 = null; _dimP2 = null;
+                            StatusMsg.Text = $"已标注：{value} · 中部蓝色夹点可调统一高度 · 继续拾取第一点（Esc 结束）";
+                        }
+                        else
+                        {
+                            _dimActive = false; _dimP1 = null; _dimP2 = null; _dimContinue = false;
+                            _dimContinueOffsetDistance = null;
+                            StatusMsg.Text = $"已标注：{value}";
+                        }
                     }
                 }
                 return;
@@ -482,7 +559,7 @@ public partial class MainWindow : Window
             }
 
             // Gizmo 三轴手柄：空闲态左键按在某根轴上 → 沿该轴拖动选择集(松开落地, 一步 Undo)。见 MainWindow.Gizmo.cs
-            if (props.IsLeftButtonPressed && _selected.Count > 0 && _measure == null && _tool == null
+            if (props.IsLeftButtonPressed && _selected.Count > 0 && !MeasureCommandActive && _tool == null
                 && _editMode == EditMode.None && !_offsetActive && !_trimActive && !_breakActive && !_slideActive
                 && e.KeyModifiers == KeyModifiers.None && GizmoTryBeginDrag(_lastPointer))
             {
@@ -495,7 +572,7 @@ public partial class MainWindow : Window
             //   Ctrl/Shift = 只改夹点选择集(Ctrl 逐个加减 / Shift 沿线区间)，本次不拖；
             //   无修饰键   = 点已选中的夹点拖整组，点未选中的清空后只选它再拖。
             //   点空白顺手清掉夹点选择，事件继续交给框选/点选。
-            if (props.IsLeftButtonPressed && _selected.Count > 0 && _measure == null && _tool == null
+            if (props.IsLeftButtonPressed && _selected.Count > 0 && !MeasureCommandActive && _tool == null
                 && _editMode == EditMode.None && !_offsetActive && !_trimActive && !_breakActive && !_slideActive)
             {
                 var wp = Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);   // 命中用原始光标点(与原版 HitTest 一致)
@@ -528,7 +605,7 @@ public partial class MainWindow : Window
             // 拖放移动文字(AutoCAD：选中对象后按住其本体拖动即移动，松开落地；Ctrl/Shift 仍归选集加减)。
             // 只在 2D、按在【已选中】的文字上才挂起；按在别的东西/空白上照旧走点选/框选。
             if (props.IsLeftButtonPressed && _selected.Count > 0 && Viewport.Is2DView && e.KeyModifiers == KeyModifiers.None
-                && _tool == null && _measure == null && _editMode == EditMode.None
+                && _tool == null && !MeasureCommandActive && _editMode == EditMode.None
                 && !_offsetActive && !_trimActive && !_breakActive && !_slideActive)
             {
                 var wp = Viewport.ScreenToWorld(_lastPointer.X, _lastPointer.Y);
@@ -546,7 +623,7 @@ public partial class MainWindow : Window
             // 选择：2D 左键拖=选择框；3D 默认左键拖=轨道旋转，开「选择模式」后左键只做框选/点选(不旋转)。
             // Shift+左键作临时选择(不必开模式)。两种情形单击不拖都=点选。
             bool navShift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
-            bool selectable = props.IsLeftButtonPressed && _tool == null && _measure == null
+            bool selectable = props.IsLeftButtonPressed && _tool == null && !MeasureCommandActive
                 && (_editMode == EditMode.None || _editAwaitSelect) && !_offsetActive && !_trimActive && !_breakActive && !_slideActive;
             if (selectable && (Viewport.Is2DView || _selectMode || navShift))
             {
@@ -831,7 +908,7 @@ public partial class MainWindow : Window
             }
 
             // 无拖动 + 非绘制/测距 → 视为点选
-            bool wasClick = _nav != NavMode.None && _tool == null && _measure == null
+            bool wasClick = _nav != NavMode.None && _tool == null && !MeasureCommandActive
                 && System.Math.Abs(rel.X - _pressPos.X) < 4 && System.Math.Abs(rel.Y - _pressPos.Y) < 4;
             if (_nav == NavMode.Orbit && !wasClick && !Viewport.Is2DView) RefreshGripsForView(force: true);   // 旋转收尾: 按最终视角把夹点尺寸算准(拖拽中是限频的)
             _nav = NavMode.None;
@@ -845,7 +922,8 @@ public partial class MainWindow : Window
         };
         _onHostDoubleTapped = (_, te) =>
         {
-            if (_tool != null && _tool.IsMultiPoint)                      // 双击结束多段线
+            if (TryBeginDimensionEditAt(te.GetPosition(ViewportHost))) { } // 双击标注优先进入夹点 + 特性编辑，绝不触发 ZoomExtents
+            else if (_tool != null && _tool.IsMultiPoint)                 // 双击非标注处结束多段线
             {
                 var e = _tool.Finish();
                 if (e != null) { BeginChange(); AssignLayer(e); _scene.Add(e); }
@@ -911,6 +989,12 @@ public partial class MainWindow : Window
             if ((e.Key == Key.Enter || e.Key == Key.Return) && ConfirmOneShotPick()) { e.Handled = true; return; }
             if ((e.Key == Key.Enter || e.Key == Key.Return) && FinishSelectObjects(true)) { e.Handled = true; return; }
             if ((e.Key == Key.Enter || e.Key == Key.Return) && !(CommandInput?.IsFocused ?? false) && TextToolAcceptDefault()) { e.Handled = true; return; }
+            if ((e.Key == Key.Enter || e.Key == Key.Return) && !(CommandInput?.IsFocused ?? false) && _area != null)
+            {
+                FinishAreaMeasure();
+                e.Handled = true;
+                return;
+            }
             // 焦点在命令框时回车已由 SubmitCommandLine 处理(它不标 Handled 会冒泡到这), 别再确认一次
             if ((e.Key == Key.Enter || e.Key == Key.Return) && e.Source is not TextBox && ConfirmEditByKey()) { e.Handled = true; return; }
             if (e.Key == Key.Escape && CancelOneShotPick()) { e.Handled = true; return; }
@@ -927,6 +1011,7 @@ public partial class MainWindow : Window
                 _tool = null;
                 _measure = null;
                 _angle = null;
+                _area = null;
                 _editMode = EditMode.None; _editAwaitSelect = false; _editDisplacement = false;
                 _textDragPending = false; _textDragging = false;
                 FinishSelectObjects(false);
@@ -940,7 +1025,7 @@ public partial class MainWindow : Window
                 _pasteBaseActive = false;
                 _benchActive = false; _benchEntity = null;
                 _spotActive = false;
-                _dimActive = false; _dimP1 = null; _dimP2 = null; _dimContinue = false;
+                _dimActive = false; _dimP1 = null; _dimP2 = null; _dimContinue = false; _dimContinueOffsetDistance = null;
                 _dimRadActive = false; _dimRadCircle = null; _dimDiameter = false;
                 _dimAngActive = false; _angVertex = null; _angP1 = null;
                 _coordLabelActive = false;
@@ -1096,7 +1181,7 @@ public partial class MainWindow : Window
         var prev = _active;
         if (prev.Vp != null) { prev.Vp.SetHighlight(null); prev.Vp.SetHighlightFaces(null); prev.Vp.SetSnapMarker(null); }
         _active = st;
-        _tool = null; _measure = null; _angle = null; _selected.Clear(); _prevSelected = new();
+        _tool = null; _measure = null; _angle = null; _area = null; _selected.Clear(); _prevSelected = new();
         _grips.Clear(); _gripHover = -1; _snapShown = false;
         _editMode = EditMode.None; _editAwaitSelect = false; FinishSelectObjects(false); _lastImport = null;
         // 图层特性管理器绑的是打开它时那个文档的图层表, 跨文档留着会改错表 —— 关掉, 需要再开就是当前文档的。
@@ -1156,6 +1241,7 @@ public partial class MainWindow : Window
     {
         public string Id = "", Title = "";
         public Scene Scene = new();
+        public Scene Overlay = new();       // 临时辅助标记，不参与存档、导出、撤销和对象树
         public LayerTable Layers = new();
         public DMC.Document Vm = null!;
         public DocState()
@@ -1427,10 +1513,8 @@ public partial class MainWindow : Window
     private (double x, double y)? _angVertex, _angP1;
     private bool _coordLabelActive;                    // 坐标标注：点击点报 X/Y(连续)
     private (double cx, double cy, double r)? _dimRadCircle;
-    private (double x, double y)? _lastDimP2;           // 上一条线性标注的第二点(连续标注基准)
     private (double x, double y)? _dimP2;               // 线性标注第二点(3 点工作流: 点1→点2→尺寸线位置)
-    private (double x, double y)? _lastDimOffsetPt;     // 上一条标注的尺寸线偏移点(连续标注沿用同尺寸线级)
-    private bool _dimContinue;                          // 连续标注模式(2 点: 续点, 尺寸线级沿用)
+    private bool _dimContinue;                          // 连续执行独立对齐标注：每次重新选一条可拾取边
     private bool _dimAligned;                           // true=对齐标注(尺寸线平行测线,真距); false=线性标注(轴对齐,量 X/Y 分量)
     private readonly Cad.Draw.DimStyle _dimStyle = DimStyleStore.LoadOrDefault();   // 标注样式(DIM 变量：字高/小数位/箭头比/延伸线)，影响新建标注; 上次设置记在用户目录 dimstyle.json(设置面板见 DimStyleWindow.cs)
     private bool _selBoxActive;                     // 窗口框选拖拽中
@@ -1449,6 +1533,8 @@ public partial class MainWindow : Window
     {
         if (sender is Control c && c.Tag is string cmd)
         {
+            // 测量下拉项位于主按钮 Flyout 内；拦截 Click 冒泡，避免“面积”随后再次触发主按钮的快速测距。
+            e.Handled = true;
             // 命令来源：界面按钮/菜单 → 参数照旧走对话框(忠实原版鼠标交互)；命令行转派 → 参数留在命令行问。
             bool fromCmdLine = _dispatchFromCmdLine; _dispatchFromCmdLine = false;
             _cmdInFlight = cmd;   // 供 EnsureGeoDb: 首次用数据库要先连库, 连上后照这条把命令重跑一遍(见那里)
@@ -1462,6 +1548,7 @@ public partial class MainWindow : Window
             // 上一条命令还停在「选择对象」阶段就又点了别的命令 —— 按 AutoCAD 的规矩，新命令顶掉旧命令。
             // 不结掉的话那个 await 会一直挂着, 且 _editAwaitSelect 残留会让点选一直是"累加"语义。
             FinishSelectObjects(false);
+            CancelAreaMeasure();
             if (await TryOpenGeoDbPageAsync(cmd)) return;   // 地质与工程信息数据库 24 页面(按 Ribbon Tag 精确匹配)
             if (await TryPointCloudCommandAsync(cmd)) return;   // 点云处理：数据集版(当前点云 → 结果作为新点云入场景); 无点云时返回 false 回落下面的既有通路
             if (await TryModelingCommandAsync(cmd)) return; // 三维地质建模：场景对象版(选中三角网/点/线 → 结果入场景)
@@ -2177,8 +2264,9 @@ public partial class MainWindow : Window
     {
         // 完整文档重置：绘图 / 导入 / 图层 / 选择 / 撤销 / 进行中的命令
         _scene.Clear();
+        _active.Overlay.Clear();
         _selected.Clear(); _prevSelected = new();
-        _tool = null; _measure = null; _angle = null;
+        _tool = null; _measure = null; _angle = null; _area = null;
         _editMode = EditMode.None; _editPts.Clear();
         _offsetActive = false; _trimActive = false;
         _breakActive = false; _breakPts.Clear();
@@ -2259,6 +2347,7 @@ public partial class MainWindow : Window
         {
             var doc = SceneIO.LoadDoc(File.ReadAllText(path));
             _scene.Clear();
+            _active.Overlay.Clear();
             foreach (var e in doc.Scene.Entities) _scene.Add(e);
             _layers.Reset();
             if (doc.Layers.Count > 0)
@@ -6864,12 +6953,15 @@ public partial class MainWindow : Window
             : $"线裁剪：无{(keepInside ? "界内" : "界外")}段";
     }
 
-    // 线性标注：取两点
+    // 线性标注手动取两点；对齐标注先点直边自动取两端点。
     private void StartDim(bool aligned = false)
     {
+        ResetForDimensionInteraction();
         _dimActive = true; _dimP1 = null; _dimP2 = null; _dimContinue = false; _dimAligned = aligned;
-        _tool = null; _measure = null; _editMode = EditMode.None;
-        StatusMsg.Text = $"{(aligned ? "对齐" : "线性")}标注：指定第一点（点1→点2→尺寸线位置）";
+        _selected.Clear(); HighlightSelection();
+        StatusMsg.Text = aligned
+            ? "对齐标注：拾取第一点（点1→点2→拾取标注位置）"
+            : "标注：拾取第一点（点1→点2→拾取标注位置）";
     }
 
     // 半径标注(DIMRADIAL)：需先选一个圆或弧
@@ -6882,8 +6974,8 @@ public partial class MainWindow : Window
             _ => null
         } : null;
         if (c == null) { StatusMsg.Text = "半径标注：请先选中一个圆或弧"; return; }
+        ResetForDimensionInteraction();
         _dimRadCircle = c; _dimRadActive = true; _dimDiameter = false;
-        _tool = null; _measure = null; _editMode = EditMode.None;
         StatusMsg.Text = "半径标注：指定标注方向";
     }
 
@@ -6897,36 +6989,34 @@ public partial class MainWindow : Window
             _ => null
         } : null;
         if (c == null) { StatusMsg.Text = "直径标注：请先选中一个圆或弧"; return; }
+        ResetForDimensionInteraction();
         _dimRadCircle = c; _dimRadActive = true; _dimDiameter = true;
-        _tool = null; _measure = null; _editMode = EditMode.None;
         StatusMsg.Text = "直径标注：指定标注方向";
     }
 
     // 角度标注(DIMANGULAR)：三点 —— 角顶点 + 两条边上各一点
     private void StartDimAngular()
     {
+        ResetForDimensionInteraction();
         _dimAngActive = true; _angVertex = null; _angP1 = null;
-        _tool = null; _measure = null; _editMode = EditMode.None;
-        _dimActive = false; _dimRadActive = false;
         StatusMsg.Text = "角度标注：指定角顶点";
     }
 
     // 坐标标注：进入连续点选模式，每点生成 十字+引线+"X=… Y=…" 注记
     private void StartCoordLabel()
     {
+        ResetForDimensionInteraction();
         _coordLabelActive = true;
-        _tool = null; _measure = null; _editMode = EditMode.None;
-        _dimActive = false; _dimRadActive = false;
         StatusMsg.Text = "坐标标注：点选要标注坐标的点（连续, ESC 退出）";
     }
 
-    // 连续标注(DIMCONTINUE)：以上一条线性标注的第二点为起点链式接续
+    // 连续标注：连续执行对齐标注，每次都直接拾取点1、点2和标注位置。
     private void StartDimContinue()
     {
-        if (_lastDimP2 == null) { StatusMsg.Text = "连续标注：请先做一条线性标注"; return; }
-        _dimActive = true; _dimP1 = _lastDimP2; _dimP2 = null; _dimContinue = true;   // 续标: 2 点, 尺寸线级沿用上条
-        _tool = null; _measure = null; _editMode = EditMode.None;
-        StatusMsg.Text = "连续标注：指定下一点";
+        ResetForDimensionInteraction();
+        _dimActive = true; _dimP1 = null; _dimP2 = null; _dimContinue = true; _dimAligned = true;
+        _selected.Clear(); HighlightSelection();
+        StatusMsg.Text = "连续标注：拾取第一点（点1→点2→标注位置，Esc 结束）";
     }
 
     // 标注样式(DIM 变量)：无参显示当前值；「标注样式 <文字高> [小数位] [箭头比]」设置。文字高 0=自动(随缩放)。
@@ -7001,14 +7091,10 @@ public partial class MainWindow : Window
     private bool SpaceSubmitsNow(string typed)
         => !(_tool is TextTool { AwaitingText: true }) && AcadCommands.SpaceSubmits(typed);
 
-    // 面积/周长：对选中的多段线(闭合优先)算面积+周长，报状态栏
+    // 面积/周长：选中对象直接计算；未选中时进入连续点取的面积 jig
     private void MeasureArea()
     {
-        if (_selected.Count != 1 || _selected[0] is not PolylineEntity pl || pl.Points.Count < 3)
-        { StatusMsg.Text = "面积：请先选中一条至少 3 点的多段线（闭合更准）"; return; }
-        double area = GeomMeasure.Area(pl.Points);
-        double peri = GeomMeasure.Perimeter(pl.Points, true);
-        StatusMsg.Text = $"面积 {area:0.###} · 周长(闭合) {peri:0.###} · {pl.Points.Count} 顶点";
+        MeasureBySelection("面积");
     }
 
     // 坐标转换：控制点对 CSV(srcX,srcY,dstX,dstY) → Helmert 4参 → 套用全场景
@@ -8490,6 +8576,7 @@ public partial class MainWindow : Window
         "多边形" or "正多边形" => QuickSelectCatalog.TypePolygon,
         "文字" or "单行文字" or "文本" => QuickSelectCatalog.TypeText,
         "点" => QuickSelectCatalog.TypePoint,
+        "三角网" or "网格" or "TIN" => QuickSelectCatalog.TypeTriangleMesh,
         _ => null,
     };
 
@@ -8687,14 +8774,23 @@ public partial class MainWindow : Window
                 ? $"{_editName}：{EditFirstPrompt()}"
                 : EditPrompt(_editMode, _editPts.Count);
         if (_gripDrag.Active) return _gripDrag.Prompt;
-        if (_measure != null || _angle != null) return MeasurePrompt();   // 测距/测角按步骤提示, 见 MainWindow.MeasureJig.cs
+        if (MeasureCommandActive) return MeasurePrompt();   // 测距/测角/面积按步骤提示, 见 MainWindow.MeasureJig.cs
         if (_offsetActive) return "偏移：指定要偏移的那一侧上的点";
         if (_trimActive) return TrimPrompt();
         if (_breakActive) return _breakPts.Count == 0 ? "打断：指定第一个打断点" : "打断：指定第二个打断点";
         if (_slideActive) return _slideDragging ? "滑动多段线：拖动中…松开结束" : "滑动多段线：按住左键拖动绘制";
         if (_ttrActive) return _ttrAwaitRadius ? "圆TTR：在命令行输入半径并回车" : _ttrRef1 == null ? "圆TTR：选择第一个相切对象（直线/圆）" : "圆TTR：选择第二个相切对象";
         if (_serActive) return _serAwaitRadius ? "圆弧SER：在命令行输入半径并回车（负值取另一侧）" : _serStart == null ? "圆弧SER：指定起点" : "圆弧SER：指定端点";
-        if (_dimActive) return _dimP1 == null ? "标注：指定第一条尺寸界线原点" : _dimP2 == null ? "标注：指定第二条尺寸界线原点" : "标注：指定尺寸线位置";
+        if (_dimActive)
+        {
+            return _dimP1 == null
+                ? $"{(_dimContinue ? "连续" : _dimAligned ? "对齐" : "标注")}标注：拾取第一点"
+                : _dimP2 == null
+                    ? $"{(_dimContinue ? "连续" : _dimAligned ? "对齐" : "标注")}标注：拾取第二点"
+                    : _dimContinue && _dimContinueOffsetDistance is { } locked
+                        ? $"连续标注：移动鼠标选择尺寸线一侧（统一高度 {locked:0.##}），单击落位"
+                        : $"{(_dimContinue ? "连续" : _dimAligned ? "对齐" : "标注")}标注：移动鼠标确定标注位置，单击落位";
+        }
         if (_dimRadActive) return _dimRadCircle == null ? $"{(_dimDiameter ? "直径" : "半径")}标注：选择圆或圆弧" : "标注：指定尺寸线位置";
         if (_dimAngActive) return _angVertex == null ? "角度标注：指定角的顶点" : _angP1 == null ? "角度标注：指定第一条边上的点" : "角度标注：指定第二条边上的点";
         if (_pathActive) return _pathP1 == null ? "寻径：指定起点" : "寻径：指定终点";
@@ -8722,13 +8818,14 @@ public partial class MainWindow : Window
         if (_editAwaitSelect) return _editSelectFaces ? Controls.CadGlViewport.CursorMode.MeshPickBox : PB;   // ← 「选择对象」= 方框; 选面 = 黄框+十字
         if (_editMode != EditMode.None) return CO;
         if (_gripDrag.Active) return CO;
-        if (_measure != null || _angle != null) return CO;
+        if (MeasureCommandActive) return CO;
         if (_offsetActive) return CO;                                  // 偏移: 指定偏移侧的点(原版 WaitingSide)
         if (_trimActive) return PB;                                    // 修剪 / 延伸: 点选对象 → 方框光标
         if (_breakActive || _slideActive) return CO;
         if (_ttrActive) return _ttrAwaitRadius ? CW : PB;              // 选相切对象 = 方框
         if (_serActive) return _serAwaitRadius ? CW : CO;
-        if (_dimActive || _dimAngActive) return CO;
+        if (_dimActive) return CO;                              // 标注统一按点拾取，始终显示十字光标
+        if (_dimAngActive) return CO;
         if (_dimRadActive) return _dimRadCircle == null ? PB : CO;     // 先选圆/圆弧 = 方框
         if (_pathActive || _pasteBaseActive || _benchActive || _spotActive || _coordLabelActive) return CO;
         return CW;
@@ -8790,7 +8887,7 @@ public partial class MainWindow : Window
             string digits = new string(cmd.Where(char.IsDigit).ToArray());
             if (digits.Length > 0 && int.TryParse(digits, out int n) && n >= 3 && n <= 120) sides = n;
             _tool = new PolygonTool { Sides = sides };
-            _measure = null; Viewport.SetSnapMarker(null); _snapShown = false; _lastInputPoint = null;
+            _measure = null; _angle = null; _area = null; Viewport.SetSnapMarker(null); _snapShown = false; _lastInputPoint = null;
             StatusMsg.Text = _tool.Prompt + "（ESC 退出）";
             return true;
         }
@@ -8824,7 +8921,7 @@ public partial class MainWindow : Window
         };
         if (t == null) return false;
         _tool = t;
-        _measure = null;                              // 退出测距
+        _measure = null; _angle = null; _area = null;  // 退出测量
         Viewport.SetSnapMarker(null); _snapShown = false; _lastInputPoint = null;
         StatusMsg.Text = t.Prompt + "（ESC 退出）";
         return true;
@@ -8832,12 +8929,17 @@ public partial class MainWindow : Window
 
     // 撤销/重做：改动前记快照。走 SceneIO.Snapshot 而不是 Save —— 点云的几百万个点按引用进 _undo.Heavy，
     // 不逐点序列化(加载了点云后每次编辑都写上百 MB 字符串、两千万点直接 OOM 的根子)；存档仍走 Save/SaveDoc 不变。
-    private void BeginChange() => _undo.Push(SceneIO.Snapshot(_scene, _undo.Heavy));
+    private void BeginChange()
+    {
+        _active.Overlay.Clear();
+        _undo.Push(SceneIO.Snapshot(_scene, _undo.Heavy));
+    }
 
     private void LoadSceneFrom(UndoManager.Snapshot snap)
     {
         var loaded = SceneIO.Restore(snap, _undo.Heavy);
         _scene.Clear();
+        _active.Overlay.Clear();
         foreach (var e in loaded.Entities) _scene.Add(e);
         _selected.Clear();
         Viewport.SetHighlight(null); Viewport.SetHighlightFaces(null);
@@ -9067,7 +9169,12 @@ public partial class MainWindow : Window
         InvalidateSnapGeom();   // 场景/图层变了 → 捕捉几何缓存作废
         _snapVerts = _scene.SnapCandidates(_layers.IsShown);   // 语义 osnap 点(端点/中点/圆心/象限)
         T("捕捉点");
-        Viewport.SetSceneGeometry(_scene.BuildGeometry(_layers.IsShown));
+        var geometry = _scene.BuildGeometryBatches(
+            _layers.IsShown, e => _layers.EffectiveLineWeight(e.LineWeight, e.LayerName));
+        Viewport.SetSceneGeometry(geometry, _lineWeightDisplay);
+        var markerGeometry = new List<float>();
+        foreach (var batch in _active.Overlay.BuildGeometryBatches()) markerGeometry.AddRange(batch.Vertices);
+        Viewport.SetMarkerGeometry(markerGeometry.ToArray());
         T("细分+上传");
         RefreshScenePreview();
         T("预览");
@@ -9080,7 +9187,9 @@ public partial class MainWindow : Window
         T("材质面");
         Viewport.SetSceneCloud(_scene.BuildCloudPoints(_layers.IsShown), PcPointPixels());   // 点云(GL_POINTS)
         T("点云");
-        Viewport.SetBillboards(_scene.BuildBillboards(_layers.IsShown));   // 注记始终朝屏幕(原版 screenFacing)
+        var billboards = _scene.BuildBillboards(_layers.IsShown);
+        billboards.AddRange(_active.Overlay.BuildBillboards());
+        Viewport.SetBillboards(billboards);   // 注记始终朝屏幕(原版 screenFacing)
         T("注记");
         if (_scene.Count != _lastSceneCount) { _lastSceneCount = _scene.Count; RefreshObjectManager(); }
         T("对象树");
@@ -9330,6 +9439,10 @@ public partial class MainWindow : Window
         var res = _gripDrag.Preview(pt.x, pt.y);
         string mode = GripDrag.ModePrompt(_gripDrag.Mode);
         bool copy = _gripCopy; _gripCopy = false;
+        var anchorOwner = _gripDrag.AnchorOwner;
+        bool continuousHeightGrip = _dimActive && _dimContinue && _gripDrag.Mode == GripMode.Stretch
+            && _gripDrag.AnchorIndex == 2 && anchorOwner is DimensionEntity;
+        DimensionEntity? adjustedDimension = null;
         _gripDrag.Cancel(); _snapVertsDrag = null;
         if (res.Count > 0)
         {
@@ -9340,11 +9453,24 @@ public partial class MainWindow : Window
                 _scene.Replace(old, moved);
                 int k = _selected.IndexOf(old);
                 if (k >= 0) _selected[k] = moved;
+                if (continuousHeightGrip && ReferenceEquals(old, anchorOwner) && moved is DimensionEntity de)
+                    adjustedDimension = de;
             }
             RefreshScene();
-            StatusMsg.Text = copy
-                ? $"夹点编辑完成 {mode} · 复制（新增 {res.Count} 个副本，原实体未动）"
-                : $"夹点编辑完成 {mode}（{res.Count} 个实体）";
+            if (adjustedDimension is { Kind: DimensionEntity.DimKind.Aligned } adjusted)
+            {
+                var offset = DimensionContinuation.ResolveOffset(
+                    new DimensionSegment(adjusted.X1, adjusted.Y1, adjusted.X2, adjusted.Y2),
+                    adjusted.OffX, adjusted.OffY, lockedDistance: null);
+                _dimContinueOffsetDistance = offset.Distance;
+                StatusMsg.Text = $"连续标注：统一高度已调整为 {offset.Distance:0.##}，继续拾取第一点（Esc 结束）";
+            }
+            else
+            {
+                StatusMsg.Text = copy
+                    ? $"夹点编辑完成 {mode} · 复制（新增 {res.Count} 个副本，原实体未动）"
+                    : $"夹点编辑完成 {mode}（{res.Count} 个实体）";
+            }
         }
         else StatusMsg.Text = "夹点：该夹点不支持此操作，未改变";
         HighlightSelection();
@@ -9395,7 +9521,7 @@ public partial class MainWindow : Window
     // 夹点拖拽取消：实体从未被改(预览式)，只清状态并恢复高亮
     private void CancelGripDrag()
     {
-        _gripDrag.Cancel(); _snapVertsDrag = null;
+        _gripDrag.Cancel(); _gripCopy = false; _gripAwaitBase = false; _snapVertsDrag = null;
         RedrawHighlight();
         HideDragTip();
         StatusMsg.Text = "夹点：已取消";
@@ -9449,7 +9575,7 @@ public partial class MainWindow : Window
         var g = new Grid { ColumnDefinitions = new ColumnDefinitions("92,*"), Margin = new Thickness(6, 2, 6, 2) };
         var l = new TextBlock { Text = label, FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
         ThemeBind(l, TextBlock.ForegroundProperty, "Theme.Text.Muted");
-        var tb = new TextBox { Text = value, FontSize = 11, Padding = new Thickness(3, 1, 3, 1), MinHeight = 0 };
+        var tb = new TextBox { Text = value, Tag = label, FontSize = 11, Padding = new Thickness(3, 1, 3, 1), MinHeight = 0 };
         ThemeBind(tb, TextBox.BackgroundProperty, "Theme.Input.Background"); ThemeBind(tb, TextBox.BorderBrushProperty, "Theme.Panel.Border");
         Grid.SetColumn(l, 0); Grid.SetColumn(tb, 1);
         g.Children.Add(l); g.Children.Add(tb);
@@ -9835,10 +9961,15 @@ public partial class MainWindow : Window
 
     private void ClrMark()   // 清理标记 / CLRMARK：清高亮/捕捉标记
     {
+        int polylineMarkerCount = _active.Overlay.Count;
+        _active.Overlay.Clear();
         Viewport.SetHighlight(null); Viewport.SetHighlightFaces(null);
         Viewport.SetSnapMarker(null);
         _snapShown = false;
-        StatusMsg.Text = "已清理标记";
+        RefreshScene();
+        StatusMsg.Text = polylineMarkerCount > 0
+            ? $"已清理标记（多段线辅助标记 {polylineMarkerCount} 个）"
+            : "已清理标记";
     }
 
     // ---------- 选择命令（全选/最后/上次）+ 分解 ----------
@@ -10978,7 +11109,7 @@ public partial class MainWindow : Window
 
     private bool TryCoordinateInput(string cmd)
     {
-        if (_tool == null && _editMode == EditMode.None && !_offsetActive && _measure == null && _angle == null) return false;   // 仅取点态接受坐标(偏移的"侧点"/测量取点也是取点)
+        if (_tool == null && _editMode == EditMode.None && !_offsetActive && _measure == null && _angle == null && _area == null) return false;   // 仅取点态接受坐标(偏移的"侧点"/测量取点也是取点)
         if (_editMode != EditMode.None && !_editAwaitSelect)
         {
             // 编辑取点认三分量：x,y,z / @dx,dy,dz 的 z 进 dz(移动/复制)；只给 x,y 就是纯 XY
@@ -11064,7 +11195,7 @@ public partial class MainWindow : Window
     {
         _lastInputPoint = (x, y);
         if (_offsetActive) { ApplyOffsetAt(x, y); return; }   // 偏移侧点也可键入坐标(同 AutoCAD)
-        if (_measure != null || _angle != null) { MeasureFeedPoint(x, y); return; }   // 测距/测角取点也可键入坐标, 见 MainWindow.MeasureJig.cs
+        if (MeasureCommandActive) { MeasureFeedPoint(x, y); return; }   // 测距/测角/面积取点也可键入坐标, 见 MainWindow.MeasureJig.cs
         if (_editMode != EditMode.None)
         {
             // 位移模式只认命令行键入的向量(同原版 WaitingDisplacement)：矿区坐标动辄几十万，
@@ -11266,12 +11397,13 @@ public partial class MainWindow : Window
     {
         if (_syncToggle) return;
         _lineWeightDisplay = LineWeightToggle.IsChecked == true;
+        Viewport.SetLineWeightDisplay(_lineWeightDisplay);
         EchoLineWeightDisplay();
     }
 
     private void EchoLineWeightDisplay()
     {
-        EditEcho(_lineWeightDisplay ? "LWDISPLAY ON：线宽显示开（按实体线宽渲染，thick-line 渲染待渲染管线升级）"
+        EditEcho(_lineWeightDisplay ? "LWDISPLAY ON：线宽显示开（按实体线宽渲染）"
                                     : "LWDISPLAY OFF：线宽显示关（所有实体按 1px 渲染）");
     }
 
@@ -11304,7 +11436,7 @@ public partial class MainWindow : Window
 
     /// <summary>命令行是否空闲（无进行中的绘制/编辑/测量/交互）——空 Enter 仅在此态重复上次命令。</summary>
     private bool CommandIdle() =>
-        _tool == null && _measure == null && _angle == null && _editMode == EditMode.None
+        _tool == null && !MeasureCommandActive && _editMode == EditMode.None
         && !_ttrActive && !_serActive && !_offsetActive && !_trimActive
         && !_breakActive && !_slideActive && !_dimActive && !_dimRadActive && !_dimAngActive;
 
@@ -12080,6 +12212,7 @@ public partial class MainWindow : Window
                 {
                     if (_selectObjectsTcs != null) FinishSelectObjects(true);
                     else if (_editAwaitSelect) ConfirmEditSelection();
+                    else if (_area != null) FinishAreaMeasure();
                     else if (!ConfirmEditPoint()) FinishSelectObjects(true);
                 }
                 return;
@@ -17128,6 +17261,8 @@ public partial class MainWindow : Window
             if (_tool is TextTool) { tb.Text = string.Empty; TextToolAcceptDefault(); return; }
             // 多点绘制中回车 = 结束（同 AutoCAD：PLINE 敲回车收笔）。原先只能双击或 Esc。
             if (_tool is { IsMultiPoint: true }) { tb.Text = string.Empty; FinishMultiPointTool(); return; }
+            // 面积 jig 回车 = 闭合当前区域并报告面积/周长
+            if (_area != null) { tb.Text = string.Empty; FinishAreaMeasure(); return; }
             // 编辑命令中回车 = 右键：选择对象阶段确定选择集；移动/复制定了基点后 = 用第一个点作为位移
             if (ConfirmEditByKey()) { tb.Text = string.Empty; return; }
             // 空命令行 + Enter = 重复上次命令（AutoCAD 行为；仅空闲态，不干预进行中的交互）
@@ -17190,6 +17325,7 @@ public partial class MainWindow : Window
         // AutoCAD 命令名/缩写 → 系统既有命令（L/PL/REC/DLI/Z/LA … 见 AcadCommands）。
         // 选择对象阶段按 AutoCAD 选择选项解释 L/P/WP/CP/ALL, 空闲态按命令名解释(L=直线, P=平移, CP=复制)。
         cmd = AcadCommands.Resolve(cmd, _editAwaitSelect);
+        CancelAreaMeasure();
 
         // 本条命令来自命令行/助手 → 它要参数时在命令行里逐项问(见 MainWindow.CmdParams.cs);
         // 命令词后面跟的位置参数先攒着, 问答时优先消费(`加密多段线 15` 直接把 15 填给第一项)。
@@ -17384,13 +17520,13 @@ public partial class MainWindow : Window
             case "DIST":
             case "DI":
                 _measure = new MeasureState();
-                _tool = null; _angle = null;
+                _tool = null; _angle = null; _area = null;
                 StatusMsg.Text = MeasurePrompt();
                 break;
             case "MANG":
             case "ANG":
                 _angle = new AngleState();
-                _tool = null; _measure = null;
+                _tool = null; _measure = null; _area = null;
                 StatusMsg.Text = MeasurePrompt();
                 break;
             case "ERASE":
@@ -17576,6 +17712,7 @@ public partial class MainWindow : Window
                 break;
             case "LWDISPLAY":   // 线宽显示开关(原内核命令表同名; 状态栏「线宽」按钮同一开关)
                 _lineWeightDisplay = !_lineWeightDisplay;
+                Viewport.SetLineWeightDisplay(_lineWeightDisplay);
                 SyncDraftToggles();
                 EchoLineWeightDisplay();
                 break;

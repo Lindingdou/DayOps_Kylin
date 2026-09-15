@@ -5,6 +5,34 @@ using PitMine3D.Kylin.Cad.Draw;
 
 namespace PitMine3D.Kylin.Views;
 
+internal enum DimensionNextStep { Finish, PickPoints }
+
+internal readonly record struct DimensionOffset(double X, double Y, double Distance);
+
+internal static class DimensionContinuation
+{
+    internal static DimensionNextStep AfterPlacement(bool continuing)
+        => continuing ? DimensionNextStep.PickPoints : DimensionNextStep.Finish;
+
+    /// <summary>
+    /// 把尺寸线位置投到被标注边的法向上。连续模式首条由鼠标给出距离，后续复用该距离，
+    /// 鼠标只决定放在线的哪一侧，避免每条尺寸线因点击远近不同而忽高忽低。
+    /// </summary>
+    internal static DimensionOffset ResolveOffset(DimensionSegment segment, double pointerX, double pointerY, double? lockedDistance)
+    {
+        double dx = segment.X2 - segment.X1, dy = segment.Y2 - segment.Y1;
+        double len = System.Math.Sqrt(dx * dx + dy * dy);
+        if (len < 1e-9) return new DimensionOffset(pointerX, pointerY, 0);
+
+        double midX = (segment.X1 + segment.X2) / 2, midY = (segment.Y1 + segment.Y2) / 2;
+        double nx = -dy / len, ny = dx / len;
+        double signed = (pointerX - midX) * nx + (pointerY - midY) * ny;
+        double distance = lockedDistance is { } d ? System.Math.Abs(d) : System.Math.Abs(signed);
+        double side = signed < 0 ? -1 : 1;
+        return new DimensionOffset(midX + nx * side * distance, midY + ny * side * distance, distance);
+    }
+}
+
 /// <summary>
 /// 标注橡皮筋（jig）：线性/对齐/连续/半径/直径/角度/坐标标注取点过程中，按「已取点 + 光标」把整条标注
 /// 现推出来画到预览通道，尺寸线随光标滑、数字随光标变（同 AutoCAD DIMLINEAR 拖尺寸线位置的手感；
@@ -14,6 +42,35 @@ namespace PitMine3D.Kylin.Views;
 public partial class MainWindow
 {
     private bool _dimJigShown;   // 上一帧画过标注橡皮筋: 命令结束后下一次光标移动把预览通道擦干净
+    private double? _dimContinueOffsetDistance;   // 连续对齐标注首条确定的法向距离；后续复用，避免高度错落
+
+    /// <summary>进入任一标注交互前统一退出其它会消费鼠标的命令，保证状态互斥。</summary>
+    private void ResetForDimensionInteraction()
+    {
+        CancelOneShotPick();
+        FinishSelectObjects(false);
+        _tool = null;
+        _measure = null; _angle = null; _area = null;
+        _editMode = EditMode.None; _editAwaitSelect = false; _editDisplacement = false;
+        _editPts.Clear(); _editPreview = null; _editPreviewPts = -1;
+        _offsetActive = false; _trimActive = false;
+        _breakActive = false; _breakPts.Clear();
+        _slideActive = false; _slideDragging = false; _slidePts.Clear();
+        _pathActive = false; _pathP1 = null; _kpathMode = false;
+        _pasteBaseActive = false;
+        _benchActive = false; _benchEntity = null;
+        _spotActive = false;
+        _ttrActive = false; _ttrAwaitRadius = false; _ttrRef1 = null; _ttrRef2 = null;
+        _serActive = false; _serAwaitRadius = false; _serStart = null; _serEnd = null;
+        _gripDrag.Cancel(); _gripCopy = false; _gripAwaitBase = false; _snapVertsDrag = null; _gripHover = -1;
+        GizmoCancel(); _selBoxActive = false;
+
+        _dimActive = false; _dimP1 = null; _dimP2 = null; _dimContinue = false; _dimContinueOffsetDistance = null;
+        _dimRadActive = false; _dimRadCircle = null; _dimDiameter = false;
+        _dimAngActive = false; _angVertex = null; _angP1 = null;
+        _coordLabelActive = false;
+        _dimJigShown = false;
+    }
 
     /// <summary>有标注命令在取点(需要橡皮筋跟随光标)。</summary>
     private bool DimJigActive => _dimActive || (_dimRadActive && _dimRadCircle != null) || _dimAngActive || _coordLabelActive;
@@ -28,6 +85,16 @@ public partial class MainWindow
 
     /// <summary>标注文字高(样式未定固定字高时随视图比例)——与落地时同一口径。</summary>
     private double DimJigHeight() => System.Math.Max(SnapTolWorld(_lastPointer) * 2.5, 1e-3);
+
+    private DimensionOffset ResolveAlignedDimOffset(double pointerX, double pointerY)
+    {
+        if (_dimP1 is not { } p1 || _dimP2 is not { } p2)
+            return new DimensionOffset(pointerX, pointerY, 0);
+        return DimensionContinuation.ResolveOffset(
+            new DimensionSegment(p1.x, p1.y, p2.x, p2.y),
+            pointerX, pointerY,
+            _dimContinue ? _dimContinueOffsetDistance : null);
+    }
 
     /// <summary>橡皮筋虚线的画/空长度: 约 7 屏幕像素。</summary>
     private double[] DimRubberDash() { double d = System.Math.Max(SnapTolWorld(_lastPointer) * 0.6, 1e-6); return new[] { d, d }; }
@@ -51,19 +118,15 @@ public partial class MainWindow
         if (_dimActive)
         {
             if (_dimP1 is not { } p1) return null;
-            if (_dimContinue)
-            {
-                // 连续标注: (上条第二点, 光标) 为测点, 尺寸线沿用上条的偏移点
-                var off = _lastDimOffsetPt ?? (cx, cy);
-                return _dimAligned
-                    ? DimTools.BuildLinear(p1.x, p1.y, cx, cy, off.x, off.y, h, _dimStyle)
-                    : DimTools.BuildLinearAxis(p1.x, p1.y, cx, cy, off.x, off.y, h, _dimStyle);
-            }
             if (_dimP2 is not { } p2) return new List<SceneEntity> { Rubber(p1.x, p1.y) };   // 第二个界线原点: 只拉橡皮筋
             // 尺寸线位置: 整条标注随光标滑
-            return _dimAligned
-                ? DimTools.BuildLinear(p1.x, p1.y, p2.x, p2.y, cx, cy, h, _dimStyle)
-                : DimTools.BuildLinearAxis(p1.x, p1.y, p2.x, p2.y, cx, cy, h, _dimStyle);
+            if (_dimAligned)
+            {
+                var offset = ResolveAlignedDimOffset(cx, cy);
+                return DimTools.BuildLinear(p1.x, p1.y, p2.x, p2.y, offset.X, offset.Y, h, _dimStyle);
+            }
+            var placement = DimensionPlacement.ResolveLinearAxis(p1.x, p1.y, p2.x, p2.y, cx, cy);
+            return DimTools.BuildLinearAxis(p1.x, p1.y, p2.x, p2.y, placement.OffsetX, placement.OffsetY, h, _dimStyle);
         }
         if (_dimRadActive && _dimRadCircle is { } rc)
         {
@@ -91,11 +154,10 @@ public partial class MainWindow
         string F(double v) => v.ToString(_dimStyle.NumberFormat, CultureInfo.InvariantCulture);
         if (_dimActive && _dimP1 is { } p1)
         {
-            var q = (_dimContinue || _dimP2 == null) ? c : _dimP2!.Value;
+            var q = _dimP2 ?? c;
             double dx = q.x - p1.x, dy = q.y - p1.y;
-            if (_dimAligned || _dimP2 == null || _dimContinue) return $"距离 {F(System.Math.Sqrt(dx * dx + dy * dy))}";
-            double mx = (p1.x + q.x) / 2, my = (p1.y + q.y) / 2;
-            bool horizontal = System.Math.Abs(c.y - my) >= System.Math.Abs(c.x - mx);   // 同 BuildLinearAxis 的判法
+            if (_dimAligned || _dimP2 == null) return $"距离 {F(System.Math.Sqrt(dx * dx + dy * dy))}";
+            bool horizontal = DimensionPlacement.ResolveLinearAxis(p1.x, p1.y, q.x, q.y, c.x, c.y).Horizontal;
             return horizontal ? $"ΔX {F(System.Math.Abs(dx))}" : $"ΔY {F(System.Math.Abs(dy))}";
         }
         if (_dimRadActive && _dimRadCircle is { } rc) return _dimDiameter ? $"Ø{F(2 * rc.r)}" : $"R{F(rc.r)}";

@@ -228,12 +228,13 @@ public static partial class ObjectSnap
     internal sealed class Cand
     {
         public readonly List<int> Segs = new();          // 端点/中点/最近/垂足用: tol 窗
-        public readonly List<int> SegsWide = new();      // 交点用: 4·tol 快拒窗(同 SegNearCursor)
+        public readonly List<int> SegsWide = new();      // 交点用: tol 快拒窗(同 SegNearCursor)
         public readonly List<int> Circles = new();
         public readonly List<int> CirclesWide = new();
         public readonly List<int> Arcs = new();
         public readonly List<int> Pts = new();
         public readonly List<Seg> NearBuf = new();       // 交点快拒后的近邻段(复用, 免每帧分配)
+        public readonly List<Circ> NearCircleBuf = new();// 交点快拒后的近邻圆(复用, 免每帧分配)
     }
 
     /// <summary>
@@ -292,7 +293,8 @@ public static partial class ObjectSnap
             bool wantSeg = OnM(Mode.Endpoint) || OnM(Mode.Midpoint) || OnM(Mode.Nearest) || OnM(Mode.Perpendicular);
             bool wantRound = OnM(Mode.Center) || OnM(Mode.Endpoint) || OnM(Mode.Midpoint) || OnM(Mode.Nearest);
             bool wantX = OnM(Mode.Intersection);
-            double wide = tol * 4;   // 交点快拒窗, 与 SegNearCursor/CircNearCursor 同尺度
+            // 交点若落在 tol 内，参与相交的每个图元也一定经过 tol 孔径；无需扩大到 4·tol。
+            double wide = tol;
 
             Fill(_gSeg, wantSeg, tol, _cand.Segs);
             Fill(_gSeg, wantX, wide, _cand.SegsWide);

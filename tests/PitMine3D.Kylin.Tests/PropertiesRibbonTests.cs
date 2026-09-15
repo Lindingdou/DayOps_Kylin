@@ -79,6 +79,45 @@ public class PropertiesRibbonTests
     }
 
     [Fact]
+    public void Measure_Volume_RepairsInconsistentFaceWindingBeforeIntegrating()
+    {
+        var box = UnitBox();
+        var t = box.Tris[2];
+        box.Tris[2] = (t.a, t.c, t.b); // 模拟导入网格中单个面朝向反了
+
+        var result = MeasureOps.Volume(new SceneEntity[] { box });
+
+        Assert.Equal("测量 - 体积：1 m³", result.Text); // 修正朝向后仍应为 1 m³，而不是裸积分的错误值
+    }
+
+    [Fact]
+    public void Measure_Volume_RejectsOpenMeshInsteadOfReturningFakeVolume()
+    {
+        var box = UnitBox();
+        box.Tris.RemoveRange(2, 2); // 去掉顶面，剩下开口表面没有唯一实体体积
+
+        var result = MeasureOps.Volume(new SceneEntity[] { box });
+
+        Assert.Contains("未闭合", result.Text);
+        Assert.Contains("开放边", result.Text);
+    }
+
+    [Fact]
+    public void Measure_Volume_TranslatesLargeWorldCoordinatesBeforeIntegrating()
+    {
+        var box = UnitBox();
+        for (int i = 0; i < box.Verts.Count; i++)
+        {
+            var v = box.Verts[i];
+            box.Verts[i] = (v.x + 1_000_000_000, v.y + 2_000_000_000, v.z + 3_000_000_000);
+        }
+
+        var result = MeasureOps.Volume(new SceneEntity[] { box });
+
+        Assert.Equal("测量 - 体积：1 m³", result.Text);
+    }
+
+    [Fact]
     public void Measure_Area_SingleClosedPolylineGivesPerimeterToo_MultiSums()
     {
         var pl = new PolylineEntity { Closed = true };
@@ -90,7 +129,9 @@ public class PropertiesRibbonTests
         var multi = MeasureOps.Area(new SceneEntity[] { pl, rect }).Text;
         Assert.Contains("共 2 项", multi);
         Assert.Contains("22", multi);          // 12 + 10
-        Assert.Contains("请先选中", MeasureOps.Area(Array.Empty<SceneEntity>()).Text);
+        var empty = MeasureOps.Area(Array.Empty<SceneEntity>());
+        Assert.True(empty.NeedJig);
+        Assert.Contains("指定第一点", empty.Text);
     }
 
     [Fact]

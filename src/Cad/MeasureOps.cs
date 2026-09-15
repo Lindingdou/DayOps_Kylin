@@ -46,16 +46,71 @@ public static class MeasureOps
         return Result.Say($"测量 - 半径：共 {rs.Count} 项 · " + string.Join(" / ", rs.Select(N)));
     }
 
-    /// <summary>体积：选中的三角网逐个报体积并合计。忠实原版 PitMine_ComputeMeshVolume 那一路。</summary>
+    /// <summary>
+    /// 体积：只对闭合实体网格计算。先按模型尺度焊接重复顶点、去掉退化/重复三角形，
+    /// 再统一面朝向并用散度定理积分；开口或非流形网格直接提示不能作为实体体积计算。
+    /// </summary>
     public static Result Volume(IReadOnlyList<SceneEntity> sel)
     {
         if (sel.Count == 0) return Result.Say("测量 - 体积：请先选中三角网");
-        double total = 0; int n = 0;
+        double total = 0; int n = 0, meshCount = 0, rejected = 0;
+        MeshDiagnoseResult firstRejected = default;
         foreach (var e in sel)
-            if (e is MeshEntity m && m.TriangleCount > 0) { total += Math.Abs(m.Volume()); n++; }
-        if (n == 0) return Result.Say("测量 - 体积：所选实体不是三角网或几何为空");
-        return Result.Say(n > 1 ? $"测量 - 体积：共 {n} 个三角网，合计 {N(total)} m³"
-                                : $"测量 - 体积：{N(total)} m³");
+        {
+            if (e is not MeshEntity m || m.TriangleCount <= 0) continue;
+            meshCount++;
+            var r = SolidVolume(m);
+            if (!r.Valid)
+            {
+                rejected++;
+                if (rejected == 1) firstRejected = r.Diagnose;
+                continue;
+            }
+            total += r.Volume;
+            n++;
+        }
+        if (meshCount == 0) return Result.Say("测量 - 体积：所选实体不是三角网或几何为空");
+        if (n == 0)
+        {
+            return Result.Say($"测量 - 体积：无法计算实体体积，网格未闭合" +
+                              $"（开放边 {firstRejected.BoundaryEdges}，非流形边 {firstRejected.NonManifoldEdges}）");
+        }
+
+        string suffix = rejected > 0 ? $"（另有 {rejected} 个网格因未闭合未计入）" : "";
+        return Result.Say(n > 1 ? $"测量 - 体积：共 {n} 个三角网，合计 {N(total)} m³{suffix}"
+                                : $"测量 - 体积：{N(total)} m³{suffix}");
+    }
+
+    private readonly record struct SolidVolumeResult(bool Valid, double Volume, MeshDiagnoseResult Diagnose);
+
+    private static SolidVolumeResult SolidVolume(MeshEntity mesh)
+    {
+        if (mesh.Verts.Count == 0 || mesh.Tris.Count == 0)
+            return new(false, 0, default);
+
+        var b = mesh.Bounds;
+        double dx = b.maxX - b.minX, dy = b.maxY - b.minY, dz = b.maxZ - b.minZ;
+        double diagonal = Math.Sqrt(dx * dx + dy * dy + dz * dz);
+        double tolerance = Math.Max(1e-9, diagonal * 1e-8);
+
+        // 导入数据常见“同坐标多顶点”和重复面；不先处理会让拓扑被误判为开口/非流形。
+        var welded = MeshWeld.Weld(mesh.Verts, mesh.Tris, tolerance, dropDuplicateTris: true);
+
+        // 体积对平移不变；先移到局部坐标，避免矿区常见大地坐标参与叉乘时发生浮点消减。
+        var localVerts = new List<(double x, double y, double z)>(welded.Verts.Count);
+        double ox = (b.minX + b.maxX) * 0.5;
+        double oy = (b.minY + b.maxY) * 0.5;
+        double oz = (b.minZ + b.maxZ) * 0.5;
+        foreach (var v in welded.Verts)
+            localVerts.Add((v.x - ox, v.y - oy, v.z - oz));
+
+        var oriented = MeshOrient.MakeConsistent(localVerts, welded.Tris);
+        var diagnose = MeshDiagnose.Analyze(localVerts, oriented, selfIntersect: false);
+        if (!diagnose.IsClosed)
+            return new(false, 0, diagnose);
+
+        double volume = Math.Abs(MeshOrient.SignedVolume6(localVerts, oriented)) / 6.0;
+        return double.IsFinite(volume) ? new(true, volume, diagnose) : new(false, 0, diagnose);
     }
 
     /// <summary>
@@ -64,8 +119,8 @@ public static class MeasureOps
     /// </summary>
     public static Result Area(IReadOnlyList<SceneEntity> sel)
     {
-        if (sel.Count == 0) return Result.Say("测量 - 面积：请先选中圆/矩形/正多边形/闭合多段线/三角网");
-        if (sel.Count == 1 && sel[0] is PolylineEntity single && single.Points.Count >= 3)
+        if (sel.Count == 0) return Result.Jig("面积：指定第一点");
+        if (sel.Count == 1 && sel[0] is PolylineEntity single && single.Closed && single.Points.Count >= 3)
             return Result.Say($"测量 - 面积：{N(GeomMeasure.Area(single.Points))} · 周长(闭合) "
                               + $"{N(GeomMeasure.Perimeter(single.Points, true))} · {single.Points.Count} 顶点");
         double total = 0; int n = 0;
@@ -84,7 +139,7 @@ public static class MeasureOps
         CircleEntity c => Math.PI * c.Radius * c.Radius,
         RectEntity r => Math.Abs(r.X1 - r.X0) * Math.Abs(r.Y1 - r.Y0),
         PolygonEntity p => p.Sides * p.Radius * p.Radius * Math.Sin(2 * Math.PI / p.Sides) / 2,
-        PolylineEntity pl when pl.Points.Count >= 3 => GeomMeasure.Area(pl.Points),
+        PolylineEntity pl when pl.Closed && pl.Points.Count >= 3 => GeomMeasure.Area(pl.Points),
         MeshEntity m => m.SurfaceArea(),
         _ => 0,
     };

@@ -80,6 +80,50 @@ public class MeshMetricsTests
     }
 
     [Fact]
+    public void RobustVolume_repairs_winding_before_integrating()
+    {
+        var v = new List<(double x, double y, double z)>
+        {
+            (0,0,0), (1,0,0), (1,1,0), (0,1,0),
+            (0,0,1), (1,0,1), (1,1,1), (0,1,1),
+        };
+        var t = new List<(int a, int b, int c)>
+        {
+            (0,3,2), (0,2,1), (4,5,6), (4,6,7),
+            (0,1,5), (0,5,4), (1,2,6), (1,6,5),
+            (2,3,7), (2,7,6), (3,0,4), (3,4,7),
+        };
+        var f = t[2];
+        t[2] = (f.a, f.c, f.b); // 模拟闭合网格中单个顶面反向
+
+        Assert.Equal(1.0, MeshMetrics.RobustVolume(v, t), 6);
+    }
+
+    [Fact]
+    public void RobustVolume_translates_large_world_coordinates_before_integrating()
+    {
+        var v = new List<(double x, double y, double z)>
+        {
+            (1_000_000_000, 2_000_000_000, 3_000_000_000),
+            (1_000_000_001, 2_000_000_000, 3_000_000_000),
+            (1_000_000_001, 2_000_000_001, 3_000_000_000),
+            (1_000_000_000, 2_000_000_001, 3_000_000_000),
+            (1_000_000_000, 2_000_000_000, 3_000_000_001),
+            (1_000_000_001, 2_000_000_000, 3_000_000_001),
+            (1_000_000_001, 2_000_000_001, 3_000_000_001),
+            (1_000_000_000, 2_000_000_001, 3_000_000_001),
+        };
+        var t = new List<(int a, int b, int c)>
+        {
+            (0,3,2), (0,2,1), (4,5,6), (4,6,7),
+            (0,1,5), (0,5,4), (1,2,6), (1,6,5),
+            (2,3,7), (2,7,6), (3,0,4), (3,4,7),
+        };
+
+        Assert.Equal(1.0, MeshMetrics.RobustVolume(v, t), 6);
+    }
+
+    [Fact]
     public void RobustVolume_open_tetra_caps_and_recovers()
     {
         var (v, t) = Tet(closed: false);          // 缺斜面 → 非水密

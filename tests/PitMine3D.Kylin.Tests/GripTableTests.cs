@@ -202,10 +202,11 @@ public class GripTableTests
         var line = new LineEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 0 };
         var t = new GripTable(); t.Rebuild(new List<SceneEntity> { line });
         t.SelectOnly(2);
-        var d = new GripDrag(); d.Begin(t, 2, 10, 0);
+        var d = new GripDrag { Mode = GripMode.Rotate }; d.Begin(t, 2, 10, 0);
         d.Preview(10, 9);
         d.Cancel();
         Assert.False(d.Active); Assert.Empty(d.Preview(10, 9));
+        Assert.Equal(GripMode.Stretch, d.Mode);                         // 下一次夹点拖动必须从拉伸开始
         Assert.Equal(0, line.Y1, 9);                                    // 原实体从未被改
     }
 }

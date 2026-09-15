@@ -133,7 +133,12 @@ public sealed class DimensionEntity : SceneEntity
         var (tr, tg, tb) = TextColor ?? (Cr, Cg, Cb);
 
         LineEntity L(double a, double b, double c, double d, float r, float g, float bl)
-            => new() { X0 = a, Y0 = b, X1 = c, Y1 = d, Cr = r, Cg = g, Cb = bl, LayerName = LayerName, Elevation = Elevation };
+            => new()
+            {
+                X0 = a, Y0 = b, X1 = c, Y1 = d, Cr = r, Cg = g, Cb = bl,
+                LayerName = LayerName, Elevation = Elevation, Dash = Dash,
+                LineWeight = LineWeight, Transparency = Transparency,
+            };
 
         if (Kind == DimKind.Radial)
         {
@@ -301,6 +306,53 @@ public sealed class DimensionEntity : SceneEntity
         }
         if (p.Text != null) g.Add((p.Text.X, p.Text.Y));
         return g;
+    }
+
+    /// <summary>将标注的定义点、尺寸线高度点和文字点接入通用夹点编辑。</summary>
+    public override List<(double x, double y)> Grips() => GripPoints();
+
+    public override SceneEntity? MoveGrip(int i, double nx, double ny)
+    {
+        var e = (DimensionEntity)Apply(Affine2.Translate(0, 0));
+        if (Kind == DimKind.Radial)
+        {
+            switch (i)
+            {
+                case 0:
+                    e.Cx = nx; e.Cy = ny;
+                    break;
+                case 1:
+                    e.Radius = Math.Sqrt((nx - Cx) * (nx - Cx) + (ny - Cy) * (ny - Cy));
+                    e.DirX = nx - Cx; e.DirY = ny - Cy;
+                    break;
+                case 2:
+                    e.TextPosX = nx; e.TextPosY = ny;
+                    break;
+                default:
+                    return null;
+            }
+            return e;
+        }
+
+        switch (i)
+        {
+            case 0:
+                e.X1 = nx; e.Y1 = ny;
+                break;
+            case 1:
+                e.X2 = nx; e.Y2 = ny;
+                break;
+            case 2:
+                // Build() 只取 Off 到测量线的法向投影，所以水平拖动不会让标注歪掉。
+                e.OffX = nx; e.OffY = ny;
+                break;
+            case 3:
+                e.TextPosX = nx; e.TextPosY = ny;
+                break;
+            default:
+                return null;
+        }
+        return e;
     }
 
     /// <summary>整体平移（挪一条标注就该整条走，这也是"标注是一个对象"的直接好处）。</summary>

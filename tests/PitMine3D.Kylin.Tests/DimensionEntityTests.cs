@@ -300,6 +300,31 @@ public class DimensionEntityTests
         Assert.Contains(gr, p => Math.Abs(p.x - 10) < 1e-9 && Math.Abs(p.y - 10) < 1e-9);   // 圆心
     }
 
+    [Fact]
+    public void 对齐标注向通用夹点系统公开高度节点()
+    {
+        var g = Aligned().Grips();
+
+        Assert.Equal(4, g.Count);
+        Assert.Equal((0d, 0d), g[0]);
+        Assert.Equal((100d, 0d), g[1]);
+        Assert.Equal((50d, 20d), g[2]);       // 尺寸线中点：拖它调高低
+    }
+
+    [Fact]
+    public void 拖动高度节点只调整尺寸线高度()
+    {
+        var moved = Assert.IsType<DimensionEntity>(Aligned().MoveGrip(2, 80, 35));
+
+        Assert.Equal(0, moved.X1, 9);
+        Assert.Equal(0, moved.Y1, 9);
+        Assert.Equal(100, moved.X2, 9);
+        Assert.Equal(0, moved.Y2, 9);
+        var dimLine = Assert.Single(moved.Build().DimLines);
+        Assert.Equal(35, dimLine.Y0, 9);
+        Assert.Equal(35, dimLine.Y1, 9);
+    }
+
     // ── 特性面板 ──────────────────────────────────────────────
     [Fact]
     public void 特性面板列出原版那三组()

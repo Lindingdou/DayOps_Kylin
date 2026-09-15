@@ -57,6 +57,20 @@ public partial class CadGlViewport : OpenGlControlBase
     private bool _hasScene;
     private float[]? _pendingScene;
     private bool _sceneDirty;
+    private List<(short lineWeight, GlRenderer.Mesh mesh)> _sceneLineBatches = new();
+    private readonly Dictionary<short, float[]> _sceneLineBatchVertices = new();
+    private readonly Dictionary<short, GlRenderer.Mesh> _sceneWideLineMeshes = new();
+    private bool _sceneWideLinesDirty = true;
+    private double _wideYaw, _widePitch, _wideDist, _wideTx, _wideTy, _wideTz;
+    private bool _wideCameraStampValid;
+    private IReadOnlyList<Scene.LineGeometryBatch>? _pendingSceneLineBatches;
+    private bool _lineWeightDisplay = true;
+
+    // 视图辅助标记：独立于源场景，始终在最上层绘制，避免被三维面/深度测试遮住。
+    private GlRenderer.Mesh _markerLines;
+    private bool _hasMarkerLines;
+    private float[]? _pendingMarkerLines;
+    private bool _markerLinesDirty;
 
     // 托管场景着色三角面(三角网面模型, GL_TRIANGLES)
     private GlRenderer.Mesh _faces;
@@ -301,7 +315,8 @@ public partial class CadGlViewport : OpenGlControlBase
         // GL 上下文(重)建后, 旧上下文里上传的网格句柄已失效——从保留的托管源重新入队, 下一帧重传。
         // 切换文档标签时 Avalonia 会 Deinit/Init 该视口(销毁并重建上下文), 有此重传各文档几何才不丢/不空白。
         if (_pendingImport is { Length: > 0 }) _importedDirty = true;
-        if (_pendingScene != null) _sceneDirty = true;
+        if (_pendingScene != null || _pendingSceneLineBatches != null) _sceneDirty = true;
+        if (_pendingMarkerLines != null) _markerLinesDirty = true;
         if (_pendingHighlight != null) _highlightDirty = true;
         if (_pendingFaces != null) _facesDirty = true;
         if (_pendingCloud != null) _cloudDirty = true;
@@ -328,7 +343,15 @@ public partial class CadGlViewport : OpenGlControlBase
         if (_hasPreview) _renderer.DeleteMesh(_preview);
         if (_pickFaces.Vbo != 0) _renderer.DeleteMesh(_pickFaces);
         if (_pickLines.Vbo != 0) _renderer.DeleteMesh(_pickLines);
-        if (_hasScene) _renderer.DeleteMesh(_scene);
+        if (_scene.Vbo != 0) _renderer.DeleteMesh(_scene);
+        foreach (var (_, mesh) in _sceneLineBatches) _renderer.DeleteMesh(mesh);
+        _sceneLineBatches.Clear();
+        _sceneLineBatchVertices.Clear();
+        foreach (var mesh in _sceneWideLineMeshes.Values) _renderer.DeleteMesh(mesh);
+        _sceneWideLineMeshes.Clear();
+        _sceneWideLinesDirty = true;
+        _wideCameraStampValid = false;
+        if (_hasMarkerLines) _renderer.DeleteMesh(_markerLines);
         if (_hasFaces) _renderer.DeleteMesh(_faces);
         if (_hasCloud) _renderer.DeleteMesh(_cloud);
         if (_hasHighlightFaces) _renderer.DeleteMesh(_highlightFaces);
@@ -342,6 +365,8 @@ public partial class CadGlViewport : OpenGlControlBase
         // 上下文销毁——句柄失效, 复位标志; 否则重建后旧 id 可能撞上新网格(grid/cube/gizmo)致误删/花屏。
         // 保留的托管源(_pendingImport/_pendingScene/…)不动, OnOpenGlInit 会据此重新入队重传。
         _hasImported = _hasScene = _hasHighlight = _hasSnap = _hasFaces = _hasHighlightFaces = _hasPreview = _hasCloud = false;
+        _hasMarkerLines = false;
+        _scene = default;
         _hasGrid = false; _hasGridPlan = false;
         // 走 UpdateMesh「复用同一 VBO 重灌」的三块(光标/捕捉标记/预览)还攥着旧上下文的缓冲名, 也要清零:
         // 否则重建后 BindBuffer(旧名) 会撞上新上下文里恰好同名的别的缓冲(场景/格网), 把它灌成光标线段——花屏/丢线。
@@ -517,9 +542,40 @@ public partial class CadGlViewport : OpenGlControlBase
         if (_sceneDirty)
         {
             _sceneDirty = false;
-            if (_hasScene) _renderer.DeleteMesh(_scene);
-            _scene = _renderer.Upload(_pendingScene!);
-            _hasScene = !_scene.IsEmpty;
+            if (_scene.Vbo != 0) _renderer.DeleteMesh(_scene);
+            foreach (var (_, mesh) in _sceneLineBatches) _renderer.DeleteMesh(mesh);
+            _sceneLineBatches.Clear();
+            _sceneLineBatchVertices.Clear();
+            foreach (var mesh in _sceneWideLineMeshes.Values) _renderer.DeleteMesh(mesh);
+            _sceneWideLineMeshes.Clear();
+            _sceneWideLinesDirty = true;
+            _wideCameraStampValid = false;
+            if (_pendingSceneLineBatches != null)
+            {
+                foreach (var batch in _pendingSceneLineBatches)
+                {
+                    var mesh = _renderer.Upload(batch.Vertices);
+                    if (!mesh.IsEmpty)
+                    {
+                        _sceneLineBatches.Add((batch.LineWeight, mesh));
+                        _sceneLineBatchVertices[batch.LineWeight] = batch.Vertices;
+                    }
+                }
+                _hasScene = _sceneLineBatches.Count > 0;
+            }
+            else
+            {
+                _scene = _renderer.Upload(_pendingScene ?? Array.Empty<float>());
+                _hasScene = !_scene.IsEmpty;
+            }
+        }
+
+        if (_markerLinesDirty)
+        {
+            _markerLinesDirty = false;
+            if (_hasMarkerLines) _renderer.DeleteMesh(_markerLines);
+            _markerLines = _renderer.Upload(_pendingMarkerLines ?? Array.Empty<float>());
+            _hasMarkerLines = !_markerLines.IsEmpty;
         }
 
         // CAD 十字光标：光标位/视口尺寸变了才重建满屏横竖两线(NDC, 屏幕对齐, 与几何无关不受相机影响)。
@@ -589,6 +645,9 @@ public partial class CadGlViewport : OpenGlControlBase
         GridPass(vp);
         if (T) PitMine3D.Kylin.CrashLog.Trace("帧 场景趟");
         ScenePass(vp);
+        if (T) PitMine3D.Kylin.CrashLog.Trace("帧 标记趟");
+        MarkerPass(vp);
+        BillboardPass(vp);
         if (T) PitMine3D.Kylin.CrashLog.Trace("帧 高亮趟");
         HighlightPass(vp);
         if (T) PitMine3D.Kylin.CrashLog.Trace("帧 叠加趟");
@@ -658,15 +717,150 @@ public partial class CadGlViewport : OpenGlControlBase
         // 开着深度的话在面区域画多段线连预览都看不见。3D 视图仍开深度(线该被前面的面挡住)。
         bool linesOverFaces = _camera.Is2D;
         if (linesOverFaces) _renderer.BeginPass(depthTest: false);
+        _renderer.SetLineWidth(1f);
         if (_hasImported) _renderer.Draw(_imported, GL_LINES, vp);
-        if (_hasScene) _renderer.Draw(_scene, GL_LINES, vp);
+        DrawSceneLines(vp);
+        _renderer.SetLineWidth(1f);
         if (_hasPreview) _renderer.Draw(_preview, GL_LINES, vp);   // 进行中的橡皮筋/拖拽预览, 紧跟场景之后(与合缓冲时同序)
-        // 注记始终朝屏幕: 实心字形先画三角(忠实原版 fillTris), 缺字回退的简笔画再画线
-        if (_hasBillboardFills) _renderer.Draw(_billboardFills, GL_TRIANGLES, vp);
-        if (_hasBillboards) _renderer.Draw(_billboards, GL_LINES, vp);
         if (linesOverFaces) _renderer.BeginPass(depthTest: true);
         DrawMaterialFaces(vp, translucent: true);   // 半透最后画: 前面的不透明体都已进深度缓冲, 才透得对
         _renderer.EndPass();
+    }
+
+    private void MarkerPass(float[] vp)
+    {
+        if (!_hasMarkerLines) return;
+        _renderer.BeginPass(depthTest: false);
+        _renderer.SetLineWidth(1f);
+        _renderer.Draw(_markerLines, GL_LINES, vp);
+        _renderer.EndPass();
+    }
+
+    private void BillboardPass(float[] vp)
+    {
+        if (!_hasBillboardFills && !_hasBillboards) return;
+        _renderer.BeginPass(depthTest: false);
+        if (_hasBillboardFills) _renderer.Draw(_billboardFills, GL_TRIANGLES, vp);
+        if (_hasBillboards) _renderer.Draw(_billboards, GL_LINES, vp);
+        _renderer.EndPass();
+    }
+
+    private void DrawSceneLines(float[] vp)
+    {
+        if (_sceneLineBatches.Count == 0)
+        {
+            if (_hasScene) _renderer.Draw(_scene, GL_LINES, vp);
+            return;
+        }
+
+        bool needWide = false;
+        if (_lineWeightDisplay)
+            foreach (var batch in _sceneLineBatches)
+                if (LineWeightUtil.PixelWidth(batch.lineWeight) > 1.01f) { needWide = true; break; }
+        if (needWide) EnsureWideSceneLines();
+        foreach (var (lineWeight, mesh) in _sceneLineBatches)
+        {
+            float width = _lineWeightDisplay ? LineWeightUtil.PixelWidth(lineWeight) : 1f;
+            // ANGLE/D3D11 (本机当前就是 GLES 3.0 + ANGLE) 常把 GL_LINES 的宽度钳成 1px。
+            // 宽线改用屏幕空间平行线展开，保留 1px GL_LINES 作为最终绘制，避免驱动静默忽略 glLineWidth。
+            if (width > 1.01f && _sceneWideLineMeshes.TryGetValue(lineWeight, out var wide))
+            {
+                _renderer.SetLineWidth(1f);
+                _renderer.Draw(wide, GL_LINES, vp);
+            }
+            else
+            {
+                _renderer.SetLineWidth(1f);
+                _renderer.Draw(mesh, GL_LINES, vp);
+            }
+        }
+    }
+
+    private void EnsureWideSceneLines()
+    {
+        bool cameraChanged = !_wideCameraStampValid
+            || _wideYaw != _camera.Yaw || _widePitch != _camera.Pitch || _wideDist != _camera.Dist
+            || _wideTx != _camera.Target[0] || _wideTy != _camera.Target[1] || _wideTz != _camera.Target[2];
+        if (!_sceneWideLinesDirty && !cameraChanged) return;
+
+        foreach (var mesh in _sceneWideLineMeshes.Values) _renderer.DeleteMesh(mesh);
+        _sceneWideLineMeshes.Clear();
+        _sceneWideLinesDirty = false;
+        _wideCameraStampValid = true;
+        _wideYaw = _camera.Yaw; _widePitch = _camera.Pitch; _wideDist = _camera.Dist;
+        _wideTx = _camera.Target[0]; _wideTy = _camera.Target[1]; _wideTz = _camera.Target[2];
+
+        foreach (var (lineWeight, _) in _sceneLineBatches)
+        {
+            float width = LineWeightUtil.PixelWidth(lineWeight);
+            if (width <= 1.01f) continue;
+            if (!_sceneLineBatchVertices.TryGetValue(lineWeight, out var source)) continue;
+            var expanded = ExpandLinesForPixels(source, width);
+            var mesh = _renderer.Upload(expanded);
+            if (!mesh.IsEmpty) _sceneWideLineMeshes[lineWeight] = mesh;
+        }
+    }
+
+    private float[] ExpandLinesForPixels(float[] source, float width)
+    {
+        var output = new List<float>(source.Length * Math.Max(2, (int)Math.Ceiling(width)));
+        int copies = Math.Max(2, (int)Math.Ceiling(width));
+        var (rx, ry, rz, ux, uy, uz) = _camera.Is2D
+            ? (1.0, 0.0, 0.0, 0.0, 1.0, 0.0)
+            : _camera.ViewAxes();
+        double vw = Bounds.Width, vh = Bounds.Height;
+        if (vw < 1 || vh < 1) return source;
+
+        for (int i = 0; i + 11 < source.Length; i += 12)
+        {
+            double x0 = source[i], y0 = source[i + 1], z0 = source[i + 2];
+            double x1 = source[i + 6], y1 = source[i + 7], z1 = source[i + 8];
+            var s0 = _camera.WorldToScreen(x0, y0, z0, vw, vh);
+            var s1 = _camera.WorldToScreen(x1, y1, z1, vw, vh);
+            if (s0 == null || s1 == null)
+            {
+                AppendRawLine(output, source, i, 0, 0, 0, 0);
+                continue;
+            }
+            double dx = s1.Value.sx - s0.Value.sx, dy = s1.Value.sy - s0.Value.sy;
+            double len = Math.Sqrt(dx * dx + dy * dy);
+            if (len < 1e-8)
+            {
+                AppendRawLine(output, source, i, 0, 0, 0, 0);
+                continue;
+            }
+            double nx = -dy / len, ny = dx / len;
+            double w0 = _camera.WorldPerPixelAt(x0, y0, z0, vh);
+            double w1 = _camera.WorldPerPixelAt(x1, y1, z1, vh);
+            double first = -(copies - 1) * 0.5;
+            for (int copy = 0; copy < copies; copy++)
+            {
+                double px = first + copy;
+                AppendOffsetLine(output, source, i, x0, y0, z0, x1, y1, z1,
+                    nx * px * w0 * rx - ny * px * w0 * ux,
+                    nx * px * w0 * ry - ny * px * w0 * uy,
+                    nx * px * w0 * rz - ny * px * w0 * uz,
+                    nx * px * w1 * rx - ny * px * w1 * ux,
+                    nx * px * w1 * ry - ny * px * w1 * uy,
+                    nx * px * w1 * rz - ny * px * w1 * uz);
+            }
+        }
+        return output.ToArray();
+    }
+
+    private static void AppendRawLine(List<float> output, float[] source, int i, double ox0, double oy0, double oz0, double ox1 = 0, double oy1 = 0, double oz1 = 0)
+    {
+        AppendOffsetLine(output, source, i, source[i], source[i + 1], source[i + 2], source[i + 6], source[i + 7], source[i + 8], ox0, oy0, oz0, ox1, oy1, oz1);
+    }
+
+    private static void AppendOffsetLine(List<float> output, float[] source, int i,
+        double x0, double y0, double z0, double x1, double y1, double z1,
+        double ox0, double oy0, double oz0, double ox1, double oy1, double oz1)
+    {
+        output.Add((float)(x0 + ox0)); output.Add((float)(y0 + oy0)); output.Add((float)(z0 + oz0));
+        output.Add(source[i + 3]); output.Add(source[i + 4]); output.Add(source[i + 5]);
+        output.Add((float)(x1 + ox1)); output.Add((float)(y1 + oy1)); output.Add((float)(z1 + oz1));
+        output.Add(source[i + 9]); output.Add(source[i + 10]); output.Add(source[i + 11]);
     }
 
     /// <summary>
@@ -730,6 +924,7 @@ public partial class CadGlViewport : OpenGlControlBase
     /// <summary>选择高亮：先在选中三角网表面盖一层高亮色面(深度开 + 负偏移压住原面)，再把高亮线画在最上层(深度关)。</summary>
     private void HighlightPass(float[] vp)
     {
+        _renderer.SetLineWidth(1f);
         if (_hasHighlightFaces)
         {
             _renderer.BeginPass(depthTest: true);
@@ -876,10 +1071,43 @@ public partial class CadGlViewport : OpenGlControlBase
     /// <summary>设置托管绘制场景几何（P3_C3）；空 → 清除。</summary>
     public void SetSceneGeometry(float[] verts)
     {
+        _pendingSceneLineBatches = null;
+        _sceneWideLinesDirty = true;
         _pendingScene = verts ?? Array.Empty<float>();
         _sceneBounds = Worldize(ComputeXYBounds(_pendingScene));   // 手绘/编辑后更新 ZE 目标包围盒
         _sceneZc = ComputeZCenter(_pendingScene);
         _sceneDirty = true;
+        RequestNextFrameRendering();
+    }
+
+    /// <summary>设置按线宽分批的托管场景几何；每个批次使用自己的 GL_LINES 宽度。</summary>
+    public void SetSceneGeometry(IReadOnlyList<Scene.LineGeometryBatch> batches, bool lineWeightDisplay = true)
+    {
+        _lineWeightDisplay = lineWeightDisplay;
+        _sceneWideLinesDirty = true;
+        _pendingSceneLineBatches = batches ?? Array.Empty<Scene.LineGeometryBatch>();
+        var all = new List<float>();
+        foreach (var batch in _pendingSceneLineBatches) all.AddRange(batch.Vertices);
+        _pendingScene = all.ToArray();
+        _sceneBounds = Worldize(ComputeXYBounds(_pendingScene));
+        _sceneZc = ComputeZCenter(_pendingScene);
+        _sceneDirty = true;
+        RequestNextFrameRendering();
+    }
+
+    /// <summary>设置视图辅助标记几何；独立于源场景并以无深度方式绘制。</summary>
+    public void SetMarkerGeometry(float[]? verts)
+    {
+        _pendingMarkerLines = verts ?? Array.Empty<float>();
+        _markerLinesDirty = true;
+        RequestNextFrameRendering();
+    }
+
+    /// <summary>切换 LWDISPLAY，不重建几何，只请求下一帧。</summary>
+    public void SetLineWeightDisplay(bool enabled)
+    {
+        if (_lineWeightDisplay == enabled) return;
+        _lineWeightDisplay = enabled;
         RequestNextFrameRendering();
     }
 

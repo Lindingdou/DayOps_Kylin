@@ -192,6 +192,28 @@ public class SnapIndexTests
         Assert.Null(new ObjectSnap.Index(new List<ObjectSnap.Seg> { new(0, 0, 1, 1) }, null, null, null)
                         .Find(0, 0, 0, ObjectSnap.AllModes, null));
     }
+
+    [Fact]
+    public void Intersection_density_guard_ignores_segments_outside_snap_aperture()
+    {
+        var segs = new List<ObjectSnap.Seg>
+        {
+            new(-1, -1, 1, 1),
+            new(-1, 1, 1, -1),
+        };
+        for (int i = 0; i < 2000; i++)
+        {
+            double y = 1.1 + i * 0.001;
+            segs.Add(new ObjectSnap.Seg(-10, y, 10, y));
+        }
+        var idx = new ObjectSnap.Index(segs, null, null, null);
+
+        var hit = idx.Find(0, 0, 1, ObjectSnap.MaskOf(ObjectSnap.Mode.Intersection), null);
+
+        Assert.NotNull(hit);
+        Assert.Equal(0, hit!.Value.X, 6);
+        Assert.Equal(0, hit.Value.Y, 6);
+    }
 }
 
 /// <summary>
@@ -259,6 +281,52 @@ public class SnapIndexBench
         Assert.True(build < 3000, $"建索引用了 {build} ms");
         Assert.True(idxMs < 1500,
             $"{queries} 次对象捕捉用了 {idxMs} ms —— 实测约 5 ms, 超这么多说明退回了逐帧全表扫描");
+    }
+
+    /// <summary>
+    /// 整图视图下 12px 会对应几百米，密集采剥图的交点候选可达十万级；若仍两两求交，
+    /// 一次 PointerMoved 就会变成数十亿次比较并卡住 UI。过密时宁可本帧不吸交点，放大后自然恢复。
+    /// </summary>
+    [Fact]
+    public void Intersection_snap_in_dense_zoomed_out_view_stays_interactive()
+    {
+        const int n = 20_000;
+        var segs = new List<ObjectSnap.Seg>(n);
+        for (int i = 0; i < n; i++)
+        {
+            double y = (i - n / 2) * 0.005;
+            segs.Add(new ObjectSnap.Seg(-1000, y, 1000, y));
+        }
+        var idx = new ObjectSnap.Index(segs, null, null, null);
+
+        var sw = Stopwatch.StartNew();
+        var hit = idx.Find(0, 0, 100, ObjectSnap.MaskOf(ObjectSnap.Mode.Intersection), null);
+        sw.Stop();
+
+        Assert.Null(hit); // 全是平行线，本来就没有交点
+        Assert.True(sw.ElapsedMilliseconds < 500,
+            $"密集视图一次交点捕捉用了 {sw.ElapsedMilliseconds} ms —— 鼠标移动会直接卡死");
+    }
+
+    [Fact]
+    public void 同网格的大量孔径外线段不能吞掉真实交点()
+    {
+        var segs = new List<ObjectSnap.Seg>();
+        for (int i = 0; i < 1_000; i++)
+        {
+            double y = 3 + i * 0.0001; // 与光标同网格，但在 tol=1 的精确孔径外
+            segs.Add(new ObjectSnap.Seg(-1_000, y, 1_000, y));
+        }
+        segs.Add(new ObjectSnap.Seg(-10, 0, 10, 0));
+        segs.Add(new ObjectSnap.Seg(0, -10, 0, 10));
+        var idx = new ObjectSnap.Index(segs, null, null, null);
+
+        var hit = idx.Find(0, 0, 1, ObjectSnap.MaskOf(ObjectSnap.Mode.Intersection), null);
+
+        Assert.NotNull(hit);
+        Assert.Equal(ObjectSnap.Mode.Intersection, hit!.Value.Mode);
+        Assert.Equal(0, hit.Value.X, 9);
+        Assert.Equal(0, hit.Value.Y, 9);
     }
 
     /// <summary>

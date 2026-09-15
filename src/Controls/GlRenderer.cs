@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using Avalonia.OpenGL;
 using static Avalonia.OpenGL.GlConsts;
 
@@ -32,6 +33,9 @@ internal sealed class GlRenderer
     private int _uLightBg;   // 浅底开关(片元着色器压白几何)
     private int _vao;
     private bool _programPointSize;
+    private delegate void LineWidthProc(float width);
+    private LineWidthProc? _lineWidthProc;
+    private float _maxLineWidth = 6f;
 
     // ── 材质程序(PBR / 贴图 / 透明度) ──
     // 单独一个 program 而不是往主程序里塞分支：主程序线/点/面都走，塞进去等于每个片元都多背一段
@@ -55,6 +59,13 @@ internal sealed class GlRenderer
     {
         _gl = gl;
         _ext = ext;
+        _lineWidthProc = null;
+        try
+        {
+            var p = gl.GetProcAddress("glLineWidth");
+            if (p != IntPtr.Zero) _lineWidthProc = Marshal.GetDelegateForFunctionPointer<LineWidthProc>(p);
+        }
+        catch { _lineWidthProc = null; _maxLineWidth = 6f; }
 
         var attempts = new List<(string header, bool modern, string name)>();
         if (isGles)
@@ -159,6 +170,7 @@ internal sealed class GlRenderer
         // 若留着旧 id, 下次 Init 里 TryBuildProgram 的 "先删旧程序" 会把**刚链接好的新程序**(同名 3)删掉,
         // 之后 UseProgram 用的就是个已删除的程序, 每帧只剩清屏色: 切回来的文档一片黑、网格都没有(实测)。
         _program = 0; _matProgram = 0; _vao = 0;
+        _lineWidthProc = null;
         MaterialReady = false; MaterialFailReason = "";
     }
 
@@ -197,6 +209,7 @@ internal sealed class GlRenderer
     public void BeginFrame(int w, int h, float r, float g, float b)
     {
         _gl.Viewport(0, 0, w, h);
+        SetLineWidth(1f);
         _gl.ClearColor(r, g, b, 1f);
         _gl.Clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         _gl.UseProgram(_program);
@@ -253,6 +266,13 @@ internal sealed class GlRenderer
     {
         if (_programPointSize) _gl.Enable(GL_PROGRAM_POINT_SIZE);
         _ext.Uniform1f(_uPointSize, px);
+    }
+
+    /// <summary>设置 GL_LINES 的像素宽度；驱动不提供入口时安全退化为 1px。</summary>
+    public void SetLineWidth(float px)
+    {
+        if (_lineWidthProc == null) return;
+        _lineWidthProc(Math.Clamp(px, 1f, _maxLineWidth));
     }
 
     // ---- 材质面（PBR / 贴图 / 透明度）----

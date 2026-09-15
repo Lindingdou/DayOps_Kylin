@@ -261,7 +261,7 @@ public partial class MainWindow
         _editName = cmdName;
         _editAwaitSelect = true;
         _editSelectFaces = faces;
-        _tool = null; _measure = null; _angle = null;
+        _tool = null; _measure = null; _angle = null; _area = null;
         EditEcho($"{cmdName}：选择{what} — 单击选取 · 按住拖动框选 · 再点取消选 · 右键/回车确定 · Esc 取消"
                + (_selected.Count > 0 ? $"（已选 {_selected.Count}）" : ""));
         RefreshScene();
@@ -329,8 +329,8 @@ public partial class MainWindow
             case "闭合多段线": await EdPolylineCloseAsync(); return true;
             case "加密多段线": await EdPolylineDensifyAsync(); return true;
             case "抽稀等值线": await EdPolylineSimplifyAsync(); return true;
-            case "标识起点": case "标识线序":
-                EditEcho($"{cmd}：原程序此项为功能预留（占位按钮），未实现", EchoLevel.Warn); return true;
+            case "标识起点": await EdPolylineMarkStartAsync(); return true;
+            case "标识线序": await EdPolylineMarkOrderAsync(); return true;
             case "连接多段线": await EdPolylineJoinAsync(); return true;
             case "两线交点": case "求交点": case "线交点": await EdPolylineIntersectAsync(); return true;
             case "线落到面上": await EdPolylineProjectAsync(); return true;
@@ -557,26 +557,27 @@ public partial class MainWindow
             : $"✓ 删除重复点：{pts.Count} → {pts.Count - removed} (-{removed})", EchoLevel.Success);
     }
 
-    /// <summary>修改点样式：样式(十字/叉/圆点) + 大小，批量改选中 Point。</summary>
+    /// <summary>修改点样式：常用 PDMODE 符号组合 + 大小，批量改选中 Point。</summary>
     private async Task EdPointStyleAsync()
     {
         var pts = await SelectObjectsAsync<PointEntity>("修改点样式", "点");
         if (pts.Count == 0) return;
-        // 原版 3 选项 = AcDbPoint 的 Cross / X / Dot；这里映射到 Kylin 的 PDMODE：2=十字, 3=叉, 0=点
-        string cur = (pts[0].Style & 31) switch { 3 => "X (叉)", 0 => "Dot (圆点)", _ => "Cross (十字)" };
+        string cur = PointStyleCatalog.LabelFor(pts[0].Style);
+        var choices = PointStyleCatalog.Options.Select(x => x.Label).ToList();
+        if (!choices.Contains(cur)) choices.Insert(0, cur);
         var dlg = await PromptDialog.AskAsync(this, "修改点样式", new[]
         {
-            new PromptDialog.Field("style", "样式", cur, null, null, false, new[] { "Cross (十字)", "X (叉)", "Dot (圆点)" }),
+            new PromptDialog.Field("style", "样式", cur, null, "常用 PDMODE：基础符号可叠加外接圆或外接方框", false, choices.ToArray()),
             new PromptDialog.Field("size", "大小", pts[0].Size > 0 ? pts[0].Size.ToString("0.##", Inv) : "3", "世界单位", "标记半长（世界单位）"),
         }, $"批量修改 {pts.Count} 个点的显示样式与大小");
         if (dlg == null) { EditEcho("修改点样式：用户取消"); return; }
         string s = dlg.S("style");
-        int style = s.StartsWith("X") ? 3 : s.StartsWith("Dot") ? 0 : 2;
+        int style = PointStyleCatalog.CodeFor(s);
         double size = dlg.D("size");
         BeginChange();
         foreach (var p in pts) { p.Style = style; if (size > 0) p.Size = size; }
         RefreshScene(); HighlightSelection();   // 样式/大小变了, 选中高亮要按新符号重镶嵌
-        EditEcho($"修改点样式：style={s.Split(' ')[0]} size={size:0.##}，已更新 {pts.Count}", EchoLevel.Success);
+        EditEcho($"修改点样式：style={style} size={size:0.##}，已更新 {pts.Count}", EchoLevel.Success);
     }
 
     /// <summary>赋节点高程：按公式 Z = a·X + b·Y + c 给选中的 Point / Polyline 逐节点赋 Z。</summary>

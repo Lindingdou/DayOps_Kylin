@@ -1,0 +1,7 @@
+﻿[2026-09-15 11:34:44] [配置] 加载失败(按空配置启动): '0xE8' is an invalid start of a property name. Expected a '"'. LineNumber: 0 | BytePositionInLine: 2.
+[2026-09-15 11:34:44] [配置] 写盘失败: Could not find a part of the path 'C:\Users\cFore\AppData\Local\Temp\pm_cfg_7cf30ff7\config.json.tmp'.
+[2026-09-15 11:35:28] [配置] 写盘失败: Could not find a part of the path 'C:\Users\cFore\AppData\Local\Temp\pm_tc_7bd17077121141d4b90cb93d8afd5482\config.json.tmp'.
+[2026-09-15 11:35:29] [配置] 写盘失败: Could not find a part of the path 'C:\Users\cFore\AppData\Local\Temp\pm_tc_422dd0c68f16497da8114497e5fed53b\config.json.tmp'.
+[2026-09-15 11:35:34] [配置] 写盘失败: Could not find a part of the path 'C:\Users\cFore\AppData\Local\Temp\pm_ext_a04f5406876b43dfa9a0c2aa1bc3cd61\config.json.tmp'.
+[2026-09-15 11:35:34] [配置] 写盘失败: Could not find a part of the path 'C:\Users\cFore\AppData\Local\Temp\pm_ext_5c06108ed1a44aa6962cebbab955fc9c\config.json.tmp'.
+[2026-09-15 11:36:07] [导入缓存] 已写 9c8ecf01a1674b62.pmc（0 MB, 2 图元）

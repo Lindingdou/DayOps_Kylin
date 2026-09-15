@@ -13,7 +13,7 @@ public abstract class SceneEntity
     public string LayerName = "0";                    // 所属图层
     public bool Visible = true;                        // 逐实体隐藏(隐藏对象/结束隐藏)；false=不上屏且不可拾取
     public double[]? Dash;                             // 线型虚线样式(画/空,世界单位); null=实线
-    public short LineWeight = -1;                      // 线宽(DXF LineWeightType 值: -1=ByLayer, -3=Default, 0..211=0.01mm); 当前不渲染变宽线, 但 round-trip 保值供下游绘图
+    public short LineWeight = -1;                      // 线宽(DXF LineWeightType 值: -1=ByLayer, -3=Default, 0..211=0.01mm)
     public short Transparency = -1;                    // 透明度(-1=随层 ByLayer, 0..90=百分比); 当前渲染不透明(P3_C3 无 alpha), 但 round-trip 保值供下游/重导出
     public double Elevation;                            // 实体标高(Z, 世界单位): 平面实体默认 0; 等高线/台阶线等按此抬高显示三维。Points 仍存 XY, 此值统一供 z。
 
@@ -97,6 +97,28 @@ public abstract class SceneEntity
     {
         if (Dash == null || Dash.Length == 0) { Seg(o, x0, y0, x1, y1); return; }
         foreach (var (sx, sy, ex, ey) in DashPattern.Dashes(x0, y0, x1, y1, Dash)) Seg(o, sx, sy, ex, ey);
+    }
+
+    /// <summary>带逐端点高程的虚线段；虚线参数按 XY 弧长切分，Z 在线性段上同步插值。</summary>
+    protected void Seg3D(List<float> o, double x0, double y0, double z0, double x1, double y1, double z1)
+    {
+        if (Dash == null || Dash.Length == 0)
+        {
+            Seg3(o, x0, y0, z0, x1, y1, z1);
+            return;
+        }
+        double dx = x1 - x0, dy = y1 - y0, len = Math.Sqrt(dx * dx + dy * dy);
+        if (len < 1e-12)
+        {
+            Seg3(o, x0, y0, z0, x1, y1, z1);
+            return;
+        }
+        foreach (var (sx, sy, ex, ey) in DashPattern.Dashes(x0, y0, x1, y1, Dash))
+        {
+            double ta = ((sx - x0) * dx + (sy - y0) * dy) / (len * len);
+            double tb = ((ex - x0) * dx + (ey - y0) * dy) / (len * len);
+            Seg3(o, sx, sy, z0 + (z1 - z0) * ta, ex, ey, z0 + (z1 - z0) * tb);
+        }
     }
 
     /// <summary>点 (px,py) 到本实体几何的最近距离（拾取用；对自身镶嵌的每段求点到线段距离取最小）。</summary>
@@ -286,7 +308,7 @@ public sealed class CircleEntity : SceneEntity
         {
             double t = 2 * Math.PI * i / Segments;
             double x = Cx + Radius * Math.Cos(t), y = Cy + Radius * Math.Sin(t);
-            Seg(o, px, py, x, y); px = x; py = y;
+            SegD(o, px, py, x, y); px = x; py = y;
         }
     }
     public override SceneEntity Apply(Affine2 m)
@@ -331,8 +353,8 @@ public sealed class RectEntity : SceneEntity
     public double X0, Y0, X1, Y1;
     public override void Tessellate(List<float> o)
     {
-        Seg(o, X0, Y0, X1, Y0); Seg(o, X1, Y0, X1, Y1);
-        Seg(o, X1, Y1, X0, Y1); Seg(o, X0, Y1, X0, Y0);
+        SegD(o, X0, Y0, X1, Y0); SegD(o, X1, Y0, X1, Y1);
+        SegD(o, X1, Y1, X0, Y1); SegD(o, X0, Y1, X0, Y0);
     }
     public override SceneEntity Apply(Affine2 m)
     {
@@ -394,19 +416,19 @@ public sealed class PointEntity : SceneEntity
         double s = Size;
         switch (Style & 31)
         {
-            case 0: Seg(o, X - s * 0.15, Y, X + s * 0.15, Y); Seg(o, X, Y - s * 0.15, X, Y + s * 0.15); break;   // 点(小十字)
+            case 0: SegD(o, X - s * 0.15, Y, X + s * 0.15, Y); SegD(o, X, Y - s * 0.15, X, Y + s * 0.15); break;   // 点(小十字)
             case 1: break;                                                                                       // 无标记
-            case 3: Seg(o, X - s, Y - s, X + s, Y + s); Seg(o, X - s, Y + s, X + s, Y - s); break;               // ×
-            case 4: Seg(o, X, Y, X, Y + s); break;                                                               // 竖线
-            default: Seg(o, X - s, Y, X + s, Y); Seg(o, X, Y - s, X, Y + s); break;                              // +（2 及默认）
+            case 3: SegD(o, X - s, Y - s, X + s, Y + s); SegD(o, X - s, Y + s, X + s, Y - s); break;               // ×
+            case 4: SegD(o, X, Y, X, Y + s); break;                                                               // 竖线
+            default: SegD(o, X - s, Y, X + s, Y); SegD(o, X, Y - s, X, Y + s); break;                              // +（2 及默认）
         }
         if ((Style & 32) != 0)   // 外接圆
         {
             const int n = 24; double px = X + s, py = Y;
-            for (int i = 1; i <= n; i++) { double a = 2 * Math.PI * i / n; double nx = X + s * Math.Cos(a), ny = Y + s * Math.Sin(a); Seg(o, px, py, nx, ny); px = nx; py = ny; }
+            for (int i = 1; i <= n; i++) { double a = 2 * Math.PI * i / n; double nx = X + s * Math.Cos(a), ny = Y + s * Math.Sin(a); SegD(o, px, py, nx, ny); px = nx; py = ny; }
         }
         if ((Style & 64) != 0)   // 外接方
-        { Seg(o, X - s, Y - s, X + s, Y - s); Seg(o, X + s, Y - s, X + s, Y + s); Seg(o, X + s, Y + s, X - s, Y + s); Seg(o, X - s, Y + s, X - s, Y - s); }
+        { SegD(o, X - s, Y - s, X + s, Y - s); SegD(o, X + s, Y - s, X + s, Y + s); SegD(o, X + s, Y + s, X - s, Y + s); SegD(o, X - s, Y + s, X - s, Y - s); }
     }
     public override SceneEntity Apply(Affine2 m)
     {
@@ -424,7 +446,7 @@ public sealed class ArcEntity : SceneEntity
     public override void Tessellate(List<float> o)
     {
         var cc = ArcMath.Circumcircle(X1, Y1, X2, Y2, X3, Y3);
-        if (cc == null) { Seg(o, X1, Y1, X3, Y3); return; }   // 三点共线 → 退化为直线
+        if (cc == null) { SegD(o, X1, Y1, X3, Y3); return; }   // 三点共线 → 退化为直线
         var (cx, cy, r) = cc.Value;
         double a1 = Math.Atan2(Y1 - cy, X1 - cx);
         double am = Math.Atan2(Y2 - cy, X2 - cx);
@@ -437,7 +459,7 @@ public sealed class ArcEntity : SceneEntity
         {
             double t = a1 + total * i / Segments;
             double x = cx + r * Math.Cos(t), y = cy + r * Math.Sin(t);
-            Seg(o, px, py, x, y); px = x; py = y;
+            SegD(o, px, py, x, y); px = x; py = y;
         }
     }
     private static double Norm(double a) { while (a < 0) a += 2 * Math.PI; while (a >= 2 * Math.PI) a -= 2 * Math.PI; return a; }
@@ -689,7 +711,7 @@ public sealed class PolygonEntity : SceneEntity
         {
             double a = Rotation + 2 * Math.PI * i / Sides;   // i=Sides → 回到首顶点，闭合
             double x = Cx + Radius * Math.Cos(a), y = Cy + Radius * Math.Sin(a);
-            Seg(o, px, py, x, y); px = x; py = y;
+            SegD(o, px, py, x, y); px = x; py = y;
         }
     }
     public override SceneEntity Apply(Affine2 m)
@@ -1214,6 +1236,39 @@ public sealed class Scene
         foreach (var e in Entities)
             if (e.Visible && (isShown == null || isShown(e.LayerName))) e.Tessellate(o);
         return o.ToArray();
+    }
+
+    /// <summary>
+    /// 按生效线宽分组生成线段缓冲。OpenGL 的 glLineWidth 是 draw-call 状态，
+    /// 所以不同线宽不能再像旧路径那样合并成一块缓冲后一次绘制。
+    /// effectiveLineWeightOf 可把实体的 ByLayer(-1) 解析为图层线宽；为空时保留实体值。
+    /// </summary>
+    public readonly record struct LineGeometryBatch(short LineWeight, float[] Vertices);
+
+    public List<LineGeometryBatch> BuildGeometryBatches(
+        Func<string, bool>? isShown = null,
+        Func<SceneEntity, short>? effectiveLineWeightOf = null)
+    {
+        var groups = new Dictionary<short, List<float>>();
+        var temp = new List<float>();
+        foreach (var e in Entities)
+        {
+            if (!e.Visible || (isShown != null && !isShown(e.LayerName))) continue;
+            temp.Clear();
+            e.Tessellate(temp);
+            if (temp.Count == 0) continue;
+            short lw = effectiveLineWeightOf?.Invoke(e) ?? e.LineWeight;
+            if (!groups.TryGetValue(lw, out var vertices))
+            {
+                vertices = new List<float>();
+                groups.Add(lw, vertices);
+            }
+            vertices.AddRange(temp);
+        }
+        var result = new List<LineGeometryBatch>(groups.Count);
+        foreach (var (lineWeight, vertices) in groups)
+            if (vertices.Count > 0) result.Add(new LineGeometryBatch(lineWeight, vertices.ToArray()));
+        return result;
     }
 
     /// <summary>

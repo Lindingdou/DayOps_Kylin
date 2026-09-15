@@ -63,7 +63,7 @@ public sealed class GripDrag
         Active = true;
     }
 
-    public void Cancel() { Active = false; _grips.Clear(); AnchorOwner = null; AnchorIndex = -1; }
+    public void Cancel() { Active = false; Mode = GripMode.Stretch; _grips.Clear(); AnchorOwner = null; AnchorIndex = -1; }
 
     /// <summary>
     /// 改基点（AutoCAD 夹点提示下的「基点(B)」）：后续的位移/旋转/缩放/镜像都以新基点为准。

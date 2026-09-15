@@ -1,0 +1,24 @@
+﻿[2026-09-15 10:57:00] [START] ──────── PitMine3D 麒麟版启动 ────────
+  程序版本: 1.0.0.0   构建时间: 2026-09-15 10:43
+  版本目录: C:\Users\cFore\coder\DayOps_Kylin\.artifacts\full-verify\bin\Debug\net8.0\
+  OS      : Microsoft Windows 10.0.26200 / X64
+  运行时  : .NET 8.0.2 (X64)
+  区域    : Invariant=False
+  DISPLAY                               = (未设)
+  WAYLAND_DISPLAY                       = (未设)
+  XDG_SESSION_TYPE                      = (未设)
+  LD_LIBRARY_PATH                       = (未设)
+  DOTNET_SYSTEM_GLOBALIZATION_INVARIANT = (未设)
+  LIBGL_ALWAYS_SOFTWARE                 = (未设)
+[2026-09-15 10:57:02] [GL] 上下文: OpenGLES 3.0
+[2026-09-15 10:57:02] [GL] 渲染器就绪, 着色器方言=GLES 300, 扩展 VAO=有 glPolygonOffset=有 glUniform1f=有 glDepthFunc=有 纹理=有 混合=有, 材质通道=可用
+[2026-09-15 10:57:02] [GL] GL_VERSION=OpenGL ES 3.0.0 (ANGLE 2.1.22045 git hash: 4a177dd16290) · GL_RENDERER=ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 (0x00002786) Direct3D11 vs_5_0 ps_5_0, D3D11-32.0.15.9186) · GL_VENDOR=Google Inc. (NVIDIA)
+[2026-09-15 10:57:02] [GL] GLSL=OpenGL ES GLSL ES 3.00 (ANGLE 2.1.22045 git hash: 4a177dd16290)
+[2026-09-15 10:57:02] [UI] 功能区缩放 0.77（需 2491px，目标 1920px）
+[2026-09-15 10:57:02] [GL] 帧缓冲深度 16 位 → 已换成 24 位(2675×1525)
+[2026-09-15 10:57:02] [GL] 首帧完成 2675x1525
+[2026-09-15 10:57:02] [自检] @标注示例 对齐  →  状态栏「自检标注：对齐标注 测量值 100 · 已入场景并选中」 命令框「」 焦点=无 光标=CrosshairWithBox
+[2026-09-15 10:57:02] [自检] @鼠标 双击 50 35  →  状态栏「标注编辑：已进入编辑模式，可拖动蓝色节点调整高度，或在右侧特性面板修改  [自检鼠标 双击 (50,35) 屏幕(860,508) 拖拽=False 框选=False 编辑框=无 选集: 对齐标注]」 命令框「」 焦点=无 光标=CrosshairWithBox
+[2026-09-15 10:57:02] [自检] @等  →  状态栏「标注编辑：已进入编辑模式，可拖动蓝色节点调整高度，或在右侧特性面板修改  [自检鼠标 双击 (50,35) 屏幕(860,508) 拖拽=False 框选=False 编辑框=无 选集: 对齐标注]」 命令框「」 焦点=TextBox 光标=CrosshairWithBox
+[2026-09-15 10:57:06] [自检] +4s  状态栏「标注编辑：已进入编辑模式，可拖动蓝色节点调整高度，或在右侧特性面板修改  [自检鼠标 双击 (50,35) 屏幕(860,508) 拖拽=False 框选=False 编辑框=无 选集: 对齐标注]」
+[2026-09-15 10:57:14] [自检] +12s  状态栏「标注编辑：已进入编辑模式，可拖动蓝色节点调整高度，或在右侧特性面板修改  [自检鼠标 双击 (50,35) 屏幕(860,508) 拖拽=False 框选=False 编辑框=无 选集: 对齐标注]」

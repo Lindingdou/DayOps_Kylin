@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using PitMine3D.Kylin.Cad.Draw;
 using Xunit;
 
@@ -18,6 +19,18 @@ public class PointStyleTests
         Assert.Equal(0, SegCount(new PointEntity { Style = 1, Size = 1 }));   // 无标记 = 0 段
         Assert.Equal(2 + 4, SegCount(new PointEntity { Style = 2 | 64, Size = 1 }));   // 加号 + 外接方(4 段)
         Assert.True(SegCount(new PointEntity { Style = 2 | 32, Size = 1 }) > 2);       // 加号 + 外接圆(多段)
+    }
+
+    [Fact]
+    public void Style_catalog_exposes_common_pdmode_combinations()
+    {
+        var codes = PointStyleCatalog.Options.Select(x => x.Code).ToArray();
+
+        Assert.Equal(new[] { 2, 3, 0, 4, 34, 35, 32, 36, 66, 67, 64, 68 }, codes);
+        Assert.Equal("Circle + X (圆+叉) [35]", PointStyleCatalog.LabelFor(35));
+        Assert.Equal("Square + Vertical (方框+竖线) [68]", PointStyleCatalog.LabelFor(68));
+        Assert.Equal(35, PointStyleCatalog.CodeFor("Circle + X (圆+叉) [35]"));
+        Assert.Equal(127, PointStyleCatalog.CodeFor("PDMODE 127"));
     }
 
     [Fact]

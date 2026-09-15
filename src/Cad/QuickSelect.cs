@@ -464,6 +464,7 @@ public static class QuickSelectSnapshot
         PolygonEntity => QuickSelectCatalog.TypePolygon,
         TextEntity => QuickSelectCatalog.TypeText,
         PointEntity => QuickSelectCatalog.TypePoint,
+        MeshEntity => QuickSelectCatalog.TypeTriangleMesh,
         _ => QuickSelectCatalog.TypeUnknown,
     };
 
@@ -524,6 +525,11 @@ public static class QuickSelectSnapshot
                 ext["textString"] = t.Text ?? "";
                 ext["height"] = N(t.Height);
                 ext["rotation"] = N(t.Rotation);
+                break;
+            case MeshEntity m:
+                ext["vertexCount"] = m.VertexCount.ToString(CultureInfo.InvariantCulture);
+                ext["triangleCount"] = m.TriangleCount.ToString(CultureInfo.InvariantCulture);
+                ext["hasNormals"] = (m.VertNormals != null && m.VertNormals.Count == m.Verts.Count) ? "true" : "false";
                 break;
         }
         return new EntitySnapshot

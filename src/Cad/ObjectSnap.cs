@@ -41,6 +41,11 @@ public static partial class ObjectSnap
     // 优先级（小=高）：端点 > 交点 > 圆心 > 中点 > 垂足 > 最近（AutoCAD 习惯）。
     private static readonly int[] Priority = { 0, 3, 2, 1, 4, 5 };  // 索引=Mode，值=排序权
 
+    // 交点捕捉是候选线段两两求交，局部线条过密时会退化为 O(n²)。整图视图下一个 12px
+    // 捕捉框可能覆盖几百米、装进十万条线；此时没有唯一可辨认的交点，宁可本帧不吸交点，
+    // 等用户放大后候选自然降下来再恢复。25 万对把单帧工作量限制在交互级别。
+    private const long MaxIntersectionPairChecks = 250_000;
+
     public static int MaskOf(params Mode[] modes)
     {
         int m = 0; foreach (var x in modes) m |= 1 << (int)x; return m;
@@ -130,16 +135,28 @@ public static partial class ObjectSnap
             near.Clear();
             for (int k = 0, kn = cand?.SegsWide.Count ?? segs.Count; k < kn; k++)
             { var s = segs[cand == null ? k : cand.SegsWide[k]]; if (SegNearCursor(s, cx, cy, tol)) near.Add(s); }
-            for (int i = 0; i < near.Count; i++)
-                for (int j = i + 1; j < near.Count; j++)
-                    if (SegSegIntersect(near[i], near[j], out double ix, out double iy)) Consider(ix, iy, Mode.Intersection);
+            var nearCircles = cand?.NearCircleBuf ?? new List<Circ>();
+            nearCircles.Clear();
             if (circles != null)
+                for (int k = 0, kn = cand?.CirclesWide.Count ?? circles.Count; k < kn; k++)
+                {
+                    var c = circles[cand == null ? k : cand.CirclesWide[k]];
+                    if (CircNearCursor(c, cx, cy, tol)) nearCircles.Add(c);
+                }
+
+            // 预算必须基于真正经过光标孔径的原语，而不是网格粗候选；否则同格但孔径外的大量线会吞掉有效交点。
+            long segPairChecks = (long)near.Count * (near.Count - 1) / 2;
+            if (segPairChecks <= MaxIntersectionPairChecks)
+                for (int i = 0; i < near.Count; i++)
+                    for (int j = i + 1; j < near.Count; j++)
+                        if (SegSegIntersect(near[i], near[j], out double ix, out double iy)) Consider(ix, iy, Mode.Intersection);
+
+            // 两类求交独立限额：圆很多时不能连有效的线—线交点也一并禁掉。
+            long segCircleChecks = (long)near.Count * nearCircles.Count;
+            if (segCircleChecks <= MaxIntersectionPairChecks)
                 foreach (var s in near)
-                    for (int k = 0, kn = cand?.CirclesWide.Count ?? circles.Count; k < kn; k++)
-                    {
-                        var c = circles[cand == null ? k : cand.CirclesWide[k]];
-                        if (CircNearCursor(c, cx, cy, tol) && SegCircleIntersect(s, c, cx, cy, tol, Consider)) { }
-                    }
+                    foreach (var c in nearCircles)
+                        if (SegCircleIntersect(s, c, cx, cy, tol, Consider)) { }
         }
 
         return best;
@@ -198,13 +215,13 @@ public static partial class ObjectSnap
     {
         var (px, py) = ClosestOnSeg(s, cx, cy);
         double dx = px - cx, dy = py - cy;
-        return dx * dx + dy * dy <= (tol * 4) * (tol * 4);
+        return dx * dx + dy * dy <= tol * tol;
     }
 
     private static bool CircNearCursor(Circ c, double cx, double cy, double tol)
     {
         double dx = cx - c.Cx, dy = cy - c.Cy, d = Math.Sqrt(dx * dx + dy * dy);
-        return Math.Abs(d - c.R) <= tol * 4;
+        return Math.Abs(d - c.R) <= tol;
     }
 
     private static bool SegSegIntersect(Seg a, Seg b, out double ix, out double iy)

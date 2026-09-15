@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using PitMine3D.Kylin.Cad;
 using PitMine3D.Kylin.Cad.Draw;
+using PitMine3D.Kylin.Views;
 using Xunit;
 
 namespace PitMine3D.Kylin.Tests;
@@ -199,6 +201,37 @@ public class QuickSelectTests
         var c = new QuickSelectCriteria { TypeId = null, PropertyKey = "radius", Operator = QuickSelectOperator.NotEquals, Value = "5" };
         var r = QuickSelectFilter.Apply(snaps, c);
         Assert.Empty(r.Handles);
+    }
+
+    [Fact]
+    public void Snapshot_maps_triangle_mesh_and_filters_by_triangle_count()
+    {
+        var mesh = new MeshEntity("TIN", new[]
+        {
+            (0.0, 0.0, 10.0), (10.0, 0.0, 11.0), (0.0, 10.0, 12.0), (10.0, 10.0, 13.0),
+        }, new[] { (0, 1, 2), (1, 3, 2) }) { LayerName = "地表" };
+
+        var snapshot = QuickSelectSnapshot.From(mesh, 7);
+
+        Assert.Equal(QuickSelectCatalog.TypeTriangleMesh, snapshot.TypeId);
+        Assert.Equal("4", snapshot.Extended!["vertexCount"]);
+        Assert.Equal("2", snapshot.Extended["triangleCount"]);
+
+        var criteria = new QuickSelectCriteria
+        {
+            TypeId = QuickSelectCatalog.TypeTriangleMesh,
+            PropertyKey = "triangleCount",
+            Operator = QuickSelectOperator.Greater,
+            Value = "1",
+        };
+        Assert.Equal(new[] { 7UL }, QuickSelectFilter.Apply(new[] { snapshot }, criteria).Handles);
+    }
+
+    [Fact]
+    public void Command_type_alias_recognizes_triangle_mesh()
+    {
+        var parser = typeof(MainWindow).GetMethod("QsTypeId", BindingFlags.Static | BindingFlags.NonPublic)!;
+        Assert.Equal(QuickSelectCatalog.TypeTriangleMesh, parser.Invoke(null, new object[] { "三角网" }));
     }
 
     [Fact]

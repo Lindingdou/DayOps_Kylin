@@ -1,0 +1,98 @@
+{
+  "Version": 1,
+  "Root": {
+    "Kind": "Proportional",
+    "Orientation": "Vertical",
+    "Proportion": null,
+    "Alignment": null,
+    "Active": null,
+    "Tools": null,
+    "Children": [
+      {
+        "Kind": "Proportional",
+        "Orientation": "Horizontal",
+        "Proportion": 0.84,
+        "Alignment": null,
+        "Active": null,
+        "Tools": null,
+        "Children": [
+          {
+            "Kind": "Tool",
+            "Orientation": null,
+            "Proportion": 0.14,
+            "Alignment": "Left",
+            "Active": "File",
+            "Tools": [
+              "File",
+              "Objects"
+            ],
+            "Children": null
+          },
+          {
+            "Kind": "Splitter",
+            "Orientation": null,
+            "Proportion": null,
+            "Alignment": null,
+            "Active": null,
+            "Tools": null,
+            "Children": null
+          },
+          {
+            "Kind": "Document",
+            "Orientation": null,
+            "Proportion": 0.7,
+            "Alignment": null,
+            "Active": null,
+            "Tools": null,
+            "Children": null
+          },
+          {
+            "Kind": "Splitter",
+            "Orientation": null,
+            "Proportion": null,
+            "Alignment": null,
+            "Active": null,
+            "Tools": null,
+            "Children": null
+          },
+          {
+            "Kind": "Tool",
+            "Orientation": null,
+            "Proportion": 0.16,
+            "Alignment": "Right",
+            "Active": "Props",
+            "Tools": [
+              "Props",
+              "Assistant"
+            ],
+            "Children": null
+          }
+        ]
+      },
+      {
+        "Kind": "Splitter",
+        "Orientation": null,
+        "Proportion": null,
+        "Alignment": null,
+        "Active": null,
+        "Tools": null,
+        "Children": null
+      },
+      {
+        "Kind": "Tool",
+        "Orientation": null,
+        "Proportion": 0.16,
+        "Alignment": "Bottom",
+        "Active": "Info",
+        "Tools": [
+          "Info"
+        ],
+        "Children": null
+      }
+    ]
+  },
+  "PinnedLeft": null,
+  "PinnedRight": null,
+  "PinnedTop": null,
+  "PinnedBottom": null
+}

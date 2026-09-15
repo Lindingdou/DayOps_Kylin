@@ -81,7 +81,30 @@ public static class MeshMetrics
     {
         if (verts == null || verts.Count == 0 || tris == null || tris.Count == 0) return 0;
         var diag = MeshDiagnose.Analyze(verts, tris);
-        if (diag.IsClosed) return Math.Abs(SignedVolume6(verts, tris)) / 6.0;   // 水密 → 严密
+        if (diag.IsClosed)
+        {
+            // 闭合网格也可能存在重复顶点、局部反向面和大地坐标；直接对原坐标积分会把体积算大。
+            // 先焊接并统一朝向，再平移到包围盒中心附近，最后做散度积分。
+            double mnx = double.MaxValue, mny = double.MaxValue, mnz = double.MaxValue;
+            double mxx = double.MinValue, mxy = double.MinValue, mxz = double.MinValue;
+            foreach (var v in verts)
+            {
+                if (v.x < mnx) mnx = v.x; if (v.y < mny) mny = v.y; if (v.z < mnz) mnz = v.z;
+                if (v.x > mxx) mxx = v.x; if (v.y > mxy) mxy = v.y; if (v.z > mxz) mxz = v.z;
+            }
+            double bboxDiag = Math.Sqrt((mxx - mnx) * (mxx - mnx) + (mxy - mny) * (mxy - mny) + (mxz - mnz) * (mxz - mnz));
+            double tol = Math.Max(1e-9, bboxDiag * 1e-8);
+            var w = MeshWeld.Weld(verts, tris, tol, dropDuplicateTris: true);
+            double ox = (mnx + mxx) * 0.5, oy = (mny + mxy) * 0.5, oz = (mnz + mxz) * 0.5;
+            var local = new List<(double x, double y, double z)>(w.Verts.Count);
+            foreach (var v in w.Verts) local.Add((v.x - ox, v.y - oy, v.z - oz));
+            var oriented = MeshOrient.MakeConsistent(local, w.Tris);
+            var cleaned = MeshDiagnose.Analyze(local, oriented, selfIntersect: false);
+            if (cleaned.IsClosed) return Math.Abs(SignedVolume6(local, oriented)) / 6.0;
+
+            // 焊接容差不应把原本闭合的正常网格变成开口；异常时保留旧路径作为最后兜底。
+            return Math.Abs(SignedVolume6(verts, tris)) / 6.0;
+        }
         // 非水密：焊接 → 补洞封盖 → 再散度
         try
         {

@@ -29,9 +29,9 @@
 ✓ 2 条多段线：顶点 7 → 106 (+99)
 
 命令: 修改点样式
-样式 [Cross (十字)/X (叉)/Dot (圆点)] <Cross (十字)>: 2
+样式 [Cross (十字) [2]/X (叉) [3]/Dot (圆点) [0]/Vertical (竖线) [4]/Circle + Cross (圆+十字) [34]/Circle + X (圆+叉) [35]/Circle + Dot (圆+点) [32]/Circle + Vertical (圆+竖线) [36]/Square + Cross (方框+十字) [66]/Square + X (方框+叉) [67]/Square + Dot (方框+点) [64]/Square + Vertical (方框+竖线) [68]] <Cross (十字) [2]>: 2
 大小(世界单位) <3>: 5
-> 修改点样式：style=X size=5，已更新 6
+> 修改点样式：style=2 size=5，已更新 6
 ```
 
 | 规则 | 说明 |

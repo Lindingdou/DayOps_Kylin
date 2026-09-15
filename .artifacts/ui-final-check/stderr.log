@@ -1,0 +1,57 @@
+[2026-09-15 12:01:48] [START] ──────── PitMine3D 麒麟版启动 ────────
+  程序版本: 1.0.0.0   构建时间: 2026-09-15 11:51
+  版本目录: C:\Users\cFore\coder\DayOps_Kylin\src\bin\Release\net8.0\
+  OS      : Microsoft Windows 10.0.26200 / X64
+  运行时  : .NET 8.0.2 (X64)
+  区域    : Invariant=False
+  DISPLAY                               = (未设)
+  WAYLAND_DISPLAY                       = (未设)
+  XDG_SESSION_TYPE                      = (未设)
+  LD_LIBRARY_PATH                       = (未设)
+  DOTNET_SYSTEM_GLOBALIZATION_INVARIANT = (未设)
+  LIBGL_ALWAYS_SOFTWARE                 = (未设)
+[FONT] 视口文字使用真字形: SimSun (含中文)
+[Binding]An error occurred binding 'IsVisible' to '!!LeftPinnedDockables.Count' at 'LeftPinnedDockables': 'Value is null.' (ToolPinnedControl #65264315)
+[Binding]An error occurred binding 'IsVisible' to '!!RightPinnedDockables.Count' at 'RightPinnedDockables': 'Value is null.' (ToolPinnedControl #50507927)
+[Binding]An error occurred binding 'IsVisible' to '!!TopPinnedDockables.Count' at 'TopPinnedDockables': 'Value is null.' (ToolPinnedControl #51918161)
+[Binding]An error occurred binding 'IsVisible' to '!!BottomPinnedDockables.Count' at 'BottomPinnedDockables': 'Value is null.' (ToolPinnedControl #64610266)
+[Binding]An error occurred binding 'PinnedDockAlignment' to 'PinnedDock.Alignment' at 'PinnedDock': 'Value is null.' (PinnedDockControl #19760744)
+[Binding]An error occurred binding 'Proportion' to 'Proportion' at 'Proportion': 'Could not find a matching property accessor for 'Proportion' on 'Dock.Model.Mvvm.Controls.ProportionalDockSplitter'.' (ContentPresenter #11605577)
+[Binding]An error occurred binding '(unknown)' to 'IsCollapsable' at 'IsCollapsable': 'Unable to cast object of type 'Dock.Model.Mvvm.Controls.ProportionalDockSplitter' to type 'Dock.Model.Core.IDock'.' (ContentPresenter #11605577)
+[Binding]An error occurred binding '(unknown)' to 'IsEmpty' at 'IsEmpty': 'Unable to cast object of type 'Dock.Model.Mvvm.Controls.ProportionalDockSplitter' to type 'Dock.Model.Core.IDock'.' (ContentPresenter #11605577)
+[Binding]An error occurred binding 'Proportion' to 'Proportion' at 'Proportion': 'Could not find a matching property accessor for 'Proportion' on 'Dock.Model.Mvvm.Controls.ProportionalDockSplitter'.' (ContentPresenter #8199431)
+[Binding]An error occurred binding '(unknown)' to 'IsCollapsable' at 'IsCollapsable': 'Unable to cast object of type 'Dock.Model.Mvvm.Controls.ProportionalDockSplitter' to type 'Dock.Model.Core.IDock'.' (ContentPresenter #8199431)
+[Binding]An error occurred binding '(unknown)' to 'IsEmpty' at 'IsEmpty': 'Unable to cast object of type 'Dock.Model.Mvvm.Controls.ProportionalDockSplitter' to type 'Dock.Model.Core.IDock'.' (ContentPresenter #8199431)
+[Binding]An error occurred binding 'Proportion' to 'Proportion' at 'Proportion': 'Could not find a matching property accessor for 'Proportion' on 'Dock.Model.Mvvm.Controls.ProportionalDockSplitter'.' (ContentPresenter #10306821)
+[Binding]An error occurred binding '(unknown)' to 'IsCollapsable' at 'IsCollapsable': 'Unable to cast object of type 'Dock.Model.Mvvm.Controls.ProportionalDockSplitter' to type 'Dock.Model.Core.IDock'.' (ContentPresenter #10306821)
+[Binding]An error occurred binding '(unknown)' to 'IsEmpty' at 'IsEmpty': 'Unable to cast object of type 'Dock.Model.Mvvm.Controls.ProportionalDockSplitter' to type 'Dock.Model.Core.IDock'.' (ContentPresenter #10306821)
+[Binding]An error occurred binding 'IsMaximized' to '$parent[HostWindow].WindowState' at '$parent[HostWindow]': 'Ancestor not found.' (ToolChromeControl #46545466)
+[Binding]An error occurred binding 'IsMaximized' to '$parent[HostWindow].WindowState' at '$parent[HostWindow]': 'Ancestor not found.' (ToolChromeControl #46545466)
+[Binding]An error occurred binding 'IsMaximized' to '$parent[HostWindow].WindowState' at '$parent[HostWindow]': 'Ancestor not found.' (ToolChromeControl #39850440)
+[Binding]An error occurred binding 'IsMaximized' to '$parent[HostWindow].WindowState' at '$parent[HostWindow]': 'Ancestor not found.' (ToolChromeControl #39850440)
+[Binding]An error occurred binding 'IsMaximized' to '$parent[HostWindow].WindowState' at '$parent[HostWindow]': 'Ancestor not found.' (ToolChromeControl #41778354)
+[Binding]An error occurred binding 'IsMaximized' to '$parent[HostWindow].WindowState' at '$parent[HostWindow]': 'Ancestor not found.' (ToolChromeControl #41778354)
+[Binding]An error occurred binding 'IsVisible' to '!PinnedDock.IsEmpty' at 'PinnedDock': 'Value is null.' (Grid #PART_PinnedDockGrid)
+[2026-09-15 12:01:50] [GL] 上下文: OpenGLES 3.0
+[2026-09-15 12:01:50] [GL] 渲染器就绪, 着色器方言=GLES 300, 扩展 VAO=有 glPolygonOffset=有 glUniform1f=有 glDepthFunc=有 纹理=有 混合=有, 材质通道=可用
+[2026-09-15 12:01:50] [GL] GL_VERSION=OpenGL ES 3.0.0 (ANGLE 2.1.22045 git hash: 4a177dd16290) · GL_RENDERER=ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 (0x00002786) Direct3D11 vs_5_0 ps_5_0, D3D11-32.0.15.9186) · GL_VENDOR=Google Inc. (NVIDIA)
+[2026-09-15 12:01:50] [GL] GLSL=OpenGL ES GLSL ES 3.00 (ANGLE 2.1.22045 git hash: 4a177dd16290)
+[2026-09-15 12:01:50] [UI] 功能区缩放 0.77（需 2491px，目标 1920px）
+[2026-09-15 12:01:50] [GL] 帧缓冲深度 16 位 → 已换成 24 位(2675×1525)
+[2026-09-15 12:01:50] [GL] 首帧完成 2675x1525
+[2026-09-15 12:01:51] [自检] @线示例  →  状态栏「自检剖面线：2 点已入场景并选中（当前共选 1 个）」 命令框「」 焦点=无 光标=CrosshairWithBox
+[2026-09-15 12:01:51] [自检] @取景 100 60 160  →  状态栏「自检取景：(100, 60) 半宽 160 m」 命令框「」 焦点=无 光标=CrosshairWithBox
+[2026-09-15 12:01:51] [自检] @等待 250  →  状态栏「自检取景：(100, 60) 半宽 160 m」 命令框「」 焦点=无 光标=CrosshairWithBox
+[2026-09-15 12:01:51] [自检] 连续标注  →  状态栏「连续标注：点击第一个可拾取的直线或边（Esc 结束）」 命令框「」 焦点=无 光标=PickBox
+[2026-09-15 12:01:51] [自检] @鼠标 按下 100 60  →  状态栏「连续标注：移动鼠标预览并调整高度，单击落位  [自检鼠标 按下 (100,60) 屏幕(892,508) 拖拽=False 框选=False 编辑框=无 选集: ]」 命令框「」 焦点=无 光标=CrosshairOnly
+[2026-09-15 12:01:51] [自检] @鼠标 移动 100 100  →  状态栏「连续标注：移动鼠标预览并调整高度，单击落位  [自检鼠标 按下 (100,60) 屏幕(892,508) 拖拽=False 框选=False 编辑框=无 选集: ]  [自检鼠标 移动 (100,100) 屏幕(892,463) 拖拽=False 框选=False 编辑框=无 选集: ]」 命令框「」 焦点=无 光标=CrosshairOnly
+[2026-09-15 12:01:51] [自检] @鼠标 按下 100 100  →  状态栏「已标注：200 · 中部蓝色夹点可调统一高度 · 继续选择下一个对象（Esc 结束）  [自检鼠标 按下 (100,100) 屏幕(892,463) 拖拽=False 框选=False 编辑框=无 选集: 对齐标注]」 命令框「」 焦点=无 光标=PickBox
+[2026-09-15 12:01:51] [自检] @夹点态 2 2  →  状态栏「夹点 4 个：悬停 #2(绿) · 选中 #2(红) · 其余冷态(蓝)」 命令框「」 焦点=无 光标=PickBox
+[2026-09-15 12:01:51] [自检] @鼠标 按下 100 100  →  状态栏「连续标注：拖动中部夹点调整统一高度，松开后继续选择对象  [自检鼠标 按下 (100,100) 屏幕(892,463) 拖拽=True 框选=False 编辑框=无 选集: 对齐标注]」 命令框「」 焦点=无 光标=CrosshairOnly
+[2026-09-15 12:01:51] [自检] @鼠标 移动 100 120  →  状态栏「连续标注：拖动中部夹点调整统一高度，松开后继续选择对象  [自检鼠标 按下 (100,100) 屏幕(892,463) 拖拽=True 框选=False 编辑框=无 选集: 对齐标注]  [自检鼠标 移动 (100,120) 屏幕(892,440) 拖拽=True 框选=False 编辑框=无 选集: 对齐标注]」 命令框「」 焦点=无 光标=CrosshairOnly
+[2026-09-15 12:01:51] [自检] @鼠标 松开 100 120  →  状态栏「连续标注：统一高度已调整为 60.22，继续选择下一个对象（Esc 结束）  [自检鼠标 松开 (100,120) 屏幕(892,440) 拖拽=False 框选=False 编辑框=无 选集: 对齐标注]」 命令框「」 焦点=无 光标=PickBox
+[2026-09-15 12:01:51] [自检] @夹点态 2 2  →  状态栏「夹点 4 个：悬停 #2(绿) · 选中 #2(红) · 其余冷态(蓝)」 命令框「」 焦点=无 光标=PickBox
+[2026-09-15 12:01:51] [自检] @鼠标 双击 100 120  →  状态栏「标注编辑：已进入编辑模式，可拖动蓝色节点调整高度，或在右侧特性面板修改  [自检鼠标 双击 (100,120) 屏幕(892,440) 拖拽=False 框选=False 编辑框=无 选集: 对齐标注]」 命令框「」 焦点=无 光标=CrosshairWithBox
+[2026-09-15 12:01:51] [自检] @等待 150  →  状态栏「标注编辑：已进入编辑模式，可拖动蓝色节点调整高度，或在右侧特性面板修改  [自检鼠标 双击 (100,120) 屏幕(892,440) 拖拽=False 框选=False 编辑框=无 选集: 对齐标注]」 命令框「」 焦点=TextBox 光标=CrosshairWithBox
+[2026-09-15 12:01:55] [自检] +4s  状态栏「标注编辑：已进入编辑模式，可拖动蓝色节点调整高度，或在右侧特性面板修改  [自检鼠标 双击 (100,120) 屏幕(892,440) 拖拽=False 框选=False 编辑框=无 选集: 对齐标注]」
+[2026-09-15 12:02:03] [自检] +12s  状态栏「标注编辑：已进入编辑模式，可拖动蓝色节点调整高度，或在右侧特性面板修改  [自检鼠标 双击 (100,120) 屏幕(892,440) 拖拽=False 框选=False 编辑框=无 选集: 对齐标注]」

@@ -46,6 +46,13 @@ public static class LineWeightUtil
         return best;
     }
 
+    /// <summary>
+    /// 把 DXF 线宽档换成视口里的像素宽度。默认/随层未解析时回到 1px，
+    /// 实际档位按 0.01mm 单调放大并封顶，保证高分屏和旧 GL 驱动仍有可见差异。
+    /// </summary>
+    public static float PixelWidth(short lw)
+        => lw <= 0 ? 1f : (float)Math.Clamp(1.0 + lw / 50.0, 1.0, 6.0);
+
     /// <summary>Ribbon「特性」组线宽下拉的候选值(随层/默认/随块 + 标准档)。顺序即下拉顺序。</summary>
     public static short[] Choices
     {
