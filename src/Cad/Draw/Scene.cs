@@ -153,6 +153,9 @@ public abstract class SceneEntity
     /// <summary>偏移：向点击 (px,py) 一侧平行偏移，返回新实体；不支持返回 null。</summary>
     public virtual SceneEntity? Offset(double px, double py) => null;
 
+    /// <summary>定距偏移：点击点只确定偏移侧，实际偏移量严格取 distance；不支持或方向不明确返回 null。</summary>
+    public virtual SceneEntity? Offset(double px, double py, double distance) => null;
+
     /// <summary>分解：拆成更基本的实体（矩形/多段线 → 直线）；不可分解返回 null。</summary>
     public virtual List<SceneEntity>? Explode() => null;
 
@@ -270,6 +273,16 @@ public sealed class LineEntity : SceneEntity
         double d = (px - X0) * nx + (py - Y0) * ny;         // 点击到直线的带符号法向距离
         return Colored(new LineEntity { X0 = X0 + nx * d, Y0 = Y0 + ny * d, X1 = X1 + nx * d, Y1 = Y1 + ny * d });
     }
+    public override SceneEntity? Offset(double px, double py, double distance)
+    {
+        double dx = X1 - X0, dy = Y1 - Y0, len = Math.Sqrt(dx * dx + dy * dy);
+        if (len < 1e-9 || !double.IsFinite(distance) || distance <= 1e-9) return null;
+        double nx = -dy / len, ny = dx / len;
+        double side = (px - X0) * nx + (py - Y0) * ny;
+        if (Math.Abs(side) < 1e-9) return null;
+        double d = Math.CopySign(distance, side);
+        return Colored(new LineEntity { X0 = X0 + nx * d, Y0 = Y0 + ny * d, X1 = X1 + nx * d, Y1 = Y1 + ny * d });
+    }
     public override List<SceneEntity>? Break(double x1, double y1, double x2, double y2)
     {
         double dx = X1 - X0, dy = Y1 - Y0, len2 = dx * dx + dy * dy;
@@ -320,6 +333,15 @@ public sealed class CircleEntity : SceneEntity
     {
         double r = Math.Sqrt((px - Cx) * (px - Cx) + (py - Cy) * (py - Cy));
         return r < 1e-6 ? null : Colored(new CircleEntity { Cx = Cx, Cy = Cy, Radius = r, Segments = Segments });
+    }
+    public override SceneEntity? Offset(double px, double py, double distance)
+    {
+        if (!double.IsFinite(distance) || distance <= 1e-9 || Radius < 1e-9) return null;
+        double pickRadius = Math.Sqrt((px - Cx) * (px - Cx) + (py - Cy) * (py - Cy));
+        double side = pickRadius - Radius;
+        if (Math.Abs(side) < 1e-9) return null;
+        double radius = Radius + Math.CopySign(distance, side);
+        return radius < 1e-6 ? null : Colored(new CircleEntity { Cx = Cx, Cy = Cy, Radius = radius, Segments = Segments });
     }
     public override List<(double x, double y)> Grips() =>
         new() { (Cx, Cy), (Cx + Radius, Cy), (Cx, Cy + Radius), (Cx - Radius, Cy), (Cx, Cy - Radius) };  // 心 + 4 象限
@@ -375,6 +397,15 @@ public sealed class RectEntity : SceneEntity
         bool inside = px > minX && px < maxX && py > minY && py < maxY;
         double d = DistanceTo(px, py);
         double off = inside ? -d : d;
+        return Colored(new RectEntity { X0 = minX - off, Y0 = minY - off, X1 = maxX + off, Y1 = maxY + off });
+    }
+    public override SceneEntity? Offset(double px, double py, double distance)
+    {
+        if (!double.IsFinite(distance) || distance <= 1e-9) return null;
+        double minX = Math.Min(X0, X1), maxX = Math.Max(X0, X1), minY = Math.Min(Y0, Y1), maxY = Math.Max(Y0, Y1);
+        bool inside = px > minX && px < maxX && py > minY && py < maxY;
+        double off = inside ? -distance : distance;
+        if (maxX - minX + 2 * off <= 1e-9 || maxY - minY + 2 * off <= 1e-9) return null;
         return Colored(new RectEntity { X0 = minX - off, Y0 = minY - off, X1 = maxX + off, Y1 = maxY + off });
     }
     public override List<SceneEntity>? Explode() => new()
@@ -490,6 +521,26 @@ public sealed class ArcEntity : SceneEntity
             X3 = cx + (X3 - cx) * s, Y3 = cy + (Y3 - cy) * s, Segments = Segments
         });
     }
+    public override SceneEntity? Offset(double px, double py, double distance)
+    {
+        if (!double.IsFinite(distance) || distance <= 1e-9) return null;
+        var cc = ArcMath.Circumcircle(X1, Y1, X2, Y2, X3, Y3);
+        if (cc == null) return null;
+        var (cx, cy, r) = cc.Value;
+        if (r < 1e-9) return null;
+        double pickRadius = Math.Sqrt((px - cx) * (px - cx) + (py - cy) * (py - cy));
+        double side = pickRadius - r;
+        if (Math.Abs(side) < 1e-9) return null;
+        double r2 = r + Math.CopySign(distance, side);
+        if (r2 < 1e-6) return null;
+        double s = r2 / r;
+        return Colored(new ArcEntity
+        {
+            X1 = cx + (X1 - cx) * s, Y1 = cy + (Y1 - cy) * s,
+            X2 = cx + (X2 - cx) * s, Y2 = cy + (Y2 - cy) * s,
+            X3 = cx + (X3 - cx) * s, Y3 = cy + (Y3 - cy) * s, Segments = Segments
+        });
+    }
     public override List<SceneEntity>? Break(double x1, double y1, double x2, double y2)   // 断成两段弧
     {
         var cc = ArcMath.Circumcircle(X1, Y1, X2, Y2, X3, Y3);
@@ -596,10 +647,21 @@ public sealed class PolylineEntity : SceneEntity
     }
     public override SceneEntity? Offset(double px, double py)   // 等距偏移(逐段平移 + 相邻段求交 miter)
     {
+        if (!TryOffsetSide(px, py, out double off)) return null;
+        return OffsetBySignedDistance(off);
+    }
+    public override SceneEntity? Offset(double px, double py, double distance)
+    {
+        if (!double.IsFinite(distance) || distance <= 1e-9 || !TryOffsetSide(px, py, out double side) || Math.Abs(side) < 1e-9) return null;
+        return OffsetBySignedDistance(Math.CopySign(distance, side));
+    }
+    private bool TryOffsetSide(double px, double py, out double off)
+    {
+        off = 0;
         int n = Points.Count;
-        if (n < 2) return null;
+        if (n < 2) return false;
         int segN = Closed ? n : n - 1;
-        int ns = -1; double best = double.MaxValue, off = 0;
+        int ns = -1; double best = double.MaxValue;
         for (int i = 0; i < segN; i++)
         {
             var a = Points[i]; var b = Points[(i + 1) % n];
@@ -608,7 +670,12 @@ public sealed class PolylineEntity : SceneEntity
             double dseg = SegDist(px, py, a.x, a.y, b.x, b.y);
             if (dseg < best) { best = dseg; ns = i; off = (px - a.x) * (-dy / len) + (py - a.y) * (dx / len); }
         }
-        if (ns < 0) return null;
+        return ns >= 0;
+    }
+    private SceneEntity? OffsetBySignedDistance(double off)
+    {
+        int n = Points.Count;
+        int segN = Closed ? n : n - 1;
         var oa = new (double x, double y)[segN];
         var ob = new (double x, double y)[segN];
         for (int i = 0; i < segN; i++)
@@ -749,6 +816,15 @@ public sealed class PolygonEntity : SceneEntity
     {
         double r = Math.Sqrt((px - Cx) * (px - Cx) + (py - Cy) * (py - Cy));
         return r < 1e-6 ? null : Colored(new PolygonEntity { Cx = Cx, Cy = Cy, Radius = r, Sides = Sides, Rotation = Rotation });
+    }
+    public override SceneEntity? Offset(double px, double py, double distance)
+    {
+        if (!double.IsFinite(distance) || distance <= 1e-9 || Radius < 1e-9) return null;
+        double pickRadius = Math.Sqrt((px - Cx) * (px - Cx) + (py - Cy) * (py - Cy));
+        double side = pickRadius - Radius;
+        if (Math.Abs(side) < 1e-9) return null;
+        double radius = Radius + Math.CopySign(distance, side);
+        return radius < 1e-6 ? null : Colored(new PolygonEntity { Cx = Cx, Cy = Cy, Radius = radius, Sides = Sides, Rotation = Rotation });
     }
     public override List<SceneEntity>? Break(double x1, double y1, double x2, double y2)   // 正多边形→开口多段线
     {

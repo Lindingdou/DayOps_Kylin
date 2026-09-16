@@ -1473,7 +1473,8 @@ public partial class MainWindow : Window
     private bool _editAwaitSelect;                                  // 编辑命令的"选择对象"阶段(右键确定后转取点)
     private string _editName = "";                                  // 当前编辑命令名(用于提示)
     private readonly List<(double x, double y)> _editPts = new();   // 编辑取的点（基点/目标点/参照…）
-    private bool _offsetActive;                    // 偏移：等待点击一侧
+    private bool _offsetActive;                    // 偏移：已指定距离，等待点击一侧
+    private double _offsetDistance = 10;           // 本次/上次固定偏移距离（按钮与命令行共用）
     private bool _trimActive;                       // 修剪 / 延伸：循环点选目标中
     private bool _trimExtend;                       // 本条命令是「延伸」还是「修剪」—— 两条命令各做各的, 不再合并
     private List<SceneEntity> _trimBoundaries = new();   // 剪切边 / 边界的边(空选确认 = 全部实体, 同原版 <全部选择>)
@@ -2075,7 +2076,7 @@ public partial class MainWindow : Window
             if (cmd.StartsWith("约束寻径") || cmd.StartsWith("运输寻径") || cmd.StartsWith("限坡寻径")) { await RoadConstraintPathAsync(cmd); return; }
             if (cmd == "运输指标报告" || cmd == "路网运输指标全" || cmd == "全运输指标") { await RoadFullIndicatorsAsync(); return; }
             if (cmd == "路网建图" || cmd == "属性路网建图" || cmd == "路网抽图" || cmd == "中线抽图") { await RoadBuildGraphAsync(); return; }
-            if (cmd == "新建图层") { var l = _layers.New(); PopulateDrawingLayers(); StatusMsg.Text = $"新建图层「{l.Name}」并置为当前"; return; }
+            if (cmd == "新建图层") { await CreateLayerAsync(); return; }
             if (cmd == "删除图层" || cmd == "删层" || cmd == "删除当前图层") { DeleteCurrentLayer(); return; }
             if (cmd.StartsWith("重命名图层 ") || cmd.StartsWith("图层重命名 ") || cmd.StartsWith("图层命名 ")) { RenameCurrentLayer(cmd.Substring(cmd.IndexOf(' ') + 1)); return; }
             if (cmd.StartsWith("合并图层 ") || cmd.StartsWith("图层合并 ")) { MergeLayerIntoCurrent(cmd.Substring(cmd.IndexOf(' ') + 1)); return; }
@@ -2239,21 +2240,19 @@ public partial class MainWindow : Window
             Title = "另存为",
             DefaultExtension = "pmx",
             SuggestedFileName = "drawing.pmx",
-            FileTypeChoices = new[]
-            {
-                new FilePickerFileType("PitMine 图形 (PMX)") { Patterns = new[] { "*.pmx" } },
-                new FilePickerFileType("DXF 图纸") { Patterns = new[] { "*.dxf" } },
-                new FilePickerFileType("DWG 图纸") { Patterns = new[] { "*.dwg" } },
-                new FilePickerFileType("WeCAD 地质地形图 (KDF)") { Patterns = new[] { "*.kdf" } }
-            }
+            FileTypeChoices = SaveAsFormats.CreatePickerChoices()
         });
         if (file == null) return;
         string path = file.Path.LocalPath;
         string ext = Path.GetExtension(path).ToLowerInvariant();
+        if (!SaveAsFormats.IsSupportedExtension(ext))
+        {
+            StatusMsg.Text = $"不支持的另存格式：{ext}";
+            return;
+        }
         try
         {
             if (ext == ".pmx") { File.WriteAllText(path, SceneIO.SaveDoc(_scene, _layers.Layers, _layers.Current.Name)); SetDocPath(path); StatusMsg.Text = $"已另存 {Path.GetFileName(path)} · {_scene.Count} 实体"; }
-            else if (ext == ".kdf") { int n = KdfExportService.Export(_scene, path, _layers); StatusMsg.Text = $"已导出 {Path.GetFileName(path)} · {n} 实体（KDF, 点/图案填充不导出）"; }
             else { int n = SceneExportService.Export(_scene, path, _layers); StatusMsg.Text = $"已导出 {Path.GetFileName(path)} · {n} 实体（.dxf/.dwg 不改当前文档）"; }
         }
         catch (System.Exception ex) { StatusMsg.Text = $"另存失败：{ex.Message}"; }
@@ -8775,7 +8774,7 @@ public partial class MainWindow : Window
                 : EditPrompt(_editMode, _editPts.Count);
         if (_gripDrag.Active) return _gripDrag.Prompt;
         if (MeasureCommandActive) return MeasurePrompt();   // 测距/测角/面积按步骤提示, 见 MainWindow.MeasureJig.cs
-        if (_offsetActive) return "偏移：指定要偏移的那一侧上的点";
+        if (_offsetActive) return $"偏移：距离 {_offsetDistance:0.###} m，指定要偏移的那一侧上的点";
         if (_trimActive) return TrimPrompt();
         if (_breakActive) return _breakPts.Count == 0 ? "打断：指定第一个打断点" : "打断：指定第二个打断点";
         if (_slideActive) return _slideDragging ? "滑动多段线：拖动中…松开结束" : "滑动多段线：按住左键拖动绘制";
@@ -10515,6 +10514,20 @@ public partial class MainWindow : Window
         var ents = await SelectObjectsAsync<SceneEntity>("偏移", "要偏移的对象");
         if (ents.Count == 0) return;
         if (ents.Count > 1) { SelectEntities(new[] { ents[0] }); StatusMsg.Text = "偏移：只对第一个所选对象生效"; }
+        var values = await Modeling.PromptDialog.AskAsync(this, "偏移", new[]
+        {
+            new Modeling.PromptDialog.Field("distance", "偏移距离",
+                _offsetDistance.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture), "m",
+                "输入固定距离；下一步点击只决定左/右、内/外方向")
+        }, "指定距离后，在图上点击要偏移到的一侧。");
+        if (values == null) { StatusMsg.Text = "偏移：已取消"; return; }
+        double distance = values.D("distance", _offsetDistance);
+        if (!double.IsFinite(distance) || distance <= 1e-9)
+        {
+            StatusMsg.Text = "偏移：距离必须大于 0";
+            return;
+        }
+        _offsetDistance = distance;
         StartOffset();
     }
 
@@ -10546,19 +10559,19 @@ public partial class MainWindow : Window
     {
         if (_selected.Count != 1) { StatusMsg.Text = "偏移：请先选中一个实体"; return; }
         _offsetActive = true; _tool = null; _measure = null; _editMode = EditMode.None;
-        StatusMsg.Text = "偏移：点击偏移到的一侧";
+        StatusMsg.Text = $"偏移：距离 {_offsetDistance:0.###} m，点击偏移到的一侧";
     }
 
     /// <summary>
-    /// 偏移落地：点(或键入坐标)定的是"往哪一侧偏、偏多远"。
+    /// 偏移落地：点(或键入坐标)只定"往哪一侧偏"，距离取命令开始时输入的固定值。
     /// 多段线偏移在凹侧会自身折叠，去折叠/去环由 <see cref="Cad.Draw.OffsetTools"/> 收尾（见 PolylineEntity.Offset）。
     /// </summary>
     private void ApplyOffsetAt(double x, double y)
     {
         if (_selected.Count == 1)
         {
-            var off = _selected[0].Offset(x, y);
-            if (off != null) { BeginChange(); _scene.Add(off); StatusMsg.Text = $"已偏移（{EntityTypeName.Of(off)}）"; }
+            var off = _selected[0].Offset(x, y, _offsetDistance);
+            if (off != null) { BeginChange(); _scene.Add(off); StatusMsg.Text = $"已偏移 {_offsetDistance:0.###} m（{EntityTypeName.Of(off)}）"; }
             else StatusMsg.Text = "偏移失败：该实体不支持偏移，或偏移量过大已尖灭（换小一点的距离）";
             RefreshScene();
         }
@@ -10807,6 +10820,7 @@ public partial class MainWindow : Window
                 RefreshScene();
                 return n;
             },
+            renameLayer: (oldName, newName) => TryRenameLayer(oldName, newName, out _),
             removeLayer: name =>
             {
                 if (name == "0") return false;
@@ -10823,19 +10837,48 @@ public partial class MainWindow : Window
     }
 
     // 图层重命名：当前层就地改名，实体 LayerName 随迁（忠实原版"图层命名/重命名"）
+    private async Task CreateLayerAsync()
+    {
+        var values = await Modeling.PromptDialog.AskAsync(this, "新建图层", new[]
+        {
+            new Modeling.PromptDialog.Field("name", "图层名称", _layers.NextAvailableName(), Numeric: false)
+        }, "输入唯一的图层名称；新层创建后自动置为当前层。");
+        if (values == null) { StatusMsg.Text = "新建图层：已取消"; return; }
+        string name = values.S("name").Trim();
+        if (!_layers.TryNew(name, out var layer) || layer == null)
+        {
+            StatusMsg.Text = name.Length == 0 ? "新建图层失败：名称不能为空"
+                : $"新建图层失败：图层「{name}」已存在或名称无效";
+            return;
+        }
+        PopulateDrawingLayers();
+        AfterLayerStateChange();
+        StatusMsg.Text = $"新建图层「{layer.Name}」并置为当前";
+    }
+
+    private bool TryRenameLayer(string oldName, string newName, out int moved)
+    {
+        moved = 0;
+        newName = newName.Trim();
+        if (oldName == "0" || newName.Length == 0 || oldName == newName || _layers.Get(newName) != null)
+            return false;
+        BeginChange();
+        if (!_layers.Rename(oldName, newName)) return false;
+        moved = _scene.ReassignLayer(oldName, newName);
+        return true;
+    }
+
     private void RenameCurrentLayer(string newName)
     {
         newName = newName.Trim();
         string old = _layers.Current.Name;
-        if (!_layers.Rename(old, newName))
+        if (!TryRenameLayer(old, newName, out int moved))
         {
             StatusMsg.Text = old == "0" ? "默认图层「0」不可改名"
                 : _layers.Get(newName) != null ? $"重命名失败：图层「{newName}」已存在（改名不合并，用「合并图层」）"
                 : "重命名失败：新名为空或与原名相同";
             return;
         }
-        BeginChange();
-        int moved = _scene.ReassignLayer(old, newName);
         PopulateDrawingLayers();
         AfterLayerStateChange();
         RefreshScene();
@@ -17334,6 +17377,15 @@ public partial class MainWindow : Window
         _pendingInlineArgs = argsAt < 0
             ? new List<string>()
             : Modeling.ParamPrompt.SplitArgs(cmd.Substring(argsAt));
+
+        // OFFSET 的同行距离要留给选择对象后的参数问答消费。若让整串 "OFFSET 10"
+        // 落到 Ribbon 兜底，它会摘成英文 "OFFSET"，而 Ribbon 只登记了中文「偏移」，最终误报未实现。
+        // 在英文命令入口直接认领，O 10 经 AcadCommands.Resolve 后也会统一走到这里。
+        if (argsAt > 0 && cmd.Substring(0, argsAt).Equals("OFFSET", System.StringComparison.OrdinalIgnoreCase))
+        {
+            _ = OffsetCmdAsync();
+            return;
+        }
 
         switch (cmd.ToUpperInvariant())
         {

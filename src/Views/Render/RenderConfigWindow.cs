@@ -708,9 +708,48 @@ internal sealed class RenderConfigWindow : Window
 
     private void ApplyColormap()
     {
-        MeshEntity.AttrColormap = CurrentStops();
-        MeshEntity.AttrReverse = _chkReverse.IsChecked == true;
-        ReapplyAttribute();
+        var sel = _selected();
+        var stops = CurrentStops();
+        bool reverse = _chkReverse.IsChecked == true;
+        bool autoRange = _chkAutoRange.IsChecked == true;
+        double min = ParseOr(_txtMin, MeshEntity.AttrMin);
+        double max = ParseOr(_txtMax, MeshEntity.AttrMax);
+        int n = ApplyColormapSelection(sel, stops, reverse, autoRange, min, max);
+
+        SelectShadingItem(Item.Attribute);
+        string name = _cmbColormap.SelectedItem is ComboBoxItem it ? it.Content?.ToString() ?? "Colormap" : "Colormap";
+        Done(n > 0
+            ? $"色带「{name}」{(reverse ? "（反转）" : "")}已套到选中 {n} 张三角网"
+            : $"色带「{name}」{(reverse ? "（反转）" : "")}已全局应用（属性分级）");
+    }
+
+    /// <summary>
+    /// 对齐 PitMine3D RenderConfigDialog.ApplyColormap：选择色带本身就是一次着色操作，
+    /// 有选择时给所选三角网写 Attribute 覆盖；无选择时切全局 Attribute，而不是只记住 LUT 等用户再切模式。
+    /// </summary>
+    internal static int ApplyColormapSelection(IReadOnlyList<MeshEntity> selected,
+                                                (byte r, byte g, byte b)[] stops,
+                                                bool reverse, bool autoRange,
+                                                double min, double max)
+    {
+        MeshEntity.AttrColormap = stops;
+        MeshEntity.AttrReverse = reverse;
+        MeshEntity.AttrAutoRange = autoRange;
+        MeshEntity.AttrMin = min;
+        MeshEntity.AttrMax = max;
+        if (MeshEntity.RenderMode == MeshEntity.DisplayMode.Wireframe)
+            MeshEntity.RenderMode = MeshEntity.DisplayMode.Shaded;
+
+        if (selected.Count == 0)
+        {
+            MeshEntity.ShadeMode = MeshEntity.FaceShade.Attribute;
+            return 0;
+        }
+
+        foreach (var mesh in selected)
+            mesh.FaceRender = new MeshEntity.FaceRenderOverride(
+                MeshEntity.FaceShade.Attribute, autoRange, min, max, stops, reverse);
+        return selected.Count;
     }
 
     private void OnRangeKey(object? sender, KeyEventArgs e)
@@ -872,6 +911,14 @@ internal sealed class RenderConfigWindow : Window
         };
         var items = _cmbShading.Items.OfType<ComboBoxItem>().ToList();
         _cmbShading.SelectedItem = items.FirstOrDefault(x => x.Tag is Item t && t == it) ?? items[0];
+        _loading = keep;
+    }
+
+    private void SelectShadingItem(Item item)
+    {
+        bool keep = _loading; _loading = true;
+        var items = _cmbShading.Items.OfType<ComboBoxItem>().ToList();
+        _cmbShading.SelectedItem = items.FirstOrDefault(x => x.Tag is Item t && t == item) ?? items[0];
         _loading = keep;
     }
 

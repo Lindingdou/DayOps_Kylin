@@ -225,4 +225,45 @@ public class LayerManagerTests
         Assert.Equal("说明", l.Description);
         Assert.Equal(2, n);   // 改即生效, 没有"确定"
     }
+
+    [Fact]
+    public void 行模型_名称编辑走统一重命名并迁移实体()
+    {
+        var layers = new LayerTable();
+        var layer = layers.New("旧层");
+        var scene = new Scene();
+        scene.Add(new LineEntity { X0 = 0, Y0 = 0, X1 = 1, Y1 = 0, LayerName = "旧层" });
+        int refreshes = 0;
+        var row = new PitMine3D.Kylin.Views.Layers.LayerManagerWindow.Row(
+            layer,
+            () => refreshes++,
+            (oldName, newName) =>
+            {
+                if (!layers.Rename(oldName, newName)) return false;
+                scene.ReassignLayer(oldName, newName);
+                return true;
+            });
+
+        row.Name = "  新层  ";
+
+        Assert.Equal("新层", row.Name);
+        Assert.Equal("新层", Assert.Single(scene.Entities).LayerName);
+        Assert.Equal(1, refreshes);
+    }
+
+    [Fact]
+    public void 行模型_名称编辑失败时恢复原名且不刷新()
+    {
+        var layers = new LayerTable();
+        var layer = layers.New("A");
+        layers.New("B");
+        int refreshes = 0;
+        var row = new PitMine3D.Kylin.Views.Layers.LayerManagerWindow.Row(
+            layer, () => refreshes++, layers.Rename);
+
+        row.Name = "B";
+
+        Assert.Equal("A", row.Name);
+        Assert.Equal(0, refreshes);
+    }
 }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using PitMine3D.Kylin.Cad;
 using PitMine3D.Kylin.Cad.Draw;
+using PitMine3D.Kylin.Views.Render;
 using Xunit;
 
 namespace PitMine3D.Kylin.Tests;
@@ -227,6 +228,53 @@ public class RenderConfigShadingTests
             Assert.True(a.hi - a.lo > 0.3f, "自动区间下单张网该铺满色带");
             Assert.Equal(a.lo, b.lo, 2);   // 抬高 1000 m 后仍各自铺满, 不是整片钳到一端
             Assert.Equal(a.hi, b.hi, 2);
+        });
+    }
+
+    [Fact]
+    public void SelectingColormapWithoutSelection_SwitchesGlobalModeToAttribute()
+    {
+        WithShadeState(() =>
+        {
+            MeshEntity.RenderMode = MeshEntity.DisplayMode.Wireframe;
+            MeshEntity.ShadeMode = MeshEntity.FaceShade.Entity;
+
+            int applied = RenderConfigWindow.ApplyColormapSelection(
+                Array.Empty<MeshEntity>(), Colormap.Magma, reverse: true,
+                autoRange: false, min: 10, max: 20);
+
+            Assert.Equal(0, applied);
+            Assert.Equal(MeshEntity.DisplayMode.Shaded, MeshEntity.RenderMode);
+            Assert.Equal(MeshEntity.FaceShade.Attribute, MeshEntity.ShadeMode);
+            Assert.Same(Colormap.Magma, MeshEntity.AttrColormap);
+            Assert.True(MeshEntity.AttrReverse);
+            Assert.False(MeshEntity.AttrAutoRange);
+            Assert.Equal(10, MeshEntity.AttrMin);
+            Assert.Equal(20, MeshEntity.AttrMax);
+        });
+    }
+
+    [Fact]
+    public void SelectingColormapWithSelection_AppliesAttributeOverrideOnlyToSelectedMeshes()
+    {
+        WithShadeState(() =>
+        {
+            MeshEntity.RenderMode = MeshEntity.DisplayMode.Shaded;
+            MeshEntity.ShadeMode = MeshEntity.FaceShade.Slope;
+            var selected = Ramp10();
+            var untouched = Ramp10();
+
+            int applied = RenderConfigWindow.ApplyColormapSelection(
+                new[] { selected }, Colormap.Jet, reverse: false,
+                autoRange: true, min: 0, max: 100);
+
+            Assert.Equal(1, applied);
+            Assert.Equal(MeshEntity.FaceShade.Slope, MeshEntity.ShadeMode);
+            Assert.NotNull(selected.FaceRender);
+            Assert.Equal(MeshEntity.FaceShade.Attribute, selected.FaceRender!.Shade);
+            Assert.True(selected.FaceRender.AutoRange);
+            Assert.Same(Colormap.Jet, selected.FaceRender.Lut);
+            Assert.Null(untouched.FaceRender);
         });
     }
 

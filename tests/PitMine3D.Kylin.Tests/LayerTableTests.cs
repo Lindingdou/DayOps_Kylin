@@ -26,6 +26,32 @@ public class LayerTableTests
     }
 
     [Fact]
+    public void TryNew_uses_entered_name_and_rejects_blank_or_duplicate()
+    {
+        var t = new LayerTable();
+
+        Assert.True(t.TryNew("  地质界线  ", out var created));
+        Assert.NotNull(created);
+        Assert.Equal("地质界线", created!.Name);
+        Assert.Same(created, t.Current);
+
+        Assert.False(t.TryNew(" ", out _));
+        Assert.False(t.TryNew("地质界线", out _));
+        Assert.False(t.TryNew("0", out _));
+        Assert.Equal(2, t.Layers.Count);
+    }
+
+    [Fact]
+    public void NextAvailableName_skips_existing_numbered_layers()
+    {
+        var t = new LayerTable();
+        t.New("图层1");
+        t.New("图层2");
+
+        Assert.Equal("图层3", t.NextAvailableName());
+    }
+
+    [Fact]
     public void Rename_changes_name_in_place_preserving_color_and_state()
     {
         var t = new LayerTable();

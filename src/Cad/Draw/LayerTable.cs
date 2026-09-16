@@ -57,12 +57,33 @@ public sealed class LayerTable
 
     public Layer New(string? name = null)
     {
-        name ??= $"图层{_layers.Count}";
+        name ??= NextAvailableName();
         var c = Palette[_layers.Count % Palette.Length];
         var l = new Layer(name, c.r, c.g, c.b);
         _layers.Add(l);
         Current = l;
         return l;
+    }
+
+    /// <summary>按用户输入新建图层：名称去首尾空白，空名、默认层名和重名均拒绝。</summary>
+    public bool TryNew(string? name, out Layer? layer)
+    {
+        string normalized = name?.Trim() ?? "";
+        if (normalized.Length == 0 || normalized == "0" || Get(normalized) != null)
+        {
+            layer = null;
+            return false;
+        }
+        layer = New(normalized);
+        return true;
+    }
+
+    /// <summary>取一个当前图层表中尚未使用的默认名称。</summary>
+    public string NextAvailableName()
+    {
+        int i = 1;
+        while (Get($"图层{i}") != null) i++;
+        return $"图层{i}";
     }
 
     public Layer? Get(string name) => _layers.Find(x => x.Name == name);

@@ -203,6 +203,46 @@ public class DrawToolsTests
     }
 
     [Fact]
+    public void Offset_with_explicit_distance_uses_pick_only_for_side()
+    {
+        var line = new LineEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 0 };
+        var above = (LineEntity)line.Offset(5, 100, 3)!;
+        var below = (LineEntity)line.Offset(5, -100, 3)!;
+
+        Assert.Equal(3, above.Y0, 6);
+        Assert.Equal(3, above.Y1, 6);
+        Assert.Equal(-3, below.Y0, 6);
+        Assert.Equal(-3, below.Y1, 6);
+
+        var polyline = new PolylineEntity();
+        polyline.Points.Add((0, 0)); polyline.Points.Add((10, 0)); polyline.Points.Add((10, 10));
+        var polyOffset = (PolylineEntity)polyline.Offset(5, -100, 2)!;
+        Assert.Equal((0d, -2d), polyOffset.Points[0]);
+        Assert.Equal((12d, -2d), polyOffset.Points[1]);
+    }
+
+    [Fact]
+    public void Curved_and_closed_entities_offset_by_explicit_distance()
+    {
+        var circle = new CircleEntity { Cx = 0, Cy = 0, Radius = 5 };
+        Assert.Equal(7, ((CircleEntity)circle.Offset(100, 0, 2)!).Radius, 6);
+        Assert.Equal(3, ((CircleEntity)circle.Offset(1, 0, 2)!).Radius, 6);
+
+        var rect = new RectEntity { X0 = 0, Y0 = 0, X1 = 10, Y1 = 10 };
+        var outside = (RectEntity)rect.Offset(100, 5, 2)!;
+        var inside = (RectEntity)rect.Offset(5, 5, 2)!;
+        Assert.Equal((-2d, -2d, 12d, 12d), (outside.X0, outside.Y0, outside.X1, outside.Y1));
+        Assert.Equal((2d, 2d, 8d, 8d), (inside.X0, inside.Y0, inside.X1, inside.Y1));
+
+        var arc = new ArcEntity { X1 = 1, Y1 = 0, X2 = 0, Y2 = 1, X3 = -1, Y3 = 0 };
+        Assert.Equal(3, ((ArcEntity)arc.Offset(0, 100, 2)!).X1, 6);
+
+        var polygon = new PolygonEntity { Cx = 0, Cy = 0, Radius = 5, Sides = 6, Rotation = 0.3 };
+        Assert.Equal(7, ((PolygonEntity)polygon.Offset(100, 0, 2)!).Radius, 6);
+        Assert.Equal(3, ((PolygonEntity)polygon.Offset(1, 0, 2)!).Radius, 6);
+    }
+
+    [Fact]
     public void CircleEntity_offset_to_click_radius()
     {
         var c = new CircleEntity { Cx = 0, Cy = 0, Radius = 2 };

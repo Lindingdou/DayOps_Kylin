@@ -14,6 +14,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using PitMine3D.Kylin.Cad;
 using PitMine3D.Kylin.Cad.Draw;
+using PitMine3D.Kylin.Views.Modeling;
 
 namespace PitMine3D.Kylin.Views.Layers;
 
@@ -45,11 +46,27 @@ internal sealed class LayerManagerWindow : Window
     {
         private readonly Layer _l;
         private readonly Action _changed;
+        private readonly Func<string, string, bool>? _rename;
         internal Layer Layer => _l;
 
-        public Row(Layer l, Action changed) { _l = l; _changed = changed; }
+        public Row(Layer l, Action changed, Func<string, string, bool>? rename = null)
+        { _l = l; _changed = changed; _rename = rename; }
 
-        public string Name => _l.Name;
+        public string Name
+        {
+            get => _l.Name;
+            set
+            {
+                string oldName = _l.Name;
+                string newName = value?.Trim() ?? "";
+                if (_rename?.Invoke(oldName, newName) == true)
+                {
+                    OnPropertyChanged();
+                    _changed();
+                }
+                else OnPropertyChanged();   // 编辑失败：把单元格刷回本体中的原名
+            }
+        }
         public string ColorText => AciPalette.DisplayName(_l.Cr, _l.Cg, _l.Cb);
         public IBrush ColorBrush => new SolidColorBrush(Color.FromRgb(
             (byte)Math.Clamp(_l.Cr * 255f, 0, 255), (byte)Math.Clamp(_l.Cg * 255f, 0, 255), (byte)Math.Clamp(_l.Cb * 255f, 0, 255)));
@@ -107,6 +124,7 @@ internal sealed class LayerManagerWindow : Window
     private readonly Action _refresh;                 // 图层状态变了 → 重绘视口 + 刷主窗图层面板
     private readonly Func<int> _selectedEntityCount;  // 视口当前选中实体数
     private readonly Func<string, int> _assignSelected;   // 把选中实体移到某层, 返回成功数
+    private readonly Func<string, string, bool> _renameLayer;  // 图层改名 + 其上实体随迁
     private readonly Func<string, bool> _removeLayer;     // 删层(含把该层实体归并到 "0"), 返回成功
 
     private readonly ObservableCollection<Row> _rows = new();
@@ -122,10 +140,12 @@ internal sealed class LayerManagerWindow : Window
     private readonly TextBlock _status = new() { Text = "就绪", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
 
     public LayerManagerWindow(LayerTable layers, Action refresh, Func<int> selectedEntityCount,
-                              Func<string, int> assignSelected, Func<string, bool> removeLayer)
+                              Func<string, int> assignSelected, Func<string, string, bool> renameLayer,
+                              Func<string, bool> removeLayer)
     {
         _layers = layers; _refresh = refresh;
-        _selectedEntityCount = selectedEntityCount; _assignSelected = assignSelected; _removeLayer = removeLayer;
+        _selectedEntityCount = selectedEntityCount; _assignSelected = assignSelected;
+        _renameLayer = renameLayer; _removeLayer = removeLayer;
 
         Title = "图层特性管理器";
         Width = 940; Height = 500;   // 够工具栏九个按钮排一行 + 九列不挤(中文表头两字要 64px)
@@ -144,6 +164,7 @@ internal sealed class LayerManagerWindow : Window
             bar.Children.Add(b);
         }
         Btn("新建图层", AddLayer);
+        Btn("重命名图层", RenameSelectedLayer);
         Btn("设为当前", SetCurrent);
         Btn("将对象置为当前图层", AssignObjects, "将当前选中的实体移动到表中选中的图层");
         Btn("批量冻结", () => Batch("frozen", true));
@@ -190,7 +211,7 @@ internal sealed class LayerManagerWindow : Window
         };
 
         _grid.Columns.Add(Text("当前", nameof(Row.CurrentMark), 72, readOnly: true));
-        _grid.Columns.Add(Text("名称", nameof(Row.Name), 120, readOnly: true));
+        _grid.Columns.Add(Text("名称", nameof(Row.Name), 140));
 
         // 颜色列：色块 + 色名，点一下弹标准色板（同「特性」组颜色下拉那套）
         var colorCol = new DataGridTemplateColumn { Header = Head("颜色"), Width = new DataGridLength(120) };
@@ -225,20 +246,57 @@ internal sealed class LayerManagerWindow : Window
         var keep = (_grid.SelectedItem as Row)?.Name;
         _rows.Clear();
         foreach (var l in _layers.Layers)
-            _rows.Add(new Row(l, () => { _refresh(); }) { IsCurrent = ReferenceEquals(l, _layers.Current) });
+            _rows.Add(new Row(l, () => { _refresh(); }, TryRenameLayer) { IsCurrent = ReferenceEquals(l, _layers.Current) });
         if (keep != null) _grid.SelectedItem = _rows.FirstOrDefault(r => r.Name == keep);
         _status.Text = $"共 {_rows.Count} 个图层 · 当前「{_layers.Current.Name}」";
     }
 
     private List<Row> SelectedRows() => _grid.SelectedItems?.Cast<Row>().ToList() ?? new List<Row>();
 
-    private void AddLayer()
+    private async void AddLayer()
     {
-        var l = _layers.New();
+        var values = await PromptDialog.AskAsync(this, "新建图层", new[]
+        {
+            new PromptDialog.Field("name", "图层名称", _layers.NextAvailableName(), Numeric: false)
+        }, "输入唯一的图层名称。");
+        if (values == null) { _status.Text = "新建图层：已取消"; return; }
+        string name = values.S("name").Trim();
+        if (!_layers.TryNew(name, out var l) || l == null)
+        {
+            _status.Text = name.Length == 0 ? "新建图层失败：名称不能为空"
+                : $"新建图层失败：图层「{name}」已存在或名称无效";
+            return;
+        }
         Reload();
         _grid.SelectedItem = _rows.FirstOrDefault(r => r.Name == l.Name);
         _refresh();
         _status.Text = $"已新建图层「{l.Name}」并置为当前 · 共 {_rows.Count} 个图层";
+    }
+
+    private async void RenameSelectedLayer()
+    {
+        if (_grid.SelectedItem is not Row row) { _status.Text = "请先选择要重命名的图层"; return; }
+        if (row.Name == "0") { _status.Text = "默认图层「0」不可改名"; return; }
+        var values = await PromptDialog.AskAsync(this, "重命名图层", new[]
+        {
+            new PromptDialog.Field("name", "新名称", row.Name, Numeric: false)
+        }, "名称列也可以直接双击编辑。");
+        if (values == null) { _status.Text = "重命名图层：已取消"; return; }
+        row.Name = values.S("name");
+    }
+
+    private bool TryRenameLayer(string oldName, string newName)
+    {
+        newName = newName.Trim();
+        if (oldName == "0") { _status.Text = "默认图层「0」不可改名"; return false; }
+        if (newName.Length == 0 || newName == oldName)
+        { _status.Text = "重命名失败：新名为空或与原名相同"; return false; }
+        if (_layers.Get(newName) != null)
+        { _status.Text = $"重命名失败：图层「{newName}」已存在"; return false; }
+        if (!_renameLayer(oldName, newName))
+        { _status.Text = $"重命名图层「{oldName}」失败"; return false; }
+        _status.Text = $"图层「{oldName}」已重命名为「{newName}」";
+        return true;
     }
 
     private void SetCurrent()

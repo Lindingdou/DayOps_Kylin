@@ -49,17 +49,19 @@ public static class TdmImportService
         string[] lines;
         try { lines = File.ReadAllLines(path, Gbk()); }
         catch (Exception ex) { result.Error = $"读取失败：{ex.Message}"; return result; }
-        try { ParseStrings(lines, result); }
+        string layer = Path.GetFileNameWithoutExtension(path);
+        if (string.IsNullOrWhiteSpace(layer)) layer = "3DMine";
+        try { ParseStrings(lines, result, layer); }
         catch (Exception ex) { result.Error = $"3DMine String 解析失败：{ex.Message}"; }
         return result;
     }
 
     /// <summary>可单测入口: 直接传入行数组解析。</summary>
-    public static void ParseStrings(string[] lines, DxfImportService.EntityImportResult result)
+    public static void ParseStrings(string[] lines, DxfImportService.EntityImportResult result, string layer = "3DMine")
     {
         if (lines.Length < 2 || lines[0].IndexOf(StringMarker, StringComparison.OrdinalIgnoreCase) < 0)
             throw new InvalidDataException("不是 3DMine String File(.3ds 文本)");
-        const string layer = "3DMine线";
+        if (string.IsNullOrWhiteSpace(layer)) layer = "3DMine";
         PolylineEntity? cur = null;
         bool nextHasColor = false; byte nr = 0, ng = 0, nb = 0;
         int nPoly = 0, nText = 0;
@@ -70,6 +72,8 @@ public static class TdmImportService
             {
                 var a = cur.Points[0]; var z = cur.Points[cur.Points.Count - 1];
                 cur.Closed = cur.Points.Count >= 3 && Math.Abs(a.x - z.x) < 1e-6 && Math.Abs(a.y - z.y) < 1e-6;
+                if (cur.Closed && cur.Has3D)
+                    cur.Closed = Math.Abs(cur.Zs![0] - cur.Zs[^1]) < 1e-6;
                 cur.LayerName = layer;
                 result.Entities.Add(cur); nPoly++;
             }
@@ -81,14 +85,15 @@ public static class TdmImportService
             string line = lines[i];
             if (string.IsNullOrWhiteSpace(line)) continue;
             string[] f = line.Split(',');
-            if (TryCoord(f, out double x, out double y))
+            if (TryCoord(f, out double x, out double y, out double z))
             {
                 if (cur == null)
                 {
-                    cur = new PolylineEntity();
+                    cur = new PolylineEntity { Zs = new List<double>(), Cr = 1, Cg = 1, Cb = 1 };
                     if (nextHasColor) { cur.Cr = nr / 255f; cur.Cg = ng / 255f; cur.Cb = nb / 255f; }
                 }
-                cur.Points.Add((x, y));   // 2D 投影(z 丢, 与其他 2D 导入一致)
+                cur.Points.Add((x, y));
+                cur.Zs!.Add(z);
                 continue;
             }
             Flush();
@@ -97,22 +102,75 @@ public static class TdmImportService
         }
         Flush();
 
-        if (nPoly > 0 && !result.LayerColors.ContainsKey(layer)) { result.LayerColors[layer] = (0.86f, 0.9f, 0.6f); result.LayerOrder.Add(layer); }
+        ApplyStringAxisOrder(result, nPoly);
+        PopulateStringExtents(result);
+        if (nPoly > 0 && !result.LayerColors.ContainsKey(layer)) { result.LayerColors[layer] = (1, 1, 1); result.LayerOrder.Add(layer); }
         result.TypeCounts["折线"] = result.TypeCounts.GetValueOrDefault("折线") + nPoly;
         if (nText > 0) result.Warnings.Add($"跳过 {nText} 个文字注记(DbSText)");
     }
 
-    // 顶点行: 去尾随空字段后恰 4 段, 首段整数 code, 后 3 段浮点 → (X,Y)(Z 丢)。
-    private static bool TryCoord(string[] f, out double x, out double y)
+    private const double NorthingMin = 1.5e6;
+    private const double NorthingMax = 6.0e6;
+
+    private static bool LooksLikeNorthing(double v) => v >= NorthingMin && v <= NorthingMax;
+
+    // String File 的坐标既可能是测量序(北,东,高), 也可能已是 CAD 序(东,北,高)。
+    // 与 PitMine3D 的 TdmStringReader 一致：整文件多数表决一次，判不清时保持原序。
+    private static void ApplyStringAxisOrder(DxfImportService.EntityImportResult result, int polylineCount)
     {
-        x = y = 0;
+        int survey = 0, cad = 0, total = 0;
+        int firstPolyline = result.Entities.Count - polylineCount;
+        for (int entityIndex = firstPolyline; entityIndex < result.Entities.Count; entityIndex++)
+            if (result.Entities[entityIndex] is PolylineEntity p)
+                foreach (var (x, y) in p.Points)
+                {
+                    total++;
+                    bool first = LooksLikeNorthing(x), second = LooksLikeNorthing(y);
+                    if (first && !second) survey++;
+                    else if (second && !first) cad++;
+                }
+
+        if (survey <= cad) return;
+        for (int entityIndex = firstPolyline; entityIndex < result.Entities.Count; entityIndex++)
+            if (result.Entities[entityIndex] is PolylineEntity p)
+                for (int i = 0; i < p.Points.Count; i++)
+                    p.Points[i] = (p.Points[i].y, p.Points[i].x);
+
+        result.Warnings.Add($"源文件为测量序(北,东,高),已换轴为 CAD 序(东,北,高)({survey}/{total} 个顶点命中判据)");
+    }
+
+    // 可编辑导入的共享取景链依赖 Bounds/Centers。漏填会把相机定位到默认原点，
+    // 双击滚轮再把原点与矿区范围合并，数公里模型会被压进数千公里视野而看似空白。
+    private static void PopulateStringExtents(DxfImportService.EntityImportResult result)
+    {
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        foreach (var poly in result.Entities)
+        {
+            if (poly is not PolylineEntity p || p.Points.Count == 0) continue;
+            double x0 = double.MaxValue, y0 = double.MaxValue, x1 = double.MinValue, y1 = double.MinValue;
+            foreach (var (x, y) in p.Points)
+            {
+                if (x < x0) x0 = x; if (x > x1) x1 = x;
+                if (y < y0) y0 = y; if (y > y1) y1 = y;
+            }
+            result.Centers.Add(((x0 + x1) * 0.5, (y0 + y1) * 0.5));
+            if (x0 < minX) minX = x0; if (x1 > maxX) maxX = x1;
+            if (y0 < minY) minY = y0; if (y1 > maxY) maxY = y1;
+        }
+        if (minX <= maxX) result.Bounds = new[] { minX, minY, maxX, maxY };
+    }
+
+    // 顶点行: 去尾随空字段后恰 4 段, 首段整数 code, 后 3 段浮点 → (X,Y,Z)。
+    private static bool TryCoord(string[] f, out double x, out double y, out double z)
+    {
+        x = y = z = 0;
         int n = f.Length;
         while (n > 0 && f[n - 1].Length == 0) n--;
         if (n != 4) return false;
         if (!int.TryParse(f[0].Trim(), out _)) return false;
         if (!double.TryParse(f[1], NumberStyles.Float, CultureInfo.InvariantCulture, out x)) return false;
         if (!double.TryParse(f[2], NumberStyles.Float, CultureInfo.InvariantCulture, out y)) return false;
-        if (!double.TryParse(f[3], NumberStyles.Float, CultureInfo.InvariantCulture, out _)) return false;
+        if (!double.TryParse(f[3], NumberStyles.Float, CultureInfo.InvariantCulture, out z)) return false;
         return true;
     }
 
